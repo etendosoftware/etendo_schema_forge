@@ -3,14 +3,17 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 
 /** POSTs a JSON payload to a financial-account-transactions action and returns data. */
-async function postAction(token, action, payload) {
+async function postAction(csrfToken, action, payload) {
   const url = `${getApiBase()}/sws/neo/financial-account-transactions?action=${action}`;
   const res = await fetch(url, {
     method: 'POST',
+    // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
+    // bearer token. Unsafe method, so the backend also requires the CSRF proof.
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
     },
+    credentials: 'include',
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -24,7 +27,7 @@ async function postAction(token, action, payload) {
 
 /** Wraps a POST action into a `{ run, busy, error }` triple. */
 function usePostAction(action) {
-  const { token } = useAuth();
+  const { csrfToken } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -32,14 +35,14 @@ function usePostAction(action) {
     setBusy(true);
     setError(null);
     try {
-      return await postAction(token, action, payload);
+      return await postAction(csrfToken, action, payload);
     } catch (err) {
       setError(err);
       throw err;
     } finally {
       setBusy(false);
     }
-  }, [token]);
+  }, [csrfToken]);
 
   return { run, busy, error };
 }

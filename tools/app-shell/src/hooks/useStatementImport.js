@@ -15,7 +15,7 @@ import { getApiBase } from './useNeoResource';
  * }}
  */
 export function useStatementImport() {
-  const { token } = useAuth();
+  const { csrfToken } = useAuth();
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,10 +27,13 @@ export function useStatementImport() {
     try {
       const res = await fetch(url, {
         method: 'POST',
+        // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
+        // bearer token. Unsafe method, so the backend also requires the CSRF proof.
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
+          ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
         },
+        credentials: 'include',
         body: JSON.stringify({
           FIN_Financial_Account_ID: accountId,
           fileName,
@@ -50,7 +53,7 @@ export function useStatementImport() {
     } finally {
       setImporting(false);
     }
-  }, [token]);
+  }, [csrfToken]);
 
   return { importStatement, importing, error };
 }

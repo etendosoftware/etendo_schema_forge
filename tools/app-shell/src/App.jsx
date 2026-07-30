@@ -77,7 +77,6 @@ export async function fetchWindowAccess(session) {
     const res = await fetch(`${apiBase}/sws/neo/windowaccessmap`, {
       method: 'GET',
       credentials: 'include',
-      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},
     });
     if (!res.ok) return null;
     const data = await res.json();

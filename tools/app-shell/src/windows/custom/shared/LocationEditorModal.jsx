@@ -27,7 +27,8 @@ function normalizeText(value) {
 }
 
 async function fetchSelectorPage(url, headers) {
-    const response = await fetch(url, {headers});
+    // ETP-4576 — the `__Host-` session cookie authenticates these reads.
+    const response = await fetch(url, {headers, credentials: 'include'});
     if (!response.ok) {
         throw new Error(`Selector request failed: ${response.status}`);
     }
@@ -182,7 +183,7 @@ export default function LocationEditorModal({
     const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
     const ui = useUI();
     const t = useLabel();
-    const {token} = useAuth();
+    const { csrfToken } = useAuth();
     const [form, setForm] = useState(EMPTY_FORM);
     const [countries, setCountries] = useState([]);
     const [countrySelectorBase, setCountrySelectorBase] = useState('');
@@ -211,7 +212,9 @@ export default function LocationEditorModal({
     const regionLoadMoreRef = useRef(null);
     const regionLoadingMoreRef = useRef(false);
 
-    const authHeader = {Authorization: `Bearer ${token}`};
+    // ETP-4576 — reads carry no auth header: the `__Host-` session cookie does it.
+    // Only the unsafe methods below add the CSRF proof.
+    const authHeader = {};
 
     function buildSelectorParams(baseParams = {}) {
         const params = new URLSearchParams();
@@ -364,7 +367,7 @@ export default function LocationEditorModal({
             setInitialLoading(true);
             // The handler enriches the GET-by-ID response with C_Location fields
             // (ContactsLocationAddressHandler for 'bpartner', the plain location handler for 'location').
-            fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {headers: authHeader})
+            fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {headers: authHeader, credentials: 'include'})
                 .then(r => (r.ok ? r.json() : null))
                 .then(d => {
                     const rec = d?.response?.data?.[0] ?? d;
@@ -565,7 +568,7 @@ export default function LocationEditorModal({
         countryHasMore,
         countryOffset,
         countriesLoading,
-        token,
+        csrfToken,
     ]);
 
     useEffect(() => {
@@ -623,7 +626,7 @@ export default function LocationEditorModal({
         regionOffset,
         regionsLoading,
         form.country,
-        token,
+        csrfToken,
     ]);
 
     function setField(key, value) {
@@ -700,7 +703,12 @@ export default function LocationEditorModal({
                 payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
                 payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
             }
-            const postHeaders = {...authHeader, 'Content-Type': 'application/json'};
+            // ETP-4576 — unsafe methods: the backend requires the CSRF proof.
+            const postHeaders = {
+                ...authHeader,
+                'Content-Type': 'application/json',
+                ...(csrfToken ? {'X-Go-CSRF': csrfToken} : {}),
+            };
 
             if (bplLinkId) {
                 // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
@@ -708,6 +716,7 @@ export default function LocationEditorModal({
                 const res = await fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {
                     method: 'PUT',
                     headers: postHeaders,
+                    credentials: 'include',
                     body: JSON.stringify(payload),
                 });
                 if (res.ok) {
@@ -732,6 +741,7 @@ export default function LocationEditorModal({
             const res = await fetch(createUrl, {
                 method: 'POST',
                 headers: postHeaders,
+                credentials: 'include',
                 body: JSON.stringify(createBody),
             });
 

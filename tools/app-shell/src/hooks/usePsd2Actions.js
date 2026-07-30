@@ -3,6 +3,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 
 const BASE_PATH = '/sws/neo/financial-account-psd2';
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** SPA route the Salt Edge popup returns to (see Psd2CallbackPage). */
 export const PSD2_CALLBACK_PATH = '/financial-account/psd2-callback';
@@ -108,7 +109,7 @@ function waitForConnection(popup) {
  * }}
  */
 export function usePsd2Actions() {
-  const { token } = useAuth();
+  const { csrfToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -119,12 +120,19 @@ export function usePsd2Actions() {
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const url = `${getApiBase()}${BASE_PATH}${buildQuery({ action, ...query })}`;
+      // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
+      // bearer token. `method` is a parameter here, so the CSRF proof is added
+      // only for the unsafe methods that the backend demands it on: sending it
+      // on the GET actions would be harmless but misleading, and omitting it on
+      // the POST ones is a 403.
+      const headers = { 'Content-Type': 'application/json' };
+      if (csrfToken && UNSAFE_METHODS.has(method.toUpperCase())) {
+        headers['X-Go-CSRF'] = csrfToken;
+      }
       const res = await fetch(url, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
+        credentials: 'include',
         body: body ? JSON.stringify(body) : undefined,
         signal: ctrl.signal,
       });
@@ -146,7 +154,7 @@ export function usePsd2Actions() {
       clearTimeout(timer);
       setLoading(false);
     }
-  }, [token]);
+  }, [csrfToken]);
 
   const connect = useCallback(
     // financialAccountId is optional: when connecting an existing account the bridge uses it to

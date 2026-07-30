@@ -192,7 +192,11 @@ export function ListModalWindow({
   const tLabel = useLabel(api?.labelOverrides);
   const auth = useAuth();
   const navigate = useNavigate();
+  // ETP-4576 — `token` is no longer an auth credential: the session lives in the
+  // `__Host-` cookie. It is still threaded to the child below, which has not been
+  // migrated yet, but it never reaches a request header from here.
   const token = tokenProp ?? auth?.token;
+  const csrfToken = auth?.csrfToken;
 
   const apiBaseUrl = useMemo(
     () => apiBaseUrlProp || (api?.baseUrl ? `${getApiBase()}${api.baseUrl}` : getApiBase()),
@@ -269,10 +273,12 @@ export function ListModalWindow({
 
   const requiredKeys = useMemo(() => fields.filter(f => f.required).map(f => f.key), [fields]);
 
+  // Every caller of this is an unsafe method (POST/PUT/PATCH/DELETE), so the CSRF
+  // proof is always required here; it is omitted only when no session provides one.
   const authHeaders = useCallback(() => ({
-    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
-  }), [token]);
+    ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
+  }), [csrfToken]);
 
   // Read and translate a backend error message from a failed Response.
   const errorMessage = useCallback(async (res) => {
@@ -369,6 +375,7 @@ export function ListModalWindow({
       const res = await fetch(url, {
         method: editingRow ? 'PUT' : 'POST',
         headers: authHeaders(),
+        credentials: 'include',
         body: JSON.stringify(formData),
       });
       if (!res.ok) {
@@ -392,6 +399,7 @@ export function ListModalWindow({
       const res = await fetch(`${apiBaseUrl}/${entity}/${encodeURIComponent(row.id)}`, {
         method: 'PATCH',
         headers: authHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ [col.key]: nextChecked }),
       });
       if (!res.ok) {
@@ -418,6 +426,7 @@ export function ListModalWindow({
       const res = await fetch(`${apiBaseUrl}/${entity}/${encodeURIComponent(deletingRow.id)}`, {
         method: 'DELETE',
         headers: authHeaders(),
+        credentials: 'include',
       });
       if (!res.ok) {
         toast.error(await errorMessage(res));

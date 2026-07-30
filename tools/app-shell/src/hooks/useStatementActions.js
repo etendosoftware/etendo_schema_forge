@@ -24,7 +24,7 @@ import { getApiBase } from './useNeoResource';
  * }}
  */
 export function useStatementActions() {
-  const { token } = useAuth();
+  const { csrfToken } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -35,10 +35,13 @@ export function useStatementActions() {
     try {
       const res = await fetch(url, {
         method: 'POST',
+        // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
+        // bearer token. Unsafe method, so the backend also requires the CSRF proof.
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
+          ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
         },
+        credentials: 'include',
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -54,7 +57,7 @@ export function useStatementActions() {
     } finally {
       setBusy(false);
     }
-  }, [token]);
+  }, [csrfToken]);
 
   const processStatement = useCallback((id) => post('process', { id }), [post]);
 

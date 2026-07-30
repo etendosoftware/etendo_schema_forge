@@ -22,13 +22,19 @@ const UNPOST_URL = (id) =>
   `${getApiBase()}/sws/neo/financial-account/transaction/${encodeURIComponent(id)}/action/unpost`;
 
 /**
- * Shared POST-with-token request used by both the post and unpost actions.
+ * Shared POST request used by both the post and unpost actions. Authenticates with
+ * the `__Host-` session cookie and carries the CSRF proof the backend demands on
+ * unsafe methods.
  * Returns { success, message } so callers decide how to surface the result.
  */
-async function callTransactionAction(url, token) {
+async function callTransactionAction(url, csrfToken) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
+    },
+    credentials: 'include',
     body: '{}',
   });
   const body = await res.json().catch(() => null);
@@ -51,7 +57,7 @@ async function callTransactionAction(url, token) {
  */
 export function MovementRowKebab({ movement, onReload, onEdit }) {
   const ui = useUI();
-  const { token } = useAuth();
+  const { csrfToken } = useAuth();
   const { processMovement, processing } = useProcessMovement();
   const { reactivateMovement, reactivating } = useReactivateMovement();
   const { deleteMovement, deleting } = useDeleteMovement();
@@ -110,7 +116,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
     if (busy) return;
     setPosting(true);
     try {
-      const { success, message } = await callTransactionAction(POST_URL(movement.id), token);
+      const { success, message } = await callTransactionAction(POST_URL(movement.id), csrfToken);
       if (success) {
         toast.success(ui('documentPosted'));
         onReload?.();
@@ -128,7 +134,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
     if (busy || !isPosted) return;
     setUnposting(true);
     try {
-      const { success, message } = await callTransactionAction(UNPOST_URL(movement.id), token);
+      const { success, message } = await callTransactionAction(UNPOST_URL(movement.id), csrfToken);
       if (success) {
         toast.success(ui('documentUnposted'));
         onReload?.();

@@ -29,7 +29,7 @@ import { getApiBase } from './useNeoResource';
  * }}
  */
 export function useStatementPreview() {
-  const { token } = useAuth();
+  const { csrfToken } = useAuth();
   const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState(null);
 
@@ -40,10 +40,13 @@ export function useStatementPreview() {
     try {
       const res = await fetch(url, {
         method: 'POST',
+        // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
+        // bearer token. Unsafe method, so the backend also requires the CSRF proof.
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
+          ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
         },
+        credentials: 'include',
         body: JSON.stringify({
           FIN_Financial_Account_ID: accountId,
           fileName,
@@ -65,7 +68,7 @@ export function useStatementPreview() {
     } finally {
       setPreviewing(false);
     }
-  }, [token]);
+  }, [csrfToken]);
 
   return { previewStatement, previewing, error };
 }
