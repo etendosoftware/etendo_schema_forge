@@ -1047,5 +1047,29 @@
     ],
     "author": "pipeline",
     "date": "2026-07-29"
+  },
+  {
+    "from": "0.26.0",
+    "to": "0.27.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"movementQuantity\" property \"defaultValue\" changed from \"1\" to \"0\" in frontend (additive)",
+      "Field \"project\" property \"dimensionsPanel\" changed from \"true\" to \"undefined\" in frontend (additive)",
+      "Field \"costcenter\" property \"dimensionsPanel\" changed from \"true\" to \"undefined\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-30"
+  },
+  {
+    "from": "0.27.0",
+    "to": "0.28.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"movementQuantity\" property \"defaultValue\" changed from \"0\" to \"1\" in frontend (additive)",
+      "Field \"project\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)",
+      "Field \"costcenter\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-30"
   }
 ]

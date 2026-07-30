@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { cn } from '@/lib/utils';
 
 /**
@@ -70,8 +71,8 @@ export function AmountFilter({ value, onChange }) {
       return presets.find((p) => p.id === activePresetId)?.label ?? ui('financeAccountMovementsFilterAmountAll');
     }
     if (isCustom) {
-      const minStr = value.min != null ? `${formatNumber(value.min)} €` : null;
-      const maxStr = value.max != null ? `${formatNumber(value.max)} €` : null;
+      const minStr = value.min != null ? formatCurrency('EUR', value.min) : null;
+      const maxStr = value.max != null ? formatCurrency('EUR', value.max) : null;
       if (minStr != null && maxStr != null) return `${minStr} – ${maxStr}`;
       if (minStr != null) return `≥ ${minStr}`;
       if (maxStr != null) return `≤ ${maxStr}`;
@@ -209,11 +210,4 @@ function NumberField({ value, onChange, placeholder, invalid }) {
       )}
     />
   );
-}
-
-function formatNumber(n) {
-  return new Intl.NumberFormat('es-ES', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(n);
 }

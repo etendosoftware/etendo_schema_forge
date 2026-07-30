@@ -257,6 +257,17 @@ Full reference: `docs/i18n-guide.md`
 If `generate-frontend.js` emits user-visible text, it must emit `ui('key')` calls, not raw strings. The generated component must import `useUI` from `@/i18n`.
 </i18n_rules>
 
+<currency_rules>
+## Currency & Amount Formatting (MANDATORY)
+
+**Every monetary value MUST go through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString`.** A hardcoded locale or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. A new ad-hoc money formatter is a bug, not a style nit.
+
+- Browser: `formatCurrency(currencyCode, value)` / `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`.
+- jsreport/PDF/printed reports: `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js` — never write a second currency Handlebars helper by hand.
+- Both read the shared instance-wide separators from one NEO config source (`GET /sws/neo/currency-format`) — see `docs/plans/2026-07-28-currency-format-centralization-proposal.md`.
+- Before writing a new amount-displaying component or report, **grep for `formatCurrency` first** — copy the existing pattern from a sibling window/component instead of reinventing it.
+</currency_rules>
+
 <decision_heuristics>
 - Make it work first, make it right second
 - Read the existing pipeline before adding to it — patterns matter

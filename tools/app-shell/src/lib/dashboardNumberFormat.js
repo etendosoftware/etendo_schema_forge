@@ -1,3 +1,5 @@
+import { formatCurrency } from './formatCurrency.js';
+
 const DASHBOARD_NUMBER_LOCALE = 'en-US';
 
 export function localeFromUi(locale) {
@@ -19,26 +21,25 @@ export function formatDashboardNumber(value, locale = 'en-US', options = {}) {
   }).format(num);
 }
 
-export function formatDashboardAmount(value, currencyLabel, locale = 'en-US') {
+/**
+ * Formats a dashboard amount as `1.234,56 \u20ac` (delegates to the shared
+ * `formatCurrency()` for the actual number/symbol formatting, es-ES locale,
+ * symbol only \u2014 never the literal ISO code). `currencyLabel` may be a raw
+ * ISO code (`"EUR"`) or a longer label containing one (`"1.14 EUR"`); the
+ * 3-letter code is extracted from it either way.
+ */
+export function formatDashboardAmount(value, currencyLabel) {
   const num = Number(value);
-
   if (!Number.isFinite(num)) return String(value ?? '\u2014');
 
-  const localizedAmount = new Intl.NumberFormat(DASHBOARD_NUMBER_LOCALE, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Math.abs(num));
-
   if (!currencyLabel) {
-    return num < 0 ? `-${localizedAmount}` : localizedAmount;
+    return formatCurrency(undefined, num);
   }
 
   const normalizedLabel = String(currencyLabel).trim();
   const codeMatch = normalizedLabel.toUpperCase().match(/\b[A-Z]{3}\b/);
   const currencyCode = codeMatch ? codeMatch[0] : normalizedLabel.toUpperCase();
-  const formatted = `${currencyCode} ${localizedAmount}`;
-
-  return num < 0 ? `-${formatted}` : formatted;
+  return formatCurrency(currencyCode, num);
 }
 
 export function formatDashboardCompact(value, { locale = 'en-US', currencyLabel = '', maxDecimals = 1 } = {}) {
@@ -50,7 +51,7 @@ export function formatDashboardCompact(value, { locale = 'en-US', currencyLabel 
     const hasFraction = Math.abs(compact) < 100 && Math.abs(compact % 1) >= 0.05;
 
     if (currencyLabel) {
-      return `${formatDashboardAmount(compact, currencyLabel, locale)}${suffix}`;
+      return `${formatDashboardAmount(compact, currencyLabel)}${suffix}`;
     }
 
     return `${formatDashboardNumber(compact, locale, {
@@ -63,7 +64,7 @@ export function formatDashboardCompact(value, { locale = 'en-US', currencyLabel 
   if (abs >= 1_000_000) return formatCompact(1_000_000, 'M');
   if (abs >= 1_000) return formatCompact(1_000, 'K');
 
-  if (currencyLabel) return formatDashboardAmount(num, currencyLabel, locale);
+  if (currencyLabel) return formatDashboardAmount(num, currencyLabel);
   return formatDashboardNumber(num, locale);
 }
 

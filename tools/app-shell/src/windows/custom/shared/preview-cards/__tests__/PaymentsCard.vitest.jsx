@@ -78,7 +78,23 @@ describe('PaymentsCard', () => {
     const payments = [{ id: '1', amount: 100, paymentDate: '2026-01-01', documentNo: 'INV-1' }];
     render(<PaymentsCard payments={payments} currencyCode="EUR" totalOutstanding={50} specName="purchase-invoice" />);
     expect(screen.getByText('invoicePendingPayment')).toBeInTheDocument();
-    expect(screen.getByText('50,00 EUR')).toBeInTheDocument();
+    // Real currency symbol, not the raw ISO code — "50,00 €", never "50,00 EUR".
+    expect(screen.getByText('50,00 €')).toBeInTheDocument();
+    expect(screen.queryByText(/EUR/)).toBeNull();
+  });
+
+  it('renders the row amount with the real currency symbol, not the raw ISO code', () => {
+    const payments = [{ id: '1', amount: 1500, paymentDate: '2026-01-01', documentNo: 'INV-1500' }];
+    render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+    expect(screen.getByText(/1\.500,00\s€/)).toBeInTheDocument();
+    expect(screen.queryByText(/EUR/)).toBeNull();
+  });
+
+  it('resolves the symbol dynamically for a non-EUR currency (USD), not hardcoded €', () => {
+    const payments = [{ id: '1', amount: 200, paymentDate: '2026-01-01', documentNo: 'INV-200' }];
+    render(<PaymentsCard payments={payments} currencyCode="USD" specName="purchase-invoice" />);
+    expect(screen.getByText(/200,00\s\$/)).toBeInTheDocument();
+    expect(screen.queryByText(/USD/)).toBeNull();
   });
 
   it('does not show outstanding row when totalOutstanding is 0', () => {

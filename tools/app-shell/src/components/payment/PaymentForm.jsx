@@ -130,7 +130,7 @@ function useBPartnerVendor(q) { return useBPartnerLookup(q, 'vendor'); }
 function PaymentFields({
   doc, pago, onPagoChange, methodOptions, metodo, setMetodo, tercero, setTercero,
   fechaPago, setFechaPago, referencia, setReferencia,
-  showAccountField, account, accountOptions, accountId, setAccountId, requireAccount,
+  showAccountField, account, accountOptions, accountId, setAccountId, requireAccount, currency,
 }) {
   const bpartnerHook = doc === 'in' ? useBPartnerCustomer : useBPartnerVendor;
   const accountLabel = doc === 'in' ? 'Ingresar en' : 'Pagar desde';
@@ -182,6 +182,7 @@ function PaymentFields({
         <AmountInput
           label="Importe del pago"
           value={Number(pago) ? fmtAmount(pago) : ''}
+          currency={currency}
           placeholder="0.00"
           onChange={onPagoChange}
           data-testid="AmountInput__bca0e2" />
@@ -469,6 +470,7 @@ export function PaymentForm({
   invoices = null,
   allowCommissions = true,
   note = null,
+  currency,
   onChange,
 }) {
   const allowedMethods = useMemo(
@@ -619,6 +621,7 @@ export function PaymentForm({
         accountId={accountId}
         setAccountId={setAccountId}
         requireAccount={requireAccount}
+        currency={currency}
         data-testid="PaymentFields__bca0e2" />
       <InvoiceTable
         invoices={invoiceRows}
