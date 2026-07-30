@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.31.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-17T18:04:55.460Z",
-  "contractChecksum": "5e26b1eaf5b3d45e",
+  "updatedAt": "2026-07-30T01:51:37.147Z",
+  "contractChecksum": "360af1ea3b464ed5",
   "apiPrediction": {
     "specName": "goods-shipment",
     "baseUrl": "/sws/neo/goods-shipment",
@@ -472,7 +472,7 @@
           "movementQuantity": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
-            "defaultValue": "0"
+            "defaultValue": "1"
           },
           "description": {},
           "orderQuantity": {
@@ -578,5 +578,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "126b26c4d7f9c2ba"
+  "checksum": "15193eaabd2c81f2"
 }

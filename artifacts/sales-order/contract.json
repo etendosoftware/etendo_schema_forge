@@ -1,8 +1,8 @@
 {
-  "version": "0.24.0",
+  "version": "0.25.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-07-22T14:17:46.384Z",
-  "checksum": "77f2b05c4b12ce37",
+  "updatedAt": "2026-07-30T01:51:44.342Z",
+  "checksum": "c6bfec69eaeb3ab3",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -1911,6 +1911,30 @@
             "apiKey": "eTPRRemovePayment",
             "column": "EM_Etpr_Remove_Payment",
             "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "eTSCCAvgPrice",
+            "apiKey": "eTSCCAvgPrice",
+            "column": "EM_ETSCC_avg_price",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etsccLinetotal",
+            "apiKey": "etsccLinetotal",
+            "column": "EM_Etscc_Linetotal",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etsccLinetotalQ",
+            "apiKey": "etsccLinetotalQ",
+            "column": "EM_Etscc_Linetotal_Q",
+            "type": "amount",
             "visibility": "discarded",
             "required": true
           }
@@ -6176,6 +6200,30 @@
         "description": "System field 'eTPRRemovePayment' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-eTSCCAvgPrice",
+        "category": "system-field",
+        "entity": "header",
+        "field": "eTSCCAvgPrice",
+        "runner": "node",
+        "description": "System field 'eTSCCAvgPrice' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-etsccLinetotal",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etsccLinetotal",
+        "runner": "node",
+        "description": "System field 'etsccLinetotal' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-etsccLinetotalQ",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etsccLinetotalQ",
+        "runner": "node",
+        "description": "System field 'etsccLinetotalQ' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-etvfacReversedInvoice",
         "category": "system-field",
         "entity": "header",
@@ -7103,7 +7151,7 @@
       }
     ],
     "summary": {
-      "total": 549,
+      "total": 552,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 2,
@@ -7117,11 +7165,11 @@
         "rule-declared": 254,
         "searchable-filters": 5,
         "selector-endpoint": 10,
-        "system-field": 150,
+        "system-field": 153,
         "visibility": 2
       },
       "byRunner": {
-        "node": 549,
+        "node": 552,
         "junit": 0
       }
     }

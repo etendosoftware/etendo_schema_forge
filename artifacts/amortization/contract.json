@@ -1,8 +1,8 @@
 {
-  "version": "0.37.0",
+  "version": "0.38.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-07-21T12:35:16.807Z",
-  "checksum": "3d1d2f26e1ccec6a",
+  "updatedAt": "2026-07-30T01:51:35.661Z",
+  "checksum": "b01823e4b6d0988c",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -503,6 +503,12 @@
             "validation": {
               "maxLength": 32
             },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -526,6 +532,12 @@
             "gridOrder": 8,
             "validation": {
               "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@$Element_BP@='Y'",
+              "evaluable": false,
+              "reason": "accounting-dimension",
+              "js": null
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -1320,6 +1332,22 @@
         "description": "Display logic for 'posted' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-lines-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-lines-eTADASBpartner",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "eTADASBpartner",
+        "runner": "node",
+        "description": "Display logic for 'eTADASBpartner' in lines should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-lines-project",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -1334,6 +1362,22 @@
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-lines-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-lines-eTADASBpartner",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "eTADASBpartner",
+        "runner": "node",
+        "description": "Display logic for 'eTADASBpartner' in lines should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-lines-project",
@@ -2584,13 +2628,13 @@
       }
     ],
     "summary": {
-      "total": 173,
+      "total": 177,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 2,
         "default-value-type": 2,
-        "displaylogic-evaluable": 2,
-        "displaylogic-valid": 2,
+        "displaylogic-evaluable": 4,
+        "displaylogic-valid": 4,
         "field-presence": 15,
         "field-type": 15,
         "readonlylogic-evaluable": 13,
@@ -2602,7 +2646,7 @@
         "visibility": 2
       },
       "byRunner": {
-        "node": 173,
+        "node": 177,
         "junit": 0
       }
     }

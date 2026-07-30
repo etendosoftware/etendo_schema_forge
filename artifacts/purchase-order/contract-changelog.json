@@ -1935,5 +1935,17 @@
     ],
     "author": "pipeline",
     "date": "2026-07-22"
+  },
+  {
+    "from": "0.42.0",
+    "to": "0.43.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTSCCAvgPrice\" added to entity \"header\" in backend",
+      "Field \"etsccLinetotal\" added to entity \"header\" in backend",
+      "Field \"etsccLinetotalQ\" added to entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-30"
   }
 ]

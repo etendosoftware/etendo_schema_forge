@@ -54,7 +54,7 @@ const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'par
 const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
-    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
+    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 1 },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
   ],
   derived: [
