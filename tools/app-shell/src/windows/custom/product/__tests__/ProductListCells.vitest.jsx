@@ -228,13 +228,14 @@ describe('useProductPrices', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: '12.5',
+            currencyIso: 'EUR',
           },
         ],
       },
     });
     const { result } = renderHook(() => useProductPrices('prod-1', 'tok', '/api'));
     await waitFor(() => expect(result.current.sale).not.toBeUndefined());
-    expect(result.current.sale).toBe(12.5);
+    expect(result.current.sale).toEqual({ value: 12.5, currency: 'EUR' });
   });
 
   it('resolves purchase price from a purchase row', async () => {
@@ -246,13 +247,14 @@ describe('useProductPrices', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: '8',
+            currencyIso: 'EUR',
           },
         ],
       },
     });
     const { result } = renderHook(() => useProductPrices('prod-1', 'tok', '/api'));
     await waitFor(() => expect(result.current.purchase).not.toBeUndefined());
-    expect(result.current.purchase).toBe(8);
+    expect(result.current.purchase).toEqual({ value: 8, currency: 'EUR' });
     expect(result.current.sale).toBeNull();
   });
 
@@ -265,13 +267,14 @@ describe('useProductPrices', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: '5',
+            currencyIso: 'EUR',
           },
         ],
       },
     });
     const { result } = renderHook(() => useProductPrices('prod-1', 'tok', '/api'));
     await waitFor(() => expect(result.current.sale).not.toBeUndefined());
-    expect(result.current.sale).toBe(5);
+    expect(result.current.sale).toEqual({ value: 5, currency: 'EUR' });
     expect(result.current.purchase).toBeNull();
   });
 
@@ -284,20 +287,43 @@ describe('useProductPrices', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: '10',
+            currencyIso: 'EUR',
           },
           {
             'priceListVersion$salesPriceList': false,
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: '6',
+            currencyIso: 'EUR',
           },
         ],
       },
     });
     const { result } = renderHook(() => useProductPrices('prod-1', 'tok', '/api'));
     await waitFor(() => expect(result.current.sale).not.toBeUndefined());
-    expect(result.current.sale).toBe(10);
-    expect(result.current.purchase).toBe(6);
+    expect(result.current.sale).toEqual({ value: 10, currency: 'EUR' });
+    expect(result.current.purchase).toEqual({ value: 6, currency: 'EUR' });
+  });
+
+  // ---- regression: real currency of the row must be preserved, not discarded ----
+
+  it('preserves the row currencyIso instead of hardcoding EUR (regression)', async () => {
+    global.fetch = buildFetch({
+      response: {
+        data: [
+          {
+            'priceListVersion$salesPriceList': true,
+            'priceListVersion$default': true,
+            'priceListVersion$validFromDate': '2025-01-01',
+            standardPrice: '25',
+            currencyIso: 'USD',
+          },
+        ],
+      },
+    });
+    const { result } = renderHook(() => useProductPrices('prod-1', 'tok', '/api'));
+    await waitFor(() => expect(result.current.sale).not.toBeUndefined());
+    expect(result.current.sale).toEqual({ value: 25, currency: 'USD' });
   });
 
   it('returns { sale: null, purchase: null } on empty data array', async () => {
@@ -413,12 +439,13 @@ describe('ProductSalePriceCell', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: 9.99,
+            currencyIso: 'EUR',
           },
         ],
       },
     });
     render(<ProductSalePriceCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
-    await waitFor(() => expect(screen.getByText('9.99 €')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('9,99 €')).toBeInTheDocument());
   });
 
   it('renders dash when no sales row exists', async () => {
@@ -430,6 +457,7 @@ describe('ProductSalePriceCell', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: 5,
+            currencyIso: 'EUR',
           },
         ],
       },
@@ -447,15 +475,39 @@ describe('ProductSalePriceCell', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: 15,
+            currencyIso: 'EUR',
           },
         ],
       },
     });
     const { container } = render(<ProductSalePriceCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
-    await waitFor(() => expect(screen.getByText('15.00 €')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('15,00 €')).toBeInTheDocument());
     const span = container.querySelector('span.font-semibold');
     expect(span).toBeInTheDocument();
-    expect(span).toHaveTextContent('15.00 €');
+    expect(span).toHaveTextContent('15,00 €');
+  });
+
+  // ---- regression: currency-correctness bug fix ----
+  // Previously PriceText hardcoded a literal `€` regardless of the product's
+  // real price-list currency. A USD-priced row must render with `$`, not `€`.
+
+  it('renders the real row currency symbol ($) instead of a hardcoded € (regression)', async () => {
+    global.fetch = buildFetch({
+      response: {
+        data: [
+          {
+            'priceListVersion$salesPriceList': true,
+            'priceListVersion$default': true,
+            'priceListVersion$validFromDate': '2025-01-01',
+            standardPrice: 4000,
+            currencyIso: 'USD',
+          },
+        ],
+      },
+    });
+    render(<ProductSalePriceCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
+    await waitFor(() => expect(screen.getByText('4.000,00 $')).toBeInTheDocument());
+    expect(screen.queryByText(/€/)).not.toBeInTheDocument();
   });
 });
 
@@ -491,12 +543,13 @@ describe('ProductPurchasePriceCell', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: 4.5,
+            currencyIso: 'EUR',
           },
         ],
       },
     });
     render(<ProductPurchasePriceCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
-    await waitFor(() => expect(screen.getByText('4.50 €')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('4,50 €')).toBeInTheDocument());
   });
 
   it('renders dash when no purchase row exists', async () => {
@@ -508,6 +561,7 @@ describe('ProductPurchasePriceCell', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: 8,
+            currencyIso: 'EUR',
           },
         ],
       },
@@ -525,14 +579,34 @@ describe('ProductPurchasePriceCell', () => {
             'priceListVersion$default': true,
             'priceListVersion$validFromDate': '2025-01-01',
             standardPrice: 3,
+            currencyIso: 'EUR',
           },
         ],
       },
     });
     const { container } = render(<ProductPurchasePriceCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
-    await waitFor(() => expect(screen.getByText('3.00 €')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('3,00 €')).toBeInTheDocument());
     const boldSpan = container.querySelector('span.font-semibold');
     expect(boldSpan).not.toBeInTheDocument();
+  });
+
+  it('renders the real row currency symbol ($) instead of a hardcoded € (regression)', async () => {
+    global.fetch = buildFetch({
+      response: {
+        data: [
+          {
+            'priceListVersion$salesPriceList': false,
+            'priceListVersion$default': true,
+            'priceListVersion$validFromDate': '2025-01-01',
+            standardPrice: 1234.5,
+            currencyIso: 'USD',
+          },
+        ],
+      },
+    });
+    render(<ProductPurchasePriceCell row={DEFAULT_ROW} {...DEFAULT_PROPS} />);
+    await waitFor(() => expect(screen.getByText('1.234,50 $')).toBeInTheDocument());
+    expect(screen.queryByText(/€/)).not.toBeInTheDocument();
   });
 });
 

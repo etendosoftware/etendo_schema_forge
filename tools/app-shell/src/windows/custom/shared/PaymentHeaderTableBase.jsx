@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { RotateCcw, Check } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { DataTable } from '@/components/contract-ui';
 import PaymentLifecycleConfirmModal from './PaymentLifecycleConfirmModal';
 import ConfirmPaymentModal from './ConfirmPaymentModal';
@@ -48,24 +49,9 @@ const PAYMENT_FILTERS = ['documentNo', 'paymentDate', 'businessPartner', 'status
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
-const _symCache = {};
-function currencySymbol(curr) {
-  const code = curr || 'EUR';
-  if (_symCache[code]) return _symCache[code];
-  try {
-    const sym = new Intl.NumberFormat('es-ES', { style: 'currency', currency: code })
-      .formatToParts(0).find(p => p.type === 'currency')?.value ?? code;
-    _symCache[code] = sym;
-    return sym;
-  } catch {
-    return code;
-  }
-}
-
-const AMOUNT_FMT = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function fmtAmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  return (n < 0 ? '-' : '') + AMOUNT_FMT.format(Math.abs(n)) + ' ' + currencySymbol(curr);
+  return formatCurrency(curr || 'EUR', n);
 }
 
 // ─── SidebarSkeleton ──────────────────────────────────────────────────────────

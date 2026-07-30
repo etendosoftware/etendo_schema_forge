@@ -24,12 +24,11 @@ describe('PaymentHeaderTableBase', () => {
 
   // ── Amount formatting ──────────────────────────────────────────────────────
 
-  it('uses Intl.NumberFormat for amount formatting', () => {
-    assert.match(src, /new Intl\.NumberFormat/);
-  });
-
-  it('has currencySymbol helper function', () => {
-    assert.match(src, /function currencySymbol/);
+  it('delegates amount formatting to the shared formatCurrency() (not a hand-rolled Intl.NumberFormat/currencySymbol duplicate)', () => {
+    assert.match(src, /import\s*\{\s*formatCurrency\s*\}\s*from\s*['"]@\/lib\/formatCurrency\.js['"]/);
+    assert.match(src, /formatCurrency\(/);
+    assert.doesNotMatch(src, /new Intl\.NumberFormat/);
+    assert.doesNotMatch(src, /function currencySymbol/);
   });
 
   it('renders sign and amount for in/out direction', () => {

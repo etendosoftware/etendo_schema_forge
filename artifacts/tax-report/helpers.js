@@ -1,60 +1,14 @@
-// Group-break detection: tracks previous values per group field
-var _prevGroupValues = {};
-
-function isGroupBreak(field, currentValue) {
-  var prev = _prevGroupValues[field];
-  _prevGroupValues[field] = currentValue;
-  return prev !== currentValue;
-}
-
-function resetGroupTracking() {
-  _prevGroupValues = {};
-}
-
-function formatDate(value) {
-  if (value == null || value === '') return '';
-  var d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
-}
-
-function formatCurrency(value) {
-  if (value == null) return '';
-  var num = Number(value);
-  if (isNaN(num)) return String(value);
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-}
-
+// All formatting helpers now come from the canonical
+// templates/reports/helpers/report-html-helpers.js (both the on-screen HTML
+// preview and the jsreport PDF/XLSX render path build their helper set from
+// there — see buildJsreportHelpersString()). This file only keeps
+// `formatNumber`'s non-default options: extractNumberFormatOptions() reads
+// this function's Intl.NumberFormat call (without executing it) to detect
+// that tax rates need 2 fixed decimals ("21,00%"), unlike the canonical
+// default (no fixed decimals).
 function formatNumber(value) {
   if (value == null) return '';
   var num = Number(value);
   if (isNaN(num)) return String(value);
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-}
-
-function formatDateDisplay(value) {
-  if (value == null || value === '') return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-    var parts = value.split('-');
-    return parts[2] + '-' + parts[1] + '-' + parts[0];
-  }
-  return String(value);
-}
-
-function sumField(rows, field) {
-  if (!Array.isArray(rows)) return 0;
-  return rows.reduce(function(acc, row) {
-    var val = Number(row[field]);
-    return acc + (isNaN(val) ? 0 : val);
-  }, 0);
-}
-
-function eq(a, b) { return a === b; }
-
-function ifCond(v1, operator, v2, options) {
-  switch (operator) {
-    case '===': return v1 === v2 ? options.fn(this) : options.inverse(this);
-    case '!==': return v1 !== v2 ? options.fn(this) : options.inverse(this);
-    default: return options.inverse(this);
-  }
 }

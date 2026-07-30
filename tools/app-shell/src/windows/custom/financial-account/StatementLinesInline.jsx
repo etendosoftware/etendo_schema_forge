@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { ArrowUpRight, Layers } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTag } from '@/components/ui/status-tag';
 import { cn } from '@/lib/utils';
@@ -83,7 +84,6 @@ const LINE_CELL_RENDERERS = {
             sign="−"
             toneClass="font-semibold text-destructive"
             currency={ctx.currency}
-            bcpLocale={ctx.bcpLocale}
             data-testid="AmountCell__10cf4a" />
         </span>
       );
@@ -102,7 +102,6 @@ const LINE_CELL_RENDERERS = {
             sign="+"
             toneClass="font-semibold text-status-success-foreground"
             currency={ctx.currency}
-            bcpLocale={ctx.bcpLocale}
             data-testid="AmountCell__10cf4a" />
         </span>
       );
@@ -196,15 +195,8 @@ function formatDate(iso, bcpLocale) {
   }).format(d);
 }
 
-function formatMoney(amount, currency, bcpLocale) {
-  try {
-    return new Intl.NumberFormat(bcpLocale, {
-      style: 'currency', currency,
-      minimumFractionDigits: 2, maximumFractionDigits: 2,
-    }).format(Number(amount));
-  } catch {
-    return `${Number(amount).toFixed(2)} ${currency}`;
-  }
+function formatMoney(amount, currency) {
+  return formatCurrency(currency, amount);
 }
 
 /**
@@ -308,7 +300,7 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
   const cellCtx = { ui, currency, bcpLocale };
   const pendingAmountLabel = matchKind === 'partial'
     ? ui('financeAccountStatementLinesPendingAmount', {
-      amount: formatMoney(Math.abs(Number(line.pendingAmount) || 0), currency, bcpLocale),
+      amount: formatMoney(Math.abs(Number(line.pendingAmount) || 0), currency),
     })
     : null;
   return (
@@ -359,9 +351,9 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
   );
 }
 
-function AmountCell({ value, sign, toneClass, currency, bcpLocale }) {
+function AmountCell({ value, sign, toneClass, currency }) {
   if (value > 0) {
-    return <span className={toneClass}>{sign}{formatMoney(value, currency, bcpLocale)}</span>;
+    return <span className={toneClass}>{sign}{formatMoney(value, currency)}</span>;
   }
   return <span className="text-[hsl(var(--text-disabled))]">—</span>;
 }

@@ -10,7 +10,7 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -979,7 +979,9 @@ function formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived) {
   let displayVal = identVal || rawVal;
   if (isTwoDecimalDerived && displayVal != null && displayVal !== '') {
     const n = typeof displayVal === 'string' ? Number.parseFloat(displayVal) : displayVal;
-    if (Number.isFinite(n)) displayVal = n.toFixed(2);
+    if (Number.isFinite(n)) {
+      displayVal = n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+    }
   }
   return displayVal;
 }
@@ -1616,7 +1618,7 @@ function renderFooterRow({
             className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}
             data-testid="TableCell__eb5261">
             {col.type === 'amount'
-              ? formatAmount(totals[col.key], filteredData[0]?.['currency$_identifier'])
+              ? formatCurrency(filteredData[0]?.['currency$_identifier'], totals[col.key])
               : ''}
           </TableCell>
         ))}

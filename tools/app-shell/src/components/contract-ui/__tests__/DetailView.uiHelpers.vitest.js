@@ -136,16 +136,11 @@ describe('getChildSaveButtonLabel', () => {
 
 describe('getSelectedLinesTotalLabel', () => {
   const lineConfig = { grossField: 'lineGross' };
-  // Format the expected number the same way the helper does, so assertions are
-  // independent of the runner's default locale decimal separator.
-  const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   it('sums the gross field across rows and formats with 2 decimals', () => {
     const rows = [{ lineGross: 10 }, { lineGross: 5.5 }];
     const result = getSelectedLinesTotalLabel({}, rows, lineConfig, {});
-    expect(result).toBe(fmt(15.5));
-    // Always rendered with exactly two fraction digits regardless of locale.
-    expect(result).toMatch(/[.,]50$/);
+    expect(result).toBe('15,50');
   });
 
   it('falls back to lineGrossAmount and treats missing/non-numeric values as 0', () => {
@@ -154,18 +149,33 @@ describe('getSelectedLinesTotalLabel', () => {
       { lineGross: 'not-a-number' }, // non-numeric -> 0
       {}, // missing both -> 0
     ];
-    expect(getSelectedLinesTotalLabel({}, rows, lineConfig, {})).toBe(fmt(4));
+    expect(getSelectedLinesTotalLabel({}, rows, lineConfig, {})).toBe('4,00');
   });
 
   it('appends the currency identifier when present', () => {
     const rows = [{ lineGross: 100 }];
     const data = { 'currency$_identifier': 'EUR' };
-    expect(getSelectedLinesTotalLabel({}, rows, lineConfig, data)).toBe(`${fmt(100)} EUR`);
+    // Delegates to formatCurrency (es-ES, narrowSymbol) — EUR renders as '€', not the
+    // literal code 'EUR'. \s matches the non-breaking space Intl inserts before the symbol.
+    expect(getSelectedLinesTotalLabel({}, rows, lineConfig, data)).toMatch(/100,00\s€/);
   });
 
   it('omits the currency suffix when not present', () => {
     const rows = [{ lineGross: 100 }];
-    expect(getSelectedLinesTotalLabel({}, rows, lineConfig, {})).toBe(fmt(100));
+    expect(getSelectedLinesTotalLabel({}, rows, lineConfig, {})).toBe('100,00');
+  });
+
+  it('pins the locale to es-ES for the no-currency path (not the runtime default)', () => {
+    // toBe('100,00') above can pass by coincidence on a machine whose default ICU
+    // locale happens to already use a comma decimal separator (e.g. es-AR) even
+    // when the code passes `undefined` as the locale — this assertion checks the
+    // actual mechanism instead of the output, so it fails regardless of the
+    // runner's own locale.
+    const rows = [{ lineGross: 100 }];
+    const spy = vi.spyOn(Number.prototype, 'toLocaleString');
+    getSelectedLinesTotalLabel({}, rows, lineConfig, {});
+    expect(spy).toHaveBeenCalledWith('es-ES', expect.anything());
+    spy.mockRestore();
   });
 
   it('returns null when showLineTotals is false', () => {
