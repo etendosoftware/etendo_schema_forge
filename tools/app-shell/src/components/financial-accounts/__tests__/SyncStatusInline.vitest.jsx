@@ -5,7 +5,7 @@ vi.mock('@/i18n', () => ({
     const map = {
       financeAccountsSyncedJustNow: 'Sincronizado',
       financeAccountsSyncPending: 'Sincronización pendiente',
-      financeAccountsConnectPsd2: 'Conectar PSD2',
+      financeAccountsConnectBank: 'Conectar banco',
     };
     return map[key] ?? key;
   },
@@ -24,23 +24,23 @@ describe('SyncStatusInline', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders the pending warning when psd2Pending is true', () => {
-    render(<SyncStatusInline account={{ type: 'B', psd2Pending: true }} />);
+  it('renders the pending warning when bankConnectionPending is true', () => {
+    render(<SyncStatusInline account={{ type: 'B', bankConnectionPending: true }} />);
     expect(screen.getByText('Sincronización pendiente')).toBeInTheDocument();
   });
 
-  it('renders the green "Sincronizado" pill when psd2Connected is true', () => {
-    render(<SyncStatusInline account={{ type: 'B', psd2Connected: true }} />);
+  it('renders the green "Sincronizado" pill when bankConnected is true', () => {
+    render(<SyncStatusInline account={{ type: 'B', bankConnected: true }} />);
     expect(screen.getByText('Sincronizado')).toBeInTheDocument();
   });
 
-  it('renders the "Conectar PSD2" link by default for bank accounts', () => {
+  it('renders the "Conectar banco" link by default for bank accounts', () => {
     render(<SyncStatusInline account={{ type: 'B' }} />);
-    expect(screen.getByText('Conectar PSD2')).toBeInTheDocument();
+    expect(screen.getByText('Conectar banco')).toBeInTheDocument();
   });
 
-  it('renders the "Conectar PSD2" link by default for card accounts', () => {
+  it('renders the "Conectar banco" link by default for card accounts', () => {
     render(<SyncStatusInline account={{ type: 'CA' }} />);
-    expect(screen.getByText('Conectar PSD2')).toBeInTheDocument();
+    expect(screen.getByText('Conectar banco')).toBeInTheDocument();
   });
 });

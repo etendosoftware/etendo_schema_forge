@@ -104,8 +104,8 @@ describe('ReturnWindowShell', () => {
     assert.match(src, /editMode: 'navigate'/);
   });
 
-  it('sets hideDeleteWhenComplete to true in rowQuickActions', () => {
-    assert.match(src, /hideDeleteWhenComplete: true/);
+  it('does not set hideDeleteWhenComplete in rowQuickActions (grid delete always visible per ETP-4656)', () => {
+    assert.doesNotMatch(src, /hideDeleteWhenComplete/);
   });
 
   // ── CloneOrderModal portal ─────────────────────────────────────────────────

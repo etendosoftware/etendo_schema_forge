@@ -83,7 +83,7 @@ vi.mock('../ImportedStatementsTab.jsx', () => ({
 
 // ETP-4530: Edit modal entry point — stubbed like the other child components above so this suite
 // stays isolated from EditAccountModal's own dependencies (i18n locale switch, account mutations,
-// PSD2 actions, accounting configuration). EditAccountModal has its own dedicated test suite.
+// bank connection actions, accounting configuration). EditAccountModal has its own dedicated test suite.
 vi.mock('../EditAccountModal.jsx', () => ({
   EditAccountModal: ({ open, account }) => (
     <div data-testid="edit-account-modal-stub" data-open={String(open)} data-account={account?.name ?? ''} />
@@ -94,16 +94,16 @@ vi.mock('../ArchiveAccountDialog.jsx', () => ({
     <div data-testid="archive-account-dialog-stub" data-open={String(open)} />
   ),
 }));
-// ETP-4530: index.jsx now runs usePsd2ConnectFlow (→ usePsd2Actions → useAuth) itself so the Edit
-// modal's "Connect to PSD2" button works from this entry point too. Stubbed here for the same
+// ETP-4530: index.jsx now runs useBankConnectionFlow (→ useBankConnectionActions → useAuth) itself so the Edit
+// modal's "Connect bank" button works from this entry point too. Stubbed here for the same
 // isolation reason as the two mocks above.
-vi.mock('../Psd2ConnectFlowUI.jsx', () => ({
-  Psd2ConnectFlowUI: ({ flow }) => (
-    <div data-testid="psd2-connect-flow-ui-stub" data-connecting={String(!!flow?.connecting)} />
+vi.mock('../BankConnectionFlowUI.jsx', () => ({
+  BankConnectionFlowUI: ({ flow }) => (
+    <div data-testid="bank-connection-flow-ui-stub" data-connecting={String(!!flow?.connecting)} />
   ),
 }));
-vi.mock('@/hooks/usePsd2ConnectFlow', () => ({
-  usePsd2ConnectFlow: () => ({
+vi.mock('@/hooks/useBankConnectionFlow', () => ({
+  useBankConnectionFlow: () => ({
     startConnect: vi.fn(), startCreate: vi.fn(), connecting: false,
     selection: null, confirmSelection: vi.fn(), cancelSelection: vi.fn(),
   }),

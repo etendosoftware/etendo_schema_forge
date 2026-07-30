@@ -9,7 +9,7 @@ Product Category lets users maintain the category master record that classifies 
 Users should be able to:
 
 - browse product categories by Search Key and Name
-- open a category and maintain its header fields: Search Key, Name, Description, Default, and Summary Level
+- open a category and maintain its header fields: Search Key, Name, Description, Default, and Active
 - view and edit accounting accounts (Asset, Expense, Revenue, COGS) for the category directly from the Accounting grid, using inline editing with pencil and trash icons on hover
 
 ## Interaction model
@@ -42,8 +42,10 @@ The window uses these layout overrides (all set in `decisions.json → window`):
 
 The header form is rendered by `ProductCategoryCustomForm` (a custom component, not the generated `ProductCategoryForm`). Layout:
 
-- **Row 1:** Name input (325 px fixed) + Search Key input (325 px fixed) + **Configuración** checkbox group (flex-1): two checkboxes — *Valor por defecto* (`IsDefault`) and *Agrupable* (`Issummary`).
+- **Row 1:** Name input (325 px fixed) + Search Key input (325 px fixed) + a checkbox group (`w-fit`, 2 columns): *Valor por defecto* (`default` / `IsDefault`) and *Activo* (`active` / `IsActive`).
 - **Row 2:** Description textarea (full width).
+
+**ETP-4670 update:** the *Agrupable* (`summaryLevel` / `Issummary`) checkbox is gone — the field is discarded (`visibility: "discarded"` in `decisions.json`), so it never renders. It is replaced by *Activo* (`active` / `IsActive`), now editable and shown in the checkbox group. The group's own "Configuración" title was removed along with the switch away from the shared `CheckboxGroup` component (see Automated evidence below) — it was a hardcoded label, not something declared in the AD or `decisions.json`.
 
 The custom form is section-aware: it returns `null` for any `section` prop other than `"principal"`, which suppresses the auto-generated *Más detalles* collapsible and the *Otros* tab that `DetailView` probes for.
 
@@ -89,6 +91,8 @@ Custom icons `SortIcon` and `RefreshIcon` from `packages/app-shell-core/src/comp
 - `artifacts/product-category/generated/web/product-category/AccountingTable.jsx` renders `InlineLinesPanel` when `linesLayout === "inlineEditable"`, otherwise `DataTable`. The three non-first selector columns declare `grow: true` so all four share the row width equally.
 - `artifacts/product-category/generated/web/product-category/AccountingForm.jsx` is generated but not used in the current layout (inline editing replaces the side-panel form).
 - No dedicated Product Category browser test was found. Shared route/loading behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.
+- `ProductCategoryDefaultHandler.java` (com.etendoerp.go) and `ProductCategoryDefaultHandlerTest.java` cover the per-client uniqueness rule (ETP-4670), including the real-org-vs-wildcard-org case.
+- `tools/app-shell/src/lib/backendErrors.js` maps `"Only one product category can be marked as default."` to `backendError.productCategoryCannotSetMultipleDefault`.
 
 ## Custom window — ETP-4190
 
@@ -115,3 +119,14 @@ Regenerated on 2026-06-09 as part of feature/ETP-4192.
 - Backend fix (NEO Headless): `SelectorDescriptorResolver.findIdentifierProperty` now returns `"combination"` for entities that have that property (e.g. `AccountingCombination`) before falling back to `"id"`.
 - Frontend fix (`InlineSearchCombo`): root wrapper div now has `w-full` so selector inputs fill the full column width in inline edit mode.
 - Frontend fix (`linesColumnWidth`): `columnFlex` for selector/search/foreignKey columns now honors `col.grow` to override the default `idx === 0` grow behavior.
+
+## Header field changes — ETP-4670
+
+- **`summaryLevel` (`Issummary`) discarded.** `decisions.json → entities.productCategory.fields.summaryLevel.visibility` set to `"discarded"`. It no longer appears anywhere in the form, and `ProductCategoryCustomForm`'s checkbox group dropped the corresponding `CheckboxGroup` item.
+- **`default` (`IsDefault`) unchanged in visibility**, still editable — see the new uniqueness rule below.
+- **`active` (`IsActive`) added to the header, editable.** New field entry in `decisions.json → entities.productCategory.fields.active` (`visibility: "editable"`, `grid: false`, `section: "principal"`, `seq: 6`, `defaultValue: "Y"`). Rendered in the same checkbox group as `default`.
+- **Checkbox group refactor:** `ProductCategoryCustomForm.jsx` no longer uses the shared `@/windows/custom/shared/CheckboxGroup` component (which rendered a titled group with its own `readOnly`/save wiring). It now renders `default` and `active` as a 2-column `EntityForm` (`cols={2}`) inside a `w-fit` wrapper, matching how the rest of the form's fields flow through `EntityForm`/`onFieldBlur`/`displayLogic`. This also means the group's fields now participate in the standard auto-save-on-blur path (`onFieldBlur`) instead of the `CheckboxGroup`'s own change handling.
+- **Only one category can be the client's default.** New business rule: setting `default: true` on a category is blocked with an HTTP 400 if another `ProductCategory` belonging to the **same client** already has `default = true`. The old default is never silently unmarked — the save is rejected and the user must first clear the existing default.
+  - **Why scoped by client, not by organization:** a category can live in a real organization or in the wildcard organization `*` (`ad_org_id = '0'`), which every organization of that client inherits and sees. A per-organization check would miss the conflict between a category defined in a real org and one defined in the wildcard org, even though the end user sees both as "the" default category for that client. Scoping the check to the client sidesteps the org-hierarchy question entirely.
+  - **Implementation:** `ProductCategoryDefaultHandler.java` (com.etendoerp.go), a `NeoHandler` registered via `Java_Qualifier = "productCategoryDefaultHandler"` on the `productCategory` header entity. It only inspects POST/PATCH/PUT requests that explicitly set `default` to a truthy value, queries for another category of the same client with `default = true` (excluding the record being saved, so re-saving the current default is a no-op), and returns `NeoResponse.error(400, ...)` when a conflict is found. The error message (`ETGO_ProductCategoryCannotSetMultipleDefault`, new `AD_MESSAGE`) is intentionally left untranslated at the AD level — the frontend maps the exact English string to an i18n key via `tools/app-shell/src/lib/backendErrors.js`, so an `AD_Message_Trl` es_ES row must **not** be added for it.
+  - New i18n keys added to `en_US.json` / `es_ES.json` for the mapped error message.

@@ -7,7 +7,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Standard order for Q1 delivery",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-002",
@@ -15,7 +15,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Rush order - priority shipping required",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-003",
@@ -23,7 +23,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Bulk purchase for warehouse restocking",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-004",
@@ -31,7 +31,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Sample order for client evaluation",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-005",
@@ -39,7 +39,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Recurring monthly supply order",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-006",
@@ -47,7 +47,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Special pricing agreement applies",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-007",
@@ -55,7 +55,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Consolidated order from multiple requests",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-008",
@@ -63,7 +63,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Trial order for new product line",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-009",
@@ -71,7 +71,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Replacement for damaged goods",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-010",
@@ -79,7 +79,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Pre-season inventory build-up",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-011",
@@ -87,7 +87,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Customer-specific configuration",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   },
   {
     "id": "mock-productCategory-012",
@@ -95,7 +95,7 @@ export const productCategory = [
     "name": "Sample name",
     "description": "Government contract fulfillment",
     "default": "Sample default",
-    "summaryLevel": "Sample summaryLevel"
+    "active": "Sample active"
   }
 ];
 

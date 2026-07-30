@@ -9,24 +9,24 @@ vi.mock('../useNeoResource', () => ({
 }));
 
 import {
-  usePsd2Actions,
+  useBankConnectionActions,
   launchSaltEdgePopup,
-  PSD2_CALLBACK_PATH,
-  PSD2_CONNECTION_KEY,
-} from '../usePsd2Actions';
+  BANK_CONNECTION_CALLBACK_PATH,
+  BANK_CONNECTION_KEY,
+} from '../useBankConnectionActions';
 
 function okResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
 }
 
-describe('usePsd2Actions — constants', () => {
+describe('useBankConnectionActions — constants', () => {
   it('exposes the SPA callback path and connection storage key', () => {
-    expect(PSD2_CALLBACK_PATH).toBe('/financial-account/psd2-callback');
-    expect(PSD2_CONNECTION_KEY).toBe('psd2:lastConnectionId');
+    expect(BANK_CONNECTION_CALLBACK_PATH).toBe('/financial-account/bank-connection-callback');
+    expect(BANK_CONNECTION_KEY).toBe('bankConnection:lastConnectionId');
   });
 });
 
-describe('usePsd2Actions — hook', () => {
+describe('useBankConnectionActions — hook', () => {
   beforeEach(() => {
     globalThis.fetch = vi.fn();
   });
@@ -36,7 +36,7 @@ describe('usePsd2Actions — hook', () => {
   });
 
   it('starts with loading false and no error', () => {
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
   });
@@ -44,7 +44,7 @@ describe('usePsd2Actions — hook', () => {
   it('connect posts to the bridge and returns the connectUrl', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ connectUrl: 'https://saltedge/connect' }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let url;
     await act(async () => {
       url = await result.current.connect();
@@ -52,7 +52,7 @@ describe('usePsd2Actions — hook', () => {
 
     expect(url).toBe('https://saltedge/connect');
     const [calledUrl, init] = globalThis.fetch.mock.calls[0];
-    expect(calledUrl).toContain('/sws/neo/financial-account-psd2');
+    expect(calledUrl).toContain('/sws/neo/financial-account-bank-connection');
     expect(calledUrl).toContain('action=connect');
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
@@ -64,7 +64,7 @@ describe('usePsd2Actions — hook', () => {
   it('connect sends the financialAccountId in the body when provided', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ connectUrl: 'https://x' }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     await act(async () => {
       await result.current.connect('FA-1');
     });
@@ -82,7 +82,7 @@ describe('usePsd2Actions — hook', () => {
       }),
     );
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let data;
     await act(async () => {
       data = await result.current.fetchAccounts('conn-1', 'B', 'FA-1');
@@ -104,7 +104,7 @@ describe('usePsd2Actions — hook', () => {
   it('fetchAccounts falls back to empty defaults when fields are missing', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({}));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let data;
     await act(async () => {
       data = await result.current.fetchAccounts('conn-1');
@@ -116,7 +116,7 @@ describe('usePsd2Actions — hook', () => {
   it('fetchProviders returns the providers array with a short timeout', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ providers: [{ code: 'p1' }] }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let providers;
     await act(async () => {
       providers = await result.current.fetchProviders('ES', 'bbva');
@@ -132,7 +132,7 @@ describe('usePsd2Actions — hook', () => {
   it('fetchProviders returns an empty array when the payload has no providers', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({}));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let providers;
     await act(async () => {
       providers = await result.current.fetchProviders();
@@ -144,7 +144,7 @@ describe('usePsd2Actions — hook', () => {
   it('link posts the payload as the body', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     await act(async () => {
       await result.current.link({ financialAccountId: 'FA-1', connectionId: 'c1' });
     });
@@ -158,7 +158,7 @@ describe('usePsd2Actions — hook', () => {
   it('createAndLink posts the payload as the body', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ id: 'new' }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     await act(async () => {
       await result.current.createAndLink({ type: 'B', connectionId: 'c1' });
     });
@@ -171,7 +171,7 @@ describe('usePsd2Actions — hook', () => {
   it('reconnect returns the reconnectUrl', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ reconnectUrl: 'https://reconnect' }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let url;
     await act(async () => {
       url = await result.current.reconnect('FA-1');
@@ -186,7 +186,7 @@ describe('usePsd2Actions — hook', () => {
   it('disconnect posts the financialAccountId', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     await act(async () => {
       await result.current.disconnect('FA-1');
     });
@@ -199,7 +199,7 @@ describe('usePsd2Actions — hook', () => {
   it('sync posts the financialAccountId', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     await act(async () => {
       await result.current.sync('FA-1');
     });
@@ -211,7 +211,7 @@ describe('usePsd2Actions — hook', () => {
   it('saveImportSettings posts to the import-settings action', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ ok: true }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     await act(async () => {
       await result.current.saveImportSettings({ financialAccountId: 'FA-1', frequency: 'daily' });
     });
@@ -224,7 +224,7 @@ describe('usePsd2Actions — hook', () => {
   it('fetchStatus issues a GET with the financialAccountId query', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ connected: true }));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let status;
     await act(async () => {
       status = await result.current.fetchStatus('FA-1');
@@ -240,7 +240,7 @@ describe('usePsd2Actions — hook', () => {
   it('returns an empty object when the response has no data payload', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let data;
     await act(async () => {
       data = await result.current.sync('FA-1');
@@ -256,7 +256,7 @@ describe('usePsd2Actions — hook', () => {
       json: async () => ({ error: { message: 'Bank rejected', status: 422 } }),
     });
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let thrown;
     await act(async () => {
       try {
@@ -280,7 +280,7 @@ describe('usePsd2Actions — hook', () => {
       json: async () => { throw new Error('not json'); },
     });
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let thrown;
     await act(async () => {
       try {
@@ -294,12 +294,12 @@ describe('usePsd2Actions — hook', () => {
     expect(thrown.status).toBe(503);
   });
 
-  it('maps an AbortError to a PSD2_TIMEOUT error', async () => {
+  it('maps an AbortError to a BANK_CONNECTION_TIMEOUT error', async () => {
     const abortErr = new Error('aborted');
     abortErr.name = 'AbortError';
     globalThis.fetch.mockRejectedValue(abortErr);
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let thrown;
     await act(async () => {
       try {
@@ -309,14 +309,14 @@ describe('usePsd2Actions — hook', () => {
       }
     });
 
-    expect(thrown.message).toBe('PSD2_TIMEOUT');
-    await waitFor(() => expect(result.current.error?.message).toBe('PSD2_TIMEOUT'));
+    expect(thrown.message).toBe('BANK_CONNECTION_TIMEOUT');
+    await waitFor(() => expect(result.current.error?.message).toBe('BANK_CONNECTION_TIMEOUT'));
   });
 
   it('propagates a generic network error unchanged', async () => {
     globalThis.fetch.mockRejectedValue(new Error('Network down'));
 
-    const { result } = renderHook(() => usePsd2Actions());
+    const { result } = renderHook(() => useBankConnectionActions());
     let thrown;
     await act(async () => {
       try {
@@ -374,7 +374,7 @@ describe('launchSaltEdgePopup', () => {
     window.dispatchEvent(
       new MessageEvent('message', {
         origin: window.location.origin,
-        data: { type: 'psd2-connected', connectionId: 'CONN-42' },
+        data: { type: 'bank-connection-connected', connectionId: 'CONN-42' },
       }),
     );
 
@@ -390,7 +390,7 @@ describe('launchSaltEdgePopup', () => {
       window.dispatchEvent(
         new MessageEvent('message', {
           origin: 'https://evil.example',
-          data: { type: 'psd2-connected', connectionId: 'HACK' },
+          data: { type: 'bank-connection-connected', connectionId: 'HACK' },
         }),
       );
 
@@ -409,7 +409,7 @@ describe('launchSaltEdgePopup', () => {
       const promise = launchSaltEdgePopup(async () => 'https://connect');
       await Promise.resolve();
 
-      localStorage.setItem(PSD2_CONNECTION_KEY, 'STORED-7');
+      localStorage.setItem(BANK_CONNECTION_KEY, 'STORED-7');
       await vi.advanceTimersByTimeAsync(600);
 
       await expect(promise).resolves.toBe('STORED-7');

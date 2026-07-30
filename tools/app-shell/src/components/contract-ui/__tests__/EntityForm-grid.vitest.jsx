@@ -114,7 +114,10 @@ describe('EntityForm — horizontal grid layout (ETP-4000)', () => {
     const grid = getGridWrapper(container);
     expect(grid).not.toBeNull();
     // The override path uses gridClass="grid" and inline style only.
-    expect(grid.style.gridTemplateColumns).toBe('repeat(2, 1fr)');
+    // minmax(0, 1fr) (not bare 1fr) — see ETP-4600 Gap D: a plain `1fr` track's
+    // implicit minimum is the item's min-content size, which lets a long
+    // unbreakable value grow the column instead of letting `truncate` clip it.
+    expect(grid.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
     // Inline override sets gap via style, not via Tailwind classes.
     expect(grid.className).not.toMatch(/(^|\s)md:grid-cols-4(\s|$)/);
     expect(grid.className).not.toMatch(/(^|\s)md:grid-cols-3(\s|$)/);
@@ -125,7 +128,7 @@ describe('EntityForm — horizontal grid layout (ETP-4000)', () => {
       <EntityForm fields={fields} data={{}} onChange={vi.fn()} layout="horizontal" cols={2} />
     );
     const grid = getGridWrapper(container);
-    expect(grid.style.gridTemplateColumns).toBe('repeat(2, 1fr)');
+    expect(grid.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
     expect(grid.className).not.toMatch(/(^|\s)md:grid-cols-4(\s|$)/);
   });
 });

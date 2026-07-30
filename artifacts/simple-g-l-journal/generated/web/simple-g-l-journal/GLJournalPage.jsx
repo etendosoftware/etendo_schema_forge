@@ -117,6 +117,38 @@ export const api = {
       "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/currency"
     },
     {
+      "entity": "gLJournal",
+      "field": "businessPartner",
+      "column": "C_Bpartner_ID",
+      "reference": "BPartner",
+      "inputMode": "search",
+      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/businessPartner"
+    },
+    {
+      "entity": "gLJournal",
+      "field": "product",
+      "column": "M_Product_ID",
+      "reference": "Product",
+      "inputMode": "search",
+      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/product"
+    },
+    {
+      "entity": "gLJournal",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "selector",
+      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/project"
+    },
+    {
+      "entity": "gLJournal",
+      "field": "costCenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/costCenter"
+    },
+    {
       "entity": "gLJournalLine",
       "field": "accountingCombination",
       "column": "C_ValidCombination_ID",
@@ -245,6 +277,7 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        dimensionsPanelFieldKeys={["businessPartner","product","project","costCenter"]}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "GL_Journal", config: {} } }]}
         menuActions={({ data, status }) => [
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },

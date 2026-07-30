@@ -244,16 +244,15 @@
           "readOnlyLogic": null
         },
         "project": {
-          "section": "other",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
-          "visibility": "discarded",
+          "visibility": "editable",
+          "section": "principal",
           "reference": "CostCenter",
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "asset": {
           "visibility": "discarded",
@@ -636,15 +635,17 @@
           "inputMode": "selector"
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "costcenter": {
-          "form": false,
+          "visibility": "editable",
+          "grid": false,
           "reference": "CostCenter",
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "asset": {
           "form": false,

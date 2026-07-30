@@ -178,7 +178,7 @@ function mapAccounts(json) {
     currency: a.currency || null, currencyId: a.currencyId || null,
     // PSD2/PIS enrichment (ETP-4406) — absent on older backends, so default
     // to "not connected" rather than throwing off the eligibility gate.
-    psd2Connected: !!a.psd2Connected, maskedPan: a.maskedPan || null,
+    bankConnected: !!a.bankConnected, maskedPan: a.maskedPan || null,
   }));
 }
 
@@ -300,7 +300,7 @@ function extractSaveError(json, ui) {
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
 function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
   const pisEligible = dir === 'out'
-    && !!selectedAccount?.psd2Connected
+    && !!selectedAccount?.bankConnected
     && looksLikeTransfer(selectedMethodObj?.name)
     && PIS_ELIGIBLE_CURRENCIES.has(currency);
   // A foreign-currency payment (invoice ≠ account currency) MUST carry a positive conversion
@@ -875,7 +875,7 @@ export default function NewPaymentEntryModal({
   }, [accounts]);
 
   // ── PIS (Salt Edge bank transfer) eligibility — ETP-4406 ────────────────────
-  // Purchase-invoice payments only, on a PSD2-connected account, paid via a
+  // Purchase-invoice payments only, on a bank-connected account, paid via a
   // transfer-like method, in a currency Salt Edge supports. Imperfect by design
   // (mirrors the backend's own heuristic) — not meant to be exhaustive.
   const selectedAccount = useMemo(() => accounts.find(a => a.id === accountId), [accounts, accountId]);

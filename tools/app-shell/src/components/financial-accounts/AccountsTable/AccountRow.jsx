@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import { Pencil, RefreshCw } from 'lucide-react';
 import { TableRow, TableCell } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Tooltip,
   TooltipContent,
@@ -12,11 +13,17 @@ import { ReconcilePill } from '../ReconcilePill.jsx';
 import { AccountRowMenu } from '../AccountRowMenu.jsx';
 import { ACCOUNT_COLUMNS, ACCOUNT_CELL_RENDERERS } from './accountColumns.jsx';
 
-export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, onPsd2Action, onTransfer, onNewMovement }) {
+/**
+ * @param {{ selected?: boolean, onSelectionChange?: (id: string) => void }} props
+ */
+export function AccountRow({
+  account, onOpen, onReconcile, onEdit, onArchive, onBankConnectionAction, onTransfer, onNewMovement,
+  selected = false, onSelectionChange,
+}) {
   const ui = useUI();
   const cellCtx = {
     ui,
-    onConnect: onPsd2Action ? (acc) => onPsd2Action('connect', acc) : undefined,
+    onConnect: onBankConnectionAction ? (acc) => onBankConnectionAction('connect', acc) : undefined,
   };
 
   return (
@@ -25,6 +32,16 @@ export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, on
       className="group relative h-16 cursor-pointer bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
       onClick={() => onOpen?.(account)}
     >
+      {/* ETP-4656 — selection checkbox, same plumbing as MovementsTable/StatementsTable */}
+      <TableCell
+        className="w-10 px-3"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="TableCell__90174f">
+        <Checkbox
+          checked={selected}
+          onChange={() => onSelectionChange?.(account.id)}
+          data-testid={`account-select-${account.id}`} />
+      </TableCell>
       {/* Contract-driven data columns (decisions.json → contract.json) */}
       {ACCOUNT_COLUMNS.map((col) => {
         const renderer = ACCOUNT_CELL_RENDERERS[col.name];
@@ -68,16 +85,16 @@ export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, on
               </TooltipTrigger>
               <TooltipContent data-testid="TooltipContent__90174f">{ui('financeAccountsMenuEdit')}</TooltipContent>
             </Tooltip>
-            {/* Sync is only meaningful for PSD2-connected accounts — same statement fetch as the
+            {/* Sync is only meaningful for bank-connected accounts — same statement fetch as the
                 kebab's "Sincronizar ahora" / the statements tab's "Sincronizar extractos". */}
-            {account.psd2Connected === true ? (
+            {account.bankConnected === true ? (
               <Tooltip delayDuration={0} data-testid="Tooltip__90174f">
                 <TooltipTrigger asChild data-testid="TooltipTrigger__90174f">
                   <button
                     type="button"
                     aria-label={ui('financeAccountsMenuSyncNow')}
                     data-testid={`account-row-refresh-${account.id}`}
-                    onClick={() => onPsd2Action?.('syncNow', account)}
+                    onClick={() => onBankConnectionAction?.('syncNow', account)}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
                   >
                     <RefreshCw className="h-5 w-5" data-testid="RefreshCw__90174f" />
@@ -91,7 +108,7 @@ export function AccountRow({ account, onOpen, onReconcile, onEdit, onArchive, on
               onOpen={onOpen}
               onEdit={onEdit}
               onArchive={onArchive}
-              onPsd2Action={onPsd2Action}
+              onBankConnectionAction={onBankConnectionAction}
               onTransfer={onTransfer}
               onNewMovement={onNewMovement}
               data-testid="AccountRowMenu__90174f" />

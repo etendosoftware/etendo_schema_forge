@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T18:11:26.703Z",
-  "updatedAt": "2026-06-08T22:49:39.501Z",
-  "contractChecksum": "1ee00082a8db1933",
+  "updatedAt": "2026-07-27T18:02:18.812Z",
+  "contractChecksum": "1a0dca6c5a53fa70",
   "apiPrediction": {
     "specName": "product-category",
     "baseUrl": "/sws/neo/product-category",
@@ -140,9 +140,9 @@
           "default": {
             "required": true
           },
-          "summaryLevel": {
+          "active": {
             "required": true,
-            "defaultValue": "N"
+            "defaultValue": "Y"
           }
         }
       },
@@ -176,7 +176,7 @@
         "searchKey",
         "name",
         "default",
-        "summaryLevel"
+        "active"
       ],
       "lineFields": [
         "fixedAsset",
@@ -215,7 +215,7 @@
           "searchKey",
           "name",
           "default",
-          "summaryLevel"
+          "active"
         ]
       },
       {
@@ -238,5 +238,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "0c4bc8795b96017a"
+  "checksum": "348ab78adedbf60e"
 }

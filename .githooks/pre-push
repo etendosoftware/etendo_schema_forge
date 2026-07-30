@@ -10,6 +10,47 @@ echo "==> Running pre-push checks..."
 
 cd "$REPO_DIR"
 
+# ----------------------------------------------------------------------------
+# Hooks-Verified: every commit being pushed must carry a valid trailer, proving
+# the pre-commit hooks were installed and ran for that exact tree.
+# Set HOOKS_VERIFY_SKIP=1 to bypass (e.g. when pushing imported/legacy history).
+# ----------------------------------------------------------------------------
+if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
+  . "$SCRIPT_DIR/lib/hooks-proof.sh"
+  # stdin: <local ref> <local sha> <remote ref> <remote sha>
+  UNVERIFIED=""
+  while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue   # branch deletion
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+      # New branch: only check commits not already reachable from any remote ref.
+      RANGE="$(git rev-list "$local_sha" --not --remotes)"
+    else
+      RANGE="$(git rev-list "${remote_sha}..${local_sha}")"
+    fi
+    for sha in $RANGE; do
+      if ! hooks_verify_commit "$sha"; then
+        UNVERIFIED="$UNVERIFIED $sha"
+      fi
+    done
+  done
+
+  if [ -n "$UNVERIFIED" ]; then
+    echo "❌ ERROR: commits without a valid '${HOOKS_TRAILER_KEY}' trailer:"
+    for sha in $UNVERIFIED; do
+      printf '     %s  %s\n' "$(git rev-parse --short "$sha")" "$(git log -1 --format=%s "$sha")"
+    done
+    echo ""
+    echo "   This means the git hooks were not active when those commits were made"
+    echo "   (or the content changed afterwards)."
+    echo "   Fix: enable the hooks and re-create the commits, e.g."
+    echo "     npm install                     # sets core.hooksPath=.githooks"
+    echo "     git rebase --exec 'git commit --amend --no-edit' <base>"
+    echo "   Bypass (discouraged): HOOKS_VERIFY_SKIP=1 git push"
+    exit 1
+  fi
+  echo "✔ Hooks-Verified trailer present on all pushed commits."
+fi
+
 # Require Node 22+ for local validation tooling and coverage workers.
 NODE_MAJOR=$(node -e "process.stdout.write(process.versions.node.split('.')[0])" 2>/dev/null || echo "0")
 if [ "$NODE_MAJOR" -lt 22 ]; then

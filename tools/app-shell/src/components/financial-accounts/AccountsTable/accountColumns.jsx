@@ -30,9 +30,9 @@ function chunkIban(iban) {
 
 function NameCell({ account, ui, onConnect }) {
   const isCashLike = account.type === ACCOUNT_TYPE.CASH;
-  // In T1 the PSD2 column is not yet populated, so anything not explicitly
-  // psd2Connected === true is treated as offline for bank/card rows.
-  const isDisconnected = !isCashLike && account.psd2Connected !== true;
+  // In T1 the connection column is not yet populated, so anything not explicitly
+  // bankConnected === true is treated as offline for bank/card rows.
+  const isDisconnected = !isCashLike && account.bankConnected !== true;
   return (
     <TableCell className="w-[480px] p-0" data-testid="TableCell__dc050f">
       <div className="flex h-full items-center">

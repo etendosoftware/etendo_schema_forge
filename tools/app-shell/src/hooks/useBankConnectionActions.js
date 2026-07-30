@@ -2,12 +2,12 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
 
-const BASE_PATH = '/sws/neo/financial-account-psd2';
+const BASE_PATH = '/sws/neo/financial-account-bank-connection';
 
-/** SPA route the Salt Edge popup returns to (see Psd2CallbackPage). */
-export const PSD2_CALLBACK_PATH = '/financial-account/psd2-callback';
+/** SPA route the Salt Edge popup returns to (see BankConnectionCallbackPage). */
+export const BANK_CONNECTION_CALLBACK_PATH = '/financial-account/bank-connection-callback';
 /** localStorage key the callback route uses to hand the connection id back to the opener. */
-export const PSD2_CONNECTION_KEY = 'psd2:lastConnectionId';
+export const BANK_CONNECTION_KEY = 'bankConnection:lastConnectionId';
 
 function buildQuery(params) {
   const parts = [];
@@ -21,7 +21,7 @@ function buildQuery(params) {
 /**
  * Opens a centered popup window synchronously (must be called inside the click handler so the
  * browser does not block it), then navigates it to the Salt Edge connect URL resolved by
- * {@code getConnectUrl} and resolves once the {@link Psd2CallbackPage} hands back the connection
+ * {@code getConnectUrl} and resolves once the {@link BankConnectionCallbackPage} hands back the connection
  * id (via postMessage / localStorage) or the user closes the popup.
  *
  * @param {() => Promise<string>} getConnectUrl resolves the Salt Edge connect/reconnect URL
@@ -53,30 +53,30 @@ function openCenteredPopup() {
   const h = Math.floor(window.screen.height * 0.7);
   const left = Math.floor((window.screen.width - w) / 2);
   const top = Math.floor((window.screen.height - h) / 2);
-  return window.open('', 'psd2-connect', `width=${w},height=${h},left=${left},top=${top}`);
+  return window.open('', 'bank-connection-connect', `width=${w},height=${h},left=${left},top=${top}`);
 }
 
 function waitForConnection(popup) {
   return new Promise((resolve) => {
-    try { localStorage.removeItem(PSD2_CONNECTION_KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem(BANK_CONNECTION_KEY); } catch { /* ignore */ }
     let settled = false;
     const finish = (value) => {
       if (settled) return;
       settled = true;
       clearInterval(timer);
       window.removeEventListener('message', onMessage);
-      try { localStorage.removeItem(PSD2_CONNECTION_KEY); } catch { /* ignore */ }
+      try { localStorage.removeItem(BANK_CONNECTION_KEY); } catch { /* ignore */ }
       resolve(value);
     };
     const onMessage = (event) => {
       if (event.origin !== window.location.origin) return;
-      if (event.data && event.data.type === 'psd2-connected' && event.data.connectionId) {
+      if (event.data && event.data.type === 'bank-connection-connected' && event.data.connectionId) {
         finish(event.data.connectionId);
       }
     };
     const timer = setInterval(() => {
       let stored = null;
-      try { stored = localStorage.getItem(PSD2_CONNECTION_KEY); } catch { /* ignore */ }
+      try { stored = localStorage.getItem(BANK_CONNECTION_KEY); } catch { /* ignore */ }
       if (stored) {
         finish(stored);
         return;
@@ -90,7 +90,7 @@ function waitForConnection(popup) {
 }
 
 /**
- * PSD2 / Salt Edge actions backed by the {@code financial-account-psd2} NEO bridge. All calls
+ * Bank connection (PSD2 / Salt Edge) actions backed by the {@code financial-account-bank-connection} NEO bridge. All calls
  * go through the bridge in com.etendoerp.go, which delegates to the PSD2 module helpers.
  *
  * @returns {{
@@ -107,7 +107,7 @@ function waitForConnection(popup) {
  *   error: Error|null,
  * }}
  */
-export function usePsd2Actions() {
+export function useBankConnectionActions() {
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -139,7 +139,7 @@ export function usePsd2Actions() {
     } catch (err) {
       // Surface a clear message when the bank service (Salt Edge middleware) is unreachable
       // and the request is aborted by the timeout, instead of a generic abort error.
-      const finalErr = err.name === 'AbortError' ? new Error('PSD2_TIMEOUT') : err;
+      const finalErr = err.name === 'AbortError' ? new Error('BANK_CONNECTION_TIMEOUT') : err;
       setError(finalErr);
       throw finalErr;
     } finally {

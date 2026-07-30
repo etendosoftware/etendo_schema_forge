@@ -535,8 +535,9 @@ describe('useEntity', () => {
         json: async () => ({ response: { data: [] } }),
       });
 
+      let outcome;
       await act(async () => {
-        await result.current.handleDelete();
+        outcome = await result.current.handleDelete();
       });
 
       const deleteCall = globalThis.fetch.mock.calls.find(c => c[1]?.method === 'DELETE');
@@ -544,18 +545,73 @@ describe('useEntity', () => {
       expect(deleteCall[0]).toBe('http://localhost/api/header/del-1');
       expect(result.current.selected).toBeNull();
       expect(result.current.editing).toBeNull();
+      // ETP-4656 — callers (DetailView's confirmHeaderDelete) navigate away
+      // only when this resolves true.
+      expect(outcome).toBe(true);
     });
 
     it('does nothing when no record selected', async () => {
       const { result } = renderEntity('header', null, { skipListFetch: true });
 
+      let outcome;
       await act(async () => {
-        await result.current.handleDelete();
+        outcome = await result.current.handleDelete();
       });
 
       // No fetch calls for DELETE
       const deleteCall = globalThis.fetch.mock.calls.find(c => c[1]?.method === 'DELETE');
       expect(deleteCall).toBeUndefined();
+      expect(outcome).toBe(false);
+    });
+
+    // ETP-4656 — standardized delete UX: handleDelete must return false (not
+    // just swallow the error) on a failed DELETE, so callers know not to
+    // navigate away as if the record were gone.
+    it('returns false and toasts an error on a failed DELETE (does not clear selection)', async () => {
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      const selectedRecord = { id: 'del-2', name: 'Referenced Record' };
+      act(() => { result.current.handleSelect(selectedRecord); });
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          error: { message: 'violates foreign key constraint "fk_x" on table "y"' },
+        }),
+      });
+
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.handleDelete();
+      });
+
+      expect(outcome).toBe(false);
+      expect(toast.error).toHaveBeenCalled();
+      // Selection/edit state must be left untouched on failure — the record
+      // was NOT actually deleted.
+      expect(result.current.selected).toEqual(selectedRecord);
+      expect(result.current.editing).toEqual(selectedRecord);
+    });
+
+    it('returns false and toasts an error when the DELETE request throws (network error)', async () => {
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'del-3', name: 'Offline Record' }); });
+
+      globalThis.fetch.mockRejectedValueOnce(new Error('Network error'));
+
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.handleDelete();
+      });
+
+      expect(outcome).toBe(false);
+      expect(toast.error).toHaveBeenCalledWith('Network error');
     });
   });
 

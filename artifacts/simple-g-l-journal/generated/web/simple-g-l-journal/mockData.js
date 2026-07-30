@@ -9,7 +9,11 @@ export const gLJournal = [
     "currency": "USD",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Acme Corp",
+    "product": "Laptop Pro 15",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-002",
@@ -19,7 +23,11 @@ export const gLJournal = [
     "currency": "EUR",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "TechFlow Inc",
+    "product": "USB-C Cable",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-003",
@@ -29,7 +37,11 @@ export const gLJournal = [
     "currency": "GBP",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Global Trade Ltd",
+    "product": "Wireless Mouse",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-004",
@@ -39,7 +51,11 @@ export const gLJournal = [
     "currency": "USD",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Summit Industries",
+    "product": "Mechanical Keyboard",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-005",
@@ -49,7 +65,11 @@ export const gLJournal = [
     "currency": "EUR",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Pacific Partners",
+    "product": "Monitor 27\"",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-006",
@@ -59,7 +79,11 @@ export const gLJournal = [
     "currency": "GBP",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Alpine Solutions",
+    "product": "Webcam HD",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-007",
@@ -69,7 +93,11 @@ export const gLJournal = [
     "currency": "USD",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Meridian Group",
+    "product": "Headset Pro",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-008",
@@ -79,7 +107,11 @@ export const gLJournal = [
     "currency": "EUR",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Vertex Systems",
+    "product": "Docking Station",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-009",
@@ -89,7 +121,11 @@ export const gLJournal = [
     "currency": "GBP",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Atlas Manufacturing",
+    "product": "SSD 1TB",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-010",
@@ -99,7 +135,11 @@ export const gLJournal = [
     "currency": "USD",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Nova Enterprises",
+    "product": "RAM 16GB",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-011",
@@ -109,7 +149,11 @@ export const gLJournal = [
     "currency": "EUR",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Pinnacle Services",
+    "product": "Power Supply 750W",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   },
   {
     "id": "mock-gLJournal-012",
@@ -119,7 +163,11 @@ export const gLJournal = [
     "currency": "GBP",
     "opening": "Sample opening",
     "multigeneralLedger": "Sample multigeneralLedger",
-    "posted": "Sample posted"
+    "posted": "Sample posted",
+    "businessPartner": "Horizon Labs",
+    "product": "Network Switch",
+    "project": "Sample project",
+    "costCenter": "Sample costCenter"
   }
 ];
 

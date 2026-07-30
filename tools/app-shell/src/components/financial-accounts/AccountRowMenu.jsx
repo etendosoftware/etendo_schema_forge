@@ -25,22 +25,22 @@ import { ACCOUNT_TYPE } from './tokens';
  * downstream features ship. Items follow this order:
  *
  *   1. Abrir cuenta             (navigates to the detail)
- *   2. Editar cuenta            (opens the unified edit modal — includes the PSD2
+ *   2. Editar cuenta            (opens the unified edit modal — includes the bank
  *                                connection panel when connected, ETP-4097 / T3)
- *   3. Sincronizar ahora        (connected only — runs the PSD2 statement fetch)
+ *   3. Sincronizar ahora        (connected only — runs the bank statement fetch)
  *   ───
- *   4. Desconectar PSD2         (connected only)
- *   4'. Conectar PSD2           (not connected)
+ *   4. Desconectar banco         (connected only)
+ *   4'. Conectar banco           (not connected)
  *
- * The former standalone "Editar conexión PSD2" item was merged into "Editar
+ * The former standalone "Editar conexión bancaria" item was merged into "Editar
  * cuenta": both surfaced the same account data, so editing is now unified.
- * Cash accounts (type=C) never expose the PSD2 group because the connection
+ * Cash accounts (type=C) never expose the bank connection group because the connection
  * does not apply to manual cash drawers.
  */
-export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Action, onTransfer, onNewMovement }) {
+export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConnectionAction, onTransfer, onNewMovement }) {
   const ui = useUI();
   const isCash = account.type === ACCOUNT_TYPE.CASH;
-  const psd2Connected = account.psd2Connected === true;
+  const bankConnected = account.bankConnected === true;
 
   return (
     <DropdownMenu data-testid="DropdownMenu__ffaf9f">
@@ -100,10 +100,10 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
 
         {!isCash ? (
           <>
-            {psd2Connected ? (
+            {bankConnected ? (
               <>
                 <DropdownMenuItem
-                  onClick={() => onPsd2Action?.('syncNow', account)}
+                  onClick={() => onBankConnectionAction?.('syncNow', account)}
                   data-testid={`account-row-menu-sync-${account.id}`}
                 >
                   <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__ffaf9f" />
@@ -113,7 +113,7 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
                 </DropdownMenuItem>
                 <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
                 <DropdownMenuItem
-                  onClick={() => onPsd2Action?.('disconnect', account)}
+                  onClick={() => onBankConnectionAction?.('disconnect', account)}
                   data-testid={`account-row-menu-disconnect-${account.id}`}
                 >
                   <Unlink2 className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Unlink2__ffaf9f" />
@@ -124,7 +124,7 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onPsd2Actio
               </>
             ) : (
               <DropdownMenuItem
-                onClick={() => onPsd2Action?.('connect', account)}
+                onClick={() => onBankConnectionAction?.('connect', account)}
                 data-testid={`account-row-menu-connect-${account.id}`}
               >
                 <Plug className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plug__ffaf9f" />

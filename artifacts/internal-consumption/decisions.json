@@ -5,6 +5,7 @@
     "name": "Internal Consumption",
     "breadcrumb": "Inventory / Internal Consumption",
     "statusField": "status",
+    "hideDeleteWhenComplete": true,
     "customComponents": {
       "moreMenuContent": "InternalConsumptionActions",
       "bottomSection": "InternalConsumptionBottomPanel"
