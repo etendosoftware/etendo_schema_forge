@@ -6962,7 +6962,7 @@
       ]
     },
     "7f2e773ac3dc6c98a3afce1787a549a48607aa6aa44274b7fb2193bcc6cde8d2": {
-      "checksum": "eabdef031d6ff8fa8ba35a3fe984cfa75824555c1803d96f360ae1deb863b236",
+      "checksum": "a76d4ee1a226e614b955a98258e0b90e1e655c611f50790697c4c56b4d2c3a8f",
       "params": [
         [
           "A6BDFA712FF948CE903C4C463E832FC1",
@@ -6989,25 +6989,25 @@
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "New statement each run",
-          "name_es": "New statement each run",
+          "name_es": "One per run",
           "value": "1BE"
         },
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "Within 1 day",
-          "name_es": "Within 1 day",
+          "name_es": "One per day",
           "value": "1BD"
         },
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "Within 7 days",
-          "name_es": "Within 7 days",
+          "name_es": "One per week",
           "value": "1BW"
         },
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "Within 30 days",
-          "name_es": "Within 30 days",
+          "name_es": "One per month",
           "value": "1BM"
         },
         {
