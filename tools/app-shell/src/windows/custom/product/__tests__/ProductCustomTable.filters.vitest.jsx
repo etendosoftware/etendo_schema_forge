@@ -96,33 +96,33 @@ describe('ProductCustomTable — identity cell & Advanced Filter fields (ETP-460
     expect(capturedProps.columns.find((c) => c.key === 'name')).toBeDefined();
   });
 
-  // ETP-4609 — regression: ListView.jsx declares its own `hiddenColumns = []`
-  // default prop and forwards it to whatever custom Table component the window
-  // wires in (here, ProductCustomTable — see ListView.jsx ~line 238 / ~line 930).
-  // ProductCustomTable spreads `{...props}` AFTER its own local
-  // `hiddenColumns={hiddenColumns}`, so ListView's empty-array default silently
-  // overwrites the intended `['name', 'searchKey']` override — the split
-  // name/searchKey filter columns end up rendered as visible grid columns,
-  // duplicating what the `nameAndSearchKey` avatar cell already shows.
-  it('keeps its own hiddenColumns override even when the parent (ListView) '
-    + 'forwards its own conflicting hiddenColumns prop', () => {
-    // Mimics exactly what ListView.jsx spreads into the Table component: an
-    // explicit (default) empty array, not an absent prop.
-    render(<ProductCustomTable data={[]} hiddenColumns={[]} />);
-    expect(capturedProps.hiddenColumns).toEqual(expect.arrayContaining(['name', 'searchKey']));
+  // ETP-4603 — the inverse guarantee of the old ETP-4609 behavior. Because the
+  // multiField identity cell exposes `name`/`searchKey` as filterable
+  // pseudo-columns (not as visible split grid columns), ProductCustomTable no
+  // longer injects a local `hiddenColumns` override. Re-introducing one would
+  // resurrect the duplicate-column problem from the opposite direction, so we
+  // regression-guard that the table stays out of the way of `hiddenColumns`.
+  it('injects no local hiddenColumns override — the multiField cell has no split '
+    + 'columns of its own to hide', () => {
+    render(<ProductCustomTable data={[]} />);
+    expect(capturedProps.hiddenColumns).toBeUndefined();
   });
 
-  it('unions a non-empty incoming hiddenColumns with its own local override '
-    + '(nothing dropped from either side, deduped)', () => {
-    // A parent forwarding a real, DIFFERENT hiddenColumns array (not just the
-    // empty-array bug-reproduction case) must still get BOTH sets merged —
-    // ProductCustomTable.jsx's own ['name', 'searchKey'] plus whatever the
-    // parent additionally asks to hide.
+  it('forwards whatever hiddenColumns ListView passes down, untouched', () => {
+    // ListView spreads its generic table props (including hiddenColumns) into the
+    // custom Table. With no local override to reconcile, they must pass through
+    // verbatim — neither dropped nor augmented.
     render(<ProductCustomTable data={[]} hiddenColumns={['someOtherColumn']} />);
-    expect(capturedProps.hiddenColumns).toEqual(
-      expect.arrayContaining(['name', 'searchKey', 'someOtherColumn']),
+    expect(capturedProps.hiddenColumns).toEqual(['someOtherColumn']);
+  });
+
+  it('lets its own `filters` win over any `filters` injected by ListView', () => {
+    // Same `{...props}`-first ordering that protects `columns` also protects the
+    // quick-search `filters`: an incoming prop cannot override the local set.
+    render(<ProductCustomTable data={[]} filters={['injectedFilter']} />);
+    expect(capturedProps.filters).toEqual(
+      expect.arrayContaining(['searchKey', 'name']),
     );
-    // Exactly 3 entries — proves no duplication and nothing extra sneaked in.
-    expect(capturedProps.hiddenColumns).toHaveLength(3);
+    expect(capturedProps.filters).not.toContain('injectedFilter');
   });
 });
