@@ -15,7 +15,7 @@ import HrPage from './pages/HrPage.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import ReportViewerPage from './pages/ReportViewerPage.jsx';
 import FinancialAccountsPage from './pages/FinancialAccountsPage.jsx';
-import Psd2CallbackPage from './pages/Psd2CallbackPage.jsx';
+import BankConnectionCallbackPage from './pages/BankConnectionCallbackPage.jsx';
 import PisCallbackPage from './pages/PisCallbackPage.jsx';
 import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
 
@@ -50,7 +50,7 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
       ) },
     { path: 'login', public: true, element: <Navigate to="/onboarding" replace data-testid="Navigate__e8c60d" /> },
     { path: 'logout', public: true, element: <LogoutRoute safeDestination="/onboarding" data-testid="LogoutRoute__e8c60d" /> },
-    { path: 'financial-account/psd2-callback', public: true, element: <Psd2CallbackPage data-testid="Psd2CallbackPage__e8c60d" /> },
+    { path: 'financial-account/bank-connection-callback', public: true, element: <BankConnectionCallbackPage data-testid="BankConnectionCallbackPage__e8c60d" /> },
     { path: 'financial-account/pis-callback', public: true, element: <PisCallbackPage data-testid="PisCallbackPage__e8c60d" /> },
     { path: 'dashboard', public: false, element: <DashboardPage apiBaseUrl={apiBaseUrl} data-testid="DashboardPage__e8c60d" /> },
     { path: 'first-steps', public: false, element: <FirstStepsPage data-testid="FirstStepsPage__e8c60d" /> },

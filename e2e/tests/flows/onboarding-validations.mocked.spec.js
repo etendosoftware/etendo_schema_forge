@@ -296,9 +296,13 @@ test.describe('Onboarding — Login & password recovery flow', () => {
     await page.locator('#login-password').fill('WrongPassword!1');
     await page.getByTestId('action-login-submit').click();
 
+    // LoginStep no longer surfaces the backend's userMessage ("Credenciales
+    // incorrectas" from the mocked 401 above) — it always renders the fixed
+    // onboardingInvalidCredentials copy instead, so match that directly (es_ES
+    // "Credenciales inválidas." / en_US "Invalid credentials.").
     const errorBox = page.locator('.border-rose-200');
     await expect(errorBox).toBeVisible({ timeout: 5_000 });
-    await expect(errorBox).toContainText(/incorrectas|invalid|wrong/i);
+    await expect(errorBox).toContainText(/inválidas|incorrectas|invalid|wrong/i);
 
     // Still on login view
     await expect(page.locator('#login-email')).toBeVisible();
