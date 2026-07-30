@@ -1,27 +1,14 @@
 /**
  * Extracted from DetailView.jsx via ast-refactor.
  */
-import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge } from '@/components/ui/badge.jsx';
-import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
-import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
-} from '@/components/ui/dialog.jsx';
-import { useSetPageMeta } from '@/components/layout/PageMetaContext';
-import { useFavorites } from '@/components/layout/FavoritesContext';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
 import { computeBalance } from '@/lib/balanceTotals';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
-import {
-  buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
-  normalizeCalloutResponse, applyQtyZeroGuard, roundAmounts,
-  resolveSnapshotIdentifiers,
-} from '@/lib/lineFieldChange.js';
+import { roundAmounts } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { formatAmount } from '@/lib/formatAmount.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
