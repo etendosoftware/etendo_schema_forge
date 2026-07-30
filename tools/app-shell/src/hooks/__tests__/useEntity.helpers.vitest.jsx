@@ -32,6 +32,8 @@ import {
   getInvalidPhoneFields,
   reportInvalidEmailFields,
   reportInvalidFormatField,
+  getNumericFieldViolation,
+  buildSavePayload,
 } from '../useEntity';
 
 describe('useEntity helpers', () => {
@@ -1307,6 +1309,170 @@ describe('useEntity helpers', () => {
     it('skips readOnly website fields', () => {
       const fields = [{ key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', readOnly: true }];
       expect(getInvalidWebsiteFields(fields, { etgoWeb: 'http://x.com' })).toEqual([]);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // extractErrorMessage — translate() branches
+  // -------------------------------------------------------------------
+  describe('extractErrorMessage — translate branches', () => {
+    function mockResponse(data, status = 400) {
+      return { json: async () => data, status };
+    }
+
+    it('interpolates the fallback params when no ui function is provided', async () => {
+      // ui omitted → translate() takes the `typeof ui !== 'function'` path and has to
+      // interpolate `{field}` into the literal fallback itself.
+      const data = { error: { message: 'null value in column "first_name" of relation "unknown_table"' } };
+      const msg = await extractErrorMessage(mockResponse(data));
+      expect(msg).toBe('The field "First Name" is required.');
+    });
+
+    it('returns the ui translation verbatim when the key resolves to real text', async () => {
+      // ui returns something other than the key → translate() must return the
+      // translated text and never fall back to the hardcoded English literal.
+      const uiTranslated = vi.fn(() => 'Ya existe un registro con ese valor.');
+      const data = { error: { message: 'duplicate key value violates unique constraint "c_bpartner_value_uk"' } };
+      const msg = await extractErrorMessage(mockResponse(data), uiTranslated);
+      expect(uiTranslated).toHaveBeenCalledWith('validationDuplicateRecord', {});
+      expect(msg).toBe('Ya existe un registro con ese valor.');
+    });
+
+    it('falls back to the generic field label when the column name is blank', async () => {
+      const ui = (key, params) => {
+        if (!params) return key;
+        let text = key;
+        Object.keys(params).forEach((p) => { text = text.replace(`{${p}}`, params[p]); });
+        return text;
+      };
+      // A whitespace-only column matches the regex but trims to '' in toReadableLabel,
+      // which then has to fall back to the generic 'Field' label.
+      const data = { error: { message: 'null value in column "   " of relation "some_table"' } };
+      const msg = await extractErrorMessage(mockResponse(data), ui);
+      expect(msg).toBe('The field "Field" is required.');
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // extractErrorMessage — AD-translated duplicate identifier (ETP-4597)
+  // -------------------------------------------------------------------
+  describe('extractErrorMessage — AD-translated unique constraint', () => {
+    const ui = (key) => key;
+
+    function mockResponse(data, status = 400) {
+      return { json: async () => data, status };
+    }
+
+    it('normalizes the Spanish AD "debe ser único" sentence without leaking field names', async () => {
+      const data = {
+        error: {
+          message: 'Ya existe un/a Categoría del producto con el mismo (Entidad, Organización, '
+            + 'Identificador). (Entidad, Organización, Identificador) debe ser único. '
+            + 'Cambie los valores introducidos',
+        },
+      };
+      const msg = await extractErrorMessage(mockResponse(data), ui);
+      expect(msg).toBe('A record with the same identifier already exists. Please enter a different one.');
+      expect(msg).not.toContain('Organización');
+    });
+
+    it('normalizes the English AD "must be unique" sentence without leaking field names', async () => {
+      const data = {
+        error: {
+          message: 'There is already a Product Category with the same (Client, Organization, '
+            + 'Identifier). (Client, Organization, Identifier) must be unique. '
+            + 'Please change the entered values',
+        },
+      };
+      const msg = await extractErrorMessage(mockResponse(data), ui);
+      expect(msg).toBe('A record with the same identifier already exists. Please enter a different one.');
+      expect(msg).not.toContain('Organization');
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // reportInvalidFormatField — toastId + params (ETP-4542 numeric gate)
+  // -------------------------------------------------------------------
+  describe('reportInvalidFormatField — toastId and params', () => {
+    it('forwards the interpolation params and dedupes the toast by the given id', () => {
+      toast.error.mockClear();
+      const ui = vi.fn((key, params) => `${key}:${params?.min ?? ''}`);
+      const setSaveError = vi.fn();
+      const setIsSaving = vi.fn();
+
+      const result = reportInvalidFormatField(
+        'numericMinValue', ui, setSaveError, setIsSaving, 'numeric-quantity', { min: 1 },
+      );
+
+      expect(result).toBeNull();
+      expect(ui).toHaveBeenCalledWith('numericMinValue', { min: 1 });
+      expect(setSaveError).toHaveBeenCalledWith('numericMinValue:1');
+      // With a toastId the toast MUST carry it, so EntityForm's blur toast for the
+      // same field collapses into this one instead of stacking.
+      expect(toast.error).toHaveBeenCalledWith('numericMinValue:1', { id: 'numeric-quantity' });
+      expect(setIsSaving).toHaveBeenCalledWith(false);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // getNumericFieldViolation — violating field descriptor (ETP-4542)
+  // -------------------------------------------------------------------
+  describe('getNumericFieldViolation', () => {
+    it('returns the descriptor of the first violating field with its i18n params', () => {
+      const fields = [
+        { key: 'name', type: 'string' },
+        { key: 'usableLifeMonths', type: 'number', min: 1 },
+      ];
+      expect(getNumericFieldViolation(fields, { name: 'Asset', usableLifeMonths: 0 })).toEqual({
+        key: 'usableLifeMonths',
+        errorKey: 'fieldMinValueError',
+        errorParams: { min: 1 },
+      });
+    });
+
+    it('reports the integer violation for a decimal value', () => {
+      const fields = [{ key: 'quantity', type: 'number', integer: true }];
+      expect(getNumericFieldViolation(fields, { quantity: 2.5 })).toEqual({
+        key: 'quantity',
+        errorKey: 'fieldIntegerError',
+        errorParams: {},
+      });
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // buildSavePayload — contacts Business Partner create detection
+  // -------------------------------------------------------------------
+  describe('buildSavePayload — contacts businessPartner create', () => {
+    const emptyRef = () => ({ current: new Set() });
+    const formFieldsRef = () => ({ current: new Map([['__default__', [{ key: 'name', required: true }]]]) });
+
+    it('drops the billing preference fields when creating from the contacts window', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', priceList: 'pl-1', paymentTerms: 'pt-1' },
+        entity: 'businessPartner',
+        apiBaseUrl: '/sws/neo/contacts',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRef(),
+      });
+      expect(payload).toEqual({ name: 'Acme' });
+    });
+
+    it('keeps the billing fields when apiBaseUrl is missing (not the contacts window)', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', priceList: 'pl-1' },
+        entity: 'businessPartner',
+        apiBaseUrl: null,
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRef(),
+      });
+      expect(payload).toEqual({ name: 'Acme', priceList: 'pl-1' });
     });
   });
 
