@@ -4,8 +4,10 @@
  * Two modes:
  *
  * Mock mode (default when BASE_URL is not set, or E2E_USE_MOCK=1):
- *   Seeds localStorage with a fake token before React boots and intercepts /sws/*
- *   so useEntity never receives a 401 and never calls logout().
+ *   Mocks GET /sws/go/session with a synthetic cookie-session payload (ETP-4576)
+ *   so AuthProvider's mount-time restore resolves into an authenticated session,
+ *   and intercepts the rest of /sws/* so useEntity never receives a 401 and
+ *   never calls logout().
  *
  * Real Etendo mode (BASE_URL set, or E2E_USE_MOCK=0):
  *   Uses the current onboarding login flow, then enters the first available environment.
@@ -17,10 +19,45 @@ const IS_MOCK_MODE = MOCK_MODE_OVERRIDE === '1' || (MOCK_MODE_OVERRIDE !== '0' &
 export const DEFAULT_USER = process.env.E2E_USER || 'goadmin@etendo.software';
 export const DEFAULT_LOGIN_PASS = process.env.E2E_PASSWORD || '';
 
+// ETP-4576 — the synthetic session served for GET /sws/go/session in mock mode.
+//
+// mapRestoredSession() (app-shell-core/src/auth/session.js) does NOT take the
+// `environment` block at face value: it resolves `selectedRole` by looking
+// `environment.roleId` up inside `roleList`, and `selectedOrg` by looking
+// `environment.orgId` up inside THAT role's `orgList`. Ids that don't
+// cross-reference resolve both to `null`, and a session without a
+// `selectedRole` never triggers AuthProvider's `fetchWindowAccess` — leaving
+// `windowAccess` at its fail-closed `{}` default, so WindowAccessGuard blanks
+// every generated window (the same failure mode the ETP-4520 note below the
+// old localStorage seeding used to describe).
+//
+// So the ids are declared ONCE, in the role/org objects, and the environment
+// block is derived from those same objects — they cannot drift apart.
+const MOCK_ORG = { id: 'e2e-org', name: 'E2E Org' };
+const MOCK_ROLE = { id: 'e2e-role', name: 'Administrator', orgList: [MOCK_ORG] };
+
+// Mirrors the real 200 body of GET /sws/go/session (EtendoGoJwtServlet's
+// handleSessionRestore): { status, account, environment, roleList, csrfToken }.
+// Note there is no token anywhere — the session lives in the `__Host-` httpOnly
+// cookie, and the CSRF proof is the only thing the client ever holds.
+export const MOCK_SESSION_RESPONSE = {
+  status: 'success',
+  account: { id: 'e2e-account', name: 'E2E Admin', email: 'e2e@etendo.software' },
+  environment: {
+    userId: 'e2e-user',
+    roleId: MOCK_ROLE.id,
+    clientId: 'e2e-client',
+    orgId: MOCK_ORG.id,
+    warehouseId: 'e2e-warehouse',
+  },
+  roleList: [MOCK_ROLE],
+  csrfToken: 'e2e-mock-csrf',
+};
+
 /**
  * Authenticate for E2E tests.
  *
- * In mock mode: seeds localStorage + intercepts /sws/* API calls.
+ * In mock mode: mocks the cookie session + intercepts /sws/* API calls.
  * In real mode: fills the onboarding login form and enters the first available environment.
  */
 export async function login(page, {
@@ -28,16 +65,15 @@ export async function login(page, {
   password = DEFAULT_LOGIN_PASS,
 } = {}) {
   if (IS_MOCK_MODE) {
-    // Inject token before React boots so AuthContext.isAuthenticated = true.
+    // ETP-4576 — nothing to seed in localStorage anymore. The sf_auth_* keys
+    // this used to write (`sf_auth_token`, `sf_auth_user`,
+    // `sf_auth_selected_role`) are dead: AuthProvider's default storage is
+    // memory, it never reads them, and purgeLegacyAuthStorage() deletes those
+    // exact keys on mount. Authentication now comes entirely from the
+    // GET /sws/go/session mock installed in the route handler below — and the
+    // role that ETP-4520 needed for `fetchWindowAccess` is derived from that
+    // response's `roleList`, not from storage.
     await page.addInitScript(() => {
-      localStorage.setItem('sf_auth_token', 'e2e-mock-token');
-      localStorage.setItem('sf_auth_user', 'admin');
-      // ETP-4520 — also seed a selected role: AuthProvider's hydration effect
-      // only fetches window access when `session.selectedRole` is present, so
-      // without this every generated window's WindowAccessGuard would fail
-      // closed to "none" and block rendering entirely (blank page).
-      localStorage.setItem('sf_auth_selected_role', JSON.stringify({ id: 'e2e-mock-role', name: 'Administrator' }));
-
       // Stub the SFWindowAccessMap endpoint itself. It's reached via NEO
       // Headless's own `/sws/neo/windowaccessmap` bridge (ETP-4513 — moved off
       // the Webhooks module's `/webhooks/SFWindowAccessMap`, which required a
@@ -50,6 +86,11 @@ export async function login(page, {
       // for this identical endpoint. Intercepting at the window.fetch layer
       // (rather than page.route) also sidesteps any LIFO route-registration
       // ordering concerns with the generic /sws/** catch-all below.
+      //
+      // ETP-4576 makes this MORE load-bearing, not less: the restored session
+      // now really does carry a `selectedRole`, so AuthProvider's hydration
+      // effect actually invokes fetchWindowAccess (before, with no role, it was
+      // never called and this stub was never even hit).
       const realFetch = window.fetch.bind(window);
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : input?.url;
@@ -67,8 +108,10 @@ export async function login(page, {
       };
     });
 
-    // Intercept /sws/* to prevent the real Etendo backend receiving our fake
-    // token (which would return 401 and trigger logout()).
+    // Intercept /sws/* to prevent the real Etendo backend receiving a request
+    // it would answer with a 401 (which triggers logout()).
+    // - GET /sws/go/session      → the synthetic cookie session (ETP-4576)
+    // - DELETE /sws/go/session   → 204, like the real server-side revoke
     // - GET /selectors/**  → single synthetic item so product search dropdowns populate
     // - POST /**/callout   → synthetic updates so forceCalloutFields can override user values
     // - POST/PUT/PATCH     → synthetic saved record so the UI can navigate to detail
@@ -76,6 +119,32 @@ export async function login(page, {
     await page.route('**/sws/**', (route) => {
       const url = route.request().url();
       const method = route.request().method();
+      // ETP-4576 — the session endpoint MUST be handled here, as a branch of this
+      // same catch-all rather than as a separate page.route(): registering it
+      // separately would leave its precedence over `**/sws/**` up to LIFO
+      // registration order. And it must come FIRST, before any broader branch.
+      //
+      // Falling through to the generic `else` below would be actively harmful,
+      // not merely useless: `{data: [], totalRows: 0}` is truthy, so
+      // AuthProvider's restore would "succeed" and flip `status` to
+      // 'authenticated', but mapRestoredSession() would derive
+      // `selectedRole: null` from it — and a session with no selected role
+      // never fetches the window-access map, so WindowAccessGuard fails closed
+      // and every generated window renders blank.
+      if (url.includes('/sws/go/session')) {
+        // 204 No Content, matching the real DELETE (server-side session revoke)
+        // in EtendoGoJwtServlet.handleSessionDelete.
+        if (method === 'DELETE') {
+          route.fulfill({ status: 204 });
+        } else {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(MOCK_SESSION_RESPONSE),
+          });
+        }
+        return;
+      }
       // SFListMenu is reached via `/sws/neo/listmenu` now (ETP-4513 — moved off the Webhooks
       // module's `/webhooks/SFListMenu`). Before that move, this generic `/sws/**` catch-all
       // never matched the old `/webhooks/*` path at all, so the fetch failed unmocked and
