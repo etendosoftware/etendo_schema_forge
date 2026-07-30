@@ -746,6 +746,46 @@ describe('isLoadingRecordForRoute', () => {
   });
 });
 
+// ETP-4741 — a creation form must show the loading gate while useEntity is still
+// fetching its defaults, otherwise the user types into a form whose values are
+// about to be replaced by the late response.
+describe('isLoadingRecordForRoute — new-record defaults gate (ETP-4741)', () => {
+  it('is true for a new record while defaults are still loading', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: false, defaultsLoading: true, selected: null }, true, 'new'),
+      'a new record must report loading while its defaults request is in flight'
+    ).toBe(true);
+  });
+
+  it('is true for a new record with defaults loading even when the list is loading too', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: true, defaultsLoading: true, selected: null }, true, 'new'),
+      'defaultsLoading must gate a new record regardless of hook.loading'
+    ).toBe(true);
+  });
+
+  it('is false for a new record once the defaults have settled', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: true, defaultsLoading: false, selected: {} }, true, 'new'),
+      'a new record must stop reporting loading as soon as defaults settle'
+    ).toBe(false);
+  });
+
+  it('still reports loading for an existing record that has not arrived yet', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: true, defaultsLoading: false, selected: { id: '1' } }, false, '999'),
+      'existing-record behavior must be unchanged'
+    ).toBe(true);
+  });
+
+  it('ignores defaultsLoading for an existing record already on screen', () => {
+    expect(
+      isLoadingRecordForRoute({ loading: false, defaultsLoading: true, selected: { id: '123' } }, false, '123'),
+      'defaultsLoading only gates creation forms, never an existing record'
+    ).toBe(false);
+  });
+});
+
 describe('resolveHideMoreMenu', () => {
   it('passes a boolean true through unchanged', () => {
     expect(resolveHideMoreMenu(true, { id: 'x' })).toBe(true);
