@@ -2,8 +2,9 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 
 /**
  * ETP-4576 — the session is a server-side `__Host-` cookie, so this hook gates
- * on `isAuthenticated` and sends no Authorization header; the cookie travels on
- * its own with same-origin fetch.
+ * on `isAuthenticated` and sends no Authorization header; it opts into sending
+ * the cookie with `credentials: 'include'` rather than relying on fetch's
+ * `same-origin` default.
  *
  * The auth mock is a plain mutable object, not a vi.fn() with
  * mockReturnValueOnce: React can invoke the hook more than once per render, and

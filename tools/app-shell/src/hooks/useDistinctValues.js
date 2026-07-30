@@ -29,7 +29,7 @@ export function useDistinctValues(entity, field, {
   debounceMs = DEFAULT_DEBOUNCE_MS,
   apiBaseUrl,
 } = {}) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [values, setValues] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -58,7 +58,7 @@ export function useDistinctValues(entity, field, {
   }, [apiBaseUrl, entity, field]);
 
   const fetchPage = useCallback(async (startRow, search, append) => {
-    if (!token || !entity || !field || !apiBaseUrl) return;
+    if (!isAuthenticated || !entity || !field || !apiBaseUrl) return;
     const reqId = ++requestIdRef.current;
     const setBusy = append ? setLoadingMore : setLoading;
     setBusy(true);
@@ -66,7 +66,7 @@ export function useDistinctValues(entity, field, {
     try {
       const endRow = startRow + pageSize - 1;
       const res = await fetch(buildUrl(startRow, endRow, search), {
-        headers: buildHeaders(token),
+        headers: buildHeaders(),
         credentials: 'include',
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -97,18 +97,18 @@ export function useDistinctValues(entity, field, {
     } finally {
       if (reqId === requestIdRef.current) setBusy(false);
     }
-  }, [token, entity, field, pageSize, buildUrl]);
+  }, [isAuthenticated, entity, field, pageSize, buildUrl]);
 
   // Reset + fetch page 1 whenever the query key changes.
   useEffect(() => {
-    if (!enabled || !token || !entity || !field || !apiBaseUrl) {
+    if (!enabled || !isAuthenticated || !entity || !field || !apiBaseUrl) {
       setValues([]);
       setHasMore(false);
       return;
     }
     startRowRef.current = 0;
     fetchPage(0, debouncedSearch, false);
-  }, [enabled, token, entity, field, apiBaseUrl, debouncedSearch, fetchPage]);
+  }, [enabled, isAuthenticated, entity, field, apiBaseUrl, debouncedSearch, fetchPage]);
 
   const loadMore = useCallback(() => {
     if (!hasMore || loading || loadingMore) return;

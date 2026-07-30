@@ -15,7 +15,7 @@ import { buildHeaders, detectBaseUrl } from '@/auth/api.js';
  * Callers decide what to put in (e.g., { columnFilters, advancedFilter }).
  */
 export function useWindowFilterPresets(windowName) {
-  const { token } = useAuth();
+  const { isAuthenticated, csrfToken } = useAuth();
   const [presets, setPresets] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -25,16 +25,16 @@ export function useWindowFilterPresets(windowName) {
   );
 
   const refresh = useCallback(() => {
-    if (!windowName || !token) return;
+    if (!windowName || !isAuthenticated) return;
     setLoading(true);
-    fetch(baseUrl(), { headers: buildHeaders(token), credentials: 'include' })
+    fetch(baseUrl(), { headers: buildHeaders(), credentials: 'include' })
       .then((res) => (res.ok ? res.json() : {}))
       .then((data) => {
         setPresets(data && typeof data === 'object' ? data : {});
       })
       .catch(() => setPresets({}))
       .finally(() => setLoading(false));
-  }, [windowName, token, baseUrl]);
+  }, [windowName, isAuthenticated, baseUrl]);
 
   useEffect(() => {
     refresh();
@@ -42,26 +42,28 @@ export function useWindowFilterPresets(windowName) {
 
   const savePreset = useCallback(
     async (presetName, payload) => {
-      if (!windowName || !token || !presetName) return;
+      if (!windowName || !isAuthenticated || !presetName) return;
       const url = `${baseUrl()}/${encodeURIComponent(presetName)}`;
       await fetch(url, {
         method: 'PUT',
-        headers: buildHeaders(token),
+        // ETP-4576 — unsafe method: the backend requires the CSRF proof.
+        headers: csrfToken ? { ...buildHeaders(), 'X-Go-CSRF': csrfToken } : buildHeaders(),
         body: JSON.stringify(payload ?? {}),
         credentials: 'include',
       });
       setPresets((prev) => ({ ...prev, [presetName]: payload ?? {} }));
     },
-    [windowName, token, baseUrl],
+    [windowName, isAuthenticated, csrfToken, baseUrl],
   );
 
   const deletePreset = useCallback(
     async (presetName) => {
-      if (!windowName || !token || !presetName) return;
+      if (!windowName || !isAuthenticated || !presetName) return;
       const url = `${baseUrl()}/${encodeURIComponent(presetName)}`;
       await fetch(url, {
         method: 'DELETE',
-        headers: buildHeaders(token),
+        // ETP-4576 — unsafe method: the backend requires the CSRF proof.
+        headers: csrfToken ? { ...buildHeaders(), 'X-Go-CSRF': csrfToken } : buildHeaders(),
         credentials: 'include',
       });
       setPresets((prev) => {
@@ -70,7 +72,7 @@ export function useWindowFilterPresets(windowName) {
         return next;
       });
     },
-    [windowName, token, baseUrl],
+    [windowName, isAuthenticated, csrfToken, baseUrl],
   );
 
   return { presets, loading, refresh, savePreset, deletePreset };

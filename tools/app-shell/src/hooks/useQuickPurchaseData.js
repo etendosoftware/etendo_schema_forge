@@ -12,12 +12,13 @@ function guessCategory(name) {
   return 'Other';
 }
 
-function buildAuthHeaders(token) {
-  return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+function buildAuthHeaders() {
+  return { 'Content-Type': 'application/json' };
 }
 
 async function fetchJSON(url, headers) {
-  const res = await fetch(url, { headers });
+  // ETP-4576 — the __Host- session cookie is the credential now.
+  const res = await fetch(url, { credentials: 'include', headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -150,7 +151,7 @@ async function loadFromAPI(poBase, headers) {
 // -- Hook ---------------------------------------------------------------------
 
 export function useQuickPurchaseData(apiBaseUrl) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [previousOrders, setPreviousOrders] = useState([]);
@@ -163,13 +164,13 @@ export function useQuickPurchaseData(apiBaseUrl) {
   useEffect(() => {
     let cancelled = false;
 
-    if (!token || !poBase) {
+    if (!isAuthenticated || !poBase) {
       setError('No API connection — authentication required');
       setLoading(false);
       return;
     }
 
-    const headers = buildAuthHeaders(token);
+    const headers = buildAuthHeaders();
     loadFromAPI(poBase, headers)
       .then(result => {
         if (cancelled) return;
@@ -187,7 +188,7 @@ export function useQuickPurchaseData(apiBaseUrl) {
       });
 
     return () => { cancelled = true; };
-  }, [token, poBase]);
+  }, [isAuthenticated, poBase]);
 
   // Derived: product categories
   const categories = useMemo(

@@ -1,7 +1,20 @@
+/**
+ * Tests for useAccountMovements (GET via useNeoResource).
+ *
+ * ETP-4576 — the session is a server-side `__Host-` cookie, so the underlying
+ * useNeoResource gates on `isAuthenticated` (never a client-held `token`) and
+ * sends no Authorization header.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
 import { renderHook, waitFor } from '@testing-library/react';
 
+let mockAuth = { isAuthenticated: true };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 import { useAccountMovements } from '../useAccountMovements.js';
@@ -16,6 +29,7 @@ describe('useAccountMovements', () => {
       value: { pathname: '/etendo/web/app' },
       writable: true,
     });
+    mockAuth = { isAuthenticated: true };
     globalThis.fetch = vi.fn();
   });
 
@@ -116,6 +130,20 @@ describe('useAccountMovements', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(result.current.movements).toEqual([]);
     expect(result.current.totals.currency).toBe('EUR');
+  });
+
+  it('does not fetch when the user is not authenticated', async () => {
+    mockAuth = { isAuthenticated: false };
+    globalThis.fetch.mockResolvedValue(
+      okResponse({ transactions: [], totals: {} }),
+    );
+
+    const { result } = renderHook(() => useAccountMovements('acc-1'));
+
+    // Give microtasks a tick to confirm no request escaped the gate.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(result.current.movements).toEqual([]);
   });
 
   it('treats a non-array transactions field as empty', async () => {

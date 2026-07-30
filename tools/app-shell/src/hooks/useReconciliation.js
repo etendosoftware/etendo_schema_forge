@@ -25,7 +25,7 @@ function buildQuery(params) {
  * @returns {{ post: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
  */
 function useNeoPost(action) {
-  const { token } = useAuth();
+  const { csrfToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -34,12 +34,15 @@ function useNeoPost(action) {
     setError(null);
     try {
       const url = `${getApiBase()}${BASE_PATH}?action=${action}`;
+      // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
+      // bearer token. This is an unsafe method, so the backend also requires the
+      // CSRF proof.
+      const headers = { 'Content-Type': 'application/json' };
+      if (csrfToken) headers['X-Go-CSRF'] = csrfToken;
       const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
 
@@ -59,7 +62,7 @@ function useNeoPost(action) {
     } finally {
       setLoading(false);
     }
-  }, [token, action]);
+  }, [csrfToken, action]);
 
   return { post, loading, error };
 }

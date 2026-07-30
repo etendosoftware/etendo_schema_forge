@@ -41,7 +41,7 @@ function writeFavorites(username, list) {
 }
 
 export function FavoritesProvider({ children }) {
-  const { username, token } = useAuth();
+  const { username, isAuthenticated, csrfToken } = useAuth();
   const [favorites, setFavorites] = useState(() => readFavorites(username));
   const fetchedRef = useRef(false);
 
@@ -53,9 +53,9 @@ export function FavoritesProvider({ children }) {
 
   // Fetch from server on login — server wins over localStorage
   useEffect(() => {
-    if (!token || !username || fetchedRef.current) return;
+    if (!isAuthenticated || !username || fetchedRef.current) return;
     let cancelled = false;
-    fetch(FAVORITES_ENDPOINT, { headers: buildHeaders(token), credentials: 'include' })
+    fetch(FAVORITES_ENDPOINT, { headers: buildHeaders(), credentials: 'include' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled && Array.isArray(data)) {
@@ -70,19 +70,20 @@ export function FavoritesProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [token, username]);
+  }, [isAuthenticated, username]);
 
   const syncToServer = useCallback(
     (list) => {
-      if (!token) return;
+      if (!isAuthenticated) return;
       fetch(FAVORITES_ENDPOINT, {
         method: 'PUT',
-        headers: buildHeaders(token),
+        // ETP-4576 — unsafe method: the backend requires the CSRF proof.
+        headers: csrfToken ? { ...buildHeaders(), 'X-Go-CSRF': csrfToken } : buildHeaders(),
         body: JSON.stringify(list),
         credentials: 'include',
       }).catch(() => {});
     },
-    [token]
+    [isAuthenticated, csrfToken]
   );
 
   const addFavorite = useCallback(

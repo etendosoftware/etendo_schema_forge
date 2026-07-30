@@ -13,12 +13,13 @@ function guessCategory(name) {
   return 'Other';
 }
 
-function buildAuthHeaders(token) {
-  return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+function buildAuthHeaders() {
+  return { 'Content-Type': 'application/json' };
 }
 
 async function fetchJSON(url, headers) {
-  const res = await fetch(url, { headers });
+  // ETP-4576 — the __Host- session cookie is the credential now.
+  const res = await fetch(url, { credentials: 'include', headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -150,7 +151,7 @@ async function loadFromAPI(soBase, headers) {
 // -- Hook ---------------------------------------------------------------------
 
 export function useQuickSalesData(apiBaseUrl) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [previousOrders, setPreviousOrders] = useState([]);
@@ -163,13 +164,13 @@ export function useQuickSalesData(apiBaseUrl) {
   useEffect(() => {
     let cancelled = false;
 
-    if (!token || !soBase) {
+    if (!isAuthenticated || !soBase) {
       setError('No API connection — authentication required');
       setLoading(false);
       return;
     }
 
-    const headers = buildAuthHeaders(token);
+    const headers = buildAuthHeaders();
     loadFromAPI(soBase, headers)
       .then(result => {
         if (cancelled) return;
@@ -187,7 +188,7 @@ export function useQuickSalesData(apiBaseUrl) {
       });
 
     return () => { cancelled = true; };
-  }, [token, soBase]);
+  }, [isAuthenticated, soBase]);
 
   // Derived: product categories
   const categories = useMemo(

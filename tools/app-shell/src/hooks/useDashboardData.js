@@ -26,7 +26,10 @@ function getApiBase() {
  * Fetch a dashboard widget endpoint.
  * All widget endpoints live under /sws/neo/dashboard/{entity}.
  */
-async function fetchWidget(apiBase, token, entity, range) {
+// ETP-4576 — authenticates with the `__Host-` session cookie: `credentials`
+// instead of a bearer token, which the browser no longer holds. These are GETs,
+// so no CSRF proof is required.
+async function fetchWidget(apiBase, entity, range) {
   const qs = range ? `?range=${encodeURIComponent(range)}` : '';
   const url = `${apiBase}/sws/neo/dashboard/${entity}${qs}`;
   const ctrl = new AbortController();
@@ -34,7 +37,8 @@ async function fetchWidget(apiBase, token, entity, range) {
 
   try {
     const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
       signal: ctrl.signal,
     });
     clearTimeout(timer);
@@ -299,7 +303,7 @@ function mapPendingAmounts(handlerData) {
 }
 
 /* ------------------------------------------------------------------
- * Empty fallback — used when no token or all endpoints fail
+ * Empty fallback — used when unauthenticated or all endpoints fail
  * ----------------------------------------------------------------*/
 
 const EMPTY_PENDING_AMOUNTS = {
@@ -337,7 +341,7 @@ function buildEmptyFallback() {
  * falls back to empty state (zeros) on error or when unauthenticated.
  */
 export function useDashboardData() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { range } = useDashboardDateRange();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -345,7 +349,7 @@ export function useDashboardData() {
   const apiBase = useMemo(() => getApiBase(), []);
 
   const fetchData = useCallback(async () => {
-    if (!token) {
+    if (!isAuthenticated) {
       setData(buildEmptyFallback());
       setLoading(false);
       return;
@@ -358,15 +362,15 @@ export function useDashboardData() {
         invoicesRes, bestProductsRes, bestSellersRes, pendingAmountsRes,
         topClientsRes,
       ] = await Promise.allSettled([
-        fetchWidget(apiBase, token, 'kpis', range),
-        fetchWidget(apiBase, token, 'trends', range),
-        fetchWidget(apiBase, token, 'pending-tasks', range),
-        fetchWidget(apiBase, token, 'activity', range),
-        fetchWidget(apiBase, token, 'recent-invoices', range),
-        fetchWidget(apiBase, token, 'best-products', range),
-        fetchWidget(apiBase, token, 'best-sellers', range),
-        fetchWidget(apiBase, token, 'pending-amounts', range),
-        fetchWidget(apiBase, token, 'top-clients', range),
+        fetchWidget(apiBase, 'kpis', range),
+        fetchWidget(apiBase, 'trends', range),
+        fetchWidget(apiBase, 'pending-tasks', range),
+        fetchWidget(apiBase, 'activity', range),
+        fetchWidget(apiBase, 'recent-invoices', range),
+        fetchWidget(apiBase, 'best-products', range),
+        fetchWidget(apiBase, 'best-sellers', range),
+        fetchWidget(apiBase, 'pending-amounts', range),
+        fetchWidget(apiBase, 'top-clients', range),
       ]);
 
       const kpisData    = kpisRes.status    === 'fulfilled' ? kpisRes.value    : null;
@@ -424,7 +428,7 @@ export function useDashboardData() {
     } finally {
       setLoading(false);
     }
-  }, [token, apiBase, range]);
+  }, [isAuthenticated, apiBase, range]);
 
   useEffect(() => {
     fetchData();

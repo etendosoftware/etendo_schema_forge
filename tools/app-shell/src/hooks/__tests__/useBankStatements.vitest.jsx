@@ -1,13 +1,37 @@
+/**
+ * Tests for useBankStatements (GET via useNeoResource).
+ *
+ * ETP-4576 — the session is a server-side `__Host-` cookie, so the underlying
+ * useNeoResource gates on `isAuthenticated` (never a client-held `token`), sends
+ * no Authorization header, and must opt the request into cookie transport with
+ * `credentials: 'include'`.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
 import { renderHook, waitFor, act } from '@testing-library/react';
 
+let mockAuth = { isAuthenticated: true };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 import { useBankStatements } from '../useBankStatements.js';
 
 function okResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
+}
+
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
 }
 
 function setPathname(pathname) {
@@ -20,6 +44,7 @@ function setPathname(pathname) {
 describe('useBankStatements', () => {
   beforeEach(() => {
     setPathname('/etendo/web/app');
+    mockAuth = { isAuthenticated: true };
     globalThis.fetch = vi.fn();
   });
 
@@ -38,6 +63,18 @@ describe('useBankStatements', () => {
     expect(result.current.statements).toEqual([]);
   });
 
+  it('does not fetch when the user is not authenticated', async () => {
+    mockAuth = { isAuthenticated: false };
+    globalThis.fetch.mockResolvedValue(okResponse({ statements: [] }));
+
+    const { result } = renderHook(() => useBankStatements('acc-1'));
+
+    // Give microtasks a tick to confirm no request escaped the gate.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(result.current.statements).toEqual([]);
+  });
+
   it('fetches the bank-statements endpoint with the accountId in the query string', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ statements: [] }));
 
@@ -46,8 +83,19 @@ describe('useBankStatements', () => {
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe('/etendo/sws/neo/bank-statements?FIN_Financial_Account_ID=acc-1');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(init.headers['Content-Type']).toBe('application/json');
+  });
+
+  it('authenticates with the session cookie, not a bearer token', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse({ statements: [] }));
+
+    renderHook(() => useBankStatements('acc-1'));
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    const [, init] = globalThis.fetch.mock.calls[0];
+    // The `__Host-` session cookie only travels when the request opts in.
+    expect(init.credentials).toBe('include');
+    expectNoAuthorizationHeader();
   });
 
   it('URL-encodes the accountId so special characters survive transport', async () => {

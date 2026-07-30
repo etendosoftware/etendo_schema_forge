@@ -14,7 +14,7 @@ const DEBOUNCE_MS = 200;
  * @param {string} query — the current search text (live, debounced internally)
  */
 function useDebouncedLookup({ action, resultKey, extraParams = '' }, query) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -30,7 +30,7 @@ function useDebouncedLookup({ action, resultKey, extraParams = '' }, query) {
     setError(null);
     try {
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
         signal: ctrl.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -41,13 +41,13 @@ function useDebouncedLookup({ action, resultKey, extraParams = '' }, query) {
     } finally {
       setLoading(false);
     }
-  }, [action, resultKey, extraParams, token]);
+  }, [action, resultKey, extraParams, isAuthenticated]);
 
   useEffect(() => {
-    if (!token) return undefined;
+    if (!isAuthenticated) return undefined;
     const id = setTimeout(() => { run(query); }, DEBOUNCE_MS);
     return () => clearTimeout(id);
-  }, [query, run, token]);
+  }, [query, run, isAuthenticated]);
 
   return { results, loading, error };
 }
@@ -99,14 +99,14 @@ export function useDimensionLookup(query, dimension) {
  * @param {'in'|'out'} [doc] - cobro vs pago
  */
 export function useOutstandingInvoices(bpartnerId, doc = 'in') {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const abortRef = useRef(null);
 
   useEffect(() => {
-    if (!token) { setInvoices([]); setLoading(false); return undefined; }
+    if (!isAuthenticated) { setInvoices([]); setLoading(false); return undefined; }
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -117,7 +117,7 @@ export function useOutstandingInvoices(bpartnerId, doc = 'in') {
       + `&bpartnerId=${encodeURIComponent(bpartnerId ?? '')}&doc=${doc === 'out' ? 'out' : 'in'}`;
     setLoading(true);
     setError(null);
-    fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal })
+    fetch(url, { credentials: 'include', signal: ctrl.signal })
       .then((res) => {
         if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
         return res.json();
@@ -127,7 +127,7 @@ export function useOutstandingInvoices(bpartnerId, doc = 'in') {
       .finally(() => { if (!ctrl.signal.aborted) setLoading(false); });
 
     return () => ctrl.abort();
-  }, [bpartnerId, doc, token]);
+  }, [bpartnerId, doc, isAuthenticated]);
 
   return { invoices, loading, error };
 }

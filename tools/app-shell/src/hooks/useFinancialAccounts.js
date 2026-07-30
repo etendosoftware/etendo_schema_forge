@@ -11,11 +11,10 @@ function getApiBase() {
   return path.substring(0, webIdx);
 }
 
-async function fetchAccountsPayload(apiBase, token, signal) {
+async function fetchAccountsPayload(apiBase, signal) {
   const url = `${apiBase}${ENDPOINT}`;
   const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     signal,
@@ -36,7 +35,7 @@ const EMPTY_SUMMARY = {
 };
 
 export function useFinancialAccounts() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
@@ -45,13 +44,13 @@ export function useFinancialAccounts() {
   const apiBase = useMemo(() => getApiBase(), []);
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!isAuthenticated) return;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAccountsPayload(apiBase, token, ctrl.signal);
+      const data = await fetchAccountsPayload(apiBase, ctrl.signal);
       setAccounts(Array.isArray(data.accounts) ? data.accounts : []);
       setSummary(data.summary || EMPTY_SUMMARY);
     } catch (err) {
@@ -63,7 +62,7 @@ export function useFinancialAccounts() {
       clearTimeout(timer);
       setLoading(false);
     }
-  }, [apiBase, token]);
+  }, [apiBase, isAuthenticated]);
 
   useEffect(() => {
     load();

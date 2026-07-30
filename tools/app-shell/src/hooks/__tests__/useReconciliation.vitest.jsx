@@ -1,7 +1,23 @@
+/**
+ * Tests for the bank-reconciliation hooks: the GET readers (via useNeoResource)
+ * and the shared useNeoPost mutation helper.
+ *
+ * ETP-4576 — the session is a server-side `__Host-` cookie, so every request
+ * gates on `isAuthenticated` (never a client-held `token`), carries no
+ * Authorization header, and opts into cookie transport with
+ * `credentials: 'include'`. The POST actions are unsafe methods, so they must
+ * also carry the session-bound `X-Go-CSRF` proof or the backend answers 403.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
 import { renderHook, waitFor, act } from '@testing-library/react';
 
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 import {
@@ -24,6 +40,16 @@ function postResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
 }
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
 function setPathname(pathname) {
   Object.defineProperty(window, 'location', {
     value: { pathname },
@@ -33,6 +59,7 @@ function setPathname(pathname) {
 
 beforeEach(() => {
   setPathname('/etendo/web/app');
+  mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
   globalThis.fetch = vi.fn();
 });
 
@@ -53,15 +80,38 @@ describe('usePendingStatementLines (GET)', () => {
     expect(result.current.counts).toEqual({});
   });
 
+  it('stays idle (no fetch) when the user is not authenticated', async () => {
+    mockAuth = { isAuthenticated: false, csrfToken: null };
+    globalThis.fetch.mockResolvedValue(getResponse({ lines: [] }));
+
+    const { result } = renderHook(() => usePendingStatementLines('acc-1'));
+
+    // Give microtasks a tick to confirm no request escaped the gate.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(result.current.lines).toEqual([]);
+  });
+
   it('fetches the pendingLines action with accountId in the query string', async () => {
     globalThis.fetch.mockResolvedValue(getResponse({ lines: [], total: 0, counts: {} }));
 
     renderHook(() => usePendingStatementLines('acc-1'));
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(`/etendo${BASE}?action=pendingLines&accountId=acc-1`);
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+  });
+
+  it('authenticates the GET with the session cookie, not a bearer token', async () => {
+    globalThis.fetch.mockResolvedValue(getResponse({ lines: [], total: 0, counts: {} }));
+
+    renderHook(() => usePendingStatementLines('acc-1'));
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    const [, init] = globalThis.fetch.mock.calls[0];
+    // The `__Host-` session cookie only travels when the request opts in.
+    expect(init.credentials).toBe('include');
+    expectNoAuthorizationHeader();
   });
 
   it('appends optional date/q filters to the query string, skipping empties', async () => {
@@ -240,11 +290,40 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(`/etendo${BASE}?action=reconcileGroup`);
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(JSON.parse(init.body)).toEqual({ lineId: 'l1', ops: ['o1'] });
     expect(returned).toEqual({ reconciledId: 'rec-1' });
     expect(result.current.error).toBeNull();
     expect(result.current.loading).toBe(false);
+  });
+
+  it('authenticates the POST with the session cookie plus the X-Go-CSRF proof', async () => {
+    globalThis.fetch.mockResolvedValue(postResponse({ reconciledId: 'rec-1' }));
+
+    const { result } = renderHook(() => useReconcileGroup());
+    await act(async () => {
+      await result.current.reconcile({ lineId: 'l1', ops: ['o1'] });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    // The `__Host-` session cookie only travels when the request opts in, and an
+    // unsafe method additionally needs the session-bound CSRF proof.
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
+  });
+
+  it('omits X-Go-CSRF (without throwing) when no CSRF proof is available', async () => {
+    mockAuth = { isAuthenticated: true, csrfToken: null };
+    globalThis.fetch.mockResolvedValue(postResponse({ reconciledId: 'rec-1' }));
+
+    const { result } = renderHook(() => useReconcileGroup());
+    await act(async () => {
+      await result.current.reconcile({ lineId: 'l1' });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(Object.keys(init.headers)).not.toContain('X-Go-CSRF');
+    expect(init.credentials).toBe('include');
   });
 
   it('returns {} when response.data is absent', async () => {
@@ -327,7 +406,9 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(`/etendo${BASE}?action=removeOperation`);
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(JSON.parse(init.body)).toEqual(UNRECONCILE_PAYLOAD);
     expect(returned).toEqual({ transactionIds: ['t1'] });
     expect(result.current.error).toBeNull();
@@ -405,7 +486,9 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(`/etendo${BASE}?action=reactivateSelected`);
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(JSON.parse(init.body)).toEqual(UNRECONCILE_PAYLOAD);
     expect(returned).toEqual({ reactivated: true });
     expect(result.current.error).toBeNull();

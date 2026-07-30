@@ -18,13 +18,18 @@ export function getApiBase() {
  * Fetches a NEO endpoint with auth, abort signal, and JSON parsing. Returns
  * the inner `response.data` payload, or throws if the shape is invalid.
  */
-async function fetchNeoPayload(apiBase, token, path, signal) {
+async function fetchNeoPayload(apiBase, path, signal) {
   const url = `${apiBase}${path}`;
+  // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
+  // bearer token, and opts into sending it explicitly rather than relying on
+  // fetch's `same-origin` default: every other migrated caller does the same,
+  // and it keeps working if the app is ever served from a different origin than
+  // the API. These are GETs, so no CSRF proof is required.
   const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
     signal,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -58,20 +63,20 @@ async function fetchNeoPayload(apiBase, token, path, signal) {
  * @returns {{ data: T|null, loading: boolean, error: Error|null, reload: () => void }}
  */
 export function useNeoResource({ path, deps = [], mapPayload, timeoutMs = DEFAULT_TIMEOUT_MS, label = 'useNeoResource' }) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const apiBase = useMemo(() => getApiBase(), []);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
-    if (!token || !path) return;
+    if (!isAuthenticated || !path) return;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     setLoading(true);
     setError(null);
     try {
-      const raw = await fetchNeoPayload(apiBase, token, path, ctrl.signal);
+      const raw = await fetchNeoPayload(apiBase, path, ctrl.signal);
       setData(mapPayload ? mapPayload(raw) : raw);
     } catch (err) {
       if (err.name !== 'AbortError') {
@@ -83,7 +88,7 @@ export function useNeoResource({ path, deps = [], mapPayload, timeoutMs = DEFAUL
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBase, token, path, timeoutMs, label, ...deps]);
+  }, [apiBase, isAuthenticated, path, timeoutMs, label, ...deps]);
 
   useEffect(() => {
     load();

@@ -13,7 +13,7 @@ import { getApiBase } from './useNeoResource';
  * @param {boolean} [enabled=true] - skip fetching while false (e.g. modal closed)
  */
 export function useDimensionValues(dimensions, enabled = true) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [optionsByDim, setOptionsByDim] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -22,7 +22,7 @@ export function useDimensionValues(dimensions, enabled = true) {
 
   useEffect(() => {
     const keys = dimKey ? dimKey.split(',') : [];
-    if (!enabled || !token || keys.length === 0) {
+    if (!enabled || !isAuthenticated || keys.length === 0) {
       setOptionsByDim({});
       return undefined;
     }
@@ -35,7 +35,8 @@ export function useDimensionValues(dimensions, enabled = true) {
       const url = `${base}/sws/neo/financial-account-transactions?action=dimension-values&dimension=${encodeURIComponent(key)}`;
       try {
         const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
           signal: ctrl.signal,
         });
         if (!res.ok) return [key, []];
@@ -53,7 +54,7 @@ export function useDimensionValues(dimensions, enabled = true) {
     });
 
     return () => { cancelled = true; ctrl.abort(); };
-  }, [dimKey, enabled, token]);
+  }, [dimKey, enabled, isAuthenticated]);
 
   return { optionsByDim, loading };
 }

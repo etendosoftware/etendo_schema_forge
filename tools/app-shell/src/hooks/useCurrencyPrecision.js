@@ -11,17 +11,17 @@ import { getApiBase } from './useNeoResource.js';
  * @returns {number} Standard precision digit count (default: 2)
  */
 export function useCurrencyPrecision() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [precision, setPrecision] = useState(2);
 
   useEffect(() => {
-    if (!token) return;
+    if (!isAuthenticated) return;
     let cancelled = false;
     const apiBase = getApiBase();
     (async () => {
       try {
         const res = await fetch(`${apiBase}/sws/neo/session`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
         });
         if (cancelled || !res.ok) return;
         const json = await res.json();
@@ -34,7 +34,7 @@ export function useCurrencyPrecision() {
       }
     })();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [isAuthenticated]);
 
   return precision;
 }
