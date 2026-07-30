@@ -80,3 +80,6 @@ tools/app-shell/src/locales/generated/
 
 # Stray build artifact directory (not produced by any tool in this repo)
 build/
+
+# push-to-neo --dump-delta diagnostic output (derived mirror, never committed)
+artifacts/*/neo-delta.json
