@@ -38,6 +38,12 @@ export function isDeleteVisibleForRecord({ record, statusField, hideDeleteWhenCo
   if (!statusField) return true;
   const status = record?.[statusField];
   if (status == null || status === '') return true;
+  // Some windows (e.g. physical-inventory, goods-movements) use a boolean
+  // `processed` field as their statusField instead of a string document-status
+  // code. `false` (not yet processed) is draft-like and deletable; `true`
+  // (processed) is not. Handled ahead of the string-code check below so the
+  // existing DR/RPAP/N behavior for code-based windows stays untouched.
+  if (typeof status === 'boolean') return status === false;
   return DELETABLE_DOC_STATUSES.includes(status);
 }
 

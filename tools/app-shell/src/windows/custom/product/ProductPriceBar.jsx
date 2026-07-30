@@ -2,25 +2,11 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Loader2, Minus, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { parseBoolean } from '@/lib/parseBoolean.js';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { InlineCreateModal } from '@/components/contract-ui/InlineCreateModal.jsx';
 import { buildCreateUrl } from '@/components/contract-ui/InlineCreateSelector.jsx';
 import { useUI } from '@/i18n';
-
-function parseBoolean(value) {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') {
-    if (value === 1) return true;
-    if (value === 0) return false;
-    return null;
-  }
-  if (typeof value !== 'string') return null;
-
-  const normalized = value.trim().toLowerCase();
-  if (['true', 'y', 'yes', '1'].includes(normalized)) return true;
-  if (['false', 'n', 'no', '0'].includes(normalized)) return false;
-  return null;
-}
 
 function getSalesFlagFromOption(option) {
   if (!option || typeof option !== 'object') return null;
