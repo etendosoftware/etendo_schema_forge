@@ -14,9 +14,15 @@ import { fileURLToPath } from 'node:url';
 //   (b) admit at most one record — enforced via `window.maxDetailLines: 1`, which caps
 //       `addLineGuard` for the window's primary `detailEntity` (see docs/ui-customization.md
 //       §11, `window.maxDetailLines`). This only applies to windows using the detailEntity
-//       pattern; `secondaryTabs`-based accounting entities (`asset-group`, `product`, and
-//       `warehouse`) have no row-count cap yet and rely on `hideDelete` alone plus the
-//       (already-1:1) business schema.
+//       pattern.
+//
+// The `window.secondaryTabs` pattern gets its own per-tab cap via
+// `window.secondaryTabs.<key>.maxDetailLines` (mirroring `window.maxDetailLines` for the
+// detailEntity pattern): `product`, `asset-group` and `contacts` (customerAccounting /
+// vendorAccounting) cap their accounting tab at one record this way (see
+// `DetailView.secondaryTabsMaxLines.vitest.jsx` for the matching behavioral coverage in
+// `SecondaryTableTab`). `warehouse` is also `secondaryTabs`-based but is NOT in scope for this
+// cap yet — it relies on `hideDelete` alone plus the (already-1:1) business schema.
 //
 // `product-category` and `business-partner-category` already declare
 // `window.maxDetailLines: 1` (see docs/ui-customization.md real-examples list) — this test does
@@ -109,6 +115,34 @@ describe('ETP-4565: Contabilidad (Accounting) tab restrictions on master-data wi
           1,
           `ETP-4565: artifacts/${name}/decisions.json → window.maxDetailLines must be 1 — ` +
             'the Contabilidad tab (window.detailEntity: "accounting") must admit at most one record',
+        );
+      });
+    }
+  });
+
+  // Windows/tabs using the `window.secondaryTabs` pattern instead of `window.detailEntity`.
+  describe('window.secondaryTabs.<key>.maxDetailLines caps the accounting tab at one record', () => {
+    const SECONDARY_TABS_MAX_DETAIL_LINES_CASES = [
+      { window: 'product', tabKey: 'accounting' },
+      { window: 'asset-group', tabKey: 'accounting' },
+      { window: 'contacts', tabKey: 'customerAccounting' },
+      { window: 'contacts', tabKey: 'vendorAccounting' },
+    ];
+
+    for (const { window: windowName, tabKey } of SECONDARY_TABS_MAX_DETAIL_LINES_CASES) {
+      it(`${windowName}: window.secondaryTabs.${tabKey}.maxDetailLines must be 1`, () => {
+        const decisions = readDecisions(windowName);
+        const tab = decisions.window?.secondaryTabs?.[tabKey];
+        assert.ok(
+          tab,
+          `ETP-4565: window.secondaryTabs.${tabKey} must exist in artifacts/${windowName}/decisions.json`,
+        );
+        assert.equal(
+          tab.maxDetailLines,
+          1,
+          `ETP-4565: artifacts/${windowName}/decisions.json → window.secondaryTabs.${tabKey}` +
+            '.maxDetailLines must be 1 — the accounting tab (window.secondaryTabs pattern) must ' +
+            'admit at most one record',
         );
       });
     }
