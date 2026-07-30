@@ -79,8 +79,8 @@ export default function ProductAdditionalInfoPanel({ entity, data, token, apiBas
           <CheckboxGroup
             label={ui('availability')}
             items={[
-              { key: 'sale', column: 'IsSold', label: ui('priceTabSales') },
-              { key: 'purchase', column: 'IsPurchased', label: ui('priceTabPurchase') },
+              { key: 'sale', column: 'IsSold', label: ui('priceTabSales'), required: true },
+              { key: 'purchase', column: 'IsPurchased', label: ui('priceTabPurchase'), required: true },
             ]}
             data={data}
             readOnly={readOnly}
@@ -124,8 +124,8 @@ export default function ProductAdditionalInfoPanel({ entity, data, token, apiBas
           <CheckboxGroup
             label={ui('stockManagement')}
             items={[
-              { key: 'stocked', column: 'IsStocked', label: ui('productStocked') },
-              { key: 'returnable', column: 'Returnable', label: ui('productReturnable') },
+              { key: 'stocked', column: 'IsStocked', label: ui('productStocked'), required: true },
+              { key: 'returnable', column: 'Returnable', label: ui('productReturnable'), required: true },
             ]}
             data={data}
             readOnly={readOnly}

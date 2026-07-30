@@ -1,12 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  if (curr) {
-    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: curr }).format(n); } catch { /* fallback */ }
-  }
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatCurrency(curr, n);
 }
 
 function fmtDate(raw) {

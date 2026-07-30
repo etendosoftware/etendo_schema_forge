@@ -2,6 +2,7 @@ import { useMemo, useRef, useLayoutEffect } from 'react';
 import { useUI } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Plus, TrendingUp, LayoutGrid, List } from 'lucide-react';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 const AVATAR_COLORS = [
   '#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6',
@@ -114,7 +115,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               </div>
               {/* Price */}
               <span className="text-sm font-bold text-foreground shrink-0">
-                {product.price.toFixed(2)} &euro;
+                {formatCurrency('EUR', product.price)}
               </span>
               {/* Stock badge */}
               {product.stock != null && (
@@ -184,7 +185,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
               {/* Price + stock */}
               <div className="flex w-full items-center justify-between">
                 <span className="text-base font-bold text-foreground">
-                  {product.price.toFixed(2)} &euro;
+                  {formatCurrency('EUR', product.price)}
                 </span>
                 {product.stock != null && (
                   <Badge

@@ -186,6 +186,13 @@ Any new Etendo AD record (window, tab, field, reference, message, module, etc.) 
 
 Existing IDs must be looked up via `cli/src/menu-cache.js`, `resolve-menu.js --menu-name`, or a DB query — never guessed.
 
+### Ad-hoc Currency/Amount Formatting (BLOCKER)
+Reject any PR that formats a monetary value with a hand-rolled `Intl.NumberFormat`/`toLocaleString()` (hardcoded locale like `'en-US'`, unpinned `undefined` locale, or missing `useGrouping: true`) instead of the canonical utility:
+- Browser: `formatCurrency(currencyCode, value)` / `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`.
+- jsreport/PDF/printed reports: `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js`.
+
+This exact bug (dropped thousands separator, wrong decimal comma) shipped repeatedly across the codebase before ETP-4314 centralized it — treat a new duplicate formatter the same as any other regression, not a style nit.
+
 ### Decisions as Source of Truth (WARNING)
 Window-specific configuration (tab layout, secondary tabs, field overrides, entityLabel, detailEntity, etc.) must be declared in `decisions.json`, not hardcoded in generated components. Every configurable field must be documented in `docs/decisions-reference.md`.
 

@@ -160,6 +160,21 @@ describe('AmortizationLinesTable — fetch + render', () => {
   });
 });
 
+describe('AmortizationLinesTable — per-line amount formatting', () => {
+  it('formats the per-line amortization amount via the shared formatCurrency (grouped, resolved symbol) instead of concatenating the raw currency identifier', async () => {
+    global.fetch = mockFetchReturning([{ ...LINE_FILLED, amortizationAmount: 1500.5 }]);
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+
+    const row = container.querySelector('[data-row-id="line-1"]');
+    // Grouped thousands + real resolved symbol (org currency defaults to USD in this test env).
+    expect(within(row).getByText('1.500,50 $')).toBeInTheDocument();
+    // Never the old bug: ungrouped number + raw currency$_identifier concatenated as a suffix.
+    expect(within(row).queryByText(/1500,50/)).toBeNull();
+    expect(within(row).queryByText('€')).toBeNull();
+  });
+});
+
 // ETP-4610 — the permanent "Dimensiones contables" grid column (DimSummary badges /
 // "+ Add dimensions" affordance) was removed. The entry point into the dimensions
 // expand panel is now a static "Edit dimensions" hover action (Layers icon), shown

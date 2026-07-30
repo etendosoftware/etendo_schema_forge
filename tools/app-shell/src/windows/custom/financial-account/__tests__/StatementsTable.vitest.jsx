@@ -72,6 +72,25 @@ describe('StatementsTable', () => {
     expect(row.textContent).toContain('—');
   });
 
+  it('groups thousands in the Out/In amounts (1000-9999 range silently drops the separator without explicit useGrouping)', () => {
+    render(
+      <StatementsTable
+        statements={[{
+          id: 'y', documentNo: 'BS-10', name: 'Grouping',
+          importDate: '2026-06-01T00:00:00Z', transactionDate: '2026-06-01T00:00:00Z',
+          lineCount: 1, matchedCount: 0, totalIn: 1500, totalOut: 2500, status: 'PENDING',
+        }]}
+        loading={false}
+        currency="EUR"
+      />,
+    );
+    const row = screen.getByTestId('statement-row-y');
+    expect(row.textContent).toContain('1.500,00');
+    expect(row.textContent).toContain('2.500,00');
+    expect(row.textContent).not.toContain('1500,00');
+    expect(row.textContent).not.toContain('2500,00');
+  });
+
   it('renders the empty state when there are no statements (and not loading)', () => {
     render(<StatementsTable statements={[]} loading={false} />);
     expect(screen.getByText('financeAccountStatementsEmpty')).toBeInTheDocument();

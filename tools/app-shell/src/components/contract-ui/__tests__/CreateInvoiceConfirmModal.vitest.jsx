@@ -75,10 +75,10 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.queryByText('Acme Corp')).not.toBeInTheDocument();
   });
 
-  it('shows formatted grandTotal + currency when grandTotal > 0', () => {
+  it('shows the formatted grandTotal with the real currency symbol (es-ES, grouped), never the raw ISO code', () => {
     renderModal({ data: makeData({ grandTotalAmount: 1234.56, 'currency$_identifier': 'EUR' }) });
-    // fmtNum uses toLocaleString — verify currency code appears
-    expect(screen.getByText(/EUR/)).toBeInTheDocument();
+    expect(screen.getByText(/1\.234,56\s€/)).toBeInTheDocument();
+    expect(screen.queryByText(/EUR/)).toBeNull();
   });
 
   it('shows documentNo when grandTotal is 0', () => {
@@ -103,7 +103,8 @@ describe('CreateInvoiceConfirmModal', () => {
       ],
     };
     renderModal({ data });
-    expect(screen.getByText(/GBP/)).toBeInTheDocument();
+    expect(screen.getByText(/9\.999,00\s£/)).toBeInTheDocument();
+    expect(screen.queryByText(/GBP/)).toBeNull();
   });
 
   // ── Checkbox state ─────────────────────────────────────────────────────────

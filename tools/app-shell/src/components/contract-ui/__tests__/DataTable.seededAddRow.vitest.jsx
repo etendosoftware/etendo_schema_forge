@@ -111,6 +111,33 @@ describe('DataTable — seeded inline add-row column', () => {
     expect(cell).not.toHaveTextContent('EUR');
   });
 
+  it('formats a derived (non-editable) amount/price cell in es-ES (comma decimal, grouped thousands), never bare toFixed dot output', () => {
+    // `grossAmount` is an `amount`-type column NOT present in `fields` — it takes
+    // the derived-cell path (formatDerivedCellValue), not the editable-input path.
+    const columnsWithDerivedAmount = [
+      ...COLUMNS,
+      { key: 'grossAmount', label: 'Gross', type: 'amount' },
+    ];
+    render(
+      <DataTable
+        columns={columnsWithDerivedAmount}
+        data={[]}
+        addRow={{
+          active: true,
+          fields: FIELDS,
+          onAdd: vi.fn(),
+          onCancel: vi.fn(),
+          catalogs: {},
+          seedValues: { grossAmount: 1500.5 },
+        }}
+        selectable={false}
+      />,
+    );
+    const cell = screen.getByTestId('inline-add-cell-grossAmount');
+    expect(cell).toHaveTextContent('1.500,50');
+    expect(cell).not.toHaveTextContent('1500.50');
+  });
+
   it('keeps the editable field as an input and does not seed-overwrite it', () => {
     // The editable `rate` column renders an input field, not a seeded display cell.
     // Even if the seed carries a `rate` key, the editable field wins (seed only

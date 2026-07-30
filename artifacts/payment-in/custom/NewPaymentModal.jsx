@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DateField } from '@/components/ui/date-field';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 function fmtDate(raw) {
   if (!raw) return '-';
@@ -15,10 +16,7 @@ function fmtDate(raw) {
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? Number.parseFloat(val) : (val ?? 0);
-  if (curr) {
-    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: curr }).format(n); } catch { /* */ }
-  }
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatCurrency(curr, n);
 }
 
 export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose }) {

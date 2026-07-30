@@ -39,11 +39,11 @@ describe('QuotationConfirmModal', () => {
     });
 
     it('appends the currency to the invoice total (regression: invoice branch used to drop the currency suffix)', () => {
-      // Both order and invoice setCreatedDoc({ ... total: `${fmtNum(...)} ${currency}` ... }) shapes.
-      const matches = src.match(/total:\s*`\$\{fmtNum\([^)]+\)\}\s+\$\{currency\}`/g) || [];
+      // Both order and invoice setCreatedDoc({ ... total: formatCurrency(currency, ...) ... }) shapes.
+      const matches = src.match(/total:\s*formatCurrency\(currency,\s*[^)]+\),/g) || [];
       assert.ok(
         matches.length >= 2,
-        `Expected at least 2 currency-suffixed totals (order + invoice); found ${matches.length}`,
+        `Expected at least 2 currency-formatted totals (order + invoice); found ${matches.length}`,
       );
     });
   });

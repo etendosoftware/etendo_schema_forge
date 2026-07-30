@@ -81,24 +81,27 @@ vi.mock('../ConfirmPaymentModal', () => ({
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import PaymentHeaderTableBase from '../PaymentHeaderTableBase.jsx';
 
-// --- Helpers (mirror the private formatting logic in the source, so
-// expectations stay correct regardless of the host's ICU data) ---
-
-function currencySymbol(curr) {
-  const code = curr || 'EUR';
-  try {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: code })
-      .formatToParts(0).find((p) => p.type === 'currency')?.value ?? code;
-  } catch {
-    return code;
-  }
-}
-const AMOUNT_FMT = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// The source now delegates straight to the shared formatCurrency() — build
+// expectations from the SAME real function instead of a hand-rolled mirror,
+// so this test can never drift from the actual centralized implementation.
+// formatCurrency() embeds a real NBSP (U+00A0) before the symbol (how es-ES
+// Intl actually renders it). toHaveTextContent()/getByText() normalize the
+// RENDERED DOM's whitespace (NBSP collapses to a regular space) but do NOT
+// normalize the expected string passed in — so the expected value here must
+// use a regular space to match what the normalized DOM text looks like.
 function fmtAmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  return (n < 0 ? '-' : '') + AMOUNT_FMT.format(Math.abs(n)) + ' ' + currencySymbol(curr);
+  return formatCurrency(curr || 'EUR', n);
+}
+// toHaveTextContent()/getByText() normalize the rendered DOM's whitespace
+// (NBSP collapses to a regular space) but do not normalize the expected
+// string — use this variant for those assertions; use fmtAmt() as-is for
+// direct .textContent comparisons, which see the real NBSP on both sides.
+function fmtAmtNorm(val, curr) {
+  return fmtAmt(val, curr).replace(/\u00a0/g, ' ');
 }
 
 function thisMonthDate(day = '05') {
@@ -144,16 +147,28 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
 
     // Hero: only p1 counts towards "this month" (p2's date is out of range).
-    expect(sidebar.getByText(`+ ${fmtAmt(120.5, 'EUR')}`)).toBeInTheDocument();
+    expect(sidebar.getByText(`+ ${fmtAmtNorm(120.5, 'EUR')}`)).toBeInTheDocument();
 
     // Pending bucket = every non-deposited row (p3 + p4) = 85.
     expect(sidebar.getByText(`2 porVencer`)).toBeInTheDocument();
-    expect(sidebar.getByText(fmtAmt(85, 'EUR'))).toBeInTheDocument();
+    expect(sidebar.getByText(fmtAmtNorm(85, 'EUR'))).toBeInTheDocument();
 
     // Per-method breakdown only includes deposited rows.
     expect(sidebar.getByText('Transferencia')).toBeInTheDocument();
     expect(sidebar.getByText('Efectivo')).toBeInTheDocument();
-    expect(sidebar.getByText(fmtAmt(30, 'EUR'))).toBeInTheDocument();
+    expect(sidebar.getByText(fmtAmtNorm(30, 'EUR'))).toBeInTheDocument();
+  });
+
+  it('groups thousands in the hero amount (1000-9999 range silently drops the separator without explicit useGrouping) — hardcoded literal, not the self-referential fmtAmt() helper', () => {
+    const rows = [
+      { id: 'p1', status: 'RPR', amount: '1500.5', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
+    ];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
+    // Hardcoded literal — the local fmtAmt() test helper above shares the SAME
+    // missing-useGrouping bug as production, so it can never catch this regression.
+    expect(sidebar.getByText('+ 1.500,50 €')).toBeInTheDocument();
+    expect(sidebar.queryByText('+ 1500,50 €')).not.toBeInTheDocument();
   });
 
   it('uses the "pagado" hero label and no method breakdown for dir="out" with no deposited rows (zero amount renders without a sign)', () => {
@@ -161,8 +176,8 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     // No deposited rows this month → thisMonth is 0 → the hero renders sign-less, not "− 0,00 €".
-    expect(sidebar.getByText(fmtAmt(0, 'EUR'))).toBeInTheDocument();
-    expect(sidebar.queryByText(`− ${fmtAmt(0, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.getByText(fmtAmtNorm(0, 'EUR'))).toBeInTheDocument();
+    expect(sidebar.queryByText(`− ${fmtAmtNorm(0, 'EUR')}`)).not.toBeInTheDocument();
     // No deposited rows → no per-method breakdown section rendered.
     expect(sidebar.queryByText('porMetodo')).not.toBeInTheDocument();
   });
@@ -173,7 +188,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     ];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    expect(sidebar.getByText(`− ${fmtAmt(40, 'EUR')}`)).toBeInTheDocument();
+    expect(sidebar.getByText(`− ${fmtAmtNorm(40, 'EUR')}`)).toBeInTheDocument();
   });
 
   it('renders the hero amount with a single sign (not a doubled "− -") when this month\'s deposited total is negative (dir="out")', () => {
@@ -186,8 +201,8 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     // Both the hero amount AND the per-method breakdown (single "other" method,
     // same -40 total) must render the sign-less single form.
-    expect(sidebar.getAllByText(fmtAmt(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
-    expect(sidebar.queryByText(`− ${fmtAmt(-40, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.getAllByText(fmtAmtNorm(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
+    expect(sidebar.queryByText(`− ${fmtAmtNorm(-40, 'EUR')}`)).not.toBeInTheDocument();
   });
 
   it('renders the hero amount with a single sign (not a doubled "+ -") when this month\'s deposited total is negative (dir="in")', () => {
@@ -196,25 +211,27 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     ];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    expect(sidebar.getAllByText(fmtAmt(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
-    expect(sidebar.queryByText(`+ ${fmtAmt(-40, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.getAllByText(fmtAmtNorm(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
+    expect(sidebar.queryByText(`+ ${fmtAmtNorm(-40, 'EUR')}`)).not.toBeInTheDocument();
   });
 
   it('renders the hero amount without a +/- sign when this month\'s total is exactly zero (dir="in")', () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     // Both the hero amount and the "sinDepositar" widget count render as a sign-less zero.
-    expect(sidebar.getAllByText(fmtAmt(0, 'EUR'))).toHaveLength(2);
-    expect(sidebar.queryByText(`+ ${fmtAmt(0, 'EUR')}`)).not.toBeInTheDocument();
-    expect(sidebar.queryByText(`− ${fmtAmt(0, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.getAllByText(fmtAmtNorm(0, 'EUR'))).toHaveLength(2);
+    expect(sidebar.queryByText(`+ ${fmtAmtNorm(0, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.queryByText(`− ${fmtAmtNorm(0, 'EUR')}`)).not.toBeInTheDocument();
   });
 
-  it('falls back to the raw currency code when Intl cannot resolve a currency symbol', () => {
+  it('falls back to a plain grouped number (no currency suffix) when the currency code is invalid', () => {
     const rows = [{ id: 'p1', status: 'RPR', amount: '10', 'currency$_identifier': '1', paymentDate: thisMonthDate() }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    // currencySymbol() catches the RangeError from Intl.NumberFormat and returns the raw code.
-    expect(sidebar.getByText('+ 10,00 1')).toBeInTheDocument();
+    // formatCurrency()'s catch branch (Intl throws on an invalid ISO code) falls
+    // back to a plain es-ES grouped number — no raw-code suffix, matching the
+    // same contract every other formatCurrency() call site in the app relies on.
+    expect(sidebar.getByText(fmtAmtNorm(10, '1'))).toBeInTheDocument();
   });
 
   it('renders zeroed widgets for an empty data array', () => {
@@ -222,7 +239,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     expect(sidebar.getByText('0 porVencer')).toBeInTheDocument();
     // Both the sign-less hero amount and the "sinDepositar" widget count read "0,00 €".
-    expect(sidebar.getAllByText(fmtAmt(0, 'EUR')).length).toBeGreaterThanOrEqual(2);
+    expect(sidebar.getAllByText(fmtAmtNorm(0, 'EUR')).length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -263,7 +280,7 @@ describe('PaymentHeaderTableBase — columns', () => {
     const rows = [{ id: 'p1', status: 'RPR', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p1');
-    expect(cell).toHaveTextContent(`+ ${fmtAmt(50, 'EUR')}`);
+    expect(cell).toHaveTextContent(`+ ${fmtAmtNorm(50, 'EUR')}`);
     expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
@@ -274,7 +291,7 @@ describe('PaymentHeaderTableBase — columns', () => {
     const rows = [{ id: 'p12', status: 'RPAE', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p12');
-    expect(cell).toHaveTextContent(`+ ${fmtAmt(50, 'EUR')}`);
+    expect(cell).toHaveTextContent(`+ ${fmtAmtNorm(50, 'EUR')}`);
     expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
@@ -282,7 +299,7 @@ describe('PaymentHeaderTableBase — columns', () => {
     const rows = [{ id: 'p2', status: 'RPAP', amount: '20', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p2');
-    expect(cell).toHaveTextContent(`− ${fmtAmt(20, 'EUR')}`);
+    expect(cell).toHaveTextContent(`− ${fmtAmtNorm(20, 'EUR')}`);
     expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 

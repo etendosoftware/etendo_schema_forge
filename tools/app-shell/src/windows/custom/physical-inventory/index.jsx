@@ -3,8 +3,8 @@ import GeneratedApp from '@generated/physical-inventory/generated/web/physical-i
 import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 
 const COLUMNS = [
-  { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false },
-  { key: 'name', column: 'Name', type: 'string' },
+  { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
+  { key: 'name', column: 'Name', type: 'string', required: true },
   {
     key: 'warehouse',
     column: 'M_Warehouse_ID',
@@ -20,8 +20,8 @@ const COLUMNS = [
       );
     },
   },
-  { key: 'processed', column: 'Processed', type: 'status', enumLabels: { 'true': 'statusProcessed', 'false': 'statusDraft' } },
-  { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+  { key: 'processed', column: 'Processed', type: 'status', required: true, enumLabels: { 'true': 'statusProcessed', 'false': 'statusDraft' } },
+  { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
 ];
 
 function CustomInventoryTable(props) {

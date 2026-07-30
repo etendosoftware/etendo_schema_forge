@@ -50,4 +50,12 @@ describe('NewTransactionModal (source contract)', () => {
     // Direction toggle testids are generated as `tx-dir-${o.id}`.
     assert.match(src, /data-testid=\{`tx-dir-\$\{o\.id\}`\}/);
   });
+
+  it('passes the real account currency to AmountInput instead of a hardcoded symbol (ETP-4314)', () => {
+    // Regression: the amount field used to always show '€' regardless of the
+    // account's actual currency. It now derives `iso` from accountCurrency and
+    // forwards it as the `currency` prop.
+    assert.match(src, /const iso = accountCurrency\?\.iso \|\| 'EUR'/);
+    assert.match(src, /currency=\{iso\}/);
+  });
 });

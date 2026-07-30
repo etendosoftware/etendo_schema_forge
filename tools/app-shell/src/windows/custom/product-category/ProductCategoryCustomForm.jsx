@@ -14,8 +14,8 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
   ];
 
   const checkboxFields = [
-    { key: 'default', column: 'IsDefault', type: 'checkbox', label: ui('categoryDefault'), section: 'principal' },
-    { key: 'active', column: 'IsActive', type: 'checkbox', label: t('IsActive'), section: 'principal' },
+    { key: 'default', column: 'IsDefault', type: 'checkbox', label: ui('categoryDefault'), required: true, section: 'principal' },
+    { key: 'active', column: 'IsActive', type: 'checkbox', label: t('IsActive'), required: true, section: 'principal' },
   ];
 
   const descriptionField = [

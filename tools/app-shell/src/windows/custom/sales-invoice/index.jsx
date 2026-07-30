@@ -24,11 +24,11 @@ import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.j
 /* eslint-disable react/prop-types */
 
 const LIST_COLUMNS = [
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.' },
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount' },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
 ];
 // Mirrors artifacts/sales-invoice/decisions.json → window.labelOverrides.
 // The list view here bypasses the generated HeaderPage and renders ListView
@@ -56,12 +56,12 @@ const SUBSET_FILTERS = [
 ];
 
 const OVERDUE_INITIAL_COLUMNS = [
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', required: true },
+  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', required: true },
   { key: 'eTGODueDate', column: 'em_etgo_due_date', type: 'date' },
 ];
 

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
+import { getCurrencySymbol } from '@/lib/formatCurrency.js';
 import {
   Select as RSelect, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -112,7 +113,7 @@ export function MoneyInput({ value, onChange, className = '', disabled, placehol
   );
 }
 
-export function AmountInput({ label, required, value, onChange, onBlur, placeholder, readOnly, className, name }) {
+export function AmountInput({ label, required, value, onChange, onBlur, placeholder, readOnly, className, name, currency }) {
   // Keep what the user types verbatim while the field is focused, so a parent
   // that re-formats `value` on every change (e.g. eur(parseEur(x))) doesn't
   // fight the keystrokes. On blur we fall back to the formatted `value` and run
@@ -137,7 +138,7 @@ export function AmountInput({ label, required, value, onChange, onBlur, placehol
           placeholder={placeholder}
           disabled={readOnly}
           data-testid={name ? `field-number-${name}` : 'field-number'} />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground">€</span>
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground">{getCurrencySymbol(currency) || '€'}</span>
       </div>
     </Field>
   );

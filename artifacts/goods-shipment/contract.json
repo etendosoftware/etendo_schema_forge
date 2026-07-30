@@ -1,7 +1,7 @@
 {
-  "version": "0.32.0",
+  "version": "0.34.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-28T16:01:02.098Z",
+  "updatedAt": "2026-07-30T04:12:10.235Z",
   "checksum": "e7d163e989c97f04",
   "frontendContract": {
     "window": {

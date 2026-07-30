@@ -297,6 +297,16 @@ import { DocChip, RelatedDocumentsShell, STATUS_KEYS, CHIP_COLORS } from '@/comp
 ```
 </i18n_rules>
 
+<currency_rules>
+## Currency & Amount Formatting (MANDATORY)
+
+**Every monetary value MUST go through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString`.** A hardcoded locale or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. A new ad-hoc money formatter is a bug, not a style nit.
+
+- Browser: `formatCurrency(currencyCode, value)` / `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`.
+- jsreport/PDF/printed reports: `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js` — never write a second currency Handlebars helper by hand.
+- Before wiring an amount field/column into a window, **grep for `formatCurrency` first** — copy the existing pattern from a sibling window instead of reinventing it.
+</currency_rules>
+
 <decision_heuristics>
 - Always read before writing — never assume `decisions.json` structure
 - Prefer querying the AD over inferring from field names

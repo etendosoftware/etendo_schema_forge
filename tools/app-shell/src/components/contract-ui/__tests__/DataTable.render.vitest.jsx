@@ -43,8 +43,8 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 vi.mock('@/lib/resolveColumnLabel.js', () => ({
   resolveColumnLabel: (col) => col.label ?? col.key,
 }));
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (val, cur) => (val != null ? `${Number(val).toFixed(2)}${cur ? ` ${cur}` : ''}` : ''),
+vi.mock('@/lib/formatCurrency.js', () => ({
+  formatCurrency: (cur, val) => (val != null ? `${Number(val).toFixed(2)}${cur ? ` ${cur}` : ''}` : ''),
 }));
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),
@@ -226,7 +226,7 @@ describe('DataTable — render coverage', () => {
         { id: 'f2', total: 250, 'currency$_identifier': 'EUR' },
       ];
       render(<DataTable columns={cols} data={rows} selectable={false} showFooterTotals />);
-      // 100 + 250 = 350 → formatAmount mock → "350.00 EUR"
+      // 100 + 250 = 350 → formatCurrency mock → "350.00 EUR"
       expect(screen.getByText('350.00 EUR')).toBeInTheDocument();
     });
 

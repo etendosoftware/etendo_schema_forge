@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
-const AMOUNT_FMT = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-function fmtAmt(val) {
+function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  return (n < 0 ? '-' : '') + AMOUNT_FMT.format(Math.abs(n)) + ' €';
+  return formatCurrency(currency || 'EUR', n);
 }
 
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
@@ -108,6 +108,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const status = data?.status || '';
   const isDraft = !PAID_STATUSES.has(status);
   const totalAmount = parseFloat(data?.amount ?? 0);
+  const currency = data?.['currency$_identifier'];
 
   useEffect(() => {
     if (!data?.id) return;
@@ -234,7 +235,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       {/* Datos: amount, padding 4px 12px 8px */}
       <div style={{ padding: '4px 12px 8px' }}>
         {(() => {
-          const formatted = sign + fmtAmt(Math.abs(totalAmount));
+          const formatted = sign + fmtAmt(Math.abs(totalAmount), currency);
           const len = formatted.length;
           const fs = len <= 13 ? 30 : 26;
           const lh = fs === 30 ? '32px' : '30px';
@@ -253,17 +254,17 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <BreakdownRow
               label={ui('totalAmount')}
-              value={fmtAmt(totalAmount)}
+              value={fmtAmt(totalAmount, currency)}
               data-testid="BreakdownRow__624cef" />
             <Separator data-testid="Separator__624cef" />
             <BreakdownRow
               label={ui('appliedToInvoices')}
-              value={lines === null ? '...' : fmtAmt(applied)}
+              value={lines === null ? '...' : fmtAmt(applied, currency)}
               data-testid="BreakdownRow__624cef" />
             <Separator data-testid="Separator__624cef" />
             <BreakdownRow
               label={ui('unallocated')}
-              value={lines === null ? '...' : fmtAmt(unapplied)}
+              value={lines === null ? '...' : fmtAmt(unapplied, currency)}
               muted={unapplied === 0}
               data-testid="BreakdownRow__624cef" />
           </div>

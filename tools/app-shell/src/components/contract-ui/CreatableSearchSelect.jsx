@@ -510,6 +510,12 @@ export function CreatableSearchSelect({
     setQuery('');
     setOpen(true);
     onChange('', '');
+    // The chip <button> unmounts and the <input> mounts once hasSelection flips to
+    // false — without moving focus onto it, clicking away never fires onBlur, so the
+    // dropdown reopened above never auto-closes (bug: stayed open forever after clear).
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
   };
 
   // Explicit empty/null choice (e.g. "All accounts"): clears the value and shows

@@ -4,6 +4,8 @@ import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { statusLabel } from '@/lib/statusBadge.js';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
 import { useUI } from '@/i18n';
+import { buildJsreportHelpersString } from '../../../../../templates/reports/helpers/report-html-helpers.js';
+import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 
 // ---------------------------------------------------------------------------
 // jsreport recipe ↔ format mapping
@@ -42,30 +44,28 @@ const REPORT_CSS = `
   @media print { .report-container { padding: 0; } }
 `;
 
-// Handlebars helpers (CommonJS for jsreport)
-const HELPERS_CODE = `
+// Handlebars helpers (CommonJS for jsreport). formatCurrency/formatBoolean/
+// ifCond/eq come from the canonical, centralized set (same source every
+// Category D report and document PDF uses — see buildJsreportHelpersString()'s
+// doc comment for why jsreport can't just import it directly). formatDate is
+// this report's own override: it intentionally keeps its distinct en-US
+// (MM/DD/YYYY) format, unrelated to the currency-centralization this ticket
+// is about — a later `function formatDate` declaration in the same combined
+// string simply wins over the canonical one (plain last-declaration-wins).
+// Built at call time (not module load) so it picks up whatever the currency-format
+// fetch has resolved to by the time a report is actually rendered (ETP-4314).
+// Never add a second currency/number Handlebars helper here — see CLAUDE.md
+// § Currency & Amount Formatting.
+function buildHelpersCode() {
+  return buildJsreportHelpersString(undefined, undefined, getCurrencyFormatConfig()) + `
 function formatDate(value) {
   if (value == null || value === '') return '';
   var d = new Date(value);
   if (isNaN(d.getTime())) return String(value);
   return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
-function formatCurrency(value) {
-  if (value == null) return '';
-  var num = Number(value);
-  if (isNaN(num)) return String(value);
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-}
-function formatBoolean(value) { return value ? 'Yes' : 'No'; }
-function ifCond(v1, operator, v2, options) {
-  switch (operator) {
-    case '===': return v1 === v2 ? options.fn(this) : options.inverse(this);
-    case '!==': return v1 !== v2 ? options.fn(this) : options.inverse(this);
-    default: return options.inverse(this);
-  }
-}
-function eq(a, b) { return a === b; }
 `;
+}
 
 // Handlebars template for listing reports
 const LISTING_TEMPLATE = `<!DOCTYPE html>
@@ -161,7 +161,7 @@ async function renderViaJsreport(recipe, title, columns, rows, filters) {
       content: isCSV ? CSV_TEMPLATE : LISTING_TEMPLATE,
       engine: 'handlebars',
       recipe,
-      helpers: HELPERS_CODE,
+      helpers: buildHelpersCode(),
     },
     data: {
       css: REPORT_CSS,

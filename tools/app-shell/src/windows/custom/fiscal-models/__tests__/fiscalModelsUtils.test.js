@@ -42,6 +42,9 @@ describe('formatAmount', () => {
   it('returns em-dash for undefined', () => assert.equal(formatAmount(undefined), '—'));
   it('formats positive number with € symbol', () => assert.match(formatAmount(12179.75), /€|EUR/));
   it('formats negative number with minus sign', () => assert.match(formatAmount(-100), /-/));
+  it('groups thousands in the 1000-9999 range (Intl silently drops it without useGrouping)', () => {
+    assert.match(formatAmount(6162.60), /^6\.162,60\s€$/);
+  });
 });
 
 describe('formatPercent', () => {
