@@ -18,7 +18,7 @@
  * only the ProductSearchDrawer mock is extended (accepts an `isTaxIncluded`
  * override) to reach the gross-price branch that fixed drawer never triggers.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -204,8 +204,15 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     expect(screen.getByTestId('TableHeader__eb5261')).toHaveAttribute('aria-hidden', 'true');
   });
 
-  // ── isColumnHidden (displayIf) — both the hidden-cell and derived-cell paths ─
-  it('hides a displayIf-controlled add-row cell until its controller field is truthy', async () => {
+  // ── visibleColumns auto-hide/reveal for a displayIf-controlled column ───
+  // Note: the entire COLUMN (header + every cell, including the add-row cell)
+  // is dropped from `visibleColumns` while its controller is falsy in both
+  // existing data rows and the current add-row values — this is the real,
+  // reachable displayIf gate. `isColumnHidden`'s own aria-hidden placeholder
+  // branch inside renderInlineAddCell can only run once the column is already
+  // visible (i.e. the controller is already truthy), making that branch
+  // unreachable in practice — it is intentionally not targeted here.
+  it('auto-hides a displayIf-controlled column until its controller field goes truthy, then reveals it', async () => {
     const addRow = {
       active: true,
       onAdd: vi.fn(async (v) => v),
@@ -227,13 +234,12 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
       />,
     );
 
-    // Hidden while `flag` is falsy — aria-hidden placeholder cell, no control rendered.
-    const hiddenCell = screen.getByTestId('inline-add-cell-conditional');
-    expect(hiddenCell).toHaveAttribute('aria-hidden', 'true');
-    expect(screen.queryByTestId('inline-add-field-conditional')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('column-header-conditional')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('inline-add-cell-conditional')).not.toBeInTheDocument();
 
-    // Toggling the controller on reveals the real input control.
     await userEvent.click(screen.getByTestId('inline-add-field-flag'));
+
+    expect(screen.getByTestId('column-header-conditional')).toBeInTheDocument();
     expect(screen.getByTestId('inline-add-field-conditional')).toBeInTheDocument();
   });
 
@@ -262,12 +268,13 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
   });
 
   // ── checkbox/boolean PillToggle add-row control ─────────────────────────
-  it('toggles a checkbox add-row field via the PillToggle control', async () => {
-    const onAdd = vi.fn(async (v) => v);
+  it('toggles a checkbox add-row field via the PillToggle control and reports it through onFieldChange', async () => {
+    const onFieldChange = vi.fn();
     const addRow = {
       active: true,
-      onAdd,
+      onAdd: vi.fn(async (v) => v),
       onCancel: vi.fn(),
+      onFieldChange,
       fields: [{ key: 'flag', label: 'Flag', type: 'checkbox' }],
     };
     render(
@@ -280,11 +287,12 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     );
 
     const toggle = screen.getByTestId('inline-add-field-flag');
-    await userEvent.click(toggle);
-    fireEvent.keyDown(toggle, { key: 'Enter' });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
 
-    await waitFor(() => expect(onAdd).toHaveBeenCalled());
-    expect(onAdd.mock.calls[0][0]).toEqual(expect.objectContaining({ flag: true }));
+    await userEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(onFieldChange).toHaveBeenCalledWith('flag', true, expect.objectContaining({ flag: true }), expect.any(Function));
   });
 
   // ── InlineAddRow imperative handle: flush() + setFieldValues() ──────────
@@ -460,6 +468,7 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     const onEditRow = vi.fn();
     const onSaveRow = vi.fn();
     const onCancelEdit = vi.fn();
+    const onDeleteRow = vi.fn(async () => {});
     const { rerender } = render(
       <DataTable
         columns={baseColumns}
@@ -469,10 +478,11 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
         onEditRow={onEditRow}
         onSaveRow={onSaveRow}
         onCancelEdit={onCancelEdit}
+        onDeleteRow={onDeleteRow}
       />,
     );
 
-    await userEvent.click(screen.getByLabelText('edit'));
+    await userEvent.click(within(screen.getByTestId('row-r1')).getByLabelText('edit'));
     expect(onEditRow).toHaveBeenCalledWith(baseRows[0]);
 
     rerender(
@@ -484,13 +494,14 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
         onEditRow={onEditRow}
         onSaveRow={onSaveRow}
         onCancelEdit={onCancelEdit}
+        onDeleteRow={onDeleteRow}
         editingRowId="r1"
       />,
     );
-    await userEvent.click(screen.getByLabelText('save'));
+    await userEvent.click(within(screen.getByTestId('row-r1')).getByLabelText('save'));
     expect(onSaveRow).toHaveBeenCalled();
 
-    await userEvent.click(screen.getByLabelText('cancel'));
+    await userEvent.click(within(screen.getByTestId('row-r1')).getByLabelText('cancel'));
     expect(onCancelEdit).toHaveBeenCalled();
   });
 
