@@ -1177,7 +1177,8 @@ export function useEntity(entity, childEntity, {
                     // the contacts backstop can add oBTIKTaxIDKey — a backstopped
                     // key must not be treated as backend-provided by
                     // shouldSkipPayloadField.
-                    const { id: _discardId, ...rawDefaults } = data.defaults;
+                    const rawDefaults = { ...data.defaults };
+                    delete rawDefaults.id;
                     backendDefaultKeysRef.current = new Set(Object.keys(rawDefaults));
                     const normalized = normalizeCreationDefaults(rawDefaults, { entity, apiBaseUrl });
                     setEditing(prev => mergeDefaultsPreservingUserEdits(prev, normalized, userChangedKeysRef.current));
