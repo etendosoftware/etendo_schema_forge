@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { clickEmptyStateAddLine } from '../helpers/secondaryTabsInteractions.js';
 
 /**
  * Contacts — Customer Accounting / Vendor Accounting tabs (mocked).
@@ -146,13 +147,7 @@ test.describe('Contacts — Customer Accounting tab (empty state)', () => {
   test('Add Line exposes the customer GL fields but never accountingSchema', async ({ page }) => {
     await page.getByTestId('tab-customerAccounting').click();
 
-    // With zero rows, SecondaryTableTab renders `secondaryTabEmptyState`
-    // (DetailView.jsx) instead of the AddLineButton (`action-add-line`) —
-    // its own "+" trigger calls the identical onAddLineClick handler, so
-    // clicking it opens the same inline add-line form.
-    const emptyState = page.getByTestId('secondary-tab-empty-state');
-    await expect(emptyState).toBeVisible({ timeout: 8_000 });
-    await emptyState.getByRole('button').click();
+    await clickEmptyStateAddLine(page);
 
     await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('inline-add-field-customerReceivablesNo')).toBeVisible();
@@ -204,13 +199,7 @@ test.describe('Contacts — Vendor Accounting tab (empty state)', () => {
   test('Add Line exposes the vendor GL fields but never accountingSchema', async ({ page }) => {
     await page.getByTestId('tab-vendorAccounting').click();
 
-    // With zero rows, SecondaryTableTab renders `secondaryTabEmptyState`
-    // (DetailView.jsx) instead of the AddLineButton (`action-add-line`) —
-    // its own "+" trigger calls the identical onAddLineClick handler, so
-    // clicking it opens the same inline add-line form.
-    const emptyState = page.getByTestId('secondary-tab-empty-state');
-    await expect(emptyState).toBeVisible({ timeout: 8_000 });
-    await emptyState.getByRole('button').click();
+    await clickEmptyStateAddLine(page);
 
     await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('inline-add-field-vendorLiability')).toBeVisible();

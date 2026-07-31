@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { clickEmptyStateAddLine } from '../helpers/secondaryTabsInteractions.js';
 
 /**
  * Product Pricing tab — mocked spec.
@@ -560,13 +561,7 @@ test.describe('Product Accounting tab (empty state) — mocked', () => {
   test('Add Line exposes the four GL account fields; accountingSchema is never editable', async ({ page }) => {
     await page.getByTestId('tab-accounting').click();
 
-    // With zero rows, SecondaryTableTab renders `secondaryTabEmptyState`
-    // (DetailView.jsx) instead of the AddLineButton (`action-add-line`) —
-    // its own "+" trigger calls the identical onAddLineClick handler, so
-    // clicking it opens the same inline add-line form.
-    const emptyState = page.getByTestId('secondary-tab-empty-state');
-    await expect(emptyState).toBeVisible({ timeout: 8_000 });
-    await emptyState.getByRole('button').click();
+    await clickEmptyStateAddLine(page);
 
     await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('inline-add-field-fixedAsset')).toBeVisible();

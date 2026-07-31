@@ -1,18 +1,17 @@
-// ETP-4565 (Pasada1) — failing behavioral coverage proving that, at this
-// commit, `SecondaryTableTab`'s add-line bar has NO row-count cap mechanism
-// for the `window.secondaryTabs` pattern. `product`, `asset-group` and
+// ETP-4565 — regression coverage for `SecondaryTableTab`'s add-line row-count
+// cap on the `window.secondaryTabs` pattern. `product`, `asset-group` and
 // `contacts` (customerAccounting / vendorAccounting) must admit at most one
 // record in their accounting tab, mirroring `window.maxDetailLines` for the
-// `window.detailEntity` pattern (see docs/ui-customization.md §11) — but
-// `secondaryAddLineBar` / `SecondaryTableTab` in `DetailView.jsx` never reads
-// `st.maxDetailLines`, so the "+ Add" button stays visible even when the tab
-// already has 1 (or more) child rows.
+// `window.detailEntity` pattern (see docs/ui-customization.md §11) —
+// `secondaryAddLineBar` / `SecondaryTableTab` in `DetailView.jsx` reads
+// `st.maxDetailLines` and hides the "+ Add" button once the tab already has
+// as many child rows as the cap allows.
 //
-// This test is RED on purpose: it asserts the desired fixed behavior (add
-// button gone once child count >= st.maxDetailLines) and is expected to fail
-// until the fix lands. Do not weaken the assertion to make it pass — the gap
-// is real at this commit (see artifacts/__tests__/etp-4565-accounting-tab-
-// restrictions.test.js for the matching decisions.json-level assertions).
+// These tests guard that behavior: the add button must stay hidden once
+// child count >= st.maxDetailLines (see artifacts/__tests__/etp-4565-
+// accounting-tab-restrictions.test.js for the matching decisions.json-level
+// assertions). Do not weaken these assertions — they are the regression
+// backstop for the gating logic.
 //
 // Mock boilerplate copied from the precedent file (DetailView.secondaryTabs.
 // vitest.js) — only what SecondaryTableTab actually touches is mocked.
@@ -68,7 +67,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('ETP-4565: SecondaryTableTab respects st.maxDetailLines (RED — gap not yet fixed)', () => {
+describe('ETP-4565: SecondaryTableTab respects st.maxDetailLines', () => {
   const makeTable = () => vi.fn(() => h('div', { 'data-testid': 'table' }));
 
   // Shared defaults — mirrors DetailView.secondaryTabs.vitest.js's baseProps,
@@ -129,15 +128,15 @@ describe('ETP-4565: SecondaryTableTab respects st.maxDetailLines (RED — gap no
     ...overrides,
   });
 
-  it('does NOT render the add-line button once child count reaches st.maxDetailLines (EXPECTED TO FAIL today)', () => {
+  it('does NOT render the add-line button once child count reaches st.maxDetailLines', () => {
     const Table = makeTable();
     const st = {
       key: 'accounting',
       Table,
       label: 'Accounting',
       addLineFields: { entry: [{ key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Fixed Asset' }] },
-      // The cap this ticket is about to add support for — a tab already
-      // holding 1 child row (== maxDetailLines) must hide its add button.
+      // A tab already holding 1 child row (== maxDetailLines) must hide its
+      // add button.
       maxDetailLines: 1,
     };
     const props = baseProps({
@@ -148,9 +147,8 @@ describe('ETP-4565: SecondaryTableTab respects st.maxDetailLines (RED — gap no
 
     render(SecondaryTableTab(props));
 
-    // GAP: as of this commit, secondaryAddLineBar/SecondaryTableTab never
-    // reads st.maxDetailLines, so the button still renders here — this
-    // assertion fails today (RED) and must turn GREEN once the fix lands.
+    // secondaryAddLineBar/SecondaryTableTab reads st.maxDetailLines, so the
+    // button is correctly absent once the cap is reached.
     expect(screen.queryByTestId('action-add-line')).not.toBeInTheDocument();
   });
 
