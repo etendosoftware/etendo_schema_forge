@@ -14,11 +14,14 @@ import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.j
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
+import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoiceSubtype.js';
 
 /* eslint-disable react/prop-types */
 
 const filters = ['documentNo', 'invoiceDate', 'businessPartner', 'orderReference', 'documentStatus'];
 
+// Legacy doc-type-name fallback for the two return-invoice names ETP-4738 doesn't cover via
+// apInvoiceSubtype (AP has no "DEV" subtype — a return generates an AP CreditMemo, same doc).
 const NC_RETURN_TYPES = new Set(['AP CreditMemo', 'Return Material Purchase Invoice', 'Reversed Purchase Invoice']);
 
 const DOC_TYPE_BADGE = {
@@ -29,7 +32,10 @@ const DOC_TYPE_BADGE = {
 };
 
 function isNcOrReturn(row) {
-  return NC_RETURN_TYPES.has(row?.['transactionDocument$_identifier']);
+  // ETP-4738: prefer the server-injected apInvoiceSubtype (covers Facturas Rectificativas de
+  // Compra with a negative total, in addition to the legacy AP CreditMemo type); fall back to
+  // doc-type-name matching for the two return-invoice names apInvoiceSubtype doesn't cover.
+  return getApSubtype(row) === 'NC' || NC_RETURN_TYPES.has(row?.['transactionDocument$_identifier']);
 }
 
 export default function PurchaseInvoiceHeaderTable(props) {

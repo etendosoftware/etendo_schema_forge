@@ -39,8 +39,8 @@ Use this window to register supplier invoices, keep the payable document aligned
 - Line pricing follows `INVOICE_LINE_CONFIG` (see `docs/line-pricing-model.md`). The editable fields are `listPrice` (PriceList column) and `etgoDiscount` (`EM_Etgo_Discount`, a Number column added by `com.etendoerp.go`). `unitPrice` (PriceActual) is hidden; it is computed at POST/PATCH as `listPrice × (1 − etgoDiscount/100)`. The product selector provides the correct price-list price via `NeoSelectorService.enrichProductSelectorWithPrices`, which populates both the display-side fields and `_aux._PSTD/_PLIST` so `SL_Invoice_Product` returns the price-list price. Guard 1 in `DetailView.jsx` maps `standardPrice → listPrice` universally when `listPrice` is null or zero. Changing the product resets `etgoDiscount` to 0. `grossAmount` is computed client-side as `invoicedQuantity × listPrice × (1 − etgoDiscount/100) × taxFactor`. The `decisions.json` declares `lineEntityConfig: "invoice"`, which drives all of these behaviors via the generator and `DetailView.jsx`.
 - The preview modal and the detail topbar both treat the invoice as a payable document. They read payment-plan and payment/payment-history data to show paid versus outstanding state, and they expose payment actions only when the invoice is completed and still has an outstanding balance.
 - The detail topbar shows a payment-status pill only for completed invoices. The pill label and amount react to whether the invoice is fully paid or still pending, and clicking it opens the shared invoice payment modal.
-- Two-step Pagos flow (ETP-4331/ETP-4342): the payment pill opens the history popup **"Pagos de la factura"** (`InvoicePaymentHistoryModal.jsx`, the unified component shared between sales and purchase invoice, `dir='out'`) — title + document-number badge header, a stats row (Proveedor · Importe total · Saldo pendiente), a table of registered payments (or an empty state), and a footer with the registered-count label and a **"+ Añadir pago"** pill button shown only while the invoice is `CO` with outstanding > 0. `InvoicePaymentModal.jsx` was removed — `InvoicePaymentHistoryModal.jsx` is now the single canonical component for both directions. It opens the **"Nuevo pago"** modal (`NewPaymentEntryModal.jsx`, step 2): *Importe*, *Fecha*, *Método de pago*, and *Cuenta* — all four marked required (red `*`) and gating **Guardar**/**Confirmar** until filled, where "Importe" is satisfied by the total applied (cash + used credit/abono), not the cash field alone, so a credit line covering 100% of the invoice (leaving cash at 0) still allows confirming — plus the conditional credit/abono section (AP credit memos only — no supplier credit accrual in it1) and the real-time balance summary with *Igualar*. Unlike collections, an **excess blocks Confirmar** with an inline "Exceso: …" error (payments never generate credit, so there is no leave-credit option; the former *Dar vuelto* / refund option was removed for both directions in ETP-4504). ETP-4504 also adds two conditional conversion fields (**Tasa de conversión** + **Importe en moneda de la cuenta**) shown only when the invoice currency differs from the selected account currency — see "Multi-currency support in the Cobros/Pagos modal — ETP-4504" below. **Guardar** → Borrador (draft), **Confirmar** → Depositado. On save/confirm the modal returns to the history popup, which refreshes both its own "Saldo pendiente" (refetches the payment plan, not just the payment list) and the invoking list's "Pendiente de pago" badge (`onDataMutated` callback into the list's data hook). Backend uses the same shared actions as sales (`invoicePaymentMethods`, `invoiceCreditSources`, extended `registerPayment` with `process`/`creditSources`, `confirmPayment`) via `RegisterPaymentOutHandler` → `PaymentRegistrationService` (isReceipt=false). The *Fecha* field is required (ETP-4005): clearing it disables **Confirmar**, and saving with an empty date surfaces the `paymentDateRequired` error and a red border on the field.
-- Credit notes (AP CreditMemo / Nota de Crédito, negative totals): the detail topbar badge mirrors the grid's "Pendiente de pago" cell — green **"Aplicada"** once the note is fully consumed, else a purple clickable **"Saldo a favor · remaining"** badge that opens the same history popup as the grid (previously a static non-clickable "Crédito aplicado · total" pill). Inside the popup, the pending widget relabels to **"Saldo a favor"** with the remaining balance, each row shows how much of the note that payment consumed (`− appliedToInvoice` from the `invoicePayments` action, negative when consuming the note), and the **"+ Añadir pago"** button is hidden.
+- Two-step Pagos flow (ETP-4331/ETP-4342): the payment pill opens the history popup **"Pagos de la factura"** (`InvoicePaymentHistoryModal.jsx`, the unified component shared between sales and purchase invoice, `dir='out'`) — title + document-number badge header, a stats row (Proveedor · Importe total · Saldo pendiente), a table of registered payments (or an empty state), and a footer with the registered-count label and a **"+ Añadir pago"** pill button shown only while the invoice is `CO` with outstanding > 0. `InvoicePaymentModal.jsx` was removed — `InvoicePaymentHistoryModal.jsx` is now the single canonical component for both directions. It opens the **"Nuevo pago"** modal (`NewPaymentEntryModal.jsx`, step 2): *Importe*, *Fecha*, *Método de pago*, and *Cuenta* — all four marked required (red `*`) and gating **Guardar**/**Confirmar** until filled, where "Importe" is satisfied by the total applied (cash + used credit/abono), not the cash field alone, so a credit line covering 100% of the invoice (leaving cash at 0) still allows confirming — plus the conditional credit/abono section (Facturas Rectificativas de Compra with a negative total only, ETP-4738 — no supplier credit accrual in it1; see "Saldo a favor restricted to Facturas Rectificativas — ETP-4738" below) and the real-time balance summary with *Igualar*. Unlike collections, an **excess blocks Confirmar** with an inline "Exceso: …" error (payments never generate credit, so there is no leave-credit option; the former *Dar vuelto* / refund option was removed for both directions in ETP-4504). ETP-4504 also adds two conditional conversion fields (**Tasa de conversión** + **Importe en moneda de la cuenta**) shown only when the invoice currency differs from the selected account currency — see "Multi-currency support in the Cobros/Pagos modal — ETP-4504" below. **Guardar** → Borrador (draft), **Confirmar** → Depositado. On save/confirm the modal returns to the history popup, which refreshes both its own "Saldo pendiente" (refetches the payment plan, not just the payment list) and the invoking list's "Pendiente de pago" badge (`onDataMutated` callback into the list's data hook). Backend uses the same shared actions as sales (`invoicePaymentMethods`, `invoiceCreditSources`, extended `registerPayment` with `process`/`creditSources`, `confirmPayment`) via `RegisterPaymentOutHandler` → `PaymentRegistrationService` (isReceipt=false). The *Fecha* field is required (ETP-4005): clearing it disables **Confirmar**, and saving with an empty date surfaces the `paymentDateRequired` error and a red border on the field.
+- Facturas Rectificativas de Compra with a negative total (saldo a favor, ETP-4738 — the retired "AP CreditMemo" / "AP Credit Memo" types are covered under ETP-4737): the detail topbar badge mirrors the grid's "Pendiente de pago" cell — green **"Aplicada"** once the rectificativa is fully consumed, else a purple clickable **"Saldo a favor · remaining"** badge that opens the same history popup as the grid (previously a static non-clickable "Crédito aplicado · total" pill). Inside the popup, the pending widget relabels to **"Saldo a favor"** with the remaining balance, each row shows how much of the rectificativa that payment consumed (`− appliedToInvoice` from the `invoicePayments` action, negative when consuming it), and the **"+ Añadir pago"** button is hidden.
 - Payment method / account defaults (ETP-4331) — mirrors Etendo Classic's `AddPaymentDefaultValuesHandler` priority instead of an arbitrary first-in-list pick: **Método de pago** defaults to the invoice's own configured method (falling back to the business partner's method if the invoice has none); **Cuenta** is filtered to only the accounts that support the selected method (and match the invoice currency), defaulting in priority order to (1) the business partner's preferred account for this direction (`pOFinancialAccount` for payments) when it supports the method, (2) the account flagged `default` on `FIN_Financial_Account_PaymentMethod` for that method, (3) the first account that supports the method. Changing **Método de pago** re-filters and, if needed, re-selects **Cuenta** using the same priority; clearing **Método de pago** never silently refills **Cuenta** (a prior bug where clearing the method after clearing the account caused the account to reappear on its own is fixed). Backend surfaces this via `paymentMethodIds`/`defaultForMethodIds` per account and `defaultMethodId`/`bpPreferredAccountId` on the `invoiceAccounts` response (`PaymentRegistrationService.java`).
 - Topbar clone button: icon-only (no text label), styled as Secondary Outline (`#D1D4DB` border, `#FFFFFF` background, `#64748B` icon color, `0px 1px 2px 0px #1212170D` shadow). Hover shifts background to `#F1F5F9`. Implemented via the shared `tools/app-shell/src/windows/custom/shared/CloneButton.jsx` component, which is also used by `SalesInvoiceTopbar.jsx`.
 - When the fiscal profile enables a manual fiscal target for purchase invoices, completed purchase invoices expose `Enviar a SIF` in both the detail topbar and the preview modal. The matrix is spec-specific: `sii` and `sii-navarra` show SII; `tbai` shows TicketBAI; `sii+tbai` shows only SII for purchases; `verifactu` shows no manual send button because Verifactu is sent automatically on completion.
@@ -526,6 +526,33 @@ substance from the two-step flow's original payment behavior; ETP-4504 only remo
 offered for payments) **"Dar vuelto"** / refund path from the shared code. Leave-credit
 (**Generar crédito a favor**) is a collection-only resolution and is never shown here.
 
+### F4 — Saldo a favor restricted to Facturas Rectificativas with a negative total — ETP-4738
+
+With ETP-4737, the old "AP CreditMemo" document type is retired and unified into a single
+**"Factura Rectificativa" AP document type**, flagged `c_doctype.em_etsg_isrectificative = 'Y'`
+(owned by the optional `com.etendoerp.sif.general` module). ETP-4738 updates the credit/abono
+section's listing to match: `PaymentCreditSourcesService.pendingAbonos` restricts the pending-PSD
+query to purchase invoices that are BOTH (a) a Factura Rectificativa de Compra (doc type resolved
+server-side via `RectificativeDocTypeSupport`, scoped to the invoice's client and purchase side)
+AND (b) carry a negative `grandTotalAmount`. A Factura Rectificativa de Compra with a **positive**
+total does not appear. The invoice-currency filter (F2) is unaffected.
+`PaymentCreditConsumer.consumeAbono` mirrors the same eligibility check server-side when a
+payment is registered, rejecting a crafted `psdId` the selector would not have offered (except a
+PSD already linked to the payment being edited/re-saved). Legacy pending AP Credit Memos no
+longer appear in this selector once retired — see ETP-4738 in Jira for the functional sign-off
+on that data-visibility change. Full rationale in
+[`sales-invoice.md`](sales-invoice.md#f4--saldo-a-favor-restricted-to-facturas-rectificativas-with-a-negative-total--etp-4738)
+(same mechanism, AR side).
+
+**ETP-4738 follow-up — a pre-existing bug is also fixed.** Before this change,
+`PaymentCreditSourcesService.collectAccumulatedCredit` was called unconditionally for BOTH
+sides, so the Pagos modal could incorrectly surface accumulated-credit rows (badge
+**"Crédito"**) even though the DF explicitly states "Sin crédito acumulado a proveedor en it1".
+`handleListCreditSources` now calls `collectAccumulatedCredit` only inside an `if (isReceipt)`
+guard (see the AR-side note in `sales-invoice.md`), so Pagos (AP) never lists a `kind: 'credit'`
+row while Cobros (AR) keeps it. The "no accumulated AP credit source (it1)" behavior documented
+above is now actually enforced in code, not just intended.
+
 ### Known display-only limitation
 
 The **Importe en moneda de la cuenta** value is rounded to **2 decimals in the UI** while the
@@ -546,6 +573,31 @@ submitted `conversionRate`.
 - `tools/app-shell/src/windows/custom/shared/usePaymentBalance.js` — excess gating; refund removed.
 - i18n keys `cpConversionRate` / `cpAmountInAccount` / `cpConversionRateRequired` /
   `cpConversionRateInvalid` present in `en_US.json`, `es_ES.json`, and `es_AR.json`.
+
+## F5 — Grid/topbar "Saldo a favor" badge now recognizes Facturas Rectificativas — ETP-4738
+
+The list-view "Pendiente de pago" cell (`PurchaseInvoiceHeaderTable.jsx`) and the detail-page
+topbar (`PurchaseInvoiceTopbar.jsx`) render a purple **"Saldo a favor"** badge (or green
+**"Aplicada"**) instead of the normal pending/paid pill for credit-note-like invoices, gated by
+`isNcOrReturn(row)` / `isCreditType`. Before this fix, both only matched a hardcoded set of
+legacy document-type **names** (`NC_RETURN_TYPES` = `'AP CreditMemo'` / `'Return Material
+Purchase Invoice'` / `'Reversed Purchase Invoice'`, or `docType === 'Nota de Crédito' || 'AP
+CreditMemo'`) — a Factura Rectificativa de Compra (docbasetype `API`, just flagged
+`em_etsg_isrectificative='Y'`) matched none of them and rendered as a normal invoice even with
+a negative total.
+
+Two changes close the gap:
+- `PurchaseInvoiceHeaderHandler.afterHandle` now injects `apInvoiceSubtype` on **every** GET row
+  (list AND detail) — previously it only did so for the single-record detail GET, so the grid
+  never received the field at all. This reuses the same shared reclassification described in
+  `sales-invoice.md`'s F5 (`AbstractInvoiceHeaderHandler.enrichInvoiceSubtype`: `FAC` → `NC` when
+  rectificative + `grandTotalAmount < 0`).
+- Both frontend files now check `getApSubtype(row) === 'NC'` (from the already-existing
+  `artifacts/purchase-invoice/custom/purchaseInvoiceSubtype.js`, previously only wired into
+  `PurchaseInvoiceBottomPanel.jsx`) **first**, falling back to the legacy name-matching set for
+  resilience against an undeployed/older backend. AP has no separate "DEV" (return) subtype — a
+  purchase return still generates an AP CreditMemo, the same document — so the
+  `'Return Material Purchase Invoice'` / `'Reversed Purchase Invoice'` names stay name-matched.
 
 ## Theme roles
 

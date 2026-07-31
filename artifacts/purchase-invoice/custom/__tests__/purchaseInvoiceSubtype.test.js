@@ -20,6 +20,25 @@ describe('getApSubtype', () => {
     assert.equal(getApSubtype({ apInvoiceSubtype: 'FAC', 'transactionDocument$_identifier': 'Credit Memo' }), 'FAC');
   });
 
+  // ETP-4738: Factura Rectificativa (unified credit-note doc type) has a name
+  // that does NOT contain "credit"/"memo"/"crédito" — the identifier fallback
+  // alone would misclassify it as FAC. The server-injected apInvoiceSubtype
+  // (set from grandTotalAmount < 0 reclassification) must be the deciding
+  // signal for this doc type.
+  it('resolves NC via apInvoiceSubtype for "Factura Rectificativa" — an identifier the fallback regex does not recognize', () => {
+    assert.equal(
+      getApSubtype({ apInvoiceSubtype: 'NC', 'transactionDocument$_identifier': 'Factura Rectificativa' }),
+      'NC',
+    );
+  });
+
+  it('without apInvoiceSubtype, "Factura Rectificativa" falls back to FAC (documents the gap the subtype field closes)', () => {
+    assert.equal(
+      getApSubtype({ 'transactionDocument$_identifier': 'Factura Rectificativa' }),
+      'FAC',
+    );
+  });
+
   it('falls back to transactionDocument identifier: credit → NC', () => {
     assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'AP Credit Memo' }), 'NC');
     assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'Nota de Crédito de Proveedor' }), 'NC');

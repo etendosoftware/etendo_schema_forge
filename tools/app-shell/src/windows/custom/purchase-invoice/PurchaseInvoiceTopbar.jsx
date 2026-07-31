@@ -8,6 +8,7 @@ import CloneButton from '../shared/CloneButton.jsx';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
+import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoiceSubtype.js';
 
 export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUrl, onProcess, onRefresh }) {
   const navigate = useNavigate();
@@ -32,7 +33,9 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
   const isFullyPaid = data.paymentComplete === true || data.paymentComplete === 'Y' || outstanding <= 0;
   const isCompleted = docStatus === 'CO';
   const docType = data['transactionDocument$_identifier'];
-  const isCreditType = docType === 'Nota de Crédito' || docType === 'AP CreditMemo';
+  // ETP-4738: prefer apInvoiceSubtype (covers Facturas Rectificativas de Compra with a negative
+  // total); fall back to the legacy doc-type-name check.
+  const isCreditType = getApSubtype(data) === 'NC' || docType === 'Nota de Crédito' || docType === 'AP CreditMemo';
 
   const handleBadgeClick = () => {
     if (isCompleted) setShowPaymentModal(true);

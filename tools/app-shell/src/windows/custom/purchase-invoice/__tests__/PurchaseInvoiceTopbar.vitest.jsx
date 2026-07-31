@@ -304,3 +304,80 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.getByText('statusPending')).toBeInTheDocument();
   });
 });
+
+// ── ETP-4738: Factura Rectificativa de Compra recognized via apInvoiceSubtype ──
+// A Factura Rectificativa with a negative total is reclassified server-side to
+// apInvoiceSubtype: 'NC', but its doc-type identifier ("Factura Rectificativa")
+// is not one of the two hardcoded legacy doc-type-name checks
+// ('Nota de Crédito' / 'AP CreditMemo'). isCreditType must still recognize it
+// via the server-injected subtype field alone. This exercises the REAL
+// artifacts/purchase-invoice/custom/purchaseInvoiceSubtype.js (not mocked here
+// — @generated resolves to artifacts/ in vitest.config.js).
+describe('PurchaseInvoiceTopbar — apInvoiceSubtype recognizes Factura Rectificativa (ETP-4738)', () => {
+  const props = {
+    data: BASE_DATA,
+    recordId: 'inv-001',
+    token: 'test-token',
+    apiBaseUrl: '/api',
+    onRefresh: vi.fn(),
+    onProcess: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const RECTIFICATIVA_DATA = {
+    ...BASE_DATA,
+    'transactionDocument$_identifier': 'Factura Rectificativa',
+    apInvoiceSubtype: 'NC',
+    grandTotalAmount: -15,
+    outstandingAmount: -15,
+  };
+
+  it('shows the "Saldo a favor" badge for a Factura Rectificativa with apInvoiceSubtype NC and a nonzero remaining balance', () => {
+    render(<PurchaseInvoiceTopbar {...props} data={RECTIFICATIVA_DATA} />);
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+    expect(screen.queryByText('statusPending')).toBeNull();
+  });
+
+  it('shows the "Aplicada" pill for a Factura Rectificativa with apInvoiceSubtype NC once fully consumed', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...RECTIFICATIVA_DATA, outstandingAmount: 0 }}
+      />,
+    );
+    expect(screen.getByText('cpCreditFullyApplied')).toBeInTheDocument();
+    expect(screen.queryByText('cpFavorBadge')).toBeNull();
+  });
+
+  it('clicking the Factura Rectificativa "Saldo a favor" badge opens the payment history modal', () => {
+    render(<PurchaseInvoiceTopbar {...props} data={RECTIFICATIVA_DATA} />);
+    expect(screen.queryByTestId('payment-history-modal')).toBeNull();
+    fireEvent.click(screen.getByText('cpFavorBadge'));
+    expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
+  });
+
+  it('regression guard: legacy doc-type-name fallback still works when apInvoiceSubtype is ABSENT (old/undeployed backend)', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'AP CreditMemo' }}
+      />,
+    );
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+  });
+
+  it('negative control: a normal invoice with apInvoiceSubtype "FAC" still shows the normal pending badge, never the credit badge', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...BASE_DATA, apInvoiceSubtype: 'FAC' }}
+      />,
+    );
+    expect(screen.getByText('statusPending')).toBeInTheDocument();
+    expect(screen.queryByText('cpFavorBadge')).toBeNull();
+    expect(screen.queryByText('cpCreditFullyApplied')).toBeNull();
+  });
+});

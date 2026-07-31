@@ -494,6 +494,119 @@ describe('PurchaseInvoiceHeaderTable — outstandingAmount credit-note/return ba
   });
 });
 
+// ── ETP-4738: Factura Rectificativa de Compra recognized via apInvoiceSubtype ──
+// A rectificative invoice with a negative total is reclassified server-side to
+// apInvoiceSubtype: 'NC', but its doc-type identifier ("Factura Rectificativa")
+// never matches NC_RETURN_TYPES nor the legacy credit/memo keyword fallback in
+// getApSubtype. isNcOrReturn() must still treat it as a credit note via the
+// server-injected subtype field alone. This exercises the REAL
+// artifacts/purchase-invoice/custom/purchaseInvoiceSubtype.js (not mocked —
+// @generated resolves to artifacts/ in vitest.config.js).
+describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage (ETP-4738)', () => {
+  let capturedColumns = null;
+
+  beforeEach(() => {
+    capturedColumns = null;
+    vi.clearAllMocks();
+    getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
+
+    vi.doMock('@/components/contract-ui', () => ({
+      DataTable: ({ columns }) => {
+        capturedColumns = columns;
+        return <div data-testid="DataTable__6b7cdb" />;
+      },
+    }));
+  });
+
+  function getColRender(key) {
+    if (!capturedColumns) return null;
+    const col = capturedColumns.find((c) => c.key === key);
+    return col?.render ?? null;
+  }
+
+  const RECTIFICATIVA_ROW = {
+    eTGODueDate: '2026-06-01',
+    outstandingAmount: '-15.00',
+    grandTotalAmount: '-15.00',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'Factura Rectificativa',
+    apInvoiceSubtype: 'NC',
+    aeatsiiEstado: null,
+  };
+
+  const RECTIFICATIVA_ROW_APPLIED = {
+    ...RECTIFICATIVA_ROW,
+    outstandingAmount: '0',
+  };
+
+  const NORMAL_ROW_WITH_FAC_SUBTYPE = {
+    eTGODueDate: '2026-06-15',
+    outstandingAmount: '300',
+    grandTotalAmount: '300',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'AP Invoice',
+    apInvoiceSubtype: 'FAC',
+    aeatsiiEstado: null,
+  };
+
+  it('outstandingAmount — Factura Rectificativa (apInvoiceSubtype: NC, unrecognized doc-type name) shows the purple "Saldo a favor" badge', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('outstandingAmount');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
+    expect(container.textContent).toMatch(/Saldo a favor/);
+    expect(container.textContent).not.toMatch(/Pendiente/);
+  });
+
+  it('outstandingAmount — fully-consumed Factura Rectificativa (apInvoiceSubtype: NC) shows the green "Aplicada" pill', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('outstandingAmount');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW_APPLIED)}</>);
+    expect(container.textContent).toMatch(/Aplicada/);
+  });
+
+  it('grandTotalAmount — inverts sign for a Factura Rectificativa row via apInvoiceSubtype alone', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('grandTotalAmount');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
+    // grandTotalAmount is already -15, isNcOrReturn -> -Math.abs(-15) = -15
+    expect(container.textContent).toContain('-15:EUR');
+  });
+
+  it('eTGODueDate — Factura Rectificativa renders a plain date (no progress-state dot), same as legacy credit types', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('eTGODueDate');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
+    expect(container.textContent).toBe('date:2026-06-01');
+  });
+
+  it('regression guard: legacy doc-type-name fallback still works when apInvoiceSubtype is ABSENT (old/undeployed backend)', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('outstandingAmount');
+    if (!renderFn) return;
+    // NC_ROW (AP CreditMemo, no apInvoiceSubtype field) — must still resolve to NC via
+    // the legacy identifier fallback inside getApSubtype.
+    const { container } = render(<>{renderFn(NC_ROW)}</>);
+    expect(container.querySelector('button')).toBeTruthy();
+    expect(container.textContent).toMatch(/Saldo a favor/);
+  });
+
+  it('negative control: a normal invoice with apInvoiceSubtype "FAC" still renders the amber pending badge, never the credit badge', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('outstandingAmount');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(NORMAL_ROW_WITH_FAC_SUBTYPE)}</>);
+    expect(container.querySelector('button')).toHaveAttribute('aria-label', 'addPago');
+    expect(container.textContent).not.toMatch(/Saldo a favor/);
+    expect(container.textContent).not.toMatch(/Aplicada/);
+  });
+});
+
 // ── Regression: advanced filter mode for custom-render columns (ETP-4705) ──
 // `type: 'custom'` is required on these columns to drive their badge/button
 // cell render, but resolveFilterMode() falls back to 'text' for any type it
