@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge.jsx';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { getStatusBadgeProps } from '@/lib/statusBadge.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -142,13 +142,13 @@ export default function SummaryCard({
   // When currencies are the same: primary = doc-currency amount, no secondary.
   const showOrgTotal = orgCurrencyCode && orgCurrencyCode !== currencyCode && orgGrandTotal != null;
   const primaryAmount = showOrgTotal
-    ? formatAmount(orgGrandTotal, orgCurrencyCode)
-    : formatAmount(grandTotal ?? 0, currencyCode || undefined);
+    ? formatCurrency(orgCurrencyCode, orgGrandTotal)
+    : formatCurrency(currencyCode || undefined, grandTotal ?? 0);
   const docAmountStr = showOrgTotal
-    ? formatAmount(grandTotal ?? 0, currencyCode || undefined)
+    ? formatCurrency(currencyCode || undefined, grandTotal ?? 0)
     : null;
   const rateNote = showOrgTotal && exchangeRate
-    ? `(${exchangeRate.toLocaleString(undefined, { minimumFractionDigits: ratePrecision, maximumFractionDigits: ratePrecision })})`
+    ? `(${exchangeRate.toLocaleString('es-ES', { minimumFractionDigits: ratePrecision, maximumFractionDigits: ratePrecision })})`
     : null;
 
   return (

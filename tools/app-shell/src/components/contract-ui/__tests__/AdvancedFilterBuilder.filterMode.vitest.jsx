@@ -10,29 +10,64 @@
  *
  * Unlike AdvancedFilterBuilder.vitest.jsx, this suite uses the REAL
  * `resolveFilterMode` — mocking it would defeat the entire point of the test.
+ * It also drives the REAL Radix Select (with the jsdom polyfills in `beforeAll`)
+ * instead of swapping in a native <select>, so the operator lists asserted below
+ * are the ones a user actually sees when opening the dropdown.
+ *
+ * Mocking note (post-ETP-4705): the local AdvancedFilterBuilder.jsx is now a
+ * 2-line shim re-exporting the component from `@etendosoftware/app-shell-core`,
+ * so the component that renders is the CORE one and its internal imports are
+ * relative to the core package (`../../i18n/index.js`,
+ * `../../hooks/useDistinctValues.js`). Vitest matches mocks by RESOLVED module
+ * id, so the functional-path mocks (`@/i18n`, `@/hooks/...`) no longer bind —
+ * the core package's exports map routes the subpath specifiers below to those
+ * very files, which is why the core-subpath mocks are the ones that take effect.
+ * Same pattern as AdvancedFilterBuilder.vitest.jsx /
+ * AdvancedFilterBuilder.cross-window.vitest.jsx. `lib/gridQuery.js` is
+ * deliberately NOT mocked on either path.
  */
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('@/i18n', () => ({
-  useLabel: () => (key) => key,
-  useMenuLabel: () => (key) => key,
-  useUI: () => (key) => key,
-  useLocale: () => ({ genericLabels: {}, statuses: {} }),
-  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
-}));
+// Function declarations (not const arrows): `vi.mock` calls are hoisted above
+// every other statement in the module, so the factories must be hoisted too.
+function uiMocks() {
+  return {
+    LocaleProvider: ({ children }) => children,
+    useLabel: () => (key) => key,
+    useMenuLabel: () => (key) => key,
+    useUI: () => (key) => key,
+    useLocale: () => ({ genericLabels: {}, statuses: {} }),
+    useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+    useLocaleState: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+    getStoredLocale: () => 'en_US',
+    resolveLabel: (key) => key,
+    resolveUI: (key) => key,
+  };
+}
 
-vi.mock('@/hooks/useDistinctValues.js', () => ({
-  useDistinctValues: () => ({
-    values: [],
-    loading: false,
-    loadingMore: false,
-    hasMore: false,
-    search: '',
-    setSearch: vi.fn(),
-    loadMore: vi.fn(),
-  }),
-}));
+function distinctValuesMock() {
+  return {
+    useDistinctValues: () => ({
+      values: [],
+      loading: false,
+      loadingMore: false,
+      hasMore: false,
+      search: '',
+      setSearch: vi.fn(),
+      loadMore: vi.fn(),
+    }),
+  };
+}
+
+// Functional-path mocks: inert while AdvancedFilterBuilder.jsx is a core shim,
+// kept so this suite keeps working if the component ever moves back in-repo.
+vi.mock('@/i18n', uiMocks);
+vi.mock('@/hooks/useDistinctValues.js', distinctValuesMock);
+
+// Core-path mocks: these are the ones the rendered component actually resolves.
+vi.mock('@etendosoftware/app-shell-core/i18n', uiMocks);
+vi.mock('@etendosoftware/app-shell-core/hooks/useDistinctValues.js', distinctValuesMock);
 
 import { AdvancedFilterBuilder } from '../AdvancedFilterBuilder.jsx';
 
@@ -157,7 +192,7 @@ describe('AdvancedFilterBuilder — custom column with explicit filterMode (ETP-
     expect(screen.getByText('advancedFilterApply')).not.toBeDisabled();
   });
 
-  it('resolves the due-date custom column to date operators and a date input', () => {
+  it('resolves the due-date custom column to date operators and a date editor', () => {
     const value = {
       rowOperator: 'and',
       conditions: [{ field: 'eTGODueDate', operator: 'greaterThan', value: '2026-07-29' }],
@@ -166,7 +201,16 @@ describe('AdvancedFilterBuilder — custom column with explicit filterMode (ETP-
     const row = getRows()[0];
     // Date mode relabels greaterThan → 'opAfter' (OP_LABEL_KEY_DATE).
     expect(getOperatorTrigger(row)).toHaveTextContent('opAfter');
-    expect(within(row).getByTestId('Input__4eedf1')).toHaveAttribute('type', 'date');
+    // Date mode renders the locale-masked DateField (calendar button + masked
+    // text input), not the plain <Input> used by text/numeric mode. The absence
+    // of `Input__4eedf1` is the load-bearing half: it proves the column did NOT
+    // degrade to text mode, which is exactly the ETP-4681 bug shape.
+    const dateEditor = within(row).getByTestId('AdvancedFilterBuilder__DateField');
+    expect(within(row).queryByTestId('Input__4eedf1')).not.toBeInTheDocument();
+    // The preloaded ISO value is shown formatted for the mocked en_US locale,
+    // proving the value round-tripped through the date editor rather than being
+    // dropped or rendered raw.
+    expect(dateEditor).toHaveValue('07/29/2026');
   });
 });
 

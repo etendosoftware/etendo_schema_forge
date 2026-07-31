@@ -260,6 +260,14 @@ function parseEnumLabelFilter(trimmed, col) {
 const GENERIC_TRUE = new Set(['true', 'yes', 'si', 'sí', '1', 'y']);
 const GENERIC_FALSE = new Set(['false', 'no', '0', 'n']);
 
+// NEO Headless stores boolean and Y/N columns — including AD "button" columns
+// such as C_Invoice.Posted — as the char 'Y'/'N' and filters them with an exact
+// string `equals`. A JS boolean never matches (verified against NEO:
+// `posted=true` → 0 rows, `posted='Y'` → matches; the same holds even for
+// genuine boolean columns like `processed`). Always serialize a booleanLabel
+// filter to the backend's 'Y'/'N' representation.
+const toBackendBoolean = (v) => ((v === true || v === 'true' || v === 'Y') ? 'Y' : 'N');
+
 function parseBooleanLabelFilter(trimmed, col) {
   const lower = trimmed.toLowerCase();
   if (GENERIC_TRUE.has(lower)) return { mode: 'booleanLabel', value: true };
@@ -378,7 +386,7 @@ export function buildBackendFilter(col, parsed) {
 
     case 'booleanLabel': {
       const field = col.backendFilterKey ?? col.key;
-      return [{ fieldName: field, operator: 'equals', value: parsed.value }];
+      return [{ fieldName: field, operator: 'equals', value: toBackendBoolean(parsed.value) }];
     }
 
     case 'numeric': {
@@ -531,8 +539,7 @@ function buildRowCriteria(col, row) {
   }
 
   if (mode === 'booleanLabel') {
-    const boolVal = val === true || val === 'true';
-    return [{ fieldName, operator: 'equals', value: boolVal }];
+    return [{ fieldName, operator: 'equals', value: toBackendBoolean(val) }];
   }
 
   return [{ fieldName, operator: op, value: val }];
