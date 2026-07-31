@@ -4,6 +4,14 @@
 
 Use this window to maintain the catalog of **matching rules** ("Reglas de matcheo") used by Bank Reconciliation. A finance user defines, prioritizes, activates/deactivates, and removes rules that tell the reconciliation engine how to classify bank-statement lines that the standard algorithm could not link to an invoice. The business goal is fast catalog maintenance: create and edit rules in a modal, see them all in one prioritized list, and toggle a rule on/off inline without leaving the list.
 
+## Pipeline registry (ETP-4658)
+
+`match-rule` and [transaction-type](transaction-type.md) predate the `cli/config/regen-windows.json` convention (introduced 2026-05-14) — they were built via an older ad-hoc process and were never picked up by `make regen`/`sf-regen-all`, so they missed every generator change since, including the ETP-4520 window-access wiring below. ETP-4658 added both to the registry (`match-rule` / `24963D64E83B4543A7F6BD248CF944EE`) and ran a full DB extraction + regen. They now participate in the normal `make regen` cycle like every other registered window — no more ad-hoc handling.
+
+## Runtime window-access gating (ETP-4520)
+
+Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.js` now emits the generic per-role gate into `EtgoMatchRuleHeaderPage.jsx` — the same `useWindowAccess`/`WindowAccessGuard` mechanism every other registered window gets (see `docs/decisions-reference.md`, "Runtime window-access gating"). A role whose `AD_Window_Access` tier for this window resolves to `"none"` gets the guard's blocked-render panel instead of the grid — before any data fetch — closing the deep-link gap where a role with no menu entry could still hit `/match-rule` directly. A `"read-only"` tier flips `window.readOnly` for this render, disabling create/edit/delete; `"full"` is unchanged. This did not require any decisions.json change — it is automatic once `window.id` is present, exactly like the 42 previously-registered windows.
+
 ## Interaction model
 
 - Route: `/match-rule` — a single list screen. There is **no drill-in detail route**.
@@ -85,7 +93,8 @@ The rules maintained here are now **consumed by the bank-reconciliation automatc
 - `artifacts/match-rule/decisions.json` declares `layoutType: "list-modal"`, the `templateConfig` (incl. `toolbarFilters` and `backLabelKey`), the grid/modal field classification, the per-field `cellType` config (`priorityPill`/`nameWithSubline`/`conditionChip`/`percent`/`boldText`/`toggle`), the `transactionType` FK selector with inline create (`allowCreate`/`createSpec`/`createEntity`), and the `inlineToggle`/`inlineEdit` flags.
 - `tools/app-shell/src/components/contract-ui/listModalCells.jsx` + `ListModalToolbarFilter.jsx` — the generic cell-renderer registry and toolbar dropdown used by `list-modal` (with `__tests__/listModalCells.vitest.jsx` and `__tests__/ListModalToolbarFilter.vitest.jsx`).
 - `artifacts/match-rule/contract.json` carries `frontendContract.window.layoutType = "list-modal"` + `templateConfig`, the `etgoMatchRuleHeader` fields, and the `apiPrediction` selectors.
-- `artifacts/match-rule/generated/web/match-rule/EtgoMatchRuleHeaderPage.jsx` renders `<ListModalWindow>` with the generated `columns`/`fields`/`sections`/`config`.
+- `artifacts/match-rule/generated/web/match-rule/EtgoMatchRuleHeaderPage.jsx` renders `<ListModalWindow>` with the generated `columns`/`fields`/`sections`/`config`, gated by `useWindowAccess('24963D64E83B4543A7F6BD248CF944EE')`/`WindowAccessGuard` (ETP-4520/ETP-4658).
+- `cli/config/regen-windows.json` — registry entry added by ETP-4658.
 - `tools/app-shell/src/components/contract-ui/ListModalWindow.jsx` + `__tests__/ListModalWindow.vitest.jsx` — the generic component and its tests.
 - `cli/test/generate-frontend-list-modal.test.js` + `cli/test/generate-contract-list-modal.test.js` — generator regression tests.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/MatchRuleHandler.java` — the validation pre-hook.

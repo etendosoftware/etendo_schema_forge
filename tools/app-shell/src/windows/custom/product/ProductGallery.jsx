@@ -1,12 +1,12 @@
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { useUI } from '@/i18n';
 import { BoxIcon } from './ProductListCells';
-import { useProductImage } from './useProductImage';
+import { useNeoImage } from '@/hooks/useNeoImage';
 
 /* eslint-disable react/prop-types */
 
 function ProductCard({ row, onNavigate, token, apiBaseUrl }) {
-  const imgSrc = useProductImage(row.image, token, apiBaseUrl);
+  const imgSrc = useNeoImage(row.image, token, apiBaseUrl);
 
   const categoryLabel = resolveIdentifier(row, 'productCategory');
 
