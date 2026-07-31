@@ -83,6 +83,7 @@ vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (val) => (val != null ? 
 vi.mock('@/lib/utils.js', () => ({ cn: (...args) => args.filter(Boolean).join(' ') }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
 
+import { toast } from 'sonner';
 import { DetailView } from '../DetailView.jsx';
 
 const BASE_PROPS = {
@@ -357,5 +358,77 @@ describe('DetailView draftMode processingModal (Verifactu-style loading modal)',
     // Clean up the pending promise so it doesn't leak into other tests.
     resolveSave({ id: '123' });
     await waitFor(() => expect(screen.queryByTestId('DialogContent__verifactu-processing')).toBeNull());
+  });
+});
+
+// Fallback/edge branches inside renderDraftModeSaveActions / renderNewRecordSaveActions
+// that the happy-path clicks above never reach: the new-record draft-Save redirect,
+// the draftMode Confirm onAfterSave list-redirect, and the "saved but no derivable
+// id" reportUnnavigableSave guard on both the draft Confirm and new-record Save.
+describe('DetailView footer save buttons — new-record and unnavigable-save branches', () => {
+  beforeEach(() => {
+    resetHook();
+    toast.error.mockClear();
+    toast.success.mockClear();
+  });
+
+  it('new record draftMode: Save Draft primes the record and redirects to /window/:id', async () => {
+    mockHook.handleSave = vi.fn(() => Promise.resolve({ id: 'draft-42' }));
+    const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' };
+    render(<DetailView {...BASE_PROPS} recordId="new" draftMode={draftMode} />);
+
+    fireEvent.click(screen.getByTestId('action-save-draft'));
+
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalled());
+    await waitFor(() => expect(mockHook.primeSaved).toHaveBeenCalledWith({ id: 'draft-42' }));
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/sales-order/draft-42',
+        { replace: true, state: { justSaved: { id: 'draft-42' } } },
+      ),
+    );
+  });
+
+  it('draftMode Confirm with onAfterSave: redirects to the list stashing the saved record', async () => {
+    mockHook.handleSaveAndProcess = vi.fn(() => Promise.resolve({ id: '123' }));
+    const onAfterSave = vi.fn();
+    const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' };
+    render(<DetailView {...BASE_PROPS} draftMode={draftMode} onAfterSave={onAfterSave} />);
+
+    fireEvent.click(screen.getByTestId('action-save'));
+
+    await waitFor(() => expect(mockHook.handleSaveAndProcess).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/sales-order',
+        { replace: true, state: { savedRecord: { id: '123' }, justSaved: { id: '123' } } },
+      ),
+    );
+    // onAfterSave redirect path must NOT fall through to the fetchById refetch.
+    expect(mockHook.fetchById).not.toHaveBeenCalledWith('123', { force: true });
+  });
+
+  it('new record draftMode Confirm: a save with no derivable id reports an unnavigable save', async () => {
+    mockHook.handleSaveAndProcess = vi.fn(() => Promise.resolve({}));
+    const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' };
+    render(<DetailView {...BASE_PROPS} recordId="new" draftMode={draftMode} />);
+
+    fireEvent.click(screen.getByTestId('action-save'));
+
+    await waitFor(() => expect(mockHook.handleSaveAndProcess).toHaveBeenCalled());
+    // No id and no navigation target → surfaced as an error toast, no redirect.
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(mockHook.primeSaved).not.toHaveBeenCalled();
+  });
+
+  it('new record Save: a save with no derivable id reports an unnavigable save', async () => {
+    mockHook.handleSave = vi.fn(() => Promise.resolve({}));
+    render(<DetailView {...BASE_PROPS} recordId="new" />);
+
+    fireEvent.click(screen.getByTestId('action-save'));
+
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalled());
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

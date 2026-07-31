@@ -13,6 +13,7 @@ import {
   pickMessageFromObject,
   extractErrorMessage,
   applyContactNameDefaults,
+  applyContactsRequiredFields,
   parseCriteriaInto,
   normalizeDefaultValue,
   shouldSkipPayloadField,
@@ -1376,6 +1377,54 @@ describe('useEntity helpers', () => {
       expect(setSaveError).toHaveBeenCalledWith('websiteInsecureUrl');
       expect(setIsSaving).toHaveBeenCalledWith(false);
       expect(toast.error).toHaveBeenCalledWith('websiteInsecureUrl');
+    });
+
+    it('reuses/replaces an existing toast id when one is supplied (ETP-4542)', () => {
+      const ui = (k, p) => (p ? `${k}:${JSON.stringify(p)}` : k);
+      const setSaveError = vi.fn();
+      const setIsSaving = vi.fn();
+      toast.error.mockClear();
+
+      const result = reportInvalidFormatField('phoneInvalid', ui, setSaveError, setIsSaving, 'toast-7', { field: 'phone' });
+
+      expect(result).toBeNull();
+      // With a toastId the error must be routed to that specific toast so it
+      // updates in place instead of stacking a new one.
+      expect(toast.error).toHaveBeenCalledWith('phoneInvalid:{"field":"phone"}', { id: 'toast-7' });
+    });
+  });
+
+  describe('applyContactsRequiredFields', () => {
+    it('is a no-op for a null or non-object payload', () => {
+      expect(applyContactsRequiredFields('contact', null)).toBeNull();
+      expect(applyContactsRequiredFields('contact', 'nope')).toBe('nope');
+    });
+
+    it('fills contact name defaults for contact/adUser/user entities', () => {
+      const payload = { name: 'Ada Lovelace' };
+      const result = applyContactsRequiredFields('contact', payload, { name: 'Ada Lovelace' });
+      // username is derived from name when missing (see applyContactNameDefaults).
+      expect(result.username).toBe('Ada Lovelace');
+    });
+
+    it('backfills name and a length-capped searchKey for a business partner', () => {
+      const longName = 'A'.repeat(48);
+      const result = applyContactsRequiredFields('businessPartner', {}, { name: longName });
+      expect(result.name).toBe(longName);
+      // C_BPartner.Value is AD-constrained to 40 chars.
+      expect(result.searchKey).toBe('A'.repeat(40));
+      expect(result.searchKey.length).toBe(40);
+    });
+
+    it('leaves a business partner untouched when name and searchKey already exist', () => {
+      const result = applyContactsRequiredFields('bpartner', { name: 'X', searchKey: 'XK' }, { name: 'Other' });
+      expect(result.name).toBe('X');
+      expect(result.searchKey).toBe('XK');
+    });
+
+    it('does not touch payloads for unrelated entities', () => {
+      const result = applyContactsRequiredFields('salesOrder', { documentNo: 'SO-1' }, { name: 'ignored' });
+      expect(result).toEqual({ documentNo: 'SO-1' });
     });
   });
 
