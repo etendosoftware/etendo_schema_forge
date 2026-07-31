@@ -19247,6 +19247,7 @@
     "warehouseStockError": "No se pudieron cargar los datos de stock.",
     "warehouseTooltipUnits": "{label}: {n} unidades",
     "warehouseTransactionsTab": "Transacciones",
+    "warehouseAccountingTab": "Contabilidad",
     "warehouseFilterPlaceholder": "Filtrar por producto o tipo…",
     "warehouseDate": "Fecha",
     "warehouseDocument": "Documento",

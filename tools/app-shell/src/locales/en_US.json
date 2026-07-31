@@ -18997,6 +18997,7 @@
     "warehouseStockError": "Could not load stock data.",
     "warehouseTooltipUnits": "{label}: {n} units",
     "warehouseTransactionsTab": "Transactions",
+    "warehouseAccountingTab": "Accounting",
     "warehouseFilterPlaceholder": "Filter by product or type…",
     "warehouseDate": "Date",
     "warehouseDocument": "Document",
