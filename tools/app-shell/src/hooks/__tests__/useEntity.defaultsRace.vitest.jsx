@@ -83,8 +83,10 @@ function abortError() {
 
 /**
  * fetch stub with real abort semantics: the returned promise rejects with an
- * AbortError as soon as the caller's signal fires. Lets the timeout tests pass
- * whether the fix reacts to the abort rejection or to its own timer callback.
+ * AbortError as soon as the caller's signal fires. Nothing aborts on the timer
+ * any more, so under the current contract this stub simply stays pending across
+ * a timeout — it settles only when a session that really does invalidate (a
+ * record load) cancels it. Keeps the gate-release assertions honest either way.
  */
 function mockFetchHonoringAbort() {
   const control = deferred();
@@ -836,8 +838,8 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
       expect(defaultsBlockCalls()).toHaveLength(1);
       expect(defaultsBlockCalls()[0][1].status).toBe('timeout');
 
-      // The timeout bumped the epoch itself; the next call must still take
-      // ownership rather than inherit the abandoned cycle's state.
+      // The timeout only released the gate — the old session is still live, so
+      // this call must supersede it and open a fresh cycle.
       await act(async () => {
         result.current.handleNew();
       });
