@@ -7,9 +7,15 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 // user can already be typing, and the merge that applies the defaults must not
 // clobber what they entered. These tests pin the agreed contract:
 //   - defaultsLoading is exposed so the form can gate itself while defaults fly
-//   - the fetch is abortable and gives up after 4000ms
-//   - the merge skips keys the user already touched (and their $_identifier twins)
-//   - each handleNew emits exactly one defaults_block timing event
+//   - the fetch is abortable, and the 4000ms timer RELEASES THE GATE ONLY: it
+//     never invalidates the session, so a slow response still merges when it
+//     finally lands (the timer is a UX budget, not a correctness mechanism)
+//   - invalidation is reserved for genuinely superseded sessions: a newer
+//     handleNew, or a record load (handleSelect / fetchById)
+//   - the merge skips keys the user already touched (and their $_identifier
+//     twins), whether they were typed before or after the early release
+//   - each handleNew emits at most one defaults_block timing event
+//   - the gate release never waits on the observability emit
 
 const observabilityMock = vi.hoisted(() => ({
   track: vi.fn().mockResolvedValue(undefined),
@@ -124,7 +130,10 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
   }
 
   beforeEach(() => {
-    observabilityMock.track.mockClear();
+    // mockReset (not mockClear) so a per-test track implementation — e.g. the
+    // never-settling stub used to prove the gate release is off the critical
+    // path — can never leak into the next test.
+    observabilityMock.track.mockReset().mockResolvedValue(undefined);
     globalThis.fetch = vi.fn();
   });
 
@@ -239,9 +248,13 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
       ).toBeInstanceOf(AbortSignal);
     });
 
-    it(`aborts the defaults request after ${DEFAULTS_TIMEOUT_MS}ms`, async () => {
+    // The timer's ONLY job is releasing the gate. Aborting would turn a slow
+    // backend into a form with no defaults AND no initial callouts, which is
+    // exactly the regression this contract exists to prevent.
+    it(`does not abort the defaults request when the ${DEFAULTS_TIMEOUT_MS}ms timer fires`, async () => {
       vi.useFakeTimers();
-      mockFetchHonoringAbort();
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
 
       const { result } = renderEntity();
       await act(async () => {
@@ -256,8 +269,8 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
 
       expect(
         init?.signal?.aborted,
-        `a defaults request still pending after ${DEFAULTS_TIMEOUT_MS}ms must be aborted`
-      ).toBe(true);
+        'the timeout releases the gate only — the request must stay in flight, un-aborted'
+      ).toBe(false);
     });
 
     it(`clears defaultsLoading once the ${DEFAULTS_TIMEOUT_MS}ms timeout fires`, async () => {
@@ -279,11 +292,9 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
       ).toBe(false);
     });
 
-    // Deliberately uses a fetch stub that IGNORES the abort signal: a request
-    // already in flight can still deliver its body after the abort. The guard
-    // therefore has to live in the hook (a staleness check before the merge),
-    // not in the abort alone.
-    it('never merges a defaults response that resolves after the timeout', async () => {
+    // The timer must not invalidate the session. A slow backend still owns the
+    // form's defaults; it just no longer holds the gate shut while it answers.
+    it('merges a defaults response that resolves after the timeout', async () => {
       vi.useFakeTimers();
       const pending = deferred();
       globalThis.fetch.mockReturnValue(pending.promise);
@@ -304,8 +315,168 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
 
       expect(
         result.current.editing?.paymentTerms,
-        'a defaults response arriving after the timeout must be discarded, not merged'
-      ).toBeUndefined();
+        'a defaults response arriving after the timeout must still be applied'
+      ).toBe('PT_LATE');
+    });
+
+    // The user-visible consequence of the merge above. DetailView's initial
+    // callout chain (DetailView.jsx — "editing became non-empty" one-shot) only
+    // fires once editing stops being {}. Discarding the late response left the
+    // form with no defaults AND no callouts; a late merge re-arms that chain.
+    it('leaves editing non-empty after a late merge, re-arming the initial callouts', async () => {
+      vi.useFakeTimers();
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderEntity();
+      await act(async () => {
+        result.current.handleNew();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(DEFAULTS_TIMEOUT_MS + 1);
+      });
+
+      expect(
+        Object.keys(result.current.editing ?? {}),
+        'the form starts empty: the callout chain has nothing to react to yet'
+      ).toHaveLength(0);
+
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: { businessPartner: 'BP-1', paymentTerms: 'PT_LATE' } }));
+        await vi.advanceTimersByTimeAsync(1);
+      });
+
+      expect(
+        Object.keys(result.current.editing ?? {}).length,
+        'a late defaults merge must leave editing non-empty so the initial callouts can run'
+      ).toBeGreaterThan(0);
+    });
+
+    // The abort ref must survive the timer: the request is still live, so the
+    // sessions that DO invalidate (record load here) must still be able to
+    // cancel it. Nulling the ref on timeout makes neutralization a silent no-op.
+    it('keeps the request cancellable, so a later record load still neutralizes it', async () => {
+      vi.useFakeTimers();
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+      const loadedRow = { id: '42', organization: 'ORG-REAL' };
+
+      const { result } = renderEntity();
+      await act(async () => {
+        result.current.handleNew();
+      });
+      const [, init] = globalThis.fetch.mock.calls.at(-1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(DEFAULTS_TIMEOUT_MS + 1);
+      });
+
+      // Pinned on both sides so the abort below can only have come from the
+      // record load — a timer that cancels the request would satisfy the second
+      // assertion by itself and prove nothing.
+      expect(
+        init?.signal?.aborted,
+        'precondition: the timer leaves the request alive'
+      ).toBe(false);
+
+      await act(async () => {
+        result.current.handleSelect(loadedRow);
+      });
+
+      expect(
+        init?.signal?.aborted,
+        'the timer must not drop the abort handle: a record load still has to cancel the request'
+      ).toBe(true);
+
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: { organization: 'ORG-DEFAULT' } }));
+        await vi.advanceTimersByTimeAsync(1);
+      });
+
+      expect(
+        result.current.editing?.organization,
+        'a neutralized session must stay inert even though the timer already fired'
+      ).toBe('ORG-REAL');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // A2b — edits made after the early release
+  //
+  // The whole point of releasing the gate early is that the user can start
+  // working. Everything they type in that window is theirs, and the response
+  // that lands afterwards goes through the same merge guard as a pre-release
+  // edit: their keys are skipped, every untouched key still gets its default.
+  // ---------------------------------------------------------------------------
+
+  describe('edits made after the early release', () => {
+    const LATE_DEFAULTS = {
+      businessPartner: 'DEFAULT_BP',
+      'businessPartner$_identifier': 'Default BP',
+      paymentTerms: 'PT_DEFAULT',
+    };
+
+    async function typeAfterTimeoutThenResolve(field = 'businessPartner', value = 'USER_BP') {
+      vi.useFakeTimers();
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderEntity('salesOrder');
+      await act(async () => {
+        result.current.handleNew();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(DEFAULTS_TIMEOUT_MS + 1);
+      });
+
+      // The gate is open — this is the user working on the released form.
+      await act(async () => {
+        result.current.handleChange(field, value);
+      });
+
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: LATE_DEFAULTS }));
+        await vi.advanceTimersByTimeAsync(1);
+      });
+
+      return result;
+    }
+
+    it('keeps a value the user typed after the timeout released the form', async () => {
+      const result = await typeAfterTimeoutThenResolve();
+
+      expect(
+        result.current.editing?.paymentTerms,
+        'precondition: the late response must have merged at all'
+      ).toBe('PT_DEFAULT');
+      expect(
+        result.current.editing?.businessPartner,
+        'a value typed after the early release must survive the late defaults merge'
+      ).toBe('USER_BP');
+    });
+
+    it('still applies defaults to fields untouched during the release window', async () => {
+      const result = await typeAfterTimeoutThenResolve();
+
+      expect(
+        result.current.editing?.paymentTerms,
+        'keys the user never touched must still receive their default, however late it lands'
+      ).toBe('PT_DEFAULT');
+    });
+
+    it('keeps the $_identifier companion of a field changed after the release', async () => {
+      const result = await typeAfterTimeoutThenResolve();
+
+      expect(
+        result.current.editing?.paymentTerms,
+        'precondition: the late response must have merged at all'
+      ).toBe('PT_DEFAULT');
+      expect(
+        result.current.editing?.['businessPartner$_identifier'],
+        'the display label of a user-picked value must not be replaced by the late default'
+      ).not.toBe('Default BP');
     });
   });
 
@@ -443,9 +614,13 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
       expect(typeof calls[0][1].durationMs).toBe('number');
     });
 
-    it('emits status "timeout" when the request is abandoned', async () => {
+    // 'timeout' is now a UX-budget signal, not an obituary: the request lives
+    // on. It is the number we tune DEFAULTS_TIMEOUT_MS with, so the timer keeps
+    // emitting it the moment it releases the gate.
+    it('emits status "timeout" when the timer releases the gate', async () => {
       vi.useFakeTimers();
-      mockFetchHonoringAbort();
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
 
       const { result } = renderEntity('salesOrder');
       await act(async () => {
@@ -460,13 +635,84 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
 
       expect(
         calls,
-        'a timed-out defaults request must emit one defaults_block event'
+        'releasing the gate on the timer must emit one defaults_block event'
       ).toHaveLength(1);
       expect(calls[0][1]).toEqual(expect.objectContaining({
         entity: 'salesOrder',
         status: 'timeout',
       }));
       expect(calls[0][1].durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('emits nothing more when the response lands after a timeout event', async () => {
+      vi.useFakeTimers();
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderEntity('salesOrder');
+      await act(async () => {
+        result.current.handleNew();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(DEFAULTS_TIMEOUT_MS + 1);
+      });
+      expect(defaultsBlockCalls()).toHaveLength(1);
+
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: { paymentTerms: 'PT_LATE' } }));
+        await vi.advanceTimersByTimeAsync(1);
+      });
+
+      const calls = defaultsBlockCalls();
+
+      expect(
+        calls,
+        'the session reports once: a response landing after the timer must add no event'
+      ).toHaveLength(1);
+      expect(
+        calls[0][1].status,
+        'the one event a released-then-answered session emits is the timer\'s'
+      ).toBe('timeout');
+      expect(result.current.editing?.paymentTerms).toBe('PT_LATE');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // A5 — the gate release is off the observability critical path
+  //
+  // settleTiming ends in client.track(), which with Mixpanel enabled is a real
+  // network call. Awaiting it before releasing defaultsLoading makes the form's
+  // usability hostage to an analytics endpoint. The gate must be released
+  // independently of whether the emit ever resolves.
+  // ---------------------------------------------------------------------------
+
+  describe('gate release vs. observability delivery', () => {
+    it('releases defaultsLoading even if the timing event never delivers', async () => {
+      // A track call that never settles — a hung analytics request.
+      observabilityMock.track.mockImplementation(() => new Promise(() => {}));
+
+      const pending = deferred();
+      globalThis.fetch.mockReturnValue(pending.promise);
+
+      const { result } = renderEntity('salesOrder');
+      await act(async () => {
+        result.current.handleNew();
+      });
+
+      await act(async () => {
+        pending.resolve(jsonResponse({ defaults: { paymentTerms: 'PT_DEFAULT' } }));
+      });
+      await settle();
+
+      expect(
+        result.current.editing?.paymentTerms,
+        'the merge itself must not wait on the analytics emit either'
+      ).toBe('PT_DEFAULT');
+      expect(
+        result.current.defaultsLoading,
+        'a hung track() must never keep the form gated'
+      ).toBe(false);
     });
   });
 
