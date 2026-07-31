@@ -214,6 +214,48 @@ describe('translateBackendError — parameterized "Account could not be found" (
     assert.equal(translateBackendError(raw, en), raw);
   });
 
+  // ── matchAccountNotFound guard branches ───────────────────────────────────────
+  //
+  // These exercise the early-return guards in matchAccountNotFound() that the
+  // happy-path tests above never hit: a prefix match that doesn't close with ')',
+  // an empty parenthesized segment, and a split that yields an empty BP or group.
+
+  it('leaves the message untouched when it starts with the prefix but does not end with ")"', () => {
+    // startsWith(prefix) is true but endsWith(')') is false — the message is
+    // truncated/malformed, so matchAccountNotFound must bail out via the
+    // "|| !msg.endsWith(')')" branch instead of slicing garbage.
+    const raw = 'Account could not be found. (Business Partner: Acme Corp';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('leaves the message untouched when the parenthesized segment is empty', () => {
+    // inner === '' after slicing — the "!inner" guard must return null rather
+    // than proceeding to split an empty string.
+    const raw = 'Account could not be found. (Business Partner: )';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('leaves the message untouched when the Business Partner name is empty but a BP Group is present', () => {
+    // delimIdx is found, but bp (the slice before it) is empty — "!bp" guard.
+    const raw = 'Account could not be found. (Business Partner: , BP Group: Vendors)';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('leaves the message untouched when the BP Group is empty but a Business Partner name is present', () => {
+    // delimIdx is found, but group (the slice after it) is empty — "!group" guard.
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: )';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('returns the original message when the BP+Group translation key is missing (guard, BP+Group branch)', () => {
+    // Same missing-translation guard already covered for the BP-only skeleton
+    // above, but exercised on the BP+Group branch (translateParameterized's
+    // `match.group !== null` arm) which has its own independent guard check.
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+    assert.equal(translateBackendError(raw, missingT), raw);
+  });
+
   it('does not affect existing exact-match BACKEND_ERROR_MAP entries', () => {
     const raw = 'Country needed in an IBAN account.';
     const t = (k) => (k === 'backendError.countryIban' ? 'Se necesita el País para una cuenta IBAN.' : k);
