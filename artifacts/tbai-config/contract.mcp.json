@@ -1,6 +1,7 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
+  "updatedAt": "2026-05-19T17:03:46.462Z",
   "contractChecksum": "bea0d6b61ddf8ef5",
   "apiPrediction": {
     "specName": "tbai-config",
@@ -115,6 +116,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "819ae4ad1b2bdde5",
-  "updatedAt": "2026-05-19T17:03:46.462Z"
+  "checksum": "819ae4ad1b2bdde5"
 }
