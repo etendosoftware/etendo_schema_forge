@@ -92,6 +92,33 @@ for branch in "origin/epic/ETP-3504" "origin/develop" "origin/main"; do
   fi
 done
 
+# Build one deterministic plan from the diff. The same selector is used by the
+# history analyser, so local behaviour and validation evidence cannot drift.
+# ETP-4752 makes diff-aware selection the default. The selector remains
+# conservative: unknown, E2E-infrastructure and broad transversal changes use
+# the full profile automatically.
+TEST_SELECTION_LEVEL="${PRE_PUSH_TEST_LEVEL:-affected}"
+TEST_SELECTION_FILE="$REPO_DIR/tmp/pre-push/test-selection.json"
+mkdir -p "$(dirname "$TEST_SELECTION_FILE")"
+if [ -n "$BASE_REF" ]; then
+  node scripts/test-selection.mjs --base "$BASE_REF" --head HEAD --level "$TEST_SELECTION_LEVEL" --format json > "$TEST_SELECTION_FILE"
+else
+  printf '%s\n' '{"profile":"full","e2e":"e2e-full","sections":["full"],"reasons":["No base ref was available."],"commands":[]}' > "$TEST_SELECTION_FILE"
+fi
+node scripts/print-test-selection-summary.mjs "$TEST_SELECTION_FILE" "${BASE_REF:-unavailable}" HEAD
+
+selection_profile() {
+  node -e "process.stdout.write(require(process.argv[1]).profile)" "$TEST_SELECTION_FILE"
+}
+
+selection_has() {
+  node -e "const p=require(process.argv[1]); process.exit(p.profile==='full'||p.sections.includes(process.argv[2])?0:1)" "$TEST_SELECTION_FILE" "$1"
+}
+
+selection_e2e() {
+  node -e "process.stdout.write(require(process.argv[1]).e2e||'e2e-full')" "$TEST_SELECTION_FILE"
+}
+
 # ----------------------------------------------------------------------------
 # Live progress helpers
 # ----------------------------------------------------------------------------
@@ -447,64 +474,51 @@ check_go_module_push_sync() {
 }
 
 # ----------------------------------------------------------------------------
-# Optional: Playwright E2E tests (opt-in — declining NEVER blocks the push)
+# Classified Playwright E2E gate
 # ----------------------------------------------------------------------------
-# Runs only AFTER the mandatory checks have passed. Prompt answers:
-#     <empty> / n / N / <60s timeout> -> skip, push proceeds
-#     y / Y                            -> run headless with the default 5 workers
-#     1..10                            -> run headless with that many workers (capped at 10)
-# Prompted ONLY on an interactive terminal — a scripted/CI push skips silently
-# (pre-push stdin holds git's ref list, so input is read from /dev/tty).
-# If you opt IN and the tests fail, the push IS blocked (you asked to gate on them).
-run_optional_playwright() {
-  if [ "$IS_TTY" != "1" ] || [ ! -e /dev/tty ]; then
+run_classified_playwright() {
+  local classification workers base_url server_pid=""
+  classification="$(selection_e2e)"
+  workers="${PRE_PUSH_E2E_WORKERS:-5}"
+  base_url="${BASE_URL:-http://localhost:3100}"
+
+  if [ "$classification" = "no-e2e" ]; then
+    echo "==> Playwright E2E... SKIPPED ✅ (classified no-e2e)"
     return 0
   fi
 
-  echo ""
-  printf "❓ Run Playwright E2E tests now? [N / y / 1-10 workers] (default N, 60s timeout): "
-  local answer=""
-  read -r -t 60 answer < /dev/tty || answer=""
-  echo ""
+  if [ "$classification" = "e2e-mocked" ] && ! curl -sf -o /dev/null --max-time 5 "$base_url" 2>/dev/null; then
+    echo "==> Starting the mocked app server for classified Playwright coverage..."
+    make dev-mock > "$REPO_DIR/tmp/pre-push/e2e-server.log" 2>&1 &
+    server_pid=$!
+    local attempt=0
+    while [ "$attempt" -lt 60 ] && ! curl -sf -o /dev/null --max-time 2 "$base_url" 2>/dev/null; do
+      sleep 1
+      attempt=$((attempt + 1))
+    done
+  fi
 
-  case "$answer" in
-    ""|n|N|no|NO)
-      echo "==> Skipping Playwright E2E tests."
-      return 0
-      ;;
+  if ! curl -sf -o /dev/null --max-time 5 "$base_url" 2>/dev/null; then
+    [ -n "$server_pid" ] && kill "$server_pid" 2>/dev/null || true
+    echo "❌ ERROR: $classification requires a reachable server at $base_url."
+    echo "   Mocked: start with 'make dev-mock'. Integration/full: set BASE_URL to the prepared Etendo environment."
+    exit 1
+  fi
+
+  local playwright_args=(--workers="$workers")
+  case "$classification" in
+    e2e-mocked) playwright_args+=(--project=mocked) ;;
+    e2e-integration) playwright_args+=(--project=integration) ;;
+    e2e-full) ;;
+    *) echo "❌ ERROR: Unknown E2E classification '$classification'."; exit 1 ;;
   esac
 
-  local workers=5
-  if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
-    workers=5
-  elif [[ "$answer" =~ ^[0-9]+$ ]]; then
-    workers="$answer"
-    if [ "$workers" -lt 1 ]; then
-      echo "==> Invalid worker count '$answer'; skipping Playwright E2E tests."
-      return 0
-    fi
-    if [ "$workers" -gt 10 ]; then
-      workers=10
-      echo "==> Capping workers at 10."
-    fi
-  else
-    echo "==> Unrecognized answer '$answer'; skipping Playwright E2E tests."
-    return 0
-  fi
-
-  # The mocked specs need the dev server on :3100. If it's down, skip gracefully
-  # (warn, don't block) — declining-to-be-able-to-run must not break the push.
-  if ! curl -sf -o /dev/null --max-time 5 http://localhost:3100 2>/dev/null; then
-    echo "⚠️  Dev server not reachable on http://localhost:3100 — skipping E2E."
-    echo "    Start it with 'make dev-mock' and re-push if you want to run them."
-    return 0
-  fi
-
-  echo "==> Running Playwright E2E tests headless with ${workers} worker(s)..."
+  echo "==> Running $classification Playwright coverage with ${workers} worker(s)..."
   set +e
-  ( cd "$REPO_DIR" && make test-e2e-headless WORKERS="$workers" )
+  ( cd "$REPO_DIR/e2e" && CI=true BASE_URL="$base_url" npx playwright test "${playwright_args[@]}" )
   local st=$?
   set -e
+  [ -n "$server_pid" ] && kill "$server_pid" 2>/dev/null || true
 
   if [ "$st" -eq 0 ]; then
     echo "==> Playwright E2E tests... SUCCESS ✅"
@@ -512,8 +526,8 @@ run_optional_playwright() {
   fi
 
   echo "==> Playwright E2E tests... FAILED ❌ (exit $st)"
-  echo "👉 You opted to run them, so the push is blocked. Re-push and decline (N),"
-  echo "   or bypass with 'git push --no-verify'."
+  echo "👉 The classified E2E gate is mandatory. Fix the failure or use"
+  echo "   'git push --no-verify' only as an explicit emergency bypass."
   exit 1
 }
 
@@ -534,6 +548,10 @@ check_base_conflicts
 # caused entirely by a stale core-package pin that only `npm ci` — not a
 # stale local install — would have caught).
 run_step_0() {
+  if [ "$(selection_profile)" = "none" ]; then
+    echo "==> [0/5] Syncing npm dependencies... SKIPPED ✅ (no functional validation selected)"
+    return 0
+  fi
   # npm ci is a pure function of the lockfile and the node major it installs for.
   local key
   key="$(step_cache_compute "node-${NODE_MAJOR}" package.json package-lock.json)"
@@ -542,6 +560,10 @@ run_step_0() {
 
 # 1. Run data-testid check (fast, runs before expensive checks)
 run_step_1() {
+  if ! selection_has "app-shell-node" && ! selection_has "app-shell-vitest" && ! selection_has "locales" && ! selection_has "build"; then
+    echo "==> [1/5] Running data-testid check... SKIPPED ✅ (app-shell is unaffected)"
+    return 0
+  fi
   # The checker only ever reads the app-shell sources it scans, plus its own script.
   local key
   key="$(step_cache_compute "node-${NODE_MAJOR}" tools/app-shell/src scripts/check-add-data-testid.sh)"
@@ -560,6 +582,17 @@ run_step_1() {
 # below the base branch's — mirroring Jenkins' "Compare Coverage Results" stage,
 # which the new-code-only Quality Gate does not cover.
 run_step_2() {
+  local profile
+  profile="$(selection_profile)"
+  if [ "$profile" = "none" ]; then
+    echo "==> [2/5] Tests and SonarQube... SKIPPED ✅ (documentation-only change)"
+    return 0
+  fi
+  if [ "$profile" != "full" ]; then
+    run_step "2" "Running affected test plan" "$REPO_DIR" "tmp/pre-push/affected-tests.log" \
+      "node scripts/test-selection.mjs --base '$BASE_REF' --head HEAD --level '$TEST_SELECTION_LEVEL' --run"
+    return 0
+  fi
   local sonar_cmd
   if [ -n "$BASE_REF" ]; then
     sonar_cmd="./run-sonar.sh --base-ref \"$BASE_REF\" --coverage --fail-on-gate --compare-coverage"
@@ -594,6 +627,10 @@ run_step_2() {
 # Both halves share step key "3" for the quick re-check: whichever fails, the
 # next push re-runs this whole function (regen + drift) before anything else.
 run_step_3() {
+  if ! selection_has "regen"; then
+    echo "==> [3/5] Regenerating windows... SKIPPED ✅ (generator/artifacts unaffected)"
+    return 0
+  fi
   local all_windows regen_all_cmd
   all_windows=$(node -e "const r=require('./cli/config/regen-windows.json');\
 process.stdout.write(r.windows.filter(w=>{\
@@ -639,6 +676,10 @@ process.stdout.write(r.windows.filter(w=>{\
 # when the sibling checkout's sourcedata isn't present — see run_step_3's
 # comment for why (b) above always runs regardless of this one).
 run_step_4() {
+  if ! selection_has "regen"; then
+    echo "==> [4/5] Comparing ETGO_SF_*.xml... SKIPPED ✅ (generator/artifacts unaffected)"
+    return 0
+  fi
   if [ -d "etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata" ]; then
     check_go_module_push_sync
     local regen_cmd="make regen-check FROM_CACHE=1 REGEN_CHECK_PREV_XML_DIR=etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata"
@@ -695,8 +736,8 @@ run_step_2
 run_step_3
 run_step_4
 
-# Mandatory checks passed — offer the optional Playwright E2E run before the banner.
-run_optional_playwright
+# Mandatory checks passed — run the Playwright depth selected from the diff.
+run_classified_playwright
 
 # Reaching here means steps 0-4 all succeeded or legitimately skipped — clear
 # any stale marker (e.g. step 4 recorded a failure, then a later run skips it

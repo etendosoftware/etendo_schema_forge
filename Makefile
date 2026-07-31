@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
+.PHONY: test test-selection test-selection-history test-selection-branches test-selection-report test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -23,6 +23,22 @@ test: ## Run all unit tests (CLI data-fixes + app-shell + artifacts + vitest)
 	node --test 'tools/app-shell/test/*.test.js'
 	node --test 'artifacts/**/__tests__/*.test.js'
 	cd tools/app-shell && npx vitest run
+
+test-selection: ## Explain affected tests for BASE...HEAD (BASE defaults to origin/epic/ETP-3504)
+	node scripts/test-selection.mjs --base "$(or $(BASE),origin/epic/ETP-3504)" --head "$(or $(HEAD),HEAD)" --level "$(or $(LEVEL),affected)"
+
+test-selection-history: ## Validate selector against merged PRs (LIMIT=100, requires authenticated gh)
+	node scripts/analyze-test-selection-history.mjs --limit "$(or $(LIMIT),100)" --source "$(or $(SOURCE),auto)" --out "$(or $(OUT),tmp/test-selection-history.md)"
+
+test-selection-branches: ## Checkout and validate INPUT PR branches in an isolated clone
+	node scripts/validate-test-selection-branches.mjs --input "$(or $(INPUT),/private/tmp/schema-forge-100-pr-branches.json)" --checkout "$(or $(CHECKOUT),/private/tmp/schema-forge-test-selection-validation)" --out "$(or $(OUT),tmp/test-selection-branches.md)"
+
+test-selection-report: ## Render standalone exploratory HTML from branch-validation JSON
+	node scripts/render-test-selection-report.mjs --input "$(or $(INPUT),tmp/test-selection-branches.json)" --out "$(or $(OUT),tmp/test-selection-exploratory-report.html)"
+
+.PHONY: e2e-selection-report
+e2e-selection-report:
+	node scripts/render-e2e-selection-report.mjs --input "$(or $(INPUT),tmp/e2e-selection-analysis.json)" --out "$(or $(OUT),tmp/e2e-selection-analysis.html)"
 
 test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@mkdir -p coverage

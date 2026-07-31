@@ -449,6 +449,34 @@ make validate-pipeline   Check artifact pipeline consistency (see docs/pipeline-
 make clean               Remove build artifacts
 ```
 
+## Diff-aware pre-push test selection
+
+The pre-push hook uses `scripts/test-selection.mjs` to classify `BASE...HEAD` and
+run the narrowest conservative validation plan. It reports every selected
+section and reason. Documentation-only changes skip functional suites; locales,
+dependencies, tests, windows and artifacts receive focused gates; CI tooling,
+unknown files and changes spanning three functional roots fall back to `full`.
+
+```bash
+make test-selection BASE=origin/epic/ETP-3504
+git push  # affected test and E2E classification is the default
+make test-selection-history LIMIT=100
+make test-selection-branches INPUT=/path/to/pr-branches.json
+```
+
+The hook classifies every push by default. There is no interactive E2E prompt:
+`no-e2e` skips Playwright, `e2e-mocked` starts the mock server when necessary,
+`e2e-integration` requires a reachable Etendo environment through `BASE_URL`, and
+`e2e-full` runs the complete Playwright project set. Unknown and transversal
+changes use the conservative full fallback. The history command excludes
+merge blocks by label and defensively by title, and writes Markdown plus JSON
+evidence under `tmp/` by default. When GitHub authentication is unavailable it
+falls back to first-parent PR merge commits in the local epic history; that mode
+validates classification but cannot recover labels or GitHub job durations.
+For branch-level evidence, `test-selection-branches` uses an isolated clone,
+fetches `refs/pull/<number>/head`, checks out every PR detached, verifies the
+expected head SHA and diffs it against that PR's recorded base SHA.
+
 ## Pipeline Validation
 
 The pipeline validator catches incomplete runs — stale `decisions.json` vs `contract.json` vs `generated/`,

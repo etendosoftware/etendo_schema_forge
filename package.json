@@ -12,6 +12,8 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
     "test": "mkdir -p artifacts && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=artifacts/test-report.xml 'cli/test/*.test.js' 'tools/app-shell/src/**/__tests__/*.test.js' 'tools/app-shell/test/*.test.js' 'artifacts/**/__tests__/*.test.js'",
+    "test:selection": "node scripts/test-selection.mjs",
+    "test:selection:history": "node scripts/analyze-test-selection-history.mjs --limit 100",
     "check:data-testid": "./scripts/check-add-data-testid.sh",
     "apply:data-testid": "./scripts/apply-add-data-testid.sh"
   },

@@ -1,0 +1,7 @@
+{
+  "974": {
+    "build": 1654,
+    "status": "dismissed-unrelated-flaky",
+    "summary": "The PR changed login translations only. Jenkins failed in Purchase Invoice and Contacts integration flows; the Playwright report marked one outcome flaky. No causal relationship to the diff."
+  }
+}
