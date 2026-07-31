@@ -380,6 +380,45 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
     await userEvent.click(await screen.findByTestId('secondary-panel'));
   });
 
+  it('keeps optional refresh consumers safe when hook callbacks are unavailable', async () => {
+    const user = userEvent.setup();
+    const originalFetchById = mockHook.fetchById;
+    const originalFetchChildren = mockHook.fetchChildren;
+    const originalItems = mockHook.items;
+    const originalEditing = mockHook.editing;
+    mockHook.items = [mockHook.selected];
+    mockHook.editing = { documentNo: mockHook.editing.documentNo };
+    mockHook.fetchById = undefined;
+    mockHook.fetchChildren = undefined;
+    const CustomLines = ({ onRefresh, onCountChange }) => (
+      <div>
+        <button data-testid="optional-refresh" onClick={onRefresh}>refresh</button>
+        <button data-testid="custom-lines-count" onClick={() => onCountChange(4)}>count</button>
+      </div>
+    );
+    const CustomModal = ({ onSaved }) => (
+      <button data-testid="optional-modal-saved" onClick={onSaved}>saved</button>
+    );
+
+    try {
+      renderDetailView({
+        DetailTable: null,
+        CustomLines,
+        customLinesLabel: 'Custom Lines',
+        secondaryTabs: [{ key: 'addresses', label: 'Addresses', customAddModal: CustomModal }],
+      });
+
+      await user.click(screen.getByTestId('optional-refresh'));
+      await user.click(screen.getByTestId('custom-lines-count'));
+      await user.click(screen.getByTestId('optional-modal-saved'));
+    } finally {
+      mockHook.fetchById = originalFetchById;
+      mockHook.fetchChildren = originalFetchChildren;
+      mockHook.items = originalItems;
+      mockHook.editing = originalEditing;
+    }
+  });
+
 });
 
 describe('DetailView — justSaved fast-path (ETP-4563)', () => {
