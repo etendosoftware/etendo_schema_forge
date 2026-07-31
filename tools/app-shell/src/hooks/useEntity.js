@@ -864,12 +864,15 @@ export function useEntity(entity, childEntity, {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
             })
-            .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity));
+            .then(data => ({
+                rows: normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity),
+                meta: extractResponseMeta(data),
+            }));
 
         runQuery(buildListKey(), fetcher, { force })
-            .then(rows => {
+            .then(({ rows, meta }) => {
                 setItems(rows);
-                setMeta(extractResponseMeta(data));
+                setMeta(meta);
                 startRowRef.current = rows.length;
                 if (rows.length < BATCH_SIZE) setHasMore(false);
                 setLoading(false);
