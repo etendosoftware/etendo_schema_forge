@@ -1,7 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-06-16T16:35:15.726Z",
-  "checksum": "ad607ba1b76e3f89",
+  "updatedAt": "2026-07-28T13:51:31.609Z",
+  "checksum": "88c9f5b2db3ccb9c",
   "frontendContract": {
     "window": {
       "id": "82922976BB524D1BAA3CF8462B9219FE",
@@ -32,26 +33,64 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 1
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            },
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "searchKey",
             "apiKey": "searchKey",
             "column": "Value",
-            "label": "Value",
+            "label": "Search Key",
             "type": "string",
             "tsType": "string",
             "visibility": "readOnly",
             "required": true,
             "grid": false,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [
           "name"
         ],
-        "computedFields": [],
+        "computedFields": [
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          }
+        ],
         "javaQualifier": "transaction-type"
       }
     }
@@ -113,18 +152,18 @@
             "required": true
           },
           {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "name",
             "apiKey": "name",
             "column": "Name",
             "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
             "visibility": "editable",
             "required": true
           },
@@ -229,59 +268,6 @@
       "category": "finance"
     }
   },
-  "formState": {
-    "entities": {
-      "transactionType": {
-        "fields": {
-          "name": {
-            "required": true
-          },
-          "searchKey": {
-            "readOnly": true,
-            "required": true
-          }
-        }
-      }
-    },
-    "requiredSessionVariables": [],
-    "evaluationMode": "runtime"
-  },
-  "agentProfile": {
-    "purpose": "Manage transaction type financial records.",
-    "whenToUse": [
-      "Use for transaction type management."
-    ],
-    "minimumCreate": {
-      "headerFields": [
-        "name"
-      ],
-      "recommendedOrder": [
-        "createHeader"
-      ]
-    },
-    "selectorContexts": [],
-    "actions": [],
-    "workflow": [
-      "Create draft header with required fields"
-    ],
-    "edgeCases": [
-      "Required field without default value must be provided"
-    ],
-    "examples": [
-      {
-        "operation": "createHeader",
-        "description": "Create a draft header with the minimum required editable fields.",
-        "fields": [
-          "name"
-        ]
-      }
-    ],
-    "warnings": [
-      "Transactional spec has no generated lifecycle action metadata"
-    ],
-    "knownLimitations": [],
-    "dangerousOperations": []
-  },
   "testManifest": {
     "tests": [
       {
@@ -290,6 +276,22 @@
         "entity": "transactionType",
         "runner": "node",
         "description": "CRUD flags for 'transactionType' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-transactionType-active",
+        "category": "default-value-type",
+        "entity": "transactionType",
+        "field": "active",
+        "runner": "node",
+        "description": "Default value for 'active' in transactionType should be a string"
+      },
+      {
+        "id": "t-field-presence-transactionType-active",
+        "category": "field-presence",
+        "entity": "transactionType",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in transactionType"
       },
       {
         "id": "t-field-presence-transactionType-name",
@@ -306,6 +308,14 @@
         "field": "searchKey",
         "runner": "node",
         "description": "Field 'searchKey' should be present in transactionType"
+      },
+      {
+        "id": "t-field-type-transactionType-active",
+        "category": "field-type",
+        "entity": "transactionType",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in transactionType"
       },
       {
         "id": "t-field-type-transactionType-name",
@@ -330,14 +340,6 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should be a supported filter for transactionType"
-      },
-      {
-        "id": "t-system-field-transactionType-active",
-        "category": "system-field",
-        "entity": "transactionType",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for transactionType"
       },
       {
         "id": "t-system-field-transactionType-client",
@@ -404,17 +406,18 @@
       }
     ],
     "summary": {
-      "total": 15,
+      "total": 17,
       "byCategory": {
         "crud-flags": 1,
-        "field-presence": 2,
-        "field-type": 2,
+        "default-value-type": 1,
+        "field-presence": 3,
+        "field-type": 3,
         "searchable-filters": 1,
-        "system-field": 8,
+        "system-field": 7,
         "visibility": 1
       },
       "byRunner": {
-        "node": 15,
+        "node": 17,
         "junit": 0
       }
     }

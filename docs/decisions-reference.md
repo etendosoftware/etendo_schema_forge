@@ -533,8 +533,40 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
 | `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
+| `virtualFields` | array | `[]` | Columns with **no AD column behind them**, injected per row by the entity's NeoHandler in `afterHandle`. See below. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
 | `hideDelete` | boolean | `false` | Disables the CRUD delete capability for **this entity only** (`apiPrediction.crud.<entity>.delete: false`) — unlike `window.hideDelete`, which disables delete uniformly across every entity in the window. `DetailView`'s row-delete handler, bulk-delete bar, and delete-eligibility checks all gate directly on this same `crud.delete` flag, so setting it also removes the row-level delete icon/checkbox in the UI, not just the declared API capability. Use for a child/detail entity whose rows are exclusively managed as a side effect of the parent's own save (e.g. a NeoHandler syncing a join table from a parent field) — manual row deletion there would let a user bypass that invariant. Added ETP-4512 (`userRoles` on the `user` window). |
+
+### Virtual fields (`entities.{name}.virtualFields`)
+
+For a column the backend computes and injects but that has **no AD column** — so
+extraction can never discover it. The entity's `NeoHandler` must `put` it into each row
+in `afterHandle`; NEO will not derive it (no AD column → no OBDal property → no value).
+
+```json
+"account": {
+  "javaQualifier": "financialAccountHeaderHandler",
+  "virtualFields": [
+    { "name": "pendingCount", "column": "pendingCount", "label": "Pending",
+      "type": "integer", "visibility": "readOnly", "form": false,
+      "grid": true, "gridOrder": 4 }
+  ]
+}
+```
+
+- **`column` must match the JSON key the handler writes exactly** — that is how the row
+  value is found. It is not an AD column name.
+- Keep `visibility: "readOnly"`: there is nothing to write to.
+- `form: false` keeps it out of the generated form; `grid` + `gridOrder` place it in the grid.
+- Safe with `push-to-neo`: no `ad_column` matches, so the field is skipped rather than
+  inserted into `ETGO_SF_FIELD`.
+- **Only a closed set of keys is copied** (`name`, `column`, `label`, `type`, `visibility`,
+  `required`, `form`, `grid`, `gridOrder`, `section`). Anything else — notably `cellType`,
+  `gridLabelKey`, `seq` — is silently dropped, so a virtual field cannot declare its own
+  renderer; bind it in the consuming component instead.
+
+Shipped by: `payment-in`, `payment-out`, `return-material-receipt`,
+`return-to-vendor-shipment` (`invoiceDocumentNo`) and `financial-account` (`pendingCount`).
 
 ### Line HandleDefaults (`entities.{name}.handlesDefaults`)
 
@@ -605,7 +637,7 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `inlineEdit` | boolean | `false` | Mark a column as inline-editable (carried into the contract as `inlineEdit: true`). Consumed by `list-modal`; editing is also available via the modal. |
 | `gridReadOnly` | boolean | `false` | Make an otherwise-editable column read-only in the grid. |
 | `grow` | boolean | `false` | Let the column grow to fill available width. |
-| `cellType` | string | `null` | Selects a cell renderer from the registry (see below). Generic to any grid; the `list-modal` layout ships a styled set. |
+| `cellType` | string | `null` | Names the cell renderer for this column. Carried decisions → contract for **any** window, but **who honours it depends on the layout** — it is not generic to every grid. See the `cellType` section below for the three paths. |
 | `dimensionsPanel` | boolean | `false` | Collect this field into the ONE synthetic `type: 'dimensionsPanel'` grid column instead of its own column — see below. Read regardless of the field's own `grid` value (typically `grid: false`, since the field renders inside the expand-row panel, not as a standalone column). |
 | `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
 
@@ -736,15 +768,30 @@ introducing a different number format for one column.
 }
 ```
 
-#### `list-modal` cell renderers (`cellType`)
+#### Cell renderers (`cellType`) — three paths, not one
 
-The `list-modal` grid renders each cell through a registry keyed by `cellType`
-(`tools/app-shell/src/components/contract-ui/listModalCells.jsx`). The renderers
-are generic and backend-agnostic — every cell reads only from the row payload and
-the column descriptor. Set them per grid field in `decisions.json`; the generator
-emits them into the contract column descriptors and the page consumes them. When
-no `cellType` is set, the cell falls back to a plain value (with enum-label / FK
-identifier resolution).
+`cellType` always survives decisions → `contract.json`, but **which grids act on it
+differs**, so check which path your window is on before declaring one:
+
+| Path | Who honours it | What you can declare |
+|---|---|---|
+| **`layoutType: "list-modal"`** | `buildListModalColumns` emits it into the column descriptor; `ListModalWindow` renders it through the registry in `tools/app-shell/src/components/contract-ui/listModalCells.jsx` | the 7 values in the table below |
+| **The standard generated table** | The generator recognises only three hardcoded, window-specific values — `depreciationProgress`, `taxRate`, `taxScope` — and inlines a `render:` for them. `DataTable` itself never reads `cellType`. | nothing new without a `schema_forge_core` change |
+| **A `customComponents.headerTable` slot** | The slot builds its own column descriptors, so it can read `cellType` off the contract and resolve it against a window-scoped registry | any name that registry defines |
+
+The third path is how `financial-account`'s accounts list works: `cellType` names
+(`accountName`, `accountType`, `accountBalance`, `reconcilePill`) resolve through
+`components/financial-accounts/accountCellTypes.jsx`. Use it when the cells are
+window-specific enough that they do not belong in a shared registry, and note what it
+buys: the **binding** (which column uses which renderer) becomes declarative, the
+renderers stay React.
+
+Nothing validates `cellType` — no pipeline-validator rule, no whitelist. An unknown
+value degrades to the generic type-based renderer rather than failing.
+
+The `list-modal` renderers below are generic and backend-agnostic — every cell reads
+only from the row payload and the column descriptor. When no `cellType` is set, the
+cell falls back to a plain value (with enum-label / FK identifier resolution).
 
 | `cellType` | Extra keys | Renders |
 |------------|-----------|---------|

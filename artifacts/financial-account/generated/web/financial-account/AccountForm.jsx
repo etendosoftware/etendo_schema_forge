@@ -7,6 +7,7 @@ const fields = [
   { key: 'type', column: 'Type', type: 'select', label: 'Type', required: true, section: 'principal', options: [{ value: 'B', label: 'Bank', labels: {"es_ES":"Banco"} }, { value: 'CA', label: 'Card', labels: {"es_ES":"Card"} }, { value: 'C', label: 'Cash', labels: {"es_ES":"Caja"} }], defaultValue: 'B' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal' },
   { key: 'active', column: 'Isactive', type: 'checkbox', label: 'Active', section: 'other', defaultValue: 'Y' },
+  { key: 'default', column: 'Isdefault', type: 'checkbox', label: 'Default', required: true, readOnly: true, section: 'other' },
   { key: 'currentBalance', column: 'Currentbalance', type: 'number', label: 'Current Balance', required: true, readOnly: true, section: 'other', defaultValue: '0' },
   { key: 'iBAN', column: 'Iban', type: 'text', label: 'IBAN', section: 'other' },
   { key: 'swiftCode', column: 'Swiftcode', type: 'text', label: 'SWIFT Code', section: 'other' },
