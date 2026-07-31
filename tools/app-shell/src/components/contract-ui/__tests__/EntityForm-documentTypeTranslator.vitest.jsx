@@ -71,6 +71,12 @@ describe('EntityForm — DocumentType optionTranslator (ETP-4600)', () => {
     expect(translate('Devolucion de venta')).toBe('returnsTab');
   });
 
+  it('maps "rectific" names to the rectificativeInvoicesTab label (ETP-4737)', () => {
+    const translate = renderDocumentTypeField();
+    expect(translate('Factura Rectificativa')).toBe('rectificativeInvoicesTab');
+    expect(translate('Factura Rectificativa (compras)')).toBe('rectificativeInvoicesTab');
+  });
+
   it('falls back to the invoicesTab label for any other document type name', () => {
     const translate = renderDocumentTypeField();
     expect(translate('AR Invoice')).toBe('invoicesTab');
