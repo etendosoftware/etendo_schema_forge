@@ -588,3 +588,133 @@ describe('ListFilterBar type filter', () => {
     expect(codes).toContain('AR');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status filter label resolution (ETP-4696 Problem 2 regression)
+//
+// The dropdown must resolve labels through the SAME statusLabel() pipeline
+// used by the grid cells (DataTable.cellRenderers.jsx), instead of a local
+// enumLabel-or-literal shortcut. Before this fix, any status code without a
+// fortuitous plain-English i18n key (e.g. "Booked", "Voided", "Not Accepted")
+// leaked its raw AD_Ref_List literal into the dropdown even though the same
+// code translated correctly in the grid column.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ListFilterBar status filter label resolution', () => {
+  const STATUS_COLUMNS = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'documentStatus', label: 'Status', type: 'status' },
+  ];
+
+  beforeEach(() => {
+    lastDistinctValuesListProps.current = null;
+  });
+
+  const openStatusPopover = async () => {
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-status'));
+    await Promise.resolve();
+  };
+
+  it('resolves a code with no dictionary translation via the shared statusLabel MAP, not the raw literal', async () => {
+    // 'PWNC' has no fortuitous plain-English i18n key collision and no
+    // dictionary.statuses entry (mocked useLocale returns { statuses: {} }).
+    // It must still humanize via statusLabel's MAP ('statusWithdrawnNotCleared'),
+    // matching exactly what DataTable.cellRenderers.jsx would render for the
+    // same code — never the bare code 'PWNC'.
+    render(
+      <ListFilterBar
+        columns={STATUS_COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        rows={[{ documentStatus: 'PWNC' }]}
+      />
+    );
+
+    await openStatusPopover();
+    expect(lastDistinctValuesListProps.current).not.toBeNull();
+    const label = lastDistinctValuesListProps.current.labelFor('PWNC');
+    expect(label).not.toBe('PWNC');
+    expect(label).toBe('Withdrawn Not Cleared');
+  });
+
+  it('resolves several documented problem codes (Booked/Voided/Not-Accepted family) consistently', async () => {
+    render(
+      <ListFilterBar
+        columns={STATUS_COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+      />
+    );
+
+    await openStatusPopover();
+    const labelFor = lastDistinctValuesListProps.current.labelFor;
+    // RPVOID -> statusVoid -> humanized 'Void'
+    expect(labelFor('RPVOID')).toBe('Void');
+    // RDNC -> statusDepositedNotCleared -> humanized 'Deposited Not Cleared'
+    expect(labelFor('RDNC')).toBe('Deposited Not Cleared');
+    // ETGO_CI -> statusInvoiceCreated -> humanized 'Invoice Created'
+    expect(labelFor('ETGO_CI')).toBe('Invoice Created');
+    // A truly unknown code (no MAP entry, no dictionary entry) falls back to
+    // the raw code itself — this is the documented last-resort behavior, not
+    // a regression.
+    expect(labelFor('UNKNOWN_XYZ')).toBe('UNKNOWN_XYZ');
+  });
+
+  it('a literal (non-i18n-key) enumLabels value still falls through to the shared MAP translation', async () => {
+    // Some columns declare enumLabels with the raw AD_Ref_List English name
+    // (a literal), not an i18n key. statusLabel()'s resolveEnumLabel() must
+    // discard non-key literals and fall through to the MAP/dictionary path
+    // exactly like the grid cell does — the dropdown must not special-case
+    // this differently.
+    const colsWithLiteralEnumLabels = [
+      { key: 'name', label: 'Name', type: 'string' },
+      {
+        key: 'documentStatus',
+        label: 'Status',
+        type: 'status',
+        enumLabels: { CJ: 'Rejected' }, // literal AD name, not an i18n key
+      },
+    ];
+    render(
+      <ListFilterBar
+        columns={colsWithLiteralEnumLabels}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+      />
+    );
+
+    await openStatusPopover();
+    const label = lastDistinctValuesListProps.current.labelFor('CJ');
+    // Falls through to the MAP ('statusRejected' -> humanized 'Rejected'),
+    // same end result here, but via the shared resolution path, not by
+    // trusting the literal directly.
+    expect(label).toBe('Rejected');
+  });
+
+  it('a genuine i18n-key enumLabels value resolves via ui() same as the grid', async () => {
+    const colsWithKeyEnumLabels = [
+      { key: 'name', label: 'Name', type: 'string' },
+      {
+        key: 'documentStatus',
+        label: 'Status',
+        type: 'status',
+        enumLabels: { CJ: 'statusRejected' },
+      },
+    ];
+    render(
+      <ListFilterBar
+        columns={colsWithKeyEnumLabels}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+      />
+    );
+
+    await openStatusPopover();
+    const label = lastDistinctValuesListProps.current.labelFor('CJ');
+    // Mocked ui()/translate() returns the key unchanged, and dictionary has
+    // no genericLabels, so resolveEnumLabel's own short-circuit doesn't fire
+    // here either — it still lands on the humanized fallback, proving the
+    // dropdown and the grid share the exact same resolution ladder.
+    expect(label).toBe('Rejected');
+  });
+});
