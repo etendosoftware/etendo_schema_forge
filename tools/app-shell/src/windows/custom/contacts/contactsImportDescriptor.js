@@ -41,9 +41,10 @@ registerImportDescriptor('contacts', async (row, config) => {
   // not-null constraint` from Postgres (reproduced via a real import run).
   // C_BPartner.Value (searchKey) is AD-constrained to 40 chars — reproduced via a real
   // import row whose commercial name was 48 chars ("Value too long. Length 48, maximum
-  // allowed 40"). Same fallback, same truncation as useEntity.js's applyContactsRequiredFields
-  // (the manual "New contact" flow's equivalent derivation) — Name itself is untouched,
-  // it has more headroom (60).
+  // allowed 40"). Name itself is untouched, it has more headroom (60).
+  // ETP-4156: BusinessPartnerHandler.handle() now applies the same fallback+truncation
+  // server-side for every create path (this /batch one included, BatchService routes
+  // through handleWithHooks), so this line is belt-and-braces rather than the only guard.
   const bpBody = { oBTIKTaxIDKey: DEFAULT_TAX_ID_KEY, ...bpFields, searchKey: String(bpFields.name || '').slice(0, 40) };
   const bpOp = { id: 'bp', spec: config.spec, entity: 'businessPartner', body: bpBody };
   const ops = [bpOp];
@@ -101,10 +102,10 @@ registerImportDescriptor('contacts', async (row, config) => {
   // AD_User.Name (DAL property `name`) is `required: true` but `form: false` — hidden
   // from every Contact create form, this one included (verified against
   // artifacts/contacts/contract.json) — same pattern as businessPartner's searchKey
-  // above. useEntity.js's applyContactNameDefaults derives it from firstName+lastName
-  // when omitted; this CSV's contact-level firstName/lastName columns are frequently
-  // blank (the row's real name lives in the BP-level etgoFirstname/etgoLastname
-  // instead), so that alone isn't enough — falls back further to the BP's own name,
+  // above. ETP-4156: ContactHandler now derives it from firstName+lastName server-side,
+  // but this CSV's contact-level firstName/lastName columns are frequently blank (the
+  // row's real name lives in the BP-level etgoFirstname/etgoLastname instead), which the
+  // handler cannot see — hence the extra, import-only fallback to the BP's own name,
   // mirroring searchKey's fallback. Omitting it hits a raw
   // `null value in column "name" of relation "ad_user" ... violates not-null
   // constraint` from Postgres (reproduced via a real import run).

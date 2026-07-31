@@ -16606,6 +16606,9 @@
     }
   },
   "genericLabels": {
+    "computedFreshnessQueued": "Este valor se calcula en segundo plano y puede tardar unos minutos en actualizarse.",
+    "computedFreshnessManual": "Este valor se calcula y se actualiza manualmente.",
+    "computedFreshnessAria": "Valor calculado — puede estar desactualizado",
     "importDialogTitle": "Importar",
     "importRevalidating": "Revalidando filas…",
     "importDownloadTemplate": "Descargar plantilla CSV",

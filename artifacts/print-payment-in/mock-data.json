@@ -1,0 +1,23 @@
+{
+  "header": {
+    "fin_payment_id": "F60718293A4B5C6D7E8F901234567890",
+    "documentno": "COB/2026-000204",
+    "paymentdate": "2026-07-18",
+    "finalsettlementdate": "2026-07-18",
+    "doc_type": "Customer Payment",
+    "bp_name": "Bebidas Alegres, S.L.",
+    "description": "Cobro de la factura FV/2026-000142.",
+    "amount": 3630.00,
+    "payment_method": "Transferencia",
+    "currency": "EUR",
+    "status": "Received",
+    "org_name": "Etendo Demo, S.L.",
+    "org_taxid": "B12345678",
+    "org_address": "Avenida de la Innovación 8",
+    "org_postal": "41020",
+    "org_city": "Sevilla"
+  },
+  "lines": [
+    { "amount": 3630.00, "reference_doc": "FV/2026-000142", "doc_type": "Sales Invoice" }
+  ]
+}

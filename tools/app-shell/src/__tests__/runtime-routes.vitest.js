@@ -42,4 +42,38 @@ describe('buildRuntimeRoutes', () => {
       ])
     );
   });
+
+  // ETP-4658 — the accounts list moved into the `financial-account` window's own list
+  // branch. `finance/accounts` is kept as a redirect so bookmarks, the archive-dialog
+  // return and the existing E2E gotos keep working, and it must still be a PROTECTED
+  // route (it used to render FinancialAccountsPage, which the route table gated).
+  describe('finance/accounts legacy path', () => {
+    function financeAccountsRoute() {
+      const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: 'http://x/api' });
+      return routes.find((route) => route.path === 'finance/accounts');
+    }
+
+    it('is still registered', () => {
+      expect(financeAccountsRoute()).toBeDefined();
+    });
+
+    it('stays a protected route', () => {
+      expect(financeAccountsRoute().public).toBe(false);
+    });
+
+    it('redirects to the financial-account window instead of rendering a page', () => {
+      const element = financeAccountsRoute().element;
+      expect(element.props.to).toBe('/financial-account');
+      expect(element.props.replace).toBe(true);
+    });
+
+    it('is registered before the dynamic window routes so the redirect wins', () => {
+      const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: 'http://x/api' });
+      const legacyIndex = routes.findIndex((route) => route.path === 'finance/accounts');
+      const dynamicIndex = routes.findIndex((route) => route.path === ':windowName');
+
+      expect(legacyIndex).toBeGreaterThanOrEqual(0);
+      expect(legacyIndex).toBeLessThan(dynamicIndex);
+    });
+  });
 });

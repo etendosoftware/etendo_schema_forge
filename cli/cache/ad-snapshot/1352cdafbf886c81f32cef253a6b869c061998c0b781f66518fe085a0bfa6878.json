@@ -1,6 +1,13 @@
 {
   "sql": "SELECT vr.AD_Val_Rule_ID, vr.Name, vr.Code, c.ColumnName FROM AD_Val_Rule vr JOIN AD_Column c ON c.AD_Val_Rule_ID = vr.AD_Val_Rule_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 ORDER BY vr.AD_Val_Rule_ID, c.ColumnName",
   "versions": {
+    "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "24963D64E83B4543A7F6BD248CF944EE"
+      ],
+      "rows": []
+    },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
       "checksum": "b683e747b399f9bdc59b9c2706b07f2675e38c5619615a280901502270656232",
       "params": [
@@ -2647,6 +2654,13 @@
           "name": "AD_Org show child organizations"
         }
       ]
+    },
+    "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "82922976BB524D1BAA3CF8462B9219FE"
+      ],
+      "rows": []
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",

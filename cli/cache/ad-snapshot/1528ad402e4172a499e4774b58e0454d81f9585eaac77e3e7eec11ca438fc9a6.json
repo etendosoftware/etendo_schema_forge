@@ -1,6 +1,13 @@
 {
   "sql": "SELECT ai.Name, ai.Code AS validation_code, t.Name AS tab_name, t.AD_Tab_ID, ai.AD_AuxiliarInput_ID FROM AD_AuxiliarInput ai JOIN AD_Tab t ON ai.AD_Tab_ID = t.AD_Tab_ID WHERE t.AD_Window_ID = $1 ORDER BY t.SeqNo, t.Name, t.AD_Tab_ID, ai.Name, ai.AD_AuxiliarInput_ID",
   "versions": {
+    "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "24963D64E83B4543A7F6BD248CF944EE"
+      ],
+      "rows": []
+    },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
@@ -624,7 +631,7 @@
       ]
     },
     "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
-      "checksum": "61a10694908e4c7da61b5392d43814983a00bb42d32a40a47274ed855053a259",
+      "checksum": "5233bc023cc0812cc27ad48961239daefdbda11955061d1ebf83ff3c51eed2fb",
       "params": [
         "6F8F913FA60F4CBD93DC1D3AA696E76E"
       ],
@@ -637,18 +644,18 @@
           "validation_code": "APP"
         },
         {
-          "ad_auxiliarinput_id": "BB2C006C5ADE411D95E5F62141A706E1",
-          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
-          "name": "FIN_ISRECEIPT",
-          "tab_name": "Header",
-          "validation_code": "N"
-        },
-        {
           "ad_auxiliarinput_id": "40289DEF2E1E98E4012E1EE6C6CD002E",
           "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
           "name": "FinancialAccountCurrencyId",
           "tab_name": "Header",
           "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "BB2C006C5ADE411D95E5F62141A706E1",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "FIN_ISRECEIPT",
+          "tab_name": "Header",
+          "validation_code": "N"
         },
         {
           "ad_auxiliarinput_id": "FF8080812E26BF58012E27DC86DE016C",
@@ -1218,7 +1225,7 @@
       ]
     },
     "843359d6657fbb328422a0e2b76bc9bab643118230c1597e04e3917031b6cb1f": {
-      "checksum": "83f831fe4f3f71ef8f2d4a714013f31578ed6bf7f78f407563a192853efa73f1",
+      "checksum": "153f19af802807fb3f198d9a511ea848eedca84faea945e4b6467e1499cd98e5",
       "params": [
         "E547CE89D4C04429B6340FFA44E70716"
       ],
@@ -1231,18 +1238,18 @@
           "validation_code": "ARR"
         },
         {
-          "ad_auxiliarinput_id": "78C534BFE24E45779C5F0B874C5B00E9",
-          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
-          "name": "FIN_ISRECEIPT",
-          "tab_name": "Header",
-          "validation_code": "Y"
-        },
-        {
           "ad_auxiliarinput_id": "FF8080812E26BF58012E2772F0B2003B",
           "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
           "name": "FinancialAccountCurrencyId",
           "tab_name": "Header",
           "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "78C534BFE24E45779C5F0B874C5B00E9",
+          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
+          "name": "FIN_ISRECEIPT",
+          "tab_name": "Header",
+          "validation_code": "Y"
         },
         {
           "ad_auxiliarinput_id": "FF8080812E26BF58012E27DDC44E0170",
@@ -2188,6 +2195,13 @@
           "validation_code": "@SQL=SELECT PROCESSED FROM M_INVENTORY WHERE M_INVENTORY_ID = @M_INVENTORY_ID@"
         }
       ]
+    },
+    "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "82922976BB524D1BAA3CF8462B9219FE"
+      ],
+      "rows": []
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",

@@ -153,3 +153,46 @@ describe('Sales InvoiceHeaderTable — payment-added refresh wiring (ETP-4331)',
     );
   });
 });
+
+// ── ETP-4681: custom-rendered columns must declare their filter semantics ─────
+// Risk: `type: 'custom'` tells the filter layer nothing about the underlying
+// data type, so resolveFilterMode falls back to 'text'. A text-mode operator
+// set has no greaterThan / before / after, which makes the Dashboard's
+// `?filter=overdue` preload render an empty operator select.
+
+describe('Sales InvoiceHeaderTable — custom column filter modes (ETP-4681)', () => {
+  it('declares filterMode numeric on the outstandingAmount column', () => {
+    assert.match(
+      src,
+      /key: 'outstandingAmount',[\s\S]{0,600}?filterMode: 'numeric'/,
+      'outstandingAmount renders status pills (type: custom) but filters as an amount',
+    );
+  });
+
+  it('declares filterMode date on the eTGODueDate column', () => {
+    assert.match(
+      src,
+      /key: 'eTGODueDate',[\s\S]{0,600}?filterMode: 'date'/,
+      'eTGODueDate renders a coloured dot (type: custom) but filters as a date',
+    );
+  });
+
+  it('keeps both columns on type custom (the rich cell renderers stay)', () => {
+    assert.match(src, /key: 'outstandingAmount',\s+column: 'OutstandingAmt',\s+type: 'custom'/);
+    assert.match(src, /key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom'/);
+  });
+
+  it('leaves grandTotalAmount on type amount (no explicit filterMode needed)', () => {
+    assert.match(
+      src,
+      /key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount'/,
+      'type amount already infers numeric — only custom columns need filterMode',
+    );
+  });
+
+  it('declares exactly one filterMode per custom column (no duplicates)', () => {
+    const modes = [...src.matchAll(/filterMode: '([^']+)'/g)].map((m) => m[1]);
+    assert.deepEqual(modes.filter((m) => m === 'numeric').length, 1);
+    assert.deepEqual(modes.filter((m) => m === 'date').length, 1);
+  });
+});

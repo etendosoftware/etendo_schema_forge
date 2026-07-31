@@ -1,18 +1,18 @@
 import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import AccountTable from './AccountTable';
+import AccountTable from '../../../custom/AccountsHeaderTable';
 import AccountForm from './AccountForm';
-import TransactionTable from './TransactionTable';
-import TransactionForm from './TransactionForm';
+import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finance / Financial Account Detail';
+const breadcrumb = 'Finance / Accounts';
 
 
 // @sf-generated-start summary:account
 const summary = [
+  { key: 'default', column: 'Isdefault', type: 'boolean' },
   { key: 'currentBalance', column: 'Currentbalance', type: 'amount' },
   { key: 'pSD2SaltEdgeAccountID', column: 'EM_PSD2_Salt_Edge_Account_ID', type: 'string' },
   { key: 'pSD2CardNumber', column: 'EM_PSD2_Masked_Pan', type: 'string' },
@@ -53,43 +53,19 @@ const processes = [
 ];
 // @sf-generated-end processes:account
 
-// @sf-generated-start detailProcesses:transaction
-const detailProcesses = [
-  { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
-    displayLogicRaw: "@Processed@='Y' & @#ShowAcct@='Y'" },
-  { name: 'etprReactivateTransaction', label: 'Reactivate Transaction', style: 'positive',
-    displayLogicRaw: "@processed@='Y'" },
-  { name: 'etprRemoveTransaction', label: 'Remove Transaction', style: 'positive',
-    displayLogicRaw: "@processed@='Y'" },
-];
-// @sf-generated-end detailProcesses:transaction
-
 // @sf-generated-start draftMode:account
 const draftMode = null;
 // @sf-generated-end draftMode:account
 
 // @sf-generated-start requiredHeaderFields:account
-const requiredHeaderFields = ['name', 'currency', 'type', 'currentBalance'];
+const requiredHeaderFields = ['name', 'currency', 'type', 'default', 'currentBalance'];
 // @sf-generated-end requiredHeaderFields:account
 
-// @sf-generated-start addLineFields:transaction
-const addLineFields = {
-  entry: [
-    { key: 'etprReactivateTransaction', column: 'EM_Etpr_Reactivate_Transaction', type: 'text', required: true, label: 'Reactivate Transaction', defaultValue: 'N' },
-    { key: 'etprRemoveTransaction', column: 'EM_Etpr_Remove_Transaction', type: 'text', required: true, label: 'Remove Transaction', defaultValue: 'N' },
-  ],
-  derived: [
 
-  ],
-  hidden: [
-    { key: 'posted', value: 'N' },
-  ],
-};
-// @sf-generated-end addLineFields:transaction
 
 export const api = {
-  "specName": "financial-account-detail",
-  "baseUrl": "/sws/neo/financial-account-detail",
+  "specName": "accounts",
+  "baseUrl": "/sws/neo/accounts",
   "crud": {
     "account": {
       "get": true,
@@ -98,8 +74,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/financial-account-detail/account",
-      "detailUrl": "/sws/neo/financial-account-detail/account/{id}",
+      "listUrl": "/sws/neo/accounts/account",
+      "detailUrl": "/sws/neo/accounts/account/{id}",
       "supportedFilters": []
     },
     "transaction": {
@@ -109,8 +85,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/financial-account-detail/transaction",
-      "detailUrl": "/sws/neo/financial-account-detail/transaction/{id}",
+      "listUrl": "/sws/neo/accounts/transaction",
+      "detailUrl": "/sws/neo/accounts/transaction/{id}",
       "supportedFilters": []
     },
     "accountingConfiguration": {
@@ -120,8 +96,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/financial-account-detail/accountingConfiguration",
-      "detailUrl": "/sws/neo/financial-account-detail/accountingConfiguration/{id}",
+      "listUrl": "/sws/neo/accounts/accountingConfiguration",
+      "detailUrl": "/sws/neo/accounts/accountingConfiguration/{id}",
       "supportedFilters": []
     },
     "importedBankStatements": {
@@ -131,8 +107,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/financial-account-detail/importedBankStatements",
-      "detailUrl": "/sws/neo/financial-account-detail/importedBankStatements/{id}",
+      "listUrl": "/sws/neo/accounts/importedBankStatements",
+      "detailUrl": "/sws/neo/accounts/importedBankStatements/{id}",
       "supportedFilters": []
     },
     "bankStatementLines": {
@@ -142,8 +118,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/financial-account-detail/bankStatementLines",
-      "detailUrl": "/sws/neo/financial-account-detail/bankStatementLines/{id}",
+      "listUrl": "/sws/neo/accounts/bankStatementLines",
+      "detailUrl": "/sws/neo/accounts/bankStatementLines/{id}",
       "supportedFilters": []
     }
   },
@@ -154,7 +130,7 @@ export const api = {
       "column": "C_Currency_ID",
       "reference": "Currency",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/account/selectors/currency"
+      "url": "/sws/neo/accounts/account/selectors/currency"
     },
     {
       "entity": "account",
@@ -162,7 +138,7 @@ export const api = {
       "column": "EM_Psd2_Provider_ID",
       "reference": "PSD2_Provider",
       "inputMode": "search",
-      "url": "/sws/neo/financial-account-detail/account/selectors/psd2Provider"
+      "url": "/sws/neo/accounts/account/selectors/psd2Provider"
     },
     {
       "entity": "transaction",
@@ -170,7 +146,7 @@ export const api = {
       "column": "C_Glitem_ID",
       "reference": "Glitem",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/gLItem"
+      "url": "/sws/neo/accounts/transaction/selectors/gLItem"
     },
     {
       "entity": "transaction",
@@ -178,7 +154,7 @@ export const api = {
       "column": "AD_Org_ID",
       "reference": "Org",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/organization"
+      "url": "/sws/neo/accounts/transaction/selectors/organization"
     },
     {
       "entity": "transaction",
@@ -186,7 +162,7 @@ export const api = {
       "column": "C_Bpartner_ID",
       "reference": "BPartner",
       "inputMode": "search",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/businessPartner"
+      "url": "/sws/neo/accounts/transaction/selectors/businessPartner"
     },
     {
       "entity": "transaction",
@@ -194,7 +170,7 @@ export const api = {
       "column": "C_Project_ID",
       "reference": "Project",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/project"
+      "url": "/sws/neo/accounts/transaction/selectors/project"
     },
     {
       "entity": "transaction",
@@ -202,7 +178,7 @@ export const api = {
       "column": "C_Costcenter_ID",
       "reference": "Costcenter",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/costCenter"
+      "url": "/sws/neo/accounts/transaction/selectors/costCenter"
     },
     {
       "entity": "transaction",
@@ -210,7 +186,7 @@ export const api = {
       "column": "C_Campaign_ID",
       "reference": "Campaign",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/salesCampaign"
+      "url": "/sws/neo/accounts/transaction/selectors/salesCampaign"
     },
     {
       "entity": "transaction",
@@ -218,7 +194,7 @@ export const api = {
       "column": "C_Activity_ID",
       "reference": "Activity",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/activity"
+      "url": "/sws/neo/accounts/transaction/selectors/activity"
     },
     {
       "entity": "transaction",
@@ -226,7 +202,7 @@ export const api = {
       "column": "C_Salesregion_ID",
       "reference": "Salesregion",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/salesRegion"
+      "url": "/sws/neo/accounts/transaction/selectors/salesRegion"
     },
     {
       "entity": "transaction",
@@ -234,7 +210,7 @@ export const api = {
       "column": "User1_ID",
       "reference": "User1",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/stDimension"
+      "url": "/sws/neo/accounts/transaction/selectors/stDimension"
     },
     {
       "entity": "transaction",
@@ -242,7 +218,7 @@ export const api = {
       "column": "User2_ID",
       "reference": "User2",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/transaction/selectors/ndDimension"
+      "url": "/sws/neo/accounts/transaction/selectors/ndDimension"
     },
     {
       "entity": "accountingConfiguration",
@@ -250,7 +226,7 @@ export const api = {
       "column": "FIN_Asset_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINAssetAcct"
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINAssetAcct"
     },
     {
       "entity": "accountingConfiguration",
@@ -258,7 +234,7 @@ export const api = {
       "column": "FIN_Transitory_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINTransitoryAcct"
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINTransitoryAcct"
     },
     {
       "entity": "bankStatementLines",
@@ -266,7 +242,7 @@ export const api = {
       "column": "C_Bpartner_ID",
       "reference": "BPartner",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/bankStatementLines/selectors/businessPartner"
+      "url": "/sws/neo/accounts/bankStatementLines/selectors/businessPartner"
     },
     {
       "entity": "bankStatementLines",
@@ -274,7 +250,7 @@ export const api = {
       "column": "C_Glitem_ID",
       "reference": "Glitem",
       "inputMode": "selector",
-      "url": "/sws/neo/financial-account-detail/bankStatementLines/selectors/gLItem"
+      "url": "/sws/neo/accounts/bankStatementLines/selectors/gLItem"
     }
   ],
   "actions": [
@@ -282,7 +258,7 @@ export const api = {
       "entity": "account",
       "field": "aPRMImportBankFile",
       "column": "EM_APRM_ImportBankFile",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMImportBankFile",
+      "url": "/sws/neo/accounts/account/{id}/action/aPRMImportBankFile",
       "processId": "7AC7BE9024E448A0BB863C159DA762F9",
       "processType": "classic"
     },
@@ -290,7 +266,7 @@ export const api = {
       "entity": "account",
       "field": "aPRMMatchTransactions",
       "column": "EM_APRM_MatchTransactions",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactions",
+      "url": "/sws/neo/accounts/account/{id}/action/aPRMMatchTransactions",
       "processId": "86F0B1EBE2BC48E3ACF458768D14CC99",
       "processType": "obuiapp"
     },
@@ -298,7 +274,7 @@ export const api = {
       "entity": "account",
       "field": "aPRMMatchTransactionsForce",
       "column": "EM_APRM_MatchTrans_Force",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactionsForce",
+      "url": "/sws/neo/accounts/account/{id}/action/aPRMMatchTransactionsForce",
       "processId": "86F0B1EBE2BC48E3ACF458768D14CC99",
       "processType": "obuiapp"
     },
@@ -306,7 +282,7 @@ export const api = {
       "entity": "account",
       "field": "aPRMReconcile",
       "column": "EM_APRM_Reconcile",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMReconcile",
+      "url": "/sws/neo/accounts/account/{id}/action/aPRMReconcile",
       "processId": "EB3D56BDD37E4229B67DBAB9F9A9B167",
       "processType": "classic"
     },
@@ -314,7 +290,7 @@ export const api = {
       "entity": "account",
       "field": "aprmAddMultiplePayments",
       "column": "EM_Aprm_AddMultiplePayments",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddMultiplePayments",
+      "url": "/sws/neo/accounts/account/{id}/action/aprmAddMultiplePayments",
       "processId": "4CE463C04CA0412CAC57EF58FE0F8498",
       "processType": "obuiapp"
     },
@@ -322,7 +298,7 @@ export const api = {
       "entity": "account",
       "field": "aprmAddtransactionpd",
       "column": "EM_Aprm_Addtransactionpd",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddtransactionpd",
+      "url": "/sws/neo/accounts/account/{id}/action/aprmAddtransactionpd",
       "processId": "E68790A7B65F4D45AB35E2BAE34C1F39",
       "processType": "obuiapp"
     },
@@ -330,7 +306,7 @@ export const api = {
       "entity": "account",
       "field": "aprmFindtransactionspd",
       "column": "EM_Aprm_Findtransactionspd",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFindtransactionspd",
+      "url": "/sws/neo/accounts/account/{id}/action/aprmFindtransactionspd",
       "processId": "154CB4F9274A479CB38A285E16984539",
       "processType": "obuiapp"
     },
@@ -338,7 +314,7 @@ export const api = {
       "entity": "account",
       "field": "aprmFundsTrans",
       "column": "EM_Aprm_Funds_Trans",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFundsTrans",
+      "url": "/sws/neo/accounts/account/{id}/action/aprmFundsTrans",
       "processId": "CC73C4845CDC487395804946EACB225F",
       "processType": "obuiapp"
     },
@@ -346,7 +322,7 @@ export const api = {
       "entity": "account",
       "field": "pSD2GetConsent",
       "column": "EM_PSD2_Get_Consent",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetConsent",
+      "url": "/sws/neo/accounts/account/{id}/action/pSD2GetConsent",
       "processId": "C580B3B60DA5484387493A74CEB00D13",
       "processType": "obuiapp"
     },
@@ -354,7 +330,7 @@ export const api = {
       "entity": "account",
       "field": "psd2GetConnections",
       "column": "EM_Psd2_Get_Connections",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2GetConnections",
+      "url": "/sws/neo/accounts/account/{id}/action/psd2GetConnections",
       "processId": "91C37692121944CA892C32316F56D9B4",
       "processType": "obuiapp"
     },
@@ -362,7 +338,7 @@ export const api = {
       "entity": "account",
       "field": "pSD2GetBankstatement",
       "column": "EM_PSD2_Get_Bankstatement",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetBankstatement",
+      "url": "/sws/neo/accounts/account/{id}/action/pSD2GetBankstatement",
       "processId": "2B2635782D4C41FF9415D86C13D1E97D",
       "processType": "obuiapp"
     },
@@ -370,7 +346,7 @@ export const api = {
       "entity": "account",
       "field": "psd2RefreshConnections",
       "column": "EM_Psd2_Refresh_Connections",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2RefreshConnections",
+      "url": "/sws/neo/accounts/account/{id}/action/psd2RefreshConnections",
       "processId": "83C5DBC9F05B4D38BBB3F5486B377427",
       "processType": "obuiapp"
     },
@@ -378,15 +354,23 @@ export const api = {
       "entity": "account",
       "field": "psd2ReconnectFa",
       "column": "EM_Psd2_Reconnect_Fa",
-      "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2ReconnectFa",
+      "url": "/sws/neo/accounts/account/{id}/action/psd2ReconnectFa",
       "processId": "F3ABCD40BD0047AF9E76071CF7D3FF04",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "transaction",
+      "field": "etprReactivateTransaction",
+      "column": "EM_Etpr_Reactivate_Transaction",
+      "url": "/sws/neo/accounts/transaction/{id}/action/etprReactivateTransaction",
+      "processId": "BA47238DB98D4FE7A4B540760EC8226A",
       "processType": "obuiapp"
     },
     {
       "entity": "transaction",
       "field": "aprmProcessed",
       "column": "EM_Aprm_Processed",
-      "url": "/sws/neo/financial-account-detail/transaction/{id}/action/aprmProcessed",
+      "url": "/sws/neo/accounts/transaction/{id}/action/aprmProcessed",
       "processId": "F68F2890E96D4D85A1DEF0274D105BCE",
       "processType": "classic"
     },
@@ -394,23 +378,15 @@ export const api = {
       "entity": "transaction",
       "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etblkpBulkposting",
+      "url": "/sws/neo/accounts/transaction/{id}/action/etblkpBulkposting",
       "processId": "57496FB9CF9E4E8F847224017941570E",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "transaction",
-      "field": "etprReactivateTransaction",
-      "column": "EM_Etpr_Reactivate_Transaction",
-      "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprReactivateTransaction",
-      "processId": "BA47238DB98D4FE7A4B540760EC8226A",
       "processType": "obuiapp"
     },
     {
       "entity": "transaction",
       "field": "etprRemoveTransaction",
       "column": "EM_Etpr_Remove_Transaction",
-      "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprRemoveTransaction",
+      "url": "/sws/neo/accounts/transaction/{id}/action/etprRemoveTransaction",
       "processId": "DC4FCAC608324CB78CF92F99C1A94AD0",
       "processType": "obuiapp"
     },
@@ -418,13 +394,13 @@ export const api = {
       "entity": "importedBankStatements",
       "field": "posted",
       "column": "Posted",
-      "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/posted"
+      "url": "/sws/neo/accounts/importedBankStatements/{id}/action/posted"
     },
     {
       "entity": "importedBankStatements",
       "field": "aPRMProcessBankStatementForce",
       "column": "EM_APRM_Process_BS_Force",
-      "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatementForce",
+      "url": "/sws/neo/accounts/importedBankStatements/{id}/action/aPRMProcessBankStatementForce",
       "processId": "2DDE7D3618034C38A4462B7F3456C28D",
       "processType": "classic"
     },
@@ -432,7 +408,7 @@ export const api = {
       "entity": "importedBankStatements",
       "field": "aPRMProcessBankStatement",
       "column": "EM_APRM_Process_BS",
-      "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatement",
+      "url": "/sws/neo/accounts/importedBankStatements/{id}/action/aPRMProcessBankStatement",
       "processId": "58A9261BACEF45DDA526F29D8557272D",
       "processType": "classic"
     },
@@ -440,7 +416,7 @@ export const api = {
       "entity": "importedBankStatements",
       "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/etblkpBulkposting",
+      "url": "/sws/neo/accounts/importedBankStatements/{id}/action/etblkpBulkposting",
       "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     }
@@ -460,9 +436,19 @@ export const api = {
   },
   "window": {
     "category": "finance"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "pendingCount": "Pending"
+    },
+    "es_ES": {
+      "pendingCount": "Por conciliar"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:AccountPage
 export default function AccountPage({ windowName, recordId, ...props }) {
   const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
@@ -477,24 +463,22 @@ export default function AccountPage({ windowName, recordId, ...props }) {
       <>
       <DetailView
         entity="account"
-        detailEntity="transaction"
         Form={AccountForm}
-        DetailTable={TransactionTable}
-        DetailForm={TransactionForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
-        detailProcesses={detailProcesses}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Account"
-        detailLabel="Transaction"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hidePrint
+        hideMoreMenu
+        customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Financial_Account", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
+        labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />
       </>
@@ -505,11 +489,15 @@ export default function AccountPage({ windowName, recordId, ...props }) {
     <ListView
       entity="account"
       Table={AccountTable}
-      entityLabel="Financial Account Detail"
+      entityLabel="Accounts"
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      rowQuickActions={{}}
+      hidePrint
+      hideCreate
+      hideMoreMenu
+      hideListFilters
+      labelOverrides={labelOverrides}
       {...props} window={effectiveWindow}
     />
   );

@@ -12,8 +12,6 @@ import {
   pickMessage,
   pickMessageFromObject,
   extractErrorMessage,
-  applyContactNameDefaults,
-  applyContactsRequiredFields,
   parseCriteriaInto,
   normalizeDefaultValue,
   shouldSkipPayloadField,
@@ -34,6 +32,8 @@ import {
   getInvalidPhoneFields,
   reportInvalidEmailFields,
   reportInvalidFormatField,
+  getNumericFieldViolation,
+  buildSavePayload,
 } from '../useEntity';
 
 describe('useEntity helpers', () => {
@@ -299,59 +299,6 @@ describe('useEntity helpers', () => {
   });
 
   // -------------------------------------------------------------------
-  // applyContactNameDefaults
-  // -------------------------------------------------------------------
-  describe('applyContactNameDefaults', () => {
-    it('derives name from firstName + lastName', () => {
-      const payload = { firstName: 'John', lastName: 'Doe' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBe('John Doe');
-    });
-
-    it('derives name from source when payload has no firstName/lastName', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, { firstName: 'Jane', lastName: 'Smith' });
-      expect(payload.name).toBe('Jane Smith');
-    });
-
-    it('does not overwrite existing name', () => {
-      const payload = { name: 'Already Set', firstName: 'John', lastName: 'Doe' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBe('Already Set');
-    });
-
-    it('sets username to name when username is empty', () => {
-      const payload = { firstName: 'John', lastName: 'Doe' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.username).toBe('John Doe');
-    });
-
-    it('does not set username when name is empty', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, {});
-      expect(payload.username).toBeUndefined();
-    });
-
-    it('handles only firstName (no lastName)', () => {
-      const payload = { firstName: 'Solo' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBe('Solo');
-    });
-
-    it('handles only lastName (no firstName)', () => {
-      const payload = { lastName: 'Only' };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBe('Only');
-    });
-
-    it('truncates name to 60 chars', () => {
-      const payload = { firstName: 'A'.repeat(40), lastName: 'B'.repeat(40) };
-      applyContactNameDefaults(payload, {});
-      expect(payload.name.length).toBe(60);
-    });
-  });
-
-  // -------------------------------------------------------------------
   // parseCriteriaInto
   // -------------------------------------------------------------------
   describe('parseCriteriaInto', () => {
@@ -571,19 +518,19 @@ describe('useEntity helpers', () => {
     it('includes only changed fields', () => {
       const editing = { id: '1', name: 'New Name', status: 'DR' };
       const selected = { id: '1', name: 'Old Name', status: 'DR' };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ name: 'New Name' });
     });
 
     it('returns empty object when nothing changed', () => {
       const record = { id: '1', name: 'Same' };
-      expect(buildPatchPayload(record, record, 'order')).toEqual({});
+      expect(buildPatchPayload(record, record)).toEqual({});
     });
 
     it('skips id field', () => {
       const editing = { id: '2', name: 'X' };
       const selected = { id: '1', name: 'X' };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload.id).toBeUndefined();
     });
   });
@@ -715,51 +662,6 @@ describe('useEntity helpers', () => {
       toast.success.mockClear();
       showSaveSuccessToast(false, false, (k) => k);
       expect(toast.success).toHaveBeenCalledWith('recordSaved');
-    });
-  });
-
-  // -------------------------------------------------------------------
-  // applyContactNameDefaults — additional branches
-  // -------------------------------------------------------------------
-  describe('applyContactNameDefaults — edge cases', () => {
-    it('derives name from source firstName only', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, { firstName: 'Jane' });
-      expect(payload.name).toBe('Jane');
-      expect(payload.username).toBe('Jane');
-    });
-
-    it('derives name from source lastName only', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, { lastName: 'Doe' });
-      expect(payload.name).toBe('Doe');
-      expect(payload.username).toBe('Doe');
-    });
-
-    it('does not set username when existing name is present', () => {
-      const payload = { name: 'Existing', username: 'ExistingUser' };
-      applyContactNameDefaults(payload, { firstName: 'A', lastName: 'B' });
-      expect(payload.name).toBe('Existing');
-      expect(payload.username).toBe('ExistingUser');
-    });
-
-    it('does nothing when neither payload nor source have names', () => {
-      const payload = {};
-      applyContactNameDefaults(payload, {});
-      expect(payload.name).toBeUndefined();
-      expect(payload.username).toBeUndefined();
-    });
-
-    it('uses payload firstName with source lastName when payload has no lastName', () => {
-      const payload = { firstName: 'PayloadFirst' };
-      applyContactNameDefaults(payload, { firstName: 'SourceFirst', lastName: 'SourceLast' });
-      expect(payload.name).toBe('PayloadFirst SourceLast');
-    });
-
-    it('mixes payload firstName with source lastName', () => {
-      const payload = { firstName: 'John' };
-      applyContactNameDefaults(payload, { lastName: 'Smith' });
-      expect(payload.name).toBe('John Smith');
     });
   });
 
@@ -1122,28 +1024,28 @@ describe('useEntity helpers', () => {
     it('detects changes in boolean values', () => {
       const editing = { id: '1', active: false };
       const selected = { id: '1', active: true };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ active: false });
     });
 
     it('detects changes from null to value', () => {
       const editing = { id: '1', name: 'New' };
       const selected = { id: '1', name: null };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ name: 'New' });
     });
 
     it('detects changes from value to null', () => {
       const editing = { id: '1', name: null };
       const selected = { id: '1', name: 'Old' };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ name: null });
     });
 
     it('includes multiple changed fields', () => {
       const editing = { id: '1', name: 'New', status: 'CO', amount: 100 };
       const selected = { id: '1', name: 'Old', status: 'DR', amount: 100 };
-      const payload = buildPatchPayload(editing, selected, 'order');
+      const payload = buildPatchPayload(editing, selected);
       expect(payload).toEqual({ name: 'New', status: 'CO' });
     });
   });
@@ -1388,43 +1290,7 @@ describe('useEntity helpers', () => {
       const result = reportInvalidFormatField('phoneInvalid', ui, setSaveError, setIsSaving, 'toast-7', { field: 'phone' });
 
       expect(result).toBeNull();
-      // With a toastId the error must be routed to that specific toast so it
-      // updates in place instead of stacking a new one.
       expect(toast.error).toHaveBeenCalledWith('phoneInvalid:{"field":"phone"}', { id: 'toast-7' });
-    });
-  });
-
-  describe('applyContactsRequiredFields', () => {
-    it('is a no-op for a null or non-object payload', () => {
-      expect(applyContactsRequiredFields('contact', null)).toBeNull();
-      expect(applyContactsRequiredFields('contact', 'nope')).toBe('nope');
-    });
-
-    it('fills contact name defaults for contact/adUser/user entities', () => {
-      const payload = { name: 'Ada Lovelace' };
-      const result = applyContactsRequiredFields('contact', payload, { name: 'Ada Lovelace' });
-      // username is derived from name when missing (see applyContactNameDefaults).
-      expect(result.username).toBe('Ada Lovelace');
-    });
-
-    it('backfills name and a length-capped searchKey for a business partner', () => {
-      const longName = 'A'.repeat(48);
-      const result = applyContactsRequiredFields('businessPartner', {}, { name: longName });
-      expect(result.name).toBe(longName);
-      // C_BPartner.Value is AD-constrained to 40 chars.
-      expect(result.searchKey).toBe('A'.repeat(40));
-      expect(result.searchKey.length).toBe(40);
-    });
-
-    it('leaves a business partner untouched when name and searchKey already exist', () => {
-      const result = applyContactsRequiredFields('bpartner', { name: 'X', searchKey: 'XK' }, { name: 'Other' });
-      expect(result.name).toBe('X');
-      expect(result.searchKey).toBe('XK');
-    });
-
-    it('does not touch payloads for unrelated entities', () => {
-      const result = applyContactsRequiredFields('salesOrder', { documentNo: 'SO-1' }, { name: 'ignored' });
-      expect(result).toEqual({ documentNo: 'SO-1' });
     });
   });
 
@@ -1455,6 +1321,170 @@ describe('useEntity helpers', () => {
     it('skips readOnly website fields', () => {
       const fields = [{ key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', readOnly: true }];
       expect(getInvalidWebsiteFields(fields, { etgoWeb: 'http://x.com' })).toEqual([]);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // extractErrorMessage — translate() branches
+  // -------------------------------------------------------------------
+  describe('extractErrorMessage — translate branches', () => {
+    function mockResponse(data, status = 400) {
+      return { json: async () => data, status };
+    }
+
+    it('interpolates the fallback params when no ui function is provided', async () => {
+      // ui omitted → translate() takes the `typeof ui !== 'function'` path and has to
+      // interpolate `{field}` into the literal fallback itself.
+      const data = { error: { message: 'null value in column "first_name" of relation "unknown_table"' } };
+      const msg = await extractErrorMessage(mockResponse(data));
+      expect(msg).toBe('The field "First Name" is required.');
+    });
+
+    it('returns the ui translation verbatim when the key resolves to real text', async () => {
+      // ui returns something other than the key → translate() must return the
+      // translated text and never fall back to the hardcoded English literal.
+      const uiTranslated = vi.fn(() => 'Ya existe un registro con ese valor.');
+      const data = { error: { message: 'duplicate key value violates unique constraint "c_bpartner_value_uk"' } };
+      const msg = await extractErrorMessage(mockResponse(data), uiTranslated);
+      expect(uiTranslated).toHaveBeenCalledWith('validationDuplicateRecord', {});
+      expect(msg).toBe('Ya existe un registro con ese valor.');
+    });
+
+    it('falls back to the generic field label when the column name is blank', async () => {
+      const ui = (key, params) => {
+        if (!params) return key;
+        let text = key;
+        Object.keys(params).forEach((p) => { text = text.replace(`{${p}}`, params[p]); });
+        return text;
+      };
+      // A whitespace-only column matches the regex but trims to '' in toReadableLabel,
+      // which then has to fall back to the generic 'Field' label.
+      const data = { error: { message: 'null value in column "   " of relation "some_table"' } };
+      const msg = await extractErrorMessage(mockResponse(data), ui);
+      expect(msg).toBe('The field "Field" is required.');
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // extractErrorMessage — AD-translated duplicate identifier (ETP-4597)
+  // -------------------------------------------------------------------
+  describe('extractErrorMessage — AD-translated unique constraint', () => {
+    const ui = (key) => key;
+
+    function mockResponse(data, status = 400) {
+      return { json: async () => data, status };
+    }
+
+    it('normalizes the Spanish AD "debe ser único" sentence without leaking field names', async () => {
+      const data = {
+        error: {
+          message: 'Ya existe un/a Categoría del producto con el mismo (Entidad, Organización, '
+            + 'Identificador). (Entidad, Organización, Identificador) debe ser único. '
+            + 'Cambie los valores introducidos',
+        },
+      };
+      const msg = await extractErrorMessage(mockResponse(data), ui);
+      expect(msg).toBe('A record with the same identifier already exists. Please enter a different one.');
+      expect(msg).not.toContain('Organización');
+    });
+
+    it('normalizes the English AD "must be unique" sentence without leaking field names', async () => {
+      const data = {
+        error: {
+          message: 'There is already a Product Category with the same (Client, Organization, '
+            + 'Identifier). (Client, Organization, Identifier) must be unique. '
+            + 'Please change the entered values',
+        },
+      };
+      const msg = await extractErrorMessage(mockResponse(data), ui);
+      expect(msg).toBe('A record with the same identifier already exists. Please enter a different one.');
+      expect(msg).not.toContain('Organization');
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // reportInvalidFormatField — toastId + params (ETP-4542 numeric gate)
+  // -------------------------------------------------------------------
+  describe('reportInvalidFormatField — toastId and params', () => {
+    it('forwards the interpolation params and dedupes the toast by the given id', () => {
+      toast.error.mockClear();
+      const ui = vi.fn((key, params) => `${key}:${params?.min ?? ''}`);
+      const setSaveError = vi.fn();
+      const setIsSaving = vi.fn();
+
+      const result = reportInvalidFormatField(
+        'numericMinValue', ui, setSaveError, setIsSaving, 'numeric-quantity', { min: 1 },
+      );
+
+      expect(result).toBeNull();
+      expect(ui).toHaveBeenCalledWith('numericMinValue', { min: 1 });
+      expect(setSaveError).toHaveBeenCalledWith('numericMinValue:1');
+      // With a toastId the toast MUST carry it, so EntityForm's blur toast for the
+      // same field collapses into this one instead of stacking.
+      expect(toast.error).toHaveBeenCalledWith('numericMinValue:1', { id: 'numeric-quantity' });
+      expect(setIsSaving).toHaveBeenCalledWith(false);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // getNumericFieldViolation — violating field descriptor (ETP-4542)
+  // -------------------------------------------------------------------
+  describe('getNumericFieldViolation', () => {
+    it('returns the descriptor of the first violating field with its i18n params', () => {
+      const fields = [
+        { key: 'name', type: 'string' },
+        { key: 'usableLifeMonths', type: 'number', min: 1 },
+      ];
+      expect(getNumericFieldViolation(fields, { name: 'Asset', usableLifeMonths: 0 })).toEqual({
+        key: 'usableLifeMonths',
+        errorKey: 'fieldMinValueError',
+        errorParams: { min: 1 },
+      });
+    });
+
+    it('reports the integer violation for a decimal value', () => {
+      const fields = [{ key: 'quantity', type: 'number', integer: true }];
+      expect(getNumericFieldViolation(fields, { quantity: 2.5 })).toEqual({
+        key: 'quantity',
+        errorKey: 'fieldIntegerError',
+        errorParams: {},
+      });
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // buildSavePayload — contacts Business Partner create detection
+  // -------------------------------------------------------------------
+  describe('buildSavePayload — contacts businessPartner create', () => {
+    const emptyRef = () => ({ current: new Set() });
+    const formFieldsRef = () => ({ current: new Map([['__default__', [{ key: 'name', required: true }]]]) });
+
+    it('drops the billing preference fields when creating from the contacts window', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', priceList: 'pl-1', paymentTerms: 'pt-1' },
+        entity: 'businessPartner',
+        apiBaseUrl: '/sws/neo/contacts',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRef(),
+      });
+      expect(payload).toEqual({ name: 'Acme' });
+    });
+
+    it('keeps the billing fields when apiBaseUrl is missing (not the contacts window)', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', priceList: 'pl-1' },
+        entity: 'businessPartner',
+        apiBaseUrl: null,
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRef(),
+      });
+      expect(payload).toEqual({ name: 'Acme', priceList: 'pl-1' });
     });
   });
 
