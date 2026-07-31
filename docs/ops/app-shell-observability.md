@@ -280,7 +280,7 @@ await stop({ status: 'success' });
 
 | Event | When |
 |-------|------|
-| `defaults_block` | Emitted at most once per `useEntity.handleNew()` — exactly once for the session that survives to settlement (`ok`/`error`/`timeout`); sessions superseded by a newer `handleNew()` or neutralized by a record load (`handleSelect`/`fetchById`) emit nothing. Measures how long the creation form stayed blocked waiting for `GET /<entity>/defaults`. Properties: `entity`, `durationMs`, and `status` — `ok` (request settled successfully; the response is merged when it carries defaults), `error` (HTTP or network failure), or `timeout` (request aborted after 4s and its late response discarded). |
+| `defaults_block` | Emitted at most once per `useEntity.handleNew()` — exactly once for the session that survives to settlement (`ok`/`error`/`timeout`); sessions superseded by a newer `handleNew()` or neutralized by a record load (`handleSelect`/`fetchById`) emit nothing. Measures how long the creation form stayed blocked waiting for `GET /<entity>/defaults`. Properties: `entity`, `durationMs`, and `status` — `ok` (request settled successfully; the response is merged when it carries defaults), `error` (HTTP or network failure), or `timeout` (the 4s UX budget elapsed and the gate was released early — the request is *not* abandoned: it stays in flight and its response still merges when it lands, which is why no further event follows). |
 
 ## Privacy Rules
 

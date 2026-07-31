@@ -468,15 +468,16 @@ second line of defense in case it doesn't.
 
 ## [2026-07-30] ETP-4741 — Creation-form defaults race fixed; two follow-ups deferred
 
-The race fix itself (defaults-loading gate on the `/new` route, 4s abort timeout, epoch-based
-staleness discard, user-edit merge guard, record-load neutralization) is documented in
+The race fix itself (defaults-loading gate on the `/new` route, 4s gate-release budget, epoch-based
+invalidation of superseded sessions, user-edit merge guard, record-load neutralization) is documented in
 `docs/generated-custom-windows/app-shell-functional-flows.md` §4 and
 `docs/ops/app-shell-observability.md` (`defaults_block`). Two follow-ups were agreed and
 deliberately deferred:
 
 - A `handleNew()` session superseded by a newer `handleNew()` is made epoch-inert but its fetch is
-  NOT aborted — up to 4s of wasted network per superseded session. Only record-load neutralization
-  (`handleSelect`/`fetchById`) aborts the in-flight request.
+  NOT aborted — it runs to completion against a form that will ignore it. Only record-load
+  neutralization (`handleSelect`/`fetchById`) aborts the in-flight request. The 4s timer does not
+  abort either: it only releases the gate, so the request is unbounded, not capped at 4s.
 - A mocked Playwright spec covering the `/new` defaults gate and the record-navigation
   (neutralization) path is recommended but not yet written; current coverage is Vitest-only
   (`tools/app-shell/src/hooks/__tests__/useEntity.defaultsRace.vitest.jsx`).

@@ -1136,9 +1136,20 @@ export function useEntity(entity, childEntity, {
         setEditing({}); // Start with empty so UI is responsive
 
         // ETP-4741 — the defaults GET races the user, who can already be typing
-        // into the open form. Guards: an epoch check discards any response that
-        // settles after the timeout (or after a newer handleNew), the fetch is
-        // aborted on timeout, and the merge never touches user-changed keys.
+        // into the open form. Guards: an epoch check discards any response whose
+        // session was superseded (a newer handleNew, or a record load via
+        // neutralizePendingDefaults), and the merge never touches user-changed
+        // keys.
+        //
+        // The timeout is a UX budget, NOT a correctness mechanism: it only
+        // releases the gate so the user can start working. It deliberately does
+        // not bump the epoch, drop the abort handle, or abort the request — a
+        // slow backend still owns this form's defaults, and discarding its
+        // answer left the form with no defaults AND no initial callouts
+        // (DetailView's initial-callout chain is latched on `editing` becoming
+        // non-empty, so an always-empty `editing` never arms it). The request
+        // stays in flight and stays cancellable, so a later record load can
+        // still neutralize it.
         const epoch = defaultsEpochRef.current + 1;
         defaultsEpochRef.current = epoch;
         const isCurrent = () => defaultsEpochRef.current === epoch;
@@ -1149,10 +1160,7 @@ export function useEntity(entity, childEntity, {
         defaultsAbortRef.current = controller;
         const timeoutId = setTimeout(() => {
             if (!isCurrent()) return;
-            defaultsEpochRef.current += 1; // late responses must not merge
-            defaultsAbortRef.current = null;
             setDefaultsLoading(false);
-            controller.abort();
             settleTiming({ status: 'timeout' });
         }, DEFAULTS_TIMEOUT_MS);
 
@@ -1174,10 +1182,16 @@ export function useEntity(entity, childEntity, {
                     setEditing(prev => mergeDefaultsPreservingUserEdits(prev, normalized, userChangedKeysRef.current));
                 }
             }
-            await settleTiming({ status: res.ok ? 'ok' : 'error' });
+            // Deliberately not awaited: settleTiming ends in client.track(),
+            // a real network call once Mixpanel is enabled. Awaiting it would
+            // put the gate release in `finally` behind an analytics endpoint,
+            // and a hung track() would latch the form shut forever. track()
+            // already swallows provider failures internally, so nothing here
+            // needs the result. Same below on the catch path.
+            settleTiming({ status: res.ok ? 'ok' : 'error' });
         } catch {
             // Defaults are best-effort; proceed with empty form if endpoint fails
-            if (isCurrent()) await settleTiming({ status: 'error' });
+            if (isCurrent()) settleTiming({ status: 'error' });
         } finally {
             if (isCurrent()) {
                 clearTimeout(timeoutId);
