@@ -134,7 +134,6 @@ export default function InvoiceHeaderTable(props) {
         column: 'OutstandingAmt',
         type: 'custom',
         required: true,
-        filterMode: 'numeric',
         label: t('pendingPaymentColumn'),
         // The cell renders status pills and a payment button, so it must stay
         // `custom` — but the underlying column is an amount. Without this the

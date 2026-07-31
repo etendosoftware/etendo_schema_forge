@@ -118,7 +118,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
       { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
       ...fiscalCols,
       {
-        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true, filterMode: 'numeric',
+        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true,
         label: t('impTotal'),
         // The cell sign-flips credit notes / returns, so it must stay `custom`
         // — but the underlying column is an amount (sales-invoice declares the
@@ -136,7 +136,6 @@ export default function PurchaseInvoiceHeaderTable(props) {
         column: 'OutstandingAmt',
         type: 'custom',
         required: true,
-        filterMode: 'numeric',
         label: t('pendingPaymentColumn'),
         // The cell renders status pills and a payment button, so it must stay
         // `custom` — but the underlying column is an amount. Without this the
