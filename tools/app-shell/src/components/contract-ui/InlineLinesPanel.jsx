@@ -134,9 +134,17 @@ function computeRowClassName(isHighlighted, isEditing, hasRowClick) {
  * "Add dimensions" trigger) render through the exact same code path. Defaults
  * to `[]` so every existing caller renders byte-for-byte the same as before
  * this slot existed.
+ *
+ * ETP-4565 — `canDelete` mirrors DataTable's own `{onDeleteRow && (...)}` gate
+ * (DataTable.jsx ~1450): when the caller doesn't pass `onDeleteRow` (e.g. a
+ * `hideDelete: true` entity, whose capability resolves to `delete: false` in
+ * the contract), the Trash2 button must not render at all — not just no-op on
+ * click. Edit stays unaffected; only the delete button is gated. Defaults to
+ * `true` so every existing caller (which always passes a real `onDeleteRow`
+ * today) renders byte-for-byte the same as before this gate existed.
  */
 function renderRowActionStrip({
-  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete, extraActions = [],
+  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, extraActions = [],
 }) {
   if (!showActions && !reserveActionSlot) return null;
   return (
@@ -172,16 +180,18 @@ function renderRowActionStrip({
           >
             <Pencil className="h-4 w-4" data-testid="Pencil__3b7ec2" />
           </button>
-          <button
-            type="button"
-            aria-label={ui('deleteRowTooltip') ?? 'Delete'}
-            title={ui('deleteRowTooltip') ?? 'Delete'}
-            onClick={onDelete}
-            disabled={isDeleting}
-            className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
-          >
-            <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              aria-label={ui('deleteRowTooltip') ?? 'Delete'}
+              title={ui('deleteRowTooltip') ?? 'Delete'}
+              onClick={onDelete}
+              disabled={isDeleting}
+              className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -958,6 +968,13 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     }
   }, [editingRowId, isDocumentReadOnly, onDeleteRow, pendingDelete]);
 
+  // ETP-4565 — no `onDeleteRow` means the entity has no delete capability at all
+  // (e.g. `hideDelete: true` resolves `apiPrediction.crud.<entity>.delete` to
+  // `false`, and DetailView/secondaryTabs never pass a handler down in that
+  // case). Mirrors DataTable's `{onDeleteRow && (...)}` gate on its own trash
+  // button — without it the icon rendered anyway and silently no-opped on click.
+  const canDelete = onDeleteRow != null;
+
   // --- Render -----------------------------------------------------------------
 
   const headerStyle = {
@@ -1097,6 +1114,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui,
               onEdit: () => handleEditClick(row),
               onDelete: () => handleDeleteClick(row),
+              canDelete,
               extraActions: [
                 ...(hasDimensionsPanel ? [{
                   key: 'dimensions',
