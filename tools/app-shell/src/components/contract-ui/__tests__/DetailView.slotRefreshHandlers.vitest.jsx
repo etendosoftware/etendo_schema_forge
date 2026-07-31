@@ -156,6 +156,7 @@ function resetState() {
   mockHook.fetchById.mockClear();
   mockHook.fetchChildren.mockClear();
   mockHook.primeSaved.mockClear();
+  mockHook.handleUpdateChild.mockClear();
 }
 
 describe('DetailView — headerExtra slotProps refresh (ETP-4563)', () => {
@@ -277,6 +278,72 @@ describe('DetailView — LinesEmptyState onRefresh (ETP-4563)', () => {
     await waitFor(() => expect(mockHook.fetchChildren).toHaveBeenCalledWith('123', { force: true }));
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
   });
+});
+
+describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => {
+  beforeEach(resetState);
+
+  it('force-refreshes children and header after a detail extra action', async () => {
+    const user = userEvent.setup();
+    const DetailExtraActions = ({ onRefresh }) => (
+      <button data-testid="detail-extra-refresh" onClick={onRefresh}>refresh</button>
+    );
+    const BottomSection = () => null;
+    BottomSection.detailExtraActions = DetailExtraActions;
+    renderDetailView({
+      bottomSection: BottomSection,
+      addLineFields: { entry: [{ key: 'quantity', type: 'number' }], derived: [] },
+    });
+
+    await user.click(screen.getByTestId('detail-extra-refresh'));
+
+    expect(mockHook.fetchChildren).toHaveBeenCalledWith('123', { force: true });
+    expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+  });
+
+  it('force-refreshes children and header from a custom lines tab', async () => {
+    const user = userEvent.setup();
+    const CustomLines = ({ onRefresh }) => (
+      <button data-testid="custom-lines-refresh" onClick={onRefresh}>refresh</button>
+    );
+    renderDetailView({ DetailTable: null, CustomLines, customLinesLabel: 'Custom Lines' });
+
+    await user.click(screen.getByRole('button', { name: /Custom Lines/i }));
+    await user.click(await screen.findByTestId('custom-lines-refresh'));
+
+    expect(mockHook.fetchChildren).toHaveBeenCalledWith('123', { force: true });
+    expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+  });
+
+  it('force-refreshes the exchange-rates collection when its header inputs change', async () => {
+    renderDetailView({ secondaryTabs: [{ key: 'exchangeRates', label: 'Exchange Rates', Table: MockTable }] });
+
+    await waitFor(() => expect(mockHook.fetchChildren).toHaveBeenCalledWith('123', { force: true }));
+  });
+
+  it('force-refreshes the parent from a secondary custom modal', async () => {
+    const user = userEvent.setup();
+    const CustomModal = ({ onParentRefresh }) => (
+      <button data-testid="modal-parent-refresh" onClick={onParentRefresh}>refresh parent</button>
+    );
+    renderDetailView({
+      secondaryTabs: [{ key: 'addresses', label: 'Addresses', Table: MockTable, customAddModal: CustomModal }],
+    });
+
+    await user.click(screen.getByTestId('modal-parent-refresh'));
+
+    expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+  });
+
+  it('mounts secondary panels and accepts their count updates', async () => {
+    const Panel = ({ onCount }) => (
+      <button data-testid="secondary-panel" onClick={() => onCount(3)}>panel</button>
+    );
+    renderDetailView({ secondaryTabs: [{ key: 'audit', label: 'Audit', Panel }] });
+
+    await userEvent.click(await screen.findByTestId('secondary-panel'));
+  });
+
 });
 
 describe('DetailView — justSaved fast-path (ETP-4563)', () => {
