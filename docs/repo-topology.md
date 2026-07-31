@@ -69,6 +69,20 @@ ESM, so it resolves its dependencies from its own `node_modules`):
 cd ../schema_forge_core && npm install
 ```
 
+**Published preview selected by the current functional branch:**
+```bash
+make dev
+```
+`make dev` maps the current branch (for example `feature/ETP-4730`) to the
+newest immutable Core preview whose SemVer branch identifier matches
+(`preview.feature-ETP-4730.*`). It installs all consumed lockstep packages with
+`--no-save --package-lock=false`, so neither manifest nor lockfile changes.
+Use `CORE_BRANCH=<branch>` when the Core and functional branch names differ, or
+`CORE_PREVIEW_VERSION=<exact-version>` to reproduce a specific snapshot. If the
+branch has no published preview, the command fails with an actionable message;
+use `make dev-pinned` when the intentionally desired runtime is the stable
+version already recorded in `package.json`.
+
 **React (hot-reload against local core source):**
 ```bash
 make dev-local-core

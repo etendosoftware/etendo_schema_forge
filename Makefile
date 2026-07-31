@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-pinned dev-local-core dev-mock build install bump bump-core-version install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -505,7 +505,11 @@ sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow
 
 # --- Dev Server ---
 
-dev: ensure-locale ## Start app-shell dev server
+dev: ensure-locale ## Install the current branch's latest Core preview without changing manifests, then start app-shell
+	node scripts/use-core-preview.mjs
+	cd tools/app-shell && npm run dev
+
+dev-pinned: ensure-locale ## Start app-shell using the package versions pinned in package.json/package-lock.json
 	cd tools/app-shell && npm run dev
 
 dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling)
@@ -535,6 +539,11 @@ merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + cop
 install: ## Install all workspace dependencies and activate git hooks
 	npm install
 	git config core.hooksPath .githooks
+
+bump: ## No longer needed for local Core preview development; use make dev
+	@echo "No Core version bump is needed for local preview development."
+	@echo "Run 'make dev' to resolve the current branch's latest immutable Core preview."
+	@echo "Use 'make bump-core-version VERSION=<version>' only when intentionally committing a new pinned Core version."
 
 bump-core-version: ## Bump the schema_forge_core lockstep pin in all package.json + refresh lockfiles (VERSION=x.y.z)
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make bump-core-version VERSION=0.3.1"; exit 1; fi
