@@ -14,7 +14,10 @@
  *    (`gridLabelKey`) and cell bodies (`cellType` → ACCOUNT_CELL_TYPES) must stay declarative
  *    too, i.e. no hardcoded label map and no hand-written column literal may come back;
  *  - the one hand-appended column (`_rowActions`) must keep swallowing its own clicks,
- *    otherwise the row navigation fires underneath it.
+ *    otherwise the row navigation fires underneath it;
+ *  - the ETP-4656 toolbar/selection-bar swap must stay wired: `selectedRows` read out of the
+ *    slot props (never relayed into DataTable) and `selectionActive` gating the toolbar,
+ *    since ListView renders its selection bar as a sibling and cannot do the swap itself.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,13 +28,46 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'AccountsHeaderTable.jsx'), 'utf8');
 
+/**
+ * The default export's destructured parameter list, split into its parts with comments
+ * removed. Asserting on WHICH props the slot consumes has to survive the signature being
+ * reflowed across lines or a comment landing between two names — the prop set is the
+ * invariant, its formatting is not.
+ */
+const destructuredParams = (() => {
+  const signature = src.match(/export default function AccountsHeaderTable\(\{([\s\S]*?)\}\)\s*\{/);
+  assert.ok(signature, 'the slot must destructure its props in the signature');
+  return signature[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+})();
+
+/** Same list reduced to bare names, so a default value (`meta = {}`) still matches. */
+const destructuredNames = destructuredParams.map(
+  (part) => part.replace(/^\.\.\./, '').split('=')[0].trim(),
+);
+
 describe('AccountsHeaderTable — module shape', () => {
   it('default-exports the slot component', () => {
     assert.match(src, /export default function AccountsHeaderTable\(\{/);
   });
 
   it('reads its rows and aggregates from the ListView slot props', () => {
-    assert.match(src, /export default function AccountsHeaderTable\(\{ data, meta, onDataMutated, \.\.\.props \}\)/);
+    for (const prop of ['data', 'meta', 'onDataMutated']) {
+      assert.ok(
+        destructuredNames.includes(prop),
+        `the slot must keep consuming ListView's \`${prop}\` prop, got: ${destructuredParams.join(', ')}`,
+      );
+    }
+    // Everything else ListView hands the slot has to keep flowing to DataTable untouched
+    // (selection triggers, pagination, sorting), which is what the rest element carries.
+    assert.ok(
+      destructuredParams.includes('...props'),
+      `the remaining ListView props must reach DataTable through a rest element, got: ${destructuredParams.join(', ')}`,
+    );
   });
 
   it('exports filterAccounts so the filtering rules are directly testable', () => {
@@ -128,6 +164,49 @@ describe('AccountsHeaderTable — row interaction guards', () => {
     assert.match(src, /onNavigate=\{\(row\) => handlers\.onOpen\(row\)\}/);
     assert.match(src, /onOpen:\s*\(account\) => navigate\(`\/financial-account\/\$\{account\.id\}`\)/);
     assert.doesNotMatch(src, /onNavigate=\{\(id\) =>/, 'the id-shaped handler is the bug this guards');
+  });
+});
+
+// ETP-4656 — ListView renders its standardized selection bar as a SIBLING of this slot and
+// cannot reach inside it, so the "selection bar replaces the toolbar" swap is wired here and
+// would silently disappear on a re-run if nothing locked it. Behaviour (what the user sees at
+// each selection size) is covered in
+// tools/app-shell/src/windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
+// ("toolbar / selection-bar swap"); this block only locks the two structural halves.
+describe('AccountsHeaderTable — selection-aware toolbar', () => {
+  it('destructures selectedRows out of the rest element instead of relaying it to DataTable', () => {
+    assert.ok(
+      destructuredNames.includes('selectedRows'),
+      `\`selectedRows\` must be pulled out of \`props\`, got: ${destructuredParams.join(', ')}`,
+    );
+    // Leaving it in the spread would hand DataTable a prop whose name is its own local
+    // selection state, i.e. it reads as controlled selection that DataTable does not
+    // implement. Passing it explicitly is the same bug spelled differently.
+    assert.doesNotMatch(src, /selectedRows=\{/, 'selectedRows must not travel into DataTable');
+  });
+
+  it('derives the toolbar gate from ListView selection rather than mirroring it locally', () => {
+    assert.match(src, /const selectionActive = \(selectedRows\?\.length \?\? 0\) > 0/);
+    // A local mirror fed by onSelectionChange goes stale: DataTable empties or prunes its
+    // internal Set from clearSelectionTrigger / deselectTrigger WITHOUT calling
+    // onSelectionChange, so after a bulk delete or a cancel the mirror still reads
+    // "selected" and the toolbar never comes back. Selection state stays ListView's, which
+    // is why neither name may appear in this slot's code. Both are named in comments here,
+    // so match on code only — same treatment as the retired-R-spec guard above.
+    const code = src.replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(code, /onSelectionChange/);
+    assert.doesNotMatch(code, /setSelectedRows/);
+  });
+
+  it('unmounts the toolbar inside that gate, so it leaves the DOM rather than hiding', () => {
+    // `&& (` is the unmount: `cuentas-toolbar` has to genuinely leave the DOM for
+    // ListView's bar above to read as its replacement. The nested pattern also pins the
+    // toolbar INSIDE the branch — no `)}` may close it before AccountsToolbar renders.
+    assert.match(
+      src,
+      /\{!selectionActive && \((?:(?!\)\})[\s\S])*?<AccountsToolbar/,
+      'AccountsToolbar must render inside the !selectionActive branch',
+    );
   });
 });
 
