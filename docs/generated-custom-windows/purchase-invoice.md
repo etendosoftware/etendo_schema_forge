@@ -68,7 +68,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 15. Open a completed purchase invoice and verify that **Contacto** (`businessPartner`), **Dirección** (`partnerAddress`), **Método de pago** (`paymentMethod`), **Condiciones de pago** (`paymentTerms`), and **Tarifa** (`priceList`) fields are all disabled (read-only). Confirm that **Nº documento** (`orderReference`) remains editable.
 2. Click a list row and confirm the preview modal opens instead of immediate navigation.
 3. In the preview modal, verify the General tab shows total, due/payable state, and payment history, while Messages and History remain placeholder states.
-4. Open `/purchase-invoice?filter=overdue` and confirm the quick filter keeps invoices with an outstanding amount.
+4. Open `/purchase-invoice?filter=overdue` and confirm the quick filter keeps invoices with an outstanding amount. Open the **Filtros** funnel (badge "2") and confirm the second preloaded condition reads `Y | Pendiente de pago | Mayor que | 0` — the operator must be visible (not the placeholder) and its value box must be a numeric input. Also confirm **Imp. total** offers numeric operators and **Vencimiento** offers `Es / Antes de / Después de / Entre` with a date picker (ETP-4681).
 5. Open a draft invoice detail and confirm adding a line is blocked until a business partner is selected.
 6. On the detail page, confirm the custom lines table shows product, description, invoiced quantity, net unit price (`listPrice`), % discount (`etgoDiscount`), tax, and line gross amount in that exact column order, and that the footer shows subtotal, inferred tax, and total. Open a line for edit and confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured purchase taxes (filtered by `IsSOTrx=N` and validity against the invoice date), not a free-text search that returns "Sin resultados". Confirm that selecting a product populates the net unit price field (`listPrice`, the PriceList value from the document's price list) and resets the discount to 0, and that typing a new quantity, price, or discount immediately updates the gross amount without a server round-trip. The net unit price field must be editable in the add-line row.
 7. Open a completed invoice with pending balance and confirm the topbar payment-status pill appears, opens the payment modal, and reflects the invoice as pending or paid based on outstanding amount.
@@ -606,3 +606,32 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Advanced-filter mode on rich cells — ETP-4681
+
+Three list columns render bespoke cells and are therefore declared `type: 'custom'`
+in `tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`
+(the live table — note `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` is
+an unreachable decoy):
+
+| Column | Why it is `custom` | Declared `filterMode` |
+|--------|--------------------|-----------------------|
+| `outstandingAmount` (`OutstandingAmt`) | "Pagada" pill and an "Añadir pago" button | `numeric` |
+| `grandTotalAmount` (`GrandTotal`) | sign-flips credit notes and returns | `numeric` |
+| `eTGODueDate` (`EM_Etgo_Due_Date`) | 4-state coloured due-date dot | `date` |
+
+`type: 'custom'` carries no filter semantics — `resolveFilterMode` cannot see the
+underlying data type behind a bespoke `render`, so without an explicit
+`filterMode` all three fell back to text mode. The visible symptom was on the
+Dashboard shortcut "Por pagar", which navigates to
+`/purchase-invoice?filter=overdue` and preloads `documentStatus equals CO` **and**
+`outstandingAmount greaterThan 0`. Text mode has no `greaterThan` in its operator
+set, so the operator `<Select>` matched no item and rendered its placeholder.
+
+Note the divergence this also settles: sales-invoice declares `grandTotalAmount`
+as `type: 'amount'` (which infers `numeric` on its own), while purchase-invoice
+needs `custom` for the sign flip and therefore needs the explicit `filterMode`.
+
+Rule **F19** of `sf-validate-pipeline` now blocks any new `custom` column over a
+numeric/date/enum contract field that omits `filterMode`. Full reference:
+[`list-filters.md`](../list-filters.md).

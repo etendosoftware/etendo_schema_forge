@@ -99,7 +99,11 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'orderReference', column: 'POReference', type: 'string' },
       {
-        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', filterMode: 'date', label: t('dueDate'),
+        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        // The cell renders a coloured due-date dot, so it must stay `custom` —
+        // but the underlying column is a plain date. Without this the advanced
+        // filter would offer text operators instead of Before/After/Between.
+        filterMode: 'date',
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
@@ -120,8 +124,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
       { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
       ...fiscalCols,
       {
-        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true, filterMode: 'numeric',
+        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true,
         label: t('impTotal'),
+        // The cell sign-flips credit notes / returns, so it must stay `custom`
+        // — but the underlying column is an amount (sales-invoice declares the
+        // same column as `type: 'amount'`).
+        filterMode: 'numeric',
         render: (row) => {
           const raw = row.grandTotalAmount;
           const currency = row['currency$_identifier'];
@@ -134,8 +142,13 @@ export default function PurchaseInvoiceHeaderTable(props) {
         column: 'OutstandingAmt',
         type: 'custom',
         required: true,
-        filterMode: 'numeric',
         label: t('pendingPaymentColumn'),
+        // The cell renders status pills and a payment button, so it must stay
+        // `custom` — but the underlying column is an amount. Without this the
+        // `?filter=overdue` preload (outstandingAmount greaterThan 0) resolves
+        // to text mode, which has no `greaterThan`, and the operator select
+        // renders empty (ETP-4681).
+        filterMode: 'numeric',
         render: (row) => {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);
           const currency = row['currency$_identifier'] || 'EUR';
