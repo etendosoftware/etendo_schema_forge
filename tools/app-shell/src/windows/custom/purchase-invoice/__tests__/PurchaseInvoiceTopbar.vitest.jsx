@@ -7,8 +7,11 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
+// Stable navigate spy so tests can assert the post-clone redirect.
+const routerMock = vi.hoisted(() => ({ navigate: vi.fn() }));
+
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => routerMock.navigate,
 }));
 
 // Render createPortal children inline so portal content is testable
@@ -379,5 +382,122 @@ describe('PurchaseInvoiceTopbar — apInvoiceSubtype recognizes Factura Rectific
     expect(screen.getByText('statusPending')).toBeInTheDocument();
     expect(screen.queryByText('cpFavorBadge')).toBeNull();
     expect(screen.queryByText('cpCreditFullyApplied')).toBeNull();
+  });
+});
+
+// ── Branch / fallback coverage (ETP-4738) ─────────────────────────────────────
+// The post-clone redirect callback and the amount/currency defensive fallbacks
+// were never exercised. Each test drives the real component and asserts the
+// resulting behaviour (navigation target, rendered badge and amount).
+describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => {
+  const props = {
+    data: BASE_DATA,
+    recordId: 'inv-001',
+    token: 'test-token',
+    apiBaseUrl: '/api',
+    onRefresh: vi.fn(),
+    onProcess: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // ── onCloned redirect (uncovered lines 77-78) ──────────────────────────────
+
+  it('navigates to the cloned invoice and closes the clone modal when the clone succeeds', () => {
+    render(<PurchaseInvoiceTopbar {...props} />);
+    fireEvent.click(screen.getByTestId('clone-btn'));
+    expect(screen.getByTestId('clone-order-modal')).toBeInTheDocument();
+
+    // The mocked CloneOrderModal invokes onCloned('new-id-123').
+    fireEvent.click(screen.getByText('Confirm clone'));
+
+    expect(routerMock.navigate).toHaveBeenCalledWith('/purchase-invoice/new-id-123');
+    expect(screen.queryByTestId('clone-order-modal')).toBeNull();
+  });
+
+  it('does not navigate while the clone modal is merely open', () => {
+    render(<PurchaseInvoiceTopbar {...props} />);
+    fireEvent.click(screen.getByTestId('clone-btn'));
+    expect(routerMock.navigate).not.toHaveBeenCalled();
+  });
+
+  // ── grandTotal fallback (uncovered branch on line 30) ──────────────────────
+
+  it('treats a missing grandTotalAmount as 0 and still shows the outstanding amount', () => {
+    const data = { ...BASE_DATA, outstandingAmount: 250 };
+    delete data.grandTotalAmount;
+    render(<PurchaseInvoiceTopbar {...props} data={data} />);
+    expect(screen.getByText('statusPending')).toBeInTheDocument();
+    expect(screen.getByText('EUR:250')).toBeInTheDocument();
+  });
+
+  it('shows a fully-paid badge with a zero total when both amounts are missing', () => {
+    const data = { ...BASE_DATA };
+    delete data.grandTotalAmount;
+    delete data.outstandingAmount;
+    render(<PurchaseInvoiceTopbar {...props} data={data} />);
+    // grandTotal 0 → outstanding 0 → isFullyPaid, totalPaid 0
+    expect(screen.getByText('statusPaid')).toBeInTheDocument();
+    expect(screen.getByText('EUR:0')).toBeInTheDocument();
+  });
+
+  // ── currency fallbacks in the credit and paid badges (lines 111/126) ───────
+
+  it('credit-note badge falls back to USD when the invoice carries no currency', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{
+          ...BASE_DATA,
+          'transactionDocument$_identifier': 'AP CreditMemo',
+          'currency$_identifier': '',
+          grandTotalAmount: -20,
+          outstandingAmount: -20,
+        }}
+      />,
+    );
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+    expect(screen.getByText('USD:20')).toBeInTheDocument();
+  });
+
+  it('paid badge falls back to USD when the invoice carries no currency', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...BASE_DATA, 'currency$_identifier': '', paymentComplete: true }}
+      />,
+    );
+    expect(screen.getByText('statusPaid')).toBeInTheDocument();
+    // grandTotal 1000 - outstanding 500 = 500 paid
+    expect(screen.getByText('USD:500')).toBeInTheDocument();
+  });
+
+  it('credit-note badge uses the invoice currency when present', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{
+          ...BASE_DATA,
+          'transactionDocument$_identifier': 'AP CreditMemo',
+          outstandingAmount: -20,
+        }}
+      />,
+    );
+    expect(screen.getByText('EUR:20')).toBeInTheDocument();
+  });
+
+  // ── no badge at all (and therefore no modal) on a draft invoice ────────────
+
+  it('renders no clickable payment badge on a draft invoice, so no modal can open', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...BASE_DATA, documentStatus: 'DR' }}
+      />,
+    );
+    expect(screen.queryByTestId('payment-status-badge')).toBeNull();
+    expect(screen.queryByTestId('payment-history-modal')).toBeNull();
   });
 });
