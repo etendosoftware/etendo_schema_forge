@@ -446,6 +446,43 @@ export function normalizeDefaultValue(val, normalized, key) {
     }
 }
 
+// Normalize a creation-defaults response (already id-stripped) from Etendo format:
+// - Dates: dd-MM-yyyy → yyyy-MM-dd (HTML date input)
+// - Booleans: "Y" → true, "N" → false (NEO defaults returns strings, not booleans)
+// Plus the contacts-window backstop: oBTIKTaxIDKey falls back to '1' (NIF) when
+// the backend sends none. Pure — returns a normalized copy, touches no state.
+export function normalizeCreationDefaults(rawDefaults, { entity, apiBaseUrl }) {
+    const normalized = { ...rawDefaults };
+    for (const [key, val] of Object.entries(normalized)) {
+        normalizeDefaultValue(val, normalized, key);
+    }
+
+    const isContactsBusinessPartner = entity === 'businessPartner'
+        && /\/contacts$/i.test(apiBaseUrl || '');
+    if (isContactsBusinessPartner && (normalized.oBTIKTaxIDKey == null || normalized.oBTIKTaxIDKey === '')) {
+        normalized.oBTIKTaxIDKey = '1';
+    }
+    return normalized;
+}
+
+// ETP-4741 merge guard: apply backend creation defaults over the editing state
+// without clobbering anything the user already typed while the request flew.
+export function mergeDefaultsPreservingUserEdits(prev, defaults, userChangedKeys) {
+    const merged = { ...prev };
+    for (const [key, val] of Object.entries(defaults)) {
+        if (userChangedKeys.has(key)) continue;
+        // A field's $_identifier companion follows its base key: if the user
+        // picked a value, its display label must not be replaced by the
+        // default's label either.
+        if (key.endsWith('$_identifier')
+            && userChangedKeys.has(key.slice(0, -'$_identifier'.length))) {
+            continue;
+        }
+        merged[key] = val;
+    }
+    return merged;
+}
+
 export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing) {
     // Always skip ID fields, identifier companions, and legacy FK keys (e.g. ad_org_id)
     // managed by the backend — these should never be sent by the client on create/update.
@@ -1127,37 +1164,14 @@ export function useEntity(entity, childEntity, {
                 const data = await res.json();
                 if (!isCurrent()) return;
                 if (data.defaults) {
-                    // Normalize values from Etendo format:
-                    // - Dates: dd-MM-yyyy → yyyy-MM-dd (HTML date input)
-                    // - Booleans: "Y" → true, "N" → false (NEO defaults returns strings, not booleans)
-                    const { id: _discardId, ...rest } = data.defaults;
-                    backendDefaultKeysRef.current = new Set(Object.keys(rest));
-                    const normalized = { ...rest };
-                    for (const [key, val] of Object.entries(normalized)) {
-                        normalizeDefaultValue(val, normalized, key);
-                    }
-
-                    const isContactsBusinessPartner = entity === 'businessPartner'
-                        && /\/contacts$/i.test(apiBaseUrl || '');
-                    if (isContactsBusinessPartner && (normalized.oBTIKTaxIDKey == null || normalized.oBTIKTaxIDKey === '')) {
-                        normalized.oBTIKTaxIDKey = '1';
-                    }
-
-                    setEditing(prev => {
-                        const merged = { ...prev };
-                        for (const [key, val] of Object.entries(normalized)) {
-                            if (userChangedKeysRef.current.has(key)) continue;
-                            // A field's $_identifier companion follows its base
-                            // key: if the user picked a value, its display label
-                            // must not be replaced by the default's label either.
-                            if (key.endsWith('$_identifier')
-                                && userChangedKeysRef.current.has(key.slice(0, -'$_identifier'.length))) {
-                                continue;
-                            }
-                            merged[key] = val;
-                        }
-                        return merged;
-                    });
+                    // backendDefaultKeysRef intentionally captures the keys BEFORE
+                    // the contacts backstop can add oBTIKTaxIDKey — a backstopped
+                    // key must not be treated as backend-provided by
+                    // shouldSkipPayloadField.
+                    const { id: _discardId, ...rawDefaults } = data.defaults;
+                    backendDefaultKeysRef.current = new Set(Object.keys(rawDefaults));
+                    const normalized = normalizeCreationDefaults(rawDefaults, { entity, apiBaseUrl });
+                    setEditing(prev => mergeDefaultsPreservingUserEdits(prev, normalized, userChangedKeysRef.current));
                 }
             }
             await settleTiming({ status: res.ok ? 'ok' : 'error' });
