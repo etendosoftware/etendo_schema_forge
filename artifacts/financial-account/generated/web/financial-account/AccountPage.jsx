@@ -436,9 +436,19 @@ export const api = {
   },
   "window": {
     "category": "finance"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "pendingCount": "Pending"
+    },
+    "es_ES": {
+      "pendingCount": "Por conciliar"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:AccountPage
 export default function AccountPage({ windowName, recordId, ...props }) {
   const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
@@ -468,6 +478,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Financial_Account", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
+        labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />
       </>
@@ -486,6 +497,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
       hideCreate
       hideMoreMenu
       hideListFilters
+      labelOverrides={labelOverrides}
       {...props} window={effectiveWindow}
     />
   );

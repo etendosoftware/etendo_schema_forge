@@ -11,7 +11,11 @@
     "hideCreate": true,
     "hidePrint": true,
     "hideMoreMenu": true,
-    "hideListFilters": true
+    "hideListFilters": true,
+    "labelOverrides": {
+      "en_US": { "pendingCount": "Pending" },
+      "es_ES": { "pendingCount": "Por conciliar" }
+    }
   },
   "entities": {
     "account": {

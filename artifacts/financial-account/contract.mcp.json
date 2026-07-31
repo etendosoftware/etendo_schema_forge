@@ -1,8 +1,8 @@
 {
   "version": "0.21.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-29T11:37:59.839Z",
-  "contractChecksum": "bbdccd3219800723",
+  "updatedAt": "2026-07-31T01:57:28.337Z",
+  "contractChecksum": "b80657da3d8e5a03",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -753,6 +753,14 @@
     },
     "window": {
       "category": "finance"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "pendingCount": "Pending"
+      },
+      "es_ES": {
+        "pendingCount": "Por conciliar"
+      }
     }
   },
   "formState": {
@@ -1116,5 +1124,5 @@
       "etprReactivateTransaction"
     ]
   },
-  "checksum": "bf23e7e786de98e7"
+  "checksum": "404cc3d8b7f27c3b"
 }
