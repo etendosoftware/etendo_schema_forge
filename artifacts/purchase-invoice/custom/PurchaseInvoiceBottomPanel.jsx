@@ -81,7 +81,7 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
   const ghostBtn = { display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid hsl(var(--muted-foreground))', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' };
 
   const emptyHintKey = isRectificativa
-    ? 'addLinesManuallyOrImportFromReturnOrSourceInvoice'
+    ? 'addLinesManuallyOrImportFromGoodsReturnOrSourceInvoice'
     : 'addLinesManuallyOrImportFromOrderOrReceipt';
 
   return (

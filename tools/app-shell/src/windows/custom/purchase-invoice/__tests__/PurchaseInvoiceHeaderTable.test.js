@@ -72,7 +72,7 @@ describe('PurchaseInvoiceHeaderTable — columns', () => {
   // badge on the purchase side, unlike sales-invoice which does distinguish returns).
   it('uses SUBTYPE_BADGE with i18n label keys for the AP doc subtypes', () => {
     assert.match(src, /label:\s*'invoicesTab'/);
-    assert.match(src, /label:\s*'creditNotesTab'/);
+    assert.match(src, /label:\s*'rectificativeInvoicesTab'/);
   });
 
   it('resolves the badge subtype via getApSubtype, not a hardcoded doc-type name', () => {

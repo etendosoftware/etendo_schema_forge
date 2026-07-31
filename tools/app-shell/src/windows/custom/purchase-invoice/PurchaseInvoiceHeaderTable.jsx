@@ -26,7 +26,7 @@ const filters = ['documentNo', 'invoiceDate', 'businessPartner', 'orderReference
 // this file missed "Factura Rectificativa (compras)" until this fix).
 const SUBTYPE_BADGE = {
   FAC:            { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
-  RECTIFICATIVA:  { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'creditNotesTab' },
+  RECTIFICATIVA:  { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'rectificativeInvoicesTab' },
 };
 
 function isNcOrReturn(row) {

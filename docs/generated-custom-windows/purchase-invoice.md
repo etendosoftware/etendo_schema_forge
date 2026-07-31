@@ -578,10 +578,15 @@ rectificative type and the legacy `APC` credit memo.
 ### List subset filters: "Todos" / "Facturas" / "Facturas rectificativas"
 
 `window.subsetFilters` in `decisions.json` keeps the same three entries (`allTab`,
-`invoicesTab`, `creditNotesTab`) but the `creditNotesTab` label text was renamed to
-**"Facturas rectificativas"** / *"Rectificative invoices"* (shared `genericLabels` key,
-also used by `sales-invoice.md`'s equivalent tab) and its filter criteria were rebuilt
-around the new discriminator.
+`invoicesTab`, `rectificativeInvoicesTab`) and its filter criteria were rebuilt around the
+new discriminator. `rectificativeInvoicesTab` is a **dedicated** `genericLabels` key
+(**"Facturas rectificativas"** / *"Rectificative invoice"*), shared with
+`sales-invoice.md`'s equivalent tab — it is intentionally NOT the generic `creditNotesTab`
+key. An earlier version of this change repurposed `creditNotesTab`'s value to save a merge
+step; that broke `EntityForm.jsx`'s generic doc-type-name fallback (which uses
+`creditNotesTab` for *any* window whose doc type contains "credit"/"memo"), silently
+mislabeling genuine credit notes elsewhere in the app. `creditNotesTab` keeps its original
+"Credit note" / "Nota de crédito" meaning and is untouched by this window.
 
 **Discriminator chosen: `transactionDocument$etsgIsRectificative` (Hibernate/DAL property
 `DocumentType.PROPERTY_ETSGISRECTIFICATIVE`, mapped to `C_DocType.EM_Etsg_Isrectificative`)
@@ -717,13 +722,18 @@ needed here — this was verified against the existing contract, not newly built
 
 ### i18n keys (all 3 locales: `en_US.json`, `es_ES.json`, `es_AR.json`)
 
-New `genericLabels` keys: `addLinesManuallyOrImportFromReturnOrSourceInvoice`,
+New `genericLabels` keys: `addLinesManuallyOrImportFromGoodsReturnOrSourceInvoice`,
 `importFromGoodsReturn`, `searchGoodsReturn`, `noPendingGoodsReturnsForSupplier`,
 `noGoodsReturnsMatchYourSearch`, `linesImportedFromGoodsReturn`, `importFromSourceInvoice`,
 `searchSourceInvoice`, `noFacSourceInvoicesForSupplier`, `noSourceInvoicesMatchYourSearch`,
-`linesImportedFromSourceInvoice`. The `creditNotesTab` key's text was changed in place
-(same key, new value) rather than renamed, to minimize merge risk with `sales-invoice.md`'s
-parallel change to the same shared key.
+`linesImportedFromSourceInvoice`, `rectificativeInvoicesTab` (dedicated key — see above;
+`creditNotesTab` is untouched and keeps its original generic meaning).
+
+Note: `addLinesManuallyOrImportFromGoodsReturnOrSourceInvoice` was renamed from
+`addLinesManuallyOrImportFromReturnOrSourceInvoice` during the merge into
+`feature/ETP-4737` — `sales-invoice.md`'s branch independently introduced the same key
+name for its own (sales-return-flavored) empty-state hint, with different text. Each
+window now owns a distinct key for this string.
 
 ### Manual verification
 
