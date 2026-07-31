@@ -24,24 +24,27 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 vi.mock('@/lib/selectorCatalog.js', () => ({ getCatalogOptions: () => [] }));
 
 let capturedOptionTranslator;
+let capturedDisplayValue;
 vi.mock('../SelectorInput.jsx', () => ({
   SelectorInput: (props) => {
     capturedOptionTranslator = props.optionTranslator;
+    capturedDisplayValue = props.displayValue;
     return <div data-testid="selector-input" />;
   },
 }));
 
 import { EntityForm } from '../EntityForm.jsx';
 
-function renderDocumentTypeField() {
+function renderDocumentTypeField(identifier = 'Invoice') {
   capturedOptionTranslator = undefined;
+  capturedDisplayValue = undefined;
   const fields = [
     { key: 'transactionDocument', label: 'Doc Type', type: 'selector', column: 'C_DocTypeTarget_ID', reference: 'DocumentType' },
   ];
   render(
     <EntityForm
       fields={fields}
-      data={{ transactionDocument: 'DT1', 'transactionDocument$_identifier': 'Invoice' }}
+      data={{ transactionDocument: 'DT1', 'transactionDocument$_identifier': identifier }}
       onChange={vi.fn()}
       token="tok"
       apiBaseUrl="/api"
@@ -81,5 +84,22 @@ describe('EntityForm — DocumentType optionTranslator (ETP-4600)', () => {
     const translate = renderDocumentTypeField();
     expect(translate('AR Invoice')).toBe('invoicesTab');
     expect(translate('Standard Order')).toBe('invoicesTab');
+  });
+});
+
+describe('EntityForm — selected-value display uses optionTranslator (ETP-4737)', () => {
+  it('translates a saved rectificativa purchase invoice identifier for displayValue', () => {
+    renderDocumentTypeField('Factura Rectificativa (compras)');
+    expect(capturedDisplayValue).toBe('rectificativeInvoicesTab');
+  });
+
+  it('still shows the plain invoicesTab label for a plain AR Invoice (no regression)', () => {
+    renderDocumentTypeField('AR Invoice');
+    expect(capturedDisplayValue).toBe('invoicesTab');
+  });
+
+  it('falls back to the raw identifier for a reversed doc type instead of going blank', () => {
+    renderDocumentTypeField('AR Invoice Reversed');
+    expect(capturedDisplayValue).toBe('AR Invoice Reversed');
   });
 });

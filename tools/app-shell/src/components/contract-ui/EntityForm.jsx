@@ -809,6 +809,18 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         return ui('invoicesTab');
       }
       : undefined;
+    // The saved/selected value must show the SAME translated label the options list
+    // shows (ETP-4737) — otherwise a saved "Factura Rectificativa (compras)" record
+    // displays the raw AD name with its Classic-only "(compras)" suffix instead of the
+    // simplified GO label. `optionTranslator` can return null for the 'reversed' case
+    // (intentionally hidden from the options list), so fall back to the raw identifier
+    // rather than rendering a blank value for an already-saved record of that type.
+    const rawIdentifier = resolveIdentifier(data, f.key);
+    // Guard against calling optionTranslator on a null/undefined identifier (e.g. a new
+    // record with no document type selected yet) — its `name.toLowerCase()` would throw.
+    const displayValue = optionTranslator && rawIdentifier
+      ? (optionTranslator(rawIdentifier) ?? rawIdentifier)
+      : rawIdentifier;
     return (
       <div key={f.key} className={LABEL_GAP}>
         <Label
@@ -821,7 +833,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           entityName={entity}
           field={f}
           value={data?.[f.key] ?? ''}
-          displayValue={resolveIdentifier(data, f.key)}
+          displayValue={displayValue}
           onChange={selectorOnChange}
           catalogs={catalogs}
           resolvedLabel={label}
