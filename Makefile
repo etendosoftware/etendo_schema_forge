@@ -59,14 +59,20 @@ test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 		--test-reporter=spec --test-reporter-destination=stdout \
 		--test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info \
 		$(shell find artifacts -path '*/__tests__/*.test.js') > coverage/artifacts.log 2>&1 & pid4=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/scripts-lcov.info \
+		$(shell find scripts/__tests__ -name '*.test.mjs') > coverage/scripts.log 2>&1 & pid5=$$!; \
 	wait $$pid1; e1=$$?; \
 	wait $$pid2; e2=$$?; \
 	wait $$pid3; e3=$$?; \
 	wait $$pid4; e4=$$?; \
+	wait $$pid5; e5=$$?; \
 	[ $$e1 -eq 0 ] || { echo "CLI tests FAILED:"; tail -30 coverage/cli.log; exit 1; }; \
 	[ $$e2 -eq 0 ] || { echo "App-shell Node tests FAILED:"; tail -30 coverage/appshell.log; exit 1; }; \
 	[ $$e3 -eq 0 ] || { echo "App-shell extra tests FAILED:"; tail -30 coverage/appshell-test.log; exit 1; }; \
 	[ $$e4 -eq 0 ] || { echo "Artifact tests FAILED:"; tail -30 coverage/artifacts.log; exit 1; }; \
+	[ $$e5 -eq 0 ] || { echo "Repository script tests FAILED:"; tail -30 coverage/scripts.log; exit 1; }; \
 	echo "=== Node tests: all passed ==="
 	@echo "=== Vitest (React components) ==="
 	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
@@ -74,7 +80,7 @@ test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 	@echo ""
 	@echo "Coverage reports saved in coverage/"
-	@echo "  Individual: cli-lcov.info, appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
+	@echo "  Individual: cli-lcov.info, appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, scripts-lcov.info, vitest-lcov.info"
 	@echo "  Merged:     merged-lcov.info (used by SonarQube)"
 
 test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
@@ -92,6 +98,10 @@ test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/artifacts.xml \
 	  'artifacts/**/__tests__/*.test.js'
+	node --test \
+	  --test-reporter=spec --test-reporter-destination=stdout \
+	  --test-reporter=junit --test-reporter-destination=test-results/scripts.xml \
+	  'scripts/__tests__/*.test.mjs'
 	cd tools/app-shell && npx vitest run \
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml
