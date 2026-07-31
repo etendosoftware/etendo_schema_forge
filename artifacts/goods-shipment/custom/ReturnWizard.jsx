@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 function MiniCheck({ checked, onChange }) {
   return (
@@ -156,12 +157,9 @@ export default function ReturnWizard({
   const getLineAmount = (line) => (quantities[line.id] || 0) * getLinePrice(line);
   const totalAmount = selectedLines.reduce((sum, l) => sum + getLineAmount(l), 0);
 
-  const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', CHF: 'CHF', BRL: 'R$', ARS: '$', MXN: '$', COP: '$', PEN: 'S/' };
-  const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
   const fmtAmount = (val) => {
     const num = typeof val === 'string' ? parseFloat(val) : val;
-    const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return currencySymbol ? `${currencySymbol} ${formatted}` : formatted;
+    return formatCurrency(currency, num);
   };
 
   const documentNo = shipmentData?.documentNo || '';

@@ -192,6 +192,23 @@ describe('ImportStatementModal', () => {
     ).toBeInTheDocument();
   });
 
+  it('groups thousands in the preview summary totals (1000-9999 range silently drops the separator without explicit useGrouping)', async () => {
+    // totalIn/totalOut are computed from lines' cramount/dramount, not read directly
+    // off the preview payload — the fixture lines must sum into the buggy range.
+    previewStatement.mockResolvedValue({
+      ...PREVIEW_DATA,
+      lines: [{ lineNo: 1, date: '2026-05-01T00:00:00Z', description: 'INGRESO 1', cramount: 1500, dramount: 2500.5 }],
+    });
+    const { container } = render(<ImportStatementModal {...defaultProps()} />);
+    const user = userEvent.setup();
+    await gotoPreview(user, container);
+
+    expect(screen.getAllByText(/\+1\.500,00/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/−2\.500,50/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\+1500,00/)).toBeNull();
+    expect(screen.queryByText(/−2500,50/)).toBeNull();
+  });
+
   it('transitions to the "error" view when preview rejects', async () => {
     previewStatement.mockRejectedValue(new Error('bad format'));
     const { container } = render(<ImportStatementModal {...defaultProps()} />);
