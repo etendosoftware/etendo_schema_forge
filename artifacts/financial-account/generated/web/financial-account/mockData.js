@@ -30,10 +30,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "DR",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 99.44,
     "eTGODateTolerance": 90,
     "pendingCount": 90
@@ -67,10 +67,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "CO",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 96.94,
     "eTGODateTolerance": 93,
     "pendingCount": 93
@@ -104,10 +104,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "VO",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 12.48,
     "eTGODateTolerance": 8,
     "pendingCount": 8
@@ -141,10 +141,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "IP",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 96.31,
     "eTGODateTolerance": 91,
     "pendingCount": 91
@@ -178,10 +178,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "DR",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 31.27,
     "eTGODateTolerance": 72,
     "pendingCount": 72
@@ -215,10 +215,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "CO",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 76.52,
     "eTGODateTolerance": 78,
     "pendingCount": 78
@@ -252,10 +252,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "VO",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 2.66,
     "eTGODateTolerance": 31,
     "pendingCount": 31
@@ -289,10 +289,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "IP",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 10.03,
     "eTGODateTolerance": 97,
     "pendingCount": 97
@@ -326,10 +326,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "DR",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 93.97,
     "eTGODateTolerance": 70,
     "pendingCount": 70
@@ -363,10 +363,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "CO",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 1.1,
     "eTGODateTolerance": 77,
     "pendingCount": 77
@@ -400,10 +400,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "VO",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 79.99,
     "eTGODateTolerance": 32,
     "pendingCount": 32
@@ -437,10 +437,10 @@ export const account = [
     "pSD2StatementFrequency": "Sample pSD2StatementFrequency",
     "pSD2GetConsent": "Sample pSD2GetConsent",
     "pSD2GetBankstatement": "Sample pSD2GetBankstatement",
+    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "pSD2SaltEdgeAccountID": "Sample pSD2SaltEdgeAccountID",
     "pSD2CardNumber": "Sample pSD2CardNumber",
     "pSD2ConnectionStatus": "IP",
-    "psd2ReconnectFa": "Sample psd2ReconnectFa",
     "eTGOAmountTolerance": 53.61,
     "eTGODateTolerance": 26,
     "pendingCount": 26
@@ -458,6 +458,7 @@ export const transaction = [
     "description": "Standard order for Q1 delivery",
     "depositAmount": 38907,
     "paymentAmount": 38907,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Acme Corp",
@@ -468,9 +469,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "DR",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-001"
   },
@@ -484,6 +484,7 @@ export const transaction = [
     "description": "Rush order - priority shipping required",
     "depositAmount": 9306,
     "paymentAmount": 9306,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "TechFlow Inc",
@@ -494,9 +495,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "CO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-002"
   },
@@ -510,6 +510,7 @@ export const transaction = [
     "description": "Bulk purchase for warehouse restocking",
     "depositAmount": 11544,
     "paymentAmount": 11544,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Global Trade Ltd",
@@ -520,9 +521,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "VO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-003"
   },
@@ -536,6 +536,7 @@ export const transaction = [
     "description": "Sample order for client evaluation",
     "depositAmount": 11872,
     "paymentAmount": 11872,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Summit Industries",
@@ -546,9 +547,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "IP",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-004"
   },
@@ -562,6 +562,7 @@ export const transaction = [
     "description": "Recurring monthly supply order",
     "depositAmount": 48460,
     "paymentAmount": 48460,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Pacific Partners",
@@ -572,9 +573,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "DR",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-005"
   },
@@ -588,6 +588,7 @@ export const transaction = [
     "description": "Special pricing agreement applies",
     "depositAmount": 45418,
     "paymentAmount": 45418,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Alpine Solutions",
@@ -598,9 +599,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "CO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-006"
   },
@@ -614,6 +614,7 @@ export const transaction = [
     "description": "Consolidated order from multiple requests",
     "depositAmount": 33840,
     "paymentAmount": 33840,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Meridian Group",
@@ -624,9 +625,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "VO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-007"
   },
@@ -640,6 +640,7 @@ export const transaction = [
     "description": "Trial order for new product line",
     "depositAmount": 25716,
     "paymentAmount": 25716,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Vertex Systems",
@@ -650,9 +651,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "IP",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-008"
   },
@@ -666,6 +666,7 @@ export const transaction = [
     "description": "Replacement for damaged goods",
     "depositAmount": 44780,
     "paymentAmount": 44780,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Atlas Manufacturing",
@@ -676,9 +677,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "DR",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-009"
   },
@@ -692,6 +692,7 @@ export const transaction = [
     "description": "Pre-season inventory build-up",
     "depositAmount": 12483,
     "paymentAmount": 12483,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Nova Enterprises",
@@ -702,9 +703,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "CO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-010"
   },
@@ -718,6 +718,7 @@ export const transaction = [
     "description": "Customer-specific configuration",
     "depositAmount": 46022,
     "paymentAmount": 46022,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Pinnacle Services",
@@ -728,9 +729,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "VO",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-011"
   },
@@ -744,6 +744,7 @@ export const transaction = [
     "description": "Government contract fulfillment",
     "depositAmount": 38634,
     "paymentAmount": 38634,
+    "etprReactivateTransaction": "Sample etprReactivateTransaction",
     "posted": "Sample posted",
     "organization": "Sample organization",
     "businessPartner": "Horizon Labs",
@@ -754,9 +755,8 @@ export const transaction = [
     "salesRegion": "Sample salesRegion",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting",
-    "etprReactivateTransaction": "Sample etprReactivateTransaction",
+    "etblkpAccountingstatus": "IP",
     "etprRemoveTransaction": "Sample etprRemoveTransaction",
     "accountId": "mock-account-012"
   }
@@ -847,8 +847,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-15",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "DR",
     "accountId": "mock-account-001"
   },
   {
@@ -860,8 +860,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-16",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "CO",
     "accountId": "mock-account-002"
   },
   {
@@ -873,8 +873,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-17",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "VO",
     "accountId": "mock-account-003"
   },
   {
@@ -886,8 +886,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-18",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "IP",
     "accountId": "mock-account-004"
   },
   {
@@ -899,8 +899,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-19",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "DR",
     "accountId": "mock-account-005"
   },
   {
@@ -912,8 +912,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-20",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "CO",
     "accountId": "mock-account-006"
   },
   {
@@ -925,8 +925,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-21",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "VO",
     "accountId": "mock-account-007"
   },
   {
@@ -938,8 +938,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-22",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "IP",
     "accountId": "mock-account-008"
   },
   {
@@ -951,8 +951,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-23",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "DR",
     "accountId": "mock-account-009"
   },
   {
@@ -964,8 +964,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-24",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "CO",
     "accountId": "mock-account-010"
   },
   {
@@ -977,8 +977,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-25",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "VO",
     "accountId": "mock-account-011"
   },
   {
@@ -990,8 +990,8 @@ export const importedBankStatements = [
     "transactionDate": "2026-01-26",
     "fileName": "Sample fileName",
     "notes": "Sample notes",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etblkpAccountingstatus": "IP",
     "accountId": "mock-account-012"
   }
 ];

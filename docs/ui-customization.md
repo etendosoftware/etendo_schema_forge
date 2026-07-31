@@ -1001,6 +1001,162 @@ different real spec).
 
 ---
 
+### 18. `multiField` — composite list column (stacked identity cell)
+
+**What it does:** turns a single list column into a **composite identity cell** that stacks several
+row fields together — a bold **title**, an optional **subtitle chip**, and an optional **authenticated
+media image** — while still behaving like real, first-class columns: each declared *part* is a
+clickable sort header (own `_sortBy`) and expands into its own pseudo-column in the advanced filter.
+It is **not** a new component and **not** a custom slot: it is a `type: 'multiField'` decorator on the
+existing `DataTable`, declared entirely in `decisions.json`. No hand-written JSX, no file in
+`windows/custom/`.
+
+Introduced in ETP-4603. It replaces the previous pattern of a bespoke per-window cell component (e.g.
+Product's old `ProductNameCell`) with a generic, config-driven column that any window can adopt.
+
+**Design note — columns are derived from grid fields (Design A).** There is **no** `window.listColumns`
+array. List columns are derived from the entity's grid fields, so `multiField` is declared as a
+**decorator on a "host" grid field** (the field whose value becomes the title). The decorator absorbs
+the sibling fields it references — they stop rendering as their own standalone columns and fold into
+the composite cell instead.
+
+**Use when:** a list row's identity is better read as one rich cell than as three separate columns —
+typically a master-data window (Product, Business Partner, etc.) where users recognize a record by an
+image + a primary name + a secondary code, and still want to sort/filter by each of those parts.
+
+**Avoid when:** the fields are unrelated data points that users genuinely compare column-by-column, or
+the "title" field is not the natural primary label of the row.
+
+#### Decision tree (inside the feature)
+
+```
+I want to combine several list fields into one column
+│
+├─ Just a title + a small code/label underneath it
+│   └─ → multiField with subtitle (no media)
+│
+├─ Title + code + a thumbnail image (product photo, avatar…)
+│   └─ → multiField with subtitle + media { kind: "neoImage" }
+│
+├─ I want users to still sort/filter by each stacked field
+│   └─ → declare each as a parts[] entry (default: sortable + filterable)
+│
+├─ One stacked field should be display-only (no sort header, no filter)
+│   └─ → parts[].sortable: false  and/or  parts[].filterable: false
+│
+└─ I need a fully bespoke rendering the decorator can't express
+    └─ → not multiField — use a cellType renderer or a custom layout
+```
+
+#### The decorator shape (declared in `decisions.json`)
+
+Set `multiField` on the **host** grid field. The host field's own value is the **title** — there is no
+`title` key in the declaration; the field you attach the decorator to *is* the title.
+
+```json
+"name": {
+  "visibility": "editable",
+  "grid": true,
+  "multiField": {
+    "subtitle": "searchKey",
+    "media": { "field": "image", "kind": "neoImage", "fallback": "box" },
+    "parts": [
+      { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
+      { "field": "name",      "labels": { "en_US": "Name",       "es_ES": "Nombre" } }
+    ],
+    "partSeparator": " & "
+  }
+}
+```
+
+| Key | Type | Default | Semantics |
+|-----|------|---------|-----------|
+| *(host field)* | — | — | The grid field carrying the decorator. Its value renders as the **bold title**. |
+| `subtitle` | string | `null` | Sibling field name whose value renders as the **chip** under the title. Omit for a title-only cell. |
+| `media` | object | `null` | `{ field, kind: "neoImage", fallback: "box" }`. `field` = row property holding the image id; `kind: "neoImage"` fetches the image with an authenticated Bearer request (see below); `fallback: "box"` shows a package glyph when empty. Omit for no image. |
+| `parts` | array | `[title, subtitle]` | Ordered segments that behave like real columns for **per-part sort** and **filter expansion**. Each entry: `{ field, sortable?, filterable?, labels?, label? }`. `sortable`/`filterable` default `true`. `labels` (`{ en_US, es_ES }`) or `label` relabel that segment's header (e.g. show *Identifier* for `searchKey`) without renaming the underlying field. When omitted, defaults to the title field plus the subtitle field (if any). |
+| `partSeparator` | string | `" & "` | String joining the part labels in the composite column header (part order drives the header text). |
+
+#### The emitted contract (what the generator writes into `columnsArray`)
+
+The generator resolves each `parts[].field`, the `subtitle`, and `media.field` against the resolved
+contract to fill in the runtime `key`/`column`/`type`/`label(s)`, and emits a single resolved column
+descriptor:
+
+```js
+{
+  key: 'name', column: 'Name', type: 'multiField',
+  title: 'name',                 // row field → bold title
+  subtitle: 'searchKey',         // row field → chip (optional)
+  media: { field: 'image', kind: 'neoImage', fallback: 'box' },   // optional
+  parts: [                       // per-part: sort header + filter expansion
+    { key: 'searchKey', column: 'Value', type: 'string', labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
+    { key: 'name',      column: 'Name',  type: 'string', labels: { en_US: 'Name',       es_ES: 'Nombre' } },
+  ],
+  partSeparator: ' & ',
+}
+```
+
+So the declared `field` (decisions.json) becomes the resolved `key`/`column`/`type` (contract). You edit
+the `field` form; you never hand-write the resolved form.
+
+#### Per-part sort
+
+Each `parts[]` entry with `sortable !== false` renders its label as a **clickable header button** with
+its own `_sortBy` — clicking *Identifier* sorts the list by `searchKey`, clicking *Name* sorts by
+`name`, independently, even though both live in one visual column. `sortable: false` renders the part
+label as plain, non-clickable text.
+
+#### Advanced-filter expansion
+
+Each `parts[]` entry with `filterable !== false` **expands into its own pseudo-column** in the advanced
+filter builder — so a user filtering the list sees *Identifier* and *Name* as separately filterable
+fields, not one opaque "multiField" blob. `filterable: false` keeps that segment out of the filter
+builder.
+
+#### Absorbed fields still carry their data
+
+The `subtitle` field, `media.field`, and any `parts[]` field that is **not** the host are **dropped
+from `columnsArray`** — they no longer render as standalone columns. **Their data still arrives**,
+though, because the list fetch sends **no field projection**: NEO Headless returns every configured
+entity field for each row regardless of which columns are shown. That is what lets the renderer paint
+the subtitle/image and lets per-part sort/filter target the absorbed fields.
+
+#### Authenticated media (`useNeoImage`)
+
+`media.kind: "neoImage"` renders through the `useNeoImage(imageId, token, apiBaseUrl)` hook, which
+issues an **authenticated Bearer fetch** to `{apiBaseUrl}/image/{imageId}` and returns an object URL for
+an `<img>` src. On a missing id or a failed fetch it falls back to the `BoxIcon` package glyph
+(`fallback: "box"`). The hook now lives in the core package (`@etendosoftware/app-shell-core`) and is
+consumed via the shim `@/hooks/useNeoImage`.
+
+#### Validation (rule F18)
+
+Pipeline validator rule **F18** (implemented in `schema_forge_core`) blocks the pipeline when a
+`multiField` decorator references a sibling field that does not exist on the same entity (`subtitle`,
+`media.field`, or any `parts[].field`), or when a **sort-enabled** part (`sortable !== false`) — or the
+host — is **not queryable** (missing from the entity's `searchableFields` / `supportedFilters`, so the
+backend would reject `_sortBy` on it). It is a no-op for windows without any `multiField` decorator.
+Fix by referencing only real same-entity fields and marking non-queryable segments `sortable: false`
+(or making the field searchable). Full row: [`docs/pipeline-validator-reference.md`](pipeline-validator-reference.md) (F18).
+
+#### Real example — the Product identity column
+
+Product's list uses `multiField` on its `name` grid field to render the product identity as one cell:
+the **name** in bold as the title, the **search key** as a subtitle chip, and the product **image**
+(authenticated `neoImage`, `box` fallback) to the left. Two `parts` — *Identifier* (`searchKey`) and
+*Name* (`name`) — make the cell sortable per part (clicking each header sorts by that field) and
+filterable (each part expands as its own pseudo-column in the advanced filter). The composite header
+reads *"Identifier & Name"* / *"Identificador & Nombre"*. See the exact declaration in
+[`docs/decisions-reference.md`](decisions-reference.md) → *Composite list column (`multiField`)* and the
+window guide [`docs/generated-custom-windows/product.md`](generated-custom-windows/product.md).
+
+**Cross-references:**
+- [`docs/decisions-reference.md`](decisions-reference.md) — canonical decorator key table (*Composite list column (`multiField`)*).
+- [`docs/pipeline-validator-reference.md`](pipeline-validator-reference.md) — rule F18.
+
+---
+
 ## Decision tree: which option to use?
 
 ```
@@ -1034,6 +1190,9 @@ I need to customize the UI of a window
 │   │
 │   ├─ Replace the master list table
 │   │   └─ → window.customComponents.headerTable
+│   │
+│   ├─ Stack title + code + image into one sortable/filterable list column
+│   │   └─ → multiField decorator on the host grid field (decisions.json)
 │   │
 │   └─ Secondary document actions (cancel, reverse, duplicate)
 │       └─ → window.menuActions

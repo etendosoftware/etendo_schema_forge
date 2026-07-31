@@ -69322,7 +69322,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "dc1ade6e92f6d8f4b1a093a49a5f0cb22ecc317ad63cc48face5bcf30c88f613",
+      "checksum": "cb20b4a45a36c81de3101441e33ab16e4f4932644def5362ba7a41a794718aa5",
       "params": [
         "167"
       ],
@@ -86063,7 +86063,7 @@
           "column_module_id": "95CA76BB409646CC8D9B68CD311CB415",
           "columnname": "EM_OBCVAT_MANUALSETTLEMENTLINE_ID",
           "computation_function": null,
-          "computation_mode": "V",
+          "computation_mode": null,
           "defaultvalue": null,
           "displaylogic": null,
           "displaylogic_server": null,
@@ -89615,7 +89615,7 @@
           "column_module_id": "A918E3331C404B889D69AA9BFAFB23AC",
           "columnname": "EM_APRM_PaymentMethod",
           "computation_function": null,
-          "computation_mode": "V",
+          "computation_mode": null,
           "defaultvalue": null,
           "displaylogic": null,
           "displaylogic_server": null,
@@ -89837,7 +89837,7 @@
           "column_module_id": "A918E3331C404B889D69AA9BFAFB23AC",
           "columnname": "EM_APRM_FinancialAccount",
           "computation_function": null,
-          "computation_mode": "V",
+          "computation_mode": null,
           "defaultvalue": null,
           "displaylogic": null,
           "displaylogic_server": null,
@@ -111740,7 +111740,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "7b75a969389246f335f23fa24453d629b37af7a743a78106ed744f23ab4db558",
+      "checksum": "a50f6c7f5ddd6d7e6ad8a72b889acdff0bff3afe7d669eb36d4b487aafe54cc7",
       "params": [
         "183"
       ],
@@ -127519,7 +127519,7 @@
           "column_module_id": "95CA76BB409646CC8D9B68CD311CB415",
           "columnname": "EM_OBCVAT_MANUALSETTLEMENTLINE_ID",
           "computation_function": null,
-          "computation_mode": "V",
+          "computation_mode": null,
           "defaultvalue": null,
           "displaylogic": null,
           "displaylogic_server": null,

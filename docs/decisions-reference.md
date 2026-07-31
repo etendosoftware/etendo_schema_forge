@@ -638,8 +638,57 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `gridReadOnly` | boolean | `false` | Make an otherwise-editable column read-only in the grid. |
 | `grow` | boolean | `false` | Let the column grow to fill available width. |
 | `cellType` | string | `null` | Names the cell renderer for this column. Carried decisions → contract for **any** window, but **who honours it depends on the layout** — it is not generic to every grid. See the `cellType` section below for the three paths. |
+| `multiField` | object | `null` | Compose this "host" grid field with sibling fields into **one** composite column: bold title + optional subtitle chip + optional authenticated media image. See below. |
 | `dimensionsPanel` | boolean | `false` | Collect this field into the ONE synthetic `type: 'dimensionsPanel'` grid column instead of its own column — see below. Read regardless of the field's own `grid` value (typically `grid: false`, since the field renders inside the expand-row panel, not as a standalone column). |
 | `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
+
+#### Composite list column (`multiField`)
+
+Declares a single list column that stacks a bold **title**, an optional **subtitle**
+chip, and an optional **media** image (e.g. a product photo) — the pattern used by
+the Product list identity cell — without any custom JSX. The decorator sits on the
+**host** grid field (whose value becomes the title); it absorbs the sibling fields it
+references so they no longer render as their own columns. The absorbed fields' data is
+still fetched (the list request sends no field projection — NEO Headless returns every
+configured entity field), so the renderer, per-part sort, and advanced filter keep
+working.
+
+| Key | Type | Default | Purpose |
+|-----|------|---------|---------|
+| `subtitle` | string | `null` | Field name whose value renders as the subtitle chip under the title. Omit for a title-only column. |
+| `media` | object | `null` | `{ field, kind: "neoImage", fallback: "box" }`. `field` is the row property holding the image id; `kind: "neoImage"` fetches `{neoBase}/image/{id}` with the auth token; `fallback: "box"` shows the package glyph when empty. Omit for no image. |
+| `parts` | array | `[title, subtitle]` | Ordered segments that behave like real columns for the header per-part sort and the advanced-filter expansion. Each entry: `{ field, sortable?, filterable?, labels?, label? }`. `sortable`/`filterable` default `true`; set `false` to opt a segment out. `labels` (`{ en_US, es_ES }`) or `label` override the contract field's own label for that segment's header — use it to relabel a segment (e.g. show *Identifier* for `searchKey`) without renaming the underlying field. When `parts` is omitted, defaults to the title field plus the subtitle field (if any). The composite header joins the segment labels in order using `partSeparator`. |
+| `partSeparator` | string | `" & "` | String rendered between part labels in the composite column header. |
+
+The generator resolves each `parts[].field` (and the `subtitle`/`media.field`) against
+the contract to fill the runtime `key`/`column`/`type`/`label(s)`, so references must be
+real fields on the same entity. Fields used for sort (`sortable !== false`) must be
+queryable (in the entity's searchable/supported filters). Both constraints are enforced
+by pipeline validator rule **F18**.
+
+**Example — a Product-style identity column on the `name` field:**
+
+```json
+"name": {
+  "visibility": "editable",
+  "grid": true,
+  "multiField": {
+    "subtitle": "searchKey",
+    "media": { "field": "image", "kind": "neoImage", "fallback": "box" },
+    "parts": [
+      { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
+      { "field": "name",      "labels": { "en_US": "Name",       "es_ES": "Nombre" } }
+    ]
+  }
+}
+```
+
+This renders one column: the product name in bold, the search key as a chip below it,
+and the product image (or a box fallback) to the left. `searchKey` and `image` no longer
+appear as standalone columns, but sorting/filtering by name or search key still works via
+the two header segments. Part order drives the composite header — here it reads
+*"Identifier & Name"* (*"Identificador & Nombre"*), with each segment relabeled via its
+own `labels` rather than the contract field's default (`Search Key` / `Name`).
 
 #### Accounting dimensions panel (`dimensionsPanel`)
 

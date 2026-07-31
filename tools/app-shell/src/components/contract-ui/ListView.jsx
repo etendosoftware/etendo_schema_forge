@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
-import { useMenuLabel, useLabel, useUI } from '@/i18n';
+import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -60,6 +60,43 @@ export function splitFilterParts(parts) {
     }
   }
   return { allCriteria, passthrough };
+}
+
+/**
+ * Pre-expand `multiField` columns into ordinary pseudo-columns for the
+ * advanced-filter path, so each constituent part shows up as its own filterable
+ * field with zero core changes. The `multiField` parent itself has no queryable
+ * key and is dropped. `column` is intentionally omitted on each pseudo-column:
+ * AdvancedFilterBuilder resolves its field label as
+ * `labelOf(col.column) ?? col.label ?? col.key`, so dropping `column` makes it
+ * fall through to our locale-resolved header wording (e.g. "Identificador"/
+ * "Nombre") instead of the AD column label ("Search Key").
+ */
+function expandMultiFieldColumns(columns, locale) {
+  const out = [];
+  for (const col of columns) {
+    if (col?.type === 'multiField' && Array.isArray(col.parts)) {
+      for (const part of col.parts) {
+        if (part.filterable === false) continue;
+        out.push({
+          key: part.key,
+          type: part.type,
+          label: part.labels?.[locale] ?? part.labels?.en_US ?? part.label ?? part.key,
+        });
+      }
+      continue;
+    }
+    // Plain columns that carry a per-locale `labels` map but no singular `label`
+    // (e.g. custom cells) would otherwise fall through to `col.key` in the
+    // advanced-filter field picker — a lowercase, unlocalized identifier. Resolve
+    // the localized label here so the builder shows "Venta"/"Compra"/"Stock".
+    if (col?.labels && !col.label && !col.column) {
+      out.push({ ...col, label: col.labels[locale] ?? col.labels.en_US ?? col.key });
+      continue;
+    }
+    out.push(col);
+  }
+  return out;
 }
 
 function ListFilterBarSection(props) {
@@ -359,12 +396,21 @@ export function ListView({
 
   const [showImportDialog, setShowImportDialog] = useState(false);
   const { runBatch } = useBatch({ apiBaseUrl, token });
+  const { locale } = useLocaleSwitch();
+
+  // `multiField` columns are opaque to the advanced filter: expand each into
+  // per-part pseudo-columns so the builder and criteria composer treat every
+  // constituent field as an independent filterable field (no core edits).
+  const filterColumns = useMemo(
+    () => expandMultiFieldColumns(tableColumns, locale),
+    [tableColumns, locale],
+  );
 
   const advancedFilterPart = useMemo(() => {
-    const criteria = buildAdvancedFilterCriteria(advancedFilter, tableColumns);
+    const criteria = buildAdvancedFilterCriteria(advancedFilter, filterColumns);
     if (!criteria || criteria.length === 0) return null;
     return `criteria=${encodeURIComponent(JSON.stringify(criteria))}`;
-  }, [advancedFilter, tableColumns]);
+  }, [advancedFilter, filterColumns]);
 
   const effectiveFilter = useMemo(() => {
     // Composition here covers window-scope filters only:
@@ -993,7 +1039,7 @@ export function ListView({
                   hideStatusFilter={listViewOptions?.hideStatusFilter}
                   entity={entity}
                   apiBaseUrl={apiBaseUrl}
-                  columns={tableColumns}
+                  columns={filterColumns}
                   columnFilters={columnFilters}
                   onFilterChange={handleFilterChange}
                   advancedFilter={advancedFilter}

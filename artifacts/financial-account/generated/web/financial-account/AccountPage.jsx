@@ -360,6 +360,14 @@ export const api = {
     },
     {
       "entity": "transaction",
+      "field": "etprReactivateTransaction",
+      "column": "EM_Etpr_Reactivate_Transaction",
+      "url": "/sws/neo/accounts/transaction/{id}/action/etprReactivateTransaction",
+      "processId": "BA47238DB98D4FE7A4B540760EC8226A",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "transaction",
       "field": "aprmProcessed",
       "column": "EM_Aprm_Processed",
       "url": "/sws/neo/accounts/transaction/{id}/action/aprmProcessed",
@@ -372,14 +380,6 @@ export const api = {
       "column": "EM_Etblkp_Bulkposting",
       "url": "/sws/neo/accounts/transaction/{id}/action/etblkpBulkposting",
       "processId": "57496FB9CF9E4E8F847224017941570E",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "transaction",
-      "field": "etprReactivateTransaction",
-      "column": "EM_Etpr_Reactivate_Transaction",
-      "url": "/sws/neo/accounts/transaction/{id}/action/etprReactivateTransaction",
-      "processId": "BA47238DB98D4FE7A4B540760EC8226A",
       "processType": "obuiapp"
     },
     {

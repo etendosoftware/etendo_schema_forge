@@ -40,6 +40,7 @@ function growColumnWidth(basisPx, fixedTotalPx, growCount) {
 }
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
+import { ComputedFreshnessHint } from './ComputedFreshnessHint.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
@@ -1292,6 +1293,62 @@ function renderLinesColgroup({
 }
 
 /**
+ * Renders the header for a `multiField` column as N independently sortable
+ * segments joined by `col.partSeparator` (default ' & '). Each segment sorts on
+ * its own `part.key` (a real NEO field), reusing the same none→asc→desc→clear
+ * cycle as any other column via `onSort(part.key)`. The direction arrow shows
+ * only on the currently active part (single active part at a time).
+ */
+function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle }) {
+  const separator = col.partSeparator ?? ' & ';
+  return (
+    <TableHead
+      key={col.key}
+      data-testid={`column-header-${col.key}`}
+      className="align-middle"
+      style={headStyle}
+    >
+      <span className="inline-flex items-center text-xs leading-4 font-semibold text-text-primary tracking-normal">
+        {col.parts.map((part, partIdx) => {
+          const partLabel = resolveColumnLabel(part, locale, t);
+          const partSorted = sortColumn === part.key;
+          const partSortable = onSort && part.sortable !== false;
+          const arrow = partSorted
+            ? <span className="text-primary/70 pointer-events-none ml-0.5">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+            : null;
+          return (
+            <span key={part.key} className="inline-flex items-center">
+              {partIdx > 0 && (
+                <span className="mx-0.5 font-normal text-text-primary/40 select-none">{separator}</span>
+              )}
+              {partSortable ? (
+                <button
+                  type="button"
+                  data-testid={`column-header-sort-${part.key}`}
+                  className="inline-flex items-center cursor-pointer select-none transition-colors bg-transparent border-0 p-0 font-semibold text-inherit"
+                  onClick={() => onSort(part.key)}
+                >
+                  {partLabel}
+                  {arrow}
+                </button>
+              ) : (
+                <span
+                  data-testid={`column-header-sort-${part.key}`}
+                  className="inline-flex items-center"
+                >
+                  {partLabel}
+                  {arrow}
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </span>
+    </TableHead>
+  );
+}
+
+/**
  * Renders a single sortable column header cell, including the sort-direction
  * arrow. Extracted from the `visibleColumns.map(...)` callback in DataTable's
  * header row so its onSort/isSorted branching lives in its own function.
@@ -1303,6 +1360,13 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   const headStyle = linesLayout === 'inlineEditable'
     ? { minWidth: columnMinWidthPx(col, colIdx) }
     : undefined;
+  // `multiField` columns expose N constituent fields as independently
+  // sortable header segments (e.g. "Identifier & Name"); each part cycles the
+  // sort on its own NEO field key. Non-multiField columns keep the single-label
+  // branch below untouched.
+  if (Array.isArray(col.parts) && col.parts.length > 0) {
+    return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle });
+  }
   const sortArrowClass = NUMERIC_FIELD_TYPES.has(col.type)
     ? 'left-0 -translate-x-full pr-0.5'
     : 'right-0 translate-x-full pl-0.5';
@@ -1327,14 +1391,20 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
           className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
           onClick={() => onSort(col.key)}
         >
-          {colLabel}
+          <span className="inline-flex items-center gap-1 align-middle">
+            {colLabel}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
+          </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
           )}
         </button>
       ) : (
         <span className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
-          {colLabel}
+          <span className="inline-flex items-center gap-1 align-middle">
+            {colLabel}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
+          </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
           )}
@@ -1925,6 +1995,8 @@ export function DataTable({
       t,
       ui,
       dateFormatter,
+      token,
+      apiBaseUrl,
     });
   };
 

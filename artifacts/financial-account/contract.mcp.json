@@ -1,8 +1,7 @@
 {
-  "version": "0.21.0",
-  "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-31T01:57:28.337Z",
-  "contractChecksum": "b80657da3d8e5a03",
+  "version": "0.18.0",
+  "generatedAt": "2026-07-31T14:37:14.155Z",
+  "contractChecksum": "156da53caaa66f88",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -489,6 +488,46 @@
         "processType": "obuiapp"
       },
       {
+        "name": "etprReactivateTransaction",
+        "actionType": "documentAction",
+        "entity": "transaction",
+        "column": "EM_Etpr_Reactivate_Transaction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/transaction/{id}/action/etprReactivateTransaction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "BA47238DB98D4FE7A4B540760EC8226A",
+        "processType": "obuiapp"
+      },
+      {
         "name": "aprmProcessed",
         "actionType": "paymentAction",
         "entity": "transaction",
@@ -549,46 +588,6 @@
           "User lacks permission to execute the action"
         ],
         "processId": "57496FB9CF9E4E8F847224017941570E",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "etprReactivateTransaction",
-        "actionType": "documentAction",
-        "entity": "transaction",
-        "column": "EM_Etpr_Reactivate_Transaction",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/accounts/transaction/{id}/action/etprReactivateTransaction",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "BA47238DB98D4FE7A4B540760EC8226A",
         "processType": "obuiapp"
       },
       {
@@ -818,6 +817,7 @@
           },
           "pSD2GetConsent": {},
           "pSD2GetBankstatement": {},
+          "psd2ReconnectFa": {},
           "pSD2SaltEdgeAccountID": {
             "readOnly": true
           },
@@ -828,7 +828,6 @@
             "readOnly": true,
             "defaultValue": "DC"
           },
-          "psd2ReconnectFa": {},
           "eTGOAmountTolerance": {
             "defaultValue": "0"
           },
@@ -883,6 +882,10 @@
             "readOnlyLogic": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPD'",
             "defaultValue": "0"
           },
+          "etprReactivateTransaction": {
+            "required": true,
+            "defaultValue": "N"
+          },
           "posted": {
             "readOnly": true,
             "required": true,
@@ -926,17 +929,13 @@
             "readOnly": true,
             "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
           },
-          "etblkpAccountingstatus": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
-          },
           "etblkpBulkposting": {
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
           },
-          "etprReactivateTransaction": {
+          "etblkpAccountingstatus": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "N"
           },
@@ -986,12 +985,12 @@
             "readOnlyLogic": "@Processed@='Y'"
           },
           "notes": {},
-          "etblkpAccountingstatus": {
-            "readOnly": true,
+          "etblkpBulkposting": {
             "required": true,
             "defaultValue": "N"
           },
-          "etblkpBulkposting": {
+          "etblkpAccountingstatus": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "N"
           }
@@ -1065,8 +1064,8 @@
     },
     "selectorContexts": [],
     "actions": [
-      "etblkpBulkposting",
       "etprReactivateTransaction",
+      "etblkpBulkposting",
       "posted",
       "etblkpBulkposting"
     ],
@@ -1115,7 +1114,7 @@
       {
         "operation": "completeDocument",
         "description": "Validate form state and run the document lifecycle action when the draft is complete.",
-        "action": "etblkpBulkposting"
+        "action": "etprReactivateTransaction"
       }
     ],
     "warnings": [],
@@ -1124,5 +1123,5 @@
       "etprReactivateTransaction"
     ]
   },
-  "checksum": "404cc3d8b7f27c3b"
+  "checksum": "e09ec001723eba0e"
 }
