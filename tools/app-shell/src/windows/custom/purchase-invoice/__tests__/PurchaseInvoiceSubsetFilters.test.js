@@ -1,11 +1,21 @@
 /**
  * Tests for the INVOICE_SUBSET_FILTERS constant in index.jsx.
  *
+ * ETP-4737: this array used to discriminate via a client-side `rowFilter` that
+ * matched the raw doc-type identifier string (e.g. 'AP Invoice', 'AP CreditMemo').
+ * That silently missed any new document type sharing the same category — exactly
+ * how the new "Factura Rectificativa (compras)" type fell through to "Todos"
+ * instead of "Facturas rectificativas". The fix switched to server-side `filter`
+ * criteria (documentCategory / etsgIsRectificative), mirrored 1:1 from
+ * artifacts/purchase-invoice/decisions.json → window.subsetFilters — the same
+ * mechanism sales-invoice/index.jsx already uses for its own tabs.
+ *
  * Strategy:
  *   1. Source-reading: verify the structural contract (constant exists, correct
- *      labels, no rowFilter on "all", rowFilter on both typed tabs).
- *   2. Logic: extract the rowFilter functions via regex from source and invoke
- *      them as plain JavaScript to verify the filter predicates.
+ *      labels, no filter/rowFilter on "allTab", a `filter` string on both typed
+ *      tabs — NOT a rowFilter).
+ *   2. Cross-check: the `filter` strings in index.jsx must match decisions.json
+ *      byte-for-byte, and must decode to the expected AdvancedCriteria payload.
  */
 
 import { describe, it } from 'node:test';
@@ -16,6 +26,15 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
+const decisions = JSON.parse(
+  readFileSync(
+    join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'purchase-invoice', 'decisions.json'),
+    'utf8',
+  ),
+);
+const decisionsByLabel = Object.fromEntries(
+  decisions.window.subsetFilters.map((f) => [f.label, f.filter]),
+);
 
 // ---------------------------------------------------------------------------
 // Structural contract (source-reading)
@@ -26,11 +45,11 @@ describe('INVOICE_SUBSET_FILTERS — structural contract', () => {
     assert.match(src, /const INVOICE_SUBSET_FILTERS = \[/);
   });
 
-  it('has exactly three entries: all, invoicesTab, creditNotesTab', () => {
+  it('has exactly three entries: allTab, invoicesTab, creditNotesTab', () => {
     const matches = [...src.matchAll(/label:\s*'([^']+)'/g)].map(m => m[1]);
     assert.ok(
-      matches.includes('all'),
-      'expected label "all" in INVOICE_SUBSET_FILTERS',
+      matches.includes('allTab'),
+      'expected label "allTab" in INVOICE_SUBSET_FILTERS',
     );
     assert.ok(
       matches.includes('invoicesTab'),
@@ -42,23 +61,27 @@ describe('INVOICE_SUBSET_FILTERS — structural contract', () => {
     );
   });
 
-  it('"all" entry has no rowFilter property', () => {
-    // The "all" entry is `{ label: 'all' }` — no rowFilter key in that line
-    assert.match(src, /\{\s*label:\s*'all'\s*\}/);
+  it('"allTab" entry has no filter/rowFilter property', () => {
+    // The "allTab" entry is `{ label: 'allTab' }` — no filter/rowFilter key on that line
+    assert.match(src, /\{\s*label:\s*'allTab'\s*\}/);
   });
 
-  it('"invoicesTab" rowFilter matches AP Invoice', () => {
-    assert.match(
+  it('does NOT use client-side rowFilter (name-string matching) for invoicesTab/creditNotesTab', () => {
+    assert.doesNotMatch(
       src,
-      /label:\s*'invoicesTab'.*?rowFilter:\s*\(r\)\s*=>\s*r\['transactionDocument\$_identifier'\]\s*===\s*'AP Invoice'/s,
+      /label:\s*'invoicesTab',\s*rowFilter/,
+      'invoicesTab must use a server-side `filter`, not a rowFilter matching the doc-type identifier',
+    );
+    assert.doesNotMatch(
+      src,
+      /label:\s*'creditNotesTab',\s*rowFilter/,
+      'creditNotesTab must use a server-side `filter`, not a rowFilter matching the doc-type identifier',
     );
   });
 
-  it('"creditNotesTab" rowFilter matches AP CreditMemo', () => {
-    assert.match(
-      src,
-      /label:\s*'creditNotesTab'.*?rowFilter:\s*\(r\)\s*=>\s*r\['transactionDocument\$_identifier'\]\s*===\s*'AP CreditMemo'/s,
-    );
+  it('"invoicesTab" and "creditNotesTab" both declare a `filter` string', () => {
+    assert.match(src, /label:\s*'invoicesTab',\s*filter:\s*'[^']+'/);
+    assert.match(src, /label:\s*'creditNotesTab',\s*filter:\s*'[^']+'/);
   });
 
   it('passes subsetFilters to ListView', () => {
@@ -67,86 +90,57 @@ describe('INVOICE_SUBSET_FILTERS — structural contract', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Filter predicate logic — extracted from source and invoked directly
+// Filter criteria — must mirror decisions.json exactly (kept-in-sync contract)
 // ---------------------------------------------------------------------------
 
-// These functions mirror the exact inline expressions from index.jsx.
-// If the source changes its filter logic, the source-reading tests above will
-// catch the structural drift; these tests will catch any behavioral regression.
+function extractFilter(label) {
+  const m = src.match(new RegExp(`label:\\s*'${label}',\\s*filter:\\s*'([^']+)'`));
+  return m ? m[1] : null;
+}
 
-const invoicesTabFilter = (r) => r['transactionDocument$_identifier'] === 'AP Invoice';
-const creditNotesTabFilter = (r) => r['transactionDocument$_identifier'] === 'AP CreditMemo';
-
-describe('INVOICE_SUBSET_FILTERS — rowFilter predicates', () => {
-  // "all" tab: no client-side filtering — all rows pass
-  it('"all" tab has no rowFilter (all rows are shown)', () => {
-    // Verified structurally above; no predicate to call here.
-    // This test is a documentation anchor for the "all = no filter" invariant.
-    assert.ok(true);
+describe('INVOICE_SUBSET_FILTERS — mirrors decisions.json subsetFilters', () => {
+  it('invoicesTab.filter matches decisions.json exactly', () => {
+    const jsFilter = extractFilter('invoicesTab');
+    assert.ok(jsFilter, 'expected an invoicesTab filter string in index.jsx');
+    assert.equal(jsFilter, decisionsByLabel.invoicesTab);
   });
 
-  // invoicesTab
-  it('invoicesTab.rowFilter returns true for "AP Invoice"', () => {
-    assert.equal(
-      invoicesTabFilter({ 'transactionDocument$_identifier': 'AP Invoice' }),
-      true,
-    );
+  it('creditNotesTab.filter matches decisions.json exactly', () => {
+    const jsFilter = extractFilter('creditNotesTab');
+    assert.ok(jsFilter, 'expected a creditNotesTab filter string in index.jsx');
+    assert.equal(jsFilter, decisionsByLabel.creditNotesTab);
   });
 
-  it('invoicesTab.rowFilter returns false for "AP CreditMemo"', () => {
-    assert.equal(
-      invoicesTabFilter({ 'transactionDocument$_identifier': 'AP CreditMemo' }),
-      false,
-    );
+  it('invoicesTab decodes to: documentCategory=API AND etsgIsRectificative != true', () => {
+    const jsFilter = extractFilter('invoicesTab');
+    const criteria = JSON.parse(decodeURIComponent(jsFilter.replace(/^criteria=/, '')));
+    assert.deepEqual(criteria, [
+      { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'API' },
+      { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
+    ]);
   });
 
-  it('invoicesTab.rowFilter returns false for an unknown type', () => {
-    assert.equal(
-      invoicesTabFilter({ 'transactionDocument$_identifier': 'Return Material Purchase Invoice' }),
-      false,
-    );
+  it('creditNotesTab decodes to: etsgIsRectificative=true OR documentCategory=APC', () => {
+    const jsFilter = extractFilter('creditNotesTab');
+    const criteria = JSON.parse(decodeURIComponent(jsFilter.replace(/^criteria=/, '')));
+    assert.deepEqual(criteria, [{
+      _constructor: 'AdvancedCriteria',
+      operator: 'or',
+      criteria: [
+        { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'equals', value: true },
+        { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'APC' },
+      ],
+    }]);
   });
 
-  it('invoicesTab.rowFilter returns false when identifier is absent', () => {
-    assert.equal(invoicesTabFilter({}), false);
-  });
-
-  // creditNotesTab
-  it('creditNotesTab.rowFilter returns true for "AP CreditMemo"', () => {
-    assert.equal(
-      creditNotesTabFilter({ 'transactionDocument$_identifier': 'AP CreditMemo' }),
-      true,
-    );
-  });
-
-  it('creditNotesTab.rowFilter returns false for "AP Invoice"', () => {
-    assert.equal(
-      creditNotesTabFilter({ 'transactionDocument$_identifier': 'AP Invoice' }),
-      false,
-    );
-  });
-
-  it('creditNotesTab.rowFilter returns false when identifier is absent', () => {
-    assert.equal(creditNotesTabFilter({}), false);
-  });
-
-  it('creditNotesTab.rowFilter returns false for undefined identifier', () => {
-    assert.equal(
-      creditNotesTabFilter({ 'transactionDocument$_identifier': undefined }),
-      false,
-    );
-  });
-
-  // Mutual exclusion: a row cannot pass both filters simultaneously
-  it('AP Invoice passes invoicesTab but not creditNotesTab', () => {
-    const row = { 'transactionDocument$_identifier': 'AP Invoice' };
-    assert.equal(invoicesTabFilter(row), true);
-    assert.equal(creditNotesTabFilter(row), false);
-  });
-
-  it('AP CreditMemo passes creditNotesTab but not invoicesTab', () => {
-    const row = { 'transactionDocument$_identifier': 'AP CreditMemo' };
-    assert.equal(creditNotesTabFilter(row), true);
-    assert.equal(invoicesTabFilter(row), false);
+  // The whole point of the fix: a new doc type like "Factura Rectificativa
+  // (compras)" is recognized because it satisfies etsgIsRectificative=true,
+  // regardless of its identifier text — unlike the old exact-name rowFilter,
+  // which never matched it. This test documents that invariant at the criteria
+  // level (the field checked is the boolean flag, not the identifier string).
+  it('creditNotesTab criteria never references the doc-type identifier/name', () => {
+    const jsFilter = extractFilter('creditNotesTab');
+    assert.doesNotMatch(decodeURIComponent(jsFilter), /_identifier/);
+    assert.doesNotMatch(decodeURIComponent(jsFilter), /Rectificativa|CreditMemo/);
   });
 });

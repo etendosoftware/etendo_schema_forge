@@ -66,10 +66,18 @@ describe('PurchaseInvoiceHeaderTable — columns', () => {
     assert.doesNotMatch(src, /backendFilterKey:\s*'transactionDocument\$_identifier'/);
   });
 
-  it('uses DOC_TYPE_BADGE with i18n label keys for the AP doc types', () => {
+  // ETP-4737: SUBTYPE_BADGE is keyed by the unified subtype (FAC/RECTIFICATIVA)
+  // resolved via getApSubtype — purchases collapse credit-memo AND return/reversal
+  // doc types into a single RECTIFICATIVA badge (there is no separate returnInvoiceTab
+  // badge on the purchase side, unlike sales-invoice which does distinguish returns).
+  it('uses SUBTYPE_BADGE with i18n label keys for the AP doc subtypes', () => {
     assert.match(src, /label:\s*'invoicesTab'/);
     assert.match(src, /label:\s*'creditNotesTab'/);
-    assert.match(src, /label:\s*'returnInvoiceTab'/);
+  });
+
+  it('resolves the badge subtype via getApSubtype, not a hardcoded doc-type name', () => {
+    assert.match(src, /import \{ getApSubtype \} from '@generated\/purchase-invoice\/custom\/purchaseInvoiceSubtype\.js'/);
+    assert.match(src, /SUBTYPE_BADGE\[getApSubtype\(row\)\]/);
   });
 });
 

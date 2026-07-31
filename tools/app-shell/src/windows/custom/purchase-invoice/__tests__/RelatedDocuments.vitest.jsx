@@ -273,4 +273,33 @@ describe('RelatedDocuments — Return Invoice (Factura de Devolución)', () => {
     );
     expect(screen.getByTestId('chip-return-to-vendor')).toBeInTheDocument();
   });
+
+  // ETP-4737: RETURN_INVOICE_TYPES (an exact-name Set) never matched this new doc
+  // type, so linked return deliveries never got fetched for a rectificativa
+  // invoice. Fixed by resolving the subtype via getApSubtype instead.
+  it('also triggers for the new "Factura Rectificativa (compras)" doc type', async () => {
+    mockFetchChild.mockResolvedValueOnce([{ id: 'line-1', goodsShipmentLine: 'sl-1' }]);
+    mockFetchChild.mockResolvedValueOnce([]);
+    mockFetchById.mockResolvedValueOnce({ id: 'sl-1', parentId: 'ret-ship-1' });
+    mockFetchById.mockResolvedValueOnce({ id: 'ret-ship-1', documentNo: 'RET-001' });
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={{ 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.getByTestId('chip-return-to-vendor')).toBeInTheDocument();
+  });
+
+  it('prefers the server-injected apInvoiceSubtype over the identifier string', async () => {
+    mockFetchChild.mockResolvedValueOnce([{ id: 'line-1', goodsShipmentLine: 'sl-1' }]);
+    mockFetchChild.mockResolvedValueOnce([]);
+    mockFetchById.mockResolvedValueOnce({ id: 'sl-1', parentId: 'ret-ship-1' });
+    mockFetchById.mockResolvedValueOnce({ id: 'ret-ship-1', documentNo: 'RET-001' });
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={{ apInvoiceSubtype: 'RECTIFICATIVA', 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.getByTestId('chip-return-to-vendor')).toBeInTheDocument();
+  });
 });

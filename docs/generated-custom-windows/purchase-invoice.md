@@ -607,8 +607,21 @@ The OR is expressed as a single-element criteria array wrapping an `AdvancedCrit
 object (`{"_constructor":"AdvancedCriteria","operator":"or","criteria":[...]}`) — the same
 mechanism `ListView.jsx`'s advanced-filter popover already uses and explicitly supports
 composing with the surrounding subset/quick/document-type AND chain (see
-`docs/list-filters.md`). No frontend code change was needed for this — it works through
-plain `decisions.json → window.subsetFilters[].filter` configuration.
+`docs/list-filters.md`).
+
+**Correction (this was wrong in an earlier revision of this doc): a frontend code change
+WAS needed.** `purchase-invoice`'s list view is a hand-rolled `ListView` in
+`tools/app-shell/src/windows/custom/purchase-invoice/index.jsx` — unlike a plain generated
+window, it never renders the generated `HeaderPage`/`ListView` for the list route, so it
+never picks up `decisions.json`'s `window.subsetFilters` at runtime. `index.jsx` declares
+its own local `INVOICE_SUBSET_FILTERS` constant that must be kept in sync with
+`decisions.json` by hand. Before this fix that constant filtered by matching the raw
+`transactionDocument$_identifier` string against `'AP Invoice'` / `'AP CreditMemo'` — which
+matches neither the new `EM_Etsg_Isrectificative` flag nor the new doc-type name, so
+"Factura Rectificativa (compras)" invoices only ever showed up under "Todos" and never under
+"Facturas rectificativas". `index.jsx` now uses the exact same `filter` criteria strings as
+`decisions.json` (see the two literals above), so the two stay byte-for-byte in sync; any
+future change to the discriminator must be applied in both places.
 
 **Consistency note:** `sales-invoice.md`'s equivalent tab uses the identical discriminator
 mechanism (`transactionDocument$etsgIsRectificative`) for the same reason — both windows
@@ -637,6 +650,25 @@ the root-cause fix (any future doc-type rename can no longer silently break this
 one-off patch. Verified behavior-preserving: all 26 existing
 `PurchaseInvoiceHeaderTable.vitest.jsx` tests (which assert on the legacy AD names via the
 identifier-fallback path) still pass unchanged.
+
+**Same bug, two more files (found in review, fixed in the same pass):** the hardcoded
+doc-type-name pattern was not confined to `PurchaseInvoiceHeaderTable.jsx`. Two sibling
+files had the identical anti-pattern and were fixed the same way:
+
+- `PurchaseInvoiceTopbar.jsx` — `isCreditType` was `docType === 'Nota de Crédito' || docType
+  === 'AP CreditMemo'`, which silently excluded the new doc type from the "Saldo a favor" /
+  "Aplicada" payment-badge treatment. Now `getApSubtype(data) === 'RECTIFICATIVA'`.
+- `RelatedDocuments.jsx` — `RETURN_INVOICE_TYPES` was a `Set` of exact doc-type-name
+  strings, which silently skipped fetching linked return-delivery documents for a
+  rectificativa invoice. Now `getApSubtype(data) === 'RECTIFICATIVA'`.
+
+A full grep of `tools/app-shell/src/windows/custom/purchase-invoice/` for the old doc-type-name
+literals (`AP CreditMemo`, `APC`, `Nota de Crédito`, `Return Material Purchase Invoice`,
+`Reversed Purchase Invoice`, `Factura de Devolución`) turned up no further occurrences
+outside `index.jsx`'s `DOC_TYPE_LABELS` display-label map — which is a cosmetic
+identifier→label translation for already-human-readable AD names, not a
+subtype/category discriminator, so it does not have this bug (the new doc type's raw AD
+name is already a proper Spanish display string and needs no translation).
 
 ### Two new "Import from…" flows for RECTIFICATIVA invoices
 
@@ -718,14 +750,41 @@ parallel change to the same shared key.
 
 ### Known gaps / needs Tester follow-up
 
-- `artifacts/purchase-invoice/custom/__tests__/purchaseInvoiceSubtype.test.js` still asserts
-  the old `'NC'` literal and needs updating to `'RECTIFICATIVA'` plus new cases for the
-  expanded fallback keywords.
+- Fixed in review (were previously gaps, resolved in the same pass as the review fixes
+  below): `artifacts/purchase-invoice/custom/__tests__/purchaseInvoiceSubtype.test.js` now
+  asserts `'RECTIFICATIVA'` (not the old `'NC'` literal) plus a case for the new
+  "Factura Rectificativa (compras)" identifier and the server-injected
+  `apInvoiceSubtype` override.
 - No automated coverage yet exists for `ImportFromGoodsReturnModal.jsx` or
   `ImportFromSourceInvoiceModal.jsx` (source-reading unit tests, mirroring
   `ImportFromGoodsReceiptModal.test.js`/`ImportFromPurchaseOrderModal.test.js`), nor for the
   new subtype-aware branching in `PurchaseInvoiceBottomPanel.jsx`, nor a Playwright spec for
   the renamed subset-filter tab or the `PurchaseInvoiceHeaderTable.jsx` badge/amount fix.
+
+### Review round 2 fixes (this window's list never rendered the "Facturas rectificativas" tab)
+
+The first pass shipped the correct `decisions.json` discriminator and fixed
+`PurchaseInvoiceHeaderTable.jsx`'s badge, but missed that **three other files still
+identified the rectificative subtype by hardcoded doc-type name/category**, so the new type
+fell through untreated in each of them:
+
+- `index.jsx`'s `INVOICE_SUBSET_FILTERS` — the list view here is a hand-rolled `ListView`
+  that bypasses the generated `HeaderPage` (and therefore never reads `decisions.json`'s
+  `window.subsetFilters` at runtime); its own local subset-filter constant still matched
+  `transactionDocument$_identifier === 'AP Invoice' / 'AP CreditMemo'`, so a new
+  "Factura Rectificativa (compras)" invoice only ever appeared under "Todos", never under
+  "Facturas rectificativas" — the ticket's core requirement. Fixed by mirroring
+  `decisions.json`'s exact `filter` criteria strings (server-side, not a client `rowFilter`).
+- `PurchaseInvoiceTopbar.jsx`'s `isCreditType` — hardcoded to `'Nota de Crédito'` /
+  `'AP CreditMemo'`, so the "Saldo a favor" / "Aplicada" payment-badge treatment never
+  applied to the new type. Fixed via `getApSubtype(data) === 'RECTIFICATIVA'`.
+- `RelatedDocuments.jsx`'s `RETURN_INVOICE_TYPES` — a `Set` of exact doc-type-name strings,
+  so linked return-delivery documents were never fetched for a rectificativa invoice. Fixed
+  via `getApSubtype(data) === 'RECTIFICATIVA'`.
+
+A full audit of `tools/app-shell/src/windows/custom/purchase-invoice/` for the same
+hardcoded-name pattern found no further occurrences (see the "Same bug, two more files"
+note above for the one intentional exception, `DOC_TYPE_LABELS`).
 
 ## Theme roles
 
