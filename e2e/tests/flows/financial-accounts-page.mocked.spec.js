@@ -107,18 +107,25 @@ const SUMMARY = {
 /**
  * Install the `account` entity mock of the financial-account W spec. Must run AFTER login()
  * so this specific handler wins over the generic /sws/** stub. The list GET answers with the
- * rows plus the `summary` sibling; a detail GET (`/account/{id}`) falls through so the detail
- * view keeps using its own hooks.
+ * rows plus the `summary` sibling; every other verb/shape (detail GET, DELETE) falls through,
+ * so the detail view keeps using its own hooks and a mutation route registered EARLIER in the
+ * same test still gets its turn (Playwright resolves `route.fallback()` towards the handler
+ * registered before this one).
+ *
+ * `getRows` is a callback, not an array, so a suite that mutates server state between
+ * requests (bulk delete: the archived ids) re-reads it on every fetch and a refetch really
+ * reflects the mutation.
  */
-async function installAccountsMock(page) {
+async function installAccountsMock(page, getRows = () => ACCOUNTS) {
   await page.route('**/sws/neo/financial-account/account**', async (route) => {
     const req = route.request();
     if (req.method() === 'GET' && !/\/account\/[^/?]+/.test(req.url())) {
+      const rows = getRows();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: { data: ACCOUNTS, totalRows: ACCOUNTS.length, summary: SUMMARY },
+          response: { data: rows, totalRows: rows.length, summary: SUMMARY },
         }),
       });
       return;
@@ -266,9 +273,11 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(page).toHaveURL(/\/financial-account\/acc-1$/);
   });
 
-  // This list owns its row actions: AccountsHeaderTable passes `selectable={false}`,
-  // `rowQuickActions={null}` and `hoverRowActions={false}` to DataTable, so the canonical
-  // RowQuickActions overlay is never mounted. That matters because the overlay is absolutely
+  // This list owns its row actions: the canonical RowQuickActions overlay is switched off
+  // declaratively (`window.rowQuickActions.enabled: false` in decisions.json) rather than by a
+  // prop, so it is never mounted. Note this is INDEPENDENT of multi-select — ETP-4656 restored
+  // the checkbox column on this grid, and the overlay stays off regardless. That matters
+  // because the overlay is absolutely
   // positioned over the trailing `_rowActions` cell: while it was mounted it added a second
   // edit button plus a delete button and swallowed every pointer event aimed at the slot's own
   // kebab, leaving "Abrir / Nuevo movimiento / Transferir / Desconectar / Archivar"
@@ -322,24 +331,38 @@ test.describe('Financial Accounts list — Cuentas', () => {
 /**
  * Bulk "Delete selected" — ETP-4656 (Gap 1), E2E smoke.
  *
- * FinancialAccountsPage.jsx has no hard-delete endpoint for financial
- * accounts: bulk delete calls the exact same
- * `DELETE /sws/neo/financial-account/account/{id}` the single-row "Archivar"
- * kebab action already uses (soft-archive, IsActive='N') via
- * `useAccountMutations().archiveAccount`. This is a smoke test proving the
- * full stack (mocked network -> React render -> user clicks -> toast) works
- * for the new BulkDeleteSelectionBar + useBatchDeleteDialog pattern — the
- * exhaustive branch coverage (toolbar swap, selection toggle, cancel, all 3
- * outcome branches) already lives in
- * tools/app-shell/src/pages/__tests__/FinancialAccountsPage.handlers.vitest.jsx.
+ * There is no hard-delete endpoint for financial accounts: bulk delete issues the exact same
+ * `DELETE /sws/neo/financial-account/account/{id}` the single-row "Archivar" kebab action
+ * already uses (soft-archive, IsActive='N').
  *
- * The mock tracks archived ids in memory so the list mock and the DELETE mock
- * stay consistent across a reload() triggered by the batch outcome.
+ * This runs entirely through the GENERIC ListView path — `useBulkRowDelete` behind ListView's
+ * standardized selection bar — not the bespoke `BulkDeleteSelectionBar` + `useBatchDeleteDialog`
+ * pair the retired hand-assembled page used (those are still alive, but only for the detail
+ * view's Movimientos / Extractos tabs). Two things make that reachable on this window, and both
+ * are what this suite guards end to end:
+ *   - `AccountsHeaderTable` does not force `selectable={false}` on its DataTable, so the
+ *     checkbox column renders. There is no per-row select testid — DataTable emits none — so
+ *     the checkbox is reached as `Checkbox__eb5261` SCOPED INSIDE `row-{id}` (the same testid
+ *     is also on the select-all header checkbox).
+ *   - `hideListBar` gates only the idle filter bar, so the selection bar itself still renders;
+ *     the slot unmounts its own `cuentas-toolbar` while a selection is active, which is why the
+ *     swap reads as one bar replacing another.
+ *
+ * Exhaustive branch coverage lives at unit level:
+ *   - ListView's bar + outcome wiring: components/contract-ui/__tests__/ListView.bulkDelete.vitest.jsx
+ *   - the batch itself + confirm dialog: hooks/__tests__/useBulkRowDelete.vitest.jsx
+ *   - the toolbar/selection-bar swap: windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
+ *
+ * The mock tracks archived ids in memory so the list mock and the DELETE mock stay consistent
+ * across the refetch the batch outcome triggers.
  */
 test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () => {
   /** @type {{ failIds: Set<string> }} */
   let deleteState;
   let archivedIds;
+
+  /** The row checkbox: DataTable emits no per-row select testid, so scope the generic one. */
+  const rowCheckbox = (page, id) => page.getByTestId(`row-${id}`).getByTestId('Checkbox__eb5261');
 
   test.beforeEach(async ({ page }) => {
     deleteState = { failIds: new Set() };
@@ -347,21 +370,12 @@ test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () 
 
     await login(page);
 
-    // List endpoint — reflects archivedIds so a reload() after a successful
-    // delete actually drops the row, mirroring the real backend.
-    await page.route('**/sws/neo/financial-accounts-page', async (route) => {
-      const visible = ACCOUNTS.filter((a) => !archivedIds.has(a.id));
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          response: { data: { accounts: visible, summary: SUMMARY } },
-        }),
-      });
-    });
-
-    // DELETE /financial-account/account/{id} — the same soft-archive call the
-    // single-row "Archivar" action makes. Fails only for ids in failIds.
+    // DELETE /financial-account/account/{id} — the same soft-archive call the single-row
+    // "Archivar" action makes. Fails only for ids in failIds.
+    //
+    // Registered BEFORE the list mock on purpose: both globs match this URL, the later
+    // registration wins, and the list handler defers non-list requests with
+    // `route.fallback()` — which resolves towards the handler registered earlier, i.e. this one.
     await page.route('**/sws/neo/financial-account/account/**', async (route) => {
       const req = route.request();
       if (req.method() !== 'DELETE') {
@@ -386,71 +400,88 @@ test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () 
       });
     });
 
-    await page.goto('/finance/accounts');
+    // Same W-spec list endpoint the rest of this file mocks, but reading archivedIds on every
+    // request so the refetch after a successful delete actually drops the row.
+    await installAccountsMock(page, () => ACCOUNTS.filter((a) => !archivedIds.has(a.id)));
+
+    await page.goto('/financial-account');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
   test('selecting rows swaps the toolbar for the selection bar with the right count', async ({ page }) => {
     await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
-    await expect(page.getByTestId('bulk-delete-selection-bar')).toHaveCount(0);
+    await expect(page.getByTestId('selection-count')).toHaveCount(0);
 
-    await page.getByTestId('account-select-acc-1').click();
+    await rowCheckbox(page, 'acc-1').click();
 
-    await expect(page.getByTestId('bulk-delete-selection-bar')).toBeVisible();
+    // The bar has no wrapper testid — its count and its delete trigger are the two markers.
+    await expect(page.getByTestId('selection-count')).toBeVisible();
+    await expect(page.getByTestId('bulk-delete-selected')).toBeVisible();
     await expect(page.getByTestId('cuentas-toolbar')).toHaveCount(0);
-    await expect(page.getByTestId('bulk-delete-selection-count')).toContainText('1');
+    await expect(page.getByTestId('selection-count')).toContainText('1');
 
-    await page.getByTestId('account-select-acc-2').click();
-    await expect(page.getByTestId('bulk-delete-selection-count')).toContainText('2');
+    await rowCheckbox(page, 'acc-2').click();
+    await expect(page.getByTestId('selection-count')).toContainText('2');
+    // The trigger carries the count too — "Eliminar seleccionados (2)".
+    await expect(page.getByTestId('bulk-delete-selected')).toContainText('2');
   });
 
-  test('cancel clears the selection and restores the normal toolbar', async ({ page }) => {
-    await page.getByTestId('account-select-acc-1').click();
-    await page.getByTestId('account-select-acc-2').click();
-    await expect(page.getByTestId('bulk-delete-selection-bar')).toBeVisible();
+  // The generic bar has no cancel button (the bespoke one did): clearing the selection is done
+  // by unticking the rows, or from the select-all header checkbox. Same intent — the selection
+  // empties, the bar goes away and the window toolbar comes back.
+  test('unticking the rows clears the selection and restores the normal toolbar', async ({ page }) => {
+    await rowCheckbox(page, 'acc-1').click();
+    await rowCheckbox(page, 'acc-2').click();
+    await expect(page.getByTestId('selection-count')).toContainText('2');
 
-    await page.getByTestId('bulk-delete-selection-cancel').click();
+    await rowCheckbox(page, 'acc-1').click();
+    await expect(page.getByTestId('selection-count')).toContainText('1');
+    await rowCheckbox(page, 'acc-2').click();
 
-    await expect(page.getByTestId('bulk-delete-selection-bar')).toHaveCount(0);
+    await expect(page.getByTestId('selection-count')).toHaveCount(0);
+    await expect(page.getByTestId('bulk-delete-selected')).toHaveCount(0);
     await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
-    // Checkboxes themselves reset to unchecked once selection state is cleared.
-    await expect(page.getByTestId('account-select-acc-1').locator('input')).not.toBeChecked();
+    // The checkboxes themselves reset with the selection state.
+    await expect(rowCheckbox(page, 'acc-1').locator('input')).not.toBeChecked();
+    await expect(rowCheckbox(page, 'acc-2').locator('input')).not.toBeChecked();
   });
 
   test('partial failure: succeeded rows disappear, failed id stays selected, warning toast fires', async ({ page }) => {
     deleteState.failIds.add('acc-2');
 
-    await page.getByTestId('account-select-acc-1').click();
-    await page.getByTestId('account-select-acc-2').click();
-    await page.getByTestId('bulk-delete-selection-trigger').click();
+    await rowCheckbox(page, 'acc-1').click();
+    await rowCheckbox(page, 'acc-2').click();
+    await page.getByTestId('bulk-delete-selected').click();
 
-    // useBatchDeleteDialog renders a confirm dialog before the actual batch runs.
-    await expect(page.getByTestId('DialogContent__batch-delete')).toBeVisible();
-    await page.getByTestId('batch-delete-confirm').click();
+    // useBulkRowDelete renders a confirm dialog before the actual batch runs.
+    await expect(page.getByTestId('DialogContent__bulk-delete')).toBeVisible();
+    await page.getByTestId('bulk-delete-confirm').click();
 
     await expect(page.locator('[data-type="warning"]')).toBeVisible({ timeout: 5_000 });
 
-    // acc-1 succeeded -> its row is gone after the reload().
-    await expect(page.getByTestId('account-row-acc-1')).toHaveCount(0);
-    // acc-2 failed -> row stays, and stays selected (bar still shows, count 1).
-    await expect(page.getByTestId('account-row-acc-2')).toBeVisible();
-    await expect(page.getByTestId('bulk-delete-selection-bar')).toBeVisible();
-    await expect(page.getByTestId('bulk-delete-selection-count')).toContainText('1');
+    // acc-1 succeeded -> its row is gone after the refetch.
+    await expect(page.getByTestId('row-acc-1')).toHaveCount(0);
+    // acc-2 failed -> row stays, and stays selected (bar still up, count back down to 1).
+    await expect(page.getByTestId('row-acc-2')).toBeVisible();
+    await expect(page.getByTestId('selection-count')).toBeVisible();
+    await expect(page.getByTestId('selection-count')).toContainText('1');
+    await expect(rowCheckbox(page, 'acc-2').locator('input')).toBeChecked();
   });
 
   test('all succeed: selection fully clears, list reloads, success toast fires', async ({ page }) => {
-    await page.getByTestId('account-select-acc-1').click();
-    await page.getByTestId('account-select-acc-3').click();
-    await page.getByTestId('bulk-delete-selection-trigger').click();
+    await rowCheckbox(page, 'acc-1').click();
+    await rowCheckbox(page, 'acc-3').click();
+    await page.getByTestId('bulk-delete-selected').click();
 
-    await expect(page.getByTestId('DialogContent__batch-delete')).toBeVisible();
-    await page.getByTestId('batch-delete-confirm').click();
+    await expect(page.getByTestId('DialogContent__bulk-delete')).toBeVisible();
+    await page.getByTestId('bulk-delete-confirm').click();
 
     await expect(page.locator('[data-type="success"]')).toBeVisible({ timeout: 5_000 });
 
-    await expect(page.getByTestId('account-row-acc-1')).toHaveCount(0);
-    await expect(page.getByTestId('account-row-acc-3')).toHaveCount(0);
-    await expect(page.getByTestId('bulk-delete-selection-bar')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-1')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-3')).toHaveCount(0);
+    await expect(page.getByTestId('selection-count')).toHaveCount(0);
+    await expect(page.getByTestId('bulk-delete-selected')).toHaveCount(0);
     await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
   });
 });

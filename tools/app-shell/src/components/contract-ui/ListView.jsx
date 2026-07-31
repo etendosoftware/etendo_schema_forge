@@ -823,6 +823,16 @@ export function ListView({
     meta: hook.meta,
     onNavigate: buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName),
     onSelectionChange: setSelectedRows,
+    // ETP-4656 — the AUTHORITATIVE selection, read-only for the slot. A custom
+    // headerTable that has to react to selection (e.g. financial-account swaps its own
+    // toolbar for the selection bar) must not mirror this by wrapping
+    // `onSelectionChange`: DataTable clears/prunes its internal Set silently from the
+    // `clearSelectionTrigger` and `deselectTrigger` effects WITHOUT calling
+    // `onSelectionChange`, so any locally-mirrored count goes stale the moment a bulk
+    // delete succeeds or the selection is cancelled — and the slot's toolbar would
+    // never come back. DataTable itself has no `selectedRows` prop (it is local state
+    // there), so forwarding this through a spread is inert.
+    selectedRows,
     onDataMutated: hook.refresh,
     isRowSelectable,
     compact: false,
@@ -854,9 +864,22 @@ export function ListView({
         <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
           {/* Selection bar or filter bar */}
           {/* Selection bar when rows are picked, otherwise the filter bar. Kept as a
-              plain `&&` around a single ternary: nesting one ternary inside another
-              here is what Sonar S3358 flags. */}
-          {!listBarHidden && (selectedRows.length > 0 ? (
+              ternary whose alternate is a plain `&&`: nesting one ternary inside
+              another here is what Sonar S3358 flags.
+
+              ETP-4658/ETP-4656 — `hideListBar` gates ONLY the idle filter bar, not the
+              selection bar. The flag exists because a custom headerTable draws the
+              window's own toolbar, so the native idle strip is a duplicate that leaves
+              an empty padded band behind (sort/refresh have no hide* flag of their own).
+              The selection bar is a different thing: transient, never empty, and the
+              standardized home of "Delete selected" — no headerTable replaces it, so
+              suppressing it here silently dropped grid multi-select delete from every
+              custom-headerTable window (that is how Cuentas financieras lost it).
+              This is safe by construction rather than by convention: the bar is
+              unreachable unless the grid is selectable, so a custom headerTable that
+              wants no selection at all simply keeps `selectable={false}` on its own
+              DataTable and never renders rows that can be picked. */}
+          {selectedRows.length > 0 ? (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
               <div className="flex items-center gap-3 h-10">
                 <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
@@ -923,7 +946,7 @@ export function ListView({
                 })}
               </div>
             </div>
-          ) : (
+          ) : !listBarHidden && (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
               <div className="flex items-center gap-2">
                 {subsetFilters && (
@@ -1115,7 +1138,7 @@ export function ListView({
                 )}
               </div>
             </div>
-          ))}
+          )}
 
           {/* KPI / header content */}
           {headerContent && (

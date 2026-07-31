@@ -155,7 +155,16 @@ export function filterAccounts(accounts, typeFilter, search) {
   });
 }
 
-export default function AccountsHeaderTable({ data, meta, onDataMutated, ...props }) {
+export default function AccountsHeaderTable({
+  data,
+  meta,
+  onDataMutated,
+  // ETP-4656 — ListView's authoritative selection (read-only here). Destructured out of
+  // `props` only so it does not travel into DataTable, where `selectedRows` is the name
+  // of local state and would read as a controlled-selection prop it does not have.
+  selectedRows,
+  ...props
+}) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
@@ -170,6 +179,17 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
   const [disconnecting, setDisconnecting] = useState(false);
 
   const reload = () => onDataMutated?.();
+
+  // ETP-4656 — the selection bar ListView renders above this slot REPLACES the toolbar
+  // rather than stacking on top of it (the standardized delete UX). ListView renders that
+  // bar as a sibling and cannot reach inside the slot, so the swap happens here.
+  //
+  // Derived straight from ListView's own state — deliberately NOT mirrored into local
+  // state off `onSelectionChange`. DataTable empties/prunes its internal selection Set
+  // silently from its `clearSelectionTrigger` / `deselectTrigger` effects without calling
+  // `onSelectionChange`, so a local mirror would still read "selected" after a successful
+  // bulk delete or a cancel, and the toolbar would never come back.
+  const selectionActive = (selectedRows?.length ?? 0) > 0;
   const { sync, disconnect } = useBankConnectionActions();
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reload });
 
@@ -249,17 +269,23 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
     // here — same as the previous hand-rolled page, which loaded every account in one
     // request. Only matters past one batch (75 accounts).
     <div className="flex h-full flex-col overflow-hidden" data-testid="cuentas-card">
-      {/* Fixed: toolbar */}
-      <div className="shrink-0 border-b border-[hsl(var(--border-subtle))] p-2">
-        <AccountsToolbar
-          typeFilter={typeFilter}
-          onTypeFilterChange={setTypeFilter}
-          search={search}
-          onSearchChange={setSearch}
-          onNewAccount={() => setWizardOpen(true)}
-          onMatchingRules={() => navigate('/match-rule')}
-          data-testid="AccountsToolbar__accthdr" />
-      </div>
+      {/* Fixed: toolbar. Unmounted (not merely hidden) while a selection is active, so
+          `cuentas-toolbar` genuinely leaves the DOM and ListView's selection bar above
+          reads as its replacement. The type filter and the search text are held in this
+          component's state, so they survive the unmount and are still applied when the
+          selection clears. */}
+      {!selectionActive && (
+        <div className="shrink-0 border-b border-[hsl(var(--border-subtle))] p-2">
+          <AccountsToolbar
+            typeFilter={typeFilter}
+            onTypeFilterChange={setTypeFilter}
+            search={search}
+            onSearchChange={setSearch}
+            onNewAccount={() => setWizardOpen(true)}
+            onMatchingRules={() => navigate('/match-rule')}
+            data-testid="AccountsToolbar__accthdr" />
+        </div>
+      )}
 
       {/* min-h-0 lets the flex child actually shrink so the inner overflow engages */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -282,12 +308,21 @@ export default function AccountsHeaderTable({ data, meta, onDataMutated, ...prop
             // Load-bearing: DataTable totals every `amount` column, and summing
             // balances across currencies without conversion is a wrong number.
             showFooterTotals={false}
-            // No bulk operations here. DataTable defaults selectable to true, which
-            // would add a checkbox column that is not part of this design. The
-            // quick-actions overlay is suppressed declaratively instead
-            // (`window.rowQuickActions.enabled: false` in decisions.json), since this
-            // list owns its actions through the trailing AccountRowActions column.
-            selectable={false}
+            // ETP-4656 — `selectable` is deliberately LEFT AT DataTable's default (true)
+            // so the checkbox column renders and ListView's standardized selection bar
+            // ("Delete selected") becomes reachable. A hardcoded `selectable={false}`
+            // here is what removed grid multi-select delete from this window; the story's
+            // scope table requires it (Cuentas financieras: F/GH/GM all ✅).
+            // Independently of selection, the hover quick-actions overlay stays
+            // suppressed declaratively (`window.rowQuickActions.enabled: false` in
+            // decisions.json), since this list owns its per-row actions through the
+            // trailing AccountRowActions column.
+            //
+            // Selection STATE stays ListView's, untouched: `onSelectionChange` (its own
+            // `setSelectedRows`) plus `clearSelectionTrigger` / `deselectTrigger` /
+            // `deselectRowIds` all reach DataTable through the `{...props}` spread above.
+            // Nothing about selection is overridden here — this slot only READS
+            // `selectedRows` to decide whether its toolbar is on screen.
             // The retired page lifted the hovered row with a drop shadow instead of
             // tinting it (`hover:z-10 hover:shadow-lg` on AccountRow's <tr>). Keeping
             // that reading — the row as a raised card — is why DataTable takes a

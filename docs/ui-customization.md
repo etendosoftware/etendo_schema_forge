@@ -410,6 +410,51 @@ unified with `useBulkRowDelete` in this sub-task — that migration is tracked
 as a follow-up. Read `hideBulkDelete: true` on a window as "has a different,
 not-yet-migrated bulk-delete," never as "has none."
 
+**`listViewOptions.hideListBar` gates only the IDLE list bar — never the
+selection bar (ETP-4658 regression fix).** `hideListBar` exists for windows whose
+custom `headerTable` slot draws the window's whole toolbar itself: the native
+idle strip is then a duplicate that leaves an empty padded band behind, because
+sort/refresh have no `hide*` flag of their own. It does **not** suppress the
+selection bar, which is a different thing — transient, never empty, and the
+standardized home of "Delete selected". While it did suppress both, every
+custom-`headerTable` window silently lost grid multi-select delete; that is how
+`financial-account` lost it, since the flag hid the only delete affordance even
+once the grid was selectable again.
+
+This is safe by construction rather than by convention: **the selection bar is
+unreachable unless the grid is selectable.** A custom `headerTable` that wants no
+selection at all simply keeps `selectable={false}` on its own `DataTable` and
+never renders rows that can be picked — so it never sees a selection bar either
+way. Conversely, a window that wants checkboxes but not the *generic* delete
+button uses `hideBulkDelete`, not `hideListBar`.
+
+Note that a window doing this swaps two bars, not stacks them: `ListView` renders
+its selection bar as a **sibling above** the slot and cannot reach inside it, so
+the slot must hide its own toolbar while a selection exists. To let it, `ListView`
+now forwards its authoritative **`selectedRows`** in the Table-slot props
+(read-only for the slot; `DataTable` has no such prop, so the spread is inert):
+
+```jsx
+function MyHeaderTable({ data, meta, selectedRows, ...props }) {
+  const selectionActive = (selectedRows?.length ?? 0) > 0;
+  return (
+    <>
+      {!selectionActive && <MyToolbar />}
+      <DataTable {...props} data={data} /* selectable stays at its default */ />
+    </>
+  );
+}
+```
+
+**Do NOT mirror the selection into slot-local state by wrapping
+`onSelectionChange`.** `DataTable` empties and prunes its internal selection `Set`
+silently from its `clearSelectionTrigger` / `deselectTrigger` effects **without**
+calling `onSelectionChange`, so a local mirror still reads "selected" after a
+successful bulk delete or a cancel — and the slot's toolbar never comes back.
+Always derive from the `selectedRows` prop. See
+`artifacts/financial-account/custom/AccountsHeaderTable.jsx` for the canonical
+example — including why the toolbar is unmounted rather than merely hidden.
+
 **Standardized delete-failure UX (applies to header, row, and bulk delete —
 no configuration needed):**
 

@@ -11,8 +11,9 @@
  * archived accounts, "Inactivas" shows only archived across types, search inside the
  * inactive view, missing `active` flag counts as active) plus the new surface the slot
  * owns: the contract-driven data columns (headers from `gridLabelKey`, cell bodies bound
- * through `cellType` → ACCOUNT_CELL_TYPES), the one hand-appended actions column, and the
- * stopPropagation guards that keep the pill / row actions from triggering row navigation.
+ * through `cellType` → ACCOUNT_CELL_TYPES), the one hand-appended actions column, the
+ * stopPropagation guards that keep the pill / row actions from triggering row navigation, and
+ * the ETP-4656 toolbar ↔ selection-bar swap the slot performs off ListView's `selectedRows`.
  *
  * The component lives in the artifact (`artifacts/financial-account/custom/`), which
  * vitest's `include` (`src/**`) does not collect — hence this file sits under the
@@ -180,15 +181,28 @@ describe('AccountsHeaderTable — layout', () => {
     expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
   });
 
-  // Only two suppressions are still expressed as DataTable props, and each is
-  // load-bearing: totalling `amount` columns would sum balances across currencies
-  // without conversion, and DataTable defaults `selectable` to true, which would add
-  // a checkbox column that is not part of this design.
-  it('suppresses bulk selection and footer totals on the grid', () => {
+  // ETP-4656 regression guard. Only ONE suppression is left as a DataTable prop, and it
+  // is load-bearing: totalling `amount` columns would sum balances across currencies
+  // without conversion. `selectable` must NOT be suppressed — DataTable defaults it to
+  // true, and that default is what renders the checkbox column and makes ListView's
+  // standardized selection bar ("Eliminar seleccionados") reachable. A hardcoded
+  // `selectable={false}` here is exactly what dropped grid multi-select delete from
+  // this window; the story's scope table requires it (Cuentas financieras: GM ✅).
+  it('leaves the checkbox column reachable and suppresses only footer totals', () => {
     renderTable();
 
-    expect(tableProps.selectable).toBe(false);
+    expect(tableProps.selectable).not.toBe(false);
     expect(tableProps.showFooterTotals).toBe(false);
+  });
+
+  // Selection STATE belongs to ListView/DataTable. `selectedRows` is ListView's own prop
+  // name for the authoritative selection, but DataTable calls its LOCAL state the same
+  // thing and has no such prop — letting it ride the `{...props}` spread would read as a
+  // controlled-selection API that does not exist. The slot must consume it, not relay it.
+  it('consumes ListView\'s selectedRows instead of relaying it to DataTable', () => {
+    renderTable({ selectedRows: [BASE_ACCOUNTS[0]] });
+
+    expect(tableProps.selectedRows).toBeUndefined();
   });
 
   // `filters={[]}` was inert (ListView supplies `onFilterChange`, which wins), and
@@ -231,6 +245,82 @@ describe('AccountsHeaderTable — layout', () => {
 
     expect(screen.getByTestId('cuentas-card')).toBeInTheDocument();
     expect(screen.getByTestId('data-table')).toBeInTheDocument();
+  });
+});
+
+/**
+ * ETP-4656 — the selection bar ListView draws above this slot REPLACES the window toolbar
+ * instead of stacking on top of it. ListView renders that bar as a sibling and cannot reach
+ * inside the slot, so the swap has to happen here, driven by the `selectedRows` prop.
+ *
+ * Unmounting (not hiding) is the contract the e2e spec asserts with
+ * `getByTestId('cuentas-toolbar')).toHaveCount(0)`, and the swap is driven straight off
+ * ListView's state rather than a local mirror of `onSelectionChange` — DataTable empties or
+ * prunes its internal selection Set silently from its `clearSelectionTrigger` /
+ * `deselectTrigger` effects WITHOUT calling `onSelectionChange`, so a mirror would still read
+ * "selected" after a successful bulk delete and the toolbar would never come back.
+ */
+describe('AccountsHeaderTable — toolbar / selection-bar swap', () => {
+  it('keeps the toolbar mounted while nothing is selected', () => {
+    renderTable({ selectedRows: [] });
+
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+  });
+
+  it('treats a missing selectedRows prop as an empty selection', () => {
+    renderTable();
+
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+  });
+
+  it('unmounts its own toolbar while a selection is active', () => {
+    renderTable({ selectedRows: [BASE_ACCOUNTS[0]] });
+
+    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
+    // Only the toolbar goes; the grid and the KPI sidebar stay.
+    expect(screen.getByTestId('data-table')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-1')).toBeInTheDocument();
+  });
+
+  it('brings the toolbar back when the selection empties', () => {
+    const { rerender } = render(
+      <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[BASE_ACCOUNTS[0]]} />,
+    );
+    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
+
+    rerender(
+      <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[]} />,
+    );
+
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+  });
+
+  // The type filter and the search term live in this component's state, so the unmount must
+  // not reset them: the grid stays filtered while the selection bar is up (the user only ever
+  // bulk-deletes what they can see), and the toolbar comes back showing the same term.
+  it('preserves the search term across the toolbar unmount and remount', () => {
+    const { rerender } = render(
+      <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[]} />,
+    );
+    fireEvent.change(screen.getByTestId('cuentas-search-input'), { target: { value: 'visa' } });
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+
+    rerender(
+      <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[BASE_ACCOUNTS[2]]} />,
+    );
+    // Still filtered with the toolbar gone.
+    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+
+    rerender(
+      <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[]} />,
+    );
+
+    expect(screen.getByTestId('cuentas-search-input')).toHaveValue('visa');
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
   });
 });
 

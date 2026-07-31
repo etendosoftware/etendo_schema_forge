@@ -932,6 +932,77 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 - Nothing validates `gridLabelKey` or `cellType` (no rule in the pipeline validator, no whitelist). A typo'd label key renders **the key itself** on screen, because `useUI` returns the key on a miss; an unknown `cellType` falls back to DataTable's generic type renderer.
 - `readOnlyLogic.js` for these fields is produced by `generate-contract.js → convertLogicToJs` (AD expression → JS). The translator handles `@Col@='v'`, `!=`, empty (`!''`/`=''`), `null` and numeric (`>0`) forms; any expression that still contains a raw `@token@` after translation is marked `evaluable:false` (never emits invalid JS). All `readonlylogic-valid` contract tests must stay green after a regen.
 
+### Grid multi-select delete on the Cuentas list (ETP-4656 · restored in ETP-4658)
+
+The list supports **selecting several accounts and deleting them in one action**, per
+ETP-4656's scope table (*Contabilidad y Finanzas → Cuentas financieras: F ✅ · GH ✅ ·
+GM ✅*, where GM = grid multi-select). It runs entirely on the **standardized generic
+path** — no bespoke bulk-delete code in this window:
+
+| Piece | Where it lives |
+| --- | --- |
+| Row checkboxes | `DataTable`'s own `selectable` column (its default, `true`) |
+| Selection state | `ListView` (`selectedRows`, `clearSelectionCounter`, `deselectTrigger`, `deselectRowIds`) — forwarded read-only to the slot as `selectedRows` |
+| Selection bar + "Eliminar seleccionados" | `ListView`, rendered **above** the `AccountsHeaderTable` slot |
+| Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` → `lib/batchDelete.js` |
+
+**How the flow behaves.** Tick one or more row checkboxes → the slot's own
+`AccountsToolbar` unmounts and `ListView`'s selection bar takes its place (one swap, not
+two stacked bars) → **Eliminar seleccionados (N)** opens the shared confirm dialog → on
+confirm one DELETE per row goes out in parallel, then a single toast reports the outcome:
+
+- **all succeeded** → list refetches, selection clears, toolbar comes back.
+- **partial failure** → list refetches (the deleted rows disappear) and only the *failed*
+  rows stay checked, so the user can retry exactly those. `ListView` keeps them checked in
+  DataTable's internal Set via `deselectTrigger` + `deselectRowIds`.
+- **all failed** → no refetch, selection untouched.
+
+**"Delete" here means archive.** The generic path issues
+`DELETE {apiBaseUrl}/{entity}/{id}` = `DELETE /sws/neo/financial-account/account/{id}`,
+which is byte-for-byte the endpoint `useAccountMutations().archiveAccount(id)` calls. So
+`FinancialAccountHandler`'s open-reconciliations guard (409) and its soft-archive
+(`IsActive='N'`) apply unchanged, and a guarded account simply lands in the "failed"
+bucket of the partial-failure branch above. That equivalence is *why* no bespoke
+`useBatchDeleteDialog` + `archiveAccount` wiring was added here — unlike the **Movimientos**
+and **Extractos importados** detail tabs, which are not `ListView`s and therefore must keep
+their own `BulkDeleteSelectionBar` + `useBatchDeleteDialog`.
+
+**Two things were load-bearing to make this work, and both are easy to re-break:**
+
+1. **`AccountsHeaderTable` must NOT pass `selectable={false}` to `DataTable`.** It did
+   (hardcoded *after* the `{...props}` spread, so it won), which is exactly how the feature
+   was lost: ETP-4656 built bulk delete on the retired hand-assembled
+   `pages/FinancialAccountsPage.jsx`, ETP-4658 replaced that page with this slot on a
+   divergent branch, and with no textual conflict the tests outlived the feature. The slot
+   now leaves `selectable` at DataTable's default and forwards `{...props}` untouched so
+   `onSelectionChange` / `clearSelectionTrigger` / `deselectTrigger` / `deselectRowIds`
+   reach the grid. The hover quick-actions overlay stays suppressed **separately** and
+   declaratively (`window.rowQuickActions.enabled: false`), since per-row actions belong to
+   the trailing `AccountRowActions` column — do not conflate the two.
+   The toolbar swap reads `ListView`'s `selectedRows` prop directly and **must not** mirror
+   it into slot-local state via `onSelectionChange`: `DataTable` empties its internal
+   selection `Set` silently from its `clearSelectionTrigger` / `deselectTrigger` effects
+   without calling `onSelectionChange`, so a mirror would still read "selected" after a
+   successful bulk delete or a cancel and the toolbar would never reappear.
+2. **`listViewOptions.hideListBar` gates only the IDLE list bar, not the selection bar** —
+   see `docs/ui-customization.md` §9c. This window sets `hideListBar: true` (its slot draws
+   the whole toolbar), and while that flag also suppressed the selection bar there was no
+   delete affordance to reach even with checkboxes on.
+
+The wrapper (`windows/custom/financial-account/index.jsx`) also sets
+`listViewOptions.hideEye: true`: a financial account is not a printable document, so the
+selection bar's document-preview action has nothing to show. `hidePrint` already covers the
+Printer button from `decisions.json`; `hideEye` has no `decisions.json` equivalent, so it is
+set on the wrapper. Net result: **Eliminar seleccionados** is the only action in the bar.
+
+**Testids** for anyone writing specs against this: row `row-{id}` (its checkbox is the
+`Checkbox__eb5261` inside it — DataTable does not emit a per-row select testid),
+`selection-count`, `bulk-delete-selected`, and the dialog's
+`DialogContent__bulk-delete` / `bulk-delete-confirm` / `Button__bulk-delete-cancel`.
+The toolbar's `cuentas-toolbar` genuinely **leaves the DOM** while a selection is active
+(it is unmounted, not hidden), so a `toHaveCount(0)` assertion is correct. Type filter and
+search text are held in `AccountsHeaderTable` state, so they survive that unmount.
+
 ## Known deviations from the Figma frame
 
 - **Row kebab visible on hover only** — appears via CSS `opacity-0 group-hover:opacity-100`. Figma shows it always-visible.
