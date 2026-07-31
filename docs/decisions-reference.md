@@ -767,6 +767,19 @@ identifier resolution).
 | `clearable` | boolean | `true` | Controls the chip's clear (`×`) button on the unified `CreatableSearchSelect`. Defaults to `true` (shown) for every selector/enum field, including required ones. Set `"clearable": false` on a specific field to hide the `×` for that field only. |
 | `dependsOn` | object \| null | `null` | Parent field dependency for cascading selectors. |
 
+**`DocumentType` carve-out — saved-value translation is window-scoped (ETP-4737):** the `optionTranslator`
+built for `reference: 'DocumentType'` fields (renames/hides options — reversed/credit/return/rectificativa
+tabs) is generic to every window, but the extra step that also translates the already-saved/selected value
+through that same translator (so a saved record shows the same label the options list would show) is
+gated to `sales-invoice` and `purchase-invoice` ONLY, via a `windowName` prop threaded from each window's
+`index.jsx` → `HeaderPage` → `DetailView` → `EntityForm` (see `SAVED_VALUE_TRANSLATION_WINDOWS` in
+`EntityForm.jsx`). `payment-out` (`documentType`) and `purchase-order` (`transactionDocument`) keep showing
+the raw AD identifier for their saved value — their real doc-type vocabulary ("AP Payment", "Credit Order",
+etc.) doesn't match the translator's invoice-specific keywords and would otherwise mislabel the field (e.g.
+falling back to "Factura"). This is a hardcoded window-name gate inside a shared component — a deliberate,
+narrow exception (same class as the pre-existing `DocumentType` carve-out itself), not a decisions.json
+option; there is nothing to configure per-window here.
+
 **dependsOn format:**
 ```json
 {

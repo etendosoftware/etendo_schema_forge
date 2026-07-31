@@ -35,7 +35,10 @@ vi.mock('../SelectorInput.jsx', () => ({
 
 import { EntityForm } from '../EntityForm.jsx';
 
-function renderDocumentTypeField(identifier = 'Invoice') {
+// `windowName` defaults to 'sales-invoice' — one of the two windows the ETP-4737
+// saved-value translation is scoped to (see SAVED_VALUE_TRANSLATION_WINDOWS in
+// EntityForm.jsx) — so existing call sites that don't pass it keep testing that path.
+function renderDocumentTypeField(identifier = 'Invoice', windowName = 'sales-invoice') {
   capturedOptionTranslator = undefined;
   capturedDisplayValue = undefined;
   const fields = [
@@ -49,6 +52,7 @@ function renderDocumentTypeField(identifier = 'Invoice') {
       token="tok"
       apiBaseUrl="/api"
       entity="header"
+      windowName={windowName}
     />,
   );
   expect(screen.getByTestId('selector-input')).toBeInTheDocument();
@@ -101,5 +105,41 @@ describe('EntityForm — selected-value display uses optionTranslator (ETP-4737)
   it('falls back to the raw identifier for a reversed doc type instead of going blank', () => {
     renderDocumentTypeField('AR Invoice Reversed');
     expect(capturedDisplayValue).toBe('AR Invoice Reversed');
+  });
+});
+
+describe('EntityForm — saved-value translation scoped OUT of payment-out/purchase-order (ETP-4737 scope-down)', () => {
+  it('does NOT translate the saved value for payment-out — shows the raw doc-type identifier', () => {
+    renderDocumentTypeField('AP Payment', 'payment-out');
+    expect(capturedDisplayValue).toBe('AP Payment');
+  });
+
+  it('does NOT translate the saved value for payment-out even when the raw name would match a keyword', () => {
+    renderDocumentTypeField('Payment Proposal', 'payment-out');
+    expect(capturedDisplayValue).toBe('Payment Proposal');
+  });
+
+  it('does NOT translate the saved value for purchase-order — shows the raw doc-type identifier', () => {
+    renderDocumentTypeField('Credit Order', 'purchase-order');
+    expect(capturedDisplayValue).toBe('Credit Order');
+  });
+
+  it('does NOT translate a purchase-order "Return Material" doc type into the returnsTab label', () => {
+    renderDocumentTypeField('Return Material', 'purchase-order');
+    expect(capturedDisplayValue).toBe('Return Material');
+  });
+
+  it('leaves the ETP-4600 options-list optionTranslator itself untouched for out-of-scope windows', () => {
+    // The scope-down only gates the saved-VALUE display (ETP-4737); the pre-existing
+    // options-list translator (ETP-4600) must still fire for every DocumentType field,
+    // regardless of window, exactly as before this change.
+    const translate = renderDocumentTypeField('AP Payment', 'payment-out');
+    expect(translate('Credit Note')).toBe('creditNotesTab');
+    expect(translate('AR Invoice')).toBe('invoicesTab');
+  });
+
+  it('still translates the saved value for sales-invoice/purchase-invoice (unaffected by scope-down)', () => {
+    renderDocumentTypeField('Factura Rectificativa (compras)', 'purchase-invoice');
+    expect(capturedDisplayValue).toBe('rectificativeInvoicesTab');
   });
 });

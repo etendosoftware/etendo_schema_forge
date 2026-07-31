@@ -28,6 +28,17 @@ function buildSelectPlaceholder(ui, label) {
   return `${ui('selectLabelPrefix')} ${label}...`;
 }
 
+// ETP-4737 scope-down: the saved/selected-value translation added below (renderSelectorField)
+// only makes sense for windows whose DocumentType vocabulary the optionTranslator keywords
+// (credit/memo/return/devoluci/rectific) actually understand. `payment-out`'s real doc types
+// ("AP Payment", "Payment Proposal") and `purchase-order`'s ("Credit Order", "Return Material")
+// either fall through to the wrong tab label (defaulting to "Factura") or get mistranslated
+// into an invoice-only concept ("Nota de Crédito") that doesn't apply to an order/payment
+// context. Scope the saved-value translation to the two windows it was built for; the
+// pre-existing ETP-4600 options-list optionTranslator itself is untouched and still applies
+// to every `reference: 'DocumentType'` field regardless of window.
+const SAVED_VALUE_TRANSLATION_WINDOWS = new Set(['sales-invoice', 'purchase-invoice']);
+
 // Static-select onChange value mapping: boolean-backed options may carry real
 // booleans OR string values from different sources, hence the `String(id)`
 // coercion before comparing to 'true'. Non-boolean fields pass the id through.
@@ -619,7 +630,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *  - catalogs: Record<string, Array<{ id, name, ... }>> for FK reference data
  *  - displayLogic: { readOnly: { fieldName: bool }, visibility: { fieldName: bool } }
  */
-export function EntityForm({ entity, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -815,10 +826,14 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     // simplified GO label. `optionTranslator` can return null for the 'reversed' case
     // (intentionally hidden from the options list), so fall back to the raw identifier
     // rather than rendering a blank value for an already-saved record of that type.
+    // Scoped to sales-invoice/purchase-invoice only (ETP-4737 follow-up) — see
+    // SAVED_VALUE_TRANSLATION_WINDOWS above for why payment-out/purchase-order must NOT
+    // get this and instead keep showing their raw identifier, exactly as before this fix.
     const rawIdentifier = resolveIdentifier(data, f.key);
+    const applySavedValueTranslation = optionTranslator && SAVED_VALUE_TRANSLATION_WINDOWS.has(windowName);
     // Guard against calling optionTranslator on a null/undefined identifier (e.g. a new
     // record with no document type selected yet) — its `name.toLowerCase()` would throw.
-    const displayValue = optionTranslator && rawIdentifier
+    const displayValue = applySavedValueTranslation && rawIdentifier
       ? (optionTranslator(rawIdentifier) ?? rawIdentifier)
       : rawIdentifier;
     return (
