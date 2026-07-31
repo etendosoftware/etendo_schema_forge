@@ -11,6 +11,7 @@ import {
   fetchById,
   fetchByCriteria,
 } from '@/components/related-documents';
+import { getArSubtype } from './invoiceSubtype';
 
 export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
   const [order, setOrder] = useState(null);
@@ -38,9 +39,14 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         })()
       );
 
-      // If this is a credit note, fetch original invoices from the same order
-      const isCreditNote = data['transactionDocument$_identifier']?.toLowerCase().includes('credit');
-      if (isCreditNote) {
+      // If this is a rectificative invoice (ETP-4737: unified subtype, formerly
+      // separate NC/DEV), fetch original invoices from the same order. Uses
+      // getArSubtype (server-injected arInvoiceSubtype, with an identifier-based
+      // fallback) rather than a raw identifier substring match — the new unified
+      // "Factura Rectificativa" doc type never contains "credit" in its name, so
+      // a plain `.includes('credit')` check would silently miss it.
+      const isRectificativa = getArSubtype(data) === 'RECTIFICATIVA';
+      if (isRectificativa) {
         promises.push(
           fetchByCriteria('sales-invoice', 'header', 'salesOrder', orderId, token, apiBaseUrl)
             .then(d => setOriginalInvoices(d.filter(inv => inv.id !== recordId)))
