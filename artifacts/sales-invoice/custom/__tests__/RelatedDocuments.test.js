@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getArSubtype } from '../invoiceSubtype.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'RelatedDocuments.jsx'), 'utf8');
@@ -34,7 +35,6 @@ describe('sales-invoice RelatedDocuments', () => {
 
     it('does not gate linkedShipments behind an order-scoped goods-shipment fetch anymore', () => {
       assert.doesNotMatch(src, /fetchByCriteria\('goods-shipment'/);
-      assert.doesNotMatch(src, /getArSubtype/);
     });
 
     it('classifies each linked shipment via the server-provided isReturn flag, not movementType', () => {
@@ -55,6 +55,48 @@ describe('sales-invoice RelatedDocuments', () => {
 
     it('does not render the dropped sourceReturnReceipt chip branch', () => {
       assert.doesNotMatch(src, /sourceReturnReceipt/);
+    });
+  });
+
+  // ETP-4737: this used to be an obsolete regression guard asserting the
+  // source does NOT use getArSubtype at all. RelatedDocuments.jsx was
+  // correctly changed in this ticket to gate the original-invoices fetch on
+  // getArSubtype(data) === 'RECTIFICATIVA' (replacing a fragile
+  // `transactionDocument$_identifier.includes('credit')` string check that
+  // could never recognize the new unified "Factura Rectificativa" doc type).
+  // These tests verify the real gating behavior, not just its absence of the
+  // old check.
+  describe('original-invoices fetch gating via getArSubtype (ETP-4737)', () => {
+    it('declares the isRectificativa gate using getArSubtype(data)', () => {
+      assert.match(src, /const isRectificativa = getArSubtype\(data\) === 'RECTIFICATIVA'/);
+      assert.match(src, /if \(isRectificativa\) \{/);
+    });
+
+    it('gates the fetch open for a RECTIFICATIVA row (server-injected subtype)', () => {
+      const rectificativaRow = { arInvoiceSubtype: 'RECTIFICATIVA' };
+      assert.equal(getArSubtype(rectificativaRow) === 'RECTIFICATIVA', true);
+    });
+
+    it('keeps the fetch closed for a plain FAC row (server-injected subtype)', () => {
+      const facRow = { arInvoiceSubtype: 'FAC' };
+      assert.equal(getArSubtype(facRow) === 'RECTIFICATIVA', false);
+    });
+
+    it('gates open for a legacy invoice (no arInvoiceSubtype yet) via the identifier fallback', () => {
+      // The former ".includes('credit')"-only check recognized this legacy
+      // wording, but would have silently missed the new unified doc type below.
+      const legacyCreditNote = { 'transactionDocument$_identifier': 'Nota de Crédito' };
+      assert.equal(getArSubtype(legacyCreditNote) === 'RECTIFICATIVA', true);
+    });
+
+    it('gates open for the new unified "Factura Rectificativa" doc type, which a raw "credit" substring match would have missed', () => {
+      const newRectificativa = { 'transactionDocument$_identifier': 'Factura Rectificativa' };
+      assert.equal(getArSubtype(newRectificativa) === 'RECTIFICATIVA', true);
+    });
+
+    it('keeps the fetch closed for a plain "Standard Invoice" identifier', () => {
+      const plainInvoice = { 'transactionDocument$_identifier': 'Standard Invoice' };
+      assert.equal(getArSubtype(plainInvoice) === 'RECTIFICATIVA', false);
     });
   });
 
