@@ -50,6 +50,30 @@ test('four broad functional roots use the full fallback', () => {
   assert.equal(plan.profile, 'full');
 });
 
+test('a merge from an unknown or foreign parent uses the full fallback', () => {
+  const plan = selectTests(['docs/architecture.md'], {
+    mergeAnalysis: {
+      count: 1,
+      targetMerges: [],
+      foreignMerges: [{ commit: 'merge-sha', parent: 'foreign-sha' }],
+    },
+  });
+  assert.equal(plan.profile, 'full');
+  assert.equal(plan.e2e, 'e2e-full');
+});
+
+test('a target synchronization merge keeps normal diff classification', () => {
+  const plan = selectTests(['docs/architecture.md'], {
+    mergeAnalysis: {
+      count: 1,
+      targetMerges: [{ commit: 'merge-sha', parent: 'target-sha' }],
+      foreignMerges: [],
+    },
+  });
+  assert.equal(plan.profile, 'none');
+  assert.equal(plan.e2e, 'no-e2e');
+});
+
 test('merge blocks are detected by label or defensive title', () => {
   assert.equal(isMergeBlock({ title: 'Feature', labels: [{ name: 'merge-block' }] }), true);
   assert.equal(isMergeBlock({ title: 'Feature ETP-4739: Merge Block 30/07', labels: [] }), true);

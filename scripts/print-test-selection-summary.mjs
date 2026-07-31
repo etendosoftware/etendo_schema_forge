@@ -16,6 +16,12 @@ export function formatSelectionSummary(plan, { base = 'unavailable', head = 'HEA
   const reasons = plan.reasons.length
     ? plan.reasons.map((reason) => `  - ${reason}`).join('\n')
     : '  - No additional reason recorded.';
+  const merges = plan.mergeAnalysis ?? { count: 0, targetMerges: [], foreignMerges: [] };
+  const mergeDecision = merges.count === 0
+    ? 'No merges detected'
+    : merges.foreignMerges.length > 0
+      ? `${merges.foreignMerges.length} foreign/unknown parent(s) -> e2e-full`
+      : `${merges.targetMerges.length} target synchronization parent(s) -> normal diff classification`;
 
   return [
     '',
@@ -24,6 +30,7 @@ export function formatSelectionSummary(plan, { base = 'unavailable', head = 'HEA
     '========================================================================',
     ` Diff:             ${base}...${head}`,
     ` Changed files:    ${plan.files?.length ?? 0}`,
+    ` Merge analysis:   ${mergeDecision}`,
     ` Test profile:     ${plan.profile}`,
     ` E2E classification: ${classification}`,
     ` Playwright action:  ${action}`,

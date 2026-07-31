@@ -54,11 +54,17 @@ export function selectTests(files, options = {}) {
   const e2eTests = new Set();
   const regenSpecs = new Set();
   const e2e = classifyE2E({ files: changedFiles, base: options.base, title: options.title });
+  const mergeAnalysis = options.mergeAnalysis ?? { count: 0, targetMerges: [], foreignMerges: [] };
   let full = level === 'full';
   let functionalRoots = new Set();
 
   if (changedFiles.length === 0) {
-    return { level, profile: 'none', e2e: 'no-e2e', files: [], sections: [], reasons: ['No changed files.'], commands: [] };
+    return { level, profile: 'none', e2e: 'no-e2e', mergeAnalysis, files: [], sections: [], reasons: ['No changed files.'], commands: [] };
+  }
+
+  if (mergeAnalysis.foreignMerges.length > 0) {
+    full = true;
+    reasons.push(`${mergeAnalysis.foreignMerges.length} merge parent(s) are not ancestors of the target base; using the full fallback.`);
   }
 
   for (const file of changedFiles) {
@@ -215,6 +221,7 @@ export function selectTests(files, options = {}) {
       level,
       profile: 'full',
       e2e: 'e2e-full',
+      mergeAnalysis,
       files: changedFiles,
       sections: ['full'],
       reasons: unique(reasons),
@@ -250,6 +257,7 @@ export function selectTests(files, options = {}) {
     level,
     profile: functional ? (level === 'focused' ? 'focused' : 'affected') : 'none',
     e2e: e2e.classification,
+    mergeAnalysis,
     files: changedFiles,
     sections: unique(sections),
     reasons: unique(reasons),
@@ -260,6 +268,24 @@ export function selectTests(files, options = {}) {
 function changedFiles(base, head) {
   const output = execFileSync('git', ['diff', '--name-only', `${base}...${head}`], { cwd: REPO_ROOT, encoding: 'utf8' });
   return output.split(/\r?\n/).filter(Boolean);
+}
+
+export function analyzeMerges(base, head) {
+  const output = execFileSync('git', ['rev-list', '--merges', '--parents', `${base}..${head}`], { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
+  const targetMerges = [];
+  const foreignMerges = [];
+
+  for (const line of output ? output.split(/\r?\n/) : []) {
+    const [commit, , ...mergedParents] = line.trim().split(/\s+/);
+    for (const parent of mergedParents) {
+      const result = spawnSync('git', ['merge-base', '--is-ancestor', parent, base], { cwd: REPO_ROOT });
+      const entry = { commit, parent };
+      if (result.status === 0) targetMerges.push(entry);
+      else foreignMerges.push(entry);
+    }
+  }
+
+  return { count: targetMerges.length + foreignMerges.length, targetMerges, foreignMerges };
 }
 
 export function runPlan(plan) {
@@ -299,7 +325,11 @@ function formatText(plan) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = parseArgs(process.argv.slice(2));
-  const plan = selectTests(changedFiles(args.base, args.head), { level: args.level });
+  const plan = selectTests(changedFiles(args.base, args.head), {
+    level: args.level,
+    base: args.base,
+    mergeAnalysis: analyzeMerges(args.base, args.head),
+  });
   console.log(args.format === 'json' ? JSON.stringify(plan, null, 2) : formatText(plan));
   if (args.run) process.exit(runPlan(plan));
 }

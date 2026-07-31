@@ -9,6 +9,11 @@ test('prints the classification and resulting Playwright action prominently', ()
     files: ['artifacts/order/decisions.json'],
     sections: ['artifact-contract'],
     reasons: ['A backend contract changed.'],
+    mergeAnalysis: {
+      count: 1,
+      targetMerges: [],
+      foreignMerges: [{ commit: 'merge-sha', parent: 'foreign-sha' }],
+    },
   }, { base: 'origin/epic/ETP-3504', head: 'HEAD' });
 
   assert.match(output, /PRE-PUSH TEST CLASSIFICATION/);
@@ -16,4 +21,5 @@ test('prints the classification and resulting Playwright action prominently', ()
   assert.match(output, /Playwright action:  Run Playwright project: integration/);
   assert.match(output, /Prepared Etendo environment required at BASE_URL/);
   assert.match(output, /Changed files:\s+1/);
+  assert.match(output, /Merge analysis:\s+1 foreign\/unknown parent\(s\) -> e2e-full/);
 });
