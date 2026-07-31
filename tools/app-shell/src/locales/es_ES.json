@@ -14090,7 +14090,7 @@
       "label": "Rol permisos"
     },
     "Return to Vendor Shipment": {
-      "label": "Devolución a albarán de proveedor",
+      "label": "Albarán de Devolución",
       "newLabel": "Nuevo albarán de devolución"
     },
     "Alert": {
@@ -16387,7 +16387,7 @@
       "label": "Devolución a Proveedor"
     },
     "Return to Vendor Shipment": {
-      "label": "Albarán de Devolución a Proveedor"
+      "label": "Albarán de Devolución"
     },
     "Quotation": {
       "label": "Presupuesto"
@@ -22429,7 +22429,7 @@
       "label": "Rol permisos"
     },
     "Return to Vendor Shipment": {
-      "label": "Albarán de Devolución a Proveedor"
+      "label": "Albarán de Devolución"
     },
     "Alert": {
       "label": "Alertas"
