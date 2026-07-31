@@ -1,7 +1,7 @@
 {
   "version": "0.18.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "contractChecksum": "156da53caaa66f88",
+  "contractChecksum": "7905beb6e8addfe5",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
