@@ -765,11 +765,24 @@ window now owns a distinct key for this string.
   asserts `'RECTIFICATIVA'` (not the old `'NC'` literal) plus a case for the new
   "Factura Rectificativa (compras)" identifier and the server-injected
   `apInvoiceSubtype` override.
-- No automated coverage yet exists for `ImportFromGoodsReturnModal.jsx` or
-  `ImportFromSourceInvoiceModal.jsx` (source-reading unit tests, mirroring
-  `ImportFromGoodsReceiptModal.test.js`/`ImportFromPurchaseOrderModal.test.js`), nor for the
-  new subtype-aware branching in `PurchaseInvoiceBottomPanel.jsx`, nor a Playwright spec for
-  the renamed subset-filter tab or the `PurchaseInvoiceHeaderTable.jsx` badge/amount fix.
+- **Coverage gap closed (this doc was stale on this point):** source-reading unit coverage for
+  `ImportFromGoodsReturnModal.jsx` and `ImportFromSourceInvoiceModal.jsx` now exists —
+  `artifacts/purchase-invoice/custom/__tests__/ImportFromGoodsReturnModal.test.js` (negative-only
+  enforcement) and `artifacts/purchase-invoice/custom/__tests__/ImportFromSourceInvoiceModal.test.js`
+  (FAC-only source filtering, rectificativa/legacy-APC exclusion, sign preservation) — added in
+  commit `dd0191c9a`. The sibling `artifacts/sales-invoice/custom/__tests__/ImportFromSourceInvoiceModal.test.js`
+  covers the equivalent sales-side flow. `PurchaseInvoiceHeaderTable.jsx`'s subtype-badge/amount fix
+  is covered by `tools/app-shell/src/windows/custom/purchase-invoice/__tests__/PurchaseInvoiceHeaderTable.test.js`
+  (asserts `SUBTYPE_BADGE[getApSubtype(row)]`, not a hardcoded doc-type name).
+- Still open: no dedicated test exists for the new subtype-aware import-button branching in
+  `PurchaseInvoiceBottomPanel.jsx` (FAC vs. RECTIFICATIVA empty-state/menu wiring itself, as
+  opposed to the modals it renders). No Playwright spec covers the **renamed** subset-filter tab
+  either — the only E2E spec for these tabs, `e2e/tests/flows/purchase-invoice-type-filter.mocked.spec.js`
+  (ETP-4036), predates ETP-4737 and still asserts the old `filter-creditnotestab` test id and
+  "Notas de crédito" tab; the real component (`tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`)
+  now renders `filter-rectificativeinvoicestab` instead, so that spec's selectors no longer match
+  the live tab and it should be treated as stale/broken test debt requiring a Tester follow-up,
+  not as current coverage.
 
 ### Review round 2 fixes (this window's list never rendered the "Facturas rectificativas" tab)
 
