@@ -113,8 +113,6 @@ if (typeof globalThis.document === 'undefined') {
 const {
   pickMessage,
   pickMessageFromObject,
-  applyContactNameDefaults,
-  applyContactsRequiredFields,
   parseCriteriaInto,
   normalizeDefaultValue,
   shouldSkipPayloadField,
@@ -225,126 +223,6 @@ describe('pickMessageFromObject', () => {
 
   it('returns null for an empty object', () => {
     assert.equal(pickMessageFromObject({}), null);
-  });
-});
-
-describe('applyContactNameDefaults', () => {
-  it('derives name from payload firstName/lastName', () => {
-    const payload = { firstName: 'John', lastName: 'Doe' };
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.name, 'John Doe');
-  });
-
-  it('falls back to source firstName/lastName when payload lacks them', () => {
-    const payload = {};
-    applyContactNameDefaults(payload, { firstName: 'Jane', lastName: 'Roe' });
-    assert.equal(payload.name, 'Jane Roe');
-  });
-
-  it('prefers payload names over source names', () => {
-    const payload = { firstName: 'Pay' };
-    applyContactNameDefaults(payload, { firstName: 'Src', lastName: 'Last' });
-    assert.equal(payload.name, 'Pay Last');
-  });
-
-  it('does NOT overwrite an existing name', () => {
-    const payload = { name: 'Existing', firstName: 'John', lastName: 'Doe' };
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.name, 'Existing');
-  });
-
-  it('sets username from name', () => {
-    const payload = { firstName: 'John', lastName: 'Doe' };
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.username, 'John Doe');
-  });
-
-  it('does not set username when name is absent', () => {
-    const payload = {};
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.name, undefined);
-    assert.equal(payload.username, undefined);
-  });
-
-  it('does not overwrite an existing username', () => {
-    const payload = { name: 'Some Name', username: 'keepme' };
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.username, 'keepme');
-  });
-
-  it('slices a long derived name to 60 chars (name and username)', () => {
-    const longFirst = 'a'.repeat(40);
-    const longLast = 'b'.repeat(40);
-    const payload = { firstName: longFirst, lastName: longLast };
-    applyContactNameDefaults(payload, {});
-    // "aaa... aaa bbb...": joined with a space then sliced to 60
-    const expected = `${longFirst} ${longLast}`.slice(0, 60);
-    assert.equal(payload.name, expected);
-    assert.equal(payload.name.length, 60);
-    assert.equal(payload.username, expected.slice(0, 60));
-    assert.equal(payload.username.length, 60);
-  });
-});
-
-describe('applyContactsRequiredFields', () => {
-  it('applies contact name defaults for a "contact" entity', () => {
-    const payload = { firstName: 'John', lastName: 'Doe' };
-    applyContactsRequiredFields('contact', payload, {});
-    assert.equal(payload.name, 'John Doe');
-  });
-
-  it('falls back businessPartner.name to source.name when payload lacks it', () => {
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
-    assert.equal(payload.name, 'Acme Corp');
-  });
-
-  it('defaults businessPartner.searchKey from source.name when absent', () => {
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
-    assert.equal(payload.searchKey, 'Acme Corp');
-  });
-
-  it('does NOT overwrite an existing searchKey', () => {
-    const payload = { searchKey: 'EXISTING' };
-    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
-    assert.equal(payload.searchKey, 'EXISTING');
-  });
-
-  it('regression: truncates a long derived searchKey to 40 chars (C_BPartner.Value AD column limit)', () => {
-    // Reproduced via a real create with a 48-char commercial name:
-    // "Value too long. Length 48, maximum allowed 40".
-    const longName = 'a'.repeat(48);
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { name: longName });
-    assert.equal(payload.searchKey, longName.slice(0, 40));
-    assert.equal(payload.searchKey.length, 40);
-  });
-
-  it('regression: does not truncate payload.name itself (only searchKey), Name has more headroom (60)', () => {
-    const longName = 'b'.repeat(48);
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { name: longName });
-    assert.equal(payload.name, longName);
-    assert.equal(payload.name.length, 48);
-  });
-
-  it('truncates the source.searchKey fallback too (not just source.name)', () => {
-    const longSearchKey = 'c'.repeat(45);
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { searchKey: longSearchKey, name: 'Short Name' });
-    assert.equal(payload.searchKey, longSearchKey.slice(0, 40));
-    assert.equal(payload.searchKey.length, 40);
-  });
-
-  it('leaves payload untouched for entities that are not contact/businessPartner', () => {
-    const payload = { name: 'Product X' };
-    const result = applyContactsRequiredFields('product', payload, {});
-    assert.deepEqual(result, { name: 'Product X' });
-  });
-
-  it('returns payload unchanged for non-object input', () => {
-    assert.equal(applyContactsRequiredFields('businessPartner', null, {}), null);
   });
 });
 
@@ -618,38 +496,38 @@ describe('buildPatchPayload', () => {
   it('includes only changed fields and skips the id key', () => {
     const editing = { id: '1', name: 'New', description: 'Same', qty: 5 };
     const selected = { id: '1', name: 'Old', description: 'Same', qty: 5 };
-    const result = buildPatchPayload(editing, selected, 'product');
+    const result = buildPatchPayload(editing, selected);
     assert.deepEqual(result, { name: 'New' });
   });
 
   it('returns an empty object when nothing changed (id ignored)', () => {
     const editing = { id: '1', name: 'Same' };
     const selected = { id: '1', name: 'Same' };
-    const result = buildPatchPayload(editing, selected, 'product');
+    const result = buildPatchPayload(editing, selected);
     assert.deepEqual(result, {});
   });
 
   it('includes a field present in editing but absent from selected', () => {
     const editing = { id: '1', extra: 'value' };
     const selected = { id: '1' };
-    const result = buildPatchPayload(editing, selected, 'product');
+    const result = buildPatchPayload(editing, selected);
     assert.deepEqual(result, { extra: 'value' });
   });
 
-  it('applies contact name defaults for a contact entity', () => {
+  // ETP-4156: a contact PATCH now carries only the changed fields. Deriving `name` from
+  // firstName/lastName is the backend's job (ContactHandler), so the payload must stay
+  // free of entity-specific extras.
+  it('does not inject entity-specific derived fields for a contact entity', () => {
     const editing = { id: '1', firstName: 'John', lastName: 'Doe' };
     const selected = { id: '1' };
-    const result = buildPatchPayload(editing, selected, 'contact');
-    assert.equal(result.firstName, 'John');
-    assert.equal(result.lastName, 'Doe');
-    assert.equal(result.name, 'John Doe');
-    assert.equal(result.username, 'John Doe');
+    const result = buildPatchPayload(editing, selected);
+    assert.deepEqual(result, { firstName: 'John', lastName: 'Doe' });
   });
 
   it('returns a fresh object, not the editing reference', () => {
     const editing = { id: '1', name: 'New' };
     const selected = { id: '1', name: 'Old' };
-    const result = buildPatchPayload(editing, selected, 'product');
+    const result = buildPatchPayload(editing, selected);
     assert.deepEqual(result, { name: 'New' });
     assert.notEqual(result, editing);
   });
