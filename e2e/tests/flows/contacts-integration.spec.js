@@ -43,6 +43,21 @@ function loadCredentials() {
 const onboardingCreds = loadCredentials();
 const RUN_INTEGRATION = process.env.E2E_USE_MOCK === '0' && !!(process.env.E2E_PASSWORD || onboardingCreds);
 
+/**
+ * Search term typed into every country picker in this file — stated once here
+ * because the reason is the same for all of them.
+ *
+ * Not 'Espa': the country label comes from C_Country (C_Country_Trl only when
+ * translated), so an instance with no Spanish translation stores it as "Spain",
+ * and 'Espa' filters every option out before the locale-tolerant España/Spain
+ * selectors ever get a chance to match. Both pickers used here filter
+ * client-side with an accent-insensitive substring match (normalizeText +
+ * includes — LocationEditorModal.jsx for the Contacts address modal,
+ * AddressSection.jsx's OptionPicker for the "Nuevo contacto" modal), and 'spa'
+ * is a substring of both "e-spa-ña" and "Spa-in", so it holds on either dataset.
+ */
+const COUNTRY_SEARCH_TERM = 'spa';
+
 /** Wait for detail view fully loaded (spinner gone, data fetched). */
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
@@ -74,6 +89,69 @@ function expectDeleteResponse(page) {
   ).catch(() => {});
 }
 
+/**
+ * Ensure the required "Clave NIF País Residencia" combobox ends up with a value.
+ *
+ * The backend supplies a default for this field asynchronously. When it lands,
+ * CreatableSearchSelect stops rendering the `field-oBTIKTaxIDKey` input and
+ * renders a selected-value chip instead (`showChip = hasSelection && ...`), so
+ * clicking the input on sight races the default: the input detaches mid-click
+ * and no element with that testid is left to re-resolve to, which is exactly
+ * how the click ends up retrying until it times out.
+ *
+ * So give the default a bounded window to arrive FIRST, and only drive the
+ * dropdown when it did not — that removes the race instead of tolerating it.
+ */
+async function ensureTaxIdKeySelected(page) {
+  const taxInput = page.getByTestId('field-oBTIKTaxIDKey');
+  const taxChip = page.getByTestId('field-oBTIKTaxIDKey-chip');
+
+  const defaultArrived = await taxChip.waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!defaultArrived) {
+    // No default on this instance — the field is still the empty combobox, and
+    // it will stay that way, so picking an option now cannot race anything.
+    await expect(taxInput).toBeVisible({ timeout: 5_000 });
+    await taxInput.click();
+    const taxOption = page.locator('[role="option"]').first();
+    await expect(taxOption).toBeVisible({ timeout: 5_000 });
+    await taxOption.click();
+  }
+
+  // Both branches must leave a real selection behind. The chip only renders
+  // when the component holds a value, so this fails loudly if the default
+  // never arrived AND the manual pick did not take effect — "already filled"
+  // can never silently mean "still empty".
+  await expect(taxChip).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * Fill every field required to save a new Empresa contact.
+ *
+ * Extracted into a helper because the save below may have to be retried after a
+ * page reload, and a reload discards the form contents: both the first attempt
+ * and the retry must fill exactly the same fields, otherwise the retry submits
+ * an empty record and can never leave /contacts/new. Sharing one helper keeps
+ * the two attempts from drifting apart.
+ */
+async function fillNewContactForm(page, { name, email }) {
+  const nameInput = page.getByRole('textbox', { name: /razón social/i });
+  await expect(nameInput).toBeVisible({ timeout: 5_000 });
+  await nameInput.clear();
+  await nameInput.fill(name);
+
+  // Clave NIF Pais Residencia (required dropdown — may be pre-filled by default)
+  await ensureTaxIdKeySelected(page);
+
+  // Email is optional — some configurations do not expose it on the form
+  const emailInput = page.getByRole('textbox', { name: /correo electrónico|email/i });
+  if (await emailInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await emailInput.fill(email);
+  }
+}
+
 
 test.describe('Contacts Integration — Full journey', () => {
   test.skip(!RUN_INTEGRATION, 'Requires real Etendo backend (E2E_USE_MOCK=0 + E2E_PASSWORD)');
@@ -83,6 +161,7 @@ test.describe('Contacts Integration — Full journey', () => {
     const ts = Date.now();
     const CONTACT_A = `E2E Contact A ${ts}`;
     const CONTACT_B = `E2E Contact B ${ts}`;
+    const CONTACT_A_EMAIL = `e2e-${ts}@test.com`;
 
     // Use onboarding-created credentials if available, otherwise env vars
     const loginOpts = onboardingCreds
@@ -129,25 +208,7 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(page).toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
 
-    // Fill Razon Social
-    const nameInput = page.getByRole('textbox', { name: /razón social/i });
-    await expect(nameInput).toBeVisible({ timeout: 5_000 });
-    await nameInput.clear();
-    await nameInput.fill(CONTACT_A);
-
-    // Fill Clave NIF Pais Residencia (required dropdown)
-    const taxSelect = page.getByTestId('field-oBTIKTaxIDKey');
-    await expect(taxSelect).toBeVisible({ timeout: 5_000 });
-    await taxSelect.click();
-    const taxOption = page.locator('[role="option"]').first();
-    await expect(taxOption).toBeVisible({ timeout: 5_000 });
-    await taxOption.click();
-
-    // Fill email (optional field — may not be present in all configurations)
-    const emailInput = page.getByRole('textbox', { name: /correo electrónico|email/i });
-    if (await emailInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await emailInput.fill(`e2e-${ts}@test.com`);
-    }
+    await fillNewContactForm(page, { name: CONTACT_A, email: CONTACT_A_EMAIL });
 
     // Save — if it fails (e.g. EM_Etgo_Identifier sequence not ready on fresh
     // onboarding environments), reload and retry once.
@@ -162,9 +223,12 @@ test.describe('Contacts Integration — Full journey', () => {
       .catch(() => false);
 
     if (!saved) {
-      // Reload to refresh backend state, then retry save
+      // Reload to refresh backend state, then re-fill and retry the save.
+      // The reload starts a brand-new empty form, so re-filling is what makes
+      // this branch a real retry instead of a guaranteed failure.
       await page.reload({ waitUntil: 'networkidle' });
       await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+      await fillNewContactForm(page, { name: CONTACT_A, email: CONTACT_A_EMAIL });
       const retrySave = page.getByTestId('action-save')
         .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
       await expect(retrySave.first()).toBeEnabled({ timeout: 10_000 });
@@ -430,7 +494,7 @@ test.describe('Contacts Integration — Full journey', () => {
     // The country picker dialog has a search input "Buscar país..."
     const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
     await expect(countrySearch).toBeVisible({ timeout: 5_000 });
-    await countrySearch.fill('Espa');
+    await countrySearch.fill(COUNTRY_SEARCH_TERM);
 
     // Wait for search results to filter — country name depends on locale (España / Spain)
     const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
@@ -512,12 +576,7 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(nameInputB).toBeVisible({ timeout: 5_000 });
     await nameInputB.fill(CONTACT_B);
 
-    const taxSelectB = page.getByTestId('field-oBTIKTaxIDKey');
-    await expect(taxSelectB).toBeVisible({ timeout: 5_000 });
-    await taxSelectB.click();
-    const taxOptionB = page.locator('[role="option"]').first();
-    await expect(taxOptionB).toBeVisible({ timeout: 5_000 });
-    await taxOptionB.click();
+    await ensureTaxIdKeySelected(page);
 
     const saveBtnB = page.getByTestId('action-save')
       .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
@@ -587,7 +646,7 @@ test.describe('Contacts Integration — Full journey', () => {
 
     // Select Contact A by navigating to its detail URL and deleting, or find by timestamp
     // Contact A may have a different name after toggle — find by email which has the timestamp
-    const rowAByEmail = page.locator('tbody tr').filter({ hasText: `e2e-${ts}@test.com` }).first();
+    const rowAByEmail = page.locator('tbody tr').filter({ hasText: CONTACT_A_EMAIL }).first();
     if (await rowAByEmail.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await rowAByEmail.getByTestId('Checkbox__eb5261').first().click();
     }
