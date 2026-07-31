@@ -50,13 +50,13 @@ vi.mock('@/components/forms/fields', () => ({
     </select>
   ),
   DateInput: ({ label }) => <input data-testid={`date-${label}`} />,
-  AmountInput: ({ label }) => <input data-testid={`amount-${label}`} />,
+  AmountInput: ({ label, currency }) => <input data-testid={`amount-${label}`} data-currency={currency ?? ''} />,
   SectionLabel: ({ children }) => <div>{children}</div>,
   LookupPicker: ({ placeholder }) => <div data-testid="lookup-picker">{placeholder}</div>,
 }));
 
 vi.mock('@/components/payment/PaymentForm', () => ({
-  PaymentForm: () => <div data-testid="payment-form">PaymentForm</div>,
+  PaymentForm: ({ currency }) => <div data-testid="payment-form" data-currency={currency ?? ''}>PaymentForm</div>,
 }));
 
 vi.mock('../movementWizardData', () => ({
@@ -223,5 +223,44 @@ describe('NewMovementWizard', () => {
   it('renders dimension selects when dimensions are provided', () => {
     render(<NewMovementWizard {...defaultProps} />);
     expect(document.body.textContent).toContain('financeAccountMovementsWizardDimensions');
+  });
+
+  // ETP-4314 — deposit/withdrawal AmountInputs and the embedded PaymentForm used
+  // to always show '€' regardless of the account's real currency. They now
+  // receive `currency={form.currencyIso}` / `currency={accountCurrency?.iso}`.
+  describe('currency propagation (ETP-4314)', () => {
+    const usdProps = { ...defaultProps, accountCurrency: { id: 'cur-usd', iso: 'USD' } };
+
+    it('passes the account currency (USD) to the deposit AmountInput', () => {
+      render(<NewMovementWizard {...usdProps} />);
+      const deposit = screen.getByTestId('amount-financeAccountMovementsNewDepositAmount');
+      expect(deposit).toHaveAttribute('data-currency', 'USD');
+    });
+
+    it('passes the account currency (USD) to the withdrawal AmountInput', () => {
+      render(<NewMovementWizard {...usdProps} />);
+      const withdrawal = screen.getByTestId('amount-financeAccountMovementsNewPaymentAmount');
+      expect(withdrawal).toHaveAttribute('data-currency', 'USD');
+    });
+
+    it('defaults both AmountInputs to EUR when no accountCurrency is given', () => {
+      render(<NewMovementWizard {...defaultProps} accountCurrency={undefined} />);
+      const deposit = screen.getByTestId('amount-financeAccountMovementsNewDepositAmount');
+      const withdrawal = screen.getByTestId('amount-financeAccountMovementsNewPaymentAmount');
+      expect(deposit).toHaveAttribute('data-currency', 'EUR');
+      expect(withdrawal).toHaveAttribute('data-currency', 'EUR');
+    });
+
+    it('passes the account currency (USD) to the embedded PaymentForm', () => {
+      render(<NewMovementWizard {...usdProps} />);
+      // Advance to stage 2 and pick "Registrar pago" to mount PaymentForm.
+      const nextBtn = Array.from(document.querySelectorAll('button'))
+        .find((b) => b.textContent.includes('financeAccountMovementsWizardNext'));
+      fireEvent.click(nextBtn);
+      const payCard = Array.from(document.querySelectorAll('button'))
+        .find((b) => b.textContent.includes('financeAccountMovementsWizardChoicePayTitle'));
+      fireEvent.click(payCard);
+      expect(screen.getByTestId('payment-form')).toHaveAttribute('data-currency', 'USD');
+    });
   });
 });

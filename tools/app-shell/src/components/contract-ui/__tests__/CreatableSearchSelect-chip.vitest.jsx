@@ -111,6 +111,34 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
     expect(onChangeSpy).toHaveBeenCalledWith('', '');
   });
 
+  it('clicking the X focuses the input so a later outside click closes the dropdown (regression)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<Harness initialValue="ADDR-1" initialDisplay="123 Main St" />);
+
+    const chip = screen.getByTestId('field-address-chip');
+    const clearBtn = chip.querySelector('[aria-label="clear"]');
+    await user.click(clearBtn);
+
+    // Chip unmounts and the input mounts (setOpen(true) in handleClear signals reopen intent).
+    const input = await screen.findByTestId('field-address');
+
+    // Without the fix, focus never moves to the input after clear — this assertion is
+    // exactly what was broken: the input never receives focus, so onBlur never fires.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(input);
+    });
+
+    // Simulate the user clicking a different field entirely (outside click) — should
+    // fire onBlur on the now-focused input, which closes the dropdown after 200ms.
+    input.blur();
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+
+    vi.useRealTimers();
+  });
+
   it('renders the ChevronDown icon with ml-auto (right-anchored, parity with SearchInput)', async () => {
     const { container } = render(<Harness />);
     // The component fires a lazy fetch on mount → loading=true initially (renders Loader2).

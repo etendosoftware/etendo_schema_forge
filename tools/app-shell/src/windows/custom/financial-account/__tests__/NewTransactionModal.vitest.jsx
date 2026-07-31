@@ -61,8 +61,11 @@ vi.mock('@/components/forms/fields', () => ({
   DateInput: ({ value, onChange, 'data-testid': dtid }) => (
     <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
   ),
-  AmountInput: ({ value, onChange, onBlur, 'data-testid': dtid }) => (
-    <input data-testid={dtid} value={value ?? ''} onChange={onChange} onBlur={onBlur} />
+  AmountInput: ({ value, onChange, onBlur, currency, 'data-testid': dtid }) => (
+    <div>
+      <input data-testid={dtid} value={value ?? ''} onChange={onChange} onBlur={onBlur} />
+      <span data-testid={`${dtid}-currency`}>{currency}</span>
+    </div>
   ),
   ChipSelect: ({ value, onChange, testId }) => (
     <div>
@@ -165,6 +168,22 @@ describe('NewTransactionModal — rendering & validity', () => {
     await user.type(amount, '20');
     await user.tab(); // blur
     expect(amount).toHaveValue('20,00');
+  });
+});
+
+describe('NewTransactionModal — amount currency (ETP-4314)', () => {
+  // Regression: AmountInput used to always show '€' regardless of the account's
+  // real currency (visually confirmed on a real USD financial account). The
+  // modal now passes `currency={iso}` (derived from accountCurrency.iso) down
+  // to AmountInput.
+  it('passes the account currency (USD) to AmountInput, not the EUR default', () => {
+    renderModal({ accountCurrency: { id: 'cur-1', iso: 'USD' } });
+    expect(screen.getByTestId('tx-amount-currency')).toHaveTextContent('USD');
+  });
+
+  it('falls back to EUR when accountCurrency is not provided', () => {
+    renderModal({ accountCurrency: null });
+    expect(screen.getByTestId('tx-amount-currency')).toHaveTextContent('EUR');
   });
 });
 

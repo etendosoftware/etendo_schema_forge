@@ -1,8 +1,9 @@
+import { formatCurrency } from '@/lib/formatCurrency.js';
+
 export function formatAmount(val, currency) {
   if (val == null) return '';
   const num = typeof val === 'string' ? parseFloat(val) : val;
-  const formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return currency ? `${formatted} ${currency}` : formatted;
+  return formatCurrency(currency, num);
 }
 
 export function neoBase(apiBaseUrl) {
