@@ -157,6 +157,7 @@ function resetState() {
   mockHook.fetchChildren.mockClear();
   mockHook.primeSaved.mockClear();
   mockHook.handleUpdateChild.mockClear();
+  mockHook.handleSelect.mockClear();
 }
 
 describe('DetailView — headerExtra slotProps refresh (ETP-4563)', () => {
@@ -303,16 +304,44 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
 
   it('force-refreshes children and header from a custom lines tab', async () => {
     const user = userEvent.setup();
-    const CustomLines = ({ onRefresh }) => (
-      <button data-testid="custom-lines-refresh" onClick={onRefresh}>refresh</button>
+    const CustomLines = ({ onRefresh, onSave }) => (
+      <div>
+        <button data-testid="custom-lines-refresh" onClick={onRefresh}>refresh</button>
+        <button data-testid="custom-lines-save" onClick={onSave}>save custom lines</button>
+      </div>
     );
     renderDetailView({ DetailTable: null, CustomLines, customLinesLabel: 'Custom Lines' });
 
-    await user.click(screen.getByRole('button', { name: /Custom Lines/i }));
     await user.click(await screen.findByTestId('custom-lines-refresh'));
+    await user.click(screen.getByTestId('custom-lines-save'));
 
     expect(mockHook.fetchChildren).toHaveBeenCalledWith('123', { force: true });
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+    expect(mockHook.handleSave).toHaveBeenCalledWith(mockHook.editing);
+  });
+
+  it('primes and navigates after saving a new record from custom lines', async () => {
+    const user = userEvent.setup();
+    const saved = { id: 'NEW-1', documentNo: 'SO-NEW' };
+    mockHook.handleSave = vi.fn().mockResolvedValue(saved);
+    const CustomLines = ({ onSave }) => (
+      <button data-testid="custom-lines-save-new" onClick={onSave}>save custom lines</button>
+    );
+    renderDetailView({
+      recordId: 'new',
+      DetailTable: null,
+      CustomLines,
+      customLinesLabel: 'Custom Lines',
+      draftMode: { enabled: false, label: 'process' },
+    });
+
+    await user.click(screen.getByTestId('custom-lines-save-new'));
+
+    await waitFor(() => expect(mockHook.primeSaved).toHaveBeenCalledWith(saved));
+    expect(mockNavigateFn).toHaveBeenCalledWith('/sales-order/NEW-1', {
+      replace: true,
+      state: { openAddLine: true },
+    });
   });
 
   it('force-refreshes the exchange-rates collection when its header inputs change', async () => {
@@ -323,16 +352,23 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
 
   it('force-refreshes the parent from a secondary custom modal', async () => {
     const user = userEvent.setup();
-    const CustomModal = ({ onParentRefresh }) => (
-      <button data-testid="modal-parent-refresh" onClick={onParentRefresh}>refresh parent</button>
+    const CustomModal = ({ onParentRefresh, onSaved, onClose }) => (
+      <div>
+        <button data-testid="modal-parent-refresh" onClick={onParentRefresh}>refresh parent</button>
+        <button data-testid="modal-saved" onClick={onSaved}>saved</button>
+        <button data-testid="modal-close" onClick={onClose}>close</button>
+      </div>
     );
     renderDetailView({
       secondaryTabs: [{ key: 'addresses', label: 'Addresses', Table: MockTable, customAddModal: CustomModal }],
     });
 
     await user.click(screen.getByTestId('modal-parent-refresh'));
+    await user.click(screen.getByTestId('modal-saved'));
+    await user.click(screen.getByTestId('modal-close'));
 
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+    expect(mockHook.handleSelect).toHaveBeenCalledWith(mockHook.selected);
   });
 
   it('mounts secondary panels and accepts their count updates', async () => {
