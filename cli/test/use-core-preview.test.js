@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   parseVersions,
+  resolveCoreRuntime,
   sanitizeBranchId,
   selectLatestPreview,
 } from '../../scripts/use-core-preview.mjs';
@@ -27,6 +28,23 @@ test('selectLatestPreview selects the newest timestamp for the current branch', 
 
 test('selectLatestPreview returns null when the branch has no published preview', () => {
   assert.equal(selectLatestPreview(['0.3.24'], 'feature/ETP-9999'), null);
+});
+
+test('resolveCoreRuntime falls back to manifest-pinned dependencies without a branch preview', () => {
+  assert.deepEqual(resolveCoreRuntime(['0.3.24'], 'feature/ETP-9999'), {
+    mode: 'pinned',
+    version: null,
+  });
+});
+
+test('resolveCoreRuntime honors an explicit immutable preview override', () => {
+  assert.deepEqual(
+    resolveCoreRuntime(['0.3.24'], 'feature/ETP-9999', '0.3.24-preview.feature-ETP-4730.20260731171859.7e5b670'),
+    {
+      mode: 'preview',
+      version: '0.3.24-preview.feature-ETP-4730.20260731171859.7e5b670',
+    },
+  );
 });
 
 test('parseVersions accepts npm view array and scalar output', () => {

@@ -79,9 +79,9 @@ newest immutable Core preview whose SemVer branch identifier matches
 `--no-save --package-lock=false`, so neither manifest nor lockfile changes.
 Use `CORE_BRANCH=<branch>` when the Core and functional branch names differ, or
 `CORE_PREVIEW_VERSION=<exact-version>` to reproduce a specific snapshot. If the
-branch has no published preview, the command fails with an actionable message;
-use `make dev-pinned` when the intentionally desired runtime is the stable
-version already recorded in `package.json`.
+branch has no published preview, the command reports it and continues with the
+Core versions recorded in `package.json`; use `make dev-pinned` to select that
+mode explicitly.
 
 **React (hot-reload against local core source):**
 ```bash

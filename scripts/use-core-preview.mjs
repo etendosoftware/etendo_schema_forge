@@ -38,6 +38,13 @@ export function selectLatestPreview(versions, branch) {
   return matches[0]?.version || null;
 }
 
+export function resolveCoreRuntime(versions, branch, exactVersion) {
+  const version = exactVersion || selectLatestPreview(versions, branch);
+  return version
+    ? { mode: 'preview', version }
+    : { mode: 'pinned', version: null };
+}
+
 export function parseVersions(raw) {
   const parsed = JSON.parse(raw);
   return Array.isArray(parsed) ? parsed : [parsed].filter(Boolean);
@@ -103,19 +110,18 @@ function main() {
   const versions = parseVersions(
     run('npm', ['view', VERSION_SOURCE_PACKAGE, 'versions', '--json']),
   );
-  const version = process.env.CORE_PREVIEW_VERSION || selectLatestPreview(versions, branch);
-  if (!version) {
-    throw new Error(
-      `No published Core preview found for ${branch}. ` +
-      'Push the matching schema_forge_core branch, wait for Publish preview packages, ' +
-      'or run make dev-pinned.',
-    );
-  }
+  const runtime = resolveCoreRuntime(versions, branch, process.env.CORE_PREVIEW_VERSION);
 
   console.log(`Schema Forge branch : ${branch}`);
   console.log(`Core branch id      : ${sanitizeBranchId(branch)}`);
-  console.log(`Core preview        : ${version}`);
-  installPreview(version);
+  if (runtime.mode === 'pinned') {
+    console.warn(`No published Core preview found for ${branch}.`);
+    console.warn('Continuing with the Core versions pinned in package.json.');
+    return;
+  }
+
+  console.log(`Core preview        : ${runtime.version}`);
+  installPreview(runtime.version);
   console.log('Package manifests   : unchanged (--no-save --package-lock=false)');
 }
 
