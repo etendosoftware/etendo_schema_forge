@@ -1,0 +1,31 @@
+{
+  "header": {
+    "c_order_id": "B2C3D4E5F60718293A4B5C6D7E8F9012",
+    "documentno": "PV/2026-000318",
+    "dateordered": "2026-07-06",
+    "doc_type": "Standard Order",
+    "bp_name": "La Fruta es la Vida, S.L.",
+    "bp_location": "Polígono Industrial Norte, Nave 7, 46980 Paterna",
+    "description": "Entrega fraccionada en dos envíos.",
+    "grandtotal": 5445.00,
+    "totallines": 4500.00,
+    "payment_term": "60 días",
+    "payment_method": "Domiciliación",
+    "delivery_term": "A domicilio",
+    "currency": "EUR",
+    "status": "Complete",
+    "org_name": "Etendo Demo, S.L.",
+    "org_taxid": "B12345678",
+    "org_address": "Avenida de la Innovación 8",
+    "org_postal": "41020",
+    "org_city": "Sevilla"
+  },
+  "lines": [
+    { "line": 10, "product_name": "Manzana Golden (caja 10kg)", "quantity": 150, "uom": "Caja", "priceactual": 14.00, "linenetamt": 2100.00 },
+    { "line": 20, "product_name": "Naranja Valencia (caja 15kg)", "quantity": 100, "uom": "Caja", "priceactual": 16.50, "linenetamt": 1650.00 },
+    { "line": 30, "product_name": "Plátano de Canarias (caja 18kg)", "quantity": 30, "uom": "Caja", "priceactual": 25.00, "linenetamt": 750.00 }
+  ],
+  "taxes": [
+    { "tax_name": "IVA 21%", "taxbaseamt": 4500.00, "taxamt": 945.00 }
+  ]
+}

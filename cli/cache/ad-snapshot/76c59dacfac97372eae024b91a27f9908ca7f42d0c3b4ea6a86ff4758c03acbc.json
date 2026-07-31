@@ -11703,6 +11703,34 @@
         }
       ]
     },
+    "cb1d36345a95e5fcce1b2f9e422683ce6d05f02303a478da5524fc857e79de1e": {
+      "checksum": "f4d766a90535524371daa93b59ea5bcf34d45e9e2193805c40c7c95dd985e53f",
+      "params": [
+        [
+          "5E528AD89E6C44929EF9C6E6274247CA"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "5E528AD89E6C44929EF9C6E6274247CA",
+          "name": "Contains",
+          "name_es": null,
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "5E528AD89E6C44929EF9C6E6274247CA",
+          "name": "Regex",
+          "name_es": null,
+          "value": "R"
+        },
+        {
+          "ad_reference_id": "5E528AD89E6C44929EF9C6E6274247CA",
+          "name": "Starts with",
+          "name_es": null,
+          "value": "S"
+        }
+      ]
+    },
     "d502eebcf56285a13e73f51515b48ae86b71fe0572a62f4db2194d4301f0ff57": {
       "checksum": "4b70a9c4cda9cdd39f6994bcd6f5515402479c48bcf3ecb9acc9912e8ca5352b",
       "params": [

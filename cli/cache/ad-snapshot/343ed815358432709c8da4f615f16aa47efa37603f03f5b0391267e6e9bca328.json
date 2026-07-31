@@ -1,6 +1,13 @@
 {
   "sql": "SELECT * FROM ( -- 1. Tab-level process SELECT 'tab_process' AS mechanism, p.AD_Process_ID AS process_id, NULL AS obuiapp_process_id, p.Name, p.Classname, NULL AS column_name FROM AD_Process p JOIN AD_Tab t ON t.AD_Process_ID = p.AD_Process_ID WHERE t.AD_Window_ID = $1 UNION ALL -- 2. Classic process (button column -> AD_Process) SELECT 'classic_process' AS mechanism, p.AD_Process_ID AS process_id, NULL AS obuiapp_process_id, p.Name, p.Classname, c.ColumnName FROM AD_Process p JOIN AD_Column c ON c.AD_Process_ID = p.AD_Process_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 UNION ALL -- 3. OBUIAPP Process (button column -> OBUIAPP_Process) SELECT 'obuiapp_process' AS mechanism, NULL AS process_id, op.OBUIAPP_Process_ID AS obuiapp_process_id, op.Name, op.Classname, c.ColumnName FROM OBUIAPP_Process op JOIN AD_Column c ON c.EM_OBUIAPP_Process_ID = op.OBUIAPP_Process_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 UNION ALL -- 4. Hardcoded buttons (no process linked) SELECT 'hardcoded' AS mechanism, NULL AS process_id, NULL AS obuiapp_process_id, c.ColumnName AS name, NULL AS classname, c.ColumnName FROM AD_Column c JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID JOIN AD_Reference r ON c.AD_Reference_ID = r.AD_Reference_ID WHERE t.AD_Window_ID = $1 AND r.Name = 'Button' AND c.AD_Process_ID IS NULL AND c.EM_OBUIAPP_Process_ID IS NULL ) q ORDER BY mechanism COLLATE \"C\", name COLLATE \"C\", column_name COLLATE \"C\" NULLS LAST, process_id COLLATE \"C\" NULLS LAST, obuiapp_process_id COLLATE \"C\" NULLS LAST",
   "versions": {
+    "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "24963D64E83B4543A7F6BD248CF944EE"
+      ],
+      "rows": []
+    },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
       "checksum": "5c0de44f8e43d1fc4a1265303b0a9b5c323e116a2ebe2b76bb45bb6fed4549c0",
       "params": [
@@ -3698,6 +3705,13 @@
           "process_id": null
         }
       ]
+    },
+    "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "82922976BB524D1BAA3CF8462B9219FE"
+      ],
+      "rows": []
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
