@@ -17,7 +17,9 @@ const breadcrumb = 'Inventory / Product';
 
 // @sf-generated-start summary:product
 const summary = [
-
+  { key: 'eTGOPurchasePrice', column: 'EM_ETGO_Purchase_Price', type: 'amount' },
+  { key: 'eTGOSalePrice', column: 'EM_ETGO_Sale_Price', type: 'amount' },
+  { key: 'eTGOStock', column: 'EM_ETGO_Stock', type: 'number' },
 ];
 
 const statusField = null;
