@@ -44,4 +44,12 @@ describe('compareStatusCodes (ETP-4696 — stable status dropdown order)', () =>
     const sorted = codes.slice().sort(compareStatusCodes);
     assert.deepEqual(sorted, ['false', 'true']);
   });
+
+  it('returns 0 for two identical unknown codes (exact tie, neither in STATUS_ORDER)', () => {
+    assert.equal(compareStatusCodes('FOO_UNKNOWN', 'FOO_UNKNOWN'), 0);
+  });
+
+  it('returns 0 for the same unknown code differing only in case (normalized tie)', () => {
+    assert.equal(compareStatusCodes('foo_unknown', 'FOO_UNKNOWN'), 0);
+  });
 });

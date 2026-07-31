@@ -15,20 +15,32 @@ vi.mock('@/lib/utils', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
 }));
 
+// Hoisted mutable state so individual tests can override the distinct-values
+// payload (e.g. to populate the backend-sourced `values` array and exercise
+// the merge loops in mergedTypeCodes/mergedStatusCodes, which the default
+// empty-array mock below never reaches).
+const { distinctValuesOverride } = vi.hoisted(() => ({
+  distinctValuesOverride: { current: null },
+}));
+
 vi.mock('@/hooks/useDistinctValues.js', () => ({
-  useDistinctValues: () => ({
+  useDistinctValues: () => distinctValuesOverride.current || {
     values: [],
     loading: false,
     loadingMore: false,
     hasMore: false,
     search: '',
-    setSearch: vi.fn(),
-    loadMore: vi.fn(),
-  }),
+    setSearch: () => {},
+    loadMore: () => {},
+  },
 }));
 
+const lastAdvancedFilterBuilderProps = { current: null };
 vi.mock('../AdvancedFilterBuilder.jsx', () => ({
-  AdvancedFilterBuilder: (props) => <div data-testid="advanced-filter-builder" />,
+  AdvancedFilterBuilder: (props) => {
+    lastAdvancedFilterBuilderProps.current = props;
+    return <div data-testid="advanced-filter-builder" />;
+  },
 }));
 
 const lastDistinctValuesListProps = { current: null };
@@ -56,6 +68,10 @@ vi.mock('@/components/ui/date-range-popover.jsx', () => ({
 }));
 
 import { ListFilterBar } from '../ListFilterBar.jsx';
+
+afterEach(() => {
+  distinctValuesOverride.current = null;
+});
 
 const COLUMNS = [
   { key: 'name', label: 'Name', type: 'string' },
@@ -716,5 +732,403 @@ describe('ListFilterBar status filter label resolution', () => {
     // here either — it still lands on the humanized fallback, proving the
     // dropdown and the grid share the exact same resolution ladder.
     expect(label).toBe('Rejected');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Active status filter flow: activeStatusCode truthy path (trigger label,
+// mergedStatusCodes appends it when absent from the other two sources) and
+// handleStatusSelect (the status-column counterpart of handleTypeSelect,
+// wired through the status DistinctValuesList's onSelect).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ListFilterBar active status filter + handleStatusSelect', () => {
+  const STATUS_COLUMNS = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'documentStatus', label: 'Status', type: 'status' },
+  ];
+
+  beforeEach(() => {
+    lastDistinctValuesListProps.current = null;
+  });
+
+  const openStatusPopover = async () => {
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-status'));
+    await Promise.resolve();
+  };
+
+  it('shows the resolved label for the active status code instead of "allStatuses"', () => {
+    render(
+      <ListFilterBar
+        columns={STATUS_COLUMNS}
+        columnFilters={{ documentStatus: { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' } }}
+        onFilterChange={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('allStatuses')).not.toBeInTheDocument();
+    expect(screen.getByTestId('filter-status')).toHaveTextContent('Complete');
+  });
+
+  it('mergedStatusCodes appends the active code when it is absent from rows and backend', async () => {
+    render(
+      <ListFilterBar
+        columns={STATUS_COLUMNS}
+        columnFilters={{ documentStatus: { mode: 'enumLabel', value: ['VO'], originalValue: 'VO' } }}
+        onFilterChange={vi.fn()}
+        rows={[]}
+      />
+    );
+
+    await openStatusPopover();
+    expect(lastDistinctValuesListProps.current.codes).toContain('VO');
+    expect(lastDistinctValuesListProps.current.activeCode).toBe('VO');
+  });
+
+  it('handleStatusSelect emits an enumLabel filter for the selected status code and closes the menu', async () => {
+    const onFilterChange = vi.fn();
+    render(
+      <ListFilterBar
+        columns={STATUS_COLUMNS}
+        columnFilters={{}}
+        onFilterChange={onFilterChange}
+      />
+    );
+
+    await openStatusPopover();
+    expect(lastDistinctValuesListProps.current).not.toBeNull();
+    act(() => {
+      lastDistinctValuesListProps.current.onSelect('IP');
+    });
+
+    expect(onFilterChange).toHaveBeenCalledWith('documentStatus', {
+      mode: 'enumLabel',
+      value: ['IP'],
+      originalValue: 'IP',
+    });
+    // The onSelect handler also calls setStatusMenuOpen(false); the popover
+    // trigger button must still be present (no crash) after the state update.
+    expect(screen.getByTestId('filter-status')).toBeInTheDocument();
+  });
+
+  it('handleStatusSelect(null) clears the status filter', async () => {
+    const onFilterChange = vi.fn();
+    render(
+      <ListFilterBar
+        columns={STATUS_COLUMNS}
+        columnFilters={{ documentStatus: { mode: 'enumLabel', value: ['IP'], originalValue: 'IP' } }}
+        onFilterChange={onFilterChange}
+      />
+    );
+
+    await openStatusPopover();
+    act(() => {
+      lastDistinctValuesListProps.current.onSelect(null);
+    });
+
+    expect(onFilterChange).toHaveBeenCalledWith('documentStatus', null);
+  });
+
+  it('inMemoryStatusCodes normalizes a boolean false row value to the string "false"', async () => {
+    render(
+      <ListFilterBar
+        columns={STATUS_COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        rows={[{ documentStatus: false }, { documentStatus: true }]}
+      />
+    );
+
+    await openStatusPopover();
+    expect(lastDistinctValuesListProps.current.codes).toEqual(
+      expect.arrayContaining(['false', 'true']),
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backend-sourced distinct values: exercises the merge loops in
+// mergedTypeCodes/mergedStatusCodes (including normalizeCode's boolean
+// handling) that the default empty-array useDistinctValues mock never
+// reaches, since `statusDistinct.values`/`typeDistinct.values` are always [].
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ListFilterBar merged codes from backend distinct values', () => {
+  const STATUS_COLUMNS = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'documentStatus', label: 'Status', type: 'status' },
+  ];
+  const TYPE_COLUMNS = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'docType', label: 'Document Type', type: 'string', isTypeFilter: true },
+  ];
+
+  beforeEach(() => {
+    lastDistinctValuesListProps.current = null;
+    distinctValuesOverride.current = null;
+  });
+
+  it('mergedTypeCodes reads codes from the backend-sourced typeDistinct.values entries', async () => {
+    distinctValuesOverride.current = {
+      values: [{ id: 'AP' }, { id: 'AR' }, { id: null }, { id: '' }],
+      loading: false,
+      loadingMore: false,
+      hasMore: false,
+      search: '',
+      setSearch: () => {},
+      loadMore: () => {},
+    };
+    render(
+      <ListFilterBar columns={TYPE_COLUMNS} columnFilters={{}} onFilterChange={vi.fn()} />
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-type'));
+    await Promise.resolve();
+
+    const codes = lastDistinctValuesListProps.current.codes;
+    expect(codes).toContain('AP');
+    expect(codes).toContain('AR');
+    // Backend entries with a null/empty id are skipped, not pushed as codes.
+    expect(codes).not.toContain(null);
+    expect(codes).not.toContain('');
+  });
+
+  it('mergedTypeCodes deduplicates a backend code that also appears in-memory', async () => {
+    distinctValuesOverride.current = {
+      values: [{ id: 'AP' }],
+      loading: false,
+      loadingMore: false,
+      hasMore: false,
+      search: '',
+      setSearch: () => {},
+      loadMore: () => {},
+    };
+    render(
+      <ListFilterBar
+        columns={TYPE_COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        rows={[{ docType: 'AP' }]}
+      />
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-type'));
+    await Promise.resolve();
+
+    const codes = lastDistinctValuesListProps.current.codes;
+    expect(codes.filter((c) => c === 'AP').length).toBe(1);
+  });
+
+  it('mergedStatusCodes normalizes boolean true/false backend ids via normalizeCode and orders them by STATUS_ORDER', async () => {
+    distinctValuesOverride.current = {
+      values: [{ id: true }, { id: false }, { id: null }, { id: '' }],
+      loading: false,
+      loadingMore: false,
+      hasMore: false,
+      search: '',
+      setSearch: () => {},
+      loadMore: () => {},
+    };
+    render(
+      <ListFilterBar columns={STATUS_COLUMNS} columnFilters={{}} onFilterChange={vi.fn()} />
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-status'));
+    await Promise.resolve();
+
+    const codes = lastDistinctValuesListProps.current.codes;
+    // normalizeCode maps boolean true/false to the strings 'true'/'false',
+    // and compareStatusCodes places 'false' (Draft bucket) before 'true'
+    // (Completed bucket) in the fixed business-flow order.
+    expect(codes).toEqual(['false', 'true']);
+  });
+
+  it('mergedStatusCodes deduplicates a backend code that also appears in-memory', async () => {
+    distinctValuesOverride.current = {
+      values: [{ id: 'CO' }],
+      loading: false,
+      loadingMore: false,
+      hasMore: false,
+      search: '',
+      setSearch: () => {},
+      loadMore: () => {},
+    };
+    render(
+      <ListFilterBar
+        columns={STATUS_COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        rows={[{ documentStatus: 'CO' }]}
+      />
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-status'));
+    await Promise.resolve();
+
+    const codes = lastDistinctValuesListProps.current.codes;
+    expect(codes.filter((c) => c === 'CO').length).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computePresetRange('last12m') + date range edge cases not covered by the
+// existing 'today'/'allTime'/preset-from-columnFilters tests: the malformed
+// activeDateRange fallback and the dateRangeValue final fallback when the
+// stored originalValue matches neither the "preset:" nor "custom:" shape.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ListFilterBar date range — remaining branches', () => {
+  const openDatePopover = async () => {
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-date'));
+    await Promise.resolve();
+  };
+
+  beforeEach(() => {
+    lastDateRangeProps.current = null;
+  });
+
+  it('handleDateRangeChange({presetId:"last12m"}) emits a range filter with preset:last12m originalValue', async () => {
+    const onFilterChange = vi.fn();
+    render(
+      <ListFilterBar
+        columns={COLUMNS}
+        columnFilters={{}}
+        onFilterChange={onFilterChange}
+        dateFilterKey="orderDate"
+      />
+    );
+
+    await openDatePopover();
+    act(() => {
+      lastDateRangeProps.current.onChange({ presetId: 'last12m' });
+    });
+
+    expect(onFilterChange).toHaveBeenCalledTimes(1);
+    const [key, payload] = onFilterChange.mock.calls[0];
+    expect(key).toBe('orderDate');
+    expect(payload.originalValue).toBe('preset:last12m');
+    expect(payload.value).toHaveLength(2);
+  });
+
+  it('dateRangeValue falls back to null when originalValue matches neither "preset:" nor "custom:"', async () => {
+    const columnFilters = {
+      orderDate: {
+        mode: 'date',
+        op: 'range',
+        value: ['2026-05-01', '2026-05-02'],
+        originalValue: 'legacy-unrecognized-value',
+      },
+    };
+    render(
+      <ListFilterBar
+        columns={COLUMNS}
+        columnFilters={columnFilters}
+        onFilterChange={vi.fn()}
+        dateFilterKey="orderDate"
+      />
+    );
+
+    await openDatePopover();
+    expect(lastDateRangeProps.current.value).toBeNull();
+  });
+
+  it('activeDateRange resolves to null (and dateRangeValue falls back to null) when the stored custom range has an invalid date', async () => {
+    const columnFilters = {
+      orderDate: {
+        mode: 'date',
+        op: 'range',
+        value: ['not-a-date', '2026-05-02'],
+        originalValue: 'custom:not-a-date:2026-05-02',
+      },
+    };
+    render(
+      <ListFilterBar
+        columns={COLUMNS}
+        columnFilters={columnFilters}
+        onFilterChange={vi.fn()}
+        dateFilterKey="orderDate"
+      />
+    );
+
+    await openDatePopover();
+    expect(lastDateRangeProps.current.value).toBeNull();
+  });
+
+  it('DateRangePopoverContent onClose closes the date menu', async () => {
+    render(
+      <ListFilterBar
+        columns={COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        dateFilterKey="orderDate"
+      />
+    );
+
+    await openDatePopover();
+    expect(screen.getByTestId('date-range-popover-content')).toBeInTheDocument();
+    act(() => {
+      lastDateRangeProps.current.onClose();
+    });
+    // No crash after closing; the trigger button remains rendered.
+    expect(screen.getByTestId('filter-date')).toBeInTheDocument();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AdvancedFilterBuilder wiring: onApply/onClear/onClose handlers passed from
+// ListFilterBar (never invoked by any prior test, since the mock stub never
+// called back into the props it received).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ListFilterBar advanced filter builder wiring', () => {
+  beforeEach(() => {
+    lastAdvancedFilterBuilderProps.current = null;
+  });
+
+  const openAdvancedPopover = async () => {
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-advanced'));
+    await Promise.resolve();
+  };
+
+  it('onApply forwards the next advanced filter via onAdvancedFilterChange', async () => {
+    const onAdvancedFilterChange = vi.fn();
+    render(
+      <ListFilterBar columns={COLUMNS} onAdvancedFilterChange={onAdvancedFilterChange} />
+    );
+
+    await openAdvancedPopover();
+    const nextFilter = { conditions: [{ field: 'name', operator: 'iContains', value: 'x' }] };
+    act(() => {
+      lastAdvancedFilterBuilderProps.current.onApply(nextFilter);
+    });
+
+    expect(onAdvancedFilterChange).toHaveBeenCalledWith(nextFilter);
+  });
+
+  it('onClear forwards null via onAdvancedFilterChange', async () => {
+    const onAdvancedFilterChange = vi.fn();
+    render(
+      <ListFilterBar columns={COLUMNS} onAdvancedFilterChange={onAdvancedFilterChange} />
+    );
+
+    await openAdvancedPopover();
+    act(() => {
+      lastAdvancedFilterBuilderProps.current.onClear();
+    });
+
+    expect(onAdvancedFilterChange).toHaveBeenCalledWith(null);
+  });
+
+  it('onClose closes the advanced filter popover without crashing', async () => {
+    render(<ListFilterBar columns={COLUMNS} onAdvancedFilterChange={vi.fn()} />);
+
+    await openAdvancedPopover();
+    act(() => {
+      lastAdvancedFilterBuilderProps.current.onClose();
+    });
+
+    expect(screen.getByTestId('filter-advanced')).toBeInTheDocument();
   });
 });
