@@ -128,13 +128,14 @@ async function installReturnToVendorMocks(page, rows = ALL_ROWS) {
         return;
       }
 
-      // POST createReturnInvoice → synthetic purchase invoice
+      // POST createReturnInvoice → synthetic purchase rectificativa invoice.
+      // ETP-4737: the generated invoice carries a NEGATIVE total (return flow).
       if (method === 'POST' && url.includes('/action/createReturnInvoice')) {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            response: { data: { id: 'inv-new-001', documentNo: 'FC-RTV-NEW-001', grandTotalAmount: 250 } },
+            response: { data: { id: 'inv-new-001', documentNo: 'FC-RTV-NEW-001', grandTotalAmount: -250 } },
           }),
         });
         return;
@@ -363,6 +364,10 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
     // defaultCreateInvoice=true → switch is aria-checked="true"
     await expect(toggleCard).toHaveAttribute('aria-checked', 'true');
 
+    // ETP-4737: the toggle card label is the current "Crear Factura Rectificativa"
+    // wording (returnToVendor.createCreditNote) — regression guard for the rename.
+    await expect(dialog.getByText('Crear Factura Rectificativa', { exact: true })).toBeVisible();
+
     // Cancel button inside the modal footer
     const modalCancelBtn = dialog.getByRole('button', { name: /^cancelar$|^cancel$/i });
     await expect(modalCancelBtn).toBeVisible();
@@ -385,6 +390,10 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
     await expect(
       page.getByText(/FC-RTV-NEW-001/).or(page.getByTestId('confirm-result-modal')),
     ).toBeVisible({ timeout: 10_000 });
+
+    // ETP-4737: the rectificativa invoice is created with a negative total (credit
+    // flow) — the result card must render the negative amount from the backend.
+    await expect(page.getByText(/-250,00/)).toBeVisible();
   });
 });
 
@@ -456,6 +465,10 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     await expect(
       page.getByText(/FC-RTV-NEW-001/).or(page.getByTestId('confirm-result-modal')),
     ).toBeVisible({ timeout: 10_000 });
+
+    // ETP-4737: same negative-total contract applies from the CO (already confirmed)
+    // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.
+    await expect(page.getByText(/-250,00/)).toBeVisible();
 
     // ETP-4299: ConfirmWithCreditButtonBase.onClose fires window.location.reload()
     // via setTimeout(0) when the user closes without navigating.

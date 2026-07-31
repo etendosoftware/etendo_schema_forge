@@ -107,13 +107,16 @@ async function installReturnReceiptMocks(page) {
       return;
     }
 
-    // POST action/createReturnInvoice → synthetic invoice
+    // POST action/createReturnInvoice → synthetic rectificativa invoice.
+    // ETP-4737: the generated invoice carries a NEGATIVE total (return flow) — the
+    // response key must be `grandTotalAmount` (not `grandTotal`), matching the field
+    // useConfirmWithCredit.js / ConfirmInOutModal.jsx actually read from the API.
     if (method === 'POST' && url.includes('/action/createReturnInvoice')) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: { data: { id: 'inv-new', documentNo: 'FC/00100', grandTotal: 150 } },
+          response: { data: { id: 'inv-new', documentNo: 'FC/00100', grandTotalAmount: -150 } },
         }),
       });
       return;
@@ -252,6 +255,13 @@ test.describe('return-material-receipt — DR form actions', () => {
     const modalInvoiceToggle = page.getByTestId('confirm-modal-invoice-toggle');
     await expect(modalInvoiceToggle).toBeVisible({ timeout: 8_000 });
 
+    // ETP-4737: the toggle card must show the current "Crear Factura Rectificativa"
+    // wording (returnReceipt.createRectificativeInvoice) — regression guard for the
+    // Factura de Devolución → Factura Rectificativa rename.
+    await expect(
+      page.getByTestId('confirm-inout-modal').getByText('Crear Factura Rectificativa', { exact: true }),
+    ).toBeVisible();
+
     // Cancel button via data-testid
     const cancelBtn = page.getByTestId('confirm-modal-cancel-btn');
     await expect(cancelBtn).toBeVisible();
@@ -279,6 +289,11 @@ test.describe('return-material-receipt — DR form actions', () => {
     // Wait for the result card or at minimum the modal to disappear and something to update
     // The ConfirmResultModal shows rmrInvoiceCreatedTitle or the invoice card
     await expect(page.getByText(/FC\/00100/).or(page.getByTestId('confirm-result-modal'))).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: the rectificativa invoice is created with a negative total (return
+    // flow) — the result card must render the negative amount as returned by the
+    // backend (fmtAmount uses Number.toLocaleString, which keeps the minus sign).
+    await expect(page.getByText(/-150,00/)).toBeVisible();
   });
 });
 
@@ -340,5 +355,9 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
 
     // createReturnInvoice POST returns FC/00100 → ConfirmResultModal shows it
     await expect(page.getByText(/FC\/00100/).or(page.getByTestId('confirm-result-modal'))).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: same negative-total contract applies from the CO (already confirmed)
+    // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.
+    await expect(page.getByText(/-150,00/)).toBeVisible();
   });
 });
