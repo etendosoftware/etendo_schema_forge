@@ -269,9 +269,11 @@ export async function extractErrorMessage(res, ui) {
 
 const BATCH_SIZE = 75;
 
-// ETP-4741 — how long a creation form waits for GET /<entity>/defaults before
-// giving up: the request is aborted, its eventual response is discarded, and
-// the form is released with whatever the user already typed.
+// ETP-4741 — UX budget for how long a creation form stays gated waiting for
+// GET /<entity>/defaults. On expiry the gate is released so the user can start
+// working, and nothing else: the request is NOT aborted and its session is NOT
+// invalidated, so it keeps running, stays cancellable, and its response still
+// merges when it lands. See handleNew below.
 const DEFAULTS_TIMEOUT_MS = 4000;
 
 const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
@@ -1143,13 +1145,12 @@ export function useEntity(entity, childEntity, {
         //
         // The timeout is a UX budget, NOT a correctness mechanism: it only
         // releases the gate so the user can start working. It deliberately does
-        // not bump the epoch, drop the abort handle, or abort the request — a
-        // slow backend still owns this form's defaults, and discarding its
-        // answer left the form with no defaults AND no initial callouts
-        // (DetailView's initial-callout chain is latched on `editing` becoming
-        // non-empty, so an always-empty `editing` never arms it). The request
-        // stays in flight and stays cancellable, so a later record load can
-        // still neutralize it.
+        // not bump the epoch, drop the abort handle, or abort the request, so
+        // the response still merges when it lands and a later record load can
+        // still neutralize the session. Full rationale — including the
+        // regression that discarding the late response caused (a form with
+        // neither defaults nor initial callouts) — lives in
+        // docs/generated-custom-windows/app-shell-functional-flows.md §4.
         const epoch = defaultsEpochRef.current + 1;
         defaultsEpochRef.current = epoch;
         const isCurrent = () => defaultsEpochRef.current === epoch;
