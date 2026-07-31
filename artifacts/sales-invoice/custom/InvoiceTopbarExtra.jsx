@@ -5,15 +5,11 @@ import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/
 import SendToSifButton from './SendToSifButton';
 import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { getArSubtype } from './invoiceSubtype';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  if (curr) {
-    try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency: curr }).format(n);
-    } catch { /* fallback if currency code is invalid */ }
-  }
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatCurrency(curr, n);
 }
 
 /** Classify an installment into a status category */

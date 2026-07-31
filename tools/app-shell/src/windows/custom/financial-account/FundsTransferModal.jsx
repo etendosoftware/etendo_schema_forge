@@ -7,21 +7,10 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
 import { useUI } from '@/i18n';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
 import { useFundsTransfer } from '@/hooks/useCreateMovement';
 import { useGLItemLookup } from '@/hooks/useMovementLookups';
-
-/** Narrow currency symbol for the amount-input suffix (matches formatCurrency's symbol). */
-function currencySymbol(iso) {
-  if (!iso) return '';
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: iso, currencyDisplay: 'narrowSymbol' })
-      .formatToParts(0).find((p) => p.type === 'currency')?.value ?? iso;
-  } catch {
-    return iso;
-  }
-}
 
 /** Parses a user-typed amount ("1.234,56" or "1234.56") into a Number, or NaN. */
 function parseAmount(raw) {
@@ -252,7 +241,7 @@ function AmountField({ value, onChange, currencyIso, testId }) {
         data-testid={testId}
       />
       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-[hsl(var(--text-disabled))]">
-        {currencySymbol(currencyIso)}
+        {getCurrencySymbol(currencyIso)}
       </span>
     </div>
   );

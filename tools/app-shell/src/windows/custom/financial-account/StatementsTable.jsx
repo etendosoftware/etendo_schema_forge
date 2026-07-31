@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { ChevronDown, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusTag } from '@/components/ui/status-tag';
@@ -104,16 +105,9 @@ function formatDate(iso, bcpLocale) {
   }).format(d);
 }
 
-function formatMoney(amount, currency, bcpLocale) {
+function formatMoney(amount, currency) {
   if (amount == null) return '—';
-  try {
-    return new Intl.NumberFormat(bcpLocale, {
-      style: 'currency', currency,
-      minimumFractionDigits: 2, maximumFractionDigits: 2,
-    }).format(Number(amount));
-  } catch {
-    return `${Number(amount).toFixed(2)} ${currency}`;
-  }
+  return formatCurrency(currency, amount);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -372,10 +366,10 @@ function StatementRow({
         })}
         <span className="text-right tabular-nums text-[hsl(var(--foreground))]">{s.lineCount ?? 0}</span>
         <span className={cn('text-right tabular-nums font-semibold', Number(s.totalOut) > 0 ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--text-disabled))]')}>
-          {Number(s.totalOut) > 0 ? `−${formatMoney(s.totalOut, currency, bcpLocale)}` : '—'}
+          {Number(s.totalOut) > 0 ? `−${formatMoney(s.totalOut, currency)}` : '—'}
         </span>
         <span className={cn('text-right tabular-nums font-semibold', Number(s.totalIn) > 0 ? 'text-[var(--status-success-fg)]' : 'text-[hsl(var(--text-disabled))]')}>
-          {Number(s.totalIn) > 0 ? `+${formatMoney(s.totalIn, currency, bcpLocale)}` : '—'}
+          {Number(s.totalIn) > 0 ? `+${formatMoney(s.totalIn, currency)}` : '—'}
         </span>
         <span>
           <StatusPill
