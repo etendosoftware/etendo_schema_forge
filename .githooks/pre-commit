@@ -13,6 +13,10 @@ export SF_ROOT="$REPO_DIR"
 # schema_forge_core repo — this hook can't watch changes to code it no
 # longer contains, so that alternation was dropped.)
 if ! git diff --cached --name-only | grep -qE '^(artifacts/|tools/app-shell/src/windows/registry\.js)'; then
+  # Nothing to validate, but the hook DID run — record the proof so commit-msg
+  # still stamps the trailer (that is what proves the hooks are installed).
+  . "$SCRIPT_DIR/lib/hooks-proof.sh"
+  hooks_write_proof
   exit 0
 fi
 
@@ -34,6 +38,13 @@ EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
   echo ""
   echo "Tip: 'git commit --no-verify' to bypass (not recommended)."
+fi
+
+# Record that these checks passed for the tree about to be committed, so
+# commit-msg can stamp the Hooks-Verified trailer. See lib/hooks-proof.sh.
+if [ $EXIT_CODE -eq 0 ]; then
+  . "$SCRIPT_DIR/lib/hooks-proof.sh"
+  hooks_write_proof
 fi
 
 exit $EXIT_CODE

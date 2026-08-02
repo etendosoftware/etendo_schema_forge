@@ -111,6 +111,56 @@ describe('isDeleteVisibleForRecord', () => {
     assert.deepEqual(DELETABLE_DOC_STATUSES, ['DR', 'RPAP', 'N']);
   });
 
+  describe('boolean-typed statusField (e.g. physical-inventory / goods-movements "processed")', () => {
+    it('returns true when the boolean status is false (not yet processed / draft-like)', () => {
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { processed: false },
+          statusField: 'processed',
+          hideDeleteWhenComplete: true,
+        }),
+        true,
+      );
+    });
+
+    it('returns false when the boolean status is true (processed)', () => {
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { processed: true },
+          statusField: 'processed',
+          hideDeleteWhenComplete: true,
+        }),
+        false,
+      );
+    });
+
+    it('does not fall through to the string-code whitelist for booleans (regression guard)', () => {
+      // Before the fix, `DELETABLE_DOC_STATUSES.includes(false)` and
+      // `.includes(true)` both evaluate to false, which hid Delete
+      // unconditionally — even for draft (processed: false) records.
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { processed: false },
+          statusField: 'processed',
+          hideDeleteWhenComplete: true,
+        }),
+        true,
+        'draft-like boolean status must remain deletable',
+      );
+    });
+
+    it('is unaffected when hideDeleteWhenComplete is false, regardless of boolean value', () => {
+      assert.equal(
+        isDeleteVisibleForRecord({
+          record: { processed: true },
+          statusField: 'processed',
+          hideDeleteWhenComplete: false,
+        }),
+        true,
+      );
+    });
+  });
+
   describe('hideDeleteButton (unconditional hide)', () => {
     it('returns false for a draft record when hideDeleteButton is true', () => {
       assert.equal(

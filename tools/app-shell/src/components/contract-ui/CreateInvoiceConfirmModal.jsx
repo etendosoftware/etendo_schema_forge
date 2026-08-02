@@ -57,7 +57,7 @@ export default function CreateInvoiceConfirmModal({
   const grandTotal  = Number(linkedOrder?.grandTotalAmount ?? data?.grandTotalAmount ?? 0);
 
   const fmtNum = (v, dec = 2) =>
-    v != null ? Number(v).toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec }) : '-';
+    v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: true }) : '-';
 
   const formattedTotal = currencyCode ? formatCurrency(currencyCode, grandTotal) : fmtNum(grandTotal);
   const displayAmount = grandTotal > 0 ? formattedTotal : documentNo;

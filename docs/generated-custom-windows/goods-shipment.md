@@ -89,6 +89,81 @@ Use this window to register and complete outbound customer shipments. The functi
 - **ETP-4028 — Price-list picker at invoice time**: `tools/app-shell/src/components/contract-ui/CreateInvoiceConfirmModal.jsx` (shared with goods-receipt, purchase-order, sales-order) gained `showPriceListPicker`/`isSOTrx` props, fetching `/price-list/priceList` and letting the user pick a price list before confirming; `GoodsShipmentActions.jsx` wires this in and forwards `priceListId` to `createDraftInvoice`. Backend: `CreateDraftInvoiceHandler.java`'s `createFromOrder`/`createFromShipments` gained a 3rd `priceListId` parameter and an `applyPriceListOverride` helper that sets `invoice.setPriceList(...)` before the native `CreateInvoiceLinesFromProcess` prices the lines.
 - **ETP-4028 — Bulk-invoice currency guard**: `BulkInvoiceFromShipment.jsx` adds a `currencyCheck` that disables `Create Invoice` when the selected shipments don't share the same currency.
 
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — no separate dimension field exists (the header's `businessPartner` is the shipment's core Customer field, not a dimension pick; raw AD carries no display-logic gating on it) | **Nunca** — the raw AD `businessPartner` field on lines carries `@ACCT_DIMENSION_DISPLAY@` but was never added to `decisions.json`, so it is absent from the generated contract by default (already matches Nunca) |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously discarded) | **Por config** — same passthrough (previously discarded) |
+| `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously discarded) | **Por config** — same passthrough (previously discarded) |
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).**
+Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
+runtime.
+
+**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
+`lines.costcenter` are correctly evaluated, but this window uses
+`window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all — so
+the two fields had no UI surface to render on (Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`). Fixed by flipping `lines.project.grid` and
+`lines.costcenter.grid` from `false` to `true` in `decisions.json` (this window's line table,
+`GoodsShipmentLineTable.jsx`, is pipeline-generated, so the pipeline-generated
+`@sf-generated-start columns` block now includes both fields once `grid: true`) and wiring
+dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
+`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
+dimension toggles OFF, the columns do not render as grid columns; with them ON, they do. See
+`sales-invoice.md` for the full write-up (including the verified list of which windows
+actually hit this gap).
+
+### Header section fix, and the plain grid columns above were reverted (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
+so they render in the main visible form area — same fix as `sales-invoice.md`.
+
+Separately: the `lines.project.grid`/`lines.costcenter.grid` flags flipped `false → true` just
+above (ETP-4543) were **flipped back to `false`**. The user asked for the same expand-row
+"Dimensiones contables" UX Amortización has instead of plain always-rendered columns (see
+`docs/ui-customization.md` §14b for the new `dimensionsPanel` `InlineLinesPanel` column type),
+but this window's `GoodsShipmentLineTable.jsx` is fully pipeline-generated with no override
+mechanism that fits that column type — the only existing lines-tab override point,
+`window.customLinesComponent`/`CustomLines`, replaces the entire lines tab with a fully
+self-fetching component (own fetch, own add/delete — matching `AmortizationLinesTable.jsx`'s
+contract), not a drop-in for the `columns`-array contract this generated table uses. This
+window is back to its pre-ETP-4543 state (no project/costcenter on the lines grid) pending a
+coordinator decision on how to add that override point — see `docs/feedback.md`'s ETP-4543
+supersession note for the full reasoning.
+
+**Resolved (ETP-4529 generator support):** `generate-frontend.js`'s `generateTableComponent`
+(`schema_forge_core`) now emits a synthetic `dimensionsPanel` column directly from
+`decisions.json` — no custom override needed. `lines.project.dimensionsPanel` and
+`lines.costcenter.dimensionsPanel` are now `true` (grid stays `false`); the pipeline-generated
+`GoodsShipmentLineTable.jsx` renders the expand-row "Dimensiones contables" panel for existing
+rows. See `docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customization.md` §14b.
+
+### "Añadir dimensiones" moves to a hover action, column no longer shown (ETP-4610)
+
+Same intent as `sales-invoice.md`/`purchase-invoice.md`: `InlineLinesPanel` no longer renders the
+`dimensionsPanel` type as a grid column at all — "Añadir dimensiones" is now a hover action next
+to Edit/Delete, gated on at least one visible dimension field, with the expand-chevron column
+unchanged. The label/icon is adaptive: "Añadir dimensiones" while the line has no dimension values,
+"Editar dimensiones" once at least one is set.
+
+**Regen history on this window:** two `make regen` attempts against the local sandbox's LIVE DB
+both hit the already-documented `AD_Ref_List_Trl` es_ES translation-stripping issue (see
+`docs/feedback.md`'s "`make regen` Silently Strips es_ES Enum Labels..." entry) on this window's
+`etblkpAccountingstatus` field, and were reverted rather than committed with a translation
+regression. The window was ultimately regenerated cleanly by the **pre-push hook's own
+offline/cached-AD-snapshot pipeline run** (the CI-parity "UI / contract drift" check, which
+regenerates from a frozen cached snapshot rather than the incomplete local sandbox DB) —
+that run hit no translation loss at all, confirming the earlier failures were purely a local-DB
+data gap, not a real blocker. `contract.json`, `contract.mcp.json`, and
+`GoodsShipmentLineTable.jsx` are now regenerated and validated (`sf-validate-pipeline`: OK) —
+see `docs/feedback.md`'s ETP-4610 entry for the full trail.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

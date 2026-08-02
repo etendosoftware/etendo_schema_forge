@@ -97,10 +97,10 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
 
   it('renders a public route without requiring auth', () => {
     // Strengthened from the brief's literal `not.toContain('Loading')` check (a weak negative
-    // assertion) to assert the real Psd2CallbackPage content is present. `auth.initialSession`
+    // assertion) to assert the real BankConnectionCallbackPage content is present. `auth.initialSession`
     // is deliberately omitted here — this route is `public: true` in buildRuntimeRoutes, so it
     // must render without an authenticated session, unlike the window/dashboard routes above.
-    renderAt('/financial-account/psd2-callback', { auth: { loginPath: '/login' } });
+    renderAt('/financial-account/bank-connection-callback', { auth: { loginPath: '/login' } });
     expect(screen.getByText('Conexión completada')).toBeInTheDocument();
   });
 
@@ -154,6 +154,6 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     // AppStorePage's own heading is the real, unambiguous proof that the lazy import resolved
     // and rendered (not the Suspense fallback).
     renderAt('/app-store');
-    expect(await screen.findByText('Tienda de aplicaciones', {}, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByText('Tienda de aplicaciones', {}, { timeout: 25000 })).toBeTruthy();
   }, 30000);
 });

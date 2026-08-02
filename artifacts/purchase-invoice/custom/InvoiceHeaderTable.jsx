@@ -7,15 +7,15 @@ import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.j
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 
 const BASE_COLUMNS = [
-  { key: 'invoiceDate',       column: 'DateInvoiced',              type: 'date',   label: 'Invoice Date' },
+  { key: 'invoiceDate',       column: 'DateInvoiced',              type: 'date',   label: 'Invoice Date', required: true },
   { key: 'orderReference',    column: 'POReference',               type: 'string', label: 'Supplier Reference' },
-  { key: 'businessPartner',   column: 'C_BPartner_ID',             type: 'string', label: 'Business Partner' },
-  { key: 'documentStatus',    column: 'DocStatus',                 type: 'status', label: 'Document Status' },
+  { key: 'businessPartner',   column: 'C_BPartner_ID',             type: 'string', label: 'Business Partner', required: true },
+  { key: 'documentStatus',    column: 'DocStatus',                 type: 'status', label: 'Document Status', required: true },
 ];
 
 const TAIL_COLUMNS = [
-  { key: 'grandTotalAmount',   column: 'GrandTotal',                type: 'amount', label: 'Total Gross Amount' },
-  { key: 'outstandingAmount',  column: 'OutstandingAmt',            type: 'amount', label: 'Total Outstanding' },
+  { key: 'grandTotalAmount',   column: 'GrandTotal',                type: 'amount', label: 'Total Gross Amount', required: true },
+  { key: 'outstandingAmount',  column: 'OutstandingAmt',            type: 'amount', label: 'Total Outstanding', required: true },
   { key: 'eTGODueDate',        column: 'EM_Etgo_Due_Date',          type: 'date' },
   { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status',   type: 'percent' },
 ];

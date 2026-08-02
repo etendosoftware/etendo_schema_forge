@@ -1026,5 +1026,83 @@
     ],
     "author": "pipeline",
     "date": "2026-07-29"
+  },
+  {
+    "from": "0.25.0",
+    "to": "0.26.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"project\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"project\" property \"section\" changed from \"undefined\" to \"principal\" in frontend (additive)",
+      "Field \"project\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"costcenter\" property \"section\" changed from \"undefined\" to \"principal\" in frontend (additive)",
+      "Field \"costcenter\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" removed from entity \"goodsReceiptLine\" in frontend",
+      "Field \"project\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"project\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"costcenter\" property \"displayLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" property \"visibility\" changed from \"editable\" to \"discarded\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-28"
+  },
+  {
+    "from": "0.26.0",
+    "to": "0.27.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"project\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)",
+      "Field \"costcenter\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-28"
+  },
+  {
+    "from": "0.27.0",
+    "to": "0.28.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"movementQuantity\" property \"defaultValue\" changed from \"0\" to \"1\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-29"
+  },
+  {
+    "from": "0.28.0",
+    "to": "0.29.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"movementQuantity\" property \"defaultValue\" changed from \"1\" to \"0\" in frontend (additive)",
+      "Field \"project\" property \"dimensionsPanel\" changed from \"true\" to \"undefined\" in frontend (additive)",
+      "Field \"costcenter\" property \"dimensionsPanel\" changed from \"true\" to \"undefined\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-30"
+  },
+  {
+    "from": "0.29.0",
+    "to": "0.30.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"movementQuantity\" property \"defaultValue\" changed from \"0\" to \"1\" in frontend (additive)",
+      "Field \"project\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)",
+      "Field \"costcenter\" property \"dimensionsPanel\" changed from \"undefined\" to \"true\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-30"
+  },
+  {
+    "from": "0.1.0",
+    "to": "0.2.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"etgoCurrency\" added to entity \"goodsReceipt\" in frontend",
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"etgoCurrency\" added to entity \"goodsReceipt\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-08-02"
   }
 ]

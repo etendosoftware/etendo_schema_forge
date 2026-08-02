@@ -54,7 +54,9 @@ const requiredHeaderFields = ['warehouse', 'businessPartner', 'movementDate', 'e
 const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
-    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
+    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 1 },
+    { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'CostCenter', inputMode: 'selector' },
   ],
   derived: [
 
@@ -266,14 +268,6 @@ export const api = {
     },
     {
       "entity": "goodsReceiptLine",
-      "field": "businessPartner",
-      "column": "C_Bpartner_ID",
-      "reference": "BusinessPartner",
-      "inputMode": "search",
-      "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
-    },
-    {
-      "entity": "goodsReceiptLine",
       "field": "project",
       "column": "C_Project_ID",
       "reference": "Project",
@@ -354,10 +348,10 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
-      "field": "receiveMaterials",
-      "column": "RM_Receipt_PickEdit",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
-      "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -367,6 +361,14 @@ export const api = {
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/updateLines",
       "processId": "800010",
       "processType": "classic"
+    },
+    {
+      "entity": "goodsReceipt",
+      "field": "receiveMaterials",
+      "column": "RM_Receipt_PickEdit",
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
+      "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+      "processType": "obuiapp"
     },
     {
       "entity": "goodsReceipt",
@@ -382,14 +384,6 @@ export const api = {
       "column": "Invoicefromshipment",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/invoicefromshipment",
       "processId": "62250E8866EA4D96A66C309878DC039E",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "goodsReceipt",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -470,6 +464,7 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
         hideDeleteWhenComplete
         hidePrint
         noHeaderBorder
+        dimensionsPanelFieldKeys={["project","costcenter"]}
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={GoodsReceiptBottomPanel}
         topbarRight={GoodsReceiptActions}

@@ -1,4 +1,9 @@
 import { localeFromUi, formatDashboardNumber, formatDashboardAmount, formatDashboardCompact, formatDashboardAxisTick, niceScale, toBezierPath, toBezierFillPath } from '../dashboardNumberFormat';
+import { formatCurrency } from '../formatCurrency';
+
+// Intl's `currencyDisplay: 'narrowSymbol'` (es-ES) separates the amount from the
+// symbol with a NON-breaking space (U+00A0), not a regular space.
+const NBSP = ' ';
 
 describe('dashboardNumberFormat', () => {
   describe('localeFromUi', () => {
@@ -17,21 +22,26 @@ describe('dashboardNumberFormat', () => {
   });
 
   describe('formatDashboardAmount', () => {
-    it('formats with currency code', () => {
-      expect(formatDashboardAmount(1234.56, 'EUR')).toBe('EUR 1,234.56');
+    it('formats with a currency symbol (es-ES), not the ISO code as plain text', () => {
+      expect(formatDashboardAmount(1234.56, 'EUR')).toBe(formatCurrency('EUR', 1234.56));
+      expect(formatDashboardAmount(1234.56, 'EUR')).toBe('1.234,56 €');
+      expect(formatDashboardAmount(1234.56, 'EUR')).not.toContain('EUR');
     });
-    it('handles negative amounts', () => {
-      expect(formatDashboardAmount(-500, 'USD')).toBe('-USD 500.00');
+    it('handles negative amounts (sign before the amount, symbol after)', () => {
+      expect(formatDashboardAmount(-500, 'USD')).toBe('-500,00 $');
     });
-    it('formats without currency', () => {
-      expect(formatDashboardAmount(100)).toBe('100.00');
+    it('formats without currency using plain es-ES separators', () => {
+      expect(formatDashboardAmount(100)).toBe('100,00');
     });
     it('handles null as zero (Number(null)=0)', () => {
       // Number(null) === 0, which is finite, so it formats as currency
-      expect(formatDashboardAmount(null, 'EUR')).toBe('EUR 0.00');
+      expect(formatDashboardAmount(null, 'EUR')).toBe('0,00 €');
     });
     it('handles non-finite input', () => {
       expect(formatDashboardAmount(undefined, 'EUR')).toBe('—');
+    });
+    it('groups thousands with a period for values >= 1000', () => {
+      expect(formatDashboardAmount(180328.29, 'USD')).toBe('180.328,29 $');
     });
   });
 
@@ -40,9 +50,10 @@ describe('dashboardNumberFormat', () => {
     it('formats millions', () => { expect(formatDashboardCompact(1_500_000)).toContain('M'); });
     it('formats thousands', () => { expect(formatDashboardCompact(5_000)).toContain('K'); });
     it('formats small numbers directly', () => { expect(formatDashboardCompact(42)).toBe('42'); });
-    it('handles currency label', () => {
+    it('handles currency label using the symbol, not the ISO code', () => {
       const result = formatDashboardCompact(1_500_000, { currencyLabel: 'EUR' });
-      expect(result).toContain('EUR');
+      expect(result).not.toContain('EUR');
+      expect(result).toContain('€');
       expect(result).toContain('M');
     });
   });
@@ -106,27 +117,31 @@ describe('dashboardNumberFormat', () => {
       expect(result).toContain('-');
     });
 
-    it('formats millions with currencyLabel', () => {
+    it('formats millions with currencyLabel using the symbol, not the ISO code', () => {
       const result = formatDashboardCompact(3_500_000, { currencyLabel: 'EUR' });
-      expect(result).toContain('EUR');
+      expect(result).not.toContain('EUR');
+      expect(result).toContain('€');
       expect(result).toContain('M');
     });
 
-    it('formats thousands with currencyLabel', () => {
+    it('formats thousands with currencyLabel using the symbol, not the ISO code', () => {
       const result = formatDashboardCompact(7_500, { currencyLabel: 'USD' });
-      expect(result).toContain('USD');
+      expect(result).not.toContain('USD');
+      expect(result).toContain('$');
       expect(result).toContain('K');
     });
 
-    it('formats small numbers with currencyLabel', () => {
+    it('formats small numbers with currencyLabel using the symbol, not the ISO code', () => {
       const result = formatDashboardCompact(42, { currencyLabel: 'EUR' });
-      expect(result).toContain('EUR');
+      expect(result).not.toContain('EUR');
+      expect(result).toContain('€');
       expect(result).toContain('42');
     });
 
-    it('formats billions with currencyLabel', () => {
+    it('formats billions with currencyLabel using the symbol, not the ISO code', () => {
       const result = formatDashboardCompact(2_000_000_000, { currencyLabel: 'GBP' });
-      expect(result).toContain('GBP');
+      expect(result).not.toContain('GBP');
+      expect(result).toContain('£');
       expect(result).toContain('B');
     });
 
@@ -232,17 +247,24 @@ describe('dashboardNumberFormat', () => {
   });
 
   describe('formatDashboardAmount (extended)', () => {
-    it('formats without currency and positive', () => {
-      expect(formatDashboardAmount(1234.5)).toBe('1,234.50');
+    it('formats without currency and positive (plain es-ES separators)', () => {
+      expect(formatDashboardAmount(1234.5)).toBe('1.234,50');
     });
 
-    it('formats without currency and negative', () => {
-      expect(formatDashboardAmount(-1234.5)).toBe('-1,234.50');
+    it('formats without currency and negative (plain es-ES separators)', () => {
+      expect(formatDashboardAmount(-1234.5)).toBe('-1.234,50');
     });
 
-    it('handles currency label with extra spaces', () => {
+    it('handles currency label with extra spaces, resolving to the symbol not the code', () => {
       const result = formatDashboardAmount(100, ' eur ');
-      expect(result).toContain('EUR');
+      expect(result).not.toContain('EUR');
+      expect(result).toContain('€');
+    });
+
+    it('ETP-4314 regression: matches formatCurrency output exactly, never the literal code', () => {
+      const result = formatDashboardAmount(1234.5, 'EUR');
+      expect(result).toBe(formatCurrency('EUR', 1234.5));
+      expect(result).not.toContain('EUR');
     });
   });
 });

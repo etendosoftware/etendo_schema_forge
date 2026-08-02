@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, token, apiBaseUrl }) {
   const ui = useUI();
@@ -218,7 +219,10 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
   };
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-  const fmtNum = (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // No currency field is available on these rows (bulk cross-shipment selection) —
+  // format the number in Spanish grouping without a symbol, same as formatCurrency's
+  // own fallback for an unrecognized/missing currency code.
+  const fmtNum = (v) => formatCurrency(undefined, Number(v || 0));
 
   const handleCreate = async () => {
     if (creating || totalSelectedLines === 0) return;

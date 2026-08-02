@@ -87,9 +87,10 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.queryByText('Acme Corp')).not.toBeInTheDocument();
   });
 
-  it('shows formatted grandTotal + currency when grandTotal > 0', () => {
+  it('shows the formatted grandTotal with the real currency symbol (es-ES, grouped), never the raw ISO code', () => {
     renderModal({ data: makeData({ grandTotalAmount: 1234.56, 'currency$_identifier': 'EUR' }) });
-    expect(screen.getByText(/€/)).toBeInTheDocument();
+    expect(screen.getByText(/1\.234,56\s€/)).toBeInTheDocument();
+    expect(screen.queryByText(/EUR/)).toBeNull();
   });
 
   it('shows documentNo when grandTotal is 0', () => {
@@ -113,22 +114,23 @@ describe('CreateInvoiceConfirmModal', () => {
       ],
     };
     renderModal({ data });
-    // GBP is not in SYMBOL_AFTER_CURRENCIES — formatCurrency renders the £ symbol before the amount
-    expect(screen.getByText(/£/)).toBeInTheDocument();
+    expect(screen.getByText(/9\.999,00\s£/)).toBeInTheDocument();
+    expect(screen.queryByText(/GBP/)).toBeNull();
   });
 
   it('prefers the document\'s own etgoCurrency over the linked order\'s currency (ETP-4028: currency is editable in draft and can diverge from the originating order)', () => {
     const data = {
       documentNo: 'SO-003',
       'businessPartner$_identifier': 'Partner',
-      grandTotalAmount: 0,
+      grandTotalAmount: 9999,
       'etgoCurrency$_identifier': 'EUR',
       linkedOrders: [
         { grandTotalAmount: 9999, 'currency$_identifier': 'USD' },
       ],
     };
     renderModal({ data });
-    expect(screen.getByText(/€/)).toBeInTheDocument();
+    expect(screen.getByText(/9\.999,00\s€/)).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).toBeNull();
   });
 
   // ── Checkbox state ─────────────────────────────────────────────────────────

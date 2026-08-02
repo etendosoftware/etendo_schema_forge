@@ -10,6 +10,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { generateShipmentPdf, getShipmentPdfLabels, useShipmentPdf } from '@/windows/custom/goods-shipment/useShipmentPdf';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl, api }) {
   const ui = useUI();
@@ -370,7 +371,7 @@ function ConfirmShipmentInvoicedModal({ data, base, headers, recordId, onConfirm
 
   const fmtAmount = (v, currency) => {
     if (v == null) return '';
-    return `${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`.trim();
+    return formatCurrency(currency, v);
   };
 
   const statusLabel = { CO: ui('orderStatusCompleted'), DR: ui('orderStatusDraft') };

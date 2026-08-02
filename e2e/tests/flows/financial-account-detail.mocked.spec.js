@@ -32,7 +32,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000001',
     isDefault: true,
     pendingCount: 4,
-    psd2Connected: true,
+    bankConnected: true,
   },
   {
     id: 'acc-galicia',
@@ -44,7 +44,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000002',
     isDefault: false,
     pendingCount: 0,
-    psd2Connected: false,
+    bankConnected: false,
   },
 ];
 
@@ -209,8 +209,8 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
     await expect(page.getByTestId('kpi-inflows')).toContainText('Entradas');
     await expect(page.getByTestId('kpi-outflows')).toContainText('Salidas');
 
-    // en-US currency formatting: "211,841.01" appears in the balance KPI.
-    await expect(page.getByTestId('kpi-balance')).toContainText('211,841.01');
+    // es-ES currency formatting: "211.841,01 €" appears in the balance KPI.
+    await expect(page.getByTestId('kpi-balance')).toContainText('211.841,01');
   });
 
   test('all five mocked movement rows are visible in the table', async ({ page }) => {

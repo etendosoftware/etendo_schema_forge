@@ -1,8 +1,8 @@
 {
-  "version": "0.32.0",
-  "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-29T19:30:33.393Z",
-  "contractChecksum": "5e11ff91c761a43e",
+  "version": "0.2.0",
+  "generatedAt": "2026-07-30T22:14:36.610Z",
+  "updatedAt": "2026-08-02T18:39:15.278Z",
+  "contractChecksum": "7588032530cf33bd",
   "apiPrediction": {
     "specName": "goods-shipment",
     "baseUrl": "/sws/neo/goods-shipment",
@@ -74,6 +74,35 @@
       },
       {
         "entity": "goodsShipment",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/costcenter"
+      },
+      {
+        "entity": "goodsShipment",
         "field": "etgoCurrency",
         "column": "EM_ETGO_Currency_ID",
         "reference": "Currency",
@@ -87,6 +116,22 @@
         "reference": "Product",
         "inputMode": "search",
         "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/product"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/project"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/costcenter"
       }
     ],
     "actions": [
@@ -110,28 +155,6 @@
           "Target entity already has linked records",
           "Required reference data is missing (price list, warehouse, etc.)"
         ]
-      },
-      {
-        "name": "processGoodsJava",
-        "actionType": "utilityAction",
-        "entity": "goodsShipment",
-        "column": "Process_Goods_Java",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "49DEE812BF0545269781FCEBF2235924",
-        "processType": "classic"
       },
       {
         "name": "documentAction",
@@ -171,6 +194,28 @@
           "User lacks permission to execute the action"
         ],
         "processId": "109",
+        "processType": "classic"
+      },
+      {
+        "name": "processGoodsJava",
+        "actionType": "utilityAction",
+        "entity": "goodsShipment",
+        "column": "Process_Goods_Java",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "49DEE812BF0545269781FCEBF2235924",
         "processType": "classic"
       },
       {
@@ -215,6 +260,46 @@
           "Record is in an incompatible state"
         ],
         "processId": "62250E8866EA4D96A66C309878DC039E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "goodsShipment",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -306,46 +391,6 @@
           "Required reference data is missing (price list, warehouse, etc.)"
         ],
         "processId": "4AD70293357245AB96E59C2CDB43A35D",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "etblkpBulkposting",
-        "actionType": "documentAction",
-        "entity": "goodsShipment",
-        "column": "EM_Etblkp_Bulkposting",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/etblkpBulkposting",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -458,7 +503,23 @@
           "invoiceStatus": {
             "readOnly": true
           },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
           "invoiced": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etblkpAccountingstatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etblkpBulkposting": {
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
@@ -470,16 +531,6 @@
           "etgoCurrency": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
-          },
-          "etblkpAccountingstatus": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
-          },
-          "etblkpBulkposting": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
           }
         }
       },
@@ -498,6 +549,12 @@
           "orderQuantity": {
             "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
           }
         }
       }
@@ -542,15 +599,32 @@
             }
           ]
         }
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
       }
     ],
     "actions": [
       "createLinesFrom",
       "documentAction",
+      "etblkpBulkposting",
       "generateTo",
       "receiveMaterials",
-      "sendMaterials",
-      "etblkpBulkposting"
+      "sendMaterials"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -562,12 +636,12 @@
       "Source document has no valid lines to copy",
       "Target entity already has linked records",
       "Required reference data is missing (price list, warehouse, etc.)",
-      "Required context is missing",
-      "User lacks permission",
-      "Record is in an incompatible state",
       "Document is already completed or closed",
       "Document has pending lines or missing required fields",
       "User lacks permission to execute the action",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
       "Required field without default value must be provided"
     ],
     "examples": [
@@ -600,5 +674,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "ed06c19e3359c7e9"
+  "checksum": "ada737dc47980d55"
 }

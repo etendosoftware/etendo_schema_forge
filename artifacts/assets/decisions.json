@@ -131,7 +131,8 @@
         },
         "product": {
           "visibility": "editable",
-          "form": false
+          "section": "principal",
+          "reason": "ETP-4529 — corrected matrix: Producto is 'Siempre' for Activo (Amortizaciones) Cabecera, always visible regardless of GL Configuration. Rendered by the custom AssetsDetailPanel (not a config-gated accounting dimension)."
         },
         "summaryLevel": {
           "visibility": "discarded",
@@ -261,15 +262,16 @@
         },
         "project": {
           "visibility": "editable",
-          "form": false
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (raw AD: @$Element_PJ@='Y' & @IsDepreciated@='Y'). Moved from \"other\" to \"principal\" — the config-gated dimension field was rendering in the secondary/collapsed area instead of the main visible form."
         },
         "eTADASCostCenter": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "ETP-4529 — Centro de costo is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
         },
         "businessPartner": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded",
+          "reason": "ETP-4529 — Contacto is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
         },
         "eTADASUser1": {
           "visibility": "discarded",

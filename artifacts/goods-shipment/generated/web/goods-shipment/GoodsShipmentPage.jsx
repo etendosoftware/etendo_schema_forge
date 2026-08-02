@@ -46,7 +46,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:goodsShipment
 
 // @sf-generated-start requiredHeaderFields:goodsShipment
-const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etgoCurrency', 'etblkpAccountingstatus', 'etblkpBulkposting'];
+const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etblkpAccountingstatus', 'etblkpBulkposting', 'etgoCurrency'];
 // @sf-generated-end requiredHeaderFields:goodsShipment
 
 // @sf-generated-start addLineFields:goodsShipmentLine
@@ -55,6 +55,8 @@ const addLineFields = {
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
+    { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'Costcenter', inputMode: 'selector' },
   ],
   derived: [
 
@@ -136,6 +138,35 @@ export const api = {
     },
     {
       "entity": "goodsShipment",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/goods-shipment/goodsShipment/selectors/project",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
+    },
+    {
+      "entity": "goodsShipment",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-shipment/goodsShipment/selectors/costcenter"
+    },
+    {
+      "entity": "goodsShipment",
       "field": "etgoCurrency",
       "column": "EM_ETGO_Currency_ID",
       "reference": "Currency",
@@ -149,6 +180,22 @@ export const api = {
       "reference": "Product",
       "inputMode": "search",
       "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/product"
+    },
+    {
+      "entity": "goodsShipmentLine",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/project"
+    },
+    {
+      "entity": "goodsShipmentLine",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/costcenter"
     }
   ],
   "actions": [
@@ -160,18 +207,18 @@ export const api = {
     },
     {
       "entity": "goodsShipment",
-      "field": "processGoodsJava",
-      "column": "Process_Goods_Java",
-      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
-      "processId": "49DEE812BF0545269781FCEBF2235924",
-      "processType": "classic"
-    },
-    {
-      "entity": "goodsShipment",
       "field": "documentAction",
       "column": "DocAction",
       "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/documentAction",
       "processId": "109",
+      "processType": "classic"
+    },
+    {
+      "entity": "goodsShipment",
+      "field": "processGoodsJava",
+      "column": "Process_Goods_Java",
+      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
+      "processId": "49DEE812BF0545269781FCEBF2235924",
       "processType": "classic"
     },
     {
@@ -188,6 +235,14 @@ export const api = {
       "column": "Invoicefromshipment",
       "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/invoicefromshipment",
       "processId": "62250E8866EA4D96A66C309878DC039E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "goodsShipment",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -220,14 +275,6 @@ export const api = {
       "column": "RM_Shipment_Pickedit",
       "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/sendMaterials",
       "processId": "4AD70293357245AB96E59C2CDB43A35D",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "goodsShipment",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -309,6 +356,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         hidePrint
         noHeaderBorder
         notesField="description"
+        dimensionsPanelFieldKeys={["project","costcenter"]}
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={GoodsShipmentBottomPanel}
         topbarRight={GoodsShipmentActions}

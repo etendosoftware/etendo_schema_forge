@@ -119,6 +119,80 @@ No current evidence shows:
 - **ETP-4028 — Currency-filtered imports**: `artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx` and `ImportFromPurchaseInvoiceModal.jsx` fetch the receipt header for `etgoCurrency` and filter candidate documents by matching currency, computing `statusAndBpCandidates` first and then narrowing by currency (so the "excluded by currency" empty state only fires when status/BP-eligible documents exist but none match the currency).
 - **ETP-4028 — Price-list picker at invoice time**: `GoodsReceiptActions.jsx` wires the shared `CreateInvoiceConfirmModal` (`showPriceListPicker`, `isSOTrx={false}`) and forwards `priceListId` to the `createPurchaseInvoice` endpoint. `CreatePurchaseInvoiceHandler.java` gained `applyPriceListOverride`/`resolvePriceListOverride` helpers, applied in the linked-PO path (before `createInvoiceLinesFromDocumentLines`) and threaded through the no-PO fallback (`createFromReceiptNoPo`, now 3-arg, with a backward-compatible 2-arg overload), where it takes precedence over the vendor's default purchase price list when provided.
 
+## Accounting dimension visibility per section — ETP-4529
+
+This window had the known `DISPLAY_Dimensions_WhenEnabled` gap referenced in ETP-4529: the rule
+catalog declared "Accounting dimensions shown only when accounting dimension display is enabled"
+(decision: Keep) but every dimension field actually carried `"form": false"` plus explicit
+`"readOnlyLogic": null, "displayLogic": null"` overrides — hidden unconditionally, with the raw AD
+display logic AND read-only logic both silenced. Fixed as part of ETP-4529:
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — the header's `businessPartner` is the receipt's core Vendor field (raw AD display logic is `None`, not a dimension), unaffected | **Nunca** — now explicit `visibility: "discarded"` (previously `form: false` with nulled logic; same effect, now unambiguous) |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` now passes through (`section: "other"`, `form: false`/nulled logic removed) | **Por config** — same fix (`grid: true` as of ETP-4543, `form: false`/nulled logic removed) |
+| `costcenter` | **Por config** — same fix as `project` | **Por config** — same fix as `project` |
+
+The `readOnlyLogic: null` overrides removed alongside `displayLogic: null` were also silencing the
+raw `@Posted@='Y'` rule — these dimension fields are now correctly locked once the receipt is
+posted, in addition to being visible again.
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).**
+Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
+runtime.
+
+**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
+`lines.costcenter` are correctly evaluated, but this window uses
+`window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all — so
+the two fields had no UI surface to render on (Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`). Fixed by flipping `lines.project.grid` and
+`lines.costcenter.grid` from `false` to `true` in `decisions.json` (this window's line table,
+`GoodsReceiptLineTable.jsx`, is pipeline-generated, so the pipeline-generated
+`@sf-generated-start columns` block now includes both fields once `grid: true`) and wiring
+dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
+`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
+dimension toggles OFF, the columns do not render as grid columns; with them ON, they do. See
+`sales-invoice.md` for the full write-up (including the verified list of which windows
+actually hit this gap).
+
+### Header section fix, and the plain grid columns above were reverted (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
+so they render in the main visible form area — same fix as `sales-invoice.md`.
+
+Separately: the `lines.project.grid`/`lines.costcenter.grid` flags flipped `false → true` just
+above (ETP-4543) were **flipped back to `false`**, for the same reason as `goods-shipment.md`:
+the user asked for the expand-row "Dimensiones contables" UX instead of plain columns (see
+`docs/ui-customization.md` §14b), but this window's `GoodsReceiptLineTable.jsx` is fully
+pipeline-generated with no override mechanism that fits the new `dimensionsPanel` column type
+— only the heavier, fully self-fetching `customLinesComponent`/`CustomLines` contract exists.
+Back to pre-ETP-4543 state pending a coordinator decision — see `docs/feedback.md`'s ETP-4543
+supersession note.
+
+**Resolved (ETP-4529 generator support):** `generate-frontend.js`'s `generateTableComponent`
+(`schema_forge_core`) now emits a synthetic `dimensionsPanel` column directly from
+`decisions.json` — no custom override needed. `lines.project.dimensionsPanel` and
+`lines.costcenter.dimensionsPanel` are now `true` (grid stays `false`); the pipeline-generated
+`GoodsReceiptLineTable.jsx` renders the expand-row "Dimensiones contables" panel for existing
+rows. See `docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customization.md` §14b.
+
+### Regen gap closed + "Añadir dimensiones" moved to a hover action (ETP-4610)
+
+While validating ETP-4610, `contract.json`/`GoodsReceiptLineTable.jsx` were found to have **never
+actually picked up** the `dimensionsPanel: true` flags above — likely lost across the
+`epic/ETP-3504` merges preceding this branch, despite the ETP-4529 note claiming this window was
+already regenerated. Re-ran `make regen ONLY=goods-receipt SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed
+clean (`sf-validate-pipeline`, 0 violations, additive version bump). Separately, `InlineLinesPanel`
+no longer renders the `dimensionsPanel` type as a grid column at all — "Añadir dimensiones" is now
+a hover action next to Edit/Delete, gated on at least one visible dimension field, with the
+expand-chevron column unchanged. The label/icon is adaptive: "Añadir dimensiones" while the line has
+no dimension values, "Editar dimensiones" once at least one is set. See `docs/ui-customization.md`
+§14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

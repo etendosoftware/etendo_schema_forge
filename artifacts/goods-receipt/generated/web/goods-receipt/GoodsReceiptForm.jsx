@@ -8,6 +8,8 @@ const fields = [
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', label: 'Warehouse', required: true, section: 'principal', reference: 'Warehouse', inputMode: 'selector', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'etgoCurrency', column: 'EM_ETGO_Currency_ID', type: 'selector', label: 'EM_ETGO_Currency_ID', required: true, section: 'principal', reference: 'Currency', inputMode: 'selector', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'collapsed', readOnlyLogic: (record) => record['processed'] === true },
+  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'principal', reference: 'Project', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
+  { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', section: 'principal', reference: 'CostCenter', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
 ];
 // @sf-generated-end fields:goodsReceipt
 
