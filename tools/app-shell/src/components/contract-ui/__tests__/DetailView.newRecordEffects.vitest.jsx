@@ -144,6 +144,11 @@ vi.mock('../LinesSelectionBar.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentStatusPill.jsx', () => ({ default: ({ status }) => <span>{status}</span> }));
 vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>A</span> }));
 
+const addLineCaptured = { onClick: null };
+vi.mock('@/components/ui/add-line-button.jsx', () => ({
+  AddLineButton: (props) => { addLineCaptured.onClick = props.onClick; return null; },
+}));
+
 const MockDetailTable = () => <div data-testid="mock-detail-table" />;
 const MockForm = ({ data }) => <div data-testid="mock-form">{data?.documentNo}</div>;
 
@@ -206,5 +211,77 @@ describe('DetailView isNew-gated effects', () => {
     renderNew();
     await act(async () => { await Promise.resolve(); });
     expect(mockHook.handleChange).not.toHaveBeenCalledWith('uOM$_identifier', expect.anything());
+  });
+});
+
+describe('handleAddLineClick — isNew branch', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockHook.editing = { documentNo: '', documentStatus: 'DR', uOM: 'U1' };
+    mockHook.handleSave = vi.fn().mockResolvedValue({ id: 'NEW1' });
+  });
+
+  it('saves the new header first, then navigates with openAddLine state', async () => {
+    renderNew();
+    await waitFor(() => expect(typeof addLineCaptured.onClick).toBe('function'));
+    await act(async () => { await addLineCaptured.onClick(); });
+    expect(mockHook.handleSave).toHaveBeenCalled();
+    expect(mockHook.primeSaved).toHaveBeenCalledWith({ id: 'NEW1' });
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/sales-order/NEW1',
+      expect.objectContaining({
+        replace: true,
+        state: expect.objectContaining({ openAddLine: true }),
+      }),
+    );
+  });
+
+  it('does not navigate when the header save yields no derivable id', async () => {
+    mockHook.handleSave = vi.fn().mockResolvedValue({});
+    renderNew();
+    await waitFor(() => expect(typeof addLineCaptured.onClick).toBe('function'));
+    await act(async () => { await addLineCaptured.onClick(); });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleImportClick — isNew branch (DetailExtraActions.onSave)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockHook.editing = { documentNo: '', documentStatus: 'DR', uOM: 'U1' };
+    mockHook.handleSave = vi.fn().mockResolvedValue({ id: 'NEW1' });
+  });
+
+  const importCaptured = { onSave: null };
+  const MockDetailExtraActions = (props) => { importCaptured.onSave = props.onSave; return null; };
+  // `bottomSection` is rendered directly as a component when set — DetailExtraActions
+  // is read off it as a static property (`bottomSection?.detailExtraActions`), so the
+  // stub itself must be a valid (no-op) component, not a plain options object.
+  const bottomSectionStub = () => null;
+  bottomSectionStub.detailExtraActions = MockDetailExtraActions;
+
+  it('saves the new header first, then navigates with openImportModal state', async () => {
+    renderNew({ bottomSection: bottomSectionStub });
+    await waitFor(() => expect(typeof importCaptured.onSave).toBe('function'));
+    await act(async () => { await importCaptured.onSave('invoice'); });
+    expect(mockHook.handleSave).toHaveBeenCalled();
+    expect(mockHook.primeSaved).toHaveBeenCalledWith({ id: 'NEW1' });
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/sales-order/NEW1',
+      expect.objectContaining({
+        replace: true,
+        state: expect.objectContaining({ openImportModal: 'invoice' }),
+      }),
+    );
+  });
+
+  it('returns false and does not navigate when the header save yields no id', async () => {
+    mockHook.handleSave = vi.fn().mockResolvedValue({});
+    renderNew({ bottomSection: bottomSectionStub });
+    await waitFor(() => expect(typeof importCaptured.onSave).toBe('function'));
+    let outcome;
+    await act(async () => { outcome = await importCaptured.onSave(); });
+    expect(outcome).toBe(false);
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
