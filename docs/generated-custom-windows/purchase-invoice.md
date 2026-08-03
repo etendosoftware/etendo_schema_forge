@@ -635,3 +635,29 @@ needs `custom` for the sign flip and therefore needs the explicit `filterMode`.
 Rule **F19** of `sf-validate-pipeline` now blocks any new `custom` column over a
 numeric/date/enum contract field that omits `filterMode`. Full reference:
 [`list-filters.md`](../list-filters.md).
+
+## MCP document actions (agents)
+
+The header's `documentAction` button is what an AI agent uses to move this invoice through its
+workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+active AD list of the `C_Invoice.DocAction` reference — note `CO` is labelled **Complete** here,
+not Book) and `actionParameter: "docAction"`; its `agentPrompt` — defined in `decisions.json` ->
+`entities.header.fields.documentAction.agentPrompt` — states which transitions are legal and
+their preconditions.
+
+Completing a draft invoice over MCP:
+
+    neo_action { spec: "purchase-invoice", entity: "header", id: "<invoiceId>",
+                 action: "documentAction", parameters: { docAction: "CO" } }
+
+Flow encoded in the prompt: `DR -> CO` completes (computes taxes/totals, creates the payment
+plan), `DR -> VO` voids, `CO -> RE` reactivates and **unposts first** when the invoice was
+already posted (the Reactivate menu action carries `preUnpost: true`), `CO -> CL` closes.
+Posting is a **separate** action on this window (`menuActions` key `post`, gated on
+`processed && !posted`) and is **not** a `documentAction` value — the prompt explicitly tells
+the agent never to send `PO` here.
+
+This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
+line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
+(ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
+change: it is the only thing telling the agent what is legal.
