@@ -530,7 +530,7 @@ describe('OnboardingPage', () => {
     expect(JSON.stringify(track.mock.calls)).not.toContain('Private Setup Name');
   });
 
-  it('tracks login failures without credentials', async () => {
+  it('tracks login failures when the server returns no token', async () => {
     loginAccount.mockResolvedValue({});
 
     // The flow lands on the login view by default (core 0.3.4).
@@ -699,7 +699,11 @@ describe('OnboardingPage', () => {
         windowName: 'onboarding',
       });
     });
+    // core 0.3.20 (ETP-4676) no longer renders the raw backend userMessage; the
+    // error is always translated via ui(err.code), falling back to this key when
+    // the rejection carries no code. The mocked ui() is the identity function.
     expect(screen.getByText('onboardingConnectionError')).toBeInTheDocument();
+    expect(screen.queryByText('Readable login failure')).not.toBeInTheDocument();
   });
 
   it('submits forgot password requests with neutral success messaging', async () => {
