@@ -78,6 +78,9 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   // Supports a single-field condition ({field, in:[...] | equals:...}) or an
   // OR-of-conditions shape ({ anyOf: [condition, ...] }) — kept minimal on
   // purpose, just enough to express "tipo X OR rectificativa checked" cleanly.
+  // Single source of truth for visibility evaluation: also backs field-level
+  // visibleWhen (identificacion/meta sections, below) — do not fork a second
+  // implementation, extend this one instead.
   const matchesSvw = (svw) => {
     if (Array.isArray(svw.anyOf)) return svw.anyOf.some(matchesSvw);
     const val = identification?.[svw.field];
@@ -148,12 +151,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
 
         // ── Identificación + meta sections (sin_actividad, rectificativa) ──
         if (section.sectionType === 'identificacion') {
-          const visibleFields = section.fields.filter(f => {
-            if (!f.visibleWhen) return true;
-            const val = identification?.[f.visibleWhen.field];
-            if (f.visibleWhen.in) return f.visibleWhen.in.includes(val);
-            return val === f.visibleWhen.equals;
-          });
+          const visibleFields = section.fields.filter(f => !f.visibleWhen || matchesSvw(f.visibleWhen));
 
           // Main identificacion section:
           // - read-only text fields (NIF/nombre) → top group
