@@ -44,6 +44,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const [receipts, setReceipts] = useState([]);
   const [payments, setPayments] = useState([]);
   const [returnDeliveries, setReturnDeliveries] = useState([]);
+  const [originInvoice, setOriginInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
@@ -91,8 +92,18 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
           setReturnDeliveries([]);
         });
     }
+    // ETP-4737: `originInvoice` is set when this rectificativa was created via the
+    // "Import from Source Invoice" popup (manual correction) — independent of the
+    // isReturn branch above (which covers the auto-generated-from-Albarán case).
+    // Server injects just the id (+ _identifier), not the full record, so fetch it here.
+    const originInvoicePromise = data?.originInvoice
+      ? fetchById('purchase-invoice', 'header', data.originInvoice, token, apiBaseUrl).catch(() => null)
+      : Promise.resolve(null);
+    promise = Promise.all([promise, originInvoicePromise]).then(([, originResult]) => {
+      setOriginInvoice(originResult);
+    });
     promise.finally(() => setLoading(false));
-  }, [recordId, apSubtype, data?.salesOrder, data?.linkedReceipts, token, apiBaseUrl, refreshKey]);
+  }, [recordId, apSubtype, data?.salesOrder, data?.linkedReceipts, data?.originInvoice, token, apiBaseUrl, refreshKey]);
 
   const chips = [];
 
@@ -119,6 +130,15 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       <DocChip
         key={`receipt-${r.id}`}
         {...docChipProps({ type: r.isReturn ? 'return-to-vendor' : 'receipt', doc: r, ui, navigate })}
+        data-testid="DocChip__bb79ed" />
+    );
+  }
+
+  if (originInvoice) {
+    chips.push(
+      <DocChip
+        key="origin-invoice"
+        {...docChipProps({ type: 'invoice', doc: originInvoice, ui, navigate })}
         data-testid="DocChip__bb79ed" />
     );
   }

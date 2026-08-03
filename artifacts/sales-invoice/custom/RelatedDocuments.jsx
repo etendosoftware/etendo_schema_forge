@@ -17,6 +17,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const [order, setOrder] = useState(null);
   const [shipments, setShipments] = useState([]);
   const [originalInvoices, setOriginalInvoices] = useState([]);
+  const [originInvoice, setOriginInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
@@ -69,6 +70,19 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     // file used to) is what produced the wrong "Envío" chip/link for return invoices (ETP-4534).
     const linked = Array.isArray(data.linkedShipments) ? data.linkedShipments : [];
     setShipments(linked);
+
+    // ETP-4737: `originInvoice` is set when this rectificativa was created via the
+    // "Import from Source Invoice" popup (manual correction) — distinct from
+    // `sourceInvoice` above, which only covers the auto-generated-from-return case.
+    // Server injects just the id (+ _identifier), not the full record, so fetch it here.
+    if (data.originInvoice) {
+      promises.push(
+        fetchById('sales-invoice', 'header', data.originInvoice, token, apiBaseUrl)
+          .then(inv => setOriginInvoice(inv))
+      );
+    } else {
+      setOriginInvoice(null);
+    }
 
     if (promises.length === 0) { setLoading(false); return; }
     Promise.all(promises).then(() => setLoading(false));
@@ -129,6 +143,18 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       <DocChip
         key="source-invoice"
         {...docChipProps({ type: 'sales-invoice', doc: data.sourceInvoice, ui, navigate })}
+      />
+    );
+  }
+
+  // ETP-4737: the manually-linked source invoice (via "Import from Source Invoice"),
+  // additive to sourceInvoice above — the two are mutually exclusive in practice
+  // (auto-generated-from-return vs. manual correction) but not enforced as such here.
+  if (originInvoice) {
+    chips.push(
+      <DocChip
+        key="origin-invoice"
+        {...docChipProps({ type: 'sales-invoice', doc: originInvoice, ui, navigate })}
       />
     );
   }
