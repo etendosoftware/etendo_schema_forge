@@ -911,13 +911,13 @@ describe('EditAccountModal', () => {
     });
 
     it('does not crash for a cash account when the capability is denied (both tabs unavailable)', () => {
-      // Edge case: a cash account has no General tab (no PSD2/reconciliation) and, here, no
-      // Accounting tab either (capability denied) — there is genuinely nothing to show, but the
-      // modal itself must still render cleanly and editTab must settle on General internally
-      // rather than staying stuck pointing at the hidden Accounting tab.
+      // Edge case: a cash account has no General tab (no bank connection/reconciliation) and,
+      // here, no Accounting tab either (capability denied) — there is genuinely nothing to
+      // show, but the modal itself must still render cleanly and editTab must settle on
+      // General internally rather than staying stuck pointing at the hidden Accounting tab.
       hasCapability.mockReturnValue(false);
       renderModal({
-        account: { id: 'acc-cash-nocap', name: 'Caja', type: 'C', currencyId: '102', psd2Connected: false },
+        account: { id: 'acc-cash-nocap', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false },
       });
 
       expect(screen.getByTestId('edit-account-modal')).toBeInTheDocument();

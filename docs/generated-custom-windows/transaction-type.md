@@ -4,9 +4,13 @@
 
 `transaction-type` is a **user-definable lookup** behind the match-rule "Tipo de transacción" field. It lets a finance user grow the list of transaction types on the fly instead of being limited to a fixed code list. It is **not a standalone window**: there is no menu entry, no route and no maintenance screen — the only way a user touches it is the inline "+ Crear tipo de transacción" action inside the [match-rule](match-rule.md) create/edit modal.
 
+## Pipeline registry (ETP-4658)
+
+Predates the `cli/config/regen-windows.json` convention — see [match-rule](match-rule.md#pipeline-registry-etp-4658) for the shared history. ETP-4658 added it to the registry (`transaction-type` / `82922976BB524D1BAA3CF8462B9219FE`) and ran a full DB extraction + regen, producing a proper `contract.mcp.json` and a generated `TransactionTypePage.jsx` for the first time. That page is **not wired into `registry.js` or `menu.json`** — deliberately, since this remains backend-only by design (no menu entry, no route); it is unused generated output, same as any other artifact whose `layoutType` implies a frontend it doesn't actually need.
+
 ## Interaction model
 
-- **No UI surface of its own**: no AD menu, no React route, no generated frontend (the artifact is backend-only; see `BACKEND_ONLY_ARTIFACTS` in `cli/src/validate-pipeline.js` and the exemption in `cli/test/wiring-completeness.test.js`).
+- **No UI surface of its own**: no AD menu, no React route, no wired frontend (the artifact is backend-only in `registry.js`/`menu.json`; the validator's `BACKEND_ONLY_ARTIFACTS` set — published in `@etendosoftware/schema-forge-cli`'s `validate-pipeline.js` post-split — exempts it from the F3 "contract without registry entry" rule).
 - **Backed by** the new core-style table `ETGO_Transaction_Type` (search key `Value` + `Name`), exposed as a NEO Headless **W spec** (`transaction-type`) with a technical AD window/tab that carries **no menu entry** — it exists only so NEO can serve the selector list and the create endpoint.
 - **Where it is used**: the match-rule `transactionType` field is a FK (`ETGO_Transaction_Type_ID`) rendered as a searchable, inline-creatable selector.
 
