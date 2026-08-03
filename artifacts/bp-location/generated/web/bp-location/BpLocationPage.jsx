@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import BpLocationTable from './BpLocationTable';
 import BpLocationForm from './BpLocationForm';
 import catalogs from './mockCatalogs';

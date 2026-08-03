@@ -3,6 +3,13 @@ import userEvent from '@testing-library/user-event';
 
 const logoutMock = vi.fn();
 const setLocaleMock = vi.fn();
+const navigateMock = vi.fn();
+
+// The component is always rendered inside the app router; these tests mount it
+// on its own, so router context has to be supplied here.
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigateMock,
+}));
 
 let authOverrides = {};
 let localeOverrides = {};
