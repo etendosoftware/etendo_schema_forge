@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
-  "generatedAt": "2026-07-31T14:37:13.834Z",
-  "updatedAt": "2026-07-31T16:47:08.597Z",
-  "checksum": "684388e0ec2d012e",
+  "version": "0.1.0",
+  "generatedAt": "2026-07-31T19:26:59.736Z",
+  "updatedAt": "2026-07-31T20:04:13.219Z",
+  "checksum": "fc8d658a3248b85d",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -65,7 +65,8 @@
             "customerReceivablesNo",
             "customerPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         },
         "vendorAccounting": {
           "tabMode": "table-form",
@@ -76,7 +77,8 @@
             "vendorLiability",
             "vendorPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -2073,6 +2075,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "customerAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -3125,6 +3128,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "vendorAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -5052,7 +5056,8 @@
             "customerReceivablesNo",
             "customerPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         },
         "vendorAccounting": {
           "tabMode": "table-form",
@@ -5063,7 +5068,8 @@
             "vendorLiability",
             "vendorPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -11193,7 +11199,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/customerAccounting",
         "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
         "supportedFilters": []
@@ -11226,7 +11232,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/vendorAccounting",
         "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
         "supportedFilters": []
