@@ -437,6 +437,14 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     await expect(createInvoiceBtn).toBeVisible();
     // Clone is a list-view row action, not a detail-view button.
 
+    // ETP-4737: the post-confirm button's label was ALSO fixed today — it used to fall
+    // back to the hardcoded, stale `createReturnInvoice` i18n key with no per-window
+    // override; ConfirmWithCreditButtonBase now accepts a `postConfirmButtonLabel` prop
+    // and this window wires it to returnToVendor.createCreditNote (value updated to the
+    // unified "Crear Factura Rectificativa" wording, matching the confirm-modal's toggle
+    // card asserted above in the DR flow test).
+    await expect(createInvoiceBtn).toHaveText('Crear Factura Rectificativa');
+
     // action-confirm-with-credit must NOT be present for CO
     await expect(page.getByTestId('action-confirm-with-credit')).toHaveCount(0);
 

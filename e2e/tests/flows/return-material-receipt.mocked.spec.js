@@ -309,13 +309,21 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
 
   test('CO detail: create invoice button, print button, invoice modal confirm — full flow', async ({ page }) => {
     test.setTimeout(120_000); // 3 navigations + modal flow can exceed 60s under full-suite load
-    // ret-003 is CO with hasReturnInvoice=false — "Crear factura de devolución" must be visible
+    // ret-003 is CO with hasReturnInvoice=false — "Crear Factura Rectificativa" must be visible
     await page.goto('/return-material-receipt/ret-003');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // --- "Crear factura de devolución" button is visible ---
+    // --- "Crear Factura Rectificativa" button is visible ---
     const createInvoiceBtn = page.getByTestId('action-create-return-invoice');
     await expect(createInvoiceBtn).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: the post-confirm button's label was ALSO fixed today — it used to fall
+    // back to the hardcoded, stale `createReturnInvoice` i18n key ("Crear Factura de
+    // Devolución") with no per-window override; ConfirmWithCreditButtonBase now accepts
+    // a `postConfirmButtonLabel` prop and this window wires it to
+    // returnReceipt.createRectificativeInvoice. Regression guard: same wording as the
+    // confirm-modal's toggle card (asserted above in the DR flow test).
+    await expect(createInvoiceBtn).toHaveText('Crear Factura Rectificativa');
 
     // --- Print button is visible ---
     const printBtn = page.getByRole('button', { name: /imprimir|print/i });
