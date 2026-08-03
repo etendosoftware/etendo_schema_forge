@@ -22,7 +22,7 @@ export default function BulkDocumentAction({
   labelKey = 'bulkCompletion',
 }) {
   const ui = useUI();
-  const { execute } = useDocumentAction({ apiBaseUrl, entity, token });
+  const { execute } = useDocumentAction({ apiBaseUrl, entity });
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);

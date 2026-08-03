@@ -89,10 +89,10 @@ export default function RowQuickActions({
   const [inFlight, setInFlight] = useState({});
   const moreRef = useRef(null);
   const menuRef = useRef(null);
-  const docAction = useDocumentAction({ apiBaseUrl, entity, token });
+  const docAction = useDocumentAction({ apiBaseUrl, entity });
   // ETP-4298 — declarative NEO action endpoint (e.g. post/unpost). `apiBaseUrl`
   // is already scoped to the spec; entity segment mirrors useDocumentAction.
-  const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
+  const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl });
 
   // visibleWhen lookup for a given action key. Falls back to `true` when no expression set.
   const passesVisibleWhen = useCallback((key) => {

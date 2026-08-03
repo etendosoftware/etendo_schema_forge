@@ -2048,8 +2048,8 @@ export function DetailView({
   const { catalogs, catalogsLoaded } = useCatalogs(api, token, apiBaseUrl, staticCatalogs);
   const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
-  const docAction = useDocumentAction({ apiBaseUrl, entity, token });
-  const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
+  const docAction = useDocumentAction({ apiBaseUrl, entity });
+  const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl });
   // ETP-4479 — fall back to the per-window default when the caller didn't
   // explicitly pass `deleteAction` (see WINDOW_DELETE_ACTIONS above).
   const effectiveDeleteAction = deleteAction ?? WINDOW_DELETE_ACTIONS[windowName] ?? null;

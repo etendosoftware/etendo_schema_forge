@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useAuth } from '@/auth/AuthContext.jsx';
 
 /**
  * useNeoAction — invokes a generic NEO action endpoint (ETP-4298).
@@ -21,16 +22,19 @@ import { useCallback, useMemo, useState } from 'react';
  * @param {string}  opts.specName   - spec name (kept for symmetry; not used in URL)
  * @param {string} [opts.entityName='header'] - entity segment of the action URL
  * @param {string}  opts.apiBaseUrl - base URL already scoped to the spec
- * @param {string}  opts.token      - bearer token
  * @returns {{ execute: (recordId: string, actionName: string) => Promise<{success: boolean, message?: string}>, loading: boolean }}
  */
-export function useNeoAction({ specName: _specName, entityName = 'header', apiBaseUrl, token } = {}) {
+export function useNeoAction({ specName: _specName, entityName = 'header', apiBaseUrl } = {}) {
+  // ETP-4576 — no credential is threaded in any more: the session is the
+  // `__Host-` cookie. This hook only needs the CSRF proof, which it reads from
+  // the auth context itself, so callers stop passing a token.
+  const { csrfToken } = useAuth();
   const [loading, setLoading] = useState(false);
 
   const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
-  }), [token]);
+    ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
+  }), [csrfToken]);
 
   const execute = useCallback(async (recordId, actionName) => {
     if (!apiBaseUrl || !recordId || !actionName) {
@@ -40,7 +44,7 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
     try {
       const res = await fetch(
         `${apiBaseUrl}/${entityName}/${encodeURIComponent(recordId)}/action/${encodeURIComponent(actionName)}`,
-        { method: 'POST', headers, body: '{}' },
+        { method: 'POST', headers, credentials: 'include', body: '{}' },
       );
       const body = await res.json().catch(() => null);
       const nested = body?.response?.data?.[0];

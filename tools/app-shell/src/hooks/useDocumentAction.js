@@ -1,18 +1,23 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { trackTransactionPosted } from '@/lib/observability/health-events.js';
 
 /**
  * Invokes Etendo DocAction buttons via NEO Headless.
  * POST {apiBaseUrl}/{entity}/{recordId}/action/documentAction { docAction }
  */
-export function useDocumentAction({ apiBaseUrl, entity = 'header', token } = {}) {
+export function useDocumentAction({ apiBaseUrl, entity = 'header' } = {}) {
+  // ETP-4576 — no credential is threaded in any more: the session is the
+  // `__Host-` cookie. This hook only needs the CSRF proof, which it reads from
+  // the auth context itself, so callers stop passing a token.
+  const { csrfToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
-  }), [token]);
+    ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
+  }), [csrfToken]);
 
   const execute = useCallback(async (recordId, docAction, { onSuccess, onError } = {}) => {
     if (!recordId || !docAction) {
@@ -26,7 +31,7 @@ export function useDocumentAction({ apiBaseUrl, entity = 'header', token } = {})
     try {
       const res = await fetch(
         `${apiBaseUrl}/${entity}/${recordId}/action/documentAction`,
-        { method: 'POST', headers, body: JSON.stringify({ docAction }) },
+        { method: 'POST', headers, credentials: 'include', body: JSON.stringify({ docAction }) },
       );
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
