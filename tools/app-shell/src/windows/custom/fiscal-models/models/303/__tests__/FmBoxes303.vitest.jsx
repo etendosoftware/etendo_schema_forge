@@ -789,20 +789,21 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
     expect(bankFieldLabels(container).some(t => t.startsWith('fm.ident.bank.iban'))).toBe(false);
   });
 
-  // KNOWN GAP (documented, not asserted-as-bug-free): FmBoxes303's field-level
-  // visibility filter (the `visibleFields = section.fields.filter(...)` block
-  // shared by all sectionType==='identificacion' sections) only understands the
-  // flat { field, in } / { field, equals } shape — unlike sectionVisibleWhen, it
-  // has no matchesSvw/anyOf support. Since _BANK_DVX_VW is now { anyOf: [...] },
-  // f.visibleWhen.field/.in/.equals are all undefined for these 6 fields, so the
-  // filter's final fallback `val === f.visibleWhen.equals` evaluates
-  // `undefined === undefined` → true UNCONDITIONALLY. In practice the per-field
-  // visibleWhen no longer gates anything on its own — these 6 fields are now
-  // visible whenever the section is, including for tipo 'U' (Domiciliación),
-  // which previously hid them (only bank_iban is needed for U). This test
-  // documents that ACTUAL current behavior so a future change doesn't silently
-  // shift it further — it does NOT assert this is the intended design.
-  it('tipo U + rectificativa false → bank_swift_bic is ALSO visible (documents current filter behavior, not necessarily by design — see comment above)', () => {
+  // FIXED (commit 789547fde — "Unify visibility evaluators for anyOf
+  // support"): FmBoxes303's field-level visibility filter (the
+  // `visibleFields = section.fields.filter(...)` block shared by all
+  // sectionType==='identificacion' sections) previously only understood the
+  // flat { field, in } / { field, equals } shape — unlike sectionVisibleWhen,
+  // it had no matchesSvw/anyOf support. Since _BANK_DVX_VW is
+  // { anyOf: [...] }, the field-level filter now delegates to the same
+  // matchesSvw function sectionVisibleWhen already used, so the anyOf shape
+  // is correctly evaluated at the individual-field level too. For plain
+  // tipo 'U' (Domiciliación) with rectificativa unchecked, only the
+  // tipo D/V/X branch and the rectificativa branch of the anyOf can satisfy
+  // it — neither does for U+false — so these 6 fields are correctly hidden,
+  // leaving only bank_iban (which carries no field-level visibleWhen)
+  // visible. This is the confirmed-correct, locked-in behavior.
+  it('tipo U + rectificativa false → bank_swift_bic hidden (fixed by commit 789547fde — anyOf now respected at field level)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
@@ -811,7 +812,33 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
         identification={{ tipo_declaracion: 'U', rectificativa: false }}
       />
     );
-    expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
+    expect(bankFieldLabels(container)).not.toContain('fm.ident.bank.swift_bic');
+  });
+
+  it('tipo U + rectificativa false → bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa also hidden', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'U', rectificativa: false }}
+      />
+    );
+    const labels = bankFieldLabels(container);
+    ['fm.ident.bank.nombre', 'fm.ident.bank.direccion', 'fm.ident.bank.ciudad', 'fm.ident.bank.pais', 'fm.ident.bank.sepa']
+      .forEach(key => expect(labels).not.toContain(key));
+  });
+
+  it('tipo U + rectificativa false → bank_iban remains visible (unaffected by the field-level anyOf gating)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'U', rectificativa: false }}
+      />
+    );
+    expect(bankFieldLabels(container).some(t => t.startsWith('fm.ident.bank.iban'))).toBe(true);
   });
 });
 
