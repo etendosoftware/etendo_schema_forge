@@ -7,8 +7,15 @@
 // the underlying visibility rules fails this test instead of only a regex.
 let capturedDetailViewProps = null;
 
-vi.mock('@/components/contract-ui', () => ({
+// ETP-4730 retargeted the generated pages off the `@/components/contract-ui`
+// barrel onto the concrete modules, so mocking the barrel no longer intercepts
+// these two — the real DetailView would mount and `capturedDetailViewProps`
+// would never be set. Mock the same paths HeaderPage.jsx now imports.
+vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   ListView: () => <div data-testid="list-view" />,
+}));
+
+vi.mock('@/components/contract-ui/DetailView.jsx', () => ({
   DetailView: (props) => {
     capturedDetailViewProps = props;
     return <div data-testid="detail-view" />;

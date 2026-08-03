@@ -1,7 +1,11 @@
 import { createRoot } from 'react-dom/client';
 import { initBrowserObservability } from './lib/observability/browser.js';
+import { initFeatureFlags } from './lib/flags/index.js';
 
 initBrowserObservability();
+// Fire-and-forget: never rejects, and flags resolve to their declared defaults
+// until (or unless) the provider becomes ready.
+initFeatureFlags();
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
 import App from './App.jsx';

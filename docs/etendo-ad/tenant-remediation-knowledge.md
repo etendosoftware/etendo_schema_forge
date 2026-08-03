@@ -327,3 +327,62 @@
 - **2026-07-30 — "AP Credit Memo" does not exist under that literal name anywhere in this dev DB — the real row is named "AP CreditMemo" (no space), `docbasetype='APC'`, and (unlike its AR sibling) has `docnosequence_id=NULL` — no dedicated sequence to retire.** A retirement fix targeting the exact ticket-given name would silently match 0 rows. **Apply:** match old-type retirement by a name list covering BOTH spellings (`'AP CreditMemo', 'AP Credit Memo'`), and never assume every old doc type has its own sequence — guard the sequence-deactivation `UPDATE` on `docnosequence_id IS NOT NULL`.
 - **2026-07-30 — `C_DOCTYPE`/`AD_SEQUENCE` are already in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so this gap's preventive front is DATASET-ONLY — no new `Onboarding*Service` needed** (same pattern as ETP-4341 payment methods / A3 / A3b). Confirmed the dataset importer (`OnboardingDatasetNormalizer.buildDatasetXml`) reads `referencedata/sampledata/GOClient/*.xml` files **sorted alphabetically by filename** (`Files.list(...).sorted(Comparator.comparing(path -> path.getFileName().toString()))`), so `AD_SEQUENCE.xml` (A) is always imported before `C_DOCTYPE.xml` (C) — satisfying `ETSG_CHECK_RECTIF_DOC_TYPE`'s "sequence must already exist" requirement for brand-new tenants too, with zero extra Java. No row-level `ISACTIVE` filtering exists in the normalizer, so shipping the 3 old doc-type/sequence rows pre-set to `ISACTIVE='N'` in the XML correctly gives new tenants the retired history without any active old type.
 - **2026-07-30 — Session recovery: a computer crash mid-session had already produced 2 throwaway "dev test" doc-type/sequence rows directly on GOClient's live DB** (`description` literally said "ETP-4737 dev test", `createdby='100'`/Admin, created ~1h earlier, zero ledger rows, zero `C_Invoice`/`C_Order` references) with the WRONG `docbasetype` (`ARC`/`APC` from a first-pass reading of the ticket, before it was corrected to `ARI`/`API`). Verified zero references before deleting (`c_invoice`, `c_order`, FK scan via `information_schema` on `c_doctype`/`ad_sequence`) — safe to hard-delete since nothing downstream depended on them and they were never tracked by the data-fixes ledger.
+
+## ETP-4706 — "Account could not be found" on Goods Receipt posting (A2b, 2026-07-29)
+
+- **2026-07-29 — Corrected misinterpretation: the ticket's original diagnosis ("missing product-category
+  account column") was WRONG.** The brief assumed `M_Product_Category_Acct`/`M_Product_Acct` needed a
+  new `p_notinvoicedreceipts_acct`-style column. Verified via `information_schema.columns`: **neither
+  table has ANY not-invoiced-receipts column** (`m_product_category_acct` has 23 columns, none named
+  `*notinvoiced*`; same for `m_product_acct`). The real resolution path (confirmed by reading
+  `org.openbravo.erpCommon.ad_forms.AcctServer#getAccount`, `ACCTTYPE_NotInvoicedReceipts = "51"`) is
+  `AcctServerData.selectNotInvoicedReceiptsAcct` (`AcctServer_data.xsql`):
+  `SELECT NotInvoicedReceipts_Acct FROM C_BP_Group_Acct a, C_BPartner bp WHERE a.C_BP_Group_ID =
+  bp.C_BP_Group_ID AND bp.C_BPartner_ID = ? AND a.C_AcctSchema_ID = ?` — entirely BP-GROUP scoped, via
+  the transaction's business partner. The error log line ("No Account Not Invoiced Receipts for
+  product: X") names the product only in its message text; the actual lookup key is the BP's group,
+  not the product or product category. **Apply:** when an `AcctServer` "account could not be found"
+  error names a product/entity, do not assume the FK lives on that entity's own `*_acct` table — trace
+  the actual `getAccount`/`AcctType` call site in the relevant `Doc*.java` class first (here
+  `DocInOut.java` line ~372, `getAccount(AcctServer.ACCTTYPE_NotInvoicedReceipts, ...)` on `this`, not
+  `line.getAccount(...)` on the product) before assuming which table owns the missing column.
+- **2026-07-29 — Live-DB root cause: one stale pre-existing `C_BP_Group_Acct` row, not a systemic
+  onboarding gap.** GOClient's "Cliente" BP group (`DBBD00C9E0B9442188FCDDA3F601DAEA`, the group ETP-4402
+  renamed from "Consumidor Final") has a `C_BP_Group_Acct` row for "Esquema GO"
+  (`C06B100312FA48159DB36B9A4B461019`) with `notinvoicedreceipts_acct = NULL`, while
+  `C_AcctSchema_Default.notinvoicedreceipts_acct` on the same schema is populated
+  (`6E9DA718417A48A290FE376448A12BF6`). Row `created = 2026-04-07 14:59:32`; the sibling
+  "Proveedor"/"Acreedor" groups on the same schema already have this column set. **Root cause:**
+  `OnboardingAccountingWiringService#provisionEntityPostingAccounts`'s `BP_GROUP_ACCT_SQL` (and the
+  `c_bp_group_trg()` core trigger, same story) is guarded by `NOT EXISTS` at the ROW level — once a
+  `(group, schema)` row exists at all, neither the trigger nor the onboarding insert ever revisits it,
+  so any column that got its default populated AFTER the row's creation stays permanently NULL. This
+  matches the exact class of bug already documented for `C_ACCTSCHEMA_DEFAULT` (A3b) and
+  `C_ACCTSCHEMA_TABLE` (A4) drift — "someone/something backfilled a default later; pre-existing rows
+  never got the memo" — just on `C_BP_Group_Acct` this time.
+- **2026-07-29 — Fleet-wide sweep CONFIRMS corrective-only; no preventive fix needed.** Queried every
+  `C_BP_Group_Acct` row across every tenant on this DB for `notinvoicedreceipts_acct IS NULL`: **only
+  GOClient's "Cliente" row matched.** Critically, tenants onboarded via the CURRENT onboarding code the
+  SAME DAY as this diagnosis (e.g. "Empresa E2E d5be89a8", onboarded 2026-07-29) already have this
+  column correctly populated on every group — proving `BP_GROUP_ACCT_SQL` already sources
+  `notinvoicedreceipts_acct` correctly for any row inserted fresh today. **Apply:** per the map's
+  §0 "Boundary" rule, a gap confirmed to be purely existing-tenant state with a demonstrably-correct
+  current onboarding path may ship corrective-only — verify this with a fleet sweep (not just the one
+  repro tenant) before deciding to skip the preventive front, and state the N/A explicitly in the gap
+  table rather than silently omitting it.
+- **2026-07-29 — Same stale row has MANY other `*_acct` columns NULL — flagged, not fixed (scope
+  discipline).** The identical "Cliente"/GOClient row also has `notinvoicedrevenue_acct`,
+  `notinvoicedreceivables_acct`, `unearnedrevenue_acct`, `paydiscount_exp_acct`, `paydiscount_rev_acct`,
+  `writeoff_rev_acct`, `v_liability_services_acct`, `doubtfuldebt_acct`, `baddebtexpense_acct`,
+  `baddebtrevenue_acct`, `allowancefordoubtful_acct` all NULL — the same drift class, other account
+  types, same row. ETP-4706 explicitly scoped itself to Not-Invoiced-Receipts only (per its own
+  "don't silently expand scope" instruction). **Apply:** a future ticket should consider generalizing
+  R17 into a "resync every NULL `*_acct` column on a `C_BP_Group_Acct` row against the schema default"
+  fix (one UPDATE per column, or a single dynamic one) rather than shipping one column-specific R-fix
+  at a time whenever the next symptom surfaces on this same row.
+- **2026-07-29 — Fix:** `cli/src/data-fixes/sql/20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql`
+  — single guarded `UPDATE` joining `c_bp_group_acct` → `c_bp_group` (tenant scope) →
+  `c_acctschema_default` (source value), backfilling `notinvoicedreceipts_acct` only where NULL and a
+  schema default exists. Verified live in a rolled-back transaction on GOClient: `BEFORE: NULL` →
+  `AFTER: 6E9DA718417A48A290FE376448A12BF6`; re-check (same predicate) matches 0 rows, confirming
+  idempotency. `ONBOARDING_PROVISIONED_THROUGH` intentionally NOT bumped (no preventive change).
