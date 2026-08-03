@@ -682,6 +682,139 @@ describe('FmBoxes303 — datos_bancarios × rectificativa visibility matrix (any
   });
 });
 
+// ── datos_bancarios individual bank field visibility (ETP-4456 follow-up) ─────
+// commit edb448754 widened _BANK_DVX_VW (fm303Layouts.js) from a plain
+// { field: 'tipo_declaracion', in: ['D','V','X'] } condition to the same anyOf
+// shape as datos_bancarios.sectionVisibleWhen: tipo D/V/X, OR rectificativa
+// checked (regardless of tipo). It is shared by 6 of the 7 bank fields
+// (bank_swift_bic, bank_nombre, bank_direccion, bank_ciudad, bank_pais,
+// bank_sepa). bank_iban itself carries no field-level visibleWhen — it is
+// gated solely by sectionVisibleWhen (covered in the block above) — so it
+// must be unaffected by this specific change.
+
+describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4456 follow-up)', () => {
+  const bankFieldLabels = (container) =>
+    Array.from(container.querySelectorAll('.fm-aeat-ident-inline-field__label'))
+      .map(el => el.textContent);
+
+  it('tipo D + rectificativa false → bank_swift_bic visible (regression guard — pre-fix correct behavior preserved)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D', rectificativa: false }}
+      />
+    );
+    expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
+  });
+
+  it('tipo I + rectificativa false → bank_swift_bic hidden (regression guard — must NOT have become visible by accident)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: false }}
+      />
+    );
+    // The whole section is hidden in this case (sectionVisibleWhen), so no bank
+    // field — including bank_swift_bic — renders at all.
+    expect(container.querySelector('.fm-aeat-section')).toBeNull();
+    expect(bankFieldLabels(container)).not.toContain('fm.ident.bank.swift_bic');
+  });
+
+  it('tipo I + rectificativa true → bank_swift_bic visible (the actual bug fix — commit edb448754)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+      />
+    );
+    expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
+  });
+
+  it('tipo D + rectificativa true → bank_swift_bic visible (both anyOf branches true simultaneously — no conflict)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D', rectificativa: true }}
+      />
+    );
+    expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
+  });
+
+  it('also covers bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa for the bug-fix case (tipo I + rectificativa true)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+      />
+    );
+    const labels = bankFieldLabels(container);
+    ['fm.ident.bank.nombre', 'fm.ident.bank.direccion', 'fm.ident.bank.ciudad', 'fm.ident.bank.pais', 'fm.ident.bank.sepa']
+      .forEach(key => expect(labels).toContain(key));
+  });
+
+  it('bank_iban is unaffected by the field-level visibleWhen change — visible whenever the section is (tipo I + rectificativa true)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+      />
+    );
+    // bank_iban has no field-level visibleWhen — it renders whenever the section
+    // does, unaffected by _BANK_DVX_VW. Its label carries the required-mark
+    // suffix ("*"), so match by prefix instead of exact equality.
+    expect(bankFieldLabels(container).some(t => t.startsWith('fm.ident.bank.iban'))).toBe(true);
+  });
+
+  it('bank_iban still hidden when the section itself is hidden (tipo I + rectificativa false)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: false }}
+      />
+    );
+    expect(bankFieldLabels(container).some(t => t.startsWith('fm.ident.bank.iban'))).toBe(false);
+  });
+
+  // KNOWN GAP (documented, not asserted-as-bug-free): FmBoxes303's field-level
+  // visibility filter (the `visibleFields = section.fields.filter(...)` block
+  // shared by all sectionType==='identificacion' sections) only understands the
+  // flat { field, in } / { field, equals } shape — unlike sectionVisibleWhen, it
+  // has no matchesSvw/anyOf support. Since _BANK_DVX_VW is now { anyOf: [...] },
+  // f.visibleWhen.field/.in/.equals are all undefined for these 6 fields, so the
+  // filter's final fallback `val === f.visibleWhen.equals` evaluates
+  // `undefined === undefined` → true UNCONDITIONALLY. In practice the per-field
+  // visibleWhen no longer gates anything on its own — these 6 fields are now
+  // visible whenever the section is, including for tipo 'U' (Domiciliación),
+  // which previously hid them (only bank_iban is needed for U). This test
+  // documents that ACTUAL current behavior so a future change doesn't silently
+  // shift it further — it does NOT assert this is the intended design.
+  it('tipo U + rectificativa false → bank_swift_bic is ALSO visible (documents current filter behavior, not necessarily by design — see comment above)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'U', rectificativa: false }}
+      />
+    );
+    expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
+  });
+});
+
 // ── identificacion select field (tipo_declaracion) ────────────────────────────
 
 describe('FmBoxes303 — identificacion select field', () => {
