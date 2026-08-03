@@ -282,3 +282,29 @@ Explicit **Refresh** still forces a network revalidation (bypasses freshness).
 - **No server-side / HTTP caching** — this is a client-side, in-memory cache only; a full page reload starts cold.
 - Selector option **pages beyond page 0** are cached per offset but the accumulated infinite-scroll list is not deduplicated across partial scroll positions.
 - **Before/after network trace:** the historical "~19 requests" figure has no committed source report (`docs/reports/contacts-test-report.md` is an external assessment doc, not in this repo); a reproducible current measurement is captured separately as delivery evidence rather than embedded here.
+
+## ETP-4156 — Contact name/username derivation moved server-side
+
+**What changed.** The derivation of the two AD-mandatory `AD_User` columns that this window does not expose as editable fields moved out of the app-shell's generic `useEntity` hook into a dedicated `NeoHandler`. The hook used to branch on hardcoded entity names (`contact` / `adUser` / `user` / `businessPartner` / `bpartner`) inside `applyContactsRequiredFields`, violating the "no window-specific logic in generic services" principle — the metadata-driven runtime must stay entity-agnostic.
+
+**New handler.** `ContactHandler` (`@Named("contactHandler")`, `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/ContactHandler.java`) is a `handle()` pre-hook on the contacts spec's `contact` entity, routed via `entities.contact.javaQualifier` in `decisions.json`:
+
+- **`name`** (`AD_User.Name`, mandatory, declared `readOnly / form: false`) — derived as `firstName + " " + lastName` when the effective name is blank: the body value on POST, the persisted `ad_user.name` on PATCH/PUT (merging body and persisted parts for whichever half the body omits, mirroring `BusinessPartnerHandler#deriveNameFromPerson`). An explicit name always wins.
+- **`username`** (`AD_User.Username`, AD-mandatory, not declared as a Schema Forge field at all) — derived from `name` on **POST only**, when blank. `NeoHiddenMandatoryDefaultsResolver` cannot cover it: that resolver only handles mandatory columns that are *not* exposed as SF fields **and** have an AD default, and it runs on the `/defaults` pre-fill path, so it cannot see values the user just typed.
+
+Both are truncated to the column length — `AD_User.Name` and `AD_User.Username` are `NVARCHAR(60)`.
+
+**Two deliberate behaviour changes** (previously implicit in the front-end code):
+
+- Renaming a contact no longer rewrites its `username`. The old hook reassigned it on every PATCH whose payload carried a new `name`; `AD_User.Username` is unique and is the login identifier.
+- The `user` window (spec `user`, which exposes `name` and `username` as editable fields) no longer receives a silent autofill. Its own handler is `UserRoleAssignmentHandler` (`@Named("user")`), which is unrelated to name derivation.
+
+**Related backend fix.** `BusinessPartnerHandler` now truncates the placeholder `searchKey` it injects on POST to 40 chars (`C_BPartner.Value` is `VARCHAR(40)` while `Name` has 60). The app-shell used to pre-truncate this client-side, which masked the missing server-side guard — without it, a create with a 48-char commercial name fails with *"Value too long. Length 48, maximum allowed 40"*. `afterHandle()` replaces the placeholder with `em_etgo_identifier` anyway, so the truncation is lossless.
+
+**Import descriptor.** `contactsImportDescriptor.js` keeps its own `contact.name` derivation: the CSV's contact-level `firstName`/`lastName` columns are frequently blank (the row's real name lives in the BP-level `etgoFirstname`/`etgoLastname`), so it falls back further to the BP's own name — a fallback the handler cannot reproduce because those values are not in the contact's request body. Its explicit `searchKey` is now redundant with the server-side guard but harmless, and was left in place.
+
+**Activation.** The handler only fires once `ETGO_SF_ENTITY.Java_Qualifier` is populated for the `contact` entity: run `make regen ONLY=contacts PUSH_TO_NEO=1`. The qualifier is also committed to the module dataset (`com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_ENTITY.xml`, `contact` row) — without that line `update.database` resets the column to null and the handler silently stops firing, which is exactly what happened during this ticket's verification.
+
+**Regeneration side effect.** The `make regen` this change required also brought `oBTIKVIESStatus` up to date in `contract.json` / `contract.mcp.json` / `BusinessPartnerForm.jsx` (`defaultValue: 'P'`, `maxLength` 10 → 60). That is not stray drift: it completes the contacts artifact regeneration called for by ETP-4144 (see `schema_forge_core/docs/plans/ETP-4144-cross-domain.md` § `window:contacts` — artifact regeneration), whose output never reached this repo's committed artifacts. Re-running the regen reproduces it, since it is a faithful read of AD.
+
+**Automated evidence.** `ContactHandlerTest.java` — 16 JUnit 5 tests covering the method guards, POST name derivation (both parts, one part, explicit name wins, 60-char truncation), POST username derivation (from derived name, from explicit name, existing username respected, truncation), PATCH derivation from persisted parts, the persisted-name and blank-record-id guards, and the regression that PATCH never touches `username`. `BusinessPartnerHandlerTest#testHandlePostTruncatesInjectedSearchKeyToColumnLength` covers the 40-char guard. On the front end, the obsolete `applyContactNameDefaults` / `applyContactsRequiredFields` suites were removed and `buildPatchPayload`'s now-unused `entity` parameter dropped; `buildPatchPayload` gained a test asserting a contact PATCH carries only the changed fields.

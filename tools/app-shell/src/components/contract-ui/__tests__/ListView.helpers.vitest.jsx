@@ -34,6 +34,7 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (k) => k,
   useLabel: () => () => '',
   useUI: () => (k) => k,
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 vi.mock('@/components/CurrentWindowContext', () => ({ useRegisterWindowContext: () => {} }));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi.fn() }));

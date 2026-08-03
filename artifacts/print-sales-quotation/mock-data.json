@@ -1,0 +1,31 @@
+{
+  "header": {
+    "c_order_id": "D4E5F60718293A4B5C6D7E8F90123456",
+    "documentno": "PRE/2026-000056",
+    "dateordered": "2026-07-21",
+    "validuntil": "2026-08-20",
+    "doc_type": "Quotation",
+    "bp_name": "Hostelería del Sur, S.A.",
+    "bp_location": "Paseo Marítimo 45, 29016 Málaga",
+    "description": "Presupuesto para apertura de nuevo local.",
+    "grandtotal": 2662.00,
+    "totallines": 2200.00,
+    "payment_term": "Contado",
+    "payment_method": "Transferencia",
+    "currency": "EUR",
+    "status": "Draft",
+    "org_name": "Etendo Demo, S.L.",
+    "org_taxid": "B12345678",
+    "org_address": "Avenida de la Innovación 8",
+    "org_postal": "41020",
+    "org_city": "Sevilla"
+  },
+  "lines": [
+    { "line": 10, "product_name": "Cafetera profesional 2 grupos", "quantity": 1, "uom": "Unidad", "priceactual": 1450.00, "linenetamt": 1450.00 },
+    { "line": 20, "product_name": "Molino de café automático", "quantity": 1, "uom": "Unidad", "priceactual": 480.00, "linenetamt": 480.00 },
+    { "line": 30, "product_name": "Vajilla porcelana (juego 12)", "quantity": 6, "uom": "Juego", "priceactual": 45.00, "linenetamt": 270.00 }
+  ],
+  "taxes": [
+    { "tax_name": "IVA 21%", "taxbaseamt": 2200.00, "taxamt": 462.00 }
+  ]
+}

@@ -10,7 +10,14 @@ describe('financial-accounts barrel exports', () => {
     expect(featureExports.AccountRowMenu).toBeDefined();
     expect(featureExports.AccountsToolbar).toBeDefined();
     expect(featureExports.AccountsSidebar).toBeDefined();
-    expect(featureExports.AccountsTable).toBeDefined();
+  });
+
+  // ETP-4658 retired the hand-rolled AccountsTable host (table + header + row): the
+  // list is now the generated page's ListView with the AccountsHeaderTable slot, and
+  // nothing mounted the old trio any more. Its cell bodies survive in
+  // AccountsTable/accountColumns.jsx, bound to columns by accountCellTypes.jsx.
+  it('no longer exports the retired AccountsTable host', () => {
+    expect(featureExports.AccountsTable).toBeUndefined();
   });
 
   it('re-exports the ACCOUNT_TYPE map and ordering', () => {

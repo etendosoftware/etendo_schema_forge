@@ -1,0 +1,80 @@
+// Hover row actions for the Cuentas list: edit, bank connection sync (connected
+// accounts only) and the kebab menu.
+//
+// Extracted from the retired AccountRow (ETP-4658) so the testids and the
+// sync-visibility rule have a single definition; the generic DataTable renders them
+// through a `col.render` synthetic column in AccountsHeaderTable.
+import { Pencil, RefreshCw } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useUI } from '@/i18n';
+import { AccountRowMenu } from './AccountRowMenu.jsx';
+
+export function AccountRowActions({
+  account,
+  onOpen,
+  onEdit,
+  onArchive,
+  onBankConnectionAction,
+  onTransfer,
+  onNewMovement,
+}) {
+  const ui = useUI();
+
+  return (
+    <TooltipProvider data-testid="TooltipProvider__acctactions">
+      {/* The named variant is the load-bearing one: DataTable marks its row as
+          `group/row` (DataTable.jsx:1201) and `group-hover:` does not match a named
+          group, so without it these actions stay invisible. The unnamed variant is kept
+          as insurance for a host that marks rows as a plain `group` — same reasoning as
+          in AccountsTable/accountColumns.jsx. */}
+      <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-hover/row:opacity-100">
+        <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
+          <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">
+            <button
+              type="button"
+              aria-label={ui('financeAccountsMenuEdit')}
+              data-testid={`account-row-edit-${account.id}`}
+              onClick={() => onEdit?.(account)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
+            >
+              <Pencil className="h-5 w-5" data-testid="Pencil__acctactions" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent data-testid="TooltipContent__acctactions">{ui('financeAccountsMenuEdit')}</TooltipContent>
+        </Tooltip>
+        {/* Sync is only meaningful for bank-connected accounts — same statement fetch as the
+            kebab's "Sincronizar ahora" / the statements tab's "Sincronizar extractos". */}
+        {account.bankConnected === true ? (
+          <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
+            <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">
+              <button
+                type="button"
+                aria-label={ui('financeAccountsMenuSyncNow')}
+                data-testid={`account-row-refresh-${account.id}`}
+                onClick={() => onBankConnectionAction?.('syncNow', account)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
+              >
+                <RefreshCw className="h-5 w-5" data-testid="RefreshCw__acctactions" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent data-testid="TooltipContent__acctactions">{ui('financeAccountsMenuSyncNow')}</TooltipContent>
+          </Tooltip>
+        ) : null}
+        <AccountRowMenu
+          account={account}
+          onOpen={onOpen}
+          onEdit={onEdit}
+          onArchive={onArchive}
+          onBankConnectionAction={onBankConnectionAction}
+          onTransfer={onTransfer}
+          onNewMovement={onNewMovement}
+          data-testid="AccountRowMenu__acctactions" />
+      </div>
+    </TooltipProvider>
+  );
+}

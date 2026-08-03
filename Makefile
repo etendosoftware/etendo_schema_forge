@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -101,7 +101,7 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov \
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml \
-	  && cp coverage/vitest/lcov.info ../../coverage/vitest-lcov.info
+	  && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 
@@ -536,8 +536,13 @@ install: ## Install all workspace dependencies and activate git hooks
 	npm install
 	git config core.hooksPath .githooks
 
-bump-core-version: ## Bump the schema_forge_core lockstep pin in all package.json + refresh lockfiles (VERSION=x.y.z)
-	@if [ -z "$(VERSION)" ]; then echo "Usage: make bump-core-version VERSION=0.3.1"; exit 1; fi
+bump-core-version: ## Bump the schema_forge_core lockstep pin in all package.json + refresh lockfiles (VERSION=x.y.z; prompts if omitted)
+	@V="$(VERSION)"; \
+	if [ -z "$$V" ]; then read -p "Core version to pin (x.y.z): " V; fi; \
+	if [ -z "$$V" ]; then echo "No version provided, aborting"; exit 1; fi; \
+	$(MAKE) _bump-core-version-run VERSION=$$V
+
+_bump-core-version-run:
 	node scripts/bump-core-version.mjs $(VERSION)
 	@echo "=== npm install (root workspace — installs + hoists app-shell deps) ==="
 	npm install

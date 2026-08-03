@@ -1,8 +1,7 @@
 {
-  "version": "0.25.0",
-  "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-28T11:44:49.773Z",
-  "contractChecksum": "8af9b3b7c3d0e43e",
+  "version": "0.26.0",
+  "generatedAt": "2026-07-30T22:44:13.503Z",
+  "contractChecksum": "df7043b80342d6e7",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -662,7 +661,16 @@
             "required": true,
             "defaultValue": "Y"
           },
-          "mProductStatusID": {}
+          "mProductStatusID": {},
+          "eTGOPurchasePrice": {
+            "readOnly": true
+          },
+          "eTGOSalePrice": {
+            "readOnly": true
+          },
+          "eTGOStock": {
+            "readOnly": true
+          }
         }
       },
       "price": {
@@ -1065,5 +1073,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "0bb8b9d474af1e4f"
+  "checksum": "3625c8b412c7c60b"
 }

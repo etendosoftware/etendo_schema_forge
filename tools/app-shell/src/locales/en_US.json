@@ -16404,6 +16404,9 @@
     }
   },
   "genericLabels": {
+    "computedFreshnessQueued": "This value is computed in the background and may take a few minutes to refresh.",
+    "computedFreshnessManual": "This value is computed and is refreshed manually.",
+    "computedFreshnessAria": "Computed value — may be delayed",
     "importDialogTitle": "Import",
     "importRevalidating": "Revalidating rows…",
     "importDownloadTemplate": "Download CSV template",

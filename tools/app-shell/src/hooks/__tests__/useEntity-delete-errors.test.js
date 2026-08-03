@@ -39,6 +39,19 @@ registerHooks({
     const isAppShellCore = url.startsWith(APP_SHELL_CORE_URL);
     if (url.endsWith('.jsx') || ((isWorkspace || isAppShellCore) && url.endsWith('.js'))) {
       const source = readFileSync(fileURLToPath(url), 'utf8');
+      // Only pay for the esbuild transform when the module actually needs it:
+      // JSX syntax, or the Vite-only `import.meta.env` / `import.meta.glob`.
+      // A plain ESM `.js` module is handed to node verbatim (just tagged as a
+      // module, which is the other reason this hook exists). Transforming it
+      // anyway would strip its comments, and the resulting line shift makes
+      // V8 emit a SECOND coverage record for the same file path whose 0-hit
+      // function ranges bleed onto unrelated lines of the real file — which
+      // silently deflates that file's reported line coverage (gridQuery.js
+      // lost 125 lines this way).
+      const needsTransform = url.endsWith('.jsx') || /import\.meta\.(env|glob)/.test(source);
+      if (!needsTransform) {
+        return { format: 'module', shortCircuit: true, source };
+      }
       const { code } = transformSync(source, {
         loader: url.endsWith('.jsx') ? 'jsx' : 'js',
         format: 'esm',

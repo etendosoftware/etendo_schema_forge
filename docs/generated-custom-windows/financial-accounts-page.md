@@ -144,17 +144,27 @@ spec + entity records live in `src-db/database/sourcedata/ETGO_SF_SPEC.xml` and
 
 ## Frontend file map
 
+> **Superseded by ETP-4658.** The list is no longer a hand-written page on a hardcoded
+> route: it is the generated window's `ListView` with an `AccountsHeaderTable` slot, and
+> its columns come from `decisions.json`. `pages/FinancialAccountsPage.jsx` and the
+> hand-rolled `AccountsTable` host (table + header + row) are **deleted**. The canonical
+> reference for the current list is **`financial-account.md`**; what stays accurate here
+> is the backend of the `financial-accounts-page` spec.
+
 ```
 tools/app-shell/src/
-├── pages/FinancialAccountsPage.jsx           # mounts the wizard / edit / archive dialogs
 ├── components/financial-accounts/
 │   ├── index.js, tokens.js
 │   ├── AccountsToolbar.jsx                    # + Nueva cuenta button
 │   ├── AccountsSidebar/index.jsx
-│   ├── AccountsTable/{index, AccountsTableHeader, AccountRow}.jsx
+│   ├── AccountsTable/accountColumns.jsx       # cell bodies only (NameCell/TypeCell/BalanceCell)
+│   ├── accountCellTypes.jsx                   # binds contract `cellType` → renderer
+│   ├── contractColumns.js                     # reads the grid columns from contract.json
+│   ├── AccountRowActions.jsx                  # pencil / PSD2 sync / kebab, on row hover
 │   ├── AccountLogoAvatar.jsx, SyncStatusInline.jsx, ReconcilePill.jsx
 │   ├── AccountTypeFilter.jsx
 │   └── AccountRowMenu.jsx                     # Abrir / Editar / Archivar + bank connection (disabled)
+├── (the list body itself lives in artifacts/financial-account/custom/AccountsHeaderTable.jsx)
 ├── windows/custom/financial-account/          # account-management modals (ETP-4096)
 │   ├── NewAccountWizard.jsx
 │   ├── AccountConnectionToggle.jsx
