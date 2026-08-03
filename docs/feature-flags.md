@@ -9,7 +9,7 @@
 |-------|-----------|-----|
 | **Application API** | [OpenFeature](https://openfeature.dev) — `@openfeature/web-sdk` | Vendor-neutral. Changing the control plane never touches component code. |
 | **Control plane (hosted)** | ConfigCat, via the official `@openfeature/config-cat-web-provider` — **pilot** (ETP-4691) | Remote toggling without a redeploy, polled so a change reaches a running tab. |
-| **Control plane (local)** | OpenFeature's `InMemoryProvider`, seeded from `VITE_FEATURE_FLAGS` or the declared defaults | Keeps dev, CI and e2e deterministic and independent of any shared remote project. |
+| **Control plane (local)** | OpenFeature's `TypedInMemoryProvider`, seeded from `VITE_FEATURE_FLAGS` or the declared defaults | Keeps dev, CI and e2e deterministic and independent of any shared remote project. |
 | **Control plane (evaluated)** | Mixpanel Feature Flags, per team plan §5.6 | Still the longer-term option; not wired. See the swap notes below. |
 
 Components only ever see the OpenFeature API through the `useFeatureFlag` hook.
@@ -169,9 +169,9 @@ Keep the SDK key out of version control: it belongs in
 
 | # | Condition | Provider |
 |---|-----------|----------|
-| 1 | `VITE_FEATURE_FLAGS` names at least one boolean flag | `InMemoryProvider` with those overrides |
+| 1 | `VITE_FEATURE_FLAGS` names at least one boolean flag | `TypedInMemoryProvider` with those overrides |
 | 2 | `VITE_CONFIGCAT_SDK_KEY` is set | `ConfigCatWebProvider` (auto-poll) |
-| 3 | neither | `InMemoryProvider` with the declared defaults |
+| 3 | neither | `TypedInMemoryProvider` with the declared defaults |
 
 **A local override deliberately beats the remote control plane.** Dev and e2e
 runs must not depend on the current state of a shared ConfigCat project, and a
@@ -334,7 +334,7 @@ tenant selection happens at sign-in and there is no in-app tenant switcher in v1
 email. The frontend uses `localStorage.sf_auth_user`, which
 `buildEnvironmentSessionStorage` sets to `env.adminUserName || env.adminUser` —
 the environment's ERP admin username, not the account email. This is inert today
-because the local `InMemoryProvider` ignores the targeting key entirely, but it
+because the local `TypedInMemoryProvider` ignores the targeting key entirely, but it
 must be resolved **before** Mixpanel is wired, or the two ends will bucket the
 same user differently.
 

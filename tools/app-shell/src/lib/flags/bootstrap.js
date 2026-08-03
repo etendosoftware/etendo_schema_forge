@@ -1,4 +1,4 @@
-import { OpenFeature, InMemoryProvider } from '@openfeature/web-sdk';
+import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';
 import { FLAG_DEFAULTS } from './flag-keys.js';
 import { createFlagExposureHook } from './flag-exposure.js';
 
@@ -6,7 +6,7 @@ import { createFlagExposureHook } from './flag-exposure.js';
  * Feature-flag bootstrap.
  *
  * Application API: OpenFeature. Control plane: currently local — flags are
- * served by OpenFeature's `InMemoryProvider`, seeded from `VITE_FEATURE_FLAGS`.
+ * served by OpenFeature's `TypedInMemoryProvider`, seeded from `VITE_FEATURE_FLAGS`.
  * Mixpanel Feature Flags is the planned control plane (team plan §5.6); see
  * `createFlagProvider` below, which is the only place that has to change.
  *
@@ -157,7 +157,7 @@ export async function createFlagProvider({ env = import.meta.env, logger = conso
   const overrides = parseFlagConfig(env.VITE_FEATURE_FLAGS, logger);
   if (Object.keys(overrides).length > 0) {
     logger.warn('[flags] VITE_FEATURE_FLAGS is set — using local overrides, not the remote control plane');
-    return new InMemoryProvider(buildInMemoryConfiguration(overrides));
+    return new TypedInMemoryProvider(buildInMemoryConfiguration(overrides));
   }
 
   const sdkKey = env.VITE_CONFIGCAT_SDK_KEY;
@@ -168,7 +168,7 @@ export async function createFlagProvider({ env = import.meta.env, logger = conso
     });
   }
 
-  return new InMemoryProvider(buildInMemoryConfiguration());
+  return new TypedInMemoryProvider(buildInMemoryConfiguration());
 }
 
 function withTimeout(promise, ms) {
