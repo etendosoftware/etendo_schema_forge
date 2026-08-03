@@ -1,12 +1,31 @@
+/**
+ * ETP-4576 — the session is a server-side `__Host-go_session` cookie, so this
+ * hook holds no bearer token: every request must pass `credentials: 'include'`
+ * explicitly and carry NO Authorization header.
+ *
+ * The hook mixes both method families against the same spec, so both sides of
+ * the CSRF branch are asserted here:
+ *   - unsafe (POST create / PUT update / DELETE archive) MUST send `X-Go-CSRF`;
+ *   - safe (the two GETs behind `fetchDefaults`) MUST NOT.
+ * A blanket "always attach the proof" header helper has to fail the GET cases,
+ * and a "never attach it" one has to fail the write cases.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ */
 import { renderHook, act } from '@testing-library/react';
 
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => mockAuth,
 }));
 
 import { useAccountMutations } from '../useAccountMutations.js';
 
 const ENTITY_URL = '/etendo/sws/neo/financial-account/account';
+const CSRF_HEADER = 'X-Go-CSRF';
 
 function okResponse(rows) {
   return { ok: true, json: async () => ({ response: { data: rows } }) };
@@ -20,8 +39,24 @@ function errorResponse(status, message) {
   };
 }
 
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
+/** Cookie-session request shape shared by every call: explicit credentials. */
+function expectSendsSessionCookie(init) {
+  expect(init.credentials).toBe('include');
+}
+
 describe('useAccountMutations', () => {
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     Object.defineProperty(window, 'location', {
       value: { pathname: '/etendo/web/app' },
       writable: true,
@@ -35,7 +70,7 @@ describe('useAccountMutations', () => {
 
   // ── createAccount ─────────────────────────────────────────────────────────
 
-  it('createAccount POSTs to the W entity endpoint (no ?action=) with auth headers', async () => {
+  it('createAccount POSTs to the W entity endpoint (no ?action=) with the cookie session and CSRF proof', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new', name: 'BBVA' }]));
 
     const { result } = renderHook(() => useAccountMutations());
@@ -49,8 +84,10 @@ describe('useAccountMutations', () => {
     expect(url).toBe(ENTITY_URL);
     expect(url).not.toContain('action=');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expectSendsSessionCookie(init);
+    expect(init.headers[CSRF_HEADER]).toBe('test-csrf');
     expect(init.headers['Content-Type']).toBe('application/json');
+    expectNoAuthorizationHeader();
     expect(created).toEqual({ id: 'acc-new', name: 'BBVA' });
   });
 
@@ -172,7 +209,7 @@ describe('useAccountMutations', () => {
 
   // ── updateAccount ─────────────────────────────────────────────────────────
 
-  it('updateAccount PUTs to /account/{id} with the DAL-mapped body', async () => {
+  it('updateAccount PUTs to /account/{id} with the DAL-mapped body, cookie session and CSRF proof', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1', name: 'Renamed' }]));
 
     const { result } = renderHook(() => useAccountMutations());
@@ -189,7 +226,9 @@ describe('useAccountMutations', () => {
     expect(url).toBe(`${ENTITY_URL}/acc-1`);
     expect(url).not.toContain('action=');
     expect(init.method).toBe('PUT');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expectSendsSessionCookie(init);
+    expect(init.headers[CSRF_HEADER]).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(JSON.parse(init.body)).toEqual({
       name: 'Renamed',
       iBAN: 'ES9121000418450200051332',
@@ -222,7 +261,7 @@ describe('useAccountMutations', () => {
 
   // ── archiveAccount ──────────────────────────────────────────────────────────
 
-  it('archiveAccount DELETEs /account/{id} and returns true', async () => {
+  it('archiveAccount DELETEs /account/{id} with the cookie session and CSRF proof, and returns true', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, status: 204, json: async () => ({}) });
 
     const { result } = renderHook(() => useAccountMutations());
@@ -235,7 +274,9 @@ describe('useAccountMutations', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(`${ENTITY_URL}/acc-1`);
     expect(init.method).toBe('DELETE');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expectSendsSessionCookie(init);
+    expect(init.headers[CSRF_HEADER]).toBe('test-csrf');
+    expectNoAuthorizationHeader();
     expect(res).toBe(true);
   });
 
@@ -293,12 +334,38 @@ describe('useAccountMutations', () => {
     // GETs: no explicit method passed to fetch
     expect(selectorsInit.method).toBeUndefined();
     expect(defaultsInit.method).toBeUndefined();
-    expect(selectorsInit.headers.Authorization).toBe('Bearer test-token');
-    expect(defaultsInit.headers.Authorization).toBe('Bearer test-token');
+    expectSendsSessionCookie(selectorsInit);
+    expectSendsSessionCookie(defaultsInit);
+    expect(selectorsInit.headers['Content-Type']).toBe('application/json');
+    expect(defaultsInit.headers['Content-Type']).toBe('application/json');
+    expectNoAuthorizationHeader();
     expect(defaults).toEqual({
       currencies: [{ id: '102', iso: 'EUR', symbol: '€' }],
       defaultCurrencyId: '102',
     });
+  });
+
+  it('fetchDefaults does not attach the CSRF proof to its two safe GETs', async () => {
+    // Highest-value assertion of this hook: the header helper used by the reads
+    // must be the safe-method one. A single blanket builder shared with the
+    // writes would leak X-Go-CSRF onto both GETs and fail here.
+    mockDefaultsFetch({
+      selectorJson: { items: [{ id: '102', name: 'EUR' }] },
+      defaultsJson: { defaults: { currency: '102' } },
+    });
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.fetchDefaults();
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    for (const [, init] of globalThis.fetch.mock.calls) {
+      expect(init.method).toBeUndefined();
+      expect(Object.keys(init.headers ?? {})).not.toContain(CSRF_HEADER);
+      expectSendsSessionCookie(init);
+    }
+    expectNoAuthorizationHeader();
   });
 
   it('fetchDefaults maps selector rows from the response.data envelope shape', async () => {
@@ -390,5 +457,55 @@ describe('useAccountMutations', () => {
     });
     // The best-effort defaults call must not happen when selectors fail.
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  // ── cookie session / CSRF proof across every operation ──────────────────────
+
+  const WRITE_OPERATIONS = [
+    { label: 'createAccount', method: 'POST', invoke: (api) => api.createAccount({ name: 'X' }) },
+    { label: 'updateAccount', method: 'PUT', invoke: (api) => api.updateAccount('acc-1', { name: 'X' }) },
+    { label: 'archiveAccount', method: 'DELETE', invoke: (api) => api.archiveAccount('acc-1') },
+  ];
+
+  for (const { label, method, invoke } of WRITE_OPERATIONS) {
+    it(`omits X-Go-CSRF entirely on the ${label} ${method} when no CSRF proof is available`, async () => {
+      // A session can be authenticated before the CSRF proof lands; the header
+      // must be added defensively, never sent as an empty/undefined value.
+      mockAuth = { isAuthenticated: true, csrfToken: null };
+      globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+      const { result } = renderHook(() => useAccountMutations());
+      await act(async () => {
+        await invoke(result.current);
+      });
+
+      const [, init] = globalThis.fetch.mock.calls[0];
+      expect(init.method).toBe(method);
+      expect(Object.keys(init.headers ?? {})).not.toContain(CSRF_HEADER);
+      expectSendsSessionCookie(init);
+      expectNoAuthorizationHeader();
+    });
+  }
+
+  it('no operation sends an Authorization header and all send the session cookie', async () => {
+    mockDefaultsFetch({
+      selectorJson: { items: [{ id: '102', name: 'EUR' }] },
+      defaultsJson: { defaults: { currency: '102' } },
+    });
+    globalThis.fetch.mockImplementation(async () => okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.createAccount({ name: 'X' });
+      await result.current.updateAccount('acc-1', { name: 'X' });
+      await result.current.archiveAccount('acc-1');
+      await result.current.fetchDefaults();
+    });
+
+    expect(globalThis.fetch.mock.calls.length).toBeGreaterThanOrEqual(5);
+    for (const [, init] of globalThis.fetch.mock.calls) {
+      expectSendsSessionCookie(init);
+    }
+    expectNoAuthorizationHeader();
   });
 });
