@@ -201,3 +201,101 @@ describe('sales-invoice RelatedDocuments — isReturn classification (behavioral
     assert.deepEqual(types, ['return-material-receipt', 'shipment', 'return-material-receipt']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// ETP-4737: data.originInvoice — set when this rectificativa was created via
+// the "Import from Source Invoice" popup (manual correction). Independent of
+// sourceInvoice above, which only covers the auto-generated-from-return case.
+// Server injects just the id (+ _identifier), not the full record, so the
+// component fetches it via fetchById inside the same effect.
+// ---------------------------------------------------------------------------
+
+describe('sales-invoice RelatedDocuments — originInvoice chip (ETP-4737)', () => {
+  it('declares an originInvoice state slot', () => {
+    assert.match(src, /const \[originInvoice, setOriginInvoice\] = useState\(null\)/);
+  });
+
+  it('fetches originInvoice via fetchById when data.originInvoice is present', () => {
+    assert.match(src, /if \(data\.originInvoice\) \{/);
+    assert.match(
+      src,
+      /fetchById\('sales-invoice', 'header', data\.originInvoice, token, apiBaseUrl\)/
+    );
+  });
+
+  it('resets originInvoice to null when data.originInvoice is absent (no stale chip on re-fetch)', () => {
+    assert.match(src, /\} else \{\s*setOriginInvoice\(null\);\s*\}/);
+  });
+
+  it('renders the origin-invoice chip with type "sales-invoice", gated on the fetched originInvoice state', () => {
+    assert.match(src, /if \(originInvoice\) \{/);
+    assert.match(
+      src,
+      /docChipProps\(\{\s*type:\s*'sales-invoice',\s*doc:\s*originInvoice,\s*ui,\s*navigate\s*\}\)/
+    );
+  });
+
+  it('keeps the sourceInvoice chip gate separate and independent from the originInvoice gate', () => {
+    // Both are their own top-level `if` blocks — not an if/else pair — so one
+    // being present never suppresses the other.
+    assert.match(src, /if \(data\?\.sourceInvoice\) \{/);
+    assert.doesNotMatch(src, /if \(data\?\.sourceInvoice\)[\s\S]{0,40}\belse\b/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavioral: chip-list composition mirrors the exact push order in the
+// source (order -> shipments -> originalInvoices -> sourceInvoice ->
+// originInvoice), verifying the new origin-invoice chip is additive and never
+// replaces or hides any pre-existing chip.
+// ---------------------------------------------------------------------------
+
+function buildChipKinds({ order, shipments = [], originalInvoices = [], sourceInvoice, originInvoice } = {}) {
+  const kinds = [];
+  if (order) kinds.push('order');
+  for (const s of shipments) kinds.push(s.isReturn === true ? 'return-material-receipt' : 'shipment');
+  for (const _inv of originalInvoices) kinds.push('invoice');
+  if (sourceInvoice) kinds.push('source-invoice');
+  if (originInvoice) kinds.push('origin-invoice');
+  return kinds;
+}
+
+describe('sales-invoice RelatedDocuments — chip composition with originInvoice (behavioral)', () => {
+  it('produces no chips when nothing is set', () => {
+    assert.deepEqual(buildChipKinds(), []);
+  });
+
+  it('renders only the origin-invoice chip when it is the sole related document', () => {
+    assert.deepEqual(buildChipKinds({ originInvoice: { id: 'o1' } }), ['origin-invoice']);
+  });
+
+  it('renders nothing when originInvoice is absent, even with other data present', () => {
+    assert.deepEqual(
+      buildChipKinds({ order: { id: 'ord' } }),
+      ['order']
+    );
+  });
+
+  it('is additive alongside the pre-existing sourceInvoice chip (both render, neither replaces the other)', () => {
+    const kinds = buildChipKinds({ sourceInvoice: { id: 's1' }, originInvoice: { id: 'o1' } });
+    assert.deepEqual(kinds, ['source-invoice', 'origin-invoice']);
+  });
+
+  it('is additive alongside order, shipment and original-invoice chips (full house)', () => {
+    const kinds = buildChipKinds({
+      order: { id: 'ord' },
+      shipments: [{ id: 'sh1', isReturn: true }, { id: 'sh2', isReturn: false }],
+      originalInvoices: [{ id: 'oi1' }],
+      sourceInvoice: { id: 's1' },
+      originInvoice: { id: 'o1' },
+    });
+    assert.deepEqual(kinds, [
+      'order',
+      'return-material-receipt',
+      'shipment',
+      'invoice',
+      'source-invoice',
+      'origin-invoice',
+    ]);
+  });
+});

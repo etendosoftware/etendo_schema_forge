@@ -303,3 +303,67 @@ describe('RelatedDocuments — Return Invoice (Factura de Devolución)', () => {
     expect(screen.getByTestId('chip-return-to-vendor')).toBeInTheDocument();
   });
 });
+
+// ETP-4737 — data.originInvoice: set when this rectificativa was created via the
+// "Import from Source Invoice" popup (manual correction). Independent from
+// sourceInvoice/sourceReturnDeliveries above, which cover the auto-generated-
+// from-return case.
+describe('RelatedDocuments (purchase-invoice) — originInvoice chip (ETP-4737)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchByCriteria.mockResolvedValue([]);
+    mockFetchChild.mockResolvedValue([]);
+    mockFetchById.mockResolvedValue(null);
+  });
+
+  it('fetches and renders an invoice chip when data.originInvoice is present', async () => {
+    mockFetchById.mockResolvedValueOnce({ id: 'origin-1', documentNo: 'FC-100' });
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={{ originInvoice: 'origin-1' }} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(mockFetchById).toHaveBeenCalledWith('purchase-invoice', 'header', 'origin-1', 'tok', '/api');
+    expect(screen.getByTestId('chip-invoice')).toBeInTheDocument();
+  });
+
+  it('does not render an invoice chip when data.originInvoice is absent', async () => {
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={{}} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.queryByTestId('chip-invoice')).not.toBeInTheDocument();
+  });
+
+  it('does not render an invoice chip when the fetch fails (caught, resolves null)', async () => {
+    mockFetchById.mockRejectedValueOnce(new Error('not found'));
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={{ originInvoice: 'origin-1' }} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.queryByTestId('chip-invoice')).not.toBeInTheDocument();
+  });
+
+  it('is additive: renders alongside pre-existing return-to-vendor chips, without hiding them', async () => {
+    const RETURN_DATA = { apInvoiceSubtype: 'RECTIFICATIVA', originInvoice: 'origin-1' };
+    mockFetchChild
+      .mockResolvedValueOnce([{ id: 'line-1', goodsShipmentLine: 'sl-1' }]) // lines
+      .mockResolvedValueOnce([]); // paymentPlan
+    // Call order matters: the originInvoice fetchById is invoked synchronously in the
+    // effect body right after the isReturn Promise.all is kicked off, which resolves
+    // BEFORE the async continuation inside fetchLinkedReturnDeliveries (itself gated
+    // behind an earlier `await fetchChild(...)`) reaches its own fetchById calls.
+    mockFetchById
+      .mockResolvedValueOnce({ id: 'origin-1', documentNo: 'FC-100' }) // origin invoice
+      .mockResolvedValueOnce({ id: 'sl-1', parentId: 'ret-ship-1' }) // shipment line lookup
+      .mockResolvedValueOnce({ id: 'ret-ship-1', documentNo: 'RET-001' }); // shipment
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={RETURN_DATA} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.getByTestId('chip-return-to-vendor')).toBeInTheDocument();
+    expect(screen.getByTestId('chip-invoice')).toBeInTheDocument();
+  });
+});

@@ -365,4 +365,128 @@ describe('ImportLinesModal', () => {
       });
     });
   });
+
+  // ETP-4737 — negativeQuantity prop: used by the "Import from Source Invoice"
+  // rectificativa flow to display/import lines as negative quantities while the
+  // internal stepper state (and buildLineBody's input) always stays a positive
+  // magnitude. See ImportLinesModal.jsx around `displayQty`.
+  describe('negativeQuantity prop (ETP-4737)', () => {
+    const NEG_LINE = { id: 'line-1', _productName: 'Widget A', _maxQty: 5, _alreadyImported: false, _unitPrice: 10, _lineNetAmount: 77 };
+
+    async function renderExpanded(overrides = {}) {
+      const result = renderModal(overrides);
+      await waitFor(() => {
+        expect(defaultProps.fetchLines).toHaveBeenCalled();
+        expect(screen.queryByText('loading')).not.toBeInTheDocument();
+        expect(screen.getByText('INV-001')).toBeInTheDocument();
+      }, { timeout: 10000 });
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
+      return result;
+    }
+
+    it('displays the quantity as negative when negativeQuantity is true', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      const { container } = await renderExpanded({ negativeQuantity: true });
+      const qtyInput = container.querySelector('input[type="number"]');
+      expect(qtyInput.value).toBe('-5');
+    });
+
+    it('keeps the quantity positive when negativeQuantity is false (default)', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      const { container } = await renderExpanded();
+      const qtyInput = container.querySelector('input[type="number"]');
+      expect(qtyInput.value).toBe('5');
+    });
+
+    it('flips the min/max attributes to negative bounds when negativeQuantity is true', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      const { container } = await renderExpanded({ negativeQuantity: true });
+      const qtyInput = container.querySelector('input[type="number"]');
+      expect(qtyInput.min).toBe('-5');
+      expect(qtyInput.max).toBe('-1');
+    });
+
+    it('keeps positive min/max bounds when negativeQuantity is false (default)', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      const { container } = await renderExpanded();
+      const qtyInput = container.querySelector('input[type="number"]');
+      expect(qtyInput.min).toBe('1');
+      expect(qtyInput.max).toBe('5');
+    });
+
+    it('clamps onChange to a positive magnitude internally, then re-displays it with the sign flipped', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      const { container } = await renderExpanded({ negativeQuantity: true });
+      const qtyInput = container.querySelector('input[type="number"]');
+
+      fireEvent.change(qtyInput, { target: { value: '-3' } });
+      expect(qtyInput.value).toBe('-3');
+    });
+
+    it('clamps a magnitude above maxQty down to maxQty', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      const { container } = await renderExpanded({ negativeQuantity: true });
+      const qtyInput = container.querySelector('input[type="number"]');
+
+      fireEvent.change(qtyInput, { target: { value: '-100' } });
+      expect(qtyInput.value).toBe('-5');
+    });
+
+    it('defaults a non-numeric input to a magnitude of 1', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      const { container } = await renderExpanded({ negativeQuantity: true });
+      const qtyInput = container.querySelector('input[type="number"]');
+
+      fireEvent.change(qtyInput, { target: { value: 'abc' } });
+      expect(qtyInput.value).toBe('-1');
+    });
+
+    it('computes a negative lineTotal preview when negativeQuantity is true', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      await renderExpanded({ negativeQuantity: true });
+      // unitPrice 10 * displayQty -5 = -50
+      expect(screen.getByText('-50,00')).toBeInTheDocument();
+    });
+
+    it('computes a positive lineTotal preview when negativeQuantity is false (default)', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      await renderExpanded();
+      expect(screen.getByText('50,00')).toBeInTheDocument();
+    });
+
+    it('computes a negative docTotal summary when negativeQuantity is true', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      renderModal({ negativeQuantity: true });
+      await waitFor(() => {
+        expect(defaultProps.fetchLines).toHaveBeenCalled();
+        expect(screen.queryByText('loading')).not.toBeInTheDocument();
+        expect(screen.getByText('INV-001')).toBeInTheDocument();
+      }, { timeout: 10000 });
+      // _lineNetAmount 77 * docTotalSign -1 = -77, shown collapsed for both docs
+      const totals = screen.getAllByText('-77,00');
+      expect(totals.length).toBeGreaterThan(0);
+    });
+
+    it('computes a positive docTotal summary when negativeQuantity is false (default)', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      renderModal();
+      await waitFor(() => {
+        expect(defaultProps.fetchLines).toHaveBeenCalled();
+        expect(screen.queryByText('loading')).not.toBeInTheDocument();
+        expect(screen.getByText('INV-001')).toBeInTheDocument();
+      }, { timeout: 10000 });
+      const totals = screen.getAllByText('77,00');
+      expect(totals.length).toBeGreaterThan(0);
+    });
+
+    it('adds Tailwind classes to hide the native number-input spin buttons on the quantity input', async () => {
+      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
+      const { container } = await renderExpanded();
+      const qtyInput = container.querySelector('input[type="number"]');
+      expect(qtyInput.className).toContain('[appearance:textfield]');
+      expect(qtyInput.className).toContain('[&::-webkit-outer-spin-button]:appearance-none');
+      expect(qtyInput.className).toContain('[&::-webkit-inner-spin-button]:appearance-none');
+    });
+  });
 });
