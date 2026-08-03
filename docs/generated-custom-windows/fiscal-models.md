@@ -90,13 +90,37 @@ The top of the Boxes tab shows the declaration type selector and, conditionally,
 
 **`tipo_declaracion` options:** `C` (Compensación), `D` (Devolución), `I` (Ingreso), `U` (Domiciliación), `N` (Resultado cero), `V` (Devolución cta. corriente), `X` (Devolución transferencia extranjero).
 
-**`datos_bancarios` visibility** (`sectionVisibleWhen`): shown only when `tipo_declaracion ∈ {U, D, X}` — the only types AEAT allows an IBAN for (error `EDID065` rejects the submission if IBAN is present for any other tipo, e.g. `I`). Hidden for `C`, `I`, `N`, `V`.
+**`datos_bancarios` visibility** (`sectionVisibleWhen`, ETP-4456): shown when `tipo_declaracion ∈
+{U, D, X}` — the only types AEAT allows an IBAN for outside a rectificativa (error `EDID065`
+rejects the submission if IBAN is present for any other tipo) — **or** when `rectificativa` is
+checked, regardless of tipo. `sectionVisibleWhen` is an `anyOf` of those two conditions, not a
+flat tipo list. The `rectificativa` branch exists because Classic's backend
+(`checkBox111MandatoryParams`/`checkIsDeclarationRMandatoryParams` in `AEAT303Report2021`)
+requires the full bank-data block (BANK/IBAN/SWIFT/SEPA/ADDRESS/CITY/COUNTRY) for **any**
+rectificativa carrying a non-zero box 111, independently of `tipo_declaracion` — so a tipo-`I`
+(or `C`/`N`) rectificativa with a real box 111 amount still needs the section visible.
 
 **Section title** varies by tipo:
 - `D`, `X` → "Devolución"
 - `U` → "Domiciliación"
 
-**SWIFT/BIC field** is only shown when `tipo ∈ {D, V, X}` (`_BANK_DVX_VW`) — note `V` can never actually reach this since the whole section is now gated to `{U, D, X}`; left as dead code pending a separate decision on `V`'s bank-field requirements.
+**Field-level visibility (`_BANK_DVX_VW`)** — SWIFT/BIC, Bank name, address, city, and country
+share the same `anyOf` condition as the section itself (`tipo ∈ {D, V, X}` **or** `rectificativa`
+checked), so each is visible for exactly the cases the section is visible for, including a
+tipo-`I`/`C`/`N` rectificativa with a non-zero box 111. `tipo V` is no longer dead code: before
+this fix `V` could never reach the field gate because the section was hard-gated to `{U, D, X}`
+only; now, if `rectificativa` is checked, the section becomes visible for tipo `V` too, and the
+field-level `tipo ∈ {D, V, X}` clause is already satisfied — so these fields correctly render for
+a tipo-`V` rectificativa. `bank_iban` is the one exception: it has no field-level `visibleWhen`
+gate of its own, so its visibility is governed solely by the section-level `sectionVisibleWhen`.
+
+Both the section-level and field-level gates are evaluated by one shared `matchesSvw` function
+(`FmBoxes303.jsx`, unified as of `789547fde`). Before that commit, `FmBoxes303.jsx` carried a
+second, independent, `anyOf`-unaware visibility filter for individual fields — once
+`sectionVisibleWhen`'s shape changed to `anyOf`, that second filter silently broke into an
+always-true evaluation, wrongly showing these fields for tipo `U` too. `matchesSvw` is also
+hardened against a malformed non-array `anyOf` (`f322ee41a`), returning `false` rather than
+throwing.
 
 ### Live data
 

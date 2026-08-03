@@ -51,6 +51,22 @@ APPROVE** (Sentinel), one LOW non-blocking gap logged (GAP-1). See "Phase 2.2 �
 Justificante attach" below for full detail, and "Known follow-ups" for the flagged Gradle-audit
 recommendation.
 
+**Update (2026-08-03, "Phase 3"):** a full audit of the branch — covering already-shipped Phase
+2/2.1/2.2 work plus a few newer, previously-undocumented commits — found real bugs across all 3
+active repos: one BLOCKER (Go: `D`/`X` declaration types silently corrupted to `N`, discarding the
+required IBAN), one HIGH spanning Classic + the Go frontend (rectificativa bank-data visibility,
+fixed across 4 commits), several MEDIUM (NRC-divergence warning, submission-commit atomicity,
+a SWIFT/BIC-vs-domestic-account conflict, an IBAN-guard gap), two LOW, a vacuous-test fix, and a
+small copy fix. Every fix went through the full DEV → Tester → REVIEW → QA pipeline, with **two
+reject cycles at QA's "final" pass plus one further small round**. **Final state: all repos
+APPROVE**, all tests green (`com.etendoerp.go` 6687/6687, `aeat303.es` 91/91, `schema_forge`
+fiscal-models 761/761 / full app-shell 9610/9611). One deliberately-not-fixed pre-existing gap
+(`checkIsDeclarationRMandatoryParams` validating a BIC the file-generation path itself blanks) was
+flagged by QA for a separate follow-up ticket rather than blocking this phase. Also:
+`modules/com.etendoerp.go/jenkinsExtraModules.txt` was missing
+`org.openbravo.module.aeat303.es` despite `Fiscal303BoxesHandler`'s direct imports from it —
+added by the user directly. Full breakdown: "Phase 3 — Audit-driven bug fixes" below.
+
 ## Session timeline (for picking this up in a new session)
 
 Chronological record of what happened after the initial plan was written and the first DEV pass delivered, since a lot happened in one long session and the sections below don't all read in order:
@@ -187,6 +203,26 @@ Phase 2 (Etendo Go backend + frontend, see below) has not started.
   updated the one remaining stale spot — the "Automatic" bullet, which still described the attach as
   a `SUCCESS`-only outcome — to cover both `SUCCESS` and `TEST_SUCCESS`, the `TEST-` filename
   prefix, and the non-authoritative invariant: `../generated-custom-windows/fiscal-models.md`
+
+## Documentation written for Phase 3 (2026-08-03, Sage)
+
+- This plan doc: added the "Phase 3 — Audit-driven bug fixes" section below (what shipped, the two
+  QA reject cycles plus the third small round recorded in full, final test counts, and the
+  still-open `checkIsDeclarationRMandatoryParams` follow-up), updated the top summary block, and
+  added a bullet to "Known follow-ups" cross-referencing that same open item.
+- Window guide — corrected the stale `datos_bancarios`/SWIFT-BIC visibility description in the
+  "Identification section" subsection: it previously claimed the bank section was hidden for any
+  tipo outside `{U, D, X}` and that the SWIFT/BIC field-level gate was dead code for tipo `V`; both
+  were made false by this session's fixes. Rewrote to describe the `anyOf` (tipo U/D/X **or**
+  rectificativa checked) now shared by the section and its 6 extended fields via `matchesSvw`:
+  `../generated-custom-windows/fiscal-models.md`.
+- Backend endpoint doc — updated the `tipo` query-param docs (now `D`/`X` accepted), the
+  "Persistence" section (single atomic commit via `commitSubmissionBestEffort` instead of up to 3
+  independent commits), and the `SEVERITY` column note (new DB `CHECK` constraint):
+  `../../../modules/com.etendoerp.go/docs/aeat-303-submit-endpoint.md`.
+- Noted the `modules/com.etendoerp.go/jenkinsExtraModules.txt` addition
+  (`org.openbravo.module.aeat303.es`, added by the user directly) in this plan doc's Phase 3
+  section, since it has no natural home in the endpoint doc.
 
 ## Context
 
@@ -542,6 +578,102 @@ Sentinel also caught that this plan doc's own "Manual QA checklist — Justifica
 factually stale (it asserted test mode does **not** trigger the attach) — corrected in place above
 rather than duplicated.
 
+## Phase 3 — Audit-driven bug fixes (2026-08-03)
+
+A full audit of the branch — covering already-shipped Phase 2/2.1/2.2 work plus a few newer,
+previously-undocumented commits — found real bugs across every repo this ticket touches. Every fix
+below went through the same full pipeline as every prior phase: DEV → Tester (regression tests) →
+Alex (REVIEW) → Sentinel (QA).
+
+**What shipped:**
+
+1. **BLOCKER (Go, `com.etendoerp.go`, commit `cc7870a1`).** `Fiscal303BoxesHandler.resolveDeclType()`
+   didn't accept declaration types `D`/`X` — they silently fell back to `"N"`, corrupting the
+   generated `.303` file's declaration-type field AND silently discarding the IBAN the frontend had
+   just required the user to provide for those tipos. Fixed by widening the accepted codes to
+   `C`/`D`/`I`/`U`/`V`/`X`/`G`.
+2. **HIGH (Classic `org.openbravo.module.aeat303.es` + Go frontend `schema_forge`).** A
+   rectificativa with a non-zero box 111 needs bank data (BANK/IBAN/SWIFT/SEPA/ADDRESS/CITY/COUNTRY)
+   regardless of `tipo_declaracion` — per Classic's own
+   `checkBox111MandatoryParams`/`checkIsDeclarationRMandatoryParams` — but the frontend hid the
+   entire bank section for any tipo outside `{U, D, X}` (a side effect of an earlier `EDID065`
+   fix), and Classic's DID-page patch (`correctSEPAValueIfbox111HasValues`) only ever fixed up
+   SEPA, not the other 5 fields. Fixed across 4 commits, each surfacing the next:
+   - Classic extended the DID-page patch to all 6 fields, renaming it
+     `correctBankSectionIfBox111HasValues` (`27a0916`).
+   - Frontend widened `datos_bancarios.sectionVisibleWhen` to an `anyOf` (tipo `U`/`D`/`X` **or**
+     rectificativa checked) (`8039e8612`).
+   - Follow-up found the individual field-level `visibleWhen` (`_BANK_DVX_VW`) hadn't been widened
+     the same way — SWIFT/BIC/Bank name/address/city/country stayed hidden for tipo `I` even after
+     the section-level fix (`edb448754`).
+   - Follow-up found `FmBoxes303.jsx` had a **second, independent**, `anyOf`-unaware visibility
+     filter for individual fields, which the new `anyOf` shape silently broke into an always-true
+     evaluation (wrongly showing these fields for tipo `U` too) — fixed by unifying both filters
+     onto one shared `matchesSvw` function (`789547fde`). Full technical detail: the "Identification
+     section" subsection in `../generated-custom-windows/fiscal-models.md`.
+3. **MEDIUM (Classic, commit `b6658bb`).** Two independent "is this Ingreso" signals for NRC
+   visibility (the popup vs. the confirmation screen) could diverge with no user feedback — restored
+   a scoped warning (`AEAT303_Pres_NrcIgnoredWarning`) that fires only on a genuine divergence.
+4. **MEDIUM (Go, commit `abf40953`).** `handleSubmit` used up to 3 separate DB commits (incidents,
+   status, attachment) instead of one atomic transaction — a mid-process failure could leave a
+   reachable partial state. Consolidated into a single `commitSubmissionBestEffort` call; see the
+   updated "Persistence" section in
+   `../../../modules/com.etendoerp.go/docs/aeat-303-submit-endpoint.md`.
+5. **MEDIUM (Classic, commit `2f11a90`).** The new `correctBankSectionIfBox111HasValues` patch
+   (fix #2) could reintroduce a SWIFT/BIC value that `AEAT303Report2021`'s own domestic-account rule
+   (SEPA="1" or IBAN starts "ES") deliberately blanks for Tipo D/V — fixed by skipping the SWIFT/BIC
+   patch specifically when the domestic-account condition applies.
+6. **MEDIUM (Go frontend, commits `8722611b7` + `42c858bb7`).** The client-side IBAN pre-flight
+   guard (`IBAN_REQUIRED_TIPOS`) hadn't been widened to match fix #2's bank-section visibility
+   change, so a tipo-`I` rectificativa with an empty IBAN round-tripped to the backend and surfaced
+   a raw, untranslated `@AEAT303_section_bank_empty@` error instead of the existing translated
+   message. Fixed in both call sites: `AeatSubmitFlow.jsx` and `fiscalModelsUtils.js`'s
+   `generate303File`.
+7. **LOW (Classic, commit `7b4ec136`).** Added a `SEVERITY` DB `CHECK` constraint on
+   `ETGO_FISCAL_DECL_INCIDENT` (`block`/`warn` only).
+8. **LOW (Go frontend, commit `f322ee41a`).** Hardened `matchesSvw` against a malformed non-array
+   `anyOf` (returns `false` instead of throwing).
+9. **Test-quality fix (Classic, commit `37e9be3`).** `AEAT303Report2014Test` was found to be
+   vacuous — it tested a hand-copied literal instead of real production code. Fixed by extracting a
+   testable `isIbanApplicable` static helper and asserting against it directly.
+10. **Copy fix (Go frontend, commit `76ddc31dc`, user-requested).** The NRC field label was
+    simplified from "NRC (opcional)"/"NRC (optional)" to just "NRC" in both locales, including a
+    hardcoded fallback string.
+11. **CI/infra.** `org.openbravo.module.aeat303.es` was missing from
+    `modules/com.etendoerp.go/jenkinsExtraModules.txt` despite `Fiscal303BoxesHandler` directly
+    importing 8 classes from it (`taxreportlauncher` was already correctly present there;
+    `aeat303.es` was not). Added by the user directly after this session confirmed the gap was
+    genuine, not an oversight to defer.
+
+### REVIEW / QA cycle (recorded in full, not sanitized)
+
+Every fix above went through DEV → Tester → Alex (REVIEW) → Sentinel (QA), with **two reject
+cycles at the "final QA" pass, plus one further small round**:
+
+- Sentinel's first "final QA" pass rejected on two independent grounds, both fixed and
+  re-submitted: the SWIFT/BIC-vs-domestic-account conflict (fix #5) and the IBAN-pre-flight-guard
+  gap (fix #6).
+- A third, small round then found and fixed the field-level-visibility-filter bug described as the
+  last bullet of fix #2 (`789547fde`).
+
+**Final verdict: all repos APPROVE**, all tests green:
+- `com.etendoerp.go`: **6687/6687** (6 pre-existing, unrelated skips — same live-infra-gated tests
+  called out in "Phase 2.2 — Codebase-wide Gradle test-wiring regression" above).
+- `org.openbravo.module.aeat303.es`: **91/91**.
+- `schema_forge` (`fiscal-models` scope): **761/761** across 33 files; full app-shell suite
+  **9610/9611** (1 pre-existing, unrelated skip).
+- `org.openbravo.module.taxreportlauncher`: unchanged — already merged to `epic/ETP-3504` via
+  PR #16 before this session started, so it was out of scope for this audit.
+
+### Known follow-up — deliberately NOT fixed in this phase
+
+`checkIsDeclarationRMandatoryParams` (Classic) still validates the raw **input** BIC even for
+domestic-account rectificativas where the file-generation path itself ends up blanking that same
+BIC (per fix #5's own domestic-account rule) — a pre-existing inconsistency dating to ~2024
+(ESL-101), **not a regression introduced by this session**. Sentinel (QA) explicitly recommended
+opening a **separate follow-up ticket** for this rather than blocking Phase 3 on it, and it remains
+unfixed as of this writing.
+
 ## Pre-existing bug found and fixed during ETP-4456 hands-on testing (NOT part of this ticket's feature scope)
 
 **This is deliberately called out separately, not folded into the "what ETP-4456 built" narrative
@@ -599,6 +731,11 @@ exact same character-by-character logic, not just read by eye.
 
 ## Known follow-ups (non-blocking)
 
+- **`checkIsDeclarationRMandatoryParams` validates a BIC the file-generation path itself blanks
+  (flagged 2026-08-03, Phase 3's audit, Sentinel QA).** Pre-existing since ~2024 (ESL-101), not a
+  regression from this session. QA recommended a **separate follow-up ticket** rather than
+  blocking Phase 3 on it — see "Phase 3 — Audit-driven bug fixes" above for the full context (fix
+  #5's domestic-account rule is what exposed the inconsistency).
 - **Audit test evidence on other recent `com.etendoerp.go` tickets/PRs (flagged 2026-07-28, Phase
   2.2's Gradle-regression finding).** The `sourceSets.test` wiring in this module's `build.gradle`
   was broken for roughly five months (commit `c575dd6d`, 2026-03-05, through this ticket's REVIEW
@@ -672,4 +809,18 @@ live calls to a real external government system — see the FIC/F01 open risk ab
 | Tests (`FmModel303Page.receiptTab.vitest.jsx`) | Tester |
 | Review (W1–W3) | Alex |
 | QA (BUG-4, BUG-5, manual checklist) | Sentinel |
+| Docs (this section + window guide + backend endpoint doc) | Sage |
+
+**Phase 3 (2026-08-03) delegation:**
+
+| Task | Agent |
+|---|---|
+| Audit (found the 11 items in "What shipped" above) | Coordinator + team, cross-repo |
+| Fixes — Classic (`org.openbravo.module.aeat303.es`) | Developer |
+| Fixes — Go backend (`com.etendoerp.go`) | Developer |
+| Fixes — Go frontend (`schema_forge`) | Developer |
+| Regression tests for every fix | Tester |
+| Review (0 blockers after the fixes landed) | Alex |
+| QA (2 reject cycles + 1 small round, final APPROVE) | Sentinel |
+| `jenkinsExtraModules.txt` addition | User (direct, not delegated) |
 | Docs (this section + window guide + backend endpoint doc) | Sage |
