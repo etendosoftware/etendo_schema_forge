@@ -323,3 +323,63 @@
 - **2026-08-03 — Precedent confirmed: seeding SII localization master data at onboarding is an established pattern.** `referencedata/sampledata/GOClient/AEATSII_DESCRIPTION.xml` already ships (2 records, Compras/Ventas), scoped to GOClient (`802509E12436405C86BA1FD5B1DF508C`) + GOOrg operative org (`61849243BE89460EB70866880A545D50`), createdby `47EAF009B7BB42BBB663C7BA1792D958`. **Apply:** the preventive twin `AEATSII_CAUSE_EXEMPTION.xml` mirrors that file's exact shape/scoping (operative org, not `'*'`).
 - **2026-08-03 — Both fronts delivered (no CUT bump needed — see below).** Preventive: `modules/com.etendoerp.go/referencedata/sampledata/GOClient/AEATSII_CAUSE_EXEMPTION.xml` (6 records, UUIDs from `make uuid`). Corrective: `cli/src/data-fixes/sql/20260803T120000Z__R17-sii-cause-exemption.sql`. `@check` fires only when the tenant is SII-configured (proxy: `EXISTS aeatsii_description` for the client) AND has 0 `aeatsii_cause_exemption` rows — so non-Spain tenants without SII setup never receive Spanish exemption causes. `@apply` inserts E1-E6, each guarded by `NOT EXISTS (ad_client_id, key)` (the natural key), org from `:org_id`, PK from `get_uuid()`. Applied live to GOClient via `--fix`: APPLIED 6 rows; re-check dry-run → SKIPPED_NOT_NEEDED (idempotent). NOTE: no `OnboardingBaselineService.ONBOARDING_PROVISIONED_THROUGH` bump was performed here — the corrective ships alone-safe (new tenants get the catalog from the sampledata, then the runner's `@check` yields SKIPPED for them). If a formal CUT bump is later wanted, set it to `20260803T120000Z` (R17's timestamp) once the sampledata is confirmed live in the onboarding path.
 - **2026-08-03 — DECISION (supersedes the earlier E1-default): ALL six exemption causes are seeded non-default (`isdefault='N'`).** Corrected in all three places consistently: the sampledata XML (`AEATSII_CAUSE_EXEMPTION.xml` — E1 flipped Y→N), the data-fix SQL (`20260803T120000Z__R17-sii-cause-exemption.sql` — E1 insert value + `@description` Background note), and the dev DB (`UPDATE aeatsii_cause_exemption SET isdefault='N' WHERE ad_client_id='802509E12436405C86BA1FD5B1DF508C' AND isdefault='Y'` → 1 row; verified all 6 keys now `N`). **Rationale:** the legally correct SII exemption cause is operation-specific and must be a conscious user choice; Go ships NO cause-exemption maintenance window, so a baked-in default could not be corrected by the user and would risk silently submitting the wrong `CausaExencion` to AEAT. With no default, the invoice shows a "should indicate an exemption cause" warning that guides the user to pick the right one. **Apply:** for SII/AEAT master catalogs where the value is legally per-operation AND there is no user-facing maintenance window, seed the catalog but pick NO default — force the conscious choice.
+---
+
+## ETP-4706 — "Account could not be found" on Goods Receipt posting (A2b, 2026-07-29)
+
+- **2026-07-29 — Corrected misinterpretation: the ticket's original diagnosis ("missing product-category
+  account column") was WRONG.** The brief assumed `M_Product_Category_Acct`/`M_Product_Acct` needed a
+  new `p_notinvoicedreceipts_acct`-style column. Verified via `information_schema.columns`: **neither
+  table has ANY not-invoiced-receipts column** (`m_product_category_acct` has 23 columns, none named
+  `*notinvoiced*`; same for `m_product_acct`). The real resolution path (confirmed by reading
+  `org.openbravo.erpCommon.ad_forms.AcctServer#getAccount`, `ACCTTYPE_NotInvoicedReceipts = "51"`) is
+  `AcctServerData.selectNotInvoicedReceiptsAcct` (`AcctServer_data.xsql`):
+  `SELECT NotInvoicedReceipts_Acct FROM C_BP_Group_Acct a, C_BPartner bp WHERE a.C_BP_Group_ID =
+  bp.C_BP_Group_ID AND bp.C_BPartner_ID = ? AND a.C_AcctSchema_ID = ?` — entirely BP-GROUP scoped, via
+  the transaction's business partner. The error log line ("No Account Not Invoiced Receipts for
+  product: X") names the product only in its message text; the actual lookup key is the BP's group,
+  not the product or product category. **Apply:** when an `AcctServer` "account could not be found"
+  error names a product/entity, do not assume the FK lives on that entity's own `*_acct` table — trace
+  the actual `getAccount`/`AcctType` call site in the relevant `Doc*.java` class first (here
+  `DocInOut.java` line ~372, `getAccount(AcctServer.ACCTTYPE_NotInvoicedReceipts, ...)` on `this`, not
+  `line.getAccount(...)` on the product) before assuming which table owns the missing column.
+- **2026-07-29 — Live-DB root cause: one stale pre-existing `C_BP_Group_Acct` row, not a systemic
+  onboarding gap.** GOClient's "Cliente" BP group (`DBBD00C9E0B9442188FCDDA3F601DAEA`, the group ETP-4402
+  renamed from "Consumidor Final") has a `C_BP_Group_Acct` row for "Esquema GO"
+  (`C06B100312FA48159DB36B9A4B461019`) with `notinvoicedreceipts_acct = NULL`, while
+  `C_AcctSchema_Default.notinvoicedreceipts_acct` on the same schema is populated
+  (`6E9DA718417A48A290FE376448A12BF6`). Row `created = 2026-04-07 14:59:32`; the sibling
+  "Proveedor"/"Acreedor" groups on the same schema already have this column set. **Root cause:**
+  `OnboardingAccountingWiringService#provisionEntityPostingAccounts`'s `BP_GROUP_ACCT_SQL` (and the
+  `c_bp_group_trg()` core trigger, same story) is guarded by `NOT EXISTS` at the ROW level — once a
+  `(group, schema)` row exists at all, neither the trigger nor the onboarding insert ever revisits it,
+  so any column that got its default populated AFTER the row's creation stays permanently NULL. This
+  matches the exact class of bug already documented for `C_ACCTSCHEMA_DEFAULT` (A3b) and
+  `C_ACCTSCHEMA_TABLE` (A4) drift — "someone/something backfilled a default later; pre-existing rows
+  never got the memo" — just on `C_BP_Group_Acct` this time.
+- **2026-07-29 — Fleet-wide sweep CONFIRMS corrective-only; no preventive fix needed.** Queried every
+  `C_BP_Group_Acct` row across every tenant on this DB for `notinvoicedreceipts_acct IS NULL`: **only
+  GOClient's "Cliente" row matched.** Critically, tenants onboarded via the CURRENT onboarding code the
+  SAME DAY as this diagnosis (e.g. "Empresa E2E d5be89a8", onboarded 2026-07-29) already have this
+  column correctly populated on every group — proving `BP_GROUP_ACCT_SQL` already sources
+  `notinvoicedreceipts_acct` correctly for any row inserted fresh today. **Apply:** per the map's
+  §0 "Boundary" rule, a gap confirmed to be purely existing-tenant state with a demonstrably-correct
+  current onboarding path may ship corrective-only — verify this with a fleet sweep (not just the one
+  repro tenant) before deciding to skip the preventive front, and state the N/A explicitly in the gap
+  table rather than silently omitting it.
+- **2026-07-29 — Same stale row has MANY other `*_acct` columns NULL — flagged, not fixed (scope
+  discipline).** The identical "Cliente"/GOClient row also has `notinvoicedrevenue_acct`,
+  `notinvoicedreceivables_acct`, `unearnedrevenue_acct`, `paydiscount_exp_acct`, `paydiscount_rev_acct`,
+  `writeoff_rev_acct`, `v_liability_services_acct`, `doubtfuldebt_acct`, `baddebtexpense_acct`,
+  `baddebtrevenue_acct`, `allowancefordoubtful_acct` all NULL — the same drift class, other account
+  types, same row. ETP-4706 explicitly scoped itself to Not-Invoiced-Receipts only (per its own
+  "don't silently expand scope" instruction). **Apply:** a future ticket should consider generalizing
+  R17 into a "resync every NULL `*_acct` column on a `C_BP_Group_Acct` row against the schema default"
+  fix (one UPDATE per column, or a single dynamic one) rather than shipping one column-specific R-fix
+  at a time whenever the next symptom surfaces on this same row.
+- **2026-07-29 — Fix:** `cli/src/data-fixes/sql/20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql`
+  — single guarded `UPDATE` joining `c_bp_group_acct` → `c_bp_group` (tenant scope) →
+  `c_acctschema_default` (source value), backfilling `notinvoicedreceipts_acct` only where NULL and a
+  schema default exists. Verified live in a rolled-back transaction on GOClient: `BEFORE: NULL` →
+  `AFTER: 6E9DA718417A48A290FE376448A12BF6`; re-check (same predicate) matches 0 rows, confirming
+  idempotency. `ONBOARDING_PROVISIONED_THROUGH` intentionally NOT bumped (no preventive change).

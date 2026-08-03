@@ -117,7 +117,7 @@ i18n keys added: `invoicePdfSubtotalNoDiscount`, `invoicePdfProductDiscount`, `i
 ## Manual verification
 
 1. Open `/sales-invoice` and confirm the list shows exactly Invoice Date (no dot), Document No., Due Date (4-state dot driven by date plus `outstandingAmount`), Business Partner, Document Status (AD status badge only — no payment-derived pills), Total Gross Amount, and Total Outstanding in that order. For Due Date confirm: "—" when no payment plan exists; green dot for invoices with `outstandingAmount ≤ 0` regardless of how their date sits relative to today (an overdue but fully-paid invoice must render green, never red); red dot plus red date text for past-due rows that still carry an outstanding balance; yellow dot for rows due within the next 7 days with outstanding balance; gray dot for everything else. Also confirm date-only values such as an immediate-payment invoice created today render on the same calendar day instead of shifting backward by one day.
-2. Open `/sales-invoice?filter=overdue` and confirm the list starts in the overdue-only quick filter.
+2. Open `/sales-invoice?filter=overdue` and confirm the list starts in the overdue-only quick filter. Open the **Filtros** funnel (badge "2") and confirm the second preloaded condition reads `Y | Pendiente de pago | Mayor que | 0` — the operator must be visible (not the placeholder) and its value box must be a numeric input. Opening the operator dropdown must offer `=, ≠, >, ≥, <, ≤, Entre`. Also filter by **Vencimiento** and confirm it offers `Es / Antes de / Después de / Entre` with a date picker (ETP-4681).
 3. Click a row from the list and confirm a lateral invoice preview opens instead of immediately navigating to `/sales-invoice/:recordId`. In that preview, confirm `General` is data-backed while `Messages` and `History` remain placeholder states, and for invoices with a billing contact location the embedded PDF shows the full address in postal order: first line, second line, postal code plus city, then region plus country.
 4. From the preview, choose **Edit** and confirm navigation to `/sales-invoice/:recordId`.
 5. Start or reopen a draft invoice and confirm a business partner is required before adding lines, partner address reacts to the chosen customer, and the line area offers manual entry plus shipment import and sales-order import when a customer is already selected. For shipment import, expanding a row must keep the originating sales-order reference visible in the row header (it should not be replaced by the computed shipment total).
@@ -636,3 +636,61 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Advanced-filter mode on rich cells — ETP-4681
+
+Two list columns render bespoke cells and are therefore declared `type: 'custom'`
+in `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`:
+
+| Column | Why it is `custom` | Declared `filterMode` |
+|--------|--------------------|-----------------------|
+| `outstandingAmount` (`OutstandingAmt`) | "Cobrada" / "Saldo a favor · X" pills and a clickable payment button | `numeric` |
+| `eTGODueDate` (`EM_Etgo_Due_Date`) | 4-state coloured due-date dot | `date` |
+
+`type: 'custom'` carries no filter semantics — `resolveFilterMode` cannot see the
+underlying data type behind a bespoke `render`, so without an explicit
+`filterMode` both columns fell back to text mode. The visible symptom was on the
+Dashboard shortcuts: "Facturas de ventas · Vencidas" and "Por cobrar" navigate to
+`/sales-invoice?filter=overdue`, which preloads
+`documentStatus equals CO` **and** `outstandingAmount greaterThan 0`. In text mode
+the operator set has no `greaterThan`, so the operator `<Select>` matched no item
+and rendered its placeholder — the condition looked malformed, and the value box
+was a text input instead of a number input.
+
+The rows returned were never wrong (the text branch of `buildRowCriteria` passes
+the operator straight through, so the emitted criteria stayed
+`{ fieldName: 'outstandingAmount', operator: 'greaterThan', value: 0 }`), but
+touching the operator dropdown lost `greaterThan` permanently.
+
+The fix is the explicit `filterMode` on each column plus a generic change in
+`resolveFilterMode` so unrecognized types no longer skip the `_ID` foreign-key
+heuristic — that is what restores `identifier` mode on the `transactionDocument`
+(`C_DocTypeTarget_ID`) custom column. Rule **F19** of `sf-validate-pipeline` now
+blocks any new `custom` column over a numeric/date/enum contract field that omits
+`filterMode`. Full reference: [`list-filters.md`](../list-filters.md).
+
+## MCP document actions (agents)
+
+The header's `documentAction` button is what an AI agent uses to move this invoice through its
+workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+active AD list of the `C_Invoice.DocAction` reference — note `CO` is labelled **Complete** here,
+not Book) and `actionParameter: "docAction"`; its `agentPrompt` — defined in `decisions.json` ->
+`entities.header.fields.documentAction.agentPrompt` — states which transitions are legal and
+their preconditions.
+
+Completing a draft invoice over MCP:
+
+    neo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>",
+                 action: "documentAction", parameters: { docAction: "CO" } }
+
+Flow encoded in the prompt: `DR -> CO` completes (assigns the final document number, computes
+taxes/totals, creates the payment plan), `DR -> VO` voids, `CO -> RE` reactivates and **unposts
+first** when the invoice was already posted (the Reactivate menu action carries
+`preUnpost: true`), `CO -> CL` closes. Posting is a **separate** action on this window
+(`menuActions` key `post`, gated on `processed && !posted`) and is **not** a `documentAction`
+value — the prompt explicitly tells the agent never to send `PO` here.
+
+This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `ProcessInvoiceHook`
+routing on completion — because `neo_action` executes the entity's `NeoHandler` hooks
+(ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
+change: it is the only thing telling the agent what is legal.

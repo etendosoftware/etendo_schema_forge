@@ -107,6 +107,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - `artifacts/product/decisions.json` declares:
   - `customPanelTabs` — registers `ProductPriceBar` as the `Price` tab alongside `Attachments`
   - `attachments: true` and `customTabsAfterBottom: true` — positions both tabs after the primary tab strip
+  - `multiField` on the `name` grid field — declares the composite list identity column (title `name` + subtitle chip `searchKey` + `neoImage` media `image`, with `parts` for per-part sort/filter). Replaces the former bespoke `ProductNameCell`. See the ETP-4603 section below.
   - `inline: true` on the image field — keeps the image inside the four-column form grid
   - `autoSaveOnBlur: true` — all header fields (name, description, type, category, UOM, etc.) save automatically on blur, matching the behavior of Contacts, Assets, and Sales Order. The image field is explicitly excluded: image changes require the manual Save button.
   - `labelOverrides` — overrides `M_Product_Category_ID` to "Category"/"Categoría" and `ProductType` to "Type"/"Tipo" using the locale-nested format `{ "en_US": {...}, "es_ES": {...} }`
@@ -198,6 +199,74 @@ Updated on 2026-06-08 as part of the feature/ETP-4190 branch. Significant change
 
 **Row-level dedupe by search key.** `window.import.dedupe` is `{ scope: "file", key: ["searchKey"] }` — an in-file duplicate SKU is flagged `skipped` rather than sent twice.
 
+**FK fields (UOM/Category/Tax Category) get the same pick-a-value review UI as Contacts' country field:** a field that couldn't be matched renders as a click-to-open popover backed by SimSearch candidates, with live re-search as the user types and a "browse all" fallback when nothing matched at all — see `contacts.md`'s ETP-4447 section for the full review-queue mechanics (frozen Status column, per-field grid, skip/unskip), which is shared code, not Product-specific.
+
+## ETP-4603 — Composite list identity column (`multiField`)
+
+**The product list identity is now a generic, config-driven composite column.** What used to be a
+bespoke per-window cell component (`ProductNameCell`) is now the generic `multiField` decorator
+declared in `decisions.json` on the `name` grid field. No product-specific JSX backs the identity cell
+anymore — the same `type: 'multiField'` column any window can adopt (see
+[`docs/ui-customization.md`](../ui-customization.md) §18 and
+[`docs/decisions-reference.md`](../decisions-reference.md) → *Composite list column (`multiField`)*).
+
+**What the cell stacks:**
+- **Title** — the product `name`, in bold (the host grid field the decorator sits on).
+- **Subtitle chip** — the `searchKey`, rendered as a chip under the title (`multiField.subtitle`).
+- **Media image** — the product `image`, fetched with an authenticated Bearer request via the
+  `useNeoImage` hook (`media: { field: "image", kind: "neoImage", fallback: "box" }`); when the product
+  has no image, it falls back to the package (`box`) glyph — the same recognizable fallback the gallery
+  cards use.
+
+**It behaves like real columns — sortable per part and filterable.** The decorator declares two
+`parts`, each of which acts as a first-class column even though both render in one visual cell:
+- **Sort per part:** clicking the *Identifier* header sorts the list by `searchKey`; clicking the
+  *Name* header sorts by `name` — each part is its own sort header with its own `_sortBy`.
+- **Filter expansion:** in the advanced filter builder, *Identifier* and *Name* each expand as their own
+  filterable pseudo-column, so users filter by search key or name separately (not by one opaque
+  "multiField" blob).
+
+The two segments are relabeled via `parts[].labels` — *Identifier* / *Identificador* for `searchKey`
+and *Name* / *Nombre* for `name` — so the composite header reads *"Identifier & Name"* /
+*"Identificador & Nombre"* (default `partSeparator` `" & "`) rather than the raw field labels.
+
+**Absorbed fields keep their data.** `searchKey` (subtitle) and `image` (media) no longer render as
+their own standalone columns — they fold into the identity cell — but their per-row data still arrives,
+because the list fetch sends no field projection (NEO Headless returns every configured entity field).
+That is what lets the subtitle chip, the image, and the per-part sort/filter keep working on the
+absorbed fields.
+
+**Validation:** pipeline validator rule **F18** (in `schema_forge_core`) guards this decorator — it
+blocks if `subtitle`, `media.field`, or any `parts[].field` references a field that does not exist on
+the `product` entity, or if a sort-enabled part is not queryable. See
+[`docs/pipeline-validator-reference.md`](../pipeline-validator-reference.md) (F18).
+
+**`decisions.json` declaration** (on `entities.product.fields.name`):
+```json
+"name": {
+  "grid": true,
+  "searchable": true,
+  "multiField": {
+    "subtitle": "searchKey",
+    "media": { "field": "image", "kind": "neoImage", "fallback": "box" },
+    "parts": [
+      { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
+      { "field": "name",      "labels": { "en_US": "Name",       "es_ES": "Nombre" } }
+    ]
+  }
+}
+```
+
+### Manual verification (ETP-4603)
+
+15. Open `/product` and switch to (or open) the list view that renders rows as a table. Confirm the
+    identity column shows the product **name** in bold with the **search key** as a chip below it and the
+    product **image** (or a package glyph when absent) alongside — one cell, not three columns.
+16. Click the *Identifier* header segment and confirm the list re-sorts by search key; click the *Name*
+    segment and confirm it re-sorts by name.
+17. Open the advanced filter and confirm both *Identifier* and *Name* appear as separately filterable
+    fields.
+
 **uOM / productCategory / taxCategory dropped (ETP-4669).** Earlier revisions mapped these three as SimSearch FK columns, but their free-text CSV values ("Otros", "Unidad", "Bebidas", …) don't fuzzy-match real `C_UOM`/`M_Product_Category`/`C_TaxCategory` records, so every row failed. They're now omitted from the import entirely, which is safe because each resolves server-side on its own: `productCategory` from its `M_Product_Category_ID` AD_Column `@SQL` default (the org's default category), and `uOM`/`taxCategory` via `NeoDefaultsService.tryInjectFirstFromLookup` (which picks the first active record for combo-style TableDir refs, ETP-3894). Stock is never settable at product-creation time (it's derived from inventory transactions) and is out of scope for the import.
 
 ## General tab and defaults — ETP-4670
@@ -213,3 +282,9 @@ When creating a new product, `uOM` now preselects the UOM row flagged `IsDefault
 - **Design decision — why this is NOT done via `AD_Column.DefaultValue`:** `productCategory` already gets its default this way (a native Etendo `@SQL=` expression on `AD_Column.DefaultValue`), and that path was evaluated for `uOM`/`taxCategory` too, then rejected. `C_UOM_ID` and `C_TaxCategory_ID` are columns owned by the **Core** dictionary (`AD_Module_ID = '0'`) and ship with no `DefaultValue` out of the box. Setting one would mean patching a Core column directly — it would require temporarily flipping Core's `IsInDevelopment` flag, would change behavior for every Etendo installation using that column (Classic and Enterprise included, not just Go), and would not be versionable from this module's own artifacts. Implementing the equivalent COALESCE logic (client's own default, falling back to System) at the NEO Headless layer keeps the behavior scoped to Etendo Go's `product` spec only.
 - **`productCategory` still uses its native `@SQL=` default** — unaffected by this change. It now resolves *reliably* only because `ProductCategoryDefaultHandler` (see `product-category.md`, ETP-4670) guarantees `IsDefault` is unique per client, so the native SQL default no longer has more than one candidate row to pick from.
 - Covered by `ProductDefaultsHandlerTest.java` (com.etendoerp.go): own-client default present, own-client absent falling back to System client, and neither present.
+
+## ETP-4565 — Accounting tab: non-deletable record
+
+**`entities.accounting.hideDelete: true`** added — the `accounting` secondary tab's row (Fixed Asset / Product Expense / Product Revenue / Product COGS) can no longer be deleted; `apiPrediction.crud.accounting.delete` is now `false`, which also removes the delete affordance from `SecondaryTableTab` in `DetailView.jsx` (both the row-level trash icon and the bulk-select delete bar gate on this same flag). **Resolved (follow-up pass):** the Accounting tab is capped at one record via the new `window.secondaryTabs.accounting.maxDetailLines: 1` decisions.json key — a generic capability added specifically for the `secondaryTabs` pattern (mirroring `window.maxDetailLines` for `detailEntity`), spanning `resolveSecondaryTabDefs`/`buildSecondaryTabPropEntry` in `generate-frontend.js` (`schema_forge_core`) and `resolveCanAddSecondaryLines(st, childrenCount)` in `DetailView.jsx` (this repo), which gates `secondaryAddLineBar`, the inline `addRow`, and the empty-state add trigger. See `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17. Regenerated via `make regen ONLY=product`; `sf-validate-pipeline --scope=product` reports 0 violations. Regression tests: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` (decisions.json assertion) and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.secondaryTabsMaxLines.vitest.jsx` (behavioral).
+
+**Also unresolved — tab order.** The ticket asks for `... → Precio → Contabilidad → ...`; today's order is `Accounting, Price, Attachments` (Accounting first). Per the "Tab position follow-up (ETP-4402 continued)" section above, inverting the relative order of `secondaryTabs` vs. `customPanelTabs` entries is explicitly **not achievable with a decisions.json-only change** — already tracked as **ETP-4415**, which touches CODEOWNERS-gated `DetailView.jsx`/`generate-frontend.js`. Not changed in this pass.

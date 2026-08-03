@@ -11,6 +11,7 @@
     "hideCreate": true,
     "hideDelete": true,
     "hideDeleteButton": true,
+    "maxDetailLines": 1,
     "labelOverrides": {
       "es_ES": {
         "Name": "Nombre",
@@ -36,6 +37,7 @@
     "translation": { "exclude": true },
     "accounting": {
       "javaQualifier": "taxAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": {
           "visibility": "system",

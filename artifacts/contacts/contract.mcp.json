@@ -1,8 +1,7 @@
 {
-  "version": "0.45.0",
-  "generatedAt": "2026-07-07T21:53:25.883Z",
-  "updatedAt": "2026-07-29T15:55:49.150Z",
-  "contractChecksum": "706496e6e55723dd",
+  "version": "0.1.0",
+  "generatedAt": "2026-07-31T19:26:59.736Z",
+  "contractChecksum": "fc8d658a3248b85d",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",
@@ -37,7 +36,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/customerAccounting",
         "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
         "supportedFilters": []
@@ -70,7 +69,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/vendorAccounting",
         "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
         "supportedFilters": []
@@ -264,19 +263,19 @@
       },
       {
         "entity": "businessPartner",
-        "field": "pOPaymentMethod",
-        "column": "PO_Paymentmethod_ID",
-        "reference": "PaymentMethod",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
-      },
-      {
-        "entity": "businessPartner",
         "field": "pOPaymentTerms",
         "column": "PO_PaymentTerm_ID",
         "reference": "PaymentTerm",
         "inputMode": "selector",
         "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentTerms"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "pOPaymentMethod",
+        "column": "PO_Paymentmethod_ID",
+        "reference": "PaymentMethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
       },
       {
         "entity": "businessPartner",
@@ -788,9 +787,6 @@
             "required": true,
             "defaultValue": "N"
           },
-          "eTGOLocation": {
-            "readOnly": true
-          },
           "account": {},
           "paymentMethod": {},
           "isSalesRepresentative": {
@@ -798,12 +794,15 @@
           },
           "priceList": {},
           "pOFinancialAccount": {},
-          "pOPaymentMethod": {},
           "pOPaymentTerms": {},
+          "pOPaymentMethod": {},
           "purchasePricelist": {},
           "vendorBlocking": {
             "required": true,
             "defaultValue": "N"
+          },
+          "eTGOLocation": {
+            "readOnly": true
           }
         }
       },
@@ -1250,5 +1249,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "c12415fd90cc0540"
+  "checksum": "797b377ec4918de9"
 }

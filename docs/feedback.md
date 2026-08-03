@@ -355,6 +355,22 @@ Regression coverage: `tools/app-shell/src/components/contract-ui/__tests__/Detai
 
 ---
 
+## [2026-07-27] Tooling — no DB-free way to regenerate a contract (`sf-resolve-curated` broken)
+
+Found while working ETP-4156, which changes only `decisions.json` (adds `entities.contact.javaQualifier`) and therefore needs a contract regeneration but no DB data.
+
+**Three separate defects, all in the published `@etendosoftware/schema-forge-cli` (and its `schema_forge_core` source):**
+
+1. **`resolve-curated.js` ignores `SF_ROOT`.** Line 22 is `const ROOT = join(__dirname, '..', '..')`, while every sibling module (`extract-fields.js`, `extract-from-db.js`, `check-version.js`, …) uses `process.env.SF_ROOT || join(__dirname, '..', '..')`. Consequence: the single-phase command documented in `CLAUDE.md` ("`resolve-curated.js --window <name> --write` — single phase, no extract, no push") cannot work from published packages — it looks for `node_modules/@etendosoftware/artifacts/<window>/schema-raw.json`. `LOCAL_CORE=1` does not help either: `cli/sf-local` correctly keeps the cwd on the functional repo, but `__dirname` then resolves to the core repo, so it looks for `schema_forge_core/artifacts/<window>/rules-raw.json`. **One-line fix**, and it restores the only DB-free path to a contract regeneration.
+2. **`node_modules/.bin/sf-resolve-curated` is not an executable script.** It is the raw ESM source with no shebang, so the shell tries to interpret it (`/Applications: is a directory`, `AGENTS.md: command not found`, then a syntax error on the JSDoc). Other bins in the same map work, so this is a per-entry packaging problem.
+3. **`sf-regen-all --skip-extract` still hits the database, and swallows the error.** `Skip extract: YES` is printed, then `[F1a] Extracting fields...` runs `extract-fields.js` (a DB reader) and fails. `--skip-extract` apparently only skips `[F0] extract-from-db`. Worse, the failure is reported as a bare `✗ FAILED:` with an empty message, so there is nothing to diagnose — the actual cause (no DB reachable) only becomes visible by running a full `make regen` and watching it die at `[F0]` instead.
+
+**Impact:** any change that touches only `decisions.json` currently requires a live database to regenerate the contract, even though the inputs (`schema-raw.json`, `rules-raw.json`, `decisions.json`) are all on disk. Also worth noting: a failed run left a stray empty `curated` file at the repo root.
+
+**Workaround until fixed:** leave the contract stale and regenerate with `make regen ONLY=<window> PUSH_TO_NEO=1` in an environment with the DB up — which is needed anyway whenever `javaQualifier` changes, since the handler only activates once `ETGO_SF_ENTITY.Java_Qualifier` is persisted and exported.
+
+---
+
 ## [2026-07-27] ETP-4609 (DOCS write-up) — Dead `purchase-invoice/custom/InvoiceHeaderTable.jsx`; `sales-invoice` counterpart is LIVE, not dead (correction of an initial finding)
 
 **Note:** this is NOT an active bug in either file. It documents (a) a confirmed-dead file so nobody wastes time "fixing" its `required` flags thinking it's a live bug, and (b) a correction — its sibling file with the identical name in `sales-invoice` was initially suspected dead by the same reasoning but traced out to be reachable after all. Read both halves before touching either file.
@@ -498,3 +514,33 @@ visible when someone actually hovers a row in a running instance. When adding a 
 `position: absolute` hover strip, always re-check (a) whether the strip still fits inside its
 reserved column at the new width, and (b) whether the strip has an opaque background as a
 second line of defense in case it doesn't.
+
+---
+
+## [2026-07-30] ETP-4565 — `contacts` hit the known `AD_Ref_List_Trl` translation-stripping gap
+
+**Follow-up to** "`make regen` Silently Strips es_ES Enum Labels on a DB Missing `AD_Ref_List_Trl` Rows" above (originally documented against `financial-account`, also hit by `goods-shipment`). `contacts` is now a third confirmed occurrence.
+
+**Symptom:** `make regen ONLY=contacts` (as part of adding `entities.customerAccounting.hideDelete`/`entities.vendorAccounting.hideDelete: true` for ETP-4565) silently dropped all 3 `es_ES` labels (`Pendiente`/`Válido`/`No válido`) from `businessPartner.fields.oBTIKVIESStatus.enumValues[].labels` in `contract.json`, and the equivalent inline `labels` keys in the generated `BusinessPartnerForm.jsx` — a field `decisions.json` never touched in this change. The run reported success; only the "AD cache looks STALE" warning hinted at it.
+
+**Fix applied:** did not commit the label loss. Restored the 3 dropped `labels` blocks by hand in `contract.json` (byte-for-byte match to the committed baseline otherwise); `BusinessPartnerForm.jsx` carried no other change from the regen, so it was reverted outright to its committed version via `git checkout --`. The legitimate `hideDelete` additions (in `decisions.json`, `contract.json`'s `entities.customerAccounting`/`entities.vendorAccounting.hideDelete` + `apiPrediction.crud.*.delete: false`, and `contract.mcp.json`) were kept.
+
+**Lesson (reinforcing the original entry):** this sandbox is missing `AD_Ref_List_Trl` es_ES rows for more reference lists than the 4 originally catalogued (`oBTIKVIESStatus`'s reference list is a new one to add to that list). Anyone running `make regen` on `contacts` — or any other window exposing this reference list — should expect and check for this exact symptom before committing.
+
+---
+
+## [2026-07-31] ETP-4565 — Follow-up: pre-push offline drift check flagged `contacts` checksum-only drift, unrelated to the es_ES label bug above
+
+**Component:** none confirmed as a schema_forge bug — most likely the published `@etendosoftware/schema-forge-cli` (`generate-contract.js`) checksum computation, out of scope to fix in this repo.
+
+**Symptom:** `git push` on this branch failed the pre-push hook's offline drift check (mirrors CI's `offline-regen-check.yml`: `make regen-check FROM_CACHE=1` against the pinned published core package + `com.etendoerp.go`'s committed `ETGO_SF_*.xml`, then `git status`). It reported drift on `artifacts/contacts/contract.json`/`contract.mcp.json`: only `checksum` (`e477fa97a11d75f1` → `fc8d658a3248b85d`) and a new `updatedAt` timestamp changed — **zero** structural/content diff anywhere else in either file (confirmed with a full `git diff`, not just a sampled excerpt).
+
+**Investigated as a possible recurrence of the es_ES label-stripping bug above (same window, same session) — ruled out.** Two different regen paths were tried:
+1. `make regen ONLY=contacts` (live sandbox DB) — DID reproduce the es_ES label-stripping bug again (dropped the 3 `oBTIKVIESStatus` labels, same `AD_Ref_List_Trl` STALE warning). Reverted via `git checkout --`, not committed. This confirms the sandbox's `AD_Ref_List_Trl` gap for this reference list is still present and anyone re-running a live-DB regen on `contacts` will hit it again.
+2. `make regen-check ONLY=contacts FROM_CACHE=1` (the exact command the offline drift check/CI runs — reads the committed AD cache snapshot, not the live sandbox DB) — did **NOT** strip the es_ES labels (the cached snapshot has correct translations) and produced the same isolated checksum/updatedAt-only diff described above. Confirmed **deterministic**: ran twice, got `fc8d658a3248b85d` both times.
+
+**Root cause (partial):** `generate-contract.js`'s `checksumFor()` hashes `JSON.stringify({frontendContract, backendContract, apiPrediction, formState, agentProfile, testManifest})` in whatever key/array insertion order the generator produced that run, but the file actually written to disk goes through a separate canonicalization pass (`reorderKeys`/similar) before serialization. If the generator's internal insertion order for some part of that payload isn't perfectly stable run-to-run (while the *canonicalized* on-disk shape is), two runs can produce byte-identical `contract.json` bodies but different checksums — exactly what was observed here (the currently-committed `contract.json` already had the es_ES labels correctly hand-restored per the entry above; a fresh cached-snapshot regen reproduces that exact body but with a different checksum). Did not chase this further into the checksum algorithm itself since it lives in the published `schema-forge-cli` package (`node_modules/@etendosoftware/schema-forge-cli/src/generate-contract.js`), not this repo — **candidate follow-up for `schema_forge_core`:** make `checksumFor()` hash the same canonicalized/reordered structure that gets written to disk, so the checksum is stable whenever the actual file content is.
+
+**Fix applied:** accepted `make regen-check ONLY=contacts FROM_CACHE=1`'s output wholesale (this is what CI's offline check itself computes, so it is the authoritative "correct" checksum for the currently-committed content) — committed the checksum/`updatedAt` bump on `contract.json` and `contract.mcp.json`. `npx sf-validate-pipeline --scope=contacts`: OK. A subsequent `make regen-check ONLY=contacts FROM_CACHE=1` run produces zero diff, confirming the branch is drift-free.
+
+**Lesson:** a pre-push/CI drift failure that touches ONLY `checksum`/`updatedAt` (no other content) on a window that was recently hand-patched for the es_ES label bug is most likely this checksum-recompute artifact, not a real content regression — verify with a full `git diff` (not a sampled one) before assuming it's the label-stripping bug again, and prefer `make regen-check ONLY=<window> FROM_CACHE=1` (the CI-equivalent, cache-backed command) over a live-DB `make regen` when investigating this specific class of drift, since the live DB reintroduces the unrelated es_ES gap and makes the two issues harder to tell apart.

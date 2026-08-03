@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import TaxTable from './TaxTable';
 import TaxForm from './TaxForm';
@@ -181,6 +182,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Tax", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
+        addLineGuard={(_, children) => children.length < 1}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />
