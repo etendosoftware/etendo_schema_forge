@@ -109,7 +109,9 @@ function makeArgs(overrides = {}) {
     hook: { editing: {}, selected: null, handleUpdateChild: vi.fn() },
     handleLineFieldChange: vi.fn().mockResolvedValue(undefined),
     prepareLineForPost: vi.fn(),
-    token: 'TKN',
+    // ETP-4576 — the credential is gone: DetailView reads the CSRF proof from
+    // the auth context and threads only that down into this factory.
+    csrfToken: 'test-csrf',
     extractErrorMessage: vi.fn().mockResolvedValue('boom error'),
     ui: (key) => key,
   };
@@ -126,6 +128,9 @@ function build(args) {
     hook: args.hook,
     handleLineFieldChange: args.handleLineFieldChange,
     prepareLineForPost: args.prepareLineForPost,
+    csrfToken: args.csrfToken,
+    // Hostile input: a caller that still threads the dead credential. Passed
+    // through verbatim so a leftover `token` can never reach the wire.
     token: args.token,
     extractErrorMessage: args.extractErrorMessage,
     ui: args.ui,
@@ -170,7 +175,10 @@ describe('buildInlineRowUpdateHandler — PATCH behavior', () => {
     delete global.fetch;
   });
 
-  it('PATCHes the configured detailUrl with {id} replaced, JSON content type, and Bearer token', async () => {
+  // ETP-4576 — the session is a `__Host-go_session` cookie: this PATCH carries
+  // `credentials: 'include'` and a guarded `X-Go-CSRF`, and never an
+  // Authorization header.
+  it('PATCHes the configured detailUrl with {id} replaced, JSON content type, and the CSRF proof', async () => {
     const args = makeArgs();
     const handler = build(args);
     await handler({ id: 'L1' }, 'description', 'Hello', {});
@@ -179,18 +187,37 @@ describe('buildInlineRowUpdateHandler — PATCH behavior', () => {
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe('https://x/api/orderLine/L1');
     expect(opts.method).toBe('PATCH');
+    expect(opts.credentials).toBe('include');
     expect(opts.headers['Content-Type']).toBe('application/json');
-    expect(opts.headers.Authorization).toBe('Bearer TKN');
+    expect(opts.headers['X-Go-CSRF']).toBe('test-csrf');
   });
 
-  it('omits the Authorization header when token is falsy', async () => {
-    const args = makeArgs({ token: '' });
+  it('never sends an Authorization header, even when a stray token is threaded in', async () => {
+    // Hostile input: a not-yet-cleaned caller still passes the dead credential.
+    const args = makeArgs({ token: 'legacy-token' });
     const handler = build(args);
     await handler({ id: 'L1' }, 'description', 'Hello', {});
 
     const [, opts] = global.fetch.mock.calls[0];
-    expect('Authorization' in opts.headers).toBe(false);
+    const keys = Object.keys(opts.headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(opts.headers)).not.toContain('Bearer');
+    expect(JSON.stringify(opts.headers)).not.toContain('legacy-token');
   });
+
+  for (const [label, value] of [['undefined', undefined], ['null', null], ['an empty string', '']]) {
+    it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
+      // A session can be authenticated before the CSRF proof lands. The header
+      // must be absent, never present with an empty/undefined value.
+      const handler = build(makeArgs({ csrfToken: value }));
+      await handler({ id: 'L1' }, 'description', 'Hello', {});
+
+      const [, opts] = global.fetch.mock.calls[0];
+      expect('X-Go-CSRF' in opts.headers).toBe(false);
+      expect(opts.credentials).toBe('include');
+      expect('Authorization' in opts.headers).toBe(false);
+    });
+  }
 
   it('falls back to ${apiBaseUrl}/${detailEntity}/${row.id} when no detailUrl configured', async () => {
     const args = makeArgs({ api: { crud: {} } });

@@ -60,7 +60,12 @@ describe('getSecondaryRowUpdateHandler', () => {
     apiBaseUrl: '/api',
     secondaryHooks: [{ handleUpdateChild: vi.fn() }],
     stIdx: 0,
-    token: 'tok',
+    // ETP-4576 — the credential is gone: DetailView reads the CSRF proof from
+    // the auth context and threads only that down into this factory. NOTE: the
+    // `token` prop on the SecondaryFormTab/SecondaryPanelTab/SecondaryTableTab
+    // describes below is a DIFFERENT, still-dead prop forwarded to child
+    // components — untouched here on purpose.
+    csrfToken: 'test-csrf',
     ui: (key) => key,
     extractErrorMessage: vi.fn(async () => 'server-error'),
   });
@@ -162,6 +167,47 @@ describe('getSecondaryRowUpdateHandler', () => {
     expect(hk).toHaveBeenNthCalledWith(2, 'r1', { qty: 1 }); // revert with previous
     expect(ctx.extractErrorMessage).toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith('server-error');
+  });
+
+  // ETP-4576 — the session is a `__Host-go_session` cookie. This handler's only
+  // request is a PATCH (an unsafe method), so it carries `credentials: 'include'`
+  // plus a guarded `X-Go-CSRF`, and never an Authorization header.
+  describe('session-cookie contract', () => {
+    const runPatch = async (ctxOverrides = {}) => {
+      global.fetch = vi.fn(async () => ({ ok: true, json: async () => null }));
+      const ctx = { ...baseCtx(), ...ctxOverrides };
+      const handler = getSecondaryRowUpdateHandler({ key: 'line' }, 'inlineEditable', ctx);
+      await handler({ id: 'r1', qty: 1 }, 'qty', 5, undefined);
+      return global.fetch.mock.calls[0][1];
+    };
+
+    it('sends credentials and the CSRF proof, and no Authorization header', async () => {
+      const init = await runPatch();
+      expect(init.method).toBe('PATCH');
+      expect(init.credentials).toBe('include');
+      expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+      expect(init.headers['Content-Type']).toBe('application/json');
+      const keys = Object.keys(init.headers).map((k) => k.toLowerCase());
+      expect(keys).not.toContain('authorization');
+      expect(JSON.stringify(init.headers)).not.toContain('Bearer');
+    });
+
+    it('never sends an Authorization header, even when a stray token is threaded in', async () => {
+      // Hostile input: a not-yet-cleaned caller still passes the dead credential.
+      const init = await runPatch({ token: 'legacy-token' });
+      const keys = Object.keys(init.headers).map((k) => k.toLowerCase());
+      expect(keys).not.toContain('authorization');
+      expect(JSON.stringify(init.headers)).not.toContain('legacy-token');
+    });
+
+    for (const [label, value] of [['undefined', undefined], ['null', null], ['an empty string', '']]) {
+      it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
+        const init = await runPatch({ csrfToken: value });
+        expect('X-Go-CSRF' in init.headers).toBe(false);
+        expect(init.credentials).toBe('include');
+        expect('Authorization' in init.headers).toBe(false);
+      });
+    }
   });
 });
 

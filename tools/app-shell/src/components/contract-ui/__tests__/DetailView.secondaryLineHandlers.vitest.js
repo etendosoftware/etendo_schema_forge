@@ -78,7 +78,9 @@ function makeDeps(overrides = {}) {
     stIdx: 0,
     api: { crud: {} },
     apiBaseUrl: '/api',
-    token: 'tok',
+    // ETP-4576 — the credential is gone: DetailView reads the CSRF proof from
+    // the auth context and threads only that down into this factory.
+    csrfToken: 'test-csrf',
     secondaryHooks: [{
       children: [],
       handleAddChild: vi.fn(async () => ({ id: 'new-1' })),
@@ -348,5 +350,106 @@ describe('buildSecondaryLineHandlers.onAdd', () => {
 
     expect(deps.secondaryHooks[0].handleAddChild).toHaveBeenCalledWith({ qty: 1 });
     expect(deps.setAddingSecondaryLine).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// ETP-4576 — session-cookie request contract
+// ===========================================================================
+// The session is a server-side `__Host-go_session` cookie. Both requests this
+// factory issues are unsafe methods (onSaveLine PATCH, onDelete DELETE), so
+// both carry `credentials: 'include'` plus a guarded `X-Go-CSRF`, and neither
+// may ever carry an Authorization header.
+describe('buildSecondaryLineHandlers — session-cookie contract', () => {
+  const MISSING_PROOFS = [['undefined', undefined], ['null', null], ['an empty string', '']];
+
+  function lastInit() {
+    const calls = global.fetch.mock.calls;
+    return calls[calls.length - 1][1];
+  }
+
+  function expectNoAuthorization(headers) {
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+
+  describe('onSaveLine PATCH', () => {
+    const runSave = async (overrides = {}) => {
+      global.fetch = vi.fn(async () => ({ ok: true, json: async () => null }));
+      const deps = makeDeps({
+        selectedSecondaryLine: { id: 'r1', _tabKey: 'rate' },
+        secondaryLineEdits: { qty: 5 },
+        ...overrides,
+      });
+      const { onSaveLine } = buildSecondaryLineHandlers(deps);
+      await onSaveLine();
+    };
+
+    it('sends credentials and the CSRF proof, and no Authorization header', async () => {
+      await runSave();
+      const init = lastInit();
+      expect(init.method).toBe('PATCH');
+      expect(init.credentials).toBe('include');
+      expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+      expect(init.headers['Content-Type']).toBe('application/json');
+      expectNoAuthorization(init.headers);
+    });
+
+    it('never sends an Authorization header, even when a stray token is threaded in', async () => {
+      // Hostile input: a not-yet-cleaned caller still passes the dead credential.
+      await runSave({ token: 'legacy-token' });
+      const init = lastInit();
+      expectNoAuthorization(init.headers);
+      expect(JSON.stringify(init.headers)).not.toContain('legacy-token');
+    });
+
+    for (const [label, value] of MISSING_PROOFS) {
+      it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
+        await runSave({ csrfToken: value });
+        const init = lastInit();
+        expect('X-Go-CSRF' in init.headers).toBe(false);
+        expect(init.credentials).toBe('include');
+        expectNoAuthorization(init.headers);
+      });
+    }
+  });
+
+  describe('onDelete DELETE', () => {
+    const runDelete = async (overrides = {}) => {
+      global.fetch = vi.fn(async () => ({ ok: true }));
+      const deps = makeDeps({
+        secondarySelectedRows: { rate: [{ id: 'z9' }] },
+        ...overrides,
+      });
+      const { onDelete } = buildSecondaryLineHandlers(deps);
+      await onDelete();
+    };
+
+    it('sends credentials and the CSRF proof, and no Authorization header', async () => {
+      await runDelete();
+      const init = lastInit();
+      expect(init.method).toBe('DELETE');
+      expect(init.credentials).toBe('include');
+      expect(init.headers['X-Go-CSRF']).toBe('test-csrf');
+      expectNoAuthorization(init.headers);
+    });
+
+    it('never sends an Authorization header, even when a stray token is threaded in', async () => {
+      await runDelete({ token: 'legacy-token' });
+      const init = lastInit();
+      expectNoAuthorization(init.headers);
+      expect(JSON.stringify(init.headers)).not.toContain('legacy-token');
+    });
+
+    for (const [label, value] of MISSING_PROOFS) {
+      it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
+        await runDelete({ csrfToken: value });
+        const init = lastInit();
+        expect('X-Go-CSRF' in init.headers).toBe(false);
+        expect(init.credentials).toBe('include');
+        expectNoAuthorization(init.headers);
+      });
+    }
   });
 });

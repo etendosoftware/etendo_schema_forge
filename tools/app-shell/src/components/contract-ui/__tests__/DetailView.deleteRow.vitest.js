@@ -106,7 +106,9 @@ function makeArgs(overrides = {}) {
     isDocumentReadOnly: false,
     confirmDelete: vi.fn().mockResolvedValue(true),
     apiBaseUrl: 'https://x/api',
-    token: 'TKN',
+    // ETP-4576 — the credential is gone: DetailView reads the CSRF proof from
+    // the auth context and threads only that down into this factory.
+    csrfToken: 'test-csrf',
     hook: { handleDeleteChild: vi.fn() },
     selectedLine: null,
     setSelectedLine: vi.fn(),
@@ -123,6 +125,9 @@ function build(args) {
     isDocumentReadOnly: args.isDocumentReadOnly,
     confirmDelete: args.confirmDelete,
     apiBaseUrl: args.apiBaseUrl,
+    csrfToken: args.csrfToken,
+    // Hostile input: a caller that still threads the dead credential. Passed
+    // through verbatim so a leftover `token` can never reach the wire.
     token: args.token,
     hook: args.hook,
     selectedLine: args.selectedLine,
@@ -178,7 +183,10 @@ describe('buildDeleteRowHandler — DELETE behavior', () => {
     expect(hook.handleDeleteChild).not.toHaveBeenCalled();
   });
 
-  it('DELETEs the configured detailUrl with {id} replaced and Bearer token header', async () => {
+  // ETP-4576 — the session is a `__Host-go_session` cookie: this DELETE carries
+  // `credentials: 'include'` and a guarded `X-Go-CSRF`, and never an
+  // Authorization header.
+  it('DELETEs the configured detailUrl with {id} replaced and the CSRF proof header', async () => {
     const handler = build(makeArgs());
     await handler({ id: 'L1' });
 
@@ -186,16 +194,35 @@ describe('buildDeleteRowHandler — DELETE behavior', () => {
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe('https://x/api/orderLine/L1');
     expect(opts.method).toBe('DELETE');
-    expect(opts.headers.Authorization).toBe('Bearer TKN');
+    expect(opts.credentials).toBe('include');
+    expect(opts.headers['X-Go-CSRF']).toBe('test-csrf');
   });
 
-  it('omits the Authorization header when token is falsy', async () => {
-    const handler = build(makeArgs({ token: '' }));
+  it('never sends an Authorization header, even when a stray token is threaded in', async () => {
+    // Hostile input: a not-yet-cleaned caller still passes the dead credential.
+    const handler = build(makeArgs({ token: 'legacy-token' }));
     await handler({ id: 'L1' });
 
     const [, opts] = global.fetch.mock.calls[0];
-    expect('Authorization' in opts.headers).toBe(false);
+    const keys = Object.keys(opts.headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(opts.headers)).not.toContain('Bearer');
+    expect(JSON.stringify(opts.headers)).not.toContain('legacy-token');
   });
+
+  for (const [label, value] of [['undefined', undefined], ['null', null], ['an empty string', '']]) {
+    it(`omits X-Go-CSRF entirely when csrfToken is ${label}`, async () => {
+      // A session can be authenticated before the CSRF proof lands. The header
+      // must be absent, never present with an empty/undefined value.
+      const handler = build(makeArgs({ csrfToken: value }));
+      await handler({ id: 'L1' });
+
+      const [, opts] = global.fetch.mock.calls[0];
+      expect('X-Go-CSRF' in opts.headers).toBe(false);
+      expect(opts.credentials).toBe('include');
+      expect('Authorization' in opts.headers).toBe(false);
+    });
+  }
 
   it('falls back to ${apiBaseUrl}/${detailEntity}/${row.id} when no detailUrl configured', async () => {
     const api = { crud: { [DETAIL_ENTITY]: {} } };

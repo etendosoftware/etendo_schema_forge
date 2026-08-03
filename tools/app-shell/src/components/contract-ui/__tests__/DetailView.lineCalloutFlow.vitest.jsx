@@ -116,6 +116,24 @@ vi.mock('@/hooks/useLineGrossAmount', () => ({
   },
 }));
 
+// ETP-4576 — the session is a server-side `__Host-go_session` cookie, and
+// DetailView now reads the CSRF proof from the auth context. Rendering it
+// without a provider would throw 'useAuth must be used within AuthProvider'.
+// Mocked rather than wrapped in a real AuthProvider so these stay unit tests.
+//
+// A plain mutable object, not a vi.fn() with mockReturnValueOnce: React can
+// invoke the hook more than once per render and a "once" override would decay to
+// the default mid-render.
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => mockAuth,
+}));
+
+beforeEach(() => {
+  mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+});
+
 vi.mock('@/hooks/useDocumentAction', () => ({
   useDocumentAction: () => ({ executeAction: vi.fn(), loading: false }),
 }));
@@ -297,6 +315,17 @@ describe('DetailView inline line callout flow', () => {
       expect.stringContaining('/lines/callout'),
       expect.objectContaining({ method: 'POST' }),
     );
+    // ETP-4576 — the session is a `__Host-go_session` cookie. This POST is an
+    // unsafe method, so it carries `credentials: 'include'` plus the CSRF proof
+    // from the mocked auth context, and no Authorization header — note the
+    // component is still rendered with a dead `token="test-token"` prop, which
+    // makes this a hostile-input check as well.
+    const [, calloutInit] = globalThis.fetch.mock.calls[0];
+    expect(calloutInit.credentials).toBe('include');
+    expect(calloutInit.headers['X-Go-CSRF']).toBe('test-csrf');
+    expect(Object.keys(calloutInit.headers).map((k) => k.toLowerCase())).not.toContain('authorization');
+    expect(JSON.stringify(calloutInit.headers)).not.toContain('Bearer');
+    expect(JSON.stringify(calloutInit.headers)).not.toContain('test-token');
     expect(apply).toHaveBeenCalled();
     const [result, forceFields] = apply.mock.calls[0];
     // applyProductCalloutPriceAdjustments: listPrice copied from standardPrice
