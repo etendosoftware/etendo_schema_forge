@@ -113,6 +113,26 @@
   "entities": {
     "header": {
       "javaQualifier": "salesInvoiceHeaderHandler",
+      "namedFilters": [
+        {
+          "name": "completed",
+          "label": "Paid",
+          "description": "Fully paid invoices (payment complete).",
+          "where": "e.paymentComplete = true"
+        },
+        {
+          "name": "pending",
+          "label": "Unpaid",
+          "description": "Unpaid invoices with nothing collected yet (outstanding equals the total).",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)"
+        },
+        {
+          "name": "partial",
+          "label": "Partially paid",
+          "description": "Invoices with a partial payment: some amount collected but a balance remains.",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)"
+        }
+      ],
       "fields": {
         "businessPartner": {
           "grid": true,
@@ -122,14 +142,16 @@
           "displayLogic": null,
           "readOnlyLogic": "@Processed@='Y'",
           "section": "principal",
-          "seq": 10
+          "seq": 10,
+          "businessCritical": true
         },
         "invoiceDate": {
           "grid": true,
           "gridOrder": 1,
           "searchable": true,
           "section": "principal",
-          "seq": 30
+          "seq": 30,
+          "businessCritical": true
         },
         "accountingDate": {
           "visibility": "system",
@@ -215,7 +237,8 @@
           "gridOrder": 2,
           "searchable": true,
           "section": "principal",
-          "seq": 20
+          "seq": 20,
+          "businessCritical": true
         },
         "documentStatus": {
           "visibility": "readOnly",
@@ -256,7 +279,8 @@
           "visibility": "readOnly",
           "grid": true,
           "gridOrder": 6,
-          "section": "summary"
+          "section": "summary",
+          "businessCritical": true
         },
         "summedLineAmount": {
           "visibility": "readOnly",
@@ -267,7 +291,8 @@
           "grid": true,
           "gridOrder": 7,
           "form": false,
-          "section": "summary"
+          "section": "summary",
+          "businessCritical": true
         },
         "eTGODueDate": {
           "visibility": "readOnly",

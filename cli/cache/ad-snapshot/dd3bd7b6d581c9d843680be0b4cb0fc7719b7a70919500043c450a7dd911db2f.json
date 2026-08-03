@@ -1417,7 +1417,7 @@
       ]
     },
     "292dffcc06f348c4ec0075d2f5a2480c447ec36ea06e3e8b7460e3e1d5ce8fed": {
-      "checksum": "723485caf26a40a8b0ea930997907b160847e058610283efcf67fd5dd349020b",
+      "checksum": "536564dcbb0629925bf367738aa719ef7a99abf4c270f390f744e32a3b18f891",
       "params": [
         [
           "131",
@@ -1487,7 +1487,7 @@
         {
           "ad_reference_id": "73625A8F22EF4CD7808603156BA606D7",
           "name": "Monthly",
-          "name_es": "Monthly",
+          "name_es": "Mensual",
           "value": "M"
         },
         {
@@ -2759,7 +2759,7 @@
       ]
     },
     "2c192ed1fd61bfc29555d591a90f82a61e76e7e3ce4614eb85abad856a74bacd": {
-      "checksum": "c65c469eaa396cccaf49baed790ae03ef5cc937ffee80727ca264ab00db5141b",
+      "checksum": "9dea8683ff6908fdc1bea4a4ab00fb7e616b41f41da11aa293f713e32ad67688",
       "params": [
         [
           "131",
@@ -2979,7 +2979,7 @@
         {
           "ad_reference_id": "153",
           "name": "Calculated",
-          "name_es": "Calculated",
+          "name_es": "Calculado",
           "value": "C"
         },
         {
@@ -3129,7 +3129,7 @@
         {
           "ad_reference_id": "153",
           "name": "Freight included",
-          "name_es": "Freight included",
+          "name_es": "Gastos incluidos",
           "value": "I"
         },
         {
@@ -4180,7 +4180,7 @@
       ]
     },
     "518bc71f3c5600c82be1f355a91bf2aa0a5ee50531e8abd1f9f73ba244952ddb": {
-      "checksum": "62b210b0ed73eb48496af735ab2690d0417909da8f23f8e4c72df28cea3c8436",
+      "checksum": "dbc923f5a0ee8156b7fdf83db3a3a4ef32e91103ff261cdc1b82aaa25b1e37c2",
       "params": [
         [
           "131",
@@ -4251,7 +4251,7 @@
         {
           "ad_reference_id": "73625A8F22EF4CD7808603156BA606D7",
           "name": "Monthly",
-          "name_es": "Monthly",
+          "name_es": "Mensual",
           "value": "M"
         },
         {
@@ -9313,7 +9313,7 @@
       ]
     },
     "c13a0c5698e414e778a9199e17cec0ae63f93e9756ff2f2699a933afc474636e": {
-      "checksum": "8242d6a54ee27c3aa98ff5aac40ea092ee813480dfb5da78fc744d5ec68709f7",
+      "checksum": "8edabc1c4a22034f7395929f39612a4f2beaccaff54789741248449b7ad5028f",
       "params": [
         [
           "111",
@@ -9333,7 +9333,7 @@
         {
           "ad_reference_id": "111",
           "name": "Average",
-          "name_es": "Average",
+          "name_es": "Promedio",
           "value": "A"
         },
         {
@@ -9357,7 +9357,7 @@
         {
           "ad_reference_id": "111",
           "name": "Company",
-          "name_es": "Company",
+          "name_es": "Empresa",
           "value": "C"
         },
         {
@@ -9423,7 +9423,7 @@
         {
           "ad_reference_id": "111",
           "name": "Fixed",
-          "name_es": "Fixed",
+          "name_es": "Fijo",
           "value": "F"
         },
         {
@@ -9441,7 +9441,7 @@
         {
           "ad_reference_id": "111",
           "name": "Manual Rate",
-          "name_es": "Manual Rate",
+          "name_es": "Porcentaje manual",
           "value": "M"
         },
         {
@@ -9465,7 +9465,7 @@
         {
           "ad_reference_id": "111",
           "name": "None",
-          "name_es": "None",
+          "name_es": "Ninguno",
           "value": "N"
         },
         {
@@ -9513,7 +9513,7 @@
         {
           "ad_reference_id": "111",
           "name": "Period End",
-          "name_es": "Period End",
+          "name_es": "Fin periodo",
           "value": "P"
         },
         {
@@ -9543,7 +9543,7 @@
         {
           "ad_reference_id": "111",
           "name": "Spot",
-          "name_es": "Spot",
+          "name_es": "Punto",
           "value": "S"
         },
         {
@@ -9585,7 +9585,7 @@
         {
           "ad_reference_id": "111",
           "name": "User Type",
-          "name_es": "User Type",
+          "name_es": "Definido por el usuario",
           "value": "U"
         },
         {

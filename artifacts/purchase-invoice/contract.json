@@ -1,8 +1,8 @@
 {
-  "version": "0.81.0",
+  "version": "0.82.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-30T04:12:10.503Z",
-  "checksum": "cee32698598f9319",
+  "updatedAt": "2026-08-03T12:52:36.469Z",
+  "checksum": "8d2a90ffb325c955",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -177,6 +177,7 @@
             },
             "section": "principal",
             "seq": 20,
+            "businessCritical": true,
             "validation": {
               "required": true,
               "maxLength": 30
@@ -206,6 +207,7 @@
             "defaultValue": "@#Date@",
             "section": "principal",
             "seq": 30,
+            "businessCritical": true,
             "gridOrder": 1,
             "validation": {
               "required": true,
@@ -236,6 +238,7 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "businessCritical": true,
             "gridOrder": 3,
             "validation": {
               "required": true,
@@ -546,6 +549,7 @@
             "grid": true,
             "form": false,
             "sourceRequired": true,
+            "businessCritical": true,
             "gridOrder": 6,
             "validation": {
               "required": true,
@@ -691,6 +695,7 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "businessCritical": true,
             "gridOrder": 7,
             "validation": {
               "required": true,
@@ -5242,7 +5247,8 @@
             "column": "DocumentNo",
             "type": "string",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "invoiceDate",
@@ -5250,7 +5256,8 @@
             "column": "DateInvoiced",
             "type": "date",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "businessPartner",
@@ -5258,7 +5265,8 @@
             "column": "C_BPartner_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "partnerAddress",
@@ -5338,7 +5346,8 @@
             "column": "GrandTotal",
             "type": "amount",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "summedLineAmount",
@@ -5402,7 +5411,8 @@
             "column": "OutstandingAmt",
             "type": "amount",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "orderDate",
@@ -6533,7 +6543,27 @@
             "required": false
           }
         ],
-        "javaQualifier": "purchaseInvoiceHeaderHandler"
+        "javaQualifier": "purchaseInvoiceHeaderHandler",
+        "namedFilters": [
+          {
+            "name": "completed",
+            "where": "e.paymentComplete = true",
+            "label": "Paid",
+            "description": "Fully paid invoices (payment complete)."
+          },
+          {
+            "name": "pending",
+            "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)",
+            "label": "Unpaid",
+            "description": "Unpaid invoices with nothing paid yet (outstanding equals the total)."
+          },
+          {
+            "name": "partial",
+            "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)",
+            "label": "Partially paid",
+            "description": "Invoices with a partial payment: some amount paid but a balance remains."
+          }
+        ]
       },
       "lines": {
         "tableName": "C_InvoiceLine",

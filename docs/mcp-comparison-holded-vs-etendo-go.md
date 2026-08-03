@@ -453,23 +453,26 @@ neo_list({ spec:"sales-invoice", entity:"header", view:"summary" })
 
 ---
 
-### IMP-3 · Business query semantics on `neo_list` — ⚙️ Signature change (richer filters)
-**Priority: P1** · ref §7.3 · **Repo: `com.etendoerp.go` (MCP servlet)**
+### IMP-3 · Business query semantics on `neo_list` — ✅ DONE (ETP-4601, Wave 2 · config-driven)
+**Priority: P1** · ref §7.3 · **Repo: `com.etendoerp.go` (MCP servlet) + `schema_forge` (authoring) + `schema_forge_core` (pipeline)**
 
-Add documented business filters (named statuses, date/range operators) for high-traffic document specs. Generic `key=value` still works.
+Business filters (named statuses, date/range operators) for high-traffic document specs. Generic `key=value` still works. **Delivered as hand-authored, per-spec config** rather than hardcoded invoice logic — each spec authors its own named statuses in `decisions.json → entities.{name}.namedFilters` (an HQL `where` fragment per name), which flow through the contract and `push-to-neo` into `ETGO_SF_ENTITY.NAMED_FILTERS`; the MCP reads them, exposes them in `neo_schema`, and applies the matching fragment. See `docs/decisions-reference.md → Named Filters`.
 
 ```jsonc
 // BEFORE — "which invoices are overdue?" — no "overdue" concept; pull + reason client-side
 neo_list({ spec:"sales-invoice", entity:"header", filters:{ paymentComplete:false } })
 // → agent must keep rows where outstandingAmount>0 AND eTGODueDate<today, paginating manually
 
-// AFTER — business concept is native; one call returns exactly the overdue set
-neo_list({ spec:"sales-invoice", entity:"header", filters:{ status:"overdue" } })
-// or explicit operators:
-neo_list({ spec:"sales-invoice", entity:"header",
-           filters:{ outstandingAmount:{ gt:0 }, dueDate:{ lt:"2026-07-21" } } })
+// AFTER — business concept is native and spec-authored; one call returns exactly the set
+neo_list({ spec:"sales-invoice", entity:"header", filters:{ status:"pending" } })
+// discover the available statuses per spec (name/label/description, never the where):
+neo_schema({ spec:"sales-invoice", entity:"header" })  // → { namedFilters: [ {completed}, {pending}, {partial} ], ... }
+// unknown name → clean handled error with the valid list, not a 500:
+neo_list({ ..., filters:{ status:"overdue" } })  // → "Unknown status 'overdue'... Available: completed, pending, partial"
+// explicit range operators also honored:
+neo_list({ spec:"sales-invoice", entity:"header", filters:{ outstandingAmount:{ gt:0 } } })
 ```
-**Done when:** `status: pending|partial|overdue|completed` and range operators (`gt/lt/gte/lte/between`) are documented and honored for invoice/order/payment specs.
+**Done when:** ~~named statuses + range operators documented and honored~~ ✅ — named statuses are **authored per spec** (`completed`/`pending`/`partial` on `sales-invoice`/`purchase-invoice`) and range operators (`gt/lt/gte/lte/between`) are honored; verified live against the running MCP. **`overdue` is intentionally not offered** on the invoice header — it would require a filter over the computed `eTGODueDate` column (unqueryable in HQL; the original source of the live HTTP 500). Overdue-by-date needs a payment-schedule subquery — out of scope for Wave 2.
 
 ---
 
@@ -647,7 +650,7 @@ Do after Wave 1. These change signatures but are additive (omitting the new arg 
 
 | Order | # | Improvement | Repo(s) | Why next |
 |---|---|---|---|---|
-| 5 | **IMP-3** | Business query semantics on `neo_list` | `com.etendoerp.go` | Collapses the most common multi-step read ("what's overdue/outstanding?") into one call. Highest-traffic path after guidance is fixed. |
+| 5 | **IMP-3** ✅ | Business query semantics on `neo_list` (config-driven, ETP-4601) | `com.etendoerp.go` + `schema_forge` + `schema_forge_core` | **DONE.** Collapses the most common multi-step read into one call. Delivered as per-spec hand-authored `namedFilters` (see IMP-3 detail above). |
 | 6 | **IMP-7** | Lean/grouped `neo_defaults` | `com.etendoerp.go` | Makes the create path clean; pairs naturally with IMP-1 (clean names) so the `confirm` block reads well. |
 | 7 | **IMP-2** | Field projection / summary view | `com.etendoerp.go` | Token + noise reduction on every list; relies on IMP-1 names to define good summary sets. |
 
