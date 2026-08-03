@@ -132,9 +132,9 @@ describe('R18 data-fix — blocking-product predicate (shared shape between @che
   });
 });
 
-describe('R18 data-fix — three-tier cost fallback (purchase -> sales -> 0)', () => {
+describe('R18 data-fix — three-tier cost fallback (purchase -> sales -> 1)', () => {
   it('resolves unit_cost via COALESCE in exactly that order', () => {
-    assert.match(normApply, /COALESCE\(r\.purchase_price, r\.sales_price, 0\) AS unit_cost/);
+    assert.match(normApply, /COALESCE\(r\.purchase_price, r\.sales_price, 1\) AS unit_cost/);
   });
 
   it('tags cost_source matching the same tier precedence', () => {
