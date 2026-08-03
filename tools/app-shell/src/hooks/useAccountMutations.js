@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
-import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
+import { jsonHeaders, writeHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
 
 /**
  * Write operations against the `financial-account` NEO spec.
@@ -19,7 +19,7 @@ import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
  * Callers keep the SPA-level payload `{ name, type, currencyId, iban, swiftCode }`;
  * this hook maps it to the DAL property names the W contract persists
  * (`currency`, `iBAN`). `useNeoResource` only handles GETs, so these mutations
- * use `fetch` directly with the same bearer-token auth. Errors throw with the
+ * use `fetch` directly with the same cookie-session auth. Errors throw with the
  * backend message and an attached `status` so callers can branch (e.g. 409
  * duplicate name → inline error).
  */
@@ -61,37 +61,43 @@ function parseSelectorItems(json) {
 }
 
 export function useAccountMutations() {
-  const { token } = useAuth();
+  const { csrfToken } = useAuth();
 
   const createAccount = useCallback(async (payload) => {
     const res = await fetch(`${getApiBase()}${ENTITY_PATH}`, {
       method: 'POST',
-      headers: authHeaders(token),
+      headers: writeHeaders(csrfToken),
+      credentials: 'include',
       body: JSON.stringify(toDalBody(payload)),
     });
     if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     return firstRecord(json);
-  }, [token]);
+  }, [csrfToken]);
 
   const updateAccount = useCallback(async (accountId, payload) => {
     const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
     const res = await fetch(url, {
       method: 'PUT',
-      headers: authHeaders(token),
+      headers: writeHeaders(csrfToken),
+      credentials: 'include',
       body: JSON.stringify(toDalBody(payload)),
     });
     if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     return firstRecord(json);
-  }, [token]);
+  }, [csrfToken]);
 
   const archiveAccount = useCallback(async (accountId) => {
     const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
-    const res = await fetch(url, { method: 'DELETE', headers: authHeaders(token) });
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: writeHeaders(csrfToken),
+      credentials: 'include',
+    });
     if (!res.ok) await throwHttpError(res);
     return true;
-  }, [token]);
+  }, [csrfToken]);
 
   /**
    * Currency list + session default for the New/Edit account forms, served by
@@ -100,11 +106,12 @@ export function useAccountMutations() {
    * so the form components stay unchanged. The default is best-effort.
    */
   const fetchDefaults = useCallback(async () => {
-    const headers = authHeaders(token);
+    // Both requests below are GETs, so they carry no CSRF proof.
+    const headers = jsonHeaders();
     const selectorsUrl = `${getApiBase()}${ENTITY_PATH}/selectors/C_Currency_ID?limit=200`;
     const defaultsUrl = `${getApiBase()}${ENTITY_PATH}/defaults`;
 
-    const res = await fetch(selectorsUrl, { headers });
+    const res = await fetch(selectorsUrl, { headers, credentials: 'include' });
     if (!res.ok) await throwHttpError(res);
     const selectorJson = await res.json();
     const currencies = parseSelectorItems(selectorJson).map((row) => ({
@@ -117,7 +124,7 @@ export function useAccountMutations() {
 
     let defaultCurrencyId = '';
     try {
-      const defRes = await fetch(defaultsUrl, { headers });
+      const defRes = await fetch(defaultsUrl, { headers, credentials: 'include' });
       if (defRes.ok) {
         const defJson = await defRes.json();
         defaultCurrencyId = defJson?.defaults?.currency || '';
@@ -127,7 +134,7 @@ export function useAccountMutations() {
     }
 
     return { currencies, defaultCurrencyId };
-  }, [token]);
+  }, [csrfToken]);
 
   return { createAccount, updateAccount, archiveAccount, fetchDefaults };
 }
