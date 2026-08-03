@@ -26,6 +26,9 @@
         "ValidFrom": "Valid From",
         "Description": "Description"
       }
+    },
+    "headerExtra": {
+      "customForm": "TaxSifField"
     }
   },
   "entities": {
@@ -76,18 +79,21 @@
     "tax": {
       "fields": {
         "name": {
+          "visibility": "readOnly",
           "grid": true,
           "searchable": true,
           "section": "principal",
           "seq": 1
         },
         "rate": {
+          "visibility": "readOnly",
           "grid": true,
           "section": "principal",
           "seq": 2,
           "cellType": "taxRate"
         },
         "salesPurchaseType": {
+          "visibility": "readOnly",
           "name": "applicableTo",
           "grid": true,
           "section": "principal",
@@ -95,6 +101,7 @@
           "cellType": "taxScope"
         },
         "validFromDate": {
+          "visibility": "readOnly",
           "name": "validFrom",
           "grid": false,
           "form": true,
@@ -102,12 +109,14 @@
           "seq": 4
         },
         "docTaxAmount": {
+          "visibility": "readOnly",
           "grid": false,
           "form": true,
           "section": "principal",
           "seq": 5
         },
         "baseAmount": {
+          "visibility": "readOnly",
           "grid": false,
           "form": true,
           "section": "principal",
@@ -131,7 +140,7 @@
         "default": { "visibility": "discarded" },
         "cascade": { "visibility": "discarded" },
         "withholdingTax": { "visibility": "discarded" },
-        "notTaxable": { "visibility": "discarded" },
+        "notTaxable": { "visibility": "readOnly", "form": false },
         "notTaxdeductable": { "visibility": "discarded" },
         "istaxdeductable": { "visibility": "discarded" },
         "obsptiReagyp": { "visibility": "discarded" },
@@ -139,21 +148,61 @@
         "isCashVAT": { "visibility": "discarded" },
         "obsptiIslease": { "visibility": "discarded" },
         "obsptiIsrealestate": { "visibility": "discarded" },
-        "taxExempt": { "visibility": "discarded" },
+        "taxExempt": { "visibility": "readOnly", "form": false },
         "obsptiIsrebu": { "visibility": "discarded" },
         "obsptiIsexport": { "visibility": "discarded" },
         "obsptiIsimplicitcharge": { "visibility": "discarded" },
         "obsptiReceiveOss": { "visibility": "discarded" },
-        "tbaiClaveregimeniva": { "visibility": "discarded" },
         "aeatsiiIsproratexml": { "visibility": "discarded" },
-        "etvfacIGICRegime": { "visibility": "discarded" },
-        "tbaiNonsubjectcause": { "visibility": "discarded" },
-        "etvfacVatRegime": { "visibility": "discarded" },
-        "etvfacExemptionCause": { "visibility": "discarded" },
-        "etvfacCauseNotTaxable": { "visibility": "discarded" },
         "aeatsiiCauseExemption": { "visibility": "discarded" },
-        "tBAICausaDeExencion": { "visibility": "discarded" },
-        "etvfacIPSIRegime": { "visibility": "discarded" }
+        "tbaiClaveregimeniva": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "displayLogic": "@isTaxExempt@='N' & @IsNoTaxable@='N'"
+        },
+        "tbaiNonsubjectcause": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "displayLogic": "@IsNoTaxable@='Y' & @isTaxExempt@='N'"
+        },
+        "tBAICausaDeExencion": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "displayLogic": "@isTaxExempt@='Y'"
+        },
+        "etvfacVatRegime": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "displayLogic": "@isTaxExempt@='N' & @IsNoTaxable@='N'"
+        },
+        "etvfacIGICRegime": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "displayLogic": "@isTaxExempt@='N' & @IsNoTaxable@='N'"
+        },
+        "etvfacIPSIRegime": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "displayLogic": "@isTaxExempt@='N' & @IsNoTaxable@='N'"
+        },
+        "etvfacExemptionCause": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "displayLogic": "@isTaxExempt@='Y'"
+        },
+        "etvfacCauseNotTaxable": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "displayLogic": "@IsNoTaxable@='Y' & @isTaxExempt@='N'"
+        }
       }
     }
   }

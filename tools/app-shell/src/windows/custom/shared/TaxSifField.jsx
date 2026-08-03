@@ -1,40 +1,49 @@
 import { useMemo } from 'react';
 import { EntityForm } from '@/components/contract-ui';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { isEtendoTrue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 
 /**
- * TaxSifField — renders EXACTLY ONE SIF (Sistemas de Información de Facturación)
- * tax-key field inline in the Taxes header form.
+ * TaxSifField — renders the applicable SIF (Sistemas de Información de Facturación)
+ * tax-key field(s) inline in the Taxes header form.
  *
- * For any given tax at most one SIF field is ever relevant, so this component
- * selects that single field from the active fiscal profile + the tax's own
- * exención / no-sujeción / régimen flags and registers it into the surrounding
- * EntityForm. When no field applies (SII / unconfigured / conflict, or the tax's
- * flags don't match) it renders nothing.
+ * The set of relevant fields depends on the active fiscal profile:
+ *   - TBAI / SII+TBAI → EXACTLY ONE field (the three TBAI columns are mutually
+ *     exclusive in AD: régimen requires not-exempt & not-non-subject).
+ *   - Verifactu → the régimen field (chosen by the config tax type) is ALWAYS
+ *     shown, PLUS the exención field when the tax is exempt OR the no-sujeción
+ *     field when the tax is non-subject (and not exempt) → 1 or 2 fields.
+ * When no field applies (SII / unconfigured / conflict) it renders nothing.
  *
  * Column selection mirrors Etendo Classic's per-field displayLogic on the Tax tab
- * (see artifacts/tax/raw-query-results/fields.csv):
- *   TBAI / SII+TBAI:
+ * (see artifacts/tax/schema-raw.json):
+ *   TBAI / SII+TBAI (mutually exclusive → always exactly ONE):
  *     EM_Tbai_Exemptioncause    @isTaxExempt@='Y'
  *     EM_Tbai_Nonsubjectcause   @IsNoTaxable@='Y' & @isTaxExempt@='N'
  *     EM_Tbai_Claveregimeniva   @isTaxExempt@='N' & @IsNoTaxable@='N'
  *   Verifactu (gated by @etvfac_has_conf_tax@='Y', i.e. a Verifactu config exists
- *   for the legal entity — equivalent to profile==='verifactu' / verifactuRecord present;
- *   the régimen column is chosen by @etvfac_type_iva/igic/ipsi@, i.e. verifactuRecord.tAXType):
- *     EM_Etvfac_Exemption_Cause     @isTaxExempt@='Y'
- *     em_etvfac_cause_not_taxable   @IsNoTaxable@='Y' & @isTaxExempt@='N'
- *     EM_Etvfac_Vat_Regime          tAXType=01 (IVA) & régimen
- *     em_etvfac_igic_regime         tAXType=03 (IGIC) & régimen
- *     EM_Etvfac_Ipsi_Regime         tAXType=02 (IPSI) & régimen
+ *   for the legal entity — equivalent to profile==='verifactu' / verifactuRecord present):
+ *     EM_Etvfac_Vat_Regime          @etvfac_type_iva@='Y'   (tAXType 01, IVA)  — always
+ *     em_etvfac_igic_regime         @etvfac_type_igic@='Y'  (tAXType 03, IGIC) — always
+ *     EM_Etvfac_Ipsi_Regime         @etvfac_type_ipsi@='Y'  (tAXType 02, IPSI) — always
+ *     EM_Etvfac_Exemption_Cause     @isTaxExempt@='Y'                          — additionally
+ *     em_etvfac_cause_not_taxable   @IsNoTaxable@='Y' & @isTaxExempt@='N'      — additionally
  *
- * Selection precedence (never two fields at once): exención wins over no-sujeción
- * wins over régimen.
+ * Crucially, the Verifactu régimen field does NOT depend on exempt/non-subject —
+ * it is driven only by the config tax type — so a non-subject or exempt Verifactu
+ * tax shows the régimen field AND its exención/no-sujeción field (2 cells). TBAI,
+ * by contrast, is always exactly one field.
  *
  * @param {object}  props
  * @param {object}  props.data         current tax record (header entity)
- * @param {string}  props.orgId        AD_Org_ID of the tax's legal entity (drives fiscal config)
+ * @param {string}  [props.orgId]      AD_Org_ID of the legal entity (drives fiscal config).
+ *                                     Optional: when omitted (the formFooter slot does not thread
+ *                                     it) it falls back to the active org from useAuth().selectedOrg
+ *                                     — the canonical fiscal-config org source used by every other
+ *                                     SIF component. NOT the tax record's own org: taxes are usually
+ *                                     defined at org '*', which never matches a legal-entity SIF config.
  * @param {string}  props.token        NEO bearer token (forwarded to EntityForm)
  * @param {string}  props.apiBaseUrl   NEO API base (drives useFiscalConfig + EntityForm)
  * @param {object}  props.api          contract api (forwarded to EntityForm)
@@ -57,23 +66,43 @@ export default function TaxSifField({
   fieldErrors,
 }) {
   const ui = useUI();
-  const { profile, verifactuRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  // Fiscal config is keyed by the active legal entity, NOT the tax record's own
+  // org (taxes are usually defined at org '*', which never matches a SIF config).
+  // Prefer an explicit orgId prop (keeps the component generic + tests intact),
+  // then the active org from useAuth().selectedOrg — the canonical source every
+  // other SIF component uses (sales-invoice/index.jsx, FiscalConfigPage, …).
+  const { selectedOrg } = useAuth();
+  const { locale } = useLocaleSwitch();
+  const resolvedOrgId = orgId ?? selectedOrg?.id ?? null;
+  const { profile, verifactuRecord } = useFiscalConfig(resolvedOrgId, apiBaseUrl);
 
-  const field = useMemo(
-    () => selectSifField({ profile, verifactuRecord, data, ui }),
+  const selectedFields = useMemo(
+    () => selectSifFields({ profile, verifactuRecord, data, ui }),
     [profile, verifactuRecord, data, ui],
   );
 
-  if (!field) return null;
+  if (selectedFields.length === 0) return null;
 
+  // readOnly gate applies per selected field key when the header form is not editing.
   const displayLogic = editing
     ? { readOnly: {}, visibility: {} }
-    : { readOnly: { [field.key]: true }, visibility: {} };
+    : {
+        readOnly: Object.fromEntries(selectedFields.map((f) => [f.key, true])),
+        visibility: {},
+      };
 
+  // Render as bare grid CELLS (renderAsFragment) — NOT a self-contained EntityForm
+  // with its own grid. DetailView splices these fragments into the principal header
+  // form's grid via its `trailing` slot (see TaxSifField.inlineInHeaderCard), so each
+  // field flows into the next free cell of the native header grid, aligned and spaced
+  // exactly like a native field, instead of starting its own new row at col 1. When
+  // Verifactu selects two fields (régimen + exención/no-sujeción) they each take the
+  // next free cell. All field behaviour (registration, readOnly/edit gate, label,
+  // options, onChange) is unchanged — only the OUTPUT markup drops the grid wrapper.
   return (
     <EntityForm
       entity="tax"
-      fields={[field]}
+      fields={selectedFields}
       data={data}
       onChange={onChange}
       catalogs={catalogs}
@@ -84,9 +113,25 @@ export default function TaxSifField({
       registerFields={registerFields}
       fieldErrors={fieldErrors}
       layout="horizontal"
+      renderAsFragment
+      // These SIF columns are now SERVED with their own AD label (e.g. "Clave de
+      // Régimen Especial de IVA"), and EntityForm resolves labels as t(column)
+      // BEFORE the descriptor's `label` (EntityForm.jsx:1251). Override each column
+      // label so the SIF-prefixed label ("TBAI - …" / "Verifactu - …") wins.
+      // useLabel expects overrides nested by locale: { [locale]: { [column]: label } }.
+      labelOverrides={{
+        [locale]: Object.fromEntries(selectedFields.map((f) => [f.column, f.label])),
+      }}
       data-testid="TaxSifField__EntityForm" />
   );
 }
+
+// Opt into DetailView rendering this footer INSIDE the header card, aligned in the
+// same horizontal grid as the native header fields (it is a single inline field, not
+// a detached multi-section panel). DetailView reads this static marker to decide
+// placement; footers without it (e.g. AssetsDetailPanel) keep the default below-card
+// block, so this is purely additive.
+TaxSifField.inlineInHeaderCard = true;
 
 // ---------------------------------------------------------------------------
 // Field selection (pure — exported for unit testing)
@@ -103,42 +148,51 @@ const VERIFACTU_REGIME_BY_TAX_TYPE = {
 };
 
 /**
- * Resolves which single SIF field (if any) applies to a tax, following the
- * exención → no-sujeción → régimen precedence and the active fiscal profile.
+ * Resolves which SIF field(s) apply to a tax, per the active fiscal profile:
+ *   - TBAI/SII+TBAI → exactly ONE (exención → no-sujeción → régimen precedence;
+ *     the three columns are mutually exclusive in AD).
+ *   - Verifactu → the régimen field for the config tax type is ALWAYS included,
+ *     PLUS the exención field when exempt, OR the no-sujeción field when
+ *     non-subject (and not exempt). So: normal → [régimen]; non-subject →
+ *     [régimen, no-sujeción]; exempt → [régimen, exención].
  *
- * @returns {object|null} an EntityForm select-field descriptor, or null.
+ * @returns {Array<object>} EntityForm select-field descriptors (0, 1, or 2).
  */
-export function selectSifField({ profile, verifactuRecord, data, ui }) {
+export function selectSifFields({ profile, verifactuRecord, data, ui }) {
   const exempt = isEtendoTrue(data?.taxExempt);
   const nonTaxable = isEtendoTrue(data?.notTaxable);
 
   if (TBAI_PROFILES.has(profile)) {
     if (exempt) {
-      return buildField('tBAICausaDeExencion', 'EM_Tbai_Exemptioncause', 'taxSif.field.tbaiExemption', 'tbaiExemption', ui);
+      return [buildField('tBAICausaDeExencion', 'EM_Tbai_Exemptioncause', 'taxSif.field.tbaiExemption', 'tbaiExemption', ui)];
     }
     if (nonTaxable) {
-      return buildField('tbaiNonsubjectcause', 'EM_Tbai_Nonsubjectcause', 'taxSif.field.tbaiNonSubject', 'tbaiNonSubject', ui);
+      return [buildField('tbaiNonsubjectcause', 'EM_Tbai_Nonsubjectcause', 'taxSif.field.tbaiNonSubject', 'tbaiNonSubject', ui)];
     }
-    return buildField('tbaiClaveregimeniva', 'EM_Tbai_Claveregimeniva', 'taxSif.field.tbaiRegime', 'tbaiRegime', ui);
+    return [buildField('tbaiClaveregimeniva', 'EM_Tbai_Claveregimeniva', 'taxSif.field.tbaiRegime', 'tbaiRegime', ui)];
   }
 
   // Verifactu: only when a Verifactu config exists for the legal entity
   // (@etvfac_has_conf_tax@='Y' ≡ profile==='verifactu' / verifactuRecord present).
+  // Unlike TBAI, the régimen field is independent of exempt/non-subject: it is
+  // always shown (driven by the config tax type), and the exención OR no-sujeción
+  // field is shown ADDITIONALLY when the tax's own flags say so.
   if (profile === 'verifactu' && verifactuRecord) {
-    if (exempt) {
-      return buildField('etvfacExemptionCause', 'EM_Etvfac_Exemption_Cause', 'taxSif.field.verifactuExemption', 'verifactuExemption', ui);
-    }
-    if (nonTaxable) {
-      return buildField('etvfacCauseNotTaxable', 'em_etvfac_cause_not_taxable', 'taxSif.field.verifactuNonSubject', 'verifactuNonSubject', ui);
-    }
+    const fields = [];
     const regime = VERIFACTU_REGIME_BY_TAX_TYPE[verifactuRecord.tAXType];
     if (regime) {
-      return buildField(regime.key, regime.column, regime.labelKey, regime.optionsKey, ui);
+      fields.push(buildField(regime.key, regime.column, regime.labelKey, regime.optionsKey, ui));
     }
+    if (exempt) {
+      fields.push(buildField('etvfacExemptionCause', 'EM_Etvfac_Exemption_Cause', 'taxSif.field.verifactuExemption', 'verifactuExemption', ui));
+    } else if (nonTaxable) {
+      fields.push(buildField('etvfacCauseNotTaxable', 'em_etvfac_cause_not_taxable', 'taxSif.field.verifactuNonSubject', 'verifactuNonSubject', ui));
+    }
+    return fields;
   }
 
   // unconfigured | sii | sii-navarra | conflict → nothing at tax level
-  return null;
+  return [];
 }
 
 function buildField(key, column, labelKey, optionsKey, ui) {
