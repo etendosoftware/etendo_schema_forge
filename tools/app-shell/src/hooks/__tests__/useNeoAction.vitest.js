@@ -1,19 +1,73 @@
+/**
+ * ETP-4576 — the session is a server-side `__Host-go_session` cookie, so this
+ * hook holds no bearer token: its request must carry `credentials: 'include'`
+ * and NO Authorization header, ever.
+ *
+ * The `token` OPTION is gone from the signature — the hook reads the CSRF proof
+ * from `useAuth().csrfToken` itself. That is why `baseOpts` below no longer
+ * carries a token: the whole suite is the proof that the hook is self-sufficient.
+ * One dedicated test still hands it a stray `token` as a hostile input, so a
+ * rename-only refactor (option kept, header still built) cannot pass.
+ *
+ * The only request this hook issues is a POST, i.e. an unsafe method, so the
+ * `X-Go-CSRF` proof header is legitimate on it — but it must be omitted
+ * entirely, not sent empty, when no proof is available.
+ *
+ * The auth mock is a plain mutable object rather than a vi.fn() with
+ * mockReturnValueOnce: React can invoke the hook more than once per render, and
+ * a "once" override would decay to the default mid-render.
+ *
+ * Endpoint convention (unchanged by this migration): `apiBaseUrl` already
+ * includes the spec name (e.g. /sws/neo/sales-order), so the hook does NOT
+ * prepend specName. URL = `${apiBaseUrl}/${entityName}/${recordId}/action/${actionName}`.
+ */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { renderHook, act } from '@testing-library/react';
+
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => mockAuth,
+}));
+
 import { useNeoAction } from '../useNeoAction';
 
-// ETP-4298 — generic NEO action endpoint hook.
-// Endpoint convention (confirmed from useDocumentAction): `apiBaseUrl` already
-// includes the spec name (e.g. /sws/neo/sales-order), so the hook does NOT
-// prepend specName. URL = `${apiBaseUrl}/${entityName}/${recordId}/action/${actionName}`.
+const CSRF_HEADER = 'X-Go-CSRF';
+
+/** Falsy proofs that must all collapse to "no CSRF header at all". */
+const MISSING_PROOFS = [
+  ['undefined', undefined],
+  ['null', null],
+  ['an empty string', ''],
+];
+
+/** Asserts no request carried a bearer token — the point of ETP-4576. */
+function expectNoAuthorizationHeader() {
+  for (const [, init] of globalThis.fetch.mock.calls) {
+    const headers = init?.headers ?? {};
+    const keys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain('authorization');
+    expect(JSON.stringify(headers)).not.toContain('Bearer');
+  }
+}
+
+/** The init object of the single fetch call the hook is expected to have made. */
+function lastInit() {
+  const calls = globalThis.fetch.mock.calls;
+  return calls[calls.length - 1][1];
+}
+
 describe('useNeoAction', () => {
   const baseOpts = {
     specName: 'sales-order',
     entityName: 'header',
     apiBaseUrl: '/sws/neo/sales-order',
-    token: 'test-token',
   };
 
   beforeEach(() => {
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     globalThis.fetch = vi.fn();
   });
 
@@ -45,15 +99,67 @@ describe('useNeoAction', () => {
       expect.objectContaining({
         method: 'POST',
         body: '{}',
+        credentials: 'include',
         headers: expect.objectContaining({
-          Authorization: 'Bearer test-token',
+          [CSRF_HEADER]: 'test-csrf',
           'Content-Type': 'application/json',
         }),
       }),
     );
+    expectNoAuthorizationHeader();
     expect(res).toEqual({ success: true, message: 'Document posted' });
     expect(result.current.loading).toBe(false);
   });
+
+  it("passes credentials: 'include' so the __Host-go_session cookie travels", async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const { result } = renderHook(() => useNeoAction(baseOpts));
+    await act(async () => { await result.current.execute('rec-1', 'post'); });
+    expect(lastInit().credentials).toBe('include');
+  });
+
+  it('never sends an Authorization header', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const { result } = renderHook(() => useNeoAction(baseOpts));
+    await act(async () => { await result.current.execute('rec-1', 'post'); });
+    expectNoAuthorizationHeader();
+  });
+
+  it('works without being handed a token — the option no longer exists', async () => {
+    // baseOpts deliberately carries no `token`. If the hook still depended on
+    // one, the request would go out with a `Bearer undefined` header.
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
+    const { result } = renderHook(() => useNeoAction(baseOpts));
+    let res;
+    await act(async () => { res = await result.current.execute('rec-1', 'post'); });
+    expect(res.success).toBe(true);
+    expectNoAuthorizationHeader();
+  });
+
+  it('ignores a stray token option — a leftover credential reaches no wire', async () => {
+    // Hostile input: a caller that was not cleaned up yet keeps threading the
+    // now-dead prop. It must not resurrect an Authorization header.
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const { result } = renderHook(() => useNeoAction({ ...baseOpts, token: 'legacy-token' }));
+    await act(async () => { await result.current.execute('rec-1', 'post'); });
+    expectNoAuthorizationHeader();
+    expect(JSON.stringify(lastInit().headers)).not.toContain('legacy-token');
+  });
+
+  for (const [label, value] of MISSING_PROOFS) {
+    it(`omits ${CSRF_HEADER} entirely when csrfToken is ${label}`, async () => {
+      // A session can be authenticated before the CSRF proof lands. The header
+      // must be absent, never present with an empty/undefined value.
+      mockAuth = { isAuthenticated: true, csrfToken: value };
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+      const { result } = renderHook(() => useNeoAction(baseOpts));
+      await act(async () => { await result.current.execute('rec-1', 'post'); });
+      const init = lastInit();
+      expect(CSRF_HEADER in init.headers).toBe(false);
+      expect(init.credentials).toBe('include');
+      expectNoAuthorizationHeader();
+    });
+  }
 
   it('returns success:true by default when body omits success', async () => {
     globalThis.fetch.mockResolvedValue({
@@ -218,5 +324,45 @@ describe('useNeoAction', () => {
       '/sws/neo/sales-order/header/rec-1/action/my%20action',
       expect.anything(),
     );
+  });
+});
+
+/**
+ * Source-level guard. The behavioral suite above can only see the code path it
+ * exercises; these assertions cover the whole module, so a second, unexercised
+ * branch cannot keep building a bearer header.
+ *
+ * Comments are stripped before matching. The pre-migration JSDoc documented
+ * `@param {string} opts.token - bearer token`, and the post-migration header
+ * comment will almost certainly mention "Authorization" while explaining that
+ * none is sent — neither may decide the outcome of these tests.
+ */
+const MODULE_SRC = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'useNeoAction.js'),
+  'utf8',
+);
+const codeOnly = MODULE_SRC
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+
+describe('useNeoAction — source contract', () => {
+  it('builds no Authorization header anywhere in the module', () => {
+    expect(codeOnly).not.toMatch(/Authorization/);
+    expect(codeOnly).not.toMatch(/Bearer/);
+  });
+
+  it('sends credentials with the request', () => {
+    expect(codeOnly).toMatch(/credentials:\s*['"]include['"]/);
+  });
+
+  it('reads the CSRF proof from the auth context', () => {
+    expect(codeOnly).toMatch(/useAuth/);
+    expect(codeOnly).toMatch(/csrfToken/);
+  });
+
+  it('no longer names a bare `token` identifier — the option is gone', () => {
+    // \b does not break inside `csrfToken`, so the CSRF proof is unaffected;
+    // only a standalone `token` option/variable trips this.
+    expect(codeOnly).not.toMatch(/\btoken\b/);
   });
 });

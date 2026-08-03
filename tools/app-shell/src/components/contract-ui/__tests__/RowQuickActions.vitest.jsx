@@ -1,4 +1,18 @@
-import { render, screen, within, act } from '@testing-library/react';
+/**
+ * ETP-4576 note — RowQuickActions is a CONSUMER of `useDocumentAction` and
+ * `useNeoAction`, not the place where request headers are built. Both hooks lost
+ * their `token` option (they read `useAuth().csrfToken` themselves), so what
+ * matters here is that the component still drives them correctly once the option
+ * is gone. The `token="t"` prop is deliberately KEPT in the render below as a
+ * hostile input: it proves a stray credential reaches neither the hook options
+ * nor the wire.
+ *
+ * `useNeoAction` is intentionally NOT mocked, so one test can assert the real
+ * request the component produces end to end. That real hook now calls
+ * `useAuth()`, hence the auth mock — a plain mutable object rather than a
+ * vi.fn() with mockReturnValueOnce, which would decay mid-render.
+ */
+import { render, screen, within, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // i18n stub — return the key so we can assert on it.
@@ -6,16 +20,30 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-// useDocumentAction stub — exposes a controllable execute() + loading flag.
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => mockAuth,
+}));
+
+// useDocumentAction stub — exposes a controllable execute() + loading flag, and
+// records the options object the component hands it so we can assert the shape
+// of the call site itself.
 const docActionExecuteMock = vi.fn().mockResolvedValue({ ok: true });
+const docActionOptions = [];
 let docActionLoadingFlag = false;
 vi.mock('@/hooks/useDocumentAction', () => ({
-  useDocumentAction: () => ({
-    execute: docActionExecuteMock,
-    get loading() { return docActionLoadingFlag; },
-    error: null,
-  }),
+  useDocumentAction: (opts) => {
+    docActionOptions.push(opts);
+    return {
+      execute: docActionExecuteMock,
+      get loading() { return docActionLoadingFlag; },
+      error: null,
+    };
+  },
 }));
+
+const CSRF_HEADER = 'X-Go-CSRF';
 
 import RowQuickActions from '../RowQuickActions.jsx';
 
@@ -56,7 +84,9 @@ function setup(props = {}) {
 describe('RowQuickActions', () => {
   beforeEach(() => {
     docActionExecuteMock.mockClear();
+    docActionOptions.length = 0;
     docActionLoadingFlag = false;
+    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
   });
 
   it('renders Edit and Clone buttons by default (no menu, no email)', () => {
@@ -354,6 +384,51 @@ describe('RowQuickActions', () => {
       await user.click(more);
       expect(screen.queryByText('Void')).toBeNull();
       expect(screen.getByText('Reactivate')).toBeTruthy();
+    });
+  });
+
+  // ── ETP-4576: the action hooks no longer take a credential ────────────────
+  describe('session-cookie contract', () => {
+    afterEach(() => {
+      delete globalThis.fetch;
+    });
+
+    it('hands useDocumentAction no token, even though the dead prop is still passed', () => {
+      // setup() renders with token="t" on purpose — a caller that has not been
+      // cleaned up yet. The hook call site must not forward it.
+      setup();
+      expect(docActionOptions.length).toBeGreaterThan(0);
+      for (const opts of docActionOptions) {
+        expect(opts).not.toHaveProperty('token');
+        expect(opts).toEqual(expect.objectContaining({ apiBaseUrl: '/api', entity: 'header' }));
+      }
+    });
+
+    it('produces a neoAction request with no Authorization header and the session cookie', async () => {
+      // useNeoAction is the one hook left unmocked here, so this is the real
+      // wire the component produces: no bearer token, cookie credentials, and
+      // the CSRF proof on the POST.
+      const user = userEvent.setup();
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, message: 'Posted' }),
+      });
+      const menuActions = [{ key: 'post', label: 'Post', neoAction: 'post' }];
+      const { onMenuActionExecuted } = setup({ menuActions, windowName: 'sales-order' });
+
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      await user.click(screen.getByText('Post'));
+      await waitFor(() => expect(onMenuActionExecuted).toHaveBeenCalled());
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = globalThis.fetch.mock.calls[0];
+      expect(url).toBe('/api/header/1/action/post');
+      expect(init.method).toBe('POST');
+      expect(init.credentials).toBe('include');
+      expect(init.headers[CSRF_HEADER]).toBe('test-csrf');
+      const headerKeys = Object.keys(init.headers).map((k) => k.toLowerCase());
+      expect(headerKeys).not.toContain('authorization');
+      expect(JSON.stringify(init.headers)).not.toContain('Bearer');
     });
   });
 });

@@ -1,3 +1,17 @@
+/**
+ * ETP-4576 — node-runner companion to `useDocumentAction.vitest.jsx`. It pins
+ * the same target contract from two angles the render-based suite cannot reach:
+ *
+ *  - source level, over the WHOLE module: no Authorization header may be built
+ *    on any code path, exercised or not.
+ *  - logic level, via `executeDocumentAction` — a standalone mirror of the
+ *    hook's fetch call, kept here so the request shape can be asserted without
+ *    a React renderer.
+ *
+ * The session is a server-side `__Host-go_session` cookie: every request sends
+ * `credentials: 'include'` and no bearer token. The POST carries the CSRF proof
+ * `X-Go-CSRF`, omitted entirely (never empty) when no proof is available.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -7,7 +21,20 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'useDocumentAction.js'), 'utf8');
 
-async function executeDocumentAction(apiBaseUrl, entity, token, recordId, docAction) {
+/**
+ * Comment-stripped view of the source. The credential assertions below run
+ * against this, never against `src`: the module's own header comment explains
+ * that no Authorization header is sent, and a comment must never be what makes
+ * a test pass or fail.
+ */
+const codeOnly = src
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+
+const CSRF_HEADER = 'X-Go-CSRF';
+
+/** Mirror of the hook's request, minus React. */
+async function executeDocumentAction(apiBaseUrl, entity, csrfToken, recordId, docAction) {
   if (!recordId || !docAction) {
     throw new Error('useDocumentAction.execute requires recordId and docAction');
   }
@@ -15,7 +42,11 @@ async function executeDocumentAction(apiBaseUrl, entity, token, recordId, docAct
     `${apiBaseUrl}/${entity}/${recordId}/action/documentAction`,
     {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { [CSRF_HEADER]: csrfToken } : {}),
+      },
       body: JSON.stringify({ docAction }),
     },
   );
@@ -44,8 +75,28 @@ describe('useDocumentAction source', () => {
     assert.match(src, /method:\s*['"]POST['"]/);
   });
 
-  it('sends Authorization Bearer header', () => {
-    assert.match(src, /Authorization.*Bearer/);
+  it('builds no Authorization header anywhere in the module', () => {
+    assert.doesNotMatch(codeOnly, /Authorization/);
+    assert.doesNotMatch(codeOnly, /Bearer/);
+  });
+
+  it('sends credentials so the __Host-go_session cookie travels', () => {
+    assert.match(codeOnly, /credentials:\s*['"]include['"]/);
+  });
+
+  it('sends the CSRF proof header on the POST', () => {
+    assert.match(codeOnly, new RegExp(CSRF_HEADER));
+  });
+
+  it('reads the CSRF proof from the auth context', () => {
+    assert.match(codeOnly, /useAuth/);
+    assert.match(codeOnly, /csrfToken/);
+  });
+
+  it('no longer names a bare `token` identifier — the option is gone', () => {
+    // \b does not break inside `csrfToken`, so the CSRF proof is unaffected;
+    // only a standalone `token` option/variable trips this.
+    assert.doesNotMatch(codeOnly, /\btoken\b/);
   });
 
   it('throws when recordId is missing', () => {
@@ -74,7 +125,7 @@ describe('executeDocumentAction logic', () => {
       return { ok: true, json: async () => ({ status: 'success' }) };
     };
 
-    await executeDocumentAction('/sws/neo/sales-order', 'header', 'tok123', 'rec-1', 'CO');
+    await executeDocumentAction('/sws/neo/sales-order', 'header', 'csrf123', 'rec-1', 'CO');
 
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, '/sws/neo/sales-order/header/rec-1/action/documentAction');
@@ -87,34 +138,66 @@ describe('executeDocumentAction logic', () => {
       return { ok: true, json: async () => ({}) };
     };
 
-    await executeDocumentAction('/api', 'header', 'token', 'id-42', 'RE');
+    await executeDocumentAction('/api', 'header', 'csrf', 'id-42', 'RE');
 
     assert.equal(calls[0].method, 'POST');
     assert.equal(calls[0].body, JSON.stringify({ docAction: 'RE' }));
   });
 
-  it('sends Authorization header', async () => {
-    let capturedHeaders;
+  it('sends the CSRF proof header and no Authorization header', async () => {
+    let capturedInit;
     globalThis.fetch = async (url, opts) => {
-      capturedHeaders = opts.headers;
+      capturedInit = opts;
       return { ok: true, json: async () => ({}) };
     };
 
-    await executeDocumentAction('/api', 'header', 'my-token', 'id-1', 'CO');
+    await executeDocumentAction('/api', 'header', 'my-csrf', 'id-1', 'CO');
 
-    assert.equal(capturedHeaders.Authorization, 'Bearer my-token');
+    assert.equal(capturedInit.headers[CSRF_HEADER], 'my-csrf');
+    assert.equal(capturedInit.headers.Authorization, undefined);
+    assert.doesNotMatch(JSON.stringify(capturedInit.headers), /Bearer/);
+  });
+
+  it('sends credentials: include so the session cookie travels', async () => {
+    let capturedInit;
+    globalThis.fetch = async (url, opts) => {
+      capturedInit = opts;
+      return { ok: true, json: async () => ({}) };
+    };
+
+    await executeDocumentAction('/api', 'header', 'my-csrf', 'id-1', 'CO');
+
+    assert.equal(capturedInit.credentials, 'include');
+  });
+
+  it('omits the CSRF header entirely when no proof is available', async () => {
+    // A session can be authenticated before the CSRF proof lands. The header
+    // must be absent, never present with an empty/undefined value.
+    for (const missing of [undefined, null, '']) {
+      let capturedInit;
+      globalThis.fetch = async (url, opts) => {
+        capturedInit = opts;
+        return { ok: true, json: async () => ({}) };
+      };
+
+      await executeDocumentAction('/api', 'header', missing, 'id-1', 'CO');
+
+      assert.equal(CSRF_HEADER in capturedInit.headers, false);
+      assert.equal(capturedInit.credentials, 'include');
+      assert.equal(capturedInit.headers.Authorization, undefined);
+    }
   });
 
   it('throws when recordId is empty', async () => {
     await assert.rejects(
-      () => executeDocumentAction('/api', 'header', 'tok', '', 'CO'),
+      () => executeDocumentAction('/api', 'header', 'csrf', '', 'CO'),
       /requires recordId/,
     );
   });
 
   it('throws when docAction is empty', async () => {
     await assert.rejects(
-      () => executeDocumentAction('/api', 'header', 'tok', 'rec-1', ''),
+      () => executeDocumentAction('/api', 'header', 'csrf', 'rec-1', ''),
       /requires recordId/,
     );
   });
@@ -127,7 +210,7 @@ describe('executeDocumentAction logic', () => {
     });
 
     await assert.rejects(
-      () => executeDocumentAction('/api', 'header', 'tok', 'rec-1', 'CO'),
+      () => executeDocumentAction('/api', 'header', 'csrf', 'rec-1', 'CO'),
       /Cannot complete document/,
     );
   });
@@ -140,7 +223,7 @@ describe('executeDocumentAction logic', () => {
     });
 
     await assert.rejects(
-      () => executeDocumentAction('/api', 'header', 'tok', 'rec-1', 'CO'),
+      () => executeDocumentAction('/api', 'header', 'csrf', 'rec-1', 'CO'),
       /Error 500/,
     );
   });
@@ -151,7 +234,7 @@ describe('executeDocumentAction logic', () => {
       json: async () => ({ result: 'ok', docStatus: 'CO' }),
     });
 
-    const data = await executeDocumentAction('/api', 'header', 'tok', 'rec-1', 'CO');
+    const data = await executeDocumentAction('/api', 'header', 'csrf', 'rec-1', 'CO');
     assert.deepEqual(data, { result: 'ok', docStatus: 'CO' });
   });
 });
