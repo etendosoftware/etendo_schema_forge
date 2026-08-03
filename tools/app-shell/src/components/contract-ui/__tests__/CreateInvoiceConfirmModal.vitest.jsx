@@ -362,6 +362,20 @@ describe('CreateInvoiceConfirmModal', () => {
       expect(screen.queryByText('Purchase PL')).not.toBeInTheDocument();
     });
 
+    it('defaults isSOTrx to true (sales price lists) when the prop is omitted entirely', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'sales-1', name: 'Sales PL', salesPriceList: true }),
+        makePriceList({ id: 'purchase-1', name: 'Purchase PL', salesPriceList: false }),
+      ]);
+      // isSOTrx intentionally omitted — must fall back to its default (true), matching
+      // the sales price list and excluding the purchase one.
+      renderModal({ showPriceListPicker: true, apiBaseUrl });
+      await waitFor(() => {
+        expect(screen.getByText('Sales PL')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Purchase PL')).not.toBeInTheDocument();
+    });
+
     it('filters price lists by salesPriceList matching isSOTrx (purchase)', async () => {
       mockPriceListFetch([
         makePriceList({ id: 'sales-1', name: 'Sales PL', salesPriceList: true }),
