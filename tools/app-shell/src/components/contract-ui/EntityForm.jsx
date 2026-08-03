@@ -703,25 +703,48 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   const imageField = displayFields.find(f => f.type === 'image' && !f.inline);
   const fieldsToRender = imageField ? displayFields.filter(f => f.type !== 'image' || f.inline) : displayFields;
 
+  // Shared by both the editable DocumentType selector (renderSelectorField below) and the
+  // read-only FK renderer (renderReadOnlyFk) — a saved record must show the SAME translated
+  // label the options list shows, in EITHER mode, not just while the field is still
+  // editable (ETP-4737 follow-up: a completed purchase invoice's read-only DocumentType
+  // field was falling through to the raw AD name, "(compras)" suffix and all).
+  const translateDocumentTypeName = (name) => {
+    const lower = name.toLowerCase();
+    if (lower.includes('reversed')) return null;
+    if (lower.includes('credit') || lower.includes('memo')) return ui('creditNotesTab');
+    if (lower.includes('return') || lower.includes('devoluci')) return ui('returnsTab');
+    if (lower.includes('rectific')) return ui('rectificativeInvoicesTab');
+    return ui('invoicesTab');
+  };
+
   // FK-style field renderers hoisted out of renderField to keep its cognitive
   // complexity low. They close over the EntityForm scope; per-field values
   // (f, label, isReadOnly) are passed in.
-  const renderReadOnlyFk = (f, label) => (
-    <div key={f.key} data-testid={`field-${f.key}`} className={LABEL_GAP}>
-      <Label
-        htmlFor={f.key}
-        className="text-sm text-foreground font-medium"
-        data-testid="Label__a8d626">
-        {label}
-      </Label>
-      <Input
-        id={f.key}
-        name={f.key}
-        value={resolveIdentifier(data, f.key) || data?.[f.key] || ''}
-        disabled
-        data-testid="Input__a8d626" />
-    </div>
-  );
+  const renderReadOnlyFk = (f, label) => {
+    const rawIdentifier = resolveIdentifier(data, f.key) || data?.[f.key] || '';
+    // Scoped exactly like the editable path's SAVED_VALUE_TRANSLATION_WINDOWS guard — only
+    // sales-invoice/purchase-invoice's DocumentType field gets the translated label; every
+    // other read-only FK (business partner, warehouse, etc.) keeps its raw AD identifier.
+    const displayValue = f.reference === 'DocumentType' && SAVED_VALUE_TRANSLATION_WINDOWS.has(windowName) && rawIdentifier
+      ? (translateDocumentTypeName(rawIdentifier) ?? rawIdentifier)
+      : rawIdentifier;
+    return (
+      <div key={f.key} data-testid={`field-${f.key}`} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}
+        </Label>
+        <Input
+          id={f.key}
+          name={f.key}
+          value={displayValue}
+          disabled
+          data-testid="Input__a8d626" />
+      </div>
+    );
+  };
 
   // Renders the shared searchable combobox (CreatableSearchSelect, serverSearch mode) for
   // FK `type:'selector'` fields — both the opt-in `searchSelect: true` fields (decisions)
@@ -810,16 +833,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     // Only the DocumentType carve-out needs option renaming — the explicit `searchSelect:
     // false` opt-out (e.g. Assets' assetCategory) just wants the plain SelectorInput with
     // its options unchanged, so it must NOT get the DocumentType-specific translator.
-    const optionTranslator = needsOptionTranslator
-      ? (name) => {
-        const lower = name.toLowerCase();
-        if (lower.includes('reversed')) return null;
-        if (lower.includes('credit') || lower.includes('memo')) return ui('creditNotesTab');
-        if (lower.includes('return') || lower.includes('devoluci')) return ui('returnsTab');
-        if (lower.includes('rectific')) return ui('rectificativeInvoicesTab');
-        return ui('invoicesTab');
-      }
-      : undefined;
+    const optionTranslator = needsOptionTranslator ? translateDocumentTypeName : undefined;
     // The saved/selected value must show the SAME translated label the options list
     // shows (ETP-4737) — otherwise a saved "Factura Rectificativa (compras)" record
     // displays the raw AD name with its Classic-only "(compras)" suffix instead of the
