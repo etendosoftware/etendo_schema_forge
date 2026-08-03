@@ -49,7 +49,17 @@ if [ ! -f "$map" ]; then
   exit 1
 fi
 
-script="$(node -e 'const m=require(process.argv[1]).bin||{}; const s=m[process.argv[2]]; if(!s){console.error("sf-local: unknown bin "+process.argv[2]);process.exit(2)} process.stdout.write(s)' "$map" "$bin")"
+# Resolve the bin name from the published map first, then fall back to the CORE's
+# own map. The fallback is what makes a bin added in core runnable before it is
+# published: without it, LOCAL_CORE — the profile whose entire purpose is running
+# unpublished core source — would still demand a release first.
+script="$(node -e '
+const [pub, local, bin] = process.argv.slice(1);
+const read = (p) => { try { return require(p).bin || {}; } catch { return {}; } };
+const s = read(pub)[bin] || read(local)[bin];
+if (!s) { console.error(`sf-local: unknown bin ${bin} (not in the published map nor in core)`); process.exit(2); }
+process.stdout.write(s);
+' "$map" "$core/cli/package.json" "$bin")"
 
 # The core CLI scripts resolve the repo root as `process.env.SF_ROOT || <__dirname-relative>`.
 # Run from the core source, that fallback would point at schema_forge_core itself, so the

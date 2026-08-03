@@ -14,6 +14,17 @@ import { login } from '../helpers/auth.js';
  *     `TaxAccountingHandler`) never renders as a column or as an add-line
  *     field — the user cannot see or edit it.
  *
+ * ETP-4565 added `"maxDetailLines": 1` to the `accounting` secondary-tab
+ * entry in `decisions.json` — the tab is now capped at a single,
+ * non-deletable record (see `DetailView.jsx`,
+ * `st.maxDetailLines == null || childrenCount < st.maxDetailLines` gating
+ * `action-add-line`, and `docs/ui-customization.md` §17). With the seeded
+ * row present (the default state exercised by the "tab is present" test),
+ * Add Line is correctly hidden — so the GL-fields-but-not-accountingSchema
+ * coverage below now runs against an empty-seed variant (the one state
+ * where Add Line is still reachable), and a companion test asserts the cap
+ * itself: Add Line is absent once the single allowed record exists.
+ *
  * NOTE: at runtime the window's apiBaseUrl is built from the ROUTE SLUG
  * (`/sws/neo/tax`, see WindowLoader), NOT the `api.baseUrl` (`/sws/neo/tax-rate`)
  * embedded in the generated `TaxPage.jsx` — the latter is stale and unused. The
@@ -112,9 +123,29 @@ test.describe('Tax — Accounting tab', () => {
     await expect(page.getByText('4720000 IVA repercutido')).toBeVisible();
   });
 
+  test('Add Line is hidden once the accounting record already exists (maxDetailLines: 1 cap)', async ({ page }) => {
+    await page.getByTestId('tab-lines').click();
+
+    // ETP-4565: maxDetailLines: 1 hides action-add-line once childrenCount
+    // reaches the cap — the seeded ACCOUNTING_ROW already fills it.
+    await expect(page.getByTestId('column-header-taxDue')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('action-add-line')).toHaveCount(0);
+  });
+});
+
+test.describe('Tax — Accounting tab (empty state)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installMocks(page, { accountingRows: [] });
+    await page.goto(`/tax/${TAX_ROW.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
   test('Add Line exposes Tax Due / Tax Credit but never accountingSchema', async ({ page }) => {
     await page.getByTestId('tab-lines').click();
 
+    // No existing row yet — childrenCount(0) < maxDetailLines(1), so
+    // action-add-line is still reachable in this state.
     const addBtn = page.getByTestId('action-add-line');
     await expect(addBtn).toBeVisible({ timeout: 8_000 });
     await addBtn.click();

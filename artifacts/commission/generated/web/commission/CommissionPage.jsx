@@ -1,4 +1,5 @@
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import CommissionTable from './CommissionTable';
 import CommissionForm from './CommissionForm';
 import CommissionLineTable from './CommissionLineTable';

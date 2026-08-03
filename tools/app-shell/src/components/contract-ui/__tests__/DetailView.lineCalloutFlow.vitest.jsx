@@ -13,7 +13,7 @@
  * The real `@/lib/lineFieldChange.js` helpers run unmocked (matching
  * DetailView.render.vitest.jsx) so the callout result is normalized for real.
  */
-import { render, act } from '@testing-library/react';
+import { render, act, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { DetailView } from '../DetailView.jsx';
 
@@ -372,5 +372,133 @@ describe('DetailView inline line callout flow', () => {
       ([, opts]) => opts?.method === 'PATCH',
     );
     expect(calledPatch).toBe(true);
+  });
+
+  // ETP-4706 — closes the gap DetailView.currencyConversion.test.js documented as
+  // untestable via full render (the effect that populates activeCurrencyConversionRef
+  // needs the org-currency `/session` fetch to resolve first). The eTGOCurrencyRate
+  // override path (line 2739-2748) skips the extra /validate-exchange-rate round trip,
+  // so only /session needs mocking here — this reaches applyProductCurrencyConversion's
+  // real `rate !== 1` conversion branch (previously only source-pattern-matched).
+  it('converts newly-added line prices when a saved-order currency conversion is active', async () => {
+    mockHook.selected = {
+      id: '123', documentNo: 'SO-001', documentStatus: 'DR', processed: false,
+      currency: 'ARS', 'currency$_identifier': 'ARS', orderDate: '2026-01-01', eTGOCurrencyRate: '2',
+    };
+    mockHook.editing = { ...mockHook.selected };
+
+    globalThis.fetch = vi.fn((url) => {
+      const u = String(url);
+      if (u.includes('/session')) {
+        return Promise.resolve({ ok: true, json: async () => ({ currencyId: 'USD' }) });
+      }
+      if (u.includes('/lines/callout')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ updates: { unitPrice: { value: 50 }, listPrice: { value: 50 } } }),
+          text: async () => '{}',
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    renderInline();
+
+    // Let the saved-state currency-sync effect's async IIFE resolve /session and
+    // populate activeCurrencyConversionRef via the eTGOCurrencyRate override branch.
+    await waitFor(() => {
+      expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/session'))).toBe(true);
+    });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    const apply = vi.fn();
+    await act(async () => {
+      await captured.onFieldChange('product', 'P9', { orderedQuantity: 1, unitPrice: 0 }, apply);
+    });
+
+    expect(apply).toHaveBeenCalled();
+    const [result] = apply.mock.calls[0];
+    // rate=2: rawPrice(50) * 2 = 100.00 — the real applyProductCurrencyConversion branch.
+    expect(result.unitPrice).toBe(100);
+    expect(result.listPrice).toBe(100);
+    // The bug-fix reset (ETP-4029): lineNetAmount cleared so computeLineGrossAmount
+    // recomputes from the CONVERTED price instead of a stale unconverted one.
+    expect(result.grossAmount).toBeGreaterThan(0);
+  });
+
+  // addRow.onAdd's hiddenEntryDefaults loop (fromParent / fromSibling / static value)
+  // and its pre-POST gross recompute — previously unreached (ETP-4706).
+  it('addRow.onAdd fills hidden entry defaults (fromParent/fromSibling/value) before handleAddChild', async () => {
+    mockHook.handleAddChild = vi.fn().mockResolvedValue({ id: 'L9' });
+    mockHook.children = [{ id: 'L1', someSiblingField: 'SIB_VAL' }];
+    mockHook.selected = { ...mockHook.selected, warehouse: 'WH_PARENT' };
+    renderInline({
+      addLineFields: {
+        entry: ENTRY_FIELDS,
+        derived: [],
+        hidden: [
+          { key: 'warehouse', fromParent: 'warehouse' },
+          { key: 'fromSib', fromSibling: 'someSiblingField' },
+          { key: 'staticField', value: 'STATIC' },
+        ],
+      },
+    });
+    const lineData = { product: 'P1', orderedQuantity: 2, unitPrice: 10, discount: 10 };
+    await act(async () => {
+      await captured.addRow.onAdd(lineData);
+    });
+    expect(lineData.warehouse).toBe('WH_PARENT');
+    expect(lineData.fromSib).toBe('SIB_VAL');
+    expect(lineData.staticField).toBe('STATIC');
+    expect(mockHook.handleAddChild).toHaveBeenCalledWith(lineData);
+  });
+
+  it('addRow.onAdd does not overwrite a hidden default the caller already supplied', async () => {
+    mockHook.handleAddChild = vi.fn().mockResolvedValue({ id: 'L9' });
+    mockHook.selected = { ...mockHook.selected, warehouse: 'WH_PARENT' };
+    renderInline({
+      addLineFields: {
+        entry: ENTRY_FIELDS,
+        derived: [],
+        hidden: [{ key: 'warehouse', fromParent: 'warehouse' }],
+      },
+    });
+    const lineData = { product: 'P1', orderedQuantity: 1, unitPrice: 5, warehouse: 'WH_ALREADY_SET' };
+    await act(async () => {
+      await captured.addRow.onAdd(lineData);
+    });
+    expect(lineData.warehouse).toBe('WH_ALREADY_SET');
+  });
+
+  describe('addRow.convertOptimisticPrice', () => {
+    it('returns the raw price unchanged when no currency conversion is active', () => {
+      renderInline();
+      expect(captured.addRow.convertOptimisticPrice(50)).toBe(50);
+    });
+
+    it('converts the raw price using the active saved-order conversion rate', async () => {
+      mockHook.selected = {
+        ...mockHook.selected,
+        currency: 'ARS', orderDate: '2026-01-01', eTGOCurrencyRate: '2',
+      };
+      globalThis.fetch = vi.fn((url) => {
+        if (String(url).includes('/session')) {
+          return Promise.resolve({ ok: true, json: async () => ({ currencyId: 'USD' }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      });
+      renderInline();
+      await waitFor(() => {
+        expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/session'))).toBe(true);
+      });
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(captured.addRow.convertOptimisticPrice(50)).toBe(100);
+    });
+
+    it('returns the raw price unchanged for a non-positive or non-numeric input', () => {
+      renderInline();
+      expect(captured.addRow.convertOptimisticPrice(0)).toBe(0);
+      expect(captured.addRow.convertOptimisticPrice(undefined)).toBe(undefined);
+    });
   });
 });

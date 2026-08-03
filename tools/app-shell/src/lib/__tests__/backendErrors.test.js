@@ -135,3 +135,187 @@ describe('translateBackendError', () => {
     assert.equal(result, raw);
   });
 });
+
+// ── ETP-4706: parameterized "Account could not be found" enrichment ──────────────
+//
+// Core Etendo's `@InvalidAccount@` message ("Account could not be found.") is
+// enriched server-side (DocumentPostingService#enrichWithFailingEntity) with the
+// transaction's Business Partner / BP Group name via the en_US-only
+// ETGO_InvalidAccountBpAndGroup / ETGO_InvalidAccountBpOnly AD_MESSAGE catalog
+// entries. These two skeletons carry a dynamic name, so they can't be an exact-match
+// BACKEND_ERROR_MAP entry — they need a regex match + re-interpolation instead.
+// A fake `t(key, params)` mimics useUI()'s interpolation ({param} substitution).
+function fakeUiTranslator(dictionary) {
+  return (key, params = {}) => {
+    let text = dictionary[key] ?? key;
+    Object.keys(params).forEach((p) => {
+      text = text.replace(`{${p}}`, params[p]);
+    });
+    return text;
+  };
+}
+
+describe('translateBackendError — parameterized "Account could not be found" (ETP-4706)', () => {
+  const en = fakeUiTranslator({
+    'backendError.invalidAccountBpAndGroup': 'Account could not be found. (Contact: {bp}, Business Partner Category: {group})',
+    'backendError.invalidAccountBpOnly': 'Account could not be found. (Contact: {bp})',
+  });
+  const es = fakeUiTranslator({
+    'backendError.invalidAccountBpAndGroup': 'No se pudo encontrar la cuenta. (Contacto: {bp}, Grupos de terceros: {group})',
+    'backendError.invalidAccountBpOnly': 'No se pudo encontrar la cuenta. (Contacto: {bp})',
+  });
+
+  it('translates the BP + BP Group skeleton to en_US, interpolating both names', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    assert.equal(
+      translateBackendError(raw, en),
+      'Account could not be found. (Contact: Acme Corp, Business Partner Category: Suppliers)',
+    );
+  });
+
+  it('translates the BP + BP Group skeleton to es_ES, interpolating both names', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    assert.equal(
+      translateBackendError(raw, es),
+      'No se pudo encontrar la cuenta. (Contacto: Acme Corp, Grupos de terceros: Suppliers)',
+    );
+  });
+
+  it('translates the BP-only skeleton to en_US, interpolating the name', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp)';
+    assert.equal(
+      translateBackendError(raw, en),
+      'Account could not be found. (Contact: Acme Corp)',
+    );
+  });
+
+  it('translates the BP-only skeleton to es_ES, interpolating the name', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp)';
+    assert.equal(
+      translateBackendError(raw, es),
+      'No se pudo encontrar la cuenta. (Contacto: Acme Corp)',
+    );
+  });
+
+  it('does not confuse the BP-only pattern when a BP Group is also present (matches BP+Group first)', () => {
+    const raw = 'Account could not be found. (Business Partner: Jane Doe, BP Group: Retail)';
+    const result = translateBackendError(raw, en);
+    assert.equal(result, 'Account could not be found. (Contact: Jane Doe, Business Partner Category: Retail)');
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const raw = 'Account could not be found. (Business Partner: Acme Corp)';
+    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+    assert.equal(translateBackendError(raw, missingT), raw);
+  });
+
+  it('leaves unrelated messages without a "(Business Partner: ...)" suffix untouched', () => {
+    const raw = 'Account could not be found.';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  // ── matchAccountNotFound guard branches ───────────────────────────────────────
+  //
+  // These exercise the early-return guards in matchAccountNotFound() that the
+  // happy-path tests above never hit: a prefix match that doesn't close with ')',
+  // an empty parenthesized segment, and a split that yields an empty BP or group.
+
+  it('leaves the message untouched when it starts with the prefix but does not end with ")"', () => {
+    // startsWith(prefix) is true but endsWith(')') is false — the message is
+    // truncated/malformed, so matchAccountNotFound must bail out via the
+    // "|| !msg.endsWith(')')" branch instead of slicing garbage.
+    const raw = 'Account could not be found. (Business Partner: Acme Corp';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('leaves the message untouched when the parenthesized segment is empty', () => {
+    // inner === '' after slicing — the "!inner" guard must return null rather
+    // than proceeding to split an empty string.
+    const raw = 'Account could not be found. (Business Partner: )';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('leaves the message untouched when the Business Partner name is empty but a BP Group is present', () => {
+    // delimIdx is found, but bp (the slice before it) is empty — "!bp" guard.
+    const raw = 'Account could not be found. (Business Partner: , BP Group: Vendors)';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('leaves the message untouched when the BP Group is empty but a Business Partner name is present', () => {
+    // delimIdx is found, but group (the slice after it) is empty — "!group" guard.
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: )';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('returns the original message when the BP+Group translation key is missing (guard, BP+Group branch)', () => {
+    // Same missing-translation guard already covered for the BP-only skeleton
+    // above, but exercised on the BP+Group branch (translateParameterized's
+    // `match.group !== null` arm) which has its own independent guard check.
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+    assert.equal(translateBackendError(raw, missingT), raw);
+  });
+
+  it('does not affect existing exact-match BACKEND_ERROR_MAP entries', () => {
+    const raw = 'Country needed in an IBAN account.';
+    const t = (k) => (k === 'backendError.countryIban' ? 'Se necesita el País para una cuenta IBAN.' : k);
+    assert.equal(translateBackendError(raw, t), 'Se necesita el País para una cuenta IBAN.');
+  });
+
+  // ── mis-split bug: BP name itself contains the ", BP Group: " delimiter ──────────
+  //
+  // QA found that the original regex-based matcher (two back-to-back lazy `(.+?)`
+  // capture groups) split at the FIRST ", BP Group: " occurrence, so a Business
+  // Partner name that happens to contain that literal substring produced a garbled
+  // capture. The string-based rewrite uses `lastIndexOf` for the delimiter, which
+  // always finds the LAST occurrence — the correct split point, since a BP Group
+  // name legitimately containing ", BP Group: " would be a vanishingly unlikely
+  // coincidence compared to it appearing inside a BP name/free-text field.
+  it('demonstrates the old regex mis-split bug on a BP name containing ", BP Group: "', () => {
+    const raw = 'Account could not be found. (Business Partner: Odd, BP Group: Fake, Corp, BP Group: Vendors)';
+    const OLD_REGEX = /^Account could not be found\.\s*\(Business Partner:\s*(.+?),\s*BP Group:\s*(.+?)\)$/;
+    const oldMatch = OLD_REGEX.exec(raw);
+    // The old regex's non-greedy first group stops at the FIRST ", BP Group: " —
+    // producing a wrong split (bp truncated to "Odd", group swallowing the rest).
+    assert.equal(oldMatch[1], 'Odd');
+    assert.equal(oldMatch[2], 'Fake, Corp, BP Group: Vendors');
+  });
+
+  it('correctly splits at the LAST ", BP Group: " when the BP name contains that literal substring', () => {
+    const raw = 'Account could not be found. (Business Partner: Odd, BP Group: Fake, Corp, BP Group: Vendors)';
+    const result = translateBackendError(raw, en);
+    assert.equal(
+      result,
+      'Account could not be found. (Contact: Odd, BP Group: Fake, Corp, Business Partner Category: Vendors)',
+    );
+  });
+});
+
+// ── ETP-4706: costing engine "@product@" placeholder never resolves ──────────────
+//
+// Core Etendo's `NotCalculatedCostWithTransaction` AD_MESSAGE
+// ("The cost of the product @product@ has not been calculated.") is returned by
+// OBMessageUtils.parseTranslation() with its own embedded `@product@` placeholder
+// left literally unsubstituted — parseTranslation resolves the outer message token
+// in a single pass and does not recursively re-parse the resolved text for nested
+// placeholders. This happens deterministically every time this specific failure
+// occurs, so the raw string (with the literal `@product@`) is a stable exact-match
+// candidate for BACKEND_ERROR_MAP — no dynamic value is ever actually available to
+// capture, unlike the parameterized "Account could not be found" case above.
+describe('translateBackendError — cost not calculated exact match (ETP-4706)', () => {
+  const RAW = 'The cost of the product @product@ has not been calculated.';
+
+  it('translates the raw (broken, literal @product@) message to en_US', () => {
+    const t = (k) => (k === 'backendError.costNotCalculated'
+      ? 'The cost of the product could not be calculated.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'The cost of the product could not be calculated.');
+  });
+
+  it('translates the raw (broken, literal @product@) message to es_ES', () => {
+    const t = (k) => (k === 'backendError.costNotCalculated'
+      ? 'No se pudo calcular el costo del producto.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'No se pudo calcular el costo del producto.');
+  });
+});

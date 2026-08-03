@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import AssetCategoryTable from './AssetCategoryTable';
@@ -64,7 +65,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/asset-group/accounting",
       "detailUrl": "/sws/neo/asset-group/accounting/{id}",
       "supportedFilters": []
@@ -142,7 +143,7 @@ export default function AssetCategoryPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm },
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, maxDetailLines: 1 },
         ]}
         hidePrint
         noHeaderBorder

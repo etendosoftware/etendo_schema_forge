@@ -1,4 +1,5 @@
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import OrderTable from './OrderTable';
 import OrderForm from './OrderForm';
 import OrderLineTable from './OrderLineTable';

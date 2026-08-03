@@ -33,6 +33,14 @@ vi.mock('../WarehouseCustomTable', () => ({
   default: () => <div data-testid="warehouse-custom-table" />,
 }));
 
+vi.mock('@generated/warehouse/generated/web/warehouse/AccountingTable', () => ({
+  default: () => <div data-testid="accounting-table" />,
+}));
+
+vi.mock('@generated/warehouse/generated/web/warehouse/AccountingForm', () => ({
+  default: () => <div data-testid="accounting-form" />,
+}));
+
 let lastWarehousePageProps;
 vi.mock('@generated/warehouse/generated/web/warehouse/WarehousePage', () => ({
   default: (props) => {
@@ -71,11 +79,19 @@ describe('WarehouseWindow', () => {
     expect(lastWarehousePageProps.secondaryTabs.map((tab) => tab.key)).toEqual([
       'products',
       'productTransactions',
+      'accounting',
     ]);
     expect(lastWarehousePageProps.secondaryTabs.map((tab) => tab.label)).toEqual([
       'warehouseProductsTab',
       'warehouseTransactionsTab',
+      'warehouseAccountingTab',
     ]);
+    expect(lastWarehousePageProps.secondaryTabs[2]).toMatchObject({
+      key: 'accounting',
+      Table: expect.any(Function),
+      Form: expect.any(Function),
+    });
+    expect(lastWarehousePageProps.secondaryTabs[2].Panel).toBeUndefined();
     expect(lastWarehousePageProps).toMatchObject({
       sidebarAboveTabsOnly: true,
       hidePrint: true,

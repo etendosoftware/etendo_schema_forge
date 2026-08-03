@@ -45,6 +45,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'event',
   'hasComment',
   'feedback',
+  'flagKey',
   'flow',
   'functional_area',
   'hostname',
@@ -71,6 +72,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'userId',
   'username',
   'value',
+  'variant',
   'windowName',
 ]);
 

@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ProductCategoryTable from './ProductCategoryTable';
 import ProductCategoryForm from './ProductCategoryForm';
@@ -81,7 +82,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/product-category/accounting",
       "detailUrl": "/sws/neo/product-category/accounting/{id}",
       "supportedFilters": []

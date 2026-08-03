@@ -15,6 +15,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'sonner';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { DetailView } from '../DetailView.jsx';
 
 vi.mock('react-router-dom', async () => {
@@ -97,7 +98,9 @@ vi.mock('@/lib/selectorCatalog.js', () => ({ getCatalogOptions: () => [] }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => (v != null ? String(v) : '—') }));
 vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: (data, f) => data?.[f] || data?._identifier || '' }));
 vi.mock('@/lib/documentTotals', () => ({ resolveTotalDiscountPct: () => 0 }));
-vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: (m) => m }));
+// Identity by default (existing behavior for these tests). Exported as a vi.fn so the
+// ETP-4706 test below can assert it's called and override its return value for one case.
+vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: vi.fn((m) => m) }));
 vi.mock('@/utils/recordActions.js', () => ({ isDeleteVisibleForRecord: () => true }));
 vi.mock('@/lib/utils.js', () => ({ cn: (...args) => args.filter(Boolean).join(' ') }));
 vi.mock('@/components/ui/dialog.jsx', () => ({
@@ -169,7 +172,24 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
     toast.error.mockClear();
     mockHook.fetchById.mockClear();
     mockHook.handleProcess.mockClear();
+    translateBackendError.mockClear();
+    translateBackendError.mockImplementation((m) => m);
     setCurrentRecord(undefined);
+  });
+
+  it('runs the failed post result.message through translateBackendError before showing the toast (ETP-4706)', async () => {
+    const user = userEvent.setup();
+    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
+    const translated = 'No se pudo encontrar la cuenta. (Contacto: Acme Corp, Grupos de terceros: Suppliers)';
+    neoExecuteMock.mockResolvedValue({ success: false, message: raw });
+    translateBackendError.mockImplementation((m) => (m === raw ? translated : m));
+    renderDetailView({ menuActions: [{ key: 'post', label: 'Post', neoAction: 'post' }] });
+
+    await user.click(screen.getByTestId('action-more'));
+    await user.click(screen.getByTestId('menu-action-post'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(translated));
+    expect(translateBackendError).toHaveBeenCalledWith(raw, expect.any(Function));
   });
 
   it('calls neoAction.execute(id, "post") and refreshes via fetchById on success', async () => {

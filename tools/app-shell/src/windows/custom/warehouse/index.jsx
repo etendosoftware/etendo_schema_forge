@@ -6,6 +6,8 @@ import WarehouseTransactionsTable from './WarehouseTransactionsTable';
 import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import WarehouseProductsTab from './WarehouseProductsTab';
 import WarehouseCustomTable from './WarehouseCustomTable';
+import AccountingTable from '@generated/warehouse/generated/web/warehouse/AccountingTable';
+import AccountingForm from '@generated/warehouse/generated/web/warehouse/AccountingForm';
 
 async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }) {
   const searchKey = `${warehouse.searchKey}-0-0-0`;
@@ -40,6 +42,7 @@ export default function WarehouseWindow(props) {
   const secondaryTabs = [
     { key: 'products', label: ui('warehouseProductsTab'), Panel: WarehouseProductsTab },
     { key: 'productTransactions', label: ui('warehouseTransactionsTab'), Panel: WarehouseTransactionsTable },
+    { key: 'accounting', label: ui('warehouseAccountingTab'), Table: AccountingTable, Form: AccountingForm },
   ];
 
   const handleAfterCreate = async (warehouse, context) => {
