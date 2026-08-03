@@ -21,6 +21,22 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
 | H1 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
 
+> **⚠️ Known label collision — `H1` is used for TWO unrelated gaps in this document.** The row above
+> (Costing / ETP-4736) and **§H1** below ("Non-System-Administrator roles 404...", ETP-4520,
+> superseded) both claim the `H1` label — the same class of naming collision this KB repeatedly warns
+> about for `Rn` corrective-fix ids (see `tenant-remediation-knowledge.md`), just never guarded for gap
+> letters. It happened because the older `H1`/`H2` pair (webhook access / role provisioning, §H below)
+> predates ETP-4736 and was overlooked when the costing gap picked its label — the "New gap-label
+> series `H`" framing used in `onboarding-and-datafixes-map.md` is therefore **not accurate**: `H` was
+> not a fresh series, `H1` and `H2` were already taken. Both fixes work correctly and are unaffected
+> functionally (`@gap` is a documentation/categorization tag only — it is never stored in
+> `ETGO_DATA_FIX_HISTORY` or read by the runner), so this is flagged rather than silently renamed.
+> **Recommended cleanup (not done here):** relabel the ETP-4736 costing gap to `H3` — in the SQL
+> header (`cli/src/data-fixes/sql/20260803T140000Z__R18-stuck-average-cost-anchor.sql`'s `@gap:` line),
+> its regression test (`cli/test/data-fixes-r18-average-cost-anchor.test.js`), this table row, and the
+> `onboarding-and-datafixes-map.md`/`tenant-remediation-knowledge.md` references — a pure metadata
+> change, safe to make in a follow-up PR.
+
 ---
 
 ## A — Accounting
