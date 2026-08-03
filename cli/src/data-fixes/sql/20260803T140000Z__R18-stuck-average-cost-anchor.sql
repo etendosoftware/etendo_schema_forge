@@ -109,21 +109,24 @@
 -- 1. Active PURCHASE Price List (M_PriceList.IsSOPriceList='N') price (PriceStd) from the
 --    version valid at-or-before the blocking transaction's MovementDate.
 -- 2. Else the active SALES Price List (IsSOPriceList='Y') price, same date rule.
--- 3. Else `0` (product-owner-approved, 2026-08-03: EVERY blocking product must now get a
+-- 3. Else `1` (product-owner-approved, 2026-08-03: EVERY blocking product must now get a
 --    seeded cost — no more "leave unfixed" bucket). This is a deliberate placeholder, not a
 --    real cost: the product's M_Product.Description is tagged " COST MANUALLY SEEDED FROM
 --    NOTHING" (see "Which tier was used" below) so finance can find and replace it with a
---    real value later. Checked whether a distinct "Standard Cost" concept exists that could
---    rank between tiers 1 and 2 (per the task's suggestion of `m_costtype`/`m_productcost`)
---    — no such table/column exists in this schema; the only candidate is
---    `M_ProductPrice.Cost` (a landed/reference cost tied to a price-list version, not an
---    independently maintained "standard cost"), so the 2-tier price chain (falling to 0) is
---    kept as-is.
+--    real value later. `1` (not `0`) was chosen deliberately, same day: a literal zero cost
+--    reads as "free" in reports/UI and can mask a genuinely missing cost instead of flagging
+--    one, and some downstream logic may special-case a zero cost oddly — `1` is a safer
+--    non-zero placeholder that still can't be mistaken for a real, deliberately-priced value.
+--    Checked whether a distinct "Standard Cost" concept exists that could rank between tiers
+--    1 and 2 (per the task's suggestion of `m_costtype`/`m_productcost`) — no such
+--    table/column exists in this schema; the only candidate is `M_ProductPrice.Cost` (a
+--    landed/reference cost tied to a price-list version, not an independently maintained
+--    "standard cost"), so the 2-tier price chain (falling to `1`) is kept as-is.
 -- 4. When multiple active price lists of the same purchase/sales orientation exist for a
 --    tenant, the default one wins (`IsDefault DESC`), then the most recent applicable
 --    version, then the oldest list (`created ASC`) — a deterministic, documented tie-break.
 -- 5. Currency for the seeded M_Costing row follows the same tier the cost came from
---    (purchase list's own C_Currency_ID, else the sales list's). For tier 3 (cost=0, no
+--    (purchase list's own C_Currency_ID, else the sales list's). For tier 3 (cost=1, no
 --    price list resolved at all) there is no price-list currency to borrow, so it falls back
 --    to `'100'` — this mirrors `M_Costing.C_Currency_ID`'s own column DEFAULT (confirmed via
 --    `\d m_costing` on the local dev DB) and is System-owned (`c_currency.ad_client_id='0'`)
@@ -179,7 +182,7 @@
 -- MANUAL-REVIEW REPORT (read-only — NOT executed by this fix; run by hand per tenant)
 -- --------------------------------------------------------------------------------------------
 -- 2026-08-03: there is no more "still stuck" bucket — @apply now ALWAYS seeds a cost (tier 3
--- falls to 0 instead of leaving the product untouched), so nothing is left unfixed. The two
+-- falls to 1 instead of leaving the product untouched), so nothing is left unfixed. The two
 -- reports below both read the M_Product.Description tag (no join-back-through-price-lists
 -- guessing needed anymore):
 --
@@ -189,7 +192,7 @@
 --        CASE
 --          WHEN p.description LIKE '%COST MANUALLY SEEDED FROM PURCHASE%' THEN 'purchase-price-list'
 --          WHEN p.description LIKE '%COST MANUALLY SEEDED FROM SALES%'    THEN 'sales-price-list'
---          WHEN p.description LIKE '%COST MANUALLY SEEDED FROM NOTHING%'  THEN 'placeholder-zero'
+--          WHEN p.description LIKE '%COST MANUALLY SEEDED FROM NOTHING%'  THEN 'placeholder-one'
 --          ELSE 'unknown'
 --        END AS cost_source
 -- FROM m_costing c
@@ -198,7 +201,7 @@
 -- WHERE c.ad_client_id = '<client_id>' AND c.ismanual = 'Y'
 -- ORDER BY t.trxprocessdate;
 --
--- -- Products seeded from NOTHING (tier 3 — a FAKE $0 placeholder cost; the M_Costing row
+-- -- Products seeded from NOTHING (tier 3 — a FAKE placeholder cost of 1; the M_Costing row
 -- -- exists so the queue is unblocked, but finance should replace the cost with a real one
 -- -- when a purchase/sales price eventually becomes available for the product):
 -- SELECT p.name AS product, p.description, c.cost AS placeholder_cost,
@@ -351,6 +354,35 @@
 --    tenant back to 151 (the 160 test-run inserts are gone), and all 3 test products'
 --    `m_product.description` back to `NULL` (the "Legacy desc." mutation is gone too).
 --    Nothing was ever committed to this or any other DB.
+--
+-- DELIVERY NOTE — TIER-3 FALLBACK VALUE CHANGE, 0 -> 1 (2026-08-03, later same day)
+-- --------------------------------------------------------------------------------------------
+-- Product decision: the tier-3 placeholder cost changes from `0` to `1` (product owner:
+-- "I think there are issues with cost 0" — a literal zero reads as "free"/masks a genuinely
+-- missing cost in reports, and some downstream logic may special-case a zero cost oddly).
+-- Tier logic/order (purchase -> sales -> fallback) and the description tagging are UNCHANGED;
+-- "NOTHING" still means "neither price list resolved," just with placeholder cost `1` now.
+-- Re-verified against the SAME local dev DB (localhost:5416/etendogoclean, "QA Testing"
+-- 4028E6C72959682B01295A070852010D) via a fresh `BEGIN ... ROLLBACK` transaction (nothing
+-- committed, nothing persisted on any DB):
+-- 1. Confirmed product `063DB3CF250E4980A63D83EF29F240CC` (the same product used to exercise
+--    tier 3 in the prior delivery note) was back to its pre-test state: 0 `M_Costing` rows,
+--    `M_Product.Description` NULL, all 3 `M_ProductPrice` rows `isactive='Y'` — i.e. the
+--    earlier ROLLBACK left no residue, confirming this is a clean re-run, not building on
+--    leftover state.
+-- 2. Deactivated all 3 of that product's `M_ProductPrice` rows (forcing tier 3 again), then
+--    ran the real, unmodified (post-change) @apply SQL for the tenant (160 products).
+-- 3. ACTUAL result observed (pre-rollback): the seeded `M_Costing` row for
+--    `063DB3CF250E4980A63D83EF29F240CC` has `cost=1`, `c_currency_id='100'`,
+--    `ismanual='Y'`, `costtype='AVA'` — confirming the fallback value is now `1`, not `0`,
+--    while the currency fallback (System-owned `'100'`) is unchanged. `M_Product.Description`
+--    became exactly `'COST MANUALLY SEEDED FROM NOTHING'` — the tag text itself is unchanged
+--    by this fix (only the numeric cost changed).
+-- 4. `ROLLBACK`, then a fresh, separate connection confirmed: 0 `M_Costing` rows for the
+--    product, `M_Product.Description` back to NULL, all 3 `M_ProductPrice` rows back to
+--    `isactive='Y'`. Nothing was ever committed to this or any other DB.
+-- Scope confirmed: only this developer's own local dev DB was touched — no remote
+-- "experimental" server, no other tenant.
 
 -- @check
 -- Returns >=1 row when at least one product in this tenant is stuck (zero M_Costing
@@ -503,8 +535,14 @@ resolved AS (
 final AS (
   SELECT
     r.*,
-    -- 2026-08-03: fallback chain extended to 0 -- every blocking product now gets SOME cost.
-    COALESCE(r.purchase_price, r.sales_price, 0) AS unit_cost,
+    -- 2026-08-03: fallback chain extended to 1 -- every blocking product now gets SOME cost.
+    -- A literal 0 was deliberately REJECTED as the placeholder (product-owner decision, same
+    -- day): it reads as "free" in reports/UI and risks masking a genuinely missing cost rather
+    -- than flagging one, and some downstream logic may special-case a zero cost oddly. `1` is
+    -- a safer non-zero placeholder -- still obviously fake, still flagged via the same
+    -- "COST MANUALLY SEEDED FROM NOTHING" description tag below, but it can't be misread as
+    -- "no cost" or trip zero-cost special-casing elsewhere.
+    COALESCE(r.purchase_price, r.sales_price, 1) AS unit_cost,
     CASE
       WHEN r.purchase_price IS NOT NULL THEN r.purchase_currency
       WHEN r.sales_price IS NOT NULL THEN r.sales_currency
@@ -564,7 +602,7 @@ seeded AS (
   FROM final2 f2
   WHERE NOT EXISTS (
     -- Outer, defensive guard (belt-and-suspenders on top of blocking_products' own filter).
-    -- unit_cost IS NOT NULL is no longer needed here: COALESCE(...,0) means unit_cost is
+    -- unit_cost IS NOT NULL is no longer needed here: COALESCE(...,1) means unit_cost is
     -- NEVER null anymore (2026-08-03 -- dropped the old "AND f2.unit_cost IS NOT NULL" guard
     -- that used to gate tier 3 out of the INSERT entirely).
     SELECT 1 FROM m_costing c2
