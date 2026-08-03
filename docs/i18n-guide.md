@@ -248,6 +248,41 @@ Is it a custom UI string (button, message, placeholder, etc.)?
   → YES: Add to `genericLabels` in BOTH locale files. Use useUI().
 ```
 
+## Backend Error Translation (`backendErrors.js`)
+
+Some validation errors are raised server-side (Etendo Java handlers, `AD_MESSAGE` catalog) and only
+exist in English — there is no `AD_MESSAGE_TRL` for `com.etendoerp.go` (not a translation-pack
+module). `tools/app-shell/src/lib/backendErrors.js` translates these raw backend strings into the
+active locale before they reach a `toast.error(...)`. It exposes a single entry point:
+
+```js
+import { translateBackendError } from '@/lib/backendErrors.js';
+
+toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
+```
+
+`t` is normally `useUI()`'s `ui` function — the resulting keys live as flat `backendError.*` entries
+inside `genericLabels` (e.g. `"backendError.countryIban"`), following the same "add to BOTH locale
+files" rule as any other `genericLabels` key.
+
+Two matching mechanisms coexist — know both before adding a new backend-error translation:
+
+1. **Exact-match (`BACKEND_ERROR_MAP`)** — the default and simplest case. A dictionary keyed by the
+   literal backend string (trimmed), mapping to a `backendError.*` i18n key. Use this whenever the
+   backend message is a fixed string with no embedded dynamic value (e.g. `MatchRuleHandler`,
+   `PriceListHeaderHandler` validation messages).
+2. **Parameterized / regex matchers (ETP-4706)** — for backend messages that embed a dynamic value
+   (e.g. a Business Partner name) inside an otherwise-fixed skeleton, so they can't be looked up by
+   exact string. A regex captures the dynamic parts and `t(key, { param: captured })` re-interpolates
+   them through the frontend's own i18n, the same way `ui('linkedToInvoice', { number })` would. See
+   `ACCOUNT_NOT_FOUND_BP_AND_GROUP` / `ACCOUNT_NOT_FOUND_BP_ONLY` in `backendErrors.js` for the
+   pattern: order matters — try the more specific pattern before the more general one, and add a code
+   comment linking the regex back to the server-side `AD_MESSAGE` entry it mirrors.
+
+`translateBackendError` tries the exact-match map first, then falls through to the parameterized
+matchers, and returns the original (untranslated) message if neither matches — never throws and
+never silently swallows an unrecognized backend error.
+
 ## Shared RelatedDocuments Components
 
 The `tools/app-shell/src/components/related-documents/` library provides i18n-ready building blocks:

@@ -218,3 +218,25 @@ Schema Forge extracts from AD, that column surfaces in this window's contract as
 frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
 this note only records why the contract was regenerated when the PSD2 dependency
 was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## MCP document actions (agents)
+
+The header's `documentAction` button is what an AI agent uses to move this order through its
+workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+active AD list of the `C_Order.DocAction` reference) and `actionParameter: "docAction"`; its
+`agentPrompt` — defined in `decisions.json` -> `entities.header.fields.documentAction.agentPrompt`
+— states which transitions are legal and their preconditions.
+
+Booking a draft order over MCP:
+
+    neo_action { spec: "purchase-order", entity: "header", id: "<orderId>",
+                 action: "documentAction", parameters: { docAction: "CO" } }
+
+Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> CL` closes pending
+quantities. **This window has no Reactivate menu action** (`menuActions: []`), so the prompt
+tells the agent not to assume `RE` is available here — unlike `sales-order`.
+
+This runs `PurchaseOrderHeaderHandler` exactly as the UI does — including the pre-CO
+total-discount line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285).
+If you change this window's workflow rules, update the `agentPrompt` in the same change: it is
+the only thing telling the agent what is legal.
