@@ -69,8 +69,14 @@ describe('ListView — clearSelection / clearSelectionTrigger (ETP-3660)', () =>
     assert.match(src, /setClearSelectionCounter\s*\(\s*\(c\)\s*=>\s*c\s*\+\s*1\s*\)/);
   });
 
+  // ETP-4658 moved the Table's props into a single `tableProps` object (they used to be
+  // written out once per wrapper, which Sonar flagged as a duplicated block), so the
+  // binding is an object property rather than a JSX attribute. Both halves of the chain
+  // are asserted — the binding AND the spread that delivers it — so this cannot pass
+  // again on a `tableProps` that is built but never handed to the Table.
   it('passes clearSelectionCounter as clearSelectionTrigger to the Table', () => {
-    assert.match(src, /clearSelectionTrigger=\{clearSelectionCounter\}/);
+    assert.match(src, /clearSelectionTrigger:\s*clearSelectionCounter/);
+    assert.match(src, /<Table\s+\{\.\.\.tableProps\}/);
   });
 
   it('clearSelection is a stable useCallback with no deps', () => {

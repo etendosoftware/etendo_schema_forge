@@ -50,7 +50,7 @@ function useDefaultVariant(ctx) {
     select, onSelect, selectedIds, selectorContext, imageMap, neoBaseUrl, token,
   } = ctx;
 
-  const currency = selectorContext?.priceCurrency ?? selectorContext?.currency ?? sessionCurrency;
+  const currency = selectorContext?.priceCurrency ?? selectorContext?.currency ?? sessionCurrency ?? 'USD';
 
   // Reset the transient highlight when the drawer opens (the shell stays mounted).
   useEffect(() => { if (open) setSelectedId(null); }, [open]);
@@ -60,7 +60,7 @@ function useDefaultVariant(ctx) {
     if (p == null) return null;
     const num = typeof p === 'number' ? p : parseFloat(p);
     if (isNaN(num)) return String(p);
-    return currency ? formatCurrency(currency, num) : num.toFixed(2);
+    return formatCurrency(currency, num);
   };
 
   const handleSelect = (item) => {

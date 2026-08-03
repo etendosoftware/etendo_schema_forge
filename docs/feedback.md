@@ -333,10 +333,61 @@ Regression coverage: `tools/app-shell/src/components/contract-ui/__tests__/Detai
 
 **Java-side counterpart (separate change, tracked by a companion task, not this repo):** the `blockCalloutFieldUpdate` guard in `com.etendoerp.go` that stripped the cascade is being removed, so the native classic-AD `documentDate → accountingDate` callout cascade is now intentionally allowed to flow through unmodified on save.
 
+---
+
+## [2026-07-27] ETP-4609 (QA finding, DOCS write-up) — Latent `hiddenColumns` Clobbering Bug in Dead `ContactsTable.jsx`
+
+**Note:** this is NOT an active bug — it documents a landmine found in dead code so it isn't silently rediscovered (and re-diagnosed from scratch) if the file is ever revived. No fix was applied.
+
+**Component:** `tools/app-shell/src/windows/custom/contacts/ContactsTable.jsx`
+
+**Status: dead code, confirmed unreachable.** `contacts/index.jsx` renders the generated `BusinessPartnerPage` and does not import `ContactsTable.jsx`. A repo-wide search found no other import of the component either (only its own test file references it). Nothing currently mounts this component.
+
+**The bug (same shape as the real ETP-4609 fix in `ProductCustomTable.jsx`):** `ContactsTable.jsx` declares `const HIDDEN_COLS = ['__contactType']`, passes `hiddenColumns={HIDDEN_COLS}` to `DataTable`, and then spreads `{...rest}` (containing whatever the caller passed in) *after* that prop, e.g. `hiddenColumns={HIDDEN_COLS} ... {...rest}`. `ListView.jsx` unconditionally forwards its own `hiddenColumns` prop (default `[]`) to whatever `Table` component a window wires in. Because the spread lands after the local assignment, a live caller's `hiddenColumns={[]}` (or any other value) would silently clobber `HIDDEN_COLS`, and `__contactType` would render as a visible grid column instead of staying hidden. This is exactly the bug ETP-4609 fixed in `ProductCustomTable.jsx` by destructuring the incoming prop and merging (`[...new Set([...local, ...incoming])]`) instead of relying on spread order.
+
+**Why it wasn't fixed here:** out of scope for ETP-4609 (that ticket's QA pass found this only as a cross-window regression check while verifying the real fix, and the bug predates ETP-4609). Since the file is currently unreachable from any live window, there is no user-facing impact today.
+
+**Evidence:** `tools/app-shell/src/windows/custom/contacts/__tests__/ContactsTable.vitest.jsx` has a corresponding `it.skip(...)` test (`'keeps HIDDEN_COLS even when the parent forwards its own hiddenColumns=[] (ListView default)'`) that reproduces the clobbering and is skipped rather than deleted, precisely so it stays discoverable.
+
+**If `ContactsTable.jsx` is ever un-deadened (imported/mounted again):** apply the same destructure-and-merge fix used in `ProductCustomTable.jsx` before shipping, and un-skip the test above (or delete both the component and the test if the file is instead removed as confirmed dead code during cleanup).
+
 **Lesson:** when a ticket's scope reverses mid-implementation, don't just overwrite the old work silently — leave a dated trail (here + the affected window docs) explaining that the earlier "independence" behavior was intentional, correct-at-the-time, and has been superseded by an explicit redefinition, not reverted because it was wrong. Also: `visibility: readOnly` + `form: false` and `visibility: system` can look functionally equivalent in the rendered UI (both fully suppressed from form and grid), but only `system` fully excludes the field from `frontendContract.entities.*.fields` — prefer `system` for "never shown, never independently editable" fields over the readOnly+form:false combination, to avoid two different-looking representations of the same "fully hidden" intent across sibling windows.
 
 ---
 
+## [2026-07-27] Tooling — no DB-free way to regenerate a contract (`sf-resolve-curated` broken)
+
+Found while working ETP-4156, which changes only `decisions.json` (adds `entities.contact.javaQualifier`) and therefore needs a contract regeneration but no DB data.
+
+**Three separate defects, all in the published `@etendosoftware/schema-forge-cli` (and its `schema_forge_core` source):**
+
+1. **`resolve-curated.js` ignores `SF_ROOT`.** Line 22 is `const ROOT = join(__dirname, '..', '..')`, while every sibling module (`extract-fields.js`, `extract-from-db.js`, `check-version.js`, …) uses `process.env.SF_ROOT || join(__dirname, '..', '..')`. Consequence: the single-phase command documented in `CLAUDE.md` ("`resolve-curated.js --window <name> --write` — single phase, no extract, no push") cannot work from published packages — it looks for `node_modules/@etendosoftware/artifacts/<window>/schema-raw.json`. `LOCAL_CORE=1` does not help either: `cli/sf-local` correctly keeps the cwd on the functional repo, but `__dirname` then resolves to the core repo, so it looks for `schema_forge_core/artifacts/<window>/rules-raw.json`. **One-line fix**, and it restores the only DB-free path to a contract regeneration.
+2. **`node_modules/.bin/sf-resolve-curated` is not an executable script.** It is the raw ESM source with no shebang, so the shell tries to interpret it (`/Applications: is a directory`, `AGENTS.md: command not found`, then a syntax error on the JSDoc). Other bins in the same map work, so this is a per-entry packaging problem.
+3. **`sf-regen-all --skip-extract` still hits the database, and swallows the error.** `Skip extract: YES` is printed, then `[F1a] Extracting fields...` runs `extract-fields.js` (a DB reader) and fails. `--skip-extract` apparently only skips `[F0] extract-from-db`. Worse, the failure is reported as a bare `✗ FAILED:` with an empty message, so there is nothing to diagnose — the actual cause (no DB reachable) only becomes visible by running a full `make regen` and watching it die at `[F0]` instead.
+
+**Impact:** any change that touches only `decisions.json` currently requires a live database to regenerate the contract, even though the inputs (`schema-raw.json`, `rules-raw.json`, `decisions.json`) are all on disk. Also worth noting: a failed run left a stray empty `curated` file at the repo root.
+
+**Workaround until fixed:** leave the contract stale and regenerate with `make regen ONLY=<window> PUSH_TO_NEO=1` in an environment with the DB up — which is needed anyway whenever `javaQualifier` changes, since the handler only activates once `ETGO_SF_ENTITY.Java_Qualifier` is persisted and exported.
+
+---
+
+## [2026-07-27] ETP-4609 (DOCS write-up) — Dead `purchase-invoice/custom/InvoiceHeaderTable.jsx`; `sales-invoice` counterpart is LIVE, not dead (correction of an initial finding)
+
+**Note:** this is NOT an active bug in either file. It documents (a) a confirmed-dead file so nobody wastes time "fixing" its `required` flags thinking it's a live bug, and (b) a correction — its sibling file with the identical name in `sales-invoice` was initially suspected dead by the same reasoning but traced out to be reachable after all. Read both halves before touching either file.
+
+### `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` — confirmed dead code, unreachable
+
+**Status: dead code, confirmed via code tracing (not assumed).** The generated `artifacts/purchase-invoice/generated/web/purchase-invoice/HeaderPage.jsx` imports it (`import HeaderTable from '../../../custom/InvoiceHeaderTable'`) and wires it as `Table={HeaderTable}` inside its own no-`recordId` `<ListView>` branch. That branch is never reached in the running app: `tools/app-shell/src/windows/registry.js` resolves loaders in the order **customLoaders > windowLoaders > PlaceholderWindow** (see the comment at that line), and `purchase-invoice` has a `customLoaders` entry (`./custom/purchase-invoice/index.jsx`) that always wins over the generated `windowLoaders` entry. That custom `index.jsx` has its own branching (`recordId ? <HeaderPage .../> : <ListView Table={PurchaseInvoiceTable} .../>`) and its own, entirely separate list-view table component — `PurchaseInvoiceHeaderTable.jsx` in `tools/app-shell/src/windows/custom/purchase-invoice/` — imported and used instead. It never imports `InvoiceHeaderTable.jsx` at all. So generated `HeaderPage.jsx` is only ever mounted with a `recordId` present (DetailView branch), and its own no-`recordId` branch — and therefore `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` — is never executed by user navigation. Repo-wide search confirms no other importer.
+
+Confirming this mattered in practice: the ETP-4609 required-flag-drift fix for purchase-invoice (commit `324166402`, this branch) correctly touched only the two live files (`PurchaseInvoiceHeaderTable.jsx` + `index.jsx`, both in `tools/app-shell`) and left this dead artifact file untouched — that was the right call, not an oversight.
+
+### `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx` — LIVE, do not treat as dead
+
+Same-shaped file, same generated-`HeaderPage.jsx` import site, same unreachable-branch reasoning as above for *that* import — but this file has a **second importer that IS reachable**: `tools/app-shell/src/windows/custom/sales-invoice/index.jsx` imports it directly via the `@generated` alias (`import InvoiceHeaderTable from '@generated/sales-invoice/custom/InvoiceHeaderTable.jsx'`, where `@generated` resolves to `../../artifacts` — see `vite.config.js`), wraps it as `SalesInvoiceTable`, and passes it as `Table={SalesInvoiceTable}` to its *own* `<ListView>` in the no-`recordId` branch — the branch that customLoaders resolution actually renders. So unlike `purchase-invoice`, `sales-invoice`'s custom `index.jsx` reuses the artifact-directory component instead of maintaining a separate one in `tools/app-shell`. This file is executed on every visit to the Sales Invoice list.
+
+**Open item surfaced by this correction:** as of this write-up, none of this file's grid columns carry `required: true` (checked all `key:` entries), while `contract.json` marks `documentNo` and `businessPartner` as required. The ETP-4609 fix commit for sales-invoice (`509650592`) only touched `sales-invoice/index.jsx`, not this file — so the required-flag drift this ticket exists to fix may still be present here and was not part of the 13-window pass. Not fixed as part of this DOCS entry (out of scope for Sage); flagged for whoever picks up the open "extend audit to `artifacts/*/custom/` locations" task.
+
+**Lesson:** the registry `customLoaders > windowLoaders` unreachability argument only proves the *generated* `HeaderPage.jsx` import site is dead — it says nothing about whether the same artifact file has a second, independent importer elsewhere (as happened here via the `@generated` alias). Always grep for **all** importers of a suspected-dead file before declaring it dead, even when two sibling windows look identical at a glance; `purchase-invoice` and `sales-invoice` diverged in exactly this way despite having same-named custom files.
 ## [2026-07-28] ETP-4610 — "Add dimensions" moved from a fixed grid column to a hover action; regen-gap on goods-receipt/simple-g-l-journal closed
 
 **Follow-up to ETP-4529/ETP-4543.** Scope: move the "+ Añadir dimensiones" trigger out of the `dimensionsPanel` grid column and into `InlineLinesPanel`'s per-row hover-action strip (next to Pencil/Trash), and hide the "Dimensiones contables" column entirely. See `docs/ui-customization.md` §14b/§14c for the resulting UX and the new generic `rowActions` extension slot this introduced.

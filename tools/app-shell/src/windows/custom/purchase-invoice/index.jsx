@@ -41,21 +41,21 @@ function applyDocTypeLabels(record) {
 
 const LIST_COLUMNS = [
   { key: 'orderReference', column: 'POReference', type: 'string', label: 'Document No.' },
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount' },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
 ];
 // Mirrors PurchaseInvoiceHeaderTable columns (key + column + type only) so that
 // buildAdvancedFilterCriteria can resolve filter modes on the first render,
 // before DataTable fires onColumnsReady.
 const OVERDUE_INITIAL_COLUMNS = [
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', required: true },
+  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', required: true },
   { key: 'eTGODueDate', column: 'em_etgo_due_date', type: 'date' },
 ];
 
@@ -124,10 +124,10 @@ export default function PurchaseInvoiceWindow(props) {
   );
 
   const summary = [
-    { key: 'summedLineAmount', column: 'TotalLines', type: 'amount', label: ui('totalNetAmount') },
-    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: ui('totalGrossAmount') },
-    { key: 'totalPaid', column: 'Totalpaid', type: 'amount', label: ui('paidAmount') },
-    { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', label: ui('outstandingAmount') },
+    { key: 'summedLineAmount', column: 'TotalLines', type: 'amount', label: ui('totalNetAmount'), required: true },
+    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: ui('totalGrossAmount'), required: true },
+    { key: 'totalPaid', column: 'Totalpaid', type: 'amount', label: ui('paidAmount'), required: true },
+    { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', label: ui('outstandingAmount'), required: true },
   ];
 
   // Pick up the saved record from navigation state when arriving at the list view

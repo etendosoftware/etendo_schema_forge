@@ -174,8 +174,10 @@ describe('TC-04 — grid row derives docNo/date/amount from the reversed invoice
     // docNo appears in both "Factura original" and "Documento" columns
     expect(await screen.findAllByText('10000067')).toHaveLength(2);
     expect(screen.getByText('05/06/2026')).toBeInTheDocument();
-    const expectedTotal = Number('2854.20').toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    expect(screen.getByText(`${expectedTotal} EUR`)).toBeInTheDocument();
+    // Real € symbol, never the hardcoded literal "EUR" string (not even a variable
+    // in the pre-fix code — a raw text literal concatenated unconditionally).
+    expect(screen.getByText('2.854,20 €')).toBeInTheDocument();
+    expect(screen.queryByText(/EUR/)).toBeNull();
   });
 });
 
