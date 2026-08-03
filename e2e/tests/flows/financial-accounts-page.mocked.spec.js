@@ -240,7 +240,16 @@ test.describe('Financial Accounts list — Cuentas', () => {
   test('the pending pill deep-links to the reconciliation tab without a plain row click', async ({ page }) => {
     await page.getByTestId('cell-acc-1-pendingCount').getByTestId('reconcile-status-pending').click();
 
-    await expect(page).toHaveURL(/\/financial-account\/acc-1\?tab=reconciliation&autoMatch=true$/);
+    // The detail view's deep-link effect (index.jsx) applies `tab`/`autoMatch` from the URL to
+    // local state on mount, then immediately clears the query string with
+    // `setSearchParams({}, { replace: true })` — a deliberate one-shot deep link. That effect
+    // runs well before Playwright's assertion polling window ever observes the query string, so
+    // asserting on the transient URL is not viable. Assert the actual landed state instead: the
+    // reconciliation tab is active and the automatch surface (gated by `activeTab ===
+    // 'reconciliation'`) rendered — both are only reachable through the deep-link params.
+    await expect(page).toHaveURL(/\/financial-account\/acc-1$/);
+    await expect(page.getByTestId('detail-tab-reconciliation')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('financial-account-automatch')).toBeVisible();
   });
 
   test('the row hover actions keep their per-row testids', async ({ page }) => {
