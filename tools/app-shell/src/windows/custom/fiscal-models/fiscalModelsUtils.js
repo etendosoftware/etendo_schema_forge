@@ -171,7 +171,10 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
 
   const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
 
-  if (IBAN_REQUIRED_TIPOS.includes(tipo) && !identChecks?.bank_iban?.trim()) {
+  if (
+    (IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true) &&
+    !identChecks?.bank_iban?.trim()
+  ) {
     return { ok: false, error: 'iban_required' };
   }
 
