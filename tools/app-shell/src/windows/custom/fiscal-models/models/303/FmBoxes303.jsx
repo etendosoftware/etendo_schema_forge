@@ -79,7 +79,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   // OR-of-conditions shape ({ anyOf: [condition, ...] }) — kept minimal on
   // purpose, just enough to express "tipo X OR rectificativa checked" cleanly.
   const matchesSvw = (svw) => {
-    if (svw.anyOf) return svw.anyOf.some(matchesSvw);
+    if (Array.isArray(svw.anyOf)) return svw.anyOf.some(matchesSvw);
     const val = identification?.[svw.field];
     return svw.in ? svw.in.includes(val) : val === svw.equals;
   };
