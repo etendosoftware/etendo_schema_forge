@@ -44,7 +44,11 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
       );
       const body = await res.json().catch(() => null);
       const nested = body?.response?.data?.[0];
-      const message = nested?.message ?? body?.response?.message ?? body?.message;
+      // `body?.error?.message` covers the standard `NeoResponse.error(int, String)` envelope
+      // (`{"error":{"message","status"}}`) used by most NEO action handlers — without it, any
+      // handler using that convention had its message silently discarded in favor of the raw
+      // HTTP reason phrase (e.g. "Unprocessable Entity" for a 422) (ETP-4706).
+      const message = nested?.message ?? body?.response?.message ?? body?.error?.message ?? body?.message;
       if (!res.ok) {
         return { success: false, message: message || res.statusText };
       }

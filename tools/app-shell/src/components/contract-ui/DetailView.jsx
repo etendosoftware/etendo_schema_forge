@@ -2380,7 +2380,7 @@ export function DetailView({
         toast.success(msg !== key ? msg : ui('recordDeleted'));
         navigate(`/${windowName}`);
       } else {
-        toast.error(result.message || ui('actionFailed'));
+        toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
       }
       return;
     }
@@ -3722,7 +3722,7 @@ export function DetailView({
                     if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
                       const unpostResult = await neoAction.execute(currentId, 'unpost');
                       if (!unpostResult.success) {
-                        toast.error(unpostResult.message || ui('actionFailed'));
+                        toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
                         return false;
                       }
                     }
@@ -3743,7 +3743,7 @@ export function DetailView({
                       toast.success(msg);
                       hook.fetchById?.(currentId);
                     } else {
-                      toast.error(result.message || ui('actionFailed'));
+                      toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
                     }
                   };
                   return (
@@ -3800,7 +3800,7 @@ export function DetailView({
                               if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
                                 const unpostResult = await neoAction.execute(currentId, 'unpost');
                                 if (!unpostResult.success) {
-                                  toast.error(unpostResult.message || ui('actionFailed'));
+                                  toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
                                   return;
                                 }
                               }
