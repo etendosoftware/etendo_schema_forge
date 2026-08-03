@@ -375,3 +375,124 @@
   schema default exists. Verified live in a rolled-back transaction on GOClient: `BEFORE: NULL` →
   `AFTER: 6E9DA718417A48A290FE376448A12BF6`; re-check (same predicate) matches 0 rows, confirming
   idempotency. `ONBOARDING_PROVISIONED_THROUGH` intentionally NOT bumped (no preventive change).
+
+---
+
+## ETP-4760 — Default costing rule Standard, not Average (J1, R20, 2026-08-03)
+
+- **2026-08-03 — CORRECTED a coordinator-supplied precomputed fact: gap letters `F1`/`F2` are NOT
+  free — they were already taken (F1 = default-customer currency/location/contact, F2 = org-info
+  location) across every branch checked.** The task brief asserted "`A1-A5(+b), B1-B2, C1-C2, D1,
+  E1, G1, H1-H3, I1, U1-U2` are ALL taken... use gap letter `F1`, confirmed unused anywhere." Before
+  writing anything, re-verified per the mandatory pre-flight instruction (`git rev-list --all` /
+  cross-branch grep for gap letters in `docs/etendo-ad/onboarding-and-datafixes-map.md` across every
+  local branch/worktree, `~450` branches checked): `F1` and `F2` are documented and taken on
+  literally every branch that has the map file at all (including `main`, `develop`, `epic/ETP-3504`).
+  Also found `H1`/`H2` (ETP-4520/ETP-4515-4516, pre-existing, not from a sibling in-flight branch)
+  and `H3` (feature/ETP-4736, correctly self-corrected there from an initial `H1` mislabel) and `I1`
+  (feature/ETP-4761). **No `U1`/`U2` gap letter was found anywhere** (searched every branch's
+  `onboarding-gaps.md` for `### U[0-9]` / `| U[0-9]` headers — zero hits) — that part of the
+  precomputed brief could not be verified and may have been a hallucination or referred to something
+  outside these two docs. **Used gap letter `J1`** (next unused after I1) for this ticket instead of
+  the briefed `F1`. **Apply generally:** even a confident, seemingly-already-verified precomputed
+  fact handed down by the coordinator MUST be re-checked against the live repo state before use —
+  the orientation checklist's "re-verify yourself right before writing" instruction exists precisely
+  because branches move and prior verification passes can be wrong, not just stale.
+- **2026-08-03 — Confirmed the ticket's root-cause correction is right and understates nothing:
+  new tenants inherit ZERO `M_Costing_Rule` rows, not Average.** Live sweep (etendogoclean,
+  `SELECT ad_client_id, count(*), string_agg(DISTINCT m_costing_algorithm_id,',') FROM
+  m_costing_rule GROUP BY 1`): 9 of 12 real tenants (acreedortest, acreetest2, empresa, 4x
+  "Empresa E2E *", RolesPresa, TaxesOrg) have exactly 0 rows. Cross-checked against
+  `M_Transaction.iscostcalculated`: every one of the 4 zero-rule tenants that has any transaction
+  rows shows 100% `'N'`. Confirms `M_COSTING_RULE` is simply absent from
+  `OnboardingDatasetDefinition.INCLUDED_TABLES` (com.etendoerp.go) — the bundled
+  `referencedata/sampledata/GOClient/M_COSTING_RULE.xml` file existed on disk with an Average row
+  but was never actually imported by the dataset importer for any tenant, confirmed by the importer
+  only normalizing tables present in `INCLUDED_TABLES`.
+- **2026-08-03 — `M_Costing_Rule` has NO `name`/`seqno` column** (confirmed via `\d m_costing_rule`)
+  — it is identified purely by `(ad_client_id, ad_org_id, datefrom/dateto, algorithm)`, not a label.
+  Confirmed NOT NULL columns: `m_costing_algorithm_id`, `org_dimension` (default `'N'`),
+  `warehouse_dimension` (default `'N'`), `isvalidated` (default `'N'`), `isactive` (default `'Y'`).
+  `m_costing_rule_id` FK-referenced by `m_costing_rule_init` (per-warehouse close/open-inventory
+  links, only populated when the real "Validate Costing Rule" process runs) and `m_valued_stock_agg`
+  — neither needs a manual insert when seeding a bare rule cold (see next bullet).
+- **2026-08-03 — A manually-`INSERT`ed `M_Costing_Rule` row with `isvalidated='Y'` and ZERO
+  `M_Costing_Rule_Init` rows is a proven-safe shape, not a shortcut invented for this fix.**
+  GOClient's OWN original Average rule (before this session's live test converted it to Standard)
+  had exactly this shape — `isvalidated='Y'`, no init row — and had been the tenant's real, working
+  costing rule for months. The `m_costing_rule_trg()` trigger only raises `@CostingRuleValidated@`
+  on `UPDATE`/`DELETE` of an already-validated row (org/algorithm/datefrom/warehouse_dimension
+  changes, or delete); a plain `INSERT` is completely unrestricted regardless of `isvalidated`.
+  **Apply:** R20's corrective INSERT mirrors this exact proven shape — no init row needed for a
+  fresh rule with no prior state to close.
+- **2026-08-03 — `M_Costing_Rule` rows are per-(client, operative org), not one per client.**
+  Live evidence: F&B International Group (623 active orgs) and QA Testing (3 active orgs) each have
+  exactly 2 rules, one per org that actually has data — NOT one row per org in the tree, and NOT a
+  single client-wide row. GOClient (1 active org) has 2 rows (its 1 org's rule, closed+reopened).
+  Every genuinely-broken tenant checked (acreedortest, acreetest2, empresa, the 4 "Empresa E2E *",
+  RolesPresa, TaxesOrg) has exactly 1 non-System org — the standard single-org onboarding shape.
+  **Apply:** R20 resolves its target org the same way `R6-org-info-location` does (`ad_org.name <>
+  '*' ORDER BY created, ad_org_id LIMIT 1`, a self-contained subquery) rather than depending on the
+  runner's `:org_id` bind — this also sidesteps the "multi-org tenant, `:org_id` resolves the OLDEST
+  org, not necessarily the one `@check` matched" latent bug already documented above (2026-07-14,
+  R3 note) without needing to fix that bug here.
+- **2026-08-03 — Live-observed the REAL "Validate Costing Rule" process's full side-effect set on
+  GOClient (this was NOT staged by this session — the tenant's Average rule had already been
+  converted to Standard by the time this investigation started, evidently via a prior manual UI run
+  to observe the exact behavior described in the ticket brief).** Confirmed via direct DB inspection:
+  (1) the old Average rule's `dateto` was set to the validation instant; (2) a new Standard rule was
+  inserted with `datefrom` = the same instant, `isvalidated='Y'`, `dateto` NULL; (3) ALL 8 of
+  GOClient's `M_Costing` anchor rows had `dateto` set (0 remain open — confirms the LAZY per-product
+  migration: the anchors only reopen on each product's own next transaction, under the new rule);
+  (4) **4 `M_Inventory` (Physical Inventory) documents were auto-created**, timestamped to the exact
+  same instant as the rule swap — one closing + one opening per warehouse (GOClient has 2 warehouses)
+  — each linked via a fresh `M_Costing_Rule_Init` row. This is decisive, first-hand evidence (not
+  just the ticket's own secondhand description) that converting an EXISTING validated rule to a
+  different algorithm is not a data-only operation — it requires real, postable AD business
+  documents with sequences/doc types/lines/workflow, which a hand-SQL data-fix should not attempt to
+  fabricate.
+- **2026-08-03 — DECISION: SQL-first for the "zero rule" case; existing-Average-rule tenants
+  (F&B International Group, QA Testing) explicitly excluded from R20, not routed to a webhook.**
+  Reasoning: (1) `@type: webhook` execution is unimplemented in `cli/src/data-fixes/run.js` (throws
+  `"@type webhook not implemented yet"`) — choosing it here would mean building a whole new execution
+  path just for 2 known tenants, a much bigger lift than the sql_first_criterion's bar for
+  escalating; (2) the "zero rule" case (9 of 12 real tenants, and the actual onboarding-birth gap
+  this ticket is about) has NO prior rule to close and NO inventory to reconcile — it is safe,
+  idempotent, ordinary SQL, proven by a rolled-back live test against "empresa" (insert 1 row,
+  re-run inserts 0); (3) the "existing Average rule" case is small (2 tenants on this DB), is NOT the
+  onboarding-birth defect the ticket is about (both were provisioned before or outside the current
+  gap), and replicating the real process's Physical-Inventory-document side effects in hand SQL
+  (previous bullet) would be materially riskier than the value it delivers for 2 tenants — a real
+  business decision (whether/when to convert them) also belongs with an accounting admin, not an
+  automated migration. **Verdict:** ship R20 SQL-only for the zero-rule case; flag F&B/QA Testing for
+  a manual "Validate Costing Rule" UI run once/if the business wants them converted. If a THIRD or
+  later ticket ever needs to convert MANY existing-Average-rule tenants at scale, that is the
+  trigger to reconsider building `@type: webhook` execution in `run.js` — not this ticket's 2-tenant
+  edge case.
+- **2026-08-03 — `M_COSTING_RULE.xml` normalizes correctly with zero special-casing needed in
+  `OnboardingDatasetNormalizer` once added to `INCLUDED_TABLES`.** The row's `AD_ORG_ID` (a specific
+  GOClient org, not `'0'`) is remapped generically by the normalizer's existing
+  `appendOrganizationReferenceIfNeeded` (any non-`'0'` source org → the new tenant's target org) —
+  confirmed by reading the normalizer source, not assumed. No `M_Product_Id`/`M_Product_Category_Id`
+  on the row, so no FK-portability concern either (unlike `M_COSTING`, which is per-product and was
+  deliberately NOT added to `INCLUDED_TABLES` — GOClient-specific product/transaction ids would not
+  port to a new tenant; fresh anchors are created lazily by the real costing engine on the new
+  tenant's own first transactions).
+- **2026-08-03 — Gradle test execution blocked by the permission classifier, not attempted around.**
+  The documented workaround for `./gradlew test` misresolving a `com.etendoerp.go` worktree (see the
+  2026-07-06 "Worktree/Gradle mismatch" note above) is copying changed files into the MAIN checkout
+  and running there — done successfully for the 4 changed Java/XML files. The SECOND half of that
+  workaround from the ETP-4761 precedent (temporarily moving a sibling worktree's own `tasks.gradle`
+  out of the way to dodge Gradle's `.worktrees/**` duplicate-task scan bug) was attempted and
+  BLOCKED by the auto-mode permission classifier (moving a file outside this session's assigned
+  worktree). Did not attempt to bypass it — reverted the main checkout to clean (`git checkout --
+  <4 files>`, verified `git status` empty) and left the sibling worktree's `tasks.gradle` untouched.
+  **Net: `OnboardingDatasetNormalizerTest.testNormalizerIncludesValidatedStandardCostingRule` was
+  NOT executed this session.** It was, however, verified by careful static trace of
+  `OnboardingDatasetNormalizer`'s actual code (property-name derivation via `toLowerCamel`, the
+  mocked-entity `isPrimitive()==true` shape every other test in that file relies on) against the
+  exact edited XML content, matching the same verification depth used by this file's sibling `xml.
+  contains(...)` assertions. **Apply:** when this workaround is blocked, do not attempt alternate
+  tools to route around a classifier denial (e.g. `rm`+recreate, a different move command) — revert
+  cleanly and document the untested state plus the exact follow-up command, per the existing
+  "document as not executed" fallback in the 2026-07-06 note.

@@ -19,6 +19,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
 | D1 | Legal entity | SII fields empty; legal-entity resolution returns NULL | *Initial Client Setup* — verify/recompute `AD_LegalEntity_Org_ID` after `AD_Org_Ready` | ETP-4177 |
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
+| J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 
 ---
 
@@ -725,6 +726,41 @@ SELECT name FROM ad_role WHERE ad_client_id = '<CLIENT_ID>' AND isactive = 'Y';
 **Live-DB staleness found and fixed while building this fix (2026-07-27):** correct reference values are `Y` for Finance and GOClient Admin, `N` for Sales/Purchasing/Inventory/GOuser — confirmed with the user. `referencedata/sampledata/GOClient/AD_ROLE.xml` already ships these correctly (a first check mis-grepped the tag's actual all-caps name, `EM_ETGO_SHOW_ACCT_FIELDS`, and wrongly concluded the XML never set it). The real gap was this local dev DB's live `ad_role` rows being stale relative to that already-correct XML — Finance and GOClient Admin both showed `N` live, same "referencedata not reapplied to an existing install" pattern as H1, just for this column instead of webhook grants. Corrected directly (`UPDATE ad_role SET em_etgo_show_acct_fields='Y' ...`) for this DB. Since Step 1 of the corrective fix always reads GOClient's *live* row (not the XML), any other environment whose GOClient copy is similarly stale would clone the wrong value until its own live data is corrected the same way.
 
 **Preventive fix (ETP-4515, implemented 2026-07-27, same day as the corrective fix):** `com.etendoerp.go/src/com/etendoerp/go/onboarding/OnboardingRoleProvisioningService.java`, wired into `EtendoGoJwtServlet`'s onboarding chain right after the existing `ensureWebhookAccess` step (both are client-wide, neither needs the organization to exist yet). Same GOClient-as-template logic as the corrective data-fix above. Written and manually cross-checked against the real DAL model classes, but not compiled/run against a live onboarding flow in this session — needs that verification before being trusted end-to-end.
+
+---
+
+## J — Costing
+
+### J1 — New tenants get ZERO `M_Costing_Rule` rows, not Average (ETP-4760, 2026-08-03)
+
+**Symptom:** the ticket was filed as "the costing rule should default to Standard, not Average". Live-DB sweep (etendogoclean, 2026-08-03) shows the actual defect is worse than the ticket's own framing: a freshly onboarded tenant gets **no costing rule at all**, of any algorithm. `M_Transaction.iscostcalculated` stays `'N'` forever for every transaction the tenant records, because there is never a rule for `CostingBackground`/`AverageAlgorithm`/`StandardAlgorithm` to apply.
+
+**Root cause:** `M_COSTING_RULE` was never in `OnboardingDatasetDefinition.INCLUDED_TABLES` (`com.etendoerp.go`). The bundled `referencedata/sampledata/GOClient/M_COSTING_RULE.xml` file existed on disk (with an Average-algorithm row) but was never actually imported for any tenant, because the dataset importer only normalizes tables present in `INCLUDED_TABLES`.
+
+**Live-DB sweep (2026-08-03, etendogoclean, `SELECT count(*) FROM m_costing_rule GROUP BY ad_client_id`):**
+
+| Client | `M_Costing_Rule` rows | Algorithm(s) | `M_Transaction.iscostcalculated` |
+|---|---|---|---|
+| acreedortest, acreetest2, empresa, Empresa E2E ×4, RolesPresa, TaxesOrg (9 tenants) | **0** | — | `'N'` on 100% of rows (where any transactions exist) |
+| GOClient | 2 (1 closed + 1 open) | Average (closed) → **Standard** (open, validated live via the real "Validate Costing Rule" process during this investigation) | `'Y'` |
+| F&B International Group | 2 | Average (both open, one per org) | `'Y'` |
+| QA Testing | 2 | Average (both open, one per org) | mixed `'Y'`/`'N'` (legacy pre-rule transactions never retroactively costed) |
+
+GOClient's original Average rule (`isvalidated='Y'`, no `M_Costing_Rule_Init` row) was confirmed hand-created by a human at some point — not representative of what onboarding gives a new tenant.
+
+**"Validate Costing Rule" process semantics (observed live, GOClient, 2026-08-03):** running the real process (`org.openbravo.costing.CostingRuleProcessActionHandler`, `obuiapp_process_id=45ED6D0400FD42BEA9771C549A9AE8AB`) closed the old Average rule (`dateto` = the validation instant), inserted+validated a new Standard rule (`datefrom` = same instant), closed all 8 open `M_Costing` anchors (0 remain open — the next transaction per product re-opens its own anchor under the new rule, confirming the documented LAZY migration), and **auto-created 4 `M_Inventory` (Physical Inventory) documents** — one closing + one opening per warehouse — each linked via its own `M_Costing_Rule_Init` row. Migration to the new rule is per-product and lazy: only products with pending/open transactions get a new cost anchor immediately; the rest keep their last anchor under the old rule until their own next transaction. **Acceptance criterion:** do not expect every product to be Standard-costed immediately — the correct criterion is "the client's active/validated rule going forward is Standard."
+
+**Scope decision — SQL-only for the "zero rule" case; existing-Average-rule tenants explicitly excluded:** replicating the real process's Physical Inventory document creation (sequences, doc types, lines, workflow, posting) in hand SQL would be a materially bigger, riskier lift than this data-fixes framework is meant for, and `@type: webhook` execution is not implemented in `run.js` yet (see `docs/etendo-ad/tenant-remediation-knowledge.md`). A brand-new tenant with zero products/transactions has no prior rule to close and no inventory to reconcile, so cloning an already-validated Standard rule directly is safe there. F&B International Group and QA Testing (the only tenants left with an existing Average rule after this fix) are deliberately **excluded** by the corrective fix's `@check`/`@apply` and flagged for a manual "Validate Costing Rule" run via the UI by an accounting admin.
+
+**Both fronts closed (2026-08-03):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective — "zero rule" tenants** | `cli/src/data-fixes/sql/20260803T180000Z__R20-default-standard-costing-rule.sql` — inserts one active, validated, whole-client Standard `M_Costing_Rule` (no `M_Product_Id`/`M_Product_Category_Id`, `org_dimension='N'`, `warehouse_dimension='N'`, `datefrom`=the tenant's own `AD_Client.created`) for the tenant's operative org, guarded `NOT EXISTS (... isactive='Y' AND isvalidated='Y')` so it never fires for a tenant that already has ANY validated rule (including an Average one). Live-verified in a rolled-back transaction against "empresa": insert succeeds, immediate re-run inserts 0 rows (idempotent). Dry-run across the fleet: 9 `WOULD_APPLY`, GOClient/F&B/QA Testing `SKIPPED_NOT_NEEDED`. |
+| **Corrective — existing-Average-rule tenants (F&B, QA Testing)** | **Deliberately NOT auto-fixed.** Flagged for a manual "Validate Costing Rule" run via the classic UI by an accounting admin, once confirmed relevant for those tenants — see the scope decision above. |
+| **Preventive** | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; `referencedata/sampledata/GOClient/M_COSTING_RULE.xml`'s `M_COSTING_ALGORITHM_ID` changed from Average (`B069080A0AE149A79CF1FA0E24F16AB6`) to Standard (`6A39D8B46CD94FE682D48758D3B7726B`) — `isvalidated`/`isactive` were already `'Y'`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-03T18:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by `OnboardingDatasetNormalizerTest.testNormalizerIncludesValidatedStandardCostingRule`. |
+
+**Open question, not blocking (per the ticket's own allowance):** whether `iscostcalculated='N'` on a tenant with no rule at all blocks document posting was not conclusively confirmed this session — worth a follow-up check, but every symptom observed (transactions exist and post; only the cost-calculation flag stays `'N'`) suggests it is a background/async concern rather than a synchronous posting blocker.
 
 ---
 
