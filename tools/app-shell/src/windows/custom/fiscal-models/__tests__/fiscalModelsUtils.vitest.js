@@ -1077,6 +1077,29 @@ describe('generate303File', () => {
       expect(result.ok).toBe(true);
     }
   });
+
+  it('returns { ok: false, error: iban_required } for tipo=I when rectificativa is checked and IBAN is empty (ETP-4456 follow-up fix)', async () => {
+    // Mirrors AeatSubmitFlow's client-side pre-flight guard: tipo I alone is
+    // not IBAN-required, but a rectificativa filed under tipo I still shows
+    // the bank section, so the download flow must gate on it too.
+    vi.stubGlobal('fetch', vi.fn());
+    const result = await generate303File(DECL, {
+      token: TOKEN, apiBaseUrl: API_BASE,
+      identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true },
+    });
+    expect(result).toEqual({ ok: false, error: 'iban_required' });
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it('still proceeds to fetch for tipo=I when rectificativa is absent/false, even with an empty IBAN', async () => {
+    mockFetchOk();
+    const result = await generate303File(DECL, {
+      token: TOKEN, apiBaseUrl: API_BASE,
+      identChecks: { tipo_declaracion: 'I', bank_iban: '' },
+    });
+    expect(result.ok).toBe(true);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ── applyIdentParams — tipo-independence (QA regression coverage, ETP-4456) ───

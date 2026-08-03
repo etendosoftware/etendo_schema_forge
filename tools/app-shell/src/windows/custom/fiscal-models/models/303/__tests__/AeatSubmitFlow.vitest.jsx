@@ -321,6 +321,28 @@ describe('AeatSubmitFlow — IBAN pre-flight guard (ETP-4456, submit-flow parity
     await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
     expect(screen.queryByText('fm.aeat.error.ibanRequired')).not.toBeInTheDocument();
   });
+
+  it('blocks tipo=I when rectificativa is checked and bank_iban is empty (ETP-4456 follow-up fix)', async () => {
+    // tipo I alone is not IBAN-required (EDID065 fix, see above), but a
+    // rectificativa filed under tipo I still shows the bank section (per
+    // fm303Layouts.js's datos_bancarios anyOf) — the pre-flight guard must
+    // widen to cover that case too, or an empty IBAN would round-trip to
+    // the backend for an untranslated 500 instead of failing fast here.
+    renderFlow({ identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true } });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(screen.getByText('fm.aeat.error.ibanRequired')).toBeInTheDocument());
+    expect(stableApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('still does not block tipo=I when rectificativa is absent/false, even with an empty IBAN', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({ identChecks: { tipo_declaracion: 'I', bank_iban: '' } });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('fm.aeat.error.ibanRequired')).not.toBeInTheDocument();
+  });
 });
 
 describe('AeatSubmitFlow — result: SUCCESS', () => {

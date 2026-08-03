@@ -66,6 +66,19 @@ vi.mock('../fm303Layouts.js', () => ({
           { field: 'r', equals: true },
         ] },
       },
+      {
+        id: 'anyof_malformed',
+        sectionType: 'identificacion',
+        titleKey: 'test.anyof.malformed',
+        colHeaderKeys: [],
+        fields: [],
+        rows: [],
+        // A plausible copy-paste-typo shape: `anyOf` present but NOT an array
+        // (object instead of array of conditions). Regression guard for the
+        // ETP-4456 follow-up fix (`Array.isArray(svw.anyOf)` guard) — this
+        // must not throw when calling `.some()` on a non-array.
+        sectionVisibleWhen: { anyOf: { field: 'x', equals: true } },
+      },
     ],
   }),
 }));
@@ -128,5 +141,36 @@ describe('FmBoxes303 — matchesSvw nested anyOf (recursive .some(matchesSvw))',
       <FmBoxes303 {...BASE_PROPS} sectionIds={['anyof_nested']} identification={{ p: false, q: false, r: false }} />
     );
     expect(isSectionVisible(container)).toBe(false);
+  });
+});
+
+describe('FmBoxes303 — matchesSvw malformed anyOf (Array.isArray guard, ETP-4456 follow-up fix)', () => {
+  it('does not throw when anyOf is a non-array object, and falls through to the normal in/equals check', () => {
+    // svw = { anyOf: {...} } — `svw.field`/`svw.equals` are undefined at the
+    // top level (the malformed `anyOf` value itself is never spread/read by
+    // the fallback branch), so `val` (identification?.[undefined]) and
+    // `svw.equals` (undefined) are both `undefined` — `undefined === undefined`
+    // resolves to `true`, regardless of what `identification` holds.
+    expect(() => render(
+      <FmBoxes303 {...BASE_PROPS} sectionIds={['anyof_malformed']} identification={{ x: true }} />
+    )).not.toThrow();
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} sectionIds={['anyof_malformed']} identification={{ x: true }} />
+    );
+    expect(isSectionVisible(container)).toBe(true);
+  });
+
+  it('resolves true regardless of identification contents (top-level field/equals are undefined either way)', () => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} sectionIds={['anyof_malformed']} identification={{ x: false }} />
+    );
+    expect(isSectionVisible(container)).toBe(true);
+  });
+
+  it('resolves true even when identification is undefined', () => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} sectionIds={['anyof_malformed']} />
+    );
+    expect(isSectionVisible(container)).toBe(true);
   });
 });
