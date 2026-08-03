@@ -611,3 +611,66 @@ export const binContents = [
     "warehouseId": "mock-warehouse-012"
   }
 ];
+
+export const accounting = [
+  {
+    "id": "mock-accounting-001",
+    "warehouseDifferences": "Main Warehouse",
+    "warehouseId": "mock-warehouse-001"
+  },
+  {
+    "id": "mock-accounting-002",
+    "warehouseDifferences": "East Distribution Center",
+    "warehouseId": "mock-warehouse-002"
+  },
+  {
+    "id": "mock-accounting-003",
+    "warehouseDifferences": "West Hub",
+    "warehouseId": "mock-warehouse-003"
+  },
+  {
+    "id": "mock-accounting-004",
+    "warehouseDifferences": "North Storage",
+    "warehouseId": "mock-warehouse-004"
+  },
+  {
+    "id": "mock-accounting-005",
+    "warehouseDifferences": "South Logistics",
+    "warehouseId": "mock-warehouse-005"
+  },
+  {
+    "id": "mock-accounting-006",
+    "warehouseDifferences": "Central Depot",
+    "warehouseId": "mock-warehouse-006"
+  },
+  {
+    "id": "mock-accounting-007",
+    "warehouseDifferences": "Regional Warehouse A",
+    "warehouseId": "mock-warehouse-007"
+  },
+  {
+    "id": "mock-accounting-008",
+    "warehouseDifferences": "Regional Warehouse B",
+    "warehouseId": "mock-warehouse-008"
+  },
+  {
+    "id": "mock-accounting-009",
+    "warehouseDifferences": "Main Warehouse",
+    "warehouseId": "mock-warehouse-009"
+  },
+  {
+    "id": "mock-accounting-010",
+    "warehouseDifferences": "East Distribution Center",
+    "warehouseId": "mock-warehouse-010"
+  },
+  {
+    "id": "mock-accounting-011",
+    "warehouseDifferences": "West Hub",
+    "warehouseId": "mock-warehouse-011"
+  },
+  {
+    "id": "mock-accounting-012",
+    "warehouseDifferences": "North Storage",
+    "warehouseId": "mock-warehouse-012"
+  }
+];

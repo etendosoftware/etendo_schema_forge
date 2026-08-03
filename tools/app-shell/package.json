@@ -15,9 +15,13 @@
     "test:all": "npm run test && npm run test:vitest"
   },
   "dependencies": {
-    "@etendosoftware/app-shell-core": "0.3.22",
-    "@etendosoftware/etendo-go-core": "0.3.22",
+    "@configcat/sdk": "^1.1.0",
+    "@etendosoftware/app-shell-core": "0.3.24",
+    "@etendosoftware/etendo-go-core": "0.3.24",
     "@iconicapp/iconic-react": "^1.1.4",
+    "@openfeature/config-cat-web-provider": "^0.2.0",
+    "@openfeature/core": "^1.11.0",
+    "@openfeature/web-sdk": "^1.9.0",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",

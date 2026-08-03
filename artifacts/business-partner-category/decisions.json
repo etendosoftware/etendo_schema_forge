@@ -49,6 +49,7 @@
     },
     "accounting": {
       "javaQualifier": "businessPartnerCategoryAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "customerReceivablesNo": {
