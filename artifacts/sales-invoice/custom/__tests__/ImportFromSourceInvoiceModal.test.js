@@ -29,9 +29,15 @@ describe('ImportFromSourceInvoiceModal — source shape', () => {
     assert.match(src, /inv\.id\s*!==\s*invoiceId/);
   });
 
-  it('does NOT unconditionally force-negate imported line quantity — sign is preserved from the source line', () => {
-    assert.doesNotMatch(src, /const negQty = -Math\.abs\(qty\);/);
-    assert.match(src, /sourceQty\s*<\s*0\s*\?\s*-Math\.abs\(qty\)\s*:\s*Math\.abs\(qty\)/);
+  it('unconditionally force-negates imported line quantity — ETP-4737, resolved with product', () => {
+    assert.match(src, /const negQty = -Math\.abs\(qty\);/);
+    assert.doesNotMatch(src, /sourceQty\s*<\s*0\s*\?\s*-Math\.abs\(qty\)\s*:\s*Math\.abs\(qty\)/);
+  });
+
+  it('shows the quantity stepper as negative and links back to the source invoice', () => {
+    assert.match(src, /negativeQuantity/);
+    assert.match(src, /originInvoice/);
+    assert.match(src, /afterImport=\{afterImport\}/);
   });
 
   it('wires the source-invoice-specific i18n keys', () => {
@@ -40,6 +46,12 @@ describe('ImportFromSourceInvoiceModal — source shape', () => {
     assert.match(src, /emptyMessageKey="noSourceInvoicesForCustomer"/);
     assert.match(src, /noSearchResultsKey="noSourceInvoicesMatchSearch"/);
     assert.match(src, /successMessageKey="linesImportedFromSourceInvoice"/);
+  });
+
+  it('sends sourceInvoiceLineId and reads it back for duplicate detection — ETP-4737 follow-up', () => {
+    assert.match(src, /sourceInvoiceLineId:\s*line\.id/);
+    assert.match(src, /il\.sourceInvoiceLineId/);
+    assert.match(src, /alreadyImportedSourceLineIds/);
   });
 });
 
@@ -61,10 +73,10 @@ async function fetchDocuments({ base, headers, bpId, invoiceId }) {
     fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
   ]);
 
-  const alreadyImportedOrderLines = new Set();
+  const alreadyImportedSourceLineIds = new Set();
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.cOrderlineId) alreadyImportedOrderLines.add(il.cOrderlineId); });
+    invLines.forEach(il => { if (il.sourceInvoiceLineId) alreadyImportedSourceLineIds.add(il.sourceInvoiceLineId); });
   }
 
   let invoiceCurrency = null;
@@ -84,7 +96,12 @@ async function fetchDocuments({ base, headers, bpId, invoiceId }) {
     documents = invoiceCurrency ? candidates.filter(inv => inv.currency === invoiceCurrency) : candidates;
     excludedByCurrency = !!invoiceCurrency && documents.length === 0 && candidates.length > 0;
   }
-  return { documents, sharedContext: { alreadyImportedOrderLines }, excludedByCurrency };
+  return { documents, sharedContext: { alreadyImportedSourceLineIds }, excludedByCurrency };
+}
+
+function fetchLinesAlreadyImported(lines, sharedContext) {
+  const { alreadyImportedSourceLineIds } = sharedContext;
+  return lines.map(l => ({ ...l, _alreadyImported: !!alreadyImportedSourceLineIds?.has(l.id) }));
 }
 
 function buildLineBody({ line, qty, invoiceId, lineNo }) {
@@ -92,21 +109,21 @@ function buildLineBody({ line, qty, invoiceId, lineNo }) {
   const listPrice = Number(line.listPrice) || unitPrice;
   const grossUnitPrice = Number(line.grossUnitPrice) || 0;
   const discount = Number(line.etgoDiscount) || 0;
-  const sourceQty = Number(line.invoicedQuantity) || 0;
-  const signedQty = sourceQty < 0 ? -Math.abs(qty) : Math.abs(qty);
+  const negQty = -Math.abs(qty);
   return {
     parentId: invoiceId,
     product: line.product,
-    invoicedQuantity: signedQty,
+    invoicedQuantity: negQty,
     unitPrice,
     listPrice,
     ...(grossUnitPrice ? { grossUnitPrice } : {}),
     ...(discount ? { etgoDiscount: discount } : {}),
-    lineNetAmount: unitPrice * signedQty,
+    lineNetAmount: unitPrice * negQty,
     tax: line.tax || null,
     uOM: line.uOM || null,
     lineNo,
     cOrderlineId: line.cOrderlineId || null,
+    sourceInvoiceLineId: line.id,
   };
 }
 
@@ -193,19 +210,19 @@ describe('ImportFromSourceInvoiceModal — fetchDocuments (edge case 5: rectific
   });
 });
 
-describe('ImportFromSourceInvoiceModal — buildLineBody (sign preservation, not force-negated)', () => {
-  it('preserves a positive source line sign on import (proveedor cobró de más scenario)', () => {
+describe('ImportFromSourceInvoiceModal — buildLineBody (always negative, ETP-4737)', () => {
+  it('force-negates a positive source line on import', () => {
     const body = buildLineBody({
       line: { product: 'p1', unitPrice: 10, invoicedQuantity: 5 },
       qty: 3,
       invoiceId: 'inv1',
       lineNo: 10,
     });
-    assert.equal(body.invoicedQuantity, 3);
-    assert.equal(body.lineNetAmount, 30);
+    assert.equal(body.invoicedQuantity, -3);
+    assert.equal(body.lineNetAmount, -30);
   });
 
-  it('preserves a negative source line sign on import (proveedor cobró de menos scenario)', () => {
+  it('keeps a negative source line negative on import', () => {
     const body = buildLineBody({
       line: { product: 'p1', unitPrice: 10, invoicedQuantity: -5 },
       qty: 3,
@@ -216,7 +233,7 @@ describe('ImportFromSourceInvoiceModal — buildLineBody (sign preservation, not
     assert.equal(body.lineNetAmount, -30);
   });
 
-  it('always uses the positive magnitude of qty from the stepper regardless of its own sign', () => {
+  it('always uses the negative of the magnitude regardless of the stepper qty\'s own sign', () => {
     const negativeSourceNegativeQty = buildLineBody({
       line: { product: 'p1', unitPrice: 10, invoicedQuantity: -5 },
       qty: -3,
@@ -224,5 +241,40 @@ describe('ImportFromSourceInvoiceModal — buildLineBody (sign preservation, not
       lineNo: 10,
     });
     assert.equal(negativeSourceNegativeQty.invoicedQuantity, -3);
+  });
+
+  it('carries the source line id as sourceInvoiceLineId, ETP-4737 duplicate-detection follow-up', () => {
+    const body = buildLineBody({
+      line: { id: 'source-line-1', product: 'p1', unitPrice: 10 },
+      qty: 3,
+      invoiceId: 'inv1',
+      lineNo: 10,
+    });
+    assert.equal(body.sourceInvoiceLineId, 'source-line-1');
+  });
+});
+
+describe('ImportFromSourceInvoiceModal — duplicate detection via sourceInvoiceLineId', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('builds the already-imported set from the current invoice lines sourceInvoiceLineId', async () => {
+    installFetch({
+      invoices: [{ id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1' }],
+      invLines: [{ id: 'il1', sourceInvoiceLineId: 'source-line-1' }],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.ok(result.sharedContext.alreadyImportedSourceLineIds.has('source-line-1'));
+  });
+
+  it('marks a source line already imported into the current invoice as _alreadyImported', () => {
+    const sharedContext = { alreadyImportedSourceLineIds: new Set(['source-line-1']) };
+    const lines = fetchLinesAlreadyImported(
+      [{ id: 'source-line-1' }, { id: 'source-line-2' }],
+      sharedContext,
+    );
+    assert.equal(lines.find(l => l.id === 'source-line-1')._alreadyImported, true);
+    assert.equal(lines.find(l => l.id === 'source-line-2')._alreadyImported, false);
   });
 });

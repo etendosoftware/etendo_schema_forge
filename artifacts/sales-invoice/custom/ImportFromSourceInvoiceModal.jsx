@@ -20,19 +20,27 @@ import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
  * is a real backend list-query filter (not the GET-by-ID-only
  * `arInvoiceSubtype` enrichment), so it is safe to apply here too.
  *
- * Sign convention: the new "Factura Rectificativa" doc type is modeled as a
- * plain invoice variant (Return=No, Credit Memo=No at the AD level), not a
- * structural credit-memo/return type — so, unlike
- * ImportFromReturnShipmentModal, imported lines are NOT force-negated. The
- * source line's own sign is preserved; the user can edit quantity/price
- * inline afterward if a reduction is intended.
+ * Sign convention (ETP-4737, resolved with product/Vale): importing from a
+ * source invoice models reversing/correcting it, so lines are ALWAYS
+ * imported with a negative quantity regardless of the source line's own
+ * sign — mirrors purchase-invoice's ImportFromSourceInvoiceModal. The picker
+ * shows the quantity stepper itself as negative (via ImportLinesModal's
+ * negativeQuantity prop) rather than a positive magnitude with a hidden sign
+ * flip, so what the user sees matches what gets persisted. There is no +/-
+ * choice in the popup by design — if a positive correction is intended, the
+ * user edits the line by hand after import.
  *
- * Duplicate detection: there is no natural FK from a rectificativa line back
- * to its source invoice line (invoice-to-invoice import is new — no schema
- * column for it), so only the existing cOrderlineId-based check (shared with
- * the shipment/order modals, when the source line itself traces back to an
- * order) is reused as a best-effort safety net. Re-importing the same source
- * invoice twice is not blocked.
+ * After import, this modal PATCHes the header's `originInvoice` virtual
+ * field (`AbstractInvoiceHeaderHandler#persistOriginInvoice`) so the
+ * rectificativa is linked back to its source via `C_Invoice_Reverse` — same
+ * mechanism as purchase-invoice, surfaced back on GET via `enrichOriginInvoice`.
+ *
+ * Duplicate detection: each imported line carries `sourceInvoiceLineId` (the source
+ * C_InvoiceLine id) in its POST body, persisted by `InvoiceLineHandler#persistSourceInvoiceLine`
+ * into `EM_ETGO_Source_Invoiceline_ID` — a self-referencing FK on C_InvoiceLine (same
+ * pattern as `BOM_Parent_ID`). Surfaced back on GET as the same key
+ * (`enrichSourceInvoiceLineId`), so `fetchDocuments` can build the already-imported set and
+ * `fetchLines` marks matching source lines `_alreadyImported`, blocking re-selection.
  */
 
 const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
@@ -46,10 +54,10 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
   ]);
 
-  const alreadyImportedOrderLines = new Set();
+  const alreadyImportedSourceLineIds = new Set();
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.cOrderlineId) alreadyImportedOrderLines.add(il.cOrderlineId); });
+    invLines.forEach(il => { if (il.sourceInvoiceLineId) alreadyImportedSourceLineIds.add(il.sourceInvoiceLineId); });
   }
 
   let invoiceCurrency = null;
@@ -69,7 +77,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     documents = invoiceCurrency ? candidates.filter(inv => inv.currency === invoiceCurrency) : candidates;
     excludedByCurrency = !!invoiceCurrency && documents.length === 0 && candidates.length > 0;
   }
-  return { documents, sharedContext: { alreadyImportedOrderLines }, excludedByCurrency };
+  return { documents, sharedContext: { alreadyImportedSourceLineIds }, excludedByCurrency };
 };
 
 const fetchLines = async ({ base, headers, docId, sharedContext }) => {
@@ -77,18 +85,17 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
-  const { alreadyImportedOrderLines } = sharedContext;
+  const { alreadyImportedSourceLineIds } = sharedContext;
   return lines.map(l => {
     const qty = Number(l.invoicedQuantity) || 0;
     const unitPrice = Number(l.unitPrice) || 0;
-    const alreadyInCurrent = !!(l.cOrderlineId && alreadyImportedOrderLines?.has(l.cOrderlineId));
     return {
       ...l,
       _productName: l['product$_identifier'] || l.id,
       _maxQty: Math.abs(qty),
       _unitPrice: unitPrice,
       _lineNetAmount: Number(l.lineNetAmount) || (unitPrice * qty),
-      _alreadyImported: alreadyInCurrent,
+      _alreadyImported: !!alreadyImportedSourceLineIds?.has(l.id),
     };
   });
 };
@@ -103,25 +110,39 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
   const listPrice = Number(line.listPrice) || unitPrice;
   const grossUnitPrice = Number(line.grossUnitPrice) || 0;
   const discount = Number(line.etgoDiscount) || 0;
-  // The quantity input always yields a positive magnitude — re-apply the
-  // source line's own sign so a source line that was itself negative stays
-  // negative on import (see sign-convention note above).
-  const sourceQty = Number(line.invoicedQuantity) || 0;
-  const signedQty = sourceQty < 0 ? -Math.abs(qty) : Math.abs(qty);
+  // Always negative regardless of the source line's own sign (see the
+  // sign-convention note above) — the quantity input yields a positive
+  // magnitude, so negate it here.
+  const negQty = -Math.abs(qty);
   return {
     parentId: invoiceId,
     product: line.product,
-    invoicedQuantity: signedQty,
+    invoicedQuantity: negQty,
     unitPrice,
     listPrice,
     ...(grossUnitPrice ? { grossUnitPrice } : {}),
     ...(discount ? { etgoDiscount: discount } : {}),
-    lineNetAmount: unitPrice * signedQty,
+    lineNetAmount: unitPrice * negQty,
     tax: line.tax || null,
     uOM: line.uOM || null,
     lineNo,
     cOrderlineId: line.cOrderlineId || null,
+    sourceInvoiceLineId: line.id,
   };
+};
+
+const afterImport = async ({ importedDocIds, base, headers, invoiceId }) => {
+  if (importedDocIds.size !== 1) return;
+  const [sourceInvoiceId] = importedDocIds;
+  try {
+    await fetch(`${base}/sales-invoice/header/${invoiceId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ originInvoice: sourceInvoiceId }),
+    });
+  } catch {
+    // best-effort — the lines are already imported regardless of this link.
+  }
 };
 
 export default function ImportFromSourceInvoiceModal(props) {
@@ -135,10 +156,12 @@ export default function ImportFromSourceInvoiceModal(props) {
       noSearchResultsKey="noSourceInvoicesMatchSearch"
       noCurrencyMatchMessageKey="noSourceInvoicesMatchCurrency"
       successMessageKey="linesImportedFromSourceInvoice"
+      negativeQuantity
       fetchDocuments={fetchDocuments}
       fetchLines={fetchLines}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
+      afterImport={afterImport}
     />
   );
 }

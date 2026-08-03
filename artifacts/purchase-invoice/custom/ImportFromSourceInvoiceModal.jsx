@@ -19,8 +19,11 @@ import { getApSubtype } from './purchaseInvoiceSubtype';
  *
  * Lines are copied with a NEGATIVE invoiced quantity by default (mirrors
  * ImportFromGoodsReturnModal) — importing from a source invoice models
- * reversing/correcting that invoice's amounts. The quantity stepper still
- * lets the user adjust the magnitude before import.
+ * reversing/correcting that invoice's amounts. The quantity stepper shows
+ * this negative value directly (ImportLinesModal's `negativeQuantity` prop,
+ * ETP-4737) rather than a positive magnitude with a hidden sign flip, so
+ * what the user sees matches what gets persisted; there is no +/- choice in
+ * the popup by design — a positive correction is made by hand after import.
  *
  * After import, this modal best-effort PATCHes the header's `originInvoice`
  * virtual field (`AbstractInvoiceHeaderHandler#persistOriginInvoice`,
@@ -29,6 +32,13 @@ import { getApSubtype } from './purchaseInvoiceSubtype';
  * reads back on GET. This is independent of, and does not touch, the
  * separate "Reversed Invoices" / 349-boxes tab (`ReversedInvoicesPanel.jsx`),
  * which manages its own rows on the same table for Modelo 349 reporting.
+ *
+ * Duplicate detection: each imported line carries `sourceInvoiceLineId` (the source
+ * C_InvoiceLine id) in its POST body, persisted by `InvoiceLineHandler#persistSourceInvoiceLine`
+ * into `EM_ETGO_Source_Invoiceline_ID` — a self-referencing FK on C_InvoiceLine (same
+ * pattern as `BOM_Parent_ID`). Surfaced back on GET as the same key
+ * (`enrichSourceInvoiceLineId`), so `fetchDocuments` can build the already-imported set and
+ * `fetchLines` marks matching source lines `_alreadyImported`, blocking re-selection.
  */
 
 const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, auxData = {}) => {
@@ -76,7 +86,10 @@ const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, au
 };
 
 const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
-  const res = await fetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers });
+  const [res, invLinesRes] = await Promise.all([
+    fetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
+    fetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
+  ]);
 
   let documents = [];
   if (res.ok) {
@@ -89,18 +102,28 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     );
   }
 
+  // ETP-4737: which source lines are already imported into THIS invoice, via the
+  // EM_ETGO_Source_Invoiceline_ID link persisted by buildLineBody below and
+  // surfaced on GET as sourceInvoiceLineId (InvoiceLineHandler#enrichSourceInvoiceLineId).
+  const alreadyImportedSourceLineIds = new Set();
+  if (invLinesRes.ok) {
+    const invLines = (await invLinesRes.json())?.response?.data || [];
+    invLines.forEach(il => { if (il.sourceInvoiceLineId) alreadyImportedSourceLineIds.add(il.sourceInvoiceLineId); });
+  }
+
   return {
     documents,
-    sharedContext: { productAuxMap: {} },
+    sharedContext: { productAuxMap: {}, alreadyImportedSourceLineIds },
     excludedByCurrency: false,
   };
 };
 
-const fetchLines = async ({ base, headers, docId }) => {
+const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   const res = await fetch(`${base}/purchase-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`, { headers });
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
+  const alreadyImportedSourceLineIds = sharedContext?.alreadyImportedSourceLineIds;
   return lines.map(l => {
     const qty = Math.abs(Number(l.invoicedQuantity)) || 0;
     const unitPrice = Number(l.unitPrice) || 0;
@@ -112,7 +135,7 @@ const fetchLines = async ({ base, headers, docId }) => {
       _lineNetAmount: unitPrice * qty,
       _tax: l.tax || null,
       _uOM: l.uOM || null,
-      _alreadyImported: qty <= 0,
+      _alreadyImported: !!alreadyImportedSourceLineIds?.has(l.id),
     };
   });
 };
@@ -167,6 +190,7 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo, base, headers }) =>
     tax,
     uOM,
     lineNo,
+    sourceInvoiceLineId: line.id,
   };
 };
 
@@ -181,6 +205,7 @@ export default function ImportFromSourceInvoiceModal(props) {
       noSearchResultsKey="noSourceInvoicesMatchYourSearch"
       successMessageKey="linesImportedFromSourceInvoice"
       showPriceColumns={false}
+      negativeQuantity
       fetchDocuments={fetchDocuments}
       fetchLines={fetchLines}
       getDocDisplay={getDocDisplay}
