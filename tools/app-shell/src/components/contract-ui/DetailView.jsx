@@ -8,6 +8,7 @@ import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shi
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
+import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
@@ -52,6 +53,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
 import { useEntity } from '@/hooks/useEntity';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { useCatalogs } from '@/hooks/useCatalogs';
 import { useDisplayLogic } from '@/hooks/useDisplayLogic';
 import { useCallout } from '@/hooks/useCallout';
@@ -401,7 +403,7 @@ export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySele
 }
 
 export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
-  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
+  const { api, apiBaseUrl, secondaryHooks, stIdx, csrfToken, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
   return !st.customAddModal && linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
         || `${apiBaseUrl}/${st.key}/${row.id}`;
@@ -418,7 +420,8 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
     try {
       res = await fetch(childUrl, {
         method: 'PATCH',
-        headers: {...(token ? {Authorization: `Bearer ${token}`} : {}), 'Content-Type': 'application/json'},
+        headers: writeHeaders(csrfToken),
+        credentials: 'include',
         body: JSON.stringify({[fieldKey]: value}),
       });
     } catch (err) {
@@ -476,7 +479,7 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  * @param {number} deps.stIdx - current secondary tab index
  * @param {object} deps.api - resolved API config (for crud detail URLs)
  * @param {string} deps.apiBaseUrl - base URL for NEO Headless requests
- * @param {string} [deps.token] - bearer token
+ * @param {string} [deps.csrfToken] - CSRF proof for unsafe methods (ETP-4576)
  * @param {object} deps.secondaryHooks - per-tab child entity hooks
  * @param {Function} deps.ui - i18n label resolver
  * @param {Function} deps.extractErrorMessage - response error extractor
@@ -496,7 +499,7 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  */
 export function buildSecondaryLineHandlers(deps) {
   const {
-    st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
+    st, stIdx, api, apiBaseUrl, csrfToken, secondaryHooks, ui,
     extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
     selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
     setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
@@ -535,7 +538,8 @@ export function buildSecondaryLineHandlers(deps) {
       }
       const res = await fetch(secUrl, {
         method: 'PATCH',
-        headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+        headers: writeHeaders(csrfToken),
+        credentials: 'include',
         body: JSON.stringify(fieldValues),
       });
       if (res.ok) {
@@ -573,7 +577,8 @@ export function buildSecondaryLineHandlers(deps) {
                 || `${apiBaseUrl}/${st.key}/${row.id}`;
             return fetch(childUrl, {
               method: 'DELETE',
-              headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+              headers: writeHeaders(csrfToken),
+              credentials: 'include',
             }).then(res => ({res, row}));
           })
       );
@@ -816,7 +821,7 @@ export function SecondaryTableTab(props) {
                 apiBaseUrl: props.apiBaseUrl,
                 secondaryHooks: props.secondaryHooks,
                 stIdx: props.stIdx,
-                token: props.token,
+                csrfToken: props.csrfToken,
                 ui: props.ui,
                 extractErrorMessage: props.extractErrorMessage,
                 isDocumentReadOnly: tabReadOnly,
@@ -1007,7 +1012,7 @@ export function getLinesContainerClassName(linesLayout, embedded) {
   return `${linesLayout === 'inlineEditable' ? '' : 'pt-3 '}flex items-start gap-4${embedded ? ' pointer-events-none' : ''}`;
 }
 
-export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui }) {
+export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, csrfToken, extractErrorMessage, ui }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     // Inline autosave with callout chain. NEO Headless expects API keys
     // (camelCase), an unwrapped body, and numeric strings coerced for
@@ -1088,7 +1093,8 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
 
     const res = await fetch(childUrl, {
       method: 'PATCH',
-      headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+      headers: writeHeaders(csrfToken),
+      credentials: 'include',
       body: JSON.stringify(fieldValues),
     });
     if (res.ok) {
@@ -1109,7 +1115,7 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
   } : undefined;
 }
 
-export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage }) {
+export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, csrfToken, hook, selectedLine, setSelectedLine, ui, extractErrorMessage }) {
   return (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly ? async (row) => {
     if (!(await confirmDelete())) return;
     try {
@@ -1117,7 +1123,8 @@ export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, c
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
       const res = await fetch(childUrl, {
         method: 'DELETE',
-        headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+        headers: writeHeaders(csrfToken),
+        credentials: 'include',
       });
       if (res.ok) {
         hook.handleDeleteChild(row.id);
@@ -1662,7 +1669,7 @@ function makeCloseDialogHandler(setter) {
 }
 
 async function executeDetailProcessImpl(process, paramValues, explicitRows, {
-  selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui,
+  selectedChildRows, api, detailEntity, apiBaseUrl, csrfToken, hook, ui,
   setSelectedChildRows, setExecutingDetailProcess,
 }) {
   const rows = explicitRows || selectedChildRows;
@@ -1679,10 +1686,8 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
         return fetch(`${url}/action/${process.columnName ?? process.name}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: writeHeaders(csrfToken),
+          credentials: 'include',
           body: JSON.stringify({ fieldValues }),
         }).then(res => ({ res, row }));
       })
@@ -1914,6 +1919,13 @@ export function DetailView({
   selectorPriceCurrency = null,
   processConfirmModal = null,
 }) {
+  // ETP-4576 — the session is the `__Host-` cookie, so requests carry no
+  // credential; only unsafe methods need the CSRF proof. Read once here, in the
+  // component body: the exported helpers above (buildSecondaryLineHandlers,
+  // buildDeleteRowHandler, …) take it as a `csrfToken` dep instead of calling
+  // useAuth themselves, because 15 test files import them and invoke them without
+  // mounting the component — a hook in there would break every one of them.
+  const { csrfToken } = useAuth();
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
   // in memory from the other hook instance). On a direct URL hit `items` is empty anyway and
@@ -2537,7 +2549,7 @@ export function DetailView({
       try {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
         const sessionRes = await fetch(`${neoBase}/session`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: jsonHeaders(), credentials: 'include',
         });
         if (!sessionRes.ok || cancelled) return;
         const session = await sessionRes.json();
@@ -2566,7 +2578,7 @@ export function DetailView({
 
         const rateRes = await fetch(
           `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(docCurrencyId)}&date=${encodeURIComponent(orderDate)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { headers: jsonHeaders(), credentials: 'include' },
         );
         if (!rateRes.ok || cancelled) {
           activeCurrencyConversionRef.current = null;
@@ -2943,7 +2955,7 @@ export function DetailView({
           };
           try {
             const sessionRes = await fetch(`${neoBase}/session`, {
-              headers: { Authorization: `Bearer ${token}` },
+              headers: jsonHeaders(), credentials: 'include',
             });
             if (!sessionRes.ok) { revert(); return; }
             const session = await sessionRes.json();
@@ -2953,7 +2965,7 @@ export function DetailView({
             if (!orgCurrencyId || orgCurrencyId === value) return;
             const rateRes = await fetch(
               `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(value)}&date=${encodeURIComponent(orderDate)}`,
-              { headers: { Authorization: `Bearer ${token}` } },
+              { headers: jsonHeaders(), credentials: 'include' },
             );
             if (!rateRes.ok) { revert(); return; }
             const rateData = await rateRes.json();
@@ -3016,10 +3028,8 @@ export function DetailView({
       };
       const res = await fetch(`${apiBaseUrl}/${detailEntity}/callout`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: writeHeaders(csrfToken),
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       if (!res.ok) return;
@@ -3082,10 +3092,8 @@ export function DetailView({
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: writeHeaders(csrfToken),
+        credentials: 'include',
         body: JSON.stringify({ etgoTotalDiscount: pct }),
       });
       if (!res.ok) {
@@ -3105,10 +3113,8 @@ export function DetailView({
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: writeHeaders(csrfToken),
+        credentials: 'include',
         body: JSON.stringify({ [notesField]: value }),
       });
       if (!res.ok) {
@@ -3185,7 +3191,7 @@ export function DetailView({
   const [paramDialogProcess, setParamDialogProcess] = useState(null);
   const [detailParamDialogProcess, setDetailParamDialogProcess] = useState(null);
   const [executingDetailProcess, setExecutingDetailProcess] = useState(false);
-  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
+  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, csrfToken, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
 
   const othersRef = useRef(null);
 
@@ -4069,7 +4075,7 @@ export function DetailView({
                                                   || `${apiBaseUrl}/${detailEntity}/${row.id}`;
                                                 return fetch(childUrl, {
                                                   method: 'DELETE',
-                                                  headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                  headers: writeHeaders(csrfToken), credentials: 'include',
                                                 }).then(res => ({ res, row }));
                                               })
                                             );
@@ -4115,8 +4121,8 @@ export function DetailView({
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
                                   hiddenColumns={[]}
-                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui })}
-                                  onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
+                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, csrfToken, extractErrorMessage, ui })}
+                                  onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, csrfToken, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
                                     ref: primaryAddRowRef,
                                     active: addingLine,
@@ -4212,7 +4218,7 @@ export function DetailView({
                                             }
                                             const res = await fetch(childUrl, {
                                               method: 'PATCH',
-                                              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              headers: writeHeaders(csrfToken), credentials: 'include',
                                               body: JSON.stringify({ fieldValues }),
                                             });
                                             if (res.ok) {
@@ -4241,7 +4247,7 @@ export function DetailView({
                                               || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
                                             const res = await fetch(childUrl, {
                                               method: 'DELETE',
-                                              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              headers: writeHeaders(csrfToken), credentials: 'include',
                                             });
                                             if (res.ok) { hook.handleDeleteChild(editingChild.id); setEditingChild(null); }
                                           } finally { setSavingChild(false); }
@@ -4315,7 +4321,7 @@ export function DetailView({
                                                   || `${apiBaseUrl}/${detailEntity}/${row.id}`;
                                                 return fetch(childUrl, {
                                                   method: 'DELETE',
-                                                  headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                  headers: writeHeaders(csrfToken), credentials: 'include',
                                                 }).then(res => ({ res, row }));
                                               })
                                             );
@@ -4420,7 +4426,7 @@ export function DetailView({
                                                 normalizePatchFieldValues(patchEdits, fieldValues);
                                                 const res = await fetch(childUrl, {
                                                   method: 'PATCH',
-                                                  headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                  headers: writeHeaders(csrfToken), credentials: 'include',
                                                   body: JSON.stringify(fieldValues),
                                                 });
                                                 if (res.ok) {
@@ -4431,7 +4437,7 @@ export function DetailView({
                                                   // derived fields (lineNetAmount, discounts) on save.
                                                   try {
                                                     const freshRes = await fetch(childUrl, {
-                                                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                      headers: jsonHeaders(), credentials: 'include',
                                                     });
                                                     if (freshRes.ok) {
                                                       const freshJson = await freshRes.json();
@@ -4478,7 +4484,7 @@ export function DetailView({
                                                 || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
                                               const res = await fetch(childUrl, {
                                                 method: 'DELETE',
-                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                headers: writeHeaders(csrfToken), credentials: 'include',
                                               });
                                               if (res.ok) {
                                                 hook.handleDeleteChild(selectedLine.id);
@@ -4540,7 +4546,7 @@ export function DetailView({
                           // Non-Panel tabs stay lazy to avoid unnecessary data fetches.
                           if (!isActiveTab && !st.Panel) return false;
                           const secondaryLineHandlers = buildSecondaryLineHandlers({
-                            st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
+                            st, stIdx, api, apiBaseUrl, csrfToken, secondaryHooks, ui,
                             extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
                             selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
                             setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
@@ -4572,6 +4578,7 @@ export function DetailView({
                                 secondaryInlineLinesRef={getSecondaryInlineLinesRef}
                                 secondaryHooks={secondaryHooks}
                                 token={token}
+                                csrfToken={csrfToken}
                                 apiBaseUrl={apiBaseUrl}
                                 selectorContextByEntity={selectorContextByEntity}
                                 catalogs={catalogs}
@@ -4907,7 +4914,7 @@ export function DetailView({
                   const secUrl = `${apiBaseUrl}/${secondaryDeleteConfirm.tabKey}/${secondaryDeleteConfirm.id}`;
                   const res = await fetch(secUrl, {
                     method: 'DELETE',
-                    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                    headers: writeHeaders(csrfToken), credentials: 'include',
                   });
                   if (res.ok) {
                     secondaryHooks[secondaryDeleteConfirm.tabIndex]?.handleDeleteChild(secondaryDeleteConfirm.id);

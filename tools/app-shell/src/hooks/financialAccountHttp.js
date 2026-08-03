@@ -11,21 +11,9 @@
  * Callers must also pass `credentials: 'include'` on the fetch itself.
  */
 
-/** Headers for safe methods (GET). No credential, no CSRF proof. */
-export function jsonHeaders() {
-  return { 'Content-Type': 'application/json' };
-}
-
-/**
- * Headers for unsafe methods (POST/PUT/PATCH/DELETE). Adds the CSRF proof when
- * a session provides one; omits the header entirely when it does not, rather
- * than sending an empty value the backend would reject as malformed.
- */
-export function writeHeaders(csrfToken) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (csrfToken) headers['X-Go-CSRF'] = csrfToken;
-  return headers;
-}
+// The header builders are app-wide, not financial-account specific, so they live
+// in `lib/sessionHeaders.js` and are re-exported here for this module's callers.
+export { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 export async function readErrorMessage(res) {
   try {
