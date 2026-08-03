@@ -1,0 +1,757 @@
+/**
+ * Extracted from DetailView.jsx via ast-refactor.
+ */
+import React, { useState, useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button.jsx';
+import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
+import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
+import BalanceFooterPanel from './BalanceFooterPanel.jsx';
+import { computeBalance } from '@/lib/balanceTotals';
+import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
+import { roundAmounts } from '@/lib/lineFieldChange.js';
+import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { formatAmount } from '@/lib/formatAmount.js';
+import DocumentStatusPill from './DocumentStatusPill.jsx';
+
+export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
+  // Stack the side panel below the content on narrow viewports (e.g. when the
+  // devtools console is open) and only place it beside the content once there
+  // is room (lg+). A rigid side-by-side row would otherwise overlap the
+  // header/lines when the panel can't shrink.
+  if (hasSidePanel) return 'flex flex-col lg:flex-row items-stretch gap-0 min-h-full';
+  if (linesLayout === 'inlineEditable') return 'flex flex-col';
+  return '';
+}
+
+/**
+ * Evaluate a simple Etendo display-logic expression (@Field@='Value') against record data.
+ * Returns true (visible) if the expression cannot be parsed or if the field is missing from data.
+ */
+export function evalDisplayLogicRaw(expr, data) {
+  if (!expr) return true;
+  const clauses = [...expr.matchAll(/@(\w+)@\s*(!?=)\s*'([^']*)'/g)];
+  if (clauses.length === 0) return true;
+  return clauses.every(([, fieldRef, op, expected]) => {
+    const key = fieldRef[0].toLowerCase() + fieldRef.slice(1);
+    if (!(key in (data || {}))) return true; // field absent → default visible
+    const rawVal = data[key];
+    // Normalize boolean API values to Etendo string equivalents (true→'Y', false→'N')
+    const boolAsYN = rawVal ? 'Y' : 'N';
+    const actual = typeof rawVal === 'boolean' ? boolAsYN : String(rawVal ?? '');
+    return op === '=' ? actual === expected : actual !== expected;
+  });
+}
+
+export /**
+ * Collapsible section that hides itself entirely when children render as null.
+ */
+function CollapsibleSection({ title, children }) {
+  const ref = useRef(null);
+  const [empty, setEmpty] = useState(true);
+
+  useEffect(() => {
+    // Check for actual form fields — wrapper divs always render even when
+    // EntityForm returns null, so we must look for real input elements.
+    if (ref.current) {
+      const hasFields = ref.current.querySelector(
+        'input, select, textarea, [role="combobox"], [role="spinbutton"]'
+      ) !== null;
+      setEmpty(!hasFields);
+    }
+  });
+
+  if (empty) return <div ref={ref} className="hidden">{children}</div>;
+
+  return (
+    <details className="group">
+      <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground py-1 select-none list-none flex items-center gap-1">
+        <svg className="h-4 w-4 transition-transform group-open:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
+        {title}
+      </summary>
+      <div className="pt-2" ref={ref}>
+        {children}
+      </div>
+    </details>
+  );
+}
+
+/**
+ * Run the add-line action for a secondary tab and surface any rejection.
+ *
+ * `customAddModal` tabs open the popup editor; the rest toggle the inline
+ * add-line row. Both handlers are async — if their promise rejects we log the
+ * failure (with the offending tab key) instead of swallowing it silently.
+ *
+ * @returns {Promise} the (already error-handled) promise, so callers/tests can await it.
+ */
+export function runAddLineAction(st, { handleCustomModalAddClick, handleSecondaryAddLineToggle }) {
+  const run = st.customAddModal
+    ? handleCustomModalAddClick(st.key)
+    : handleSecondaryAddLineToggle(st.key);
+  return run.catch((err) => {
+    console.error(`Add line action failed for tab '${st.key}':`, err);
+  });
+}
+
+export function deriveTaxRateFromGross(gross, lineConfig, selectedLine) {
+  if (gross <= 0) return null;
+  const disc = lineConfig.discountField ? (parseFloat(String(selectedLine[lineConfig.discountField] ?? '')) || 0) : 0;
+  const net = parseFloat(String(selectedLine.lineNetAmount ?? '')) || 0;
+  if (net > 0) {
+    // Etendo stores LINENETAMT = qty × listPrice (before discount).
+    // Adjust by discount to get the actual taxable base before deriving the tax rate.
+    const taxableNet = disc > 0 ? net * (1 - disc / 100) : net;
+    return (gross / taxableNet - 1) * 100;
+  }
+  const qty = parseFloat(String(selectedLine[lineConfig.qtyField] ?? '')) || 0;
+  const price = parseFloat(String(selectedLine[lineConfig.priceField] ?? selectedLine.unitPrice ?? '')) || 0;
+  const lineNet = qty * price * (1 - disc / 100);
+  if (lineNet > 0) return (gross / lineNet - 1) * 100;
+  return null;
+}
+
+export function normalizePatchFieldValues(patchEdits, fieldValues) {
+  for (const [k, v] of Object.entries(patchEdits)) {
+    if (k.endsWith('$_identifier')) continue;
+    // NEO Headless PATCH expects camelCase API keys, not DB column names.
+    // Always use k (the API key) as the field name.
+    // Convert numeric strings to numbers for BigDecimal compatibility.
+    // Only strip when the value is already in standard format (no commas).
+    // Comma removal is skipped to avoid locale corruption (e.g. Spanish "10,50" = 10.5).
+    if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
+      fieldValues[k] = parseFloat(v);
+    } else {
+      fieldValues[k] = v;
+    }
+  }
+}
+
+export function applyCalloutFieldUpdates(updates, ctx) {
+  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs } = ctx;
+  for (const [key, entry] of Object.entries(updates)) {
+    // Skip empty callout values if the field already has a non-empty value
+    // (e.g., callout clears warehouse but defaults already set it)
+    const currentVal = data[key];
+    const userHasValue = currentVal !== '' && currentVal != null;
+    if ((entry.value === '' || entry.value == null) && userHasValue) {
+      continue;
+    }
+    // Protect user-touched fields from being overwritten by collateral updates
+    // coming from a callout triggered by a different field. The trigger field
+    // itself always wins (it was just changed by the user).
+    if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue) {
+      continue;
+    }
+    appliedFields.set(key, entry.value);
+    hook.handleChange(key, entry.value);
+    handleEntryIdentifierChange(entry, hook, key, api, catalogs);
+  }
+}
+
+export function applyOneComboEntry(key, combo, ctx) {
+  const { data, userTouchedRef, appliedFields, hook } = ctx;
+  let selectedVal = combo.selected;
+  let selectedLabel = combo._identifier;
+  // Auto-select first entry if no explicit selection (e.g., BP address combo)
+  if (selectedVal == null && Array.isArray(combo.entries) && combo.entries.length > 0) {
+    selectedVal = combo.entries[0].id;
+    selectedLabel = combo.entries[0].identifier || combo.entries[0]._identifier;
+  }
+  if (selectedVal == null) return;
+  // Protect user-touched fields from collateral combo updates
+  const currentVal = data[key];
+  const userHasValue = currentVal !== '' && currentVal != null;
+  if (userTouchedRef.current.has(key) && userHasValue) return;
+  appliedFields.set(key, selectedVal);
+  hook.handleChange(key, selectedVal);
+  if (selectedLabel) {
+    hook.handleChange(key + '$_identifier', selectedLabel);
+  }
+}
+
+/**
+ * Folds the selector item's top-level fields into the callout snapshot:
+ * maps standardPrice to gross/net price keys based on isTaxIncluded, and
+ * exposes every other scalar field as a `${fieldKey}_${name}` context key
+ * (without overwriting one the snapshot already has).
+ */
+export function mergeSelectorContextFields(selectedItem, snapshot, fieldKey) {
+  for (const [topField, topVal] of Object.entries(selectedItem)) {
+    if (topField === 'id' || topField === '_aux' || topField === 'label'
+        || topField === 'name' || topField === 'searchKey'
+        || typeof topVal === 'object' || topVal === null) continue;
+    if (topField === 'standardPrice' && topVal != null) {
+      const isGross = selectedItem.isTaxIncluded !== false;
+      if (isGross) {
+        snapshot.grossUnitPrice = topVal;
+        snapshot.grossListPrice = topVal;
+      } else {
+        snapshot.unitPrice = topVal;
+        snapshot.listPrice = topVal;
+      }
+      continue;
+    }
+    const ctxKey = `${fieldKey}_${topField}`;
+    if (!(ctxKey in snapshot)) snapshot[ctxKey] = topVal;
+  }
+}
+
+/**
+ * Folds the selector item's `_aux` suffixed values (e.g. _PSTD, _PLIM, _UOM)
+ * into the callout snapshot, keyed as `${fieldKey}${suffix}`.
+ */
+export function mergeSelectorAuxFields(selectedItem, snapshot, fieldKey) {
+  if (selectedItem._aux) {
+    for (const [suffix, auxVal] of Object.entries(selectedItem._aux)) {
+      snapshot[fieldKey + suffix] = auxVal;
+    }
+  }
+}
+
+/**
+ * Applies an optimistic local update to a child row after a successful PATCH,
+ * folding in the callout-derived values (incl. $_identifier keys for FK
+ * outputs like tax$_identifier) so the row UI reflects the full snapshot
+ * without a refetch.
+ */
+export function applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue, fieldValues, opts, hook, row) {
+  const localUpdate = {...derivedUpdates, [fieldKey]: payloadValue};
+  if (fieldValues.unitPrice !== undefined) localUpdate.unitPrice = fieldValues.unitPrice;
+  if (opts?.identifier !== undefined) {
+    localUpdate[fieldKey + '$_identifier'] = opts.identifier;
+  }
+  hook.handleUpdateChild?.(row.id, localUpdate);
+}
+
+/**
+ * Seeds the PATCH body from a cleaned row, coercing each value and skipping
+ * `$_identifier` keys and internal markers/metadata (_identifier, _entityName,
+ * $ref, id) that are not valid persisted fields.
+ */
+export function collectRowFieldValues(cleanRow, fieldValues, coerce) {
+  for (const [k, v] of Object.entries(cleanRow)) {
+    if (k.endsWith('$_identifier')) continue;
+    // Skip internal markers and metadata that aren't valid fields.
+    if (k === '_identifier' || k === '_entityName' || k === '$ref' || k === 'id') continue;
+    fieldValues[k] = coerce(v);
+  }
+}
+
+/**
+ * Builds the className for a secondary tab's content wrapper, disabling pointer
+ * events when the view is embedded (read-only) inside another detail view.
+ */
+export function getSecondaryTabContentClassName(secondaryTabContentPaddingT, embedded) {
+  return `${secondaryTabContentPaddingT} flex flex-col gap-3${embedded ? ' pointer-events-none' : ''}`;
+}
+
+/**
+ * Returns the inline-lines table ref for a secondary tab when the lines layout
+ * is `inlineEditable`, otherwise undefined (no ref wiring for read-only tables).
+ */
+export function getSecondaryLinesTableRef(linesLayout, getSecondaryInlineLinesRef, st) {
+  return linesLayout === 'inlineEditable' ? getSecondaryInlineLinesRef(st.key) : undefined;
+}
+
+/**
+ * Returns the `onEditRow` handler for a secondary tab: tabs that use a custom
+ * add/edit modal open the popup editor; other tabs edit in place (undefined).
+ */
+export function getSecondaryEditRowHandler(st, setCustomModalState) {
+  return st.customAddModal
+      ? (row) => setCustomModalState({key: st.key, rowId: row.id})
+      : undefined;
+}
+
+export function SecondaryPanelTab(props) {
+  return <div className="flex-1 min-w-0">
+    <props.st.Panel
+        parentId={props.data?.id}
+        token={props.token}
+        apiBaseUrl={props.apiBaseUrl}
+        onCount={props.onCount}
+    />
+  </div>;
+}
+
+export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
+  return (
+    <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
+      <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="8" y1="13" x2="16" y2="13" />
+          <line x1="8" y1="17" x2="13" y2="17" />
+        </svg>
+      </div>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noRecordsYet')}</span>
+      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
+      <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
+        + {addLineLabel}
+      </button>
+    </div>
+  );
+}
+
+export function getSaveButtonLabel(savingLine, ui) {
+  return savingLine ? ui('loading') : ui('save');
+}
+
+export function getChildSaveButtonLabel(savingChild, ui) {
+  return savingChild ? ui('loading') : ui('save');
+}
+
+export function getAddLineWrapperClassName(linesLayout) {
+  return linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-card z-10' : 'relative';
+}
+
+export function resolveCanAddLines(addLineGuard, data, requiredHeaderFields, children = []) {
+  if (addLineGuard) {
+    return addLineGuard(data, children);
+  } else if (Array.isArray(requiredHeaderFields) && requiredHeaderFields.length > 0) {
+    return requiredHeaderFields.every((k) => {
+      const v = data?.[k];
+      return v != null && v !== '' && !(typeof v === 'string' && v.trim() === '');
+    });
+  } else {
+    return true;
+  }
+}
+
+export async function parseBackendErrorMessage(res) {
+  let raw;
+  try {
+    const data = await res.json();
+    // NEO Headless top-level format: { error: { message, status } }
+    if (data?.error?.message) raw = data.error.message;
+    else {
+      // Etendo JsonDataService format: { response: { error: { message } | string } }
+      const err = data?.response?.error;
+      if (err?.message) raw = err.message;
+      else if (typeof err === 'string') raw = err;
+      else if (data?.message) raw = data.message;
+    }
+  } catch {
+    // Ignore non-JSON error bodies.
+  }
+  return raw;
+}
+
+export function getDocumentIds(recordId) {
+  return recordId ? [recordId] : [];
+}
+
+export function resolveSidebarContent(sidebarContent, data) {
+  return typeof sidebarContent === 'function' ? sidebarContent(data) : sidebarContent;
+}
+
+export function renderSidePanel(sidePanel, data, recordId, token, apiBaseUrl, api, isNew) {
+  return typeof sidePanel === 'function'
+      ? React.createElement(sidePanel, {recordId: data?.id || recordId, data, token, apiBaseUrl, api, isNew})
+      : sidePanel;
+}
+
+export function getNotesRowClassName(embedded) {
+  return `flex items-start gap-3 px-4 py-2.5${embedded ? ' pointer-events-none' : ''}`;
+}
+
+export function getDocsRowClassName(embedded) {
+  return `flex items-start gap-3 px-4 py-2.5 border-b border-border/30${embedded ? ' pointer-events-none' : ''}`;
+}
+
+export function getAddLineMenuActions(getLineMenuActions, data, extraActionsRef, ui) {
+  return getLineMenuActions
+      ? getLineMenuActions({data, importRef: extraActionsRef}).map(a => ({
+        ...a,
+        label: typeof a.label === 'string' ? (ui(a.label) || a.label) : a.label,
+      }))
+      : undefined;
+}
+
+export function getInlineEditableShrinkClassName(linesLayout) {
+  return linesLayout === 'inlineEditable' ? 'shrink-0' : '';
+}
+
+export function getOthersTabClassName(embedded) {
+  return `pt-5${embedded ? ' pointer-events-none' : ''}`;
+}
+
+export function getCustomLinesTabClassName(embedded) {
+  return `pt-3${embedded ? ' pointer-events-none' : ''}`;
+}
+
+export function getSidebarSlideClassName(isClosingLine) {
+  return isClosingLine ? 'sidebar-slide-out' : 'sidebar-slide-in';
+}
+
+export function getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom) {
+  return `flex items-center justify-between ${linesLayout === 'inlineEditable' ? 'p-2' : toolbarPaddingX + ' py-2'}${toolbarBorderBottom || linesLayout === 'inlineEditable' ? ' border-b border-[hsl(var(--border-subtle))]' : ''}`;
+}
+
+export function getLineMenuActionsRef(getLineMenuActions, extraActionsRef) {
+  return getLineMenuActions ? extraActionsRef : undefined;
+}
+
+export function getWindowTitle(breadcrumb, tMenu, windowName) {
+  return breadcrumb
+      ? tMenu(breadcrumb.split(' / ').at(-1).trim()) || breadcrumb.split(' / ').at(-1).trim()
+      : tMenu(windowName) || windowName || '';
+}
+
+export function getRecordTitle(isNew, ui, data, titleField) {
+  return isNew
+      ? ui('newRecord')
+      : `${resolveIdentifier(data, titleField) || data._identifier || data.id || ''}`;
+}
+
+export function getFullBreadcrumb(breadcrumb, tMenu, title, windowTitle) {
+  const titleSuffix = title ? ` / ${title}` : '';
+  return breadcrumb
+      ? `${breadcrumb.split(' / ').map(s => tMenu(s.trim())).join(' / ')}${titleSuffix}`
+      : windowTitle;
+}
+
+export function getOnAddToFavorites(favKey, toggleFavorite, entityLabel, breadcrumb, windowName) {
+  return favKey ? () => toggleFavorite(favKey, entityLabel || breadcrumb?.split(' / ').at(-1).trim() || windowName) : undefined;
+}
+
+export function getLinesContainerClassName(linesLayout, embedded) {
+  return `${linesLayout === 'inlineEditable' ? '' : 'pt-3 '}flex items-start gap-4${embedded ? ' pointer-events-none' : ''}`;
+}
+
+export function getDeleteChildButtonLabel(deletingChildren, ui) {
+  return deletingChildren ? ui('loading') : ui('delete');
+}
+
+export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine) {
+  return DetailForm && linesLayout !== 'inlineEditable' ? (row) => {
+    const line = {...row};
+    roundAmounts(line);
+    setSelectedLine(line);
+  } : undefined;
+}
+
+export function getSqBtnSize(toolbarButtonSize) {
+  return toolbarButtonSize === 'default' ? 'h-10 w-10' : 'h-9 w-9';
+}
+
+export function getSaveBtnCls(toolbarButtonSize) {
+  return toolbarButtonSize === 'default' ? 'h-10 gap-2' : 'gap-1.5';
+}
+
+export function getDocumentReadOnly(lockWhenProcessed, _headerData) {
+  return lockWhenProcessed && (_headerData?.processed === true || _headerData?.processed === 'Y');
+}
+
+export function insertLinesTab(detailLabel, detailEntity, hook, detailTabIndex, tabs) {
+  const linesTab = {key: 'lines', label: detailLabel || detailEntity || 'Lines', count: hook.children?.length || 0};
+  if (typeof detailTabIndex === 'number' && detailTabIndex >= 0 && detailTabIndex <= tabs.length) {
+    tabs.splice(detailTabIndex, 0, linesTab);
+  } else {
+    tabs.unshift(linesTab);
+  }
+}
+
+export function customTabKey(ct) {
+  return `custom:${ct.key}`;
+}
+
+export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
+  return (typeof extraActions === 'function' ? extraActions({
+    data,
+    children: hook.children
+  }) : extraActions).map((action, i) => (
+      action.visible !== false && (
+          <Button
+            key={action.key || i}
+            variant="outline"
+            size="default"
+            className={`${action.className || ''} ${saveBtnCls}`.trim()}
+            onClick={action.onClick}
+            data-testid="Button__fa3275">
+            {action.label}
+          </Button>
+      )
+  ));
+}
+
+export function getSecondaryTabEntityKey(secondaryTabs, index) {
+  return (secondaryTabs[index]?.isFormTab || secondaryTabs[index]?.Panel) ? null : (secondaryTabs[index]?.key ?? null);
+}
+
+export function renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui) {
+  return notesFocused ? (
+      <textarea
+          value={data[notesField] || ''}
+          onChange={(e) => handleChangeWithCallout(notesField, e.target.value)}
+          onBlur={() => {
+            handleNotesSave(data[notesField]);
+            setNotesFocused(false);
+          }}
+          placeholder={ui('description')}
+          rows={3}
+          autoFocus
+          className="w-full text-xs bg-transparent px-2 py-0.5 resize-none focus:outline-none placeholder:text-muted-foreground/40"
+      />
+  ) : (
+      <div
+          tabIndex={0}
+          role="textbox"
+          onClick={() => setNotesFocused(true)}
+          onFocus={() => setNotesFocused(true)}
+          className="w-full text-xs px-2 py-0.5 cursor-text min-h-[1.5rem] whitespace-pre-wrap break-words text-foreground/80"
+      >
+        {data[notesField] || <span className="text-muted-foreground/40">{ui('description')}</span>}
+      </div>
+  );
+}
+
+export function pushOthers(showOthers, tabs, othersLabel, ui) {
+  if (showOthers === true) {
+    tabs.push({key: 'others', label: othersLabel || ui('others')});
+  }
+}
+
+export function renderEmbeddedStatusPill(statusField, data, statusEnumLabels) {
+  return statusField && data[statusField] ? (
+      <div className="flex items-center gap-3 px-6 py-3 border-b border-border/30">
+        <DocumentStatusPill
+          status={data[statusField]}
+          enumLabels={statusEnumLabels}
+          data-testid="DocumentStatusPill__fa3275" />
+      </div>
+  ) : null;
+}
+
+export function getTabsBarStyle(tabsBarRight, tabsBarRightDivider) {
+  return tabsBarRight && tabsBarRightDivider ? {paddingRight: `calc(${tabsBarRightDivider} + 24px)`} : undefined;
+}
+
+export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
+  return `flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`;
+}
+
+export // ETP-4479 — windows where a plain header DELETE fails once the record has
+// ever been referenced (FK constraints); the NEO action reactivates and
+// removes it server-side instead. Hardcoded here (not decisions.json-driven)
+// because the decisions.json -> generator wiring for this is not published
+// in schema_forge_core; do not add a decisions.json field for this without
+// first confirming the generator support ships.
+const WINDOW_DELETE_ACTIONS = {
+  'payment-in': 'eTPRRemovePayment',
+  'payment-out': 'eTPRRemovePayment',
+};
+
+export // ETP-4500 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: these
+// windows show the rich Reactivar/Eliminar cartel (conditional Conciliación/Asiento items)
+// instead of the generic delete confirmation Dialog. `dir` feeds the cobro/pago wording.
+const WINDOW_DELETE_CONFIRM_MODALS = {
+  'payment-in': { Component: PaymentLifecycleConfirmModal, dir: 'in' },
+  'payment-out': { Component: PaymentLifecycleConfirmModal, dir: 'out' },
+};
+
+export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu) {
+  return primaryTabsVariant === 'pill' ? (
+      <div className="inline-flex items-center gap-1 p-1 h-10 rounded-xl bg-muted">
+        {primaryTabs.map(tab => (
+            <button
+                key={tab.key}
+                onClick={() => setActivePrimaryTab(tab.key)}
+                className={activePrimaryTab === tab.key
+                  ? 'h-8 px-4 text-sm font-medium rounded-lg transition-all bg-card text-text-primary shadow-sm'
+                  : 'h-8 px-4 text-sm font-medium rounded-lg transition-all text-text-secondary'}
+            >
+              {tMenu(tab.label)}
+            </button>
+        ))}
+      </div>
+  ) : (
+      primaryTabs.map(tab => (
+          <button
+              key={tab.key}
+              onClick={() => setActivePrimaryTab(tab.key)}
+              className={[
+                'relative px-4 py-1.5 text-sm font-medium rounded-lg transition-colors border',
+                activePrimaryTab === tab.key
+                    ? 'bg-card border-border-control shadow-sm text-text-primary'
+                    : 'border-transparent text-text-secondary hover:text-text-primary',
+              ].join(' ')}
+          >
+            {tMenu(tab.label)}
+          </button>
+      ))
+  );
+}
+
+export function resolveHeaderContent(headerContent, data) {
+  return typeof headerContent === 'function' ? headerContent(data) : headerContent;
+}
+
+export function isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) {
+  return linesLayout !== 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly && selectedChildRows.length > 0;
+}
+
+export function isCustomPrimaryTabActive(primaryTabs, activePrimaryTab) {
+  return primaryTabs && activePrimaryTab !== 'general';
+}
+
+export function getDetailContentClassName(sidePanel, linesLayout) {
+  return `${sidePanel ? 'flex-1 min-w-0' : 'max-w-full'} ${linesLayout === 'inlineEditable' ? 'flex flex-col' : 'space-y-2'}`;
+}
+
+export function canDeleteSelectedLine(api, detailEntity, selectedLine, isDocumentReadOnly) {
+  return (api?.crud?.[detailEntity]?.delete ?? true) && selectedLine?.id && !isDocumentReadOnly;
+}
+
+export function shouldShowDetailFormSidebar(linesLayout, DetailForm, selectedLine, isClosingLine) {
+  return linesLayout !== 'inlineEditable' && DetailForm && (selectedLine || isClosingLine);
+}
+
+export function isInitialChildrenLoading(hook) {
+  return hook.childrenLoading && hook.children.length === 0;
+}
+
+export function shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) {
+  return linesLayout === 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true);
+}
+
+/**
+ * Balance gate for double-entry windows (decisions.json window.balanceFooter).
+ * Computes the live balance and the two block flags used to disable Save / Confirm.
+ * Extracted from the DetailView body to keep its cognitive complexity low.
+ * - blockSaveForBalance: Save stays disabled until Σ debit === Σ credit.
+ * - blockCompleteForBalance: Completion is stricter — must balance AND carry a
+ *   non-zero amount (a 0=0 draft is "balanced" but must not be completable).
+ */
+export function computeBalanceGate({ balanceFooter, children, pendingLineValues, lineEdits, selectedLine }) {
+  const balanceEditingLine = lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine;
+  const balanceState = balanceFooter
+    ? computeBalance(children, pendingLineValues, balanceEditingLine, balanceFooter)
+    : null;
+  const blockSaveForBalance = !!balanceFooter && balanceState != null && !balanceState.isBalanced;
+  const blockCompleteForBalance = !!balanceFooter && balanceState != null
+    && (!balanceState.isBalanced || !balanceState.hasAmounts);
+  return { balanceState, blockSaveForBalance, blockCompleteForBalance };
+}
+
+export function renderTotalsBlock({ balanceFooter, children, pendingLine, editingLine, lineConfig, formatAmount, currency, summary, isDocumentReadOnly, totalDiscountPct, onTotalDiscountChange }) {
+  if (balanceFooter) {
+    return (
+      <BalanceFooterPanel
+        lines={children}
+        pendingLine={pendingLine}
+        editingLine={editingLine}
+        config={balanceFooter}
+        formatAmount={formatAmount}
+        currency={currency}
+        data-testid="BalanceFooterPanel__fa3275" />
+    );
+  }
+  const subtotalField = summary.find(f => f.type === 'amount' && (f.key.toLowerCase().includes('summed') || f.key.toLowerCase().includes('totallines') || f.key.toLowerCase().includes('lineamount')));
+  const totalField = summary.find(f => f.type === 'amount' && (f.key.toLowerCase().includes('grand') || (f.key.toLowerCase().includes('total') && !f.key.toLowerCase().includes('line'))));
+  if (!subtotalField && !totalField) return null;
+  return (
+    <DocumentTotalsPanel
+      lines={children}
+      pendingLine={pendingLine}
+      editingLine={editingLine}
+      lineConfig={lineConfig}
+      formatAmount={formatAmount}
+      currency={currency}
+      readOnly={isDocumentReadOnly}
+      totalDiscountPct={totalDiscountPct}
+      onTotalDiscountChange={onTotalDiscountChange}
+      data-testid="DocumentTotalsPanel__fa3275" />
+  );
+}
+
+export function isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) {
+  return isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows)
+    || (detailProcesses.length > 0 && selectedChildRows.length > 0 && linesLayout !== 'inlineEditable');
+}
+
+export function resolveDetailRows(selectedChildRows, selectedLine) {
+  if (selectedChildRows.length > 0) return selectedChildRows;
+  return selectedLine ? [selectedLine] : [];
+}
+
+export function makeCloseDialogHandler(setter) {
+  return open => { if (!open) setter(null); };
+}
+
+/**
+ * Full-page detail view for a single entity record.
+ * Two-zone layout: gray top bar + white content card with rounded corner.
+ *
+ * `customTabs` accepts items of shape:
+ *   { key, label, Component, placement = 'footer', props = {} }
+ *
+ * - placement: 'footer' (default) -> renders as a chip row in the bottom Docs section
+ *   (legacy behavior; component receives layout="chips").
+ * - placement: 'tab' -> renders as a first-class tab next to lines/secondaryTabs.
+ *   The component always mounts but receives `isActive` so it can lazy-load data
+ *   the first time it becomes visible.
+ *
+ * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api, onChange }`
+ * plus any keys declared in the optional `props` object.
+ *
+ * `onChange(field, value)` is `hook.handleChange` — it writes straight into the shared
+ * `editing` state (the same state the header form uses), so any edit made by a custom
+ * tab is picked up automatically by the next header save (no per-field persistence
+ * needed, no separate save button required). This prop is additive/optional — custom
+ * tabs that don't use it are unaffected.
+ *
+ * 'tab' placement items also receive an `onVisibilityChange(visible: boolean)` callback
+ * (mirroring `onCountChange`). The tab defaults to visible and stays that way unless the
+ * component calls `onVisibilityChange(false)` — e.g. to hide itself entirely when it has
+ * nothing to show for the current record. Calling `onVisibilityChange(true)` afterwards
+ * (e.g. once the underlying data changes) restores it. Components that never call it are
+ * unaffected — the tab is always shown, so this is fully backwards compatible.
+ */
+export function hasUnsavedEdits(editing, selected) {
+  if (!editing || !selected) return false;
+  return Object.entries(editing).some(([k, v]) => k !== 'id' && v !== selected[k]);
+}
+
+export function mergeLineEdits(lineEdits, selectedLine) {
+  return lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine;
+}
+
+export function dispatchProcessAction(p, { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess }) {
+  if ((p.style === 'ghost-danger' || p.confirmModal) && processConfirmModal) { setConfirmProcess(p); }
+  else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
+  else { handleProcess?.(p); }
+}
+
+export function resolveProcessLabel(p, data) {
+  if (p.labelToggle && data?.[p.labelToggle.field] === p.labelToggle.equals) {
+    return p.labelToggle.label;
+  }
+  return p.label;
+}
+
+export function renderProcessConfirmModal(process, Modal, onConfirm, onClose, record) {
+  if (!process || !Modal) return null;
+  return React.createElement(Modal, { process, onConfirm, onClose, record });
+}
+
+export function resolveStatusPrefix(key, translate) {
+  return key ? translate(key) : undefined;
+}
+
+export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
+  if (entry._identifier) {
+    hook.handleChange(key + '$_identifier', entry._identifier);
+  } else if (entry.value && api?.selectors) {
+    // Callout returned an ID without _identifier — resolve from loaded catalogs
+    const sel = api.selectors.find(s => s.field === key);
+    if (sel) {
+      const options = getCatalogOptions(catalogs, sel.entity, sel);
+      const match = Array.isArray(options) && options.find(o => o.id === entry.value);
+      if (match) {
+        hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
+      }
+    }
+  }
+}
