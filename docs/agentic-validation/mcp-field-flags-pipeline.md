@@ -77,6 +77,7 @@ Each field object is built by `McpToolRouterSupport.buildSchemaField`
 | **`agentPrompt`** (only when non-empty) | **table** | `AGENT_PROMPT` (`neo-writer.js:275,316`; `push-to-neo.js:346-349,382-384`) | **`fields.<f>.agentPrompt`** (`resolve-curated.js:204`) |
 | `hasSelector` + `selectorType` (`TableDir`/`Table`/`Search`/…) | computed | from `AD_Reference` (`:332,404-408`) | — |
 | button info: `triggerValue`, `action`, `invokeVia:"neo_action"`, `processType`, `processName`, `processId` (button cols only) | from AD | `AD_Column.Process` / `OBUIAPPProcess` (`:334,345-364`) | AD |
+| **`actionValues`** (`[{value,label}]`, sorted) + **`actionParameter`** (`"docAction"`) — only for buttons whose AD column has an `AD_Reference_Value` list (ETP-4285) | from AD | `McpSchemaFieldBuilder.addActionValues` → `NeoSelectorService.getListLabels` (active-only) | **Not settable in `decisions.json`.** The AD list is the full active set and is intentionally broader than what is legal per state — the state machine lives in the field's `agentPrompt` |
 | `defaultValue` (resolved on create/read) | **table + AD** | `DEFAULTVALUE` (`neo-writer.js:314`) + AD default cascade | **`fields.<f>.defaultValue`** |
 
 ### `visibility` — wired but currently sourced as a pair, not a column
