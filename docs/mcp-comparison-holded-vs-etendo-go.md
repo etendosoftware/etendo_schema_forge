@@ -19,6 +19,8 @@ Holded and Etendo GO expose two fundamentally different MCP philosophies:
 - The biggest Etendo GO wins are on **agent/developer experience of features it already has** — cleaner naming, leaner responses, richer query semantics, friendlier value resolution and clearer errors (§7). Broader operational domains (CRM pipeline, projects, HR) are a **roadmap item**, not a current gap (§8).
 - **Easiest wins for "simpler to use":** most of the friction is already solved by assets that just aren't surfaced — a `docs` recipe tool the agent doesn't know to call, a `neo_defaults` that pre-fills everything but drowns it in compliance noise, and small argument/entity-naming inconsistencies that cost a guaranteed first-try failure (§7.8–§7.9). None require ERP work.
 
+> **Delivery status (2026-08-03):** 7 of the 10 improvements in §12 shipped under **ETP-4601** — Wave 1 (IMP-1, IMP-5, IMP-8, IMP-10) and Wave 2 (IMP-2, IMP-3, IMP-7). Only **Wave 3** (IMP-4 FK-by-name, IMP-6 actions-only view, IMP-9 `primaryEntity`) remains. See §12 for per-item detail.
+
 ---
 
 ## 2. Method & Scope
@@ -352,19 +354,19 @@ neo_list({ spec: "product", entity: "product", filters: { name: "Widget" } })
 
 ## 10. Prioritized Recommendations (Etendo GO MCP)
 
-### P1 — High impact, low/medium effort (DX parity on existing features — §7)
-- **Clean field/action names + per-field prose** in `neo_schema` (surface the `decisions.json` curation). [§7.1]
-- **Business query semantics** on `neo_list` for high-traffic document specs (status, date/due ranges, operators). [§7.3]
-- **Explicit not-found / structured validation errors** from `neo_get` and writes. [§7.5]
-- **Make `docs` first-class + fix name drift** — point to it from `neo_discover` and every error, and align recipe tool names (`etendo_neo_*` → `neo_*`). Turns the best-but-hidden asset into the default on-ramp. [§7.9]
+### P1 — High impact, low/medium effort (DX parity on existing features — §7) — ✅ all DONE (ETP-4601)
+- ✅ **Clean field/action names + per-field prose** in `neo_schema` (surface the `decisions.json` curation). [§7.1] — IMP-1
+- ✅ **Business query semantics** on `neo_list` for high-traffic document specs (status, date/due ranges, operators). [§7.3] — IMP-3
+- ✅ **Explicit not-found / structured validation errors** from `neo_get` and writes. [§7.5] — IMP-5
+- ✅ **Make `docs` first-class + fix name drift** — point to it from `neo_discover` and every error, and align recipe tool names (`etendo_neo_*` → `neo_*`). Turns the best-but-hidden asset into the default on-ramp. [§7.9] — IMP-10
 
 ### P2 — Medium
-- **Field projection / summary views** to cut response verbosity. [§7.2]
-- **Lean/grouped `neo_defaults`** — split `confirm` vs `systemManaged`, or a `view:"minimal"` returning only writable non-system fields. [§7.8a]
-- **Human-friendly FK resolution** in `neo_create`/`neo_update` (accept names, resolve server-side). [§7.4]
-- **Actions-only discovery view** in `neo_discover`/`neo_schema`. [§7.6]
-- **Argument-name ergonomics** — `field` alias for `column`; missing-arg errors name the expected key. [§7.8b]
-- **Expose `primaryEntity` in `neo_discover`** — additive field derived from the existing entity hierarchy; no renaming. [§7.8c]
+- ✅ **Field projection / summary views** to cut response verbosity. [§7.2] — IMP-2 (ETP-4601)
+- ✅ **Lean/grouped `neo_defaults`** — split `confirm` vs `systemManaged`, or a `view:"minimal"` returning only writable non-system fields. [§7.8a] — IMP-7 (ETP-4601)
+- ✅ **Argument-name ergonomics** — `field` alias for `column`; missing-arg errors name the expected key. [§7.8b] — IMP-8 (ETP-4601)
+- ⏳ **Human-friendly FK resolution** in `neo_create`/`neo_update` (accept names, resolve server-side). [§7.4] — IMP-4 (Wave 3, pending)
+- ⏳ **Actions-only discovery view** in `neo_discover`/`neo_schema`. [§7.6] — IMP-6 (Wave 3, pending)
+- ⏳ **Expose `primaryEntity` in `neo_discover`** — additive field derived from the existing entity hierarchy; no renaming. [§7.8c] — IMP-9 (Wave 3, pending)
 - **PDF/print + attachment tools** (document delivery — currently absent).
 - **Convenience lookups** (find-by-document-number) and **per-verb permission/role** in the schema.
 - **Cursor pagination** alongside offset.
@@ -406,7 +408,7 @@ Legend: **⚙️ Signature change** = the tool's arguments/name change · **♻�
 
 ---
 
-### IMP-1 · Clean field names + per-field prose in `neo_schema` — ♻️ Same call
+### IMP-1 · Clean field names + per-field prose in `neo_schema` — ✅ DONE (ETP-4601, Wave 1)
 **Priority: P1** · ref §7.1 · **Repo(s): `com.etendoerp.go` (MCP servlet emits it)** — *and* `schema_forge_core` (`push-to-neo`) **only if** the curated label/description is not already stored in `ETGO_SF_FIELD`. Verify the table first: if the data is there, this is servlet-only; if not, it's a two-repo change (push the curated text → emit it).
 
 The call stays identical; only the per-field payload gains a clean `label` and a `description`.
@@ -425,11 +427,11 @@ The call stays identical; only the per-field payload gains a clean `label` and a
 { "name": "siiDescription", "column": "EM_Aeatsii_Descripcion_Sii", "label": "SII Description",
   "description": "Free-text description reported to the Spanish SII tax authority.", "type": "string" }
 ```
-**Done when:** no field in a curated spec exposes a raw `EM_*`/`User1_ID`-style label, and every writable field has a non-empty `description`.
+**Done when:** ~~no field in a curated spec exposes a raw `EM_*`/`User1_ID`-style label, and every writable field has a non-empty `description`~~ ✅ — curated, localized AD_Field labels + one-line descriptions are surfaced in `neo_schema` (`McpSchemaFieldBuilder`, ETP-4601).
 
 ---
 
-### IMP-2 · Field projection / summary view on `neo_list` & `neo_get` — ⚙️ Signature change (additive, optional)
+### IMP-2 · Field projection / summary view on `neo_list` & `neo_get` — ✅ DONE (ETP-4601, Wave 2)
 **Priority: P2** · ref §7.2 · **Repo: `com.etendoerp.go` (MCP servlet)**
 
 Add an optional `fields` (projection) parameter and/or a `view:"summary"`. Omitting it keeps today's full behavior (backward compatible).
@@ -449,7 +451,7 @@ neo_list({ spec:"sales-invoice", entity:"header", fields:["documentNo","business
 // AFTER (alt) — curated summary view, no field list needed
 neo_list({ spec:"sales-invoice", entity:"header", view:"summary" })
 ```
-**Done when:** an agent can retrieve a document list with ≤8 fields/row without post-filtering, and the default (no `fields`) still returns everything.
+**Done when:** ~~an agent can retrieve a document list with ≤8 fields/row without post-filtering, and the default (no `fields`) still returns everything~~ ✅ — `fields` projection + `view:"summary"` (driven by `businessCritical`) implemented in `McpFieldProjection`; default (no `fields`/`view`) returns everything (ETP-4601).
 
 ---
 
@@ -495,7 +497,7 @@ neo_create({ spec:"product", entity:"product", data:{ name:"Widget", tax:"IVA 21
 
 ---
 
-### IMP-5 · Explicit not-found + structured validation errors — ♻️ Same call (different response on error)
+### IMP-5 · Explicit not-found + structured validation errors — ✅ DONE (ETP-4601, Wave 1)
 **Priority: P1** · ref §7.5 · **Repo: `com.etendoerp.go` (MCP servlet)**
 
 The happy path is unchanged; not-found and validation failures return an unambiguous error object instead of a success-looking empty result.
@@ -513,7 +515,7 @@ neo_create({ spec:"sales-invoice", entity:"header", data:{ /* missing businessPa
 { "response": { "status": 422, "error": "validation_error",
                 "fields": [ { "name":"businessPartner", "message":"required" } ] } }
 ```
-**Done when:** an agent can distinguish "not found" from "empty match" and "invalid write" from "server error" purely from the response, without heuristics.
+**Done when:** ~~an agent can distinguish "not found" from "empty match" and "invalid write" from "server error" purely from the response, without heuristics~~ ✅ — structured `{status:404, error:"not_found", detail:…}` implemented (`McpConstants`, `McpToolRouterSupport`, ETP-4601).
 
 ---
 
@@ -537,7 +539,7 @@ neo_schema({ spec:"sales-order", entity:"header", view:"actions" })
 
 ---
 
-### IMP-7 · Lean / grouped `neo_defaults` — ⚙️ Signature change (additive `view`)
+### IMP-7 · Lean / grouped `neo_defaults` — ✅ DONE (ETP-4601, Wave 2)
 **Priority: P2** · ref §7.8a · **Repo: `com.etendoerp.go` (MCP servlet)**
 
 `neo_defaults` already pre-fills everything (`unresolvedFields:[]`, a strength). Add grouping / a `view:"minimal"` so the agent sees the ~5 fields that matter, not ~65 compliance flags. Default (no `view`) stays as-is.
@@ -557,11 +559,11 @@ neo_schema({ spec:"sales-order", entity:"header", view:"actions" })
 
 // AFTER (alt) — neo_defaults(sales-invoice, header, view:"minimal") → only the `confirm` block
 ```
-**Done when:** an agent can obtain the writable, non-system defaults of a spec without visually filtering compliance flags.
+**Done when:** ~~an agent can obtain the writable, non-system defaults of a spec without visually filtering compliance flags~~ ✅ — grouped `confirm`/`systemManaged` payload + `view:"minimal"` implemented (`McpDefaultsView`); default view unchanged (ETP-4601).
 
 ---
 
-### IMP-8 · Argument-name ergonomics on `neo_selectors` — ⚙️ Signature change (alias + better error)
+### IMP-8 · Argument-name ergonomics on `neo_selectors` — ✅ DONE (ETP-4601, Wave 1)
 **Priority: P2 (cheap)** · ref §7.8b · **Repo: `com.etendoerp.go` (MCP servlet)**
 
 Accept `field` as an alias for `column`, and make the missing-argument error name the expected key. Removes a guaranteed first-try failure.
@@ -577,7 +579,7 @@ neo_selectors({ spec:"sales-invoice", entity:"header", field:"businessPartner", 
 // AFTER (if alias not added) — error names the key:
 // → Error: "Missing required argument: 'column' (the FK field name, e.g. \"businessPartner\"). Did you mean column: \"businessPartner\"?"
 ```
-**Done when:** the natural first call shape succeeds, or the error message alone is enough to fix the call without guessing.
+**Done when:** ~~the natural first call shape succeeds, or the error message alone is enough to fix the call without guessing~~ ✅ — `field` accepted as an alias for `column` and the missing-argument error self-corrects (`McpToolRouter`, `McpConstants.PARAM_FIELD`, ETP-4601).
 
 ---
 
@@ -608,7 +610,7 @@ neo_selectors({ spec:"sales-invoice", entity:"header", field:"businessPartner", 
 
 ---
 
-### IMP-10 · Make `docs` first-class + fix name drift — ♻️ Same call (pointer + corpus fix)
+### IMP-10 · Make `docs` first-class + fix name drift — ✅ DONE (ETP-4601, Wave 1)
 **Priority: P1 (highest leverage)** · ref §7.9 · **Repo(s): `com.etendoerp.go`** (servlet adds the `docs` pointer to `neo_discover` + error objects) **AND `etendo-go-docs`** (`github.com/etendosoftware/etendo-go-docs` — fix the recipe corpus: `etendo_neo_*` → `neo_*`). Two repos, no Schema Forge.
 
 The `docs` tool already returns excellent recipes — the fix is to *point the agent to it* and to align the tool names inside the corpus.
@@ -627,7 +629,7 @@ neo_get(bad id)
 docs({ topic:"creating a sales invoice with lines" })
 // → recipe now uses "neo_batch" / "neo_create" verbatim-runnable
 ```
-**Done when:** a cold agent is routed to `docs` from `neo_discover`/errors, and every recipe in the corpus uses the registered `neo_*` tool names.
+**Done when:** ~~a cold agent is routed to `docs` from `neo_discover`/errors, and every recipe in the corpus uses the registered `neo_*` tool names~~ ✅ — `neo_discover` guidance + error `seeAlso` point to `docs`; corpus tool names aligned to `neo_*` (ETP-4601).
 
 ---
 
@@ -635,27 +637,27 @@ docs({ topic:"creating a sales invoice with lines" })
 
 Ranked into three waves. The ordering weighs **leverage** (how many agent failures it removes), **risk** (breaking vs additive vs same-call), and **dependencies** (some items make later ones cheaper). Take the waves in order; within a wave, items are independent and can be parallelized.
 
-#### 🟢 Wave 1 — Ship first (P1, zero/low risk, highest leverage)
-The three ♻️ same-call items plus the cheapest quick win. **No breaking changes** to existing integrations — safe to ship immediately and independently.
+#### 🟢 Wave 1 — ✅ DONE (ETP-4601) — the three ♻️ same-call items plus the cheapest quick win
+**All four shipped under ETP-4601 (commit `b58e293c`).** No breaking changes to existing integrations.
 
-| Order | # | Improvement | Repo(s) | Why first |
+| Order | # | Improvement | Repo(s) | Status / Why first |
 |---|---|---|---|---|
-| 1 | **IMP-10** | `docs` first-class + name drift | `com.etendoerp.go` + `etendo-go-docs` | **Highest leverage, lowest cost.** The recipes already exist; a pointer from `neo_discover` + a corpus find-replace (`etendo_neo_*`→`neo_*`) unlocks §7.1/7.6/7.7 guidance at once. Do this before anything else — it changes agent behavior with almost no code. |
-| 2 | **IMP-5** | Explicit not-found / validation errors | `com.etendoerp.go` | **Enables self-correction** and is a prerequisite for IMP-10's `seeAlso` error pointers. Everything downstream benefits from an agent that can tell failure from success. |
-| 3 | **IMP-1** | Clean names + prose in `neo_schema` | `com.etendoerp.go` (+ `schema_forge_core` if data missing) | Surfacing curated names makes every write safer and makes IMP-2/IMP-6 naming coherent. Verify `ETGO_SF_FIELD` has the text before assuming servlet-only. |
-| 4 | **IMP-8** | `neo_selectors` arg alias + error | `com.etendoerp.go` | **Cheapest fix on the board** (an alias + a better error string) that removes a *guaranteed* first-try failure. Free win to bundle into Wave 1. |
+| 1 | **IMP-10** ✅ | `docs` first-class + name drift | `com.etendoerp.go` + `etendo-go-docs` | **DONE.** `neo_discover` guidance + error `seeAlso` route cold agents to `docs`; corpus tool names aligned to `neo_*`. Highest leverage, lowest cost. |
+| 2 | **IMP-5** ✅ | Explicit not-found / validation errors | `com.etendoerp.go` | **DONE.** Structured `{status:404, error:"not_found", detail:…}` (see `McpConstants`/`McpToolRouterSupport`); an agent can now tell failure from empty match. Prerequisite for IMP-10's `seeAlso` pointers. |
+| 3 | **IMP-1** ✅ | Clean names + prose in `neo_schema` | `com.etendoerp.go` | **DONE.** Curated, localized AD_Field labels + one-line descriptions surfaced in `neo_schema` (`McpSchemaFieldBuilder`). |
+| 4 | **IMP-8** ✅ | `neo_selectors` arg alias + error | `com.etendoerp.go` | **DONE.** `field` accepted as alias for `column` (`McpToolRouter` L619), missing-arg error self-corrects. |
 
-#### 🟡 Wave 2 — High-value read/create ergonomics (P1–P2, additive)
-Do after Wave 1. These change signatures but are additive (omitting the new arg preserves today's behavior).
+#### 🟡 Wave 2 — ✅ DONE (ETP-4601) — high-value read/create ergonomics (additive)
+**All three shipped under ETP-4601** (`c5b51c1f`). Signature changes are additive (omitting the new arg preserves today's behavior).
 
-| Order | # | Improvement | Repo(s) | Why next |
+| Order | # | Improvement | Repo(s) | Status / Why next |
 |---|---|---|---|---|
-| 5 | **IMP-3** ✅ | Business query semantics on `neo_list` (config-driven, ETP-4601) | `com.etendoerp.go` + `schema_forge` + `schema_forge_core` | **DONE.** Collapses the most common multi-step read into one call. Delivered as per-spec hand-authored `namedFilters` (see IMP-3 detail above). |
-| 6 | **IMP-7** | Lean/grouped `neo_defaults` | `com.etendoerp.go` | Makes the create path clean; pairs naturally with IMP-1 (clean names) so the `confirm` block reads well. |
-| 7 | **IMP-2** | Field projection / summary view | `com.etendoerp.go` | Token + noise reduction on every list; relies on IMP-1 names to define good summary sets. |
+| 5 | **IMP-3** ✅ | Business query semantics on `neo_list` (config-driven) | `com.etendoerp.go` + `schema_forge` + `schema_forge_core` | **DONE.** Collapses the most common multi-step read into one call. Delivered as per-spec hand-authored `namedFilters` (see IMP-3 detail above). |
+| 6 | **IMP-7** ✅ | Lean/grouped `neo_defaults` | `com.etendoerp.go` | **DONE.** `view:"minimal"`/grouped `confirm`+`systemManaged` payload (`McpDefaultsView`); default (no `view`) unchanged. |
+| 7 | **IMP-2** ✅ | Field projection / summary view | `com.etendoerp.go` | **DONE.** `fields` projection + `view:"summary"` from `businessCritical` (`McpFieldProjection`); default returns everything. |
 
-#### 🔵 Wave 3 — Deeper convenience (P2, some breaking-ish, sequence last)
-Valuable but either higher effort or best done once the foundations above are in place.
+#### 🔵 Wave 3 — ⏳ PENDING — deeper convenience (P2, some breaking-ish, sequence last)
+Waves 1 & 2 are done (ETP-4601); this is the only remaining wave. Valuable but either higher effort or best done once the foundations above are in place.
 
 | Order | # | Improvement | Repo(s) | Why last |
 |---|---|---|---|---|
@@ -663,4 +665,4 @@ Valuable but either higher effort or best done once the foundations above are in
 | 9 | **IMP-6** | Actions-only discovery view | `com.etendoerp.go` | Nice-to-have once IMP-10 already routes agents to action recipes via `docs`. |
 | 10 | **IMP-9** | Expose `primaryEntity` in `neo_discover` | `com.etendoerp.go` | Additive field derived from the existing entity hierarchy; no renaming, no breakage. Lowest per-call impact (one lookup saved per new spec); safe to defer. |
 
-**One-line recommendation:** start with **IMP-10**, then **IMP-5** — those two alone remove most of the "why did the agent get stuck?" failures, and neither breaks a single existing call.
+**Status (2026-08-03):** Waves 1 & 2 (IMP-1, IMP-2, IMP-3, IMP-5, IMP-7, IMP-8, IMP-10 — 7 of 10) shipped under **ETP-4601**. Only **Wave 3** (IMP-4, IMP-6, IMP-9) remains. Those two same-call foundations (IMP-10 + IMP-5) that removed most of the "why did the agent get stuck?" failures are already live.
