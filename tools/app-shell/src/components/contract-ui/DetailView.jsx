@@ -1179,6 +1179,27 @@ export async function maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, han
   return !!saved?.id;
 }
 
+// Builds the form-footer render pieces. A formFooter may opt into rendering INSIDE
+// the header card (single-field footers like TaxSifField set the static marker
+// `inlineInHeaderCard`), aligned in the same horizontal grid as the native header
+// fields, instead of the default detached block below the card (multi-section
+// panels like AssetsDetailPanel). Inline footers are spliced into the principal
+// Form's grid via its `trailing` slot (a bare grid cell, WITHOUT the pointer-events
+// wrapper, so it is a direct grid sibling of the native fields). Non-marked footers
+// keep the detached `footerElement` block and are completely unaffected.
+export function buildHeaderFooter({ formFooter, embedded, data, entity, handleChangeWithCallout, hook, catalogs, api, token, apiBaseUrl }) {
+  if (!formFooter) return { footerInline: false, footerElement: null, inlineTrailing: undefined };
+  const footerInline = !!formFooter.inlineInHeaderCard;
+  const footerNode = React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing, registerFields: hook.registerFields, fieldErrors: hook.fieldErrors });
+  const footerElement = (
+    <div className={embedded ? 'pointer-events-none' : ''}>
+      {footerNode}
+    </div>
+  );
+  const inlineTrailing = footerInline ? footerNode : undefined;
+  return { footerInline, footerElement, inlineTrailing };
+}
+
 export function DetailView({
   entity,
   detailEntity,
@@ -3366,23 +3387,13 @@ export function DetailView({
                     // card, aligned in the same horizontal grid as the native header
                     // fields (single-field footers like TaxSifField), instead of the
                     // default detached block below the card (multi-section panels like
-                    // AssetsDetailPanel). Opt-in is a static marker on the component so
-                    // no generator/decisions change is needed and non-marked footers are
-                    // completely unaffected.
-                    const footerInline = !!(formFooter && formFooter.inlineInHeaderCard);
-                    const footerNode = formFooter && React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing, registerFields: hook.registerFields, fieldErrors: hook.fieldErrors });
-                    const footerElement = formFooter && (
-                      <div className={embedded ? 'pointer-events-none' : ''}>
-                        {footerNode}
-                      </div>
-                    );
-                    // Inline footers (inlineInHeaderCard) render their field as a bare
-                    // grid cell (renderAsFragment) that we splice into the principal
-                    // form's grid via its `trailing` slot below — so it flows into the
-                    // next free cell of the native header grid rather than starting its
-                    // own row. Passed WITHOUT the pointer-events wrapper div so the cell
-                    // is a direct grid sibling of the native fields.
-                    const inlineTrailing = footerInline ? footerNode : undefined;
+                    // AssetsDetailPanel). See buildHeaderFooter for the opt-in marker and
+                    // the inline `trailing`-slot wiring. Extracted to keep this render
+                    // branch's cognitive complexity within budget.
+                    const { footerInline, footerElement, inlineTrailing } = buildHeaderFooter({
+                      formFooter, embedded, data, entity, handleChangeWithCallout, hook,
+                      catalogs, api, token, apiBaseUrl,
+                    });
                     const formSection = (
                       <>
                         {/* Principal + collapsed fields wrapped in a card */}
@@ -3475,7 +3486,7 @@ export function DetailView({
                             (default). Single-field footers that opted into
                             inlineInHeaderCard are rendered inside the card above and
                             skipped here. */}
-                        {formFooter && !footerInline && footerElement}
+                        {!footerInline && footerElement}
                       </>
                     );
                     if (sidebarAboveTabsOnly && sidebarContent) {

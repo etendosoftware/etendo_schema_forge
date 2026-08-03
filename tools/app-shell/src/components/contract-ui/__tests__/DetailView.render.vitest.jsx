@@ -51,6 +51,7 @@ import {
   getLinesTabsSectionClassName,
   getSecondaryTabEntityKey,
   getSecondaryRowUpdateHandler,
+  buildHeaderFooter,
 } from '../DetailView.jsx';
 
 // --- Mock every hook/dep DetailView imports ---
@@ -2675,6 +2676,36 @@ describe('getLinesContainerClassName', () => {
 
   it('includes pointer-events-none when embedded', () => {
     expect(getLinesContainerClassName('table', true)).toContain('pointer-events-none');
+  });
+});
+
+describe('buildHeaderFooter', () => {
+  const baseProps = {
+    embedded: false, data: {}, entity: 'tax', handleChangeWithCallout: () => {},
+    hook: { handleChange: () => {}, editing: true, registerFields: () => {}, fieldErrors: {} },
+    catalogs: {}, api: {}, token: 't', apiBaseUrl: '/api',
+  };
+
+  it('returns empty pieces when there is no formFooter', () => {
+    const r = buildHeaderFooter({ ...baseProps, formFooter: null });
+    expect(r).toEqual({ footerInline: false, footerElement: null, inlineTrailing: undefined });
+  });
+
+  it('a plain (non-inline) footer yields a detached footerElement and no inline trailing', () => {
+    const Plain = () => null;
+    const r = buildHeaderFooter({ ...baseProps, formFooter: Plain });
+    expect(r.footerInline).toBe(false);
+    expect(r.inlineTrailing).toBeUndefined();
+    expect(r.footerElement).not.toBeNull();
+  });
+
+  it('an inlineInHeaderCard footer yields inline trailing (the bare grid cell) + footerInline true', () => {
+    const Inline = () => null;
+    Inline.inlineInHeaderCard = true;
+    const r = buildHeaderFooter({ ...baseProps, formFooter: Inline });
+    expect(r.footerInline).toBe(true);
+    expect(r.inlineTrailing).not.toBeUndefined();
+    expect(r.footerElement).not.toBeNull();
   });
 });
 

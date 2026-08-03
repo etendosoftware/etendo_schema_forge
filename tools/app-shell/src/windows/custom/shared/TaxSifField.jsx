@@ -225,9 +225,12 @@ const OPTION_VALUES = {
 };
 
 function buildOptions(optionsKey, ui) {
-  return OPTION_VALUES[optionsKey].map((value) => ({
-    value,
-    // Prefix code so the AEAT key stays visible even before/without a translation.
-    label: `${value} — ${ui(`taxSif.opt.${optionsKey}.${value}`)}`,
-  }));
+  return OPTION_VALUES[optionsKey].map((value) => {
+    const labelText = ui(`taxSif.opt.${optionsKey}.${value}`);
+    return {
+      value,
+      // Prefix code so the AEAT key stays visible even before/without a translation.
+      label: `${value} — ${labelText}`,
+    };
+  });
 }
