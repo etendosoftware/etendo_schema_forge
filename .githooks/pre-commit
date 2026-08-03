@@ -8,6 +8,13 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 export SF_ROOT="$REPO_DIR"
 
+# Merge commits only reconcile trees that were already validated on their
+# source branches. Avoid re-validating every incoming artifact as if it were a
+# new task change; hooks-proof already excludes multi-parent commits.
+if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+  exit 0
+fi
+
 # Fast-path: only run when staged files touch artifacts or pipeline code.
 # (The generator/resolver/validator code itself now lives in the separate
 # schema_forge_core repo — this hook can't watch changes to code it no

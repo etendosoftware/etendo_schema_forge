@@ -295,6 +295,11 @@ export default defineConfig(({ mode }) => {
   },
   server: {
     allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],
+    // LOCAL_CORE aliases core packages to a sibling repo, which is outside the
+    // workspace root Vite serves by default — without this the aliased modules
+    // resolve and then 403, so the dev profile fails at request time rather than
+    // at config time. Only widened when LOCAL_CORE is set.
+    ...(LOCAL_CORE ? { fs: { allow: [resolve(__dirname, '../..'), CORE_REPO] } } : {}),
     port: 3100,
     proxy: {
       '/etendo_sf': {
