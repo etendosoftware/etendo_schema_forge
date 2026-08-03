@@ -625,6 +625,63 @@ describe('FmBoxes303 — datos_bancarios sectionVisibleWhen', () => {
   });
 });
 
+// ── datos_bancarios × rectificativa visibility matrix (ETP-4456 — anyOf fix) ──
+// The section is visible when tipo_declaracion is U/D/X, OR when rectificativa
+// is checked regardless of tipo_declaracion. Before the fix, a rectificativa
+// filed under any other tipo (e.g. 'I', the most common real-world case) had
+// no UI to enter the AEAT-mandatory bank fields, causing a submission-blocking
+// backend failure.
+
+describe('FmBoxes303 — datos_bancarios × rectificativa visibility matrix (anyOf fix)', () => {
+  it('tipo U + rectificativa false → visible (tipo branch alone satisfies anyOf)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'U', rectificativa: false }}
+      />
+    );
+    expect(container.querySelector('.fm-aeat-section')).toBeTruthy();
+  });
+
+  it('tipo I + rectificativa false → hidden (regression guard — pre-fix correct behavior preserved)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: false }}
+      />
+    );
+    expect(container.querySelector('.fm-aeat-section')).toBeNull();
+  });
+
+  it('tipo I + rectificativa true → visible (the actual bug fix — rectificativa branch of anyOf)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+      />
+    );
+    expect(container.querySelector('.fm-aeat-section')).toBeTruthy();
+  });
+
+  it('tipo V + rectificativa true → visible (V is reachable again once rectificativa is checked)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'V', rectificativa: true }}
+      />
+    );
+    expect(container.querySelector('.fm-aeat-section')).toBeTruthy();
+  });
+});
+
 // ── identificacion select field (tipo_declaracion) ────────────────────────────
 
 describe('FmBoxes303 — identificacion select field', () => {

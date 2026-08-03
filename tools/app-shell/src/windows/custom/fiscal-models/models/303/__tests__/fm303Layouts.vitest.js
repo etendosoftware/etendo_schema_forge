@@ -529,14 +529,24 @@ describe('SUPPORTED_YEARS', () => {
 });
 
 // ── datos_bancarios section (EDID065 fix — AEAT rejects IBAN for tipos other
-// than U/D/X) ──────────────────────────────────────────────────────────────
+// than U/D/X — AND the ETP-4456 follow-up fix that widens visibility to an
+// anyOf so a rectificativa under any tipo_declaracion can still enter the
+// AEAT-mandatory bank fields) ─────────────────────────────────────────────
 
-describe('getLayout303 — datos_bancarios section visibility (EDID065 fix)', () => {
+describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectificativa anyOf fix)', () => {
   const layout = getLayout303(2026, 1);
   const sec = layout.sections.find(s => s.id === 'datos_bancarios');
 
-  it('sectionVisibleWhen only allows tipo_declaracion U, D, X (not G, I, V)', () => {
-    expect(sec.sectionVisibleWhen).toEqual({ field: 'tipo_declaracion', in: ['U', 'D', 'X'] });
+  it('sectionVisibleWhen is an anyOf of tipo_declaracion U/D/X OR rectificativa checked', () => {
+    expect(sec.sectionVisibleWhen).toEqual({ anyOf: [
+      { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
+      { field: 'rectificativa', equals: true },
+    ] });
+  });
+
+  it('bank_iban stays required: true (Classic also requires IBAN for the rectificativa case)', () => {
+    const iban = sec.fields.find(f => f.id === 'bank_iban');
+    expect(iban.required).toBe(true);
   });
 
   it('titleKeyMap only maps D, X (devolucion) and U (domiciliacion) — no G, I, V entries', () => {
