@@ -170,7 +170,15 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
     setConnError(null);
     try {
       const tipo = localData.declarationType || decl?.result?.kind || 'N';
-      if (IBAN_REQUIRED_TIPOS.includes(tipo) && !identChecks?.bank_iban?.trim()) {
+      // Mirrors fm303Layouts.js's datos_bancarios.sectionVisibleWhen anyOf (ETP-4456 follow-up):
+      // the bank section — and its required bank_iban field — is shown whenever tipo_declaracion
+      // is U/D/X OR rectificativa is checked (independent of tipo). This pre-flight guard must
+      // fire under the same condition, otherwise a rectificativa filed under e.g. tipo 'I' shows
+      // the IBAN field as required but lets the user submit with it empty, round-tripping to the
+      // backend for an untranslated AEAT303_section_bank_empty 500 instead of failing fast with
+      // the existing translated fm.aeat.error.ibanRequired message.
+      const ibanRequired = IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true;
+      if (ibanRequired && !identChecks?.bank_iban?.trim()) {
         setConnError(t('fm.aeat.error.ibanRequired') ?? 'IBAN is required to submit this declaration type. Fill in the IBAN field in the Identification section.');
         setSubmitting(false);
         return;
