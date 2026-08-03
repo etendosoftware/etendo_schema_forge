@@ -289,7 +289,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                 </Field>
                 {localData.declarationType === DECLARATION_TYPE_INGRESO && (
                   <Field
-                    label={t('fm.aeat.nrc.label') ?? 'NRC (optional)'}
+                    label={t('fm.aeat.nrc.label') ?? 'NRC'}
                     data-testid="Field__fc2aac">
                     <input
                       type="text"

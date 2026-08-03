@@ -20450,7 +20450,7 @@
     "fm.aeat.presenter.title": "Presenter (certificate holder)",
     "fm.aeat.presenter.nif": "Presenter NIF",
     "fm.aeat.presenter.name": "Presenter name",
-    "fm.aeat.nrc.label": "NRC (optional)",
+    "fm.aeat.nrc.label": "NRC",
     "fm.aeat.nrc.placeholder": "Complete Reference Number",
     "fm.aeat.test_mode.label": "Test mode (no certificate required)",
     "fm.aeat.test_mode.warning": "In test mode the declaration is validated by AEAT but NOT submitted. No document will be filed.",

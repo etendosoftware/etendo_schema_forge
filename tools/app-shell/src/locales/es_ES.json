@@ -20700,7 +20700,7 @@
     "fm.aeat.presenter.title": "Presentador (titular del certificado)",
     "fm.aeat.presenter.nif": "NIF del presentador",
     "fm.aeat.presenter.name": "Nombre del presentador",
-    "fm.aeat.nrc.label": "NRC (opcional)",
+    "fm.aeat.nrc.label": "NRC",
     "fm.aeat.nrc.placeholder": "Número de Referencia Completo",
     "fm.aeat.test_mode.label": "Modo de prueba (no requiere certificado)",
     "fm.aeat.test_mode.warning": "En modo de prueba la declaración se valida en la AEAT pero NO se presenta. No se realizará ninguna presentación.",
