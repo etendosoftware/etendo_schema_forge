@@ -49,14 +49,16 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - **Selector dependencies:** the current evidence shows selector-backed maintenance for category, tax category, UOM, UOM for weight, attribute set, brand, lifecycle status, warehouse, currency, characteristic, characteristic subset, storage bin, and price-list-version references where relevant.
 - **Pricing tab states:**
   - When the product has not been saved yet, the `Price` tab shows a save-first message and blocks pricing maintenance.
-  - When the product exists but has no price rows yet, the tab shows an empty state plus `Set Pricing`. That action opens an inline create mode with two cards labeled `Sales price` and `Purchase price`. Each card has two inputs: `Unit price` and `List price`.
-  - The initial create mode requires at least one entered amount across all four inputs, but it does not ask the user to choose a price list version. `ProductPriceBar` resolves the sales price list version (`salesPriceList = true`) and the purchase price list version (`salesPriceList = false`) automatically: it reads `/price/defaults`, routes that default to the matching side, then fills any missing side from the selector catalog and finally from `/price/selectors/<column>`.
-  - Each side is saved as an independent `M_ProductPrice` row in its own price list version. The sales card maps to the sales-flagged version; the purchase card maps to the purchase-flagged version. Within a single row, when only `Unit price` or `List price` is provided, the missing column falls back to the entered one so `standardPrice`, `listPrice` and `priceLimit` stay consistent. If the user leaves an entire side blank, **no row is created for that side** — values are never replicated across sales and purchase.
-  - Once price rows exist, the tab switches to two summary tables: `Sales lists` and `Purchase lists`. Each table header carries a pencil icon; clicking the pencil for `Sales lists` opens `PricingDialog` with `focusedSection="sales"`, and clicking the pencil for `Purchase lists` opens it with `focusedSection="purchase"`. The dialog shows only the relevant section rather than both at once.
-  - Inside the dialog, added rows are split by sales-vs-purchase selector metadata, duplicate price-list-version rows are blocked, and staged adds/edits/deletes are only applied when `Save changes` is pressed.
-  - Selector catalogs are not eagerly loaded (see `useCatalogs`), so the add-row selector lazily fetches the available price list versions from `/price/selectors/<column>` on first open.
+  - Once saved, the tab is a single inline surface (the former `PricingDialog` / `Set Pricing` flow was removed in ETP-4420). A left-hand `Venta` / `Compra` toggle switches the active section; rows are split by the `priceListVersion$salesPriceList` flag that `ProductPriceHandler` adds to every row. Each row is a read-only `Nombre` input plus `Unit price` and `List price` steppers and a hover-revealed delete button. Committing a stepper `PATCH`es only the changed column; delete fires `DELETE /price/<id>` and re-fetches the rows.
+  - **Row and option labels show the TARIFF name** (`priceList$_identifier`, i.e. `M_PriceList.Name`), with the version identifier as fallback for unenriched payloads. The two differ in real data — an onboarding-created list is `Lista de venta (sin impuestos)` while its version is `Version Lista de venta (sin impuestos)`, and legacy demo data has `Customer A USD` / `Customer A USD 2014` — so preferring the version identifier displayed the wrong name (fixed in ETP-4605).
+  - **The section itself never scrolls.** The rows list has no height cap: growth is absorbed by the detail content column, which is already `flex-1 min-h-0 overflow-auto` and is a **sibling** of the sidebar column (`DetailView.jsx` — "Scrollable content + optional sidebarContent"), so scrolling the tariffs never moves the `Resumen` / `Almacenes` summary.
+  - The add action lives in the **section header**, on the same line as the title and the count badge, **right-aligned over the `List price` column** so its right edge matches the right edge of every list-price stepper below (the header mirrors the rows' 300 / 201 / 201 `gap-5` grid). Left-aligning it at the *start* of that column aligned it with nothing and read as accidental. The add row opens at the **top** of the list, directly under the column headers. Both therefore stay put however many tariffs the product has — no need to scroll to the bottom to add one. It renders through the shared `AddLineButton` (`@/components/ui/add-line-button.jsx`, the same control as `+ Add line` in the order/invoice lines panels). That component hardcodes `data-testid="action-add-line"`, which is **not unique in this window** (the Accounting secondary tab renders one too, and every custom tab panel stays mounted), so it is wrapped in a `data-testid="price-add-tariff"` span; selectors targeting the DetailView-rendered one must scope through its `[data-inline-add-portal="true"]` wrapper.
   - **Add / create tariff:** the `+ Add new tariff` row renders a `CreatableSearchSelect` (not a plain `<select>`). It lists the existing price-list versions for the active side (sales vs. purchase) **and** a pinned `+ Create tariff` action. Picking an existing option links it via `POST /price`. Choosing `+ Create tariff` opens a name-only `InlineCreateModal`: on submit it `POST`s to the `price-list/priceList` endpoint with `{ name, salesPriceList: <active side>, costBasedPriceList:false, priceIncludesTax:false, default:false }` — no currency, which the backend `PriceListHeaderHandler` injects from the organization currency. In Go a price list has exactly one version (auto-created with the same name by the handler); the create response returns its `priceListVersion`, which is then linked to the product via `POST /price`.
-  - Closing the dialog with unsaved changes triggers a confirmation overlay offering discard vs save.
+  - The selector options are fetched from `/price/selectors/<column>?limit=200` **every time the add row is opened**, not once per mount. A fetch-once cache left a tariff created in-session through `+ Create tariff` (which links the new version by id, without touching the option list) permanently out of the selector, so deleting its price could never bring it back. `limit` is explicit because the NEO selector endpoint defaults to 20 rows.
+  - Tariffs that already have a price for this product are excluded from the selector (matched on price-list-version id, across **both** sections, mirroring the `(PriceListVersion, Product)` unique constraint), so the same tariff cannot be added twice. Deleting a price row puts its tariff back in the list.
+  - The dropdown is left to auto-flip (`preferDown` is deliberately **not** passed). The add row is the last element of the tab, so forcing the panel downward drew it past the viewport edge — and because the panel is `position: fixed`, no amount of scrolling could reveal it.
+  - When every tariff of the active side already has a price, the tab renders an explicit hint (`priceAllSalesTariffsAssigned` / `priceAllPurchaseTariffsAssigned`, `data-testid="price-no-available-tariffs"`). Without it the dropdown showed only `+ Create tariff` with no explanation, which reads as a rendering bug. The hint is gated on the fetch having resolved so it never flashes while loading.
+  - Selector catalogs are not eagerly loaded (`useCatalogs` is a no-op **and** `DetailView` does not pass `catalogs` to custom tab components), so the lazy fetch above is the only live path in the running app; the eager branch is exercised only by tests.
 - **Sidebar reactions:**
   - The inventory sidebar has two tabs: `Summary` and `Warehouses`. A shared `SidebarPeriodSelector` (3M / 6M / 12M) sits at the top of each tab and drives the inline chart's time window. The selector is disabled when no transaction history exists.
   - `Summary` shows an **On Hand** `AvailabilityWidget` card. The widget is hidden when there are no transactions — a product that sold all its stock still has transactions and will display the widget showing `0`; a product with no history at all omits it entirely.
@@ -72,7 +74,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 
 ## Gap assessment
 - The generated contract declares many child datasets and actions, but the inspected page code makes only the gallery, the two primary tabs, the pricing footer, and the product sidebar explicit. Treat the exact visible availability of every child surface beyond those areas as partially evidenced.
-- The footer's initial `Set Pricing` flow hides which price list version is chosen. Users only see the drafted values, while the actual target list/version comes from defaults or selector fallback.
+- The pricing selector excludes already-priced tariffs by **price-list-version** id. Today that is exact (every price list in the inspected tenants has exactly one version, and `PriceListVersionHandler` refuses to create a second), but a legacy price list carrying two versions would appear twice in the selector under the same tariff name. Fixing it properly needs a price-list id on the row payload (`ProductPriceHandler`'s list SQL selects `pl.name` but not `pl.m_pricelist_id`).
 - Variant management, service/tax helper actions, and transaction-level manual cost adjustment remain declared in metadata, but the inspected page code does not make their live entry points explicit.
 - `ProductDetailHeader.jsx` still returns `null`, so any richer standalone product header is not part of the current visible behavior.
 
@@ -82,9 +84,10 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 3. Open an existing product and confirm the detail surface exposes `General` and `Additional Info`.
 4. In `Additional Info`, verify the `Commercial` section contains `Tax Category`, `Sale`, and `Purchase` in a right-side `EntityForm` with a section title and description on the left. Confirm an HR divider separates it from the `Logistics` section, which contains `Stocked`, `Returnable`, `Weight`, and `UOM for Weight`. All input backgrounds should be white.
 5. Open `/product/new` and confirm the `Price` tab says the product must be saved before pricing can be maintained.
-6. For a saved product with no price rows, confirm the `Price` tab shows `Set Pricing` and that the inline create state exposes four inputs: `Unit price` and `List price` for `Sales price`, and the same pair for `Purchase price`. Entering values only on one side must create just that row; entering values on both sides must create two separate rows in their respective price list versions.
-7. After price rows exist, confirm the `Price` tab shows separate `Sales lists` and `Purchase lists` tables, each with a pencil icon in the table header. Click the pencil on `Sales lists` and verify the dialog opens showing only the sales section. Click the pencil on `Purchase lists` and verify the dialog opens showing only the purchase section.
-8. In the dialog, stage an edit or add/delete action, try closing it, and confirm the unsaved-changes overlay appears.
+6. For a saved product, confirm the `Price` tab shows the `Venta` / `Compra` toggle and that the active section lists only the tariffs of that side. Change a `Unit price` and blur: only that column must be sent. Delete a row and confirm it disappears and the count badge drops.
+7. Open a product whose tariff name differs from its version name (any product priced in `Lista de venta (sin impuestos)`) and confirm the row shows **`Lista de venta (sin impuestos)`**, not `Version Lista de venta (sin impuestos)`. Open the add-tariff selector and confirm the options use tariff names too.
+8. With enough tariffs to overflow the tab, confirm the `+ Add new tariff` control sits on the title line (same look as `+ Add line` in a sales order), that clicking it opens the add row at the top of the list, and that the tariffs scroll with the detail content while the `Resumen` / `Almacenes` sidebar stays put. Confirm the options panel is fully visible (it flips upward when there is no room below). With every tariff of the side already priced, confirm the "all tariffs already priced" hint appears instead of an unexplained empty dropdown.
+8a. Create a tariff via `+ Create tariff`, delete the price row it created, reopen the selector and confirm the tariff is offered again.
 8b. In the `Sales` section, click `+ Add new tariff`, then `+ Create tariff`; enter a name and submit. Confirm a new price row appears without ever prompting for a currency, and that repeating it in the `Purchase` section creates a purchase-flagged tariff (`IsSOPriceList = N`).
 9. Open a product with an image. Verify the image renders inside the form grid (not above it), spanning two rows alongside adjacent fields. Click the image and confirm the lightbox opens portal-rendered over the page. Press ESC and confirm the lightbox closes. Hover the image thumbnail in the form and confirm the overlay appears with zoom, remove, and replace actions.
 10. Confirm the sidebar exposes `Summary` and `Warehouses`, and that `Stock movement` only appears when the product has transaction history. When it appears, verify the chart uses smooth curves, dashed gridlines, and a pill-style period-switch row. Click "Expand" below the chart title and verify the modal opens with the period switches and warehouse drill-down.
@@ -99,7 +102,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - Product-specific behavior is grounded in current code under `tools/app-shell/src/windows/custom/product/`:
   - `ProductGallery.jsx` for gallery browsing
   - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them
-  - `ProductPriceBar.jsx` for product pricing fetch/create/edit behavior. Unit prices and list prices shown in the pricing tables are formatted using the org's configured currency via `useCurrency()` and `formatCurrency()`. `PricingDialog` accepts a `focusedSection` prop (`"sales"` or `"purchase"`) that controls which table is shown.
+  - `ProductPriceBar.jsx` for product pricing fetch/create/edit behavior, including the tariff-name labels, the bounded rows scroller, the per-open selector refetch and the "all tariffs already priced" hint. Amounts render through a local `CURRENCY_SYMBOLS` map plus the row's `currencySymbol`; migrating them to the canonical `formatCurrency()` util is pending the dedicated currency-format task.
   - `ImageField.jsx` was fully redesigned for ETP-4190 and extended in a follow-up: upload button inside the container, hover overlay with zoom icon and remove/replace actions, lightbox via `createPortal(document.body)` with ESC-to-close, `cursor-zoom-in` when an image exists. When no image exists (stretch mode), the area shows a full-height dashed dropzone with an upload icon button, "Selecciona o arrastra aquí tus archivos", and the constraint hint ("Hasta 30 MB y 7680 × 4320 píxeles (JPEG, JPG, PNG)"). The dropzone supports drag & drop (highlights on `isDragging`). Validation rejects non-JPEG/PNG types, files over 30 MB, and images exceeding 7680 × 4320 px — all errors surface as `toast.error()` (no inline message). The upload button at the bottom is hidden in the empty state (the entire zone is the upload target); it reappears once an image is loaded.
   - `ProductSidebar.jsx` for stock and transaction-driven sidebar summaries, including pill-style period tabs, bezier-curve SVG chart, dashed gridlines, expand link, smaller stat cards, conditional visibility of `Available`/`Reserved` cards, and divider between sections.
 - The generated product page at `artifacts/product/generated/web/product/ProductPage.jsx` wires those custom surfaces into the product window and declares the attached child CRUD endpoints.
@@ -282,3 +285,53 @@ When creating a new product, `uOM` now preselects the UOM row flagged `IsDefault
 - **Design decision — why this is NOT done via `AD_Column.DefaultValue`:** `productCategory` already gets its default this way (a native Etendo `@SQL=` expression on `AD_Column.DefaultValue`), and that path was evaluated for `uOM`/`taxCategory` too, then rejected. `C_UOM_ID` and `C_TaxCategory_ID` are columns owned by the **Core** dictionary (`AD_Module_ID = '0'`) and ship with no `DefaultValue` out of the box. Setting one would mean patching a Core column directly — it would require temporarily flipping Core's `IsInDevelopment` flag, would change behavior for every Etendo installation using that column (Classic and Enterprise included, not just Go), and would not be versionable from this module's own artifacts. Implementing the equivalent COALESCE logic (client's own default, falling back to System) at the NEO Headless layer keeps the behavior scoped to Etendo Go's `product` spec only.
 - **`productCategory` still uses its native `@SQL=` default** — unaffected by this change. It now resolves *reliably* only because `ProductCategoryDefaultHandler` (see `product-category.md`, ETP-4670) guarantees `IsDefault` is unique per client, so the native SQL default no longer has more than one candidate row to pick from.
 - Covered by `ProductDefaultsHandlerTest.java` (com.etendoerp.go): own-client default present, own-client absent falling back to System client, and neither present.
+
+## Tariffs section fixes — ETP-4605
+
+Four issues were reported against the `Price` tab. Investigation confirmed two of them,
+found one already working, re-diagnosed one, and surfaced one more. All changes are
+frontend-only (`ProductPriceBar.jsx` + locales): no `decisions.json`, contract, generated
+file or Java change, so no `make regen` and no `export.database` were needed.
+
+- **Tariff name instead of version name (real).** The row label preferred
+  `priceListVersion$_identifier` (the version) over `priceList$_identifier` (the tariff),
+  and the dropdown built its option label from the selector item's `label`/`name` — also
+  the version. Both now prefer the tariff name. The backend already supplied it:
+  `ProductPriceHandler` puts `pl.name` on every row and `pl.getIdentifier()` on every
+  selector item, and `M_PriceList.Name` is that table's only identifier column, so the two
+  sources agree. The bug looked intermittent because tariffs created from Go get a version
+  with the same name; the divergence only shows on onboarding-created and legacy lists.
+- **Options panel unreachable (real, but not the reported cause).** The rows list was never
+  unreachable — the detail content container already scrolls. What could not be reached was
+  the dropdown: `preferDown` disabled `CreatableSearchSelect`'s auto-flip, so with the add
+  row at the bottom of the tab the `position: fixed` panel was drawn past the viewport edge.
+  `preferDown` was dropped. The add action then moved into the section header (rendered with
+  the shared `AddLineButton`) and the add row now opens at the top of the list, so neither
+  depends on how many tariffs exist. The rows list keeps **no** inner scroller: the detail
+  content column absorbs the growth, and because that column is a sibling of the sidebar,
+  scrolling the tariffs leaves the summary panel untouched.
+- **Already-priced tariffs shown in the selector (already worked).** The exclusion filter has
+  been in place since ETP-4190 and matches on price-list-version id across both sections. It
+  was simply untested; a regression test was added. See the Gap assessment note about price
+  lists with more than one version.
+- **Deleted price not offered again (real, different root cause).** Deleting *does* return the
+  tariff to the selector when it was present in the fetched option list. The failing case was a
+  tariff created in-session via `+ Create tariff`: it was linked by id without entering the
+  cached option list, and the fetch-once guard prevented any refresh. Options are now fetched
+  on every add-row open, with an explicit `limit=200` (the NEO selector endpoint defaults to 20).
+- **No feedback when nothing is left to add (new).** With every tariff of the side already
+  priced the dropdown rendered only `+ Create tariff` — `CreatableSearchSelect` shows its
+  no-results text only when the user has typed something. An explicit hint was added
+  (`priceAllSalesTariffsAssigned` / `priceAllPurchaseTariffsAssigned`, in all three locales).
+- **Secondary tab strip divider did not reach the panel edge (new, and NOT product-specific).**
+  Spotted while reviewing this tab. Fixed generically in `DetailView.jsx` so it applies to
+  every window with secondary tabs — see "Secondary tab strip — full-bleed divider" in
+  `docs/generated-custom-windows/app-shell-functional-flows.md`.
+
+Coverage: 12 new cases in `ProductPriceBar.vitest.jsx` (label preference and fallback, option
+labels, already-priced exclusion, hint shown/not shown, refetch-per-open, tariff appearing
+between sessions, explicit `limit`, no inner scroller, add action in the header, add row above
+the existing rows). The mocked E2E spec `e2e/tests/flows/product-pricing.mocked.spec.js` now
+uses payloads where the version name and the tariff name differ, so it guards the label rule
+end to end; its Accounting add-line locator was scoped to `[data-inline-add-portal]` because
+`action-add-line` is no longer unique in this window.

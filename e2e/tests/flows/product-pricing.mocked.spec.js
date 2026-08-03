@@ -36,17 +36,23 @@ import { login } from '../helpers/auth.js';
 
 // ── Synthetic data ───────────────────────────────────────────────────────────
 
+// `label`/`name` carry the price list VERSION name and `priceList$_identifier` the
+// TARIFF name, exactly as ProductPriceHandler returns them. They are deliberately
+// different: the UI must always show the tariff name (the version of an
+// onboarding-created list is named "Version <list name>").
 const PLV_SALE = {
   id: 'plv-sale',
-  label: 'Lista venta 2026',
-  name: 'Lista venta 2026',
+  label: 'Version Lista venta 2026',
+  name: 'Version Lista venta 2026',
+  'priceList$_identifier': 'Lista venta 2026',
   salesPriceList: true,
 };
 
 const PLV_PURCHASE = {
   id: 'plv-purchase',
-  label: 'Lista compra 2026',
-  name: 'Lista compra 2026',
+  label: 'Version Lista compra 2026',
+  name: 'Version Lista compra 2026',
+  'priceList$_identifier': 'Lista compra 2026',
   salesPriceList: false,
 };
 
@@ -73,7 +79,8 @@ const EXISTING_SALES_ROW = {
   id: 'price-existing-sales-1',
   product: 'PROD-2',
   priceListVersion: 'plv-sale',
-  'priceListVersion$_identifier': 'Lista venta 2026',
+  'priceListVersion$_identifier': 'Version Lista venta 2026',
+  'priceList$_identifier': 'Lista venta 2026',
   'priceListVersion$salesPriceList': true,
   // Fields required by ProductSalePriceCell / ProductPurchasePriceCell (list view)
   // to resolve the correct price row via selectPriceRow.
@@ -185,6 +192,9 @@ function installPriceRoute(page, state) {
         product: body.product,
         priceListVersion: body.priceListVersion,
         'priceListVersion$_identifier': isSales ? PLV_SALE.label : PLV_PURCHASE.label,
+        'priceList$_identifier': isSales
+          ? PLV_SALE['priceList$_identifier']
+          : PLV_PURCHASE['priceList$_identifier'],
         'priceListVersion$salesPriceList': isSales,
         'priceListVersion$default': true,
         'priceListVersion$validFromDate': '2026-01-01',
@@ -528,7 +538,10 @@ test.describe('Product Accounting tab — mocked', () => {
   test('Add Line exposes the four GL account fields; accountingSchema is never editable', async ({ page }) => {
     await page.getByTestId('tab-accounting').click();
 
-    const addBtn = page.getByTestId('action-add-line');
+    // The pricing tab reuses the same shared AddLineButton (hardcoded
+    // `action-add-line`) and every custom tab panel stays mounted, so scope this to the
+    // DetailView-rendered one via its `data-inline-add-portal` wrapper.
+    const addBtn = page.locator('[data-inline-add-portal="true"] [data-testid="action-add-line"]');
     await expect(addBtn).toBeVisible({ timeout: 8_000 });
     await addBtn.click();
 
