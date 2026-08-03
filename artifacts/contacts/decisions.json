@@ -537,7 +537,8 @@
         "psd2ApiKey": {
           "visibility": "discarded"
         }
-      }
+      },
+      "javaQualifier": "contactHandler"
     },
     "basicDiscount": {
       "fields": {

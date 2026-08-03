@@ -35,16 +35,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Acme Corp",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-002",
@@ -80,16 +80,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "TechFlow Inc",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-003",
@@ -125,16 +125,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Global Trade Ltd",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-004",
@@ -170,16 +170,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Summit Industries",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-005",
@@ -215,16 +215,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Pacific Partners",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-006",
@@ -260,16 +260,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Alpine Solutions",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-007",
@@ -305,16 +305,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Meridian Group",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-008",
@@ -350,16 +350,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Vertex Systems",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-009",
@@ -395,16 +395,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Atlas Manufacturing",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-010",
@@ -440,16 +440,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Nova Enterprises",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-011",
@@ -485,16 +485,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Pinnacle Services",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   },
   {
     "id": "mock-businessPartner-012",
@@ -530,16 +530,16 @@ export const businessPartner = [
     "paymentTerms": "Sample paymentTerms",
     "salaryCategory": "Sample salaryCategory",
     "customerBlocking": "Horizon Labs",
-    "eTGOLocation": "Sample eTGOLocation",
     "account": "Sample account",
     "paymentMethod": "Sample paymentMethod",
     "isSalesRepresentative": "Sample isSalesRepresentative",
     "priceList": "Sample priceList",
     "pOFinancialAccount": "Sample pOFinancialAccount",
-    "pOPaymentMethod": "Sample pOPaymentMethod",
     "pOPaymentTerms": "Sample pOPaymentTerms",
+    "pOPaymentMethod": "Sample pOPaymentMethod",
     "purchasePricelist": "Sample purchasePricelist",
-    "vendorBlocking": "Sample vendorBlocking"
+    "vendorBlocking": "Sample vendorBlocking",
+    "eTGOLocation": "Sample eTGOLocation"
   }
 ];
 

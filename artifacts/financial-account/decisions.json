@@ -3,18 +3,42 @@
   "window": {
     "agentPrompt": "#REF#agent-prompts/financial-account/spec.md",
     "category": "finance",
-    "name": "Financial Account Detail",
-    "layoutType": "custom"
+    "name": "Accounts",
+    "detailEntity": null,
+    "customComponents": {
+      "headerTable": "AccountsHeaderTable"
+    },
+    "rowQuickActions": { "enabled": false },
+    "hideCreate": true,
+    "hidePrint": true,
+    "hideMoreMenu": true,
+    "hideListFilters": true,
+    "labelOverrides": {
+      "en_US": { "pendingCount": "Pending" },
+      "es_ES": { "pendingCount": "Por conciliar" }
+    }
   },
   "entities": {
     "account": {
       "javaQualifier": "financialAccountHeaderHandler",
       "agentPrompt": "#REF#agent-prompts/financial-account/account.md",
+      "virtualFields": [
+        {
+          "name": "pendingCount",
+          "column": "pendingCount",
+          "label": "Pending",
+          "type": "integer",
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 4
+        }
+      ],
       "fields": {
-        "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true },
-        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
+        "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
+        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md", "gridLabelKey": "financeAccountsColType", "cellType": "accountType" },
         "currency": { "visibility": "editable", "grid": false, "required": true },
-        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
         "description": { "visibility": "editable", "grid": false },
         "iBAN": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.iban.md" },
         "swiftCode": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.swift-code.md" },
@@ -27,7 +51,7 @@
         "initialBalance": { "visibility": "system" },
         "creditLimit": { "visibility": "discarded" },
         "locationAddress": { "visibility": "discarded" },
-        "default": { "visibility": "discarded" },
+        "default": { "visibility": "readOnly", "grid": false },
         "genericAccountNo": { "visibility": "discarded" },
         "iNENo": { "visibility": "discarded" },
         "country": { "visibility": "system" },
