@@ -496,3 +496,35 @@
   tools to route around a classifier denial (e.g. `rm`+recreate, a different move command) — revert
   cleanly and document the untested state plus the exact follow-up command, per the existing
   "document as not executed" fallback in the 2026-07-06 note.
+- **2026-08-03 — QA FINDING (MEDIUM, addressed same day) — R20's "pick any org for a whole-client
+  rule" assumption was wrong for a hypothetical multi-Legal-Entity zero-rule tenant.** R20's first
+  shipped revision resolved its target org exactly like `R6-org-info-location` (oldest non-`'*'` org
+  for the client, `LIMIT 1`), reasoning that `org_dimension='N'` (whole-client) made the specific org
+  irrelevant. Sentinel (QA) traced Etendo core's real lookup path — `CostingUtils
+  .getCostDimensionRule()` and `CostingServer.getOrganization()` — and confirmed it does an **exact
+  match** on `M_Costing_Rule.ad_org_id`, with **no** client-wide/`org_dimension` fallback at lookup
+  time; `org_dimension` only affects how the ALGORITHM computes cost, not which rule row a
+  transaction resolves to. **Consequence:** a zero-rule tenant with more than one Legal Entity org
+  would get a rule anchored to only ONE of them; transactions posted under any OTHER legal entity
+  would hit a hard `NoCostingRuleFoundForOrganizationAndDate`, actively WORSE than the pre-fix state
+  (silent `iscostcalculated='N'`, no thrown error). **Verified no live impact:** re-queried
+  `ad_org` for every one of R20's 9 originally-matched tenants — every single one has exactly ONE
+  non-`'*'` org (this DB's tenants are all single-org, standard onboarding shape) — so this was a
+  correct-for-today, wrong-for-the-general-case assumption, not an active bug. **Fix:** added
+  `(SELECT COUNT(*) FROM ad_org o2 WHERE o2.ad_client_id = :client_id AND o2.name <> '*') = 1` to
+  BOTH `@check` and `@apply` (identical subquery in both, verified structurally identical by a
+  dedicated test — `checkMatch[0] === applyMatch[0]` — so the two-layer idempotency contract can't
+  silently drift between them). Re-ran the dry-run across the fleet after the change: byte-identical
+  outcome (9 `WOULD_APPLY`, 3 `SKIPPED_NOT_NEEDED`) — confirms the guard is a genuine no-op for every
+  tenant that exists today, only changing behavior for a tenant shape that doesn't exist yet.
+  Independently confirmed the guard actually excludes a real multi-org tenant: F&B International
+  Group's own `COUNT(non-'*' orgs)` is 623, verified directly (not just inferred from its existing
+  rule already excluding it via the OTHER guard) in the same rolled-back transaction that
+  re-confirmed the single-org apply still works. **Apply generally:** "the specific value doesn't
+  matter for a client/schema-wide setting" is a dangerous shortcut whenever the setting is still
+  stored on a per-row FK that a downstream LOOKUP resolves by exact match — verify the actual
+  read-path code (not just the write-path's own column semantics) before assuming a "doesn't matter
+  which one" simplification is safe to scale beyond today's data shape. This is a variant of the
+  2026-07-14 R3 note's `:org_id` latent-bug lesson (multi-org tenants can silently diverge from a
+  single-org-tested fix's assumptions) — here caught by QA before any multi-org tenant existed to
+  hit it, rather than after.

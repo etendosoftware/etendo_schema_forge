@@ -141,6 +141,38 @@ describe('R20 data-fix — scope: only tenants with ZERO active+validated rules 
   });
 });
 
+describe('R20 data-fix — scope: excludes multi-org tenants (QA finding, 2026-08-03)', () => {
+  /**
+   * Etendo core's actual costing-rule lookup (CostingUtils.getCostDimensionRule /
+   * CostingServer.getOrganization()) is an EXACT match on ad_org_id with no client-wide
+   * fallback, even though the seeded rule itself is org_dimension='N' (whole-client). Picking
+   * an arbitrary org for a hypothetical future multi-Legal-Entity zero-rule tenant would leave
+   * every OTHER legal entity's transactions hitting a hard
+   * NoCostingRuleFoundForOrganizationAndDate error instead of today's silent gap. So both
+   * @check and @apply must require EXACTLY ONE non-'*' org for the client — a multi-org
+   * zero-rule tenant (none exist today) falls through to the same "needs manual handling"
+   * bucket as the already-excluded existing-rule tenants, rather than getting a rule anchored
+   * to an arbitrary org.
+   */
+  const countGuard = /\(SELECT COUNT\(\*\) FROM ad_org o2 WHERE o2\.ad_client_id = :client_id AND o2\.name <> '\*'\) = 1/;
+
+  it('the @check requires exactly one non-System org for the client', () => {
+    assert.match(normCheck, countGuard);
+  });
+
+  it('the @apply re-checks the identical single-org guard (second idempotency layer)', () => {
+    assert.match(normApply, countGuard);
+  });
+
+  it('the single-org guard is structurally identical in @check and @apply (same COUNT subquery)', () => {
+    const checkMatch = normCheck.match(countGuard);
+    const applyMatch = normApply.match(countGuard);
+    assert.ok(checkMatch, '@check must contain the single-org COUNT guard');
+    assert.ok(applyMatch, '@apply must contain the single-org COUNT guard');
+    assert.equal(checkMatch[0], applyMatch[0]);
+  });
+});
+
 describe('R20 data-fix — datefrom mirrors the tenant\'s own history, not "today"', () => {
   it('sources datefrom from the tenant\'s own AD_Client.created, not now()', () => {
     assert.match(normApply, /CROSS JOIN ad_client c/i);

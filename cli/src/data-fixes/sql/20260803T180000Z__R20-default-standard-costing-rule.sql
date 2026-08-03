@@ -53,18 +53,33 @@
 -- immediately -- migration is lazy, per-product, on next transaction. The correct criterion is
 -- "the client's active/validated costing rule going forward is Standard".
 --
--- Target org: the tenant's operative org is the single non-'*' org (mirrors R6's own resolution,
--- not the runner's :org_id bind, so this fix has no dependency on that placeholder ever being
--- wired for a multi-org tenant).
+-- Target org / SINGLE-ORG RESTRICTION (QA finding, 2026-08-03, addressed same day): the tenant's
+-- operative org is resolved the same way R6-org-info-location does (a self-contained subquery,
+-- not the runner's :org_id bind). The rule is inserted with org_dimension='N' (whole-client), but
+-- it still carries exactly ONE ad_org_id -- and Etendo core's actual lookup is an EXACT match on
+-- that column with NO client-wide fallback (CostingUtils.getCostDimensionRule /
+-- CostingServer.getOrganization()). An earlier revision of this fix assumed the org choice was
+-- irrelevant for a whole-client rule and picked "the oldest non-'*' org" for ANY zero-rule tenant;
+-- QA traced the core lookup and showed that for a hypothetical future zero-rule tenant with
+-- MULTIPLE Legal Entities, transactions under any legal entity other than the one picked would hit
+-- a hard NoCostingRuleFoundForOrganizationAndDate error instead of today's silent gap -- worse than
+-- the defect this fix closes. No currently-matched tenant is multi-org (verified below), so this
+-- was a latent assumption, not an active bug, but the fix now scopes itself to single-org tenants
+-- ONLY (both @check and @apply require `COUNT(non-'*' orgs) = 1`). A future multi-org zero-rule
+-- tenant falls through to the SAME "needs manual handling" bucket as the already-excluded
+-- existing-rule tenants (GOClient/F&B/QA Testing) -- multi-org costing-rule seeding is explicitly
+-- OUT OF SCOPE for this fix, not silently mishandled.
 
 -- @check
--- Needs the fix when the tenant has an operative org AND zero active+validated M_Costing_Rule
--- rows client-wide (any algorithm). A tenant with an existing validated rule (even Average) is
--- intentionally NOT matched here -- see the scope decision above.
+-- Needs the fix when the tenant has EXACTLY ONE operative (non-'*') org AND zero active+validated
+-- M_Costing_Rule rows client-wide (any algorithm). A tenant with an existing validated rule (even
+-- Average) is intentionally NOT matched here -- see the scope decision above. A tenant with ZERO
+-- or MULTIPLE non-'*' orgs is also NOT matched -- see the single-org restriction above.
 SELECT 1
 FROM ad_org o
 WHERE o.ad_client_id = :client_id
   AND o.name <> '*'
+  AND (SELECT COUNT(*) FROM ad_org o2 WHERE o2.ad_client_id = :client_id AND o2.name <> '*') = 1
   AND NOT EXISTS (
     SELECT 1 FROM m_costing_rule cr
     WHERE cr.ad_client_id = :client_id
@@ -74,7 +89,9 @@ WHERE o.ad_client_id = :client_id
 LIMIT 1;
 
 -- @apply
--- Second idempotency layer: the same NOT EXISTS guard as @check, re-evaluated at apply time.
+-- Second idempotency layer: the same NOT EXISTS + single-org guard as @check, re-evaluated at
+-- apply time (LIMIT 1 in the target-org subquery is now provably a no-op given the COUNT=1 guard,
+-- kept as defense-in-depth in case the guard is ever weakened).
 INSERT INTO m_costing_rule (
   m_costing_rule_id, ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby,
   m_costing_algorithm_id, org_dimension, warehouse_dimension, isvalidated, process_rule, datefrom
@@ -92,6 +109,7 @@ FROM (
 ) tgt
 CROSS JOIN ad_client c
 WHERE c.ad_client_id = :client_id
+  AND (SELECT COUNT(*) FROM ad_org o2 WHERE o2.ad_client_id = :client_id AND o2.name <> '*') = 1
   AND NOT EXISTS (
     SELECT 1 FROM m_costing_rule cr
     WHERE cr.ad_client_id = :client_id
