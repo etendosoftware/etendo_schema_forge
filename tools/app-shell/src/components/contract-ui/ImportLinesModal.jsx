@@ -235,8 +235,9 @@ export default function ImportLinesModal({
               const checkState = getDocCheckState(doc.id);
               const hasAnySelected = checkState.checked || checkState.indeterminate;
               const display = getDocDisplay(doc);
+              const docTotalSign = negativeQuantity ? -1 : 1;
               const docTotal = lines.length > 0
-                ? lines.reduce((sum, l) => sum + (l._lineNetAmount || 0), 0) * (negativeQuantity ? -1 : 1)
+                ? lines.reduce((sum, l) => sum + (l._lineNetAmount || 0), 0) * docTotalSign
                 : null;
               return (
                 <div key={doc.id} style={{ borderLeft: (isExpanded || hasAnySelected) ? '3px solid hsl(var(--foreground))' : '3px solid transparent' }}>
