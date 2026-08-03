@@ -210,3 +210,42 @@ describe('DetailView.jsx — the credential source', () => {
     }
   });
 });
+
+// Everything above proves each fetch site *spells* writeHeaders(csrfToken), and
+// that the helpers honour the proof when handed one. None of it proves the proof
+// ARRIVES: the helper suites call the helpers directly with their own deps, so
+// deleting a hand-off in DetailView leaves 5 of the 6 helper sites sending no
+// X-Go-CSRF — a 403 on every one — with the whole suite green. That is the exact
+// failure mode ETP-4576 exists to remove, so each hand-off is pinned here.
+//
+// Only `detailProcessDeps` was already covered, by DetailView.detailProcesses'
+// mounted flow. A behavioural test for the other four would have to drive inline
+// JSX arrow props through long interaction flows that do not exist today; those
+// stay in the named-gap bucket. This is the textual complement.
+describe('DetailView.jsx — the proof reaches every consumer', () => {
+  const HANDOFFS = [
+    ['SecondaryTableTab render', /<SecondaryTableTab\b[\s\S]*?\/>/],
+    ['buildSecondaryLineHandlers call', /buildSecondaryLineHandlers\(\{[\s\S]*?\}\)/],
+    ['buildInlineRowUpdateHandler call', /buildInlineRowUpdateHandler\(\{[^}]*\}\)/],
+    ['buildDeleteRowHandler call', /buildDeleteRowHandler\(\{[^}]*\}\)/],
+    ['detailProcessDeps object', /detailProcessDeps\s*=\s*\{[^}]*\}/],
+  ];
+
+  for (const [label, pattern] of HANDOFFS) {
+    it(`passes csrfToken at the ${label}`, () => {
+      const match = codeOnly.match(pattern);
+      expect(match, `expected to find the ${label}`).toBeTruthy();
+      expect(match[0], `the ${label} must forward csrfToken`).toMatch(/\bcsrfToken\b/);
+    });
+  }
+
+  it('hands the proof to getSecondaryRowUpdateHandler through the tab ctx', () => {
+    // SecondaryTableTab is the one exported sub-component that needs the proof.
+    // It cannot call useAuth (15 test files render it unprovided), so it takes a
+    // prop and forwards it into the ctx this handler destructures.
+    // Anchored on `props.` so this matches the call site, not the declaration.
+    const ctx = codeOnly.match(/getSecondaryRowUpdateHandler\(\s*props\.[\s\S]*?\}\)/);
+    expect(ctx, 'expected the getSecondaryRowUpdateHandler call site').toBeTruthy();
+    expect(ctx[0]).toMatch(/csrfToken:\s*props\.csrfToken/);
+  });
+});
