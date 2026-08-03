@@ -1,5 +1,5 @@
 -- @id: R18-stuck-average-cost-anchor
--- @gap: H1
+-- @gap: H3
 -- @risk: high
 -- @type: sql
 -- @description: Seed a manual M_Costing (AVA) anchor for products whose earliest
@@ -298,9 +298,9 @@
 --      20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql` (gap A2b, ETP-4706) —
 --      same client, same BP group, same NULL column, same root cause (a pre-existing
 --      `C_BP_Group_Acct` row created before this account's `C_AcctSchema_Default` was
---      populated). R17 is out of scope for this fix/branch (ETP-4736/R18/H1) and was
+--      populated). R17 is out of scope for this fix/branch (ETP-4736/R18/H3) and was
 --      deliberately NOT applied here — flagged for the coordinator to sequence its own merge.
---    Net result: R18 fully closes H1 for this product (both of CostoTest's transactions are
+--    Net result: R18 fully closes H3 for this product (both of CostoTest's transactions are
 --    costed, and the transaction it targeted posts a real document with real Fact_Acct
 --    entries); the Goods Receipt's remaining posting failure is an unrelated, already-tracked
 --    gap (A2b/R17/ETP-4706), not a new problem introduced or left behind by R18.

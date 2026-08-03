@@ -7,7 +7,7 @@ import { parseFix } from '../src/data-fixes/parse-fix.js';
 
 /**
  * Regression guard for the R18 corrective data-fix
- * (20260803T140000Z__R18-stuck-average-cost-anchor.sql, ETP-4736, gap H1).
+ * (20260803T140000Z__R18-stuck-average-cost-anchor.sql, ETP-4736, gap H3).
  *
  * This file was deliberately trimmed down from a broader "pin every clause
  * of the SQL text" suite (header metadata, tenant-isolation scoping, the
