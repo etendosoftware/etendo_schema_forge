@@ -313,19 +313,19 @@ export const api = {
     },
     {
       "entity": "businessPartner",
-      "field": "pOPaymentMethod",
-      "column": "PO_Paymentmethod_ID",
-      "reference": "PaymentMethod",
-      "inputMode": "selector",
-      "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
-    },
-    {
-      "entity": "businessPartner",
       "field": "pOPaymentTerms",
       "column": "PO_PaymentTerm_ID",
       "reference": "PaymentTerm",
       "inputMode": "selector",
       "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentTerms"
+    },
+    {
+      "entity": "businessPartner",
+      "field": "pOPaymentMethod",
+      "column": "PO_Paymentmethod_ID",
+      "reference": "PaymentMethod",
+      "inputMode": "selector",
+      "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
     },
     {
       "entity": "businessPartner",

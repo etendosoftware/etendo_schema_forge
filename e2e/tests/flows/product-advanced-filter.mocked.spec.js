@@ -4,16 +4,24 @@ import { login } from '../helpers/auth.js';
 /**
  * Product grid — Advanced Filter (funnel) coverage for ETP-4609 — mocked.
  *
+ * NOTE (ETP-4603): the grid identity cell is now the generic `multiField`
+ * cell, NOT the old ETP-4609 `nameAndSearchKey` custom cell. The advanced-
+ * filter functional flow below is still the ETP-4609 feature and is
+ * unchanged; only the identity-cell + field-selector assertions were
+ * realigned to the multiField model (see the inline blocks below).
+ *
  * Maps directly to the 5 acceptance-criteria bullets on the Jira ticket:
  *
  *   1. Crear un producto nuevo desde la ventana Producto.
  *   2. Verificar labels correctos en el selector de campos del filtro (sin
  *      claves internas) — the field dropdown must show human AD labels
  *      ("Categoría...", "Tipo", "Unidad de medida...") and never raw
- *      internal keys (`productCategory`, `productType`, `uOM`,
- *      `nameAndSearchKey`). The last one doubles as E2E coverage for the
- *      custom-column exclusion fix: `nameAndSearchKey` (`type: 'custom'`,
- *      no `column`/`backendFilterKey`) must not appear as an option at all.
+ *      internal keys (`productCategory`, `productType`, `uOM`). Post
+ *      ETP-4603 the `multiField` identity column is pre-expanded (via
+ *      `expandMultiFieldColumns` in ListView.jsx) into its `parts`, so the
+ *      human labels "Nombre" (name) and "Identificador" (searchKey) DO now
+ *      appear as filterable options; the never-existed raw key
+ *      `nameAndSearchKey` must still not appear.
  *   3. Filtrar por Categoría con operador "Es" y validar que el buscador
  *      funcione — selecting "Es" on the identifier-mode `productCategory`
  *      column opens the `IdentifierMultiPicker` (checkbox popover backed by
@@ -26,14 +34,16 @@ import { login } from '../helpers/auth.js';
  *   5. Verificar que campos obligatorios no muestren operadores "Está
  *      vacío"/"No está vacío" — `productCategory` is `required: true`.
  *
- * ProductCustomTable.jsx (tools/app-shell/src/windows/custom/product/) also
- * declares a purely client-rendered `nameAndSearchKey` (`type: 'custom'`,
- * no `column` / no `backendFilterKey`) and a local `hiddenColumns` override
- * for the split `name`/`searchKey` filter columns. Both are guarded here
- * too (see docs/list-filters.md and the matching Vitest suites).
+ * ProductCustomTable.jsx (tools/app-shell/src/windows/custom/product/) now
+ * declares a single generic `multiField` identity column (`key: 'name'`,
+ * `column: 'Name'`, `parts` = searchKey→Value + name→Name) that the shared
+ * grid renders as ONE cell `cell-<rowId>-name`: a bold title (name) plus a
+ * subtitle chip (searchKey). There is no `nameAndSearchKey` column and no
+ * local `hiddenColumns` override anymore (see the matching Vitest suite
+ * ProductCustomTable.filters.vitest.jsx and docs/list-filters.md).
  *
- * Single comprehensive flow (create → hiddenColumns check → field-label
- * check → Categoría "Es" + search + grid narrowing → Tipo inSet
+ * Single comprehensive flow (create → multiField identity-cell check →
+ * field-label check → Categoría "Es" + search + grid narrowing → Tipo inSet
  * case-insensitive + grid narrowing → required-column operator exclusion)
  * per this repo's E2E convention of one flow per describe block.
  *
@@ -273,21 +283,19 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     expect(state.postBodies[0].productCategory).toBe(CATEGORY_OPTION.id);
     expect(state.postBodies[0].uOM).toBe(UOM_OPTION.id);
 
-    // Back to the grid — the new product must be visible inside the combined
-    // "Identificador & Nombre" avatar cell (nameAndSearchKey). Scoped by
-    // data-testid (not getByText) because of a third ETP-4609 gap: ListView.jsx
-    // declares its own `hiddenColumns = []` default prop and forwards it to
-    // whatever custom Table component the window wires in; ProductCustomTable
-    // spreads `{...props}` AFTER its own local `hiddenColumns={hiddenColumns}`,
-    // so ListView's empty-array default silently overwrote the intended
-    // `['name', 'searchKey']` override (see the matching regression test in
-    // ProductCustomTable.filters.vitest.jsx). `name` / `searchKey` must NOT
-    // also render as their own separate visible cells.
+    // Back to the grid — the new product must be visible inside the generic
+    // `multiField` identity cell (ETP-4603). Scoped by data-testid (not
+    // getByText): the shared grid renders the multiField column as ONE cell
+    // `cell-<rowId>-name` (pattern `cell-${row.id}-${col.key}`, col.key='name')
+    // whose body is a bold title (the `name` value) plus a subtitle chip (the
+    // `searchKey` value). searchKey is the subtitle chip INSIDE the name cell,
+    // so it must NOT render as its own separate `cell-prod-new-1-searchKey`.
     await page.goto('/product');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await expect(page.getByTestId('cell-prod-new-1-nameAndSearchKey')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('cell-prod-new-1-nameAndSearchKey')).toContainText('New filterable product');
-    await expect(page.getByTestId('cell-prod-new-1-name')).toHaveCount(0);
+    await expect(page.getByTestId('cell-prod-new-1-name')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('cell-prod-new-1-name')).toContainText('New filterable product');
+    // The searchKey value ('PROD-NEW') is the subtitle chip inside the same cell.
+    await expect(page.getByTestId('cell-prod-new-1-name')).toContainText('PROD-NEW');
     await expect(page.getByTestId('cell-prod-new-1-searchKey')).toHaveCount(0);
 
     // ── Open the funnel and the field selector dropdown ──
@@ -306,14 +314,20 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     await fieldSelect.click();
 
     // ── Bullet 2: field selector shows human labels, never raw internal
-    // keys. `nameAndSearchKey` in particular must not appear as an option
-    // at all (custom-column exclusion fix). ──
+    // keys. The never-existed key `nameAndSearchKey` must still not appear as
+    // an option. ──
     for (const rawKey of ['productCategory', 'nameAndSearchKey', 'productType', 'uOM']) {
       await expect(page.getByRole('option', { name: rawKey, exact: true })).toHaveCount(0);
     }
     await expect(page.getByRole('option', { name: /categor/i })).toBeVisible({ timeout: 5_000 });
     await expect(page.getByRole('option', { name: 'Tipo', exact: true })).toBeVisible();
     await expect(page.getByRole('option', { name: /unidad/i })).toBeVisible();
+    // ETP-4603: the `multiField` identity column is pre-expanded into its
+    // `parts`, so filtering by name/searchKey is now enabled — their human
+    // labels "Nombre" and "Identificador" appear as filterable options
+    // (mocked locale defaults to es_ES).
+    await expect(page.getByRole('option', { name: /nombre/i })).toBeVisible();
+    await expect(page.getByRole('option', { name: /identificador/i })).toBeVisible();
 
     await page.getByRole('option', { name: /categor/i }).click();
 

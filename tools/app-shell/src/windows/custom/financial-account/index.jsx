@@ -4,6 +4,8 @@ import { Sparkles, Upload, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
+import AccountPage from '@generated/financial-account/generated/web/financial-account/AccountPage';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFinancialAccount } from '@/hooks/useFinancialAccount';
 import { useAccountMovements } from '@/hooks/useAccountMovements';
@@ -77,12 +79,17 @@ const LINE_CSV_COLUMNS = [
 ].join('|');
 
 /**
- * Financial Account detail view.
- * Rendered by WindowLoader when navigating to /financial-account/{recordId}.
+ * Financial Account detail view (single account: Movimientos / Extractos /
+ * Conciliación). Rendered for /financial-account/{recordId} by the wrapper at the
+ * bottom of this file.
+ *
+ * Still fully hand-written: PSD2, the reconciliation engine and the statement
+ * import have no AD backing, so they are not expressible through the contract.
+ * Only the LIST half of this window went decisions-driven.
  *
  * @param {{ recordId: string }} props
  */
-export default function FinancialAccountWindow({ recordId }) {
+export function FinancialAccountDetail({ recordId }) {
   const ui = useUI();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -236,6 +243,19 @@ export default function FinancialAccountWindow({ recordId }) {
     [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending],
   );
 
+  // ETP-4658 — this custom window never delegated to the generated AccountPage.jsx
+  // (registry.js loads this file for "financial-account", not @generated/...), so it
+  // never picked up the ETP-4520 access-tier guard despite the contract carrying a
+  // real window.id. Checked here, after every other hook, so hook order stays stable
+  // across renders regardless of the tier (mirrors custom/sales-invoice/index.jsx).
+  // Only the "none" tier is gated — propagating "read-only" would require threading
+  // it through every mutation hook in this window (useAccountMutations,
+  // useReconciliation, PSD2 actions, ...), out of scope here.
+  const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="94EAA455D2644E04AB25D93BE5157B6D" data-testid="WindowAccessGuard__financial-account" />;
+  }
+
   return (
     <TooltipProvider data-testid="TooltipProvider__f7dbb3">
       <div className="flex h-full flex-col overflow-hidden">
@@ -340,9 +360,60 @@ export default function FinancialAccountWindow({ recordId }) {
         open={!!archiveTarget}
         account={archiveTarget}
         onClose={() => setArchiveTarget(null)}
-        onArchived={() => { setArchiveTarget(null); navigate('/finance/accounts'); }}
+        onArchived={() => { setArchiveTarget(null); navigate('/financial-account'); }}
         data-testid="ArchiveAccountDialog__f7dbb3" />
       <BankConnectionFlowUI flow={bankConnectionFlow} data-testid="BankConnectionFlowUI__f7dbb3" />
     </TooltipProvider>
+  );
+}
+
+/**
+ * Window entry point for `financial-account`, resolved through
+ * `registry.js`'s customLoaders (which win over windowLoaders).
+ *
+ * Mirrors the split used by `custom/sales-invoice/index.jsx`, inverted: there the
+ * DETAIL delegates to the generated page and the list is hand-rolled; here the
+ * LIST is the generated page (ListView + the AccountsHeaderTable slot, driven by
+ * decisions.json) and the DETAIL stays hand-written above.
+ *
+ * `recordId` is passed down by WindowLoader from the `:windowName/:recordId` route;
+ * it is explicitly NOT forwarded to the generated page, whose own `if (recordId)`
+ * branch would otherwise render the generic DetailView instead of our tabs.
+ */
+export default function FinancialAccountWindow(props) {
+  if (props.recordId) {
+    return <FinancialAccountDetail recordId={props.recordId} data-testid="FinancialAccountDetail__f7dbb3" />;
+  }
+  // `listViewOptions` reaches ListView through AccountPage's `{...props}` spread.
+  // AccountsHeaderTable renders the window's whole toolbar itself, so ListView's
+  // native list bar must be dropped entirely — the individual hide* flags leave an
+  // empty padded strip behind (sort/refresh have no flag of their own).
+  return (
+    <AccountPage
+      {...props}
+      recordId={undefined}
+      // ListView pads the table region horizontally by default (`px-2`). This slot draws
+      // its own full-bleed rules — under the toolbar and between the KPI panel and the
+      // rows — which the padding would inset from both edges. The slot handles its own
+      // inner spacing instead.
+      tablePaddingX=""
+      listViewOptions={{
+        ...(props.listViewOptions || {}),
+        // Drops the IDLE list bar only. ListView's SELECTION bar still renders on top of
+        // this slot — that is where ETP-4656's "Eliminar seleccionados" lives, and
+        // AccountsHeaderTable hides its own toolbar while rows are picked so the two read
+        // as one swap rather than two stacked bars.
+        hideListBar: true,
+        // A financial account is not a printable document, so the selection bar's
+        // document-preview action has nothing to show. `hidePrint` is already declared in
+        // decisions.json and covers the Printer button; this covers the Eye button, which
+        // has no decisions.json equivalent. Leaves "Eliminar seleccionados" as the only
+        // action in the bar.
+        hideEye: true,
+        // AccountsHeaderTable pins its toolbar + KPI sidebar and scrolls only the rows,
+        // so it must not sit inside ListView's own ScrollPane.
+        tableOwnsScroll: true,
+      }}
+      data-testid="AccountPage__f7dbb3" />
   );
 }
