@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import BusinessPartnerCategoryTable from './BusinessPartnerCategoryTable';
 import BusinessPartnerCategoryForm from './BusinessPartnerCategoryForm';
@@ -98,7 +99,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/business-partner-category/accounting",
       "detailUrl": "/sws/neo/business-partner-category/accounting/{id}",
       "supportedFilters": []

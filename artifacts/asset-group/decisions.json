@@ -12,7 +12,8 @@
     "secondaryTabs": {
       "accounting": {
         "tabOrder": 1,
-        "label": "Accounting"
+        "label": "Accounting",
+        "maxDetailLines": 1
       }
     }
   },
@@ -89,6 +90,7 @@
     },
     "accounting": {
       "name": "accounting",
+      "hideDelete": true,
       "fields": {
         "accumulatedDepreciation": {
           "visibility": "editable",

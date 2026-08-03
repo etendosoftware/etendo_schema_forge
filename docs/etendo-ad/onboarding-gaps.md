@@ -12,6 +12,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A3 | Accounting | Schema not predefined (Allow Negatives/Centrally Maintained=N); only 5 of 8 dimensions enabled (Cost Center/User1/User2 missing) | Onboarding sampledata XML (`C_ACCTSCHEMA.xml`, `C_ACCTSCHEMA_ELEMENT.xml`) — dataset-only, no new service | ETP-4245 |
 | A3b | Accounting | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL (doubtful debt, bad-debt expense/revenue, allowance for doubtful debt, deferred product expense/revenue) | Onboarding sampledata XML (`C_ACCTSCHEMA_DEFAULT.xml`) — dataset-only, no new service | ETP-4245 |
 | A4 | Accounting | `A_Amortization` table (`AD_Table_id 800060`) inactive on `c_acctschema_table` — amortization documents cannot post | Onboarding sampledata XML (`C_ACCTSCHEMA_TABLE.xml`) — dataset-only, no new service | ETP-4452 |
+| A2b | Accounting | Posting a Goods Receipt fails with generic "Account could not be found." — `C_BP_Group_Acct.NotInvoicedReceipts_Acct` stuck NULL on one stale pre-existing row (GOClient "Cliente" group) | Corrective-only data-fix (`R17`) — CONFIRMED no preventive gap: current onboarding code already wires this column correctly for every group created today | ETP-4706 |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
@@ -304,6 +305,77 @@ notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable fact
 **Where it should be fixed:** the onboarding process — at client creation these tables should be auto-populated from the schema defaults. Note: with these populated, tax accounting is independent per client (supports the system-level taxes approach).
 
 **Cross-link:** this is exactly what the `../proposals/initial-organization-setup-accounting.md` proposal aims to automate. The proposal's wiring step (`applyAccountingPackageWiring`) and package-completeness validation (`validateAccountingPackage`) together ensure these tables are populated before `AD_Org_Ready` is called.
+
+---
+
+### A2b — `C_BP_Group_Acct.NotInvoicedReceipts_Acct` stuck NULL on a stale pre-existing row (ETP-4706, 2026-07-29)
+
+**Symptom:** `Contabilizar` (post) on a purchase Goods Receipt fails with a generic `422`:
+```json
+{"success":false,"message":"Account could not be found."}
+```
+Server log (NEO just proxies this through):
+```
+WARN  AcctServer - getAccount - NO account Type=51, Record=<inout id>
+ERROR AcctServer - No Account Not Invoiced Receipts for product: <product> in accounting schema: <schema>
+```
+
+**Root cause — NOT a product/product-category gap (ticket's original diagnosis corrected).**
+`AcctType=51` is `AcctServer.ACCTTYPE_NotInvoicedReceipts`, resolved by
+`AcctServer_data.xsql#selectNotInvoicedReceiptsAcct`:
+```sql
+SELECT NotInvoicedReceipts_Acct FROM C_BP_Group_Acct a, C_BPartner bp
+WHERE a.C_BP_Group_ID = bp.C_BP_Group_ID AND bp.C_BPartner_ID = ? AND a.C_AcctSchema_ID = ?
+```
+This is resolved **entirely by the transaction's Business Partner → its BP Group** — never by the
+product or product category, even though the error message text happens to name the product.
+Confirmed via `information_schema.columns` that neither `M_Product_Category_Acct` nor
+`M_Product_Acct` has a not-invoiced-receipts column at all — those tables cannot be the fix target.
+
+**Live-DB diagnosis (GOClient, client `802509E12436405C86BA1FD5B1DF508C`, schema "Esquema GO"
+`C06B100312FA48159DB36B9A4B461019`):** the repro's Goods Receipt (`36DEE37DA9EA4A54A01B2D313EDFE636`)
+uses BP `6BD084B9C1744044B9691AD373F96A93` ("Tercero España"), whose group is "Cliente"
+(`DBBD00C9E0B9442188FCDDA3F601DAEA`, the group renamed from "Consumidor Final" by ETP-4402). That
+group's `C_BP_Group_Acct` row for this schema has `notinvoicedreceipts_acct = NULL`, while
+`C_AcctSchema_Default.notinvoicedreceipts_acct` on the same schema **is** populated
+(`6E9DA718417A48A290FE376448A12BF6`). The row's `created` timestamp is `2026-04-07 14:59:32` — well
+before the tenant's current account defaults were fully settled — and the onboarding insert
+(`OnboardingAccountingWiringService#provisionEntityPostingAccounts`, `BP_GROUP_ACCT_SQL`) is guarded
+by `NOT EXISTS` at the **row** level: once *any* row exists for `(group, schema)` it is never
+revisited, so a column added/defaulted after the row's creation stays permanently NULL on it. The
+sibling "Proveedor" and "Acreedor" groups on the same tenant/schema already have this column set.
+
+**Scope — swept the whole fleet, confirmed corrective-only (no preventive front needed):** every
+other `C_BP_Group_Acct` row on this DB, across every other tenant — including tenants onboarded via
+the **current** onboarding code the same day this was diagnosed (e.g. "Empresa E2E d5be89a8",
+onboarded 2026-07-29) — already has `notinvoicedreceipts_acct` populated. A brand-new tenant is NOT
+born with this gap; only this one pre-existing GOClient row is affected. Per the "Boundary" rule in
+`../etendo-ad/onboarding-and-datafixes-map.md` §0, this ships corrective-only, stated explicitly.
+`ONBOARDING_PROVISIONED_THROUGH` is deliberately NOT bumped — there is no preventive change to gate.
+
+**Also found, explicitly OUT OF SCOPE for this ticket (flagged, not fixed here):** the SAME "Cliente"
+row also has `notinvoicedrevenue_acct`, `notinvoicedreceivables_acct`, `unearnedrevenue_acct`,
+`paydiscount_exp_acct`, `paydiscount_rev_acct`, `writeoff_rev_acct`, `v_liability_services_acct`,
+`doubtfuldebt_acct`, `baddebtexpense_acct`, `baddebtrevenue_acct` and `allowancefordoubtful_acct` all
+NULL — the same stale-row class of drift, just for other account types on the identical row. ETP-4706
+explicitly scoped itself to Not-Invoiced-Receipts only; a follow-up ticket should decide whether to
+generalize R17 into a "resync every NULL `*_acct` column against the schema default" fix for this row
+(and any other row like it) rather than one column at a time.
+
+**Fix:** `cli/src/data-fixes/sql/20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql` —
+single guarded `UPDATE`, scoped to `:client_id`, backfilling `notinvoicedreceipts_acct` from
+`c_acctschema_default` wherever the group row has it NULL and the schema has a value to source from.
+Verified live in a rolled-back transaction on GOClient (`BEFORE: NULL` → `AFTER:
+6E9DA718417A48A290FE376448A12BF6`; re-check matches 0 rows).
+
+**Related hygiene fix (different repo, same stale row):** the static
+`referencedata/sampledata/GOClient/C_BP_GROUP_ACCT.xml` dump in `com.etendoerp.go` carried this exact
+row (`C_BP_GROUP_ACCT_ID 69081038A3AC421AB8DB93A096D58D57`) with `NOTINVOICEDRECEIPTS_ACCT` missing
+entirely — a byte-for-byte mirror of the live NULL above. Fixed for hygiene only in that repo's
+`feature/ETP-4706` (element added, value `6E9DA718417A48A290FE376448A12BF6`); the table is not in
+`OnboardingDatasetDefinition.INCLUDED_TABLES`, so this has no runtime/onboarding effect — it just
+prevents the stale value from resurfacing if the file is ever regenerated or the table is later
+added to the included set. If you independently find this XML stale, it's already handled.
 
 ---
 

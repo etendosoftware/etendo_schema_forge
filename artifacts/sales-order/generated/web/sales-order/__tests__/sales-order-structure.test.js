@@ -57,8 +57,9 @@ describe('Sales Order — HeaderForm', () => {
 });
 
 describe('Sales Order — HeaderPage', () => {
-  it('imports ListView and DetailView', () => {
-    assert.match(headerPage, /import.*ListView.*DetailView.*from/);
+  it('imports ListView and DetailView from their own modules', () => {
+    assert.match(headerPage, /import \{ ListView \} from '@\/components\/contract-ui\/ListView\.jsx'/);
+    assert.match(headerPage, /import \{ DetailView \} from '@\/components\/contract-ui\/DetailView\.jsx'/);
   });
 
   it('imports HeaderTable and HeaderForm', () => {

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import BpartnerTable from './BpartnerTable';
 import BpartnerForm from './BpartnerForm';
 import BpartnerLocationTable from './BpartnerLocationTable';

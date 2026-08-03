@@ -115,7 +115,8 @@
           "customerReceivablesNo",
           "customerPrepayment"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       },
       "vendorAccounting": {
         "tabMode": "table-form",
@@ -126,7 +127,8 @@
           "vendorLiability",
           "vendorPrepayment"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       }
     },
     "import": {
@@ -610,6 +612,7 @@
     },
     "customerAccounting": {
       "javaQualifier": "customerAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "customerReceivablesNo": {
@@ -635,6 +638,7 @@
     },
     "vendorAccounting": {
       "javaQualifier": "vendorAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "vendorLiability": {

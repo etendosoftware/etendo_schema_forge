@@ -34,8 +34,8 @@ describe('SalesOrderWindow — legacy pendingDelivery filter removed (ETP-4004)'
       'must still import GeneratedApp from the generated sales-order window');
   });
 
-  it('still imports ListView from contract-ui', () => {
-    assert.match(src, /import.*ListView.*from\s*['"]@\/components\/contract-ui['"]/,
+  it('still imports ListView from its own contract-ui module', () => {
+    assert.match(src, /import \{ ListView \} from ['"]@\/components\/contract-ui\/ListView\.jsx['"]/,
       'must still import ListView — used for the list view when recordId is not present');
   });
 });

@@ -83,7 +83,7 @@ vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
   ),
 }));
 
-vi.mock('@/components/contract-ui', () => ({
+vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   ListView: (props) => {
     lastListViewProps = props;
     return (

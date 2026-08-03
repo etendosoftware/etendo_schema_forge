@@ -6,8 +6,13 @@
     "detailEntity": null,
     "secondaryTabs": {
       "productTransactions": {
+        "tabOrder": 1,
         "label": "Transactions",
         "customPanel": "WarehouseTransactionsTable"
+      },
+      "accounting": {
+        "tabOrder": 2,
+        "label": "Accounting"
       }
     },
     "hidePrint": true,
@@ -94,7 +99,31 @@
     },
     "accounting": {
       "name": "accounting",
-      "exclude": true
+      "hideDelete": true,
+      "fields": {
+        "accountingSchema": { "visibility": "system", "derivation": "fromConfig" },
+        "warehouse": { "visibility": "system", "derivation": "fromParent" },
+        "warehouseDifferences": {
+          "visibility": "editable",
+          "grid": true,
+          "form": true,
+          "required": true,
+          "lookup": true,
+          "grow": true,
+          "seq": 1
+        },
+        "warehouseInventory": { "visibility": "discarded" },
+        "inventoryRevaluation": { "visibility": "discarded" },
+        "inventoryAdjustment": { "visibility": "discarded" },
+        "organization": { "visibility": "system" },
+        "client": { "visibility": "system" },
+        "id": { "visibility": "system" },
+        "active": { "visibility": "system" },
+        "creationDate": { "visibility": "system" },
+        "createdBy": { "visibility": "system" },
+        "updated": { "visibility": "system" },
+        "updatedBy": { "visibility": "system" }
+      }
     }
   },
   "rules": {},

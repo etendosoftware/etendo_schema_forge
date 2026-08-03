@@ -122,16 +122,19 @@ workflow lo expone por dos vías, ambas **fail-soft** (`continue-on-error`, nunc
 1. **Commit status** (`preview-package`) sobre el SHA publicado, con `description = "alpha: <version>"`
    y `target_url` al run. Aparece como check ✅ en el commit **y** en la lista de checks del PR — se
    ve la versión sin abrir el run. Requiere `permissions: statuses: write`.
-2. **Comentario sticky** en el PR abierto de la rama (si existe): busca el PR por `--head`, y hace
+2. **Comentario sticky** en el PR abierto de la rama: el workflow primero busca el PR por `--head` y
+   **no publica** si no existe. Con el PR encontrado, hace
    *upsert* de un único comentario (marcado con `<!-- preview-packages-bot -->`) — nunca spammea, se
    actualiza en cada push. Incluye la versión y el snippet exacto del pin
-   (`"@etendosoftware/app-shell-core": "<version>"`). Si no hay PR abierto, se saltea en silencio.
+   (`"@etendosoftware/app-shell-core": "<version>"`).
    Requiere `permissions: pull-requests: write`.
 
-### D4 — Trigger: automático en cada push a una rama `feature/**` de core
-El preview se publica **solo, en cada push** a una rama `feature/**` del repo `schema_forge_core`
-(`on: push: branches: ['feature/**']`). No hay que dispararlo a mano. Se conserva además
-`workflow_dispatch` como escape manual (correr un preview sin pushear).
+### D4 — Trigger: automático en cada push a una rama `feature/**` de core, con PR abierto
+El workflow se dispara en cada push a una rama `feature/**` del repo `schema_forge_core`
+(`on: push: branches: ['feature/**']`), pero el job que publica se ejecuta **solo si esa rama tiene
+un PR abierto**. Sin PR el run termina después de la comprobación, sin tests, publicación ni cleanup.
+Se conserva además `workflow_dispatch`, que tiene la misma compuerta: no permite publicar una rama
+sin PR.
 
 Ventaja del `on: push` frente al `workflow_dispatch`: el push usa el archivo de workflow **de la rama
 pusheada** y publica **el código de esa misma rama** (via `github.ref_name` para el `<branchid>` y el
@@ -139,8 +142,8 @@ sha del commit). Esto **elimina la fricción** que tendría el input de `workflo
 de la rama default) — no hay input que validar contra main.
 
 `main` queda **fuera** de este trigger (solo `feature/**`): el push a `main` lo maneja `release.yml`
-(publish real `latest` + cleanup D5b). Contrapartida asumida: cada push a una feature corre la suite
-de tests de los 6 paquetes y publica un preview (D5a autopurga los anteriores de esa rama).
+(publish real `latest` + cleanup D5b). Con el PR abierto, cada push a una feature corre la suite de
+tests de los 6 paquetes y publica un preview (D5a autopurga los anteriores de esa rama).
 
 ### D5 — Cleanup en dos momentos, atado a la cadencia de publicación (no cron)
 Dos mecanismos complementarios, ninguno agendado — se disparan cuando se publica:

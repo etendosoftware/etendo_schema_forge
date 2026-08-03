@@ -318,6 +318,35 @@ describe('InlineLinesPanel', () => {
     expect(onDeleteRow).toHaveBeenCalledWith(ROWS[0]);
   });
 
+  // ETP-4565 — regression: `hideDelete: true` windows (e.g. product-category's
+  // Contabilidad tab) resolve `onDeleteRow` to undefined all the way up from the
+  // contract's `apiPrediction.crud.<entity>.delete: false`. DataTable already gates
+  // its own trash button on `onDeleteRow` (see DataTable.jsx ~1450); InlineLinesPanel
+  // did not, so the icon rendered anyway and silently no-opped on click. This asserts
+  // the icon itself is absent — not just inert — when no delete handler is provided.
+  it('does not render the delete (trash) icon when onDeleteRow is not provided (ETP-4565)', async () => {
+    renderPanel({ onDeleteRow: undefined });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    // Edit (pencil) must still render — only delete is gated.
+    expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeInTheDocument();
+    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeNull();
+    expect(within(actions).queryByRole('button', { name: /delete/i })).toBeNull();
+  });
+
+  it('still renders the delete (trash) icon when onDeleteRow IS provided (no regression)', async () => {
+    renderPanel();
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeInTheDocument();
+  });
+
   it('numeric column headers are right-aligned', () => {
     renderPanel();
     const qtyHeader = screen.getByTestId('column-header-quantity');

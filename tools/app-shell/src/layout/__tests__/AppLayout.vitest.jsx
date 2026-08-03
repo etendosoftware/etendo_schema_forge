@@ -33,6 +33,16 @@ vi.mock('@/hooks/useRoleMenu.js', () => ({
   useRoleMenu: vi.fn(() => null),
 }));
 
+// Same situation as useRoleMenu above: AppLayout now mounts useAccountIdentity()
+// (ETP-4693) to resolve the account flags are targeted on, and that hook calls
+// useAuth(). Rendering AppLayout without an AuthProvider therefore throws, so the
+// hook is stubbed here. What AppLayout owes the feature is that it MOUNTS the
+// hook inside the authenticated shell — asserted below — not that the hook works;
+// that belongs to the hook's own tests.
+vi.mock('@/lib/flags/useAccountIdentity.js', () => ({
+  useAccountIdentity: vi.fn(),
+}));
+
 // Mock layout components. menuGroups is rendered (serialized) so tests can
 // assert on what AppLayout actually passed down after filtering, not just
 // that SideMenu rendered.
@@ -96,6 +106,7 @@ vi.mock('@/components/support/SupportChatWidget.jsx', () => ({
 }));
 
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
+import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '../AppLayout.jsx';
 
@@ -111,6 +122,13 @@ describe('AppLayout — normal mode', () => {
   it('renders without crashing', () => {
     render(<AppLayout {...defaultProps} />);
     expect(screen.getByTestId('outlet')).toBeInTheDocument();
+  });
+
+  it('mounts the account-identity hook, so flag targeting can resolve', () => {
+    render(<AppLayout {...defaultProps} />);
+    // The hook has to run inside the authenticated shell: until it resolves,
+    // flags target the ERP admin username, which the backend never sees.
+    expect(useAccountIdentity).toHaveBeenCalled();
   });
 
   it('renders SideMenu when not embedded', () => {

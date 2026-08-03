@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -604,6 +604,11 @@ sonar-coverage: ## Run all tests with coverage then SonarQube analysis
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info 'tools/app-shell/test/*.test.js'
 	cd tools/app-shell && npx vitest run --coverage && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	sonar-scanner -Dproject.settings=sonar-project.properties
+
+# --- Feature Flag Debt ---
+
+flag-debt: ## Score per-flag technical debt from flags-registry.json (FLAG=<key>, JSON=1, HTML=1)
+	@$(SF) sf-flag-debt $(if $(FLAG),--flag $(FLAG)) $(if $(JSON),--json) $(if $(HTML),--html)
 
 # --- XML Regeneration Check ---
 
