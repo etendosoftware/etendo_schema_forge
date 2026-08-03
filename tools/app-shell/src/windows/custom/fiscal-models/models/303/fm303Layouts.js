@@ -26,9 +26,14 @@ const IVA_DED_COLS = [
 // ── Shared field definitions (declared before BASE to avoid TDZ) ─────
 
 // visibleWhen shared by bank fields that only apply to devolucion/transferencia (not domiciliacion U).
-// NOTE: 'V' is now dead code — the whole datos_bancarios section is gated to {U, D, X}
-// (EDID065 fix), so V can never reach this visibleWhen. Left as-is pending a separate
-// decision on whether V should show these extended bank fields at all.
+// NOTE: 'V' is reachable again (ETP-4456 follow-up fix). The EDID065 fix originally gated the
+// whole datos_bancarios section to {U, D, X} via sectionVisibleWhen, which made 'V' dead code here
+// AND — much worse — hid the section entirely for a rectificativa filed under any other tipo (e.g.
+// 'I'), even though AEAT303Report's checkIsDeclarationRMandatoryParams hard-requires the bank
+// fields whenever a rectificativa has a non-zero box 111 amount, independent of tipo_declaracion.
+// Fixed by widening datos_bancarios.sectionVisibleWhen to an anyOf that also shows the section
+// whenever 'rectificativa' is checked — so 'V' (already in this array) is visible again once its
+// declaration is a rectificativa, same as before EDID065.
 const _BANK_DVX_VW = { field: 'tipo_declaracion', in: ['D', 'V', 'X'] };
 
 const TIPO_DECLARACION_FIELD = {
@@ -77,7 +82,19 @@ const BASE = {
       },
       // Only U (Domiciliación), D (Devolución) and X (Devolución transferencia
       // extranjero) may carry IBAN per AEAT error EDID065 — see IBAN_REQUIRED_TIPOS.
-      sectionVisibleWhen: { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
+      // ALSO shown whenever 'rectificativa' is checked, regardless of tipo_declaracion:
+      // AEAT303Report's checkIsDeclarationRMandatoryParams hard-requires the bank fields
+      // (BANK/IBAN/SWIFT/SEPA/ADDRESS/CITY/COUNTRY) when a rectificativa carries a non-zero
+      // box 111 (rectificacion_importe) amount — a requirement that is independent of
+      // tipo_declaracion. Without this OR branch, e.g. tipo 'I' (Ingreso) rectificativas had
+      // no UI at all to enter the now-mandatory bank data, causing a submission-blocking
+      // backend hard-fail. Gating on "rectificativa checked" (rather than also checking the
+      // box 111 amount, which lives outside this identification map) is a deliberate,
+      // harmless UX-only over-show — see FmBoxes303's matchesSvw/anyOf support.
+      sectionVisibleWhen: { anyOf: [
+        { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
+        { field: 'rectificativa', equals: true },
+      ] },
       fieldLayout: 'aligned',
       colHeaderKeys: [],
       fields: [

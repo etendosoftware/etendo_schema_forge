@@ -75,7 +75,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     </div>
   );
 
+  // Supports a single-field condition ({field, in:[...] | equals:...}) or an
+  // OR-of-conditions shape ({ anyOf: [condition, ...] }) — kept minimal on
+  // purpose, just enough to express "tipo X OR rectificativa checked" cleanly.
   const matchesSvw = (svw) => {
+    if (svw.anyOf) return svw.anyOf.some(matchesSvw);
     const val = identification?.[svw.field];
     return svw.in ? svw.in.includes(val) : val === svw.equals;
   };
