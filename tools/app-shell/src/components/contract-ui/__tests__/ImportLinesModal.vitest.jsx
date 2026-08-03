@@ -574,14 +574,22 @@ describe('ImportLinesModal', () => {
 
       renderModal();
 
+      // The eager-load effect runs in two commits: `loading` flips to false
+      // first (a transient render where documents show with no docLines info
+      // yet), then the effect itself sets `eagerLoadingLines` back to true
+      // until the fetchLines Promise.all settles. Asserting only "not
+      // loading" + "INV-001 present" can catch that transient first commit
+      // as a false positive; requiring fetchLines to have been called rules
+      // it out, matching the guard used by renderExpandedTwoLines below.
       await waitFor(() => {
+        expect(defaultProps.fetchLines).toHaveBeenCalled();
         expect(screen.queryByText('loading')).not.toBeInTheDocument();
         expect(screen.getByText('INV-001')).toBeInTheDocument();
-      });
+      }, { timeout: 10000 });
 
       fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
 
-      await waitFor(() => expect(screen.getByText('noLinesFound')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('noLinesFound')).toBeInTheDocument(), { timeout: 10000 });
     });
   });
 
@@ -601,7 +609,14 @@ describe('ImportLinesModal', () => {
   describe('document row hover feedback', () => {
     it('applies a hover background on mouse enter and clears it on mouse leave', async () => {
       renderModal();
-      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      // See the comment in the "resilience to a failed eager line fetch" test
+      // above: waiting on "INV-001 present" alone can catch the transient
+      // pre-eager-load render. Require fetchLines to have been called too so
+      // we only proceed once the checkboxes are actually in the DOM.
+      await waitFor(() => {
+        expect(defaultProps.fetchLines).toHaveBeenCalled();
+        expect(screen.getByText('INV-001')).toBeInTheDocument();
+      }, { timeout: 10000 });
 
       // mouseenter/mouseleave don't bubble, so the target must be the exact row
       // element the handlers are attached to. That row is the checkbox's direct
