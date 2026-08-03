@@ -25,16 +25,22 @@ const IVA_DED_COLS = [
 
 // ── Shared field definitions (declared before BASE to avoid TDZ) ─────
 
-// visibleWhen shared by bank fields that only apply to devolucion/transferencia (not domiciliacion U).
-// NOTE: 'V' is reachable again (ETP-4456 follow-up fix). The EDID065 fix originally gated the
-// whole datos_bancarios section to {U, D, X} via sectionVisibleWhen, which made 'V' dead code here
-// AND — much worse — hid the section entirely for a rectificativa filed under any other tipo (e.g.
-// 'I'), even though AEAT303Report's checkIsDeclarationRMandatoryParams hard-requires the bank
-// fields whenever a rectificativa has a non-zero box 111 amount, independent of tipo_declaracion.
-// Fixed by widening datos_bancarios.sectionVisibleWhen to an anyOf that also shows the section
-// whenever 'rectificativa' is checked — so 'V' (already in this array) is visible again once its
-// declaration is a rectificativa, same as before EDID065.
-const _BANK_DVX_VW = { field: 'tipo_declaracion', in: ['D', 'V', 'X'] };
+// visibleWhen shared by 6 of the 7 bank fields (all but bank_iban, which has no
+// field-level gate of its own and relies solely on sectionVisibleWhen below).
+// NOTE: widened the same way and for the same reason as datos_bancarios.sectionVisibleWhen
+// (ETP-4456 follow-up fix). The original {D, V, X} tipo-only condition left these fields
+// hidden for a rectificativa filed under any other tipo (e.g. 'I'), even though
+// AEAT303Report's checkIsDeclarationRMandatoryParams / checkBox111MandatoryParams
+// hard-require SWIFT_BIC/BANK/BANKADDRESS/BANKCITY/COUNTRYISO/SEPA whenever a
+// rectificativa has a non-zero box 111 amount, independent of tipo_declaracion. Widening
+// sectionVisibleWhen alone made the section appear but left these 6 fields still gated
+// on the old {D, V, X} set, so the exact submission-blocking bug remained reachable for
+// every field except bank_iban. Now these fields follow the same anyOf as the section:
+// visible when tipo_declaracion is D/V/X, OR whenever 'rectificativa' is checked.
+const _BANK_DVX_VW = { anyOf: [
+  { field: 'tipo_declaracion', in: ['D', 'V', 'X'] },
+  { field: 'rectificativa', equals: true },
+] };
 
 const TIPO_DECLARACION_FIELD = {
   id: 'tipo_declaracion', labelKey: 'fm.ident.tipo_declaracion', type: 'select', readOnly: false, required: true,
