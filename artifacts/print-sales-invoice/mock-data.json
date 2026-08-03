@@ -1,0 +1,30 @@
+{
+  "header": {
+    "c_invoice_id": "A1B2C3D4E5F60718293A4B5C6D7E8F90",
+    "documentno": "FV/2026-000142",
+    "dateinvoiced": "2026-07-14",
+    "doc_type": "Sales Invoice",
+    "bp_name": "Bebidas Alegres, S.L.",
+    "bp_location": "Calle Mayor 12, 28013 Madrid",
+    "description": "Pedido consolidado del segundo trimestre.",
+    "grandtotal": 3630.00,
+    "totallines": 3000.00,
+    "payment_term": "30 días",
+    "payment_method": "Transferencia",
+    "currency": "EUR",
+    "status": "Complete",
+    "org_name": "Etendo Demo, S.L.",
+    "org_taxid": "B12345678",
+    "org_address": "Avenida de la Innovación 8",
+    "org_postal": "41020",
+    "org_city": "Sevilla"
+  },
+  "lines": [
+    { "line": 10, "product_name": "Agua Mineral 1,5L (caja 12)", "quantity": 100, "uom": "Caja", "priceactual": 12.00, "linenetamt": 1200.00 },
+    { "line": 20, "product_name": "Zumo de Naranja 1L (caja 6)", "quantity": 60, "uom": "Caja", "priceactual": 18.50, "linenetamt": 1110.00 },
+    { "line": 30, "product_name": "Refresco de Cola 33cl (pack 24)", "quantity": 30, "uom": "Pack", "priceactual": 23.00, "linenetamt": 690.00 }
+  ],
+  "taxes": [
+    { "tax_name": "IVA 21%", "taxbaseamt": 3000.00, "taxamt": 630.00 }
+  ]
+}

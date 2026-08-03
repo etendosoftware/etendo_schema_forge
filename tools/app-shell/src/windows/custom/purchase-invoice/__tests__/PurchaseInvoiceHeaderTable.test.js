@@ -134,3 +134,47 @@ describe('PurchaseInvoiceHeaderTable — due date column', () => {
     assert.match(src, /formatCalendarDate\(d, locale\)/);
   });
 });
+
+// ── ETP-4681: custom-rendered columns must declare their filter semantics ─────
+// Risk: `type: 'custom'` tells the filter layer nothing about the underlying
+// data type, so resolveFilterMode falls back to 'text'. A text-mode operator
+// set has no greaterThan / before / after, which makes the Dashboard's
+// `?filter=overdue` preload render an empty operator select.
+
+describe('PurchaseInvoiceHeaderTable — custom column filter modes (ETP-4681)', () => {
+  it('declares filterMode numeric on the outstandingAmount column', () => {
+    assert.match(
+      src,
+      /key: 'outstandingAmount',[\s\S]{0,600}?filterMode: 'numeric'/,
+      'outstandingAmount renders status pills (type: custom) but filters as an amount',
+    );
+  });
+
+  it('declares filterMode numeric on the grandTotalAmount column', () => {
+    assert.match(
+      src,
+      /key: 'grandTotalAmount',[\s\S]{0,600}?filterMode: 'numeric'/,
+      'grandTotalAmount sign-flips credit notes (type: custom) but filters as an amount',
+    );
+  });
+
+  it('declares filterMode date on the eTGODueDate column', () => {
+    assert.match(
+      src,
+      /key: 'eTGODueDate',[\s\S]{0,600}?filterMode: 'date'/,
+      'eTGODueDate renders a coloured dot (type: custom) but filters as a date',
+    );
+  });
+
+  it('keeps all three columns on type custom (the rich cell renderers stay)', () => {
+    assert.match(src, /key: 'outstandingAmount',\s+column: 'OutstandingAmt',\s+type: 'custom'/);
+    assert.match(src, /key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom'/);
+    assert.match(src, /key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom'/);
+  });
+
+  it('declares exactly one filterMode per custom column (no duplicates)', () => {
+    const modes = [...src.matchAll(/filterMode: '([^']+)'/g)].map((m) => m[1]);
+    assert.deepEqual(modes.filter((m) => m === 'numeric').length, 2);
+    assert.deepEqual(modes.filter((m) => m === 'date').length, 1);
+  });
+});
