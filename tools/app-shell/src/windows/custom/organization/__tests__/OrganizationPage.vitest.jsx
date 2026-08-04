@@ -146,8 +146,11 @@ describe('OrganizationPage', () => {
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
       await waitFor(() => expect(screen.getByTestId('OrganizationPage__name')).toBeInTheDocument());
 
+      // header and info load from two independent fetches — wait on the country pill's
+      // own settled content, not just on `name`, so this doesn't race under heavy
+      // parallel test load where the two responses can resolve a tick apart.
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__country')).toHaveTextContent('—'));
       const country = screen.getByTestId('OrganizationPage__country');
-      expect(country).toHaveTextContent('—');
       expect(country.textContent).not.toMatch(/[\u{1F1E6}-\u{1F1FF}]/u);
     });
 
@@ -163,10 +166,12 @@ describe('OrganizationPage', () => {
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
       await waitFor(() => expect(screen.getByTestId('OrganizationPage__name')).toBeInTheDocument());
 
+      // Same race-avoidance as the test above: wait on the country pill's own settled
+      // content rather than assuming it's already there once `name` renders.
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__country')).toHaveTextContent('JustOneSegmentNoDashes'));
       const country = screen.getByTestId('OrganizationPage__country');
       // The whole single-segment string is treated as the "country" — not a real country
       // name, so countryFlag.js has no match and renders no flag, but it must not crash.
-      expect(country).toHaveTextContent('JustOneSegmentNoDashes');
       expect(country.textContent).not.toMatch(/[\u{1F1E6}-\u{1F1FF}]/u);
     });
   });
