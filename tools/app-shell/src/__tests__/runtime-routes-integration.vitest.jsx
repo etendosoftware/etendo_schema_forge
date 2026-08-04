@@ -48,7 +48,25 @@ afterEach(() => {
 
 function renderAt(path, {
   windowMap = { 'sales-order': { slug: 'sales-order' } },
-  auth = { loginPath: '/login', initialSession: { token: 'test-token' } },
+  // ETP-4576 — AuthShellRuntime's AuthGate now has a tri-state status and starts
+  // in 'booting'. `restoreSession` DEFAULTS to the platform cookie fetcher, so a
+  // host that simply omits it still boots: AuthGate returns `bootingFallback`
+  // (null here) while GET /sws/go/session settles, and in jsdom that real fetch
+  // fails → status 'anonymous' → the authenticated routes redirect to login and
+  // never mount. Supplying a resolving `restoreSession` is what an authenticated
+  // host looks like now; `initialSession` alone no longer gets past the gate
+  // because the gate checks `status`, not `session.token`.
+  auth = {
+    loginPath: '/login',
+    initialSession: { token: 'test-token' },
+    restoreSession: async () => ({
+      csrfToken: 'test-csrf',
+      account: { name: 'Test User', email: 'test@example.com' },
+      // A session may legitimately have no environment entered yet.
+      environment: null,
+      roleList: [],
+    }),
+  },
   // DashboardPage waits on `useCurrency()` resolving to a non-null value before leaving its
   // skeleton state. With a token set, CurrencyProvider's effect fetches `${apiBaseUrl}/session`
   // for real (no fetch mock here) and silently swallows the failure, leaving the currency code
@@ -72,14 +90,16 @@ function renderAt(path, {
 }
 
 describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
-  it('routes a window path through WindowLoader with the given windowMap', () => {
+  // `findByTestId`, not `getByTestId`: the route only mounts once the session
+  // restore settles and AuthGate leaves its 'booting' state.
+  it('routes a window path through WindowLoader with the given windowMap', async () => {
     renderAt('/sales-order');
-    expect(screen.getByTestId('window-loader')).toHaveTextContent('sales-order:http://x/api');
+    expect(await screen.findByTestId('window-loader')).toHaveTextContent('sales-order:http://x/api');
   });
 
-  it('routes a window record path through WindowLoader too', () => {
+  it('routes a window record path through WindowLoader too', async () => {
     renderAt('/sales-order/123');
-    expect(screen.getByTestId('window-loader')).toBeInTheDocument();
+    expect(await screen.findByTestId('window-loader')).toBeInTheDocument();
   });
 
   it('renders a business landing page for a known path', async () => {
