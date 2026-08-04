@@ -125,6 +125,16 @@ const INLINE_ADD_IGNORED_PORTAL_SELECTORS = [
 ];
 
 function isClickInsideIgnoredPortal(target) {
+  // Radix primitives that render via a DismissableLayer with
+  // disableOutsidePointerEvents (e.g. <Select>, <Dialog>) set
+  // document.body.style.pointerEvents = 'none' while open, so a click meant
+  // for an underlying field never reaches it — the browser resolves the
+  // event target to <html> instead. That target matches none of the
+  // selectors below (it isn't a descendant of the listbox/dialog), so
+  // without this check it reads as "genuinely outside, nothing touched" and
+  // wrongly discards the row. Treat any click while such a layer is active
+  // as belonging to that layer, regardless of what element it resolves to.
+  if (document.body.style.pointerEvents === 'none') return true;
   if (!(target instanceof Element)) return false;
   return INLINE_ADD_IGNORED_PORTAL_SELECTORS.some(sel => target.closest(sel));
 }
