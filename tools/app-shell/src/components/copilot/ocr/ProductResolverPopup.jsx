@@ -639,7 +639,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
             </button>
           </div>
           {error && (
-            <div className="rounded-md bg-destructive border border-destructive px-3 py-2 text-sm text-destructive">
+            <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}
