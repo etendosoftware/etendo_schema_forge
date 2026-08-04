@@ -179,6 +179,25 @@ describe('ReturnToVendorShipmentPreview', () => {
       expect(callArgs.onEmail).toBeUndefined();
     });
 
+    // ETP-4718 QA edge case — a shipment record missing/nulling documentStatus
+    // (unexpected API payload shape) must NOT fall through to "sendable"; the
+    // strict === 'CO' comparison already guards this, but it's worth locking
+    // down explicitly since a looser check (e.g. `!== 'DR'`) would have shipped
+    // a real regression here.
+    it('does not wire onEmail when documentStatus is undefined', () => {
+      const shipmentWithoutStatus = { ...defaultShipment };
+      delete shipmentWithoutStatus.documentStatus;
+      renderPreview({ shipment: shipmentWithoutStatus });
+      const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
+      expect(callArgs.onEmail).toBeUndefined();
+    });
+
+    it('does not wire onEmail when documentStatus is null', () => {
+      renderPreview({ shipment: { ...defaultShipment, documentStatus: null } });
+      const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
+      expect(callArgs.onEmail).toBeUndefined();
+    });
+
     it('renders ReceiptSendModal regardless of documentStatus (modal wiring stays mounted; only the trigger button is gated)', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
       expect(screen.getByTestId('receipt-send-modal')).toBeInTheDocument();
