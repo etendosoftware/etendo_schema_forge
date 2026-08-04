@@ -474,12 +474,12 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
               // unique in this window (the Accounting secondary tab renders one too), so the
               // wrapper carries the pricing-specific hook — mirroring DetailView's own
               // data-inline-add-portal span around the same component.
-              <span data-testid="price-add-tariff">
+              (<span data-testid="price-add-tariff">
                 <AddLineButton
                   onClick={() => setAdding(true)}
                   label={ui('priceAddTariff')}
                   data-testid="AddLineButton__d76b90" />
-              </span>
+              </span>)
             )}
           </div>
         </div>
