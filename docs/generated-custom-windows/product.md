@@ -335,3 +335,38 @@ the existing rows). The mocked E2E spec `e2e/tests/flows/product-pricing.mocked.
 uses payloads where the version name and the tariff name differ, so it guards the label rule
 end to end; its Accounting add-line locator was scoped to `[data-inline-add-portal]` because
 `action-add-line` is no longer unique in this window.
+
+## Stored computed columns kept out of the detail form — ETP-4603 follow-up
+
+`eTGOPurchasePrice` / `eTGOSalePrice` / `eTGOStock` (`EM_ETGO_*` on `M_Product`, the stored
+computed columns added by ETP-4603 to remove the per-row N+1 in the product list) were
+leaking into the **detail** screen as a `SummaryBar` line — `eTGOPurchasePrice: 11,00 ·
+eTGOSalePrice: 0,00 · eTGOStock: 559` — rendered under whatever secondary tab was active,
+which made them look like part of **Accounting**.
+
+They are not related to Accounting. The chain was:
+
+1. `decisions.json` declared them `visibility: "readOnly"`, `grid: true`, `section: "other"`
+   but left `form` at its default `true`.
+2. The generator's `getReadOnlyFields()` selects `f.form && f.visibility === 'readOnly'`, and
+   `getSummaryFields()` takes **all** of those minus the status field, so all three landed in
+   the `summary` array of `ProductPage.jsx`.
+3. `DetailView.jsx` renders `<SummaryBar>` when `!DetailTable && !isCustomTabActive`. Product
+   has no lines panel, and **Accounting is a `secondaryTabs` entry, not a `customPanelTabs`
+   one**, so the condition held there and the strip appeared. It correctly vanished on
+   `Price` / `Attachments` (both custom tabs) — which is why it looked Accounting-specific.
+4. The labels showed the raw camelCase names because `SummaryBar` resolves
+   `t(field.column) ?? field.label ?? field.key`: there is no locale entry for
+   `EM_ETGO_Purchase_Price`, and the generated summary entries carry no `label`. (In the DB
+   the `AD_Element` names are fine — "Purchase Price", "Sale Price", "Stock" — but
+   `AD_Column.Name` is the raw column name, as usual for `EM_` module-extension columns.)
+
+**Fix:** `"form": false` on the three fields in `decisions.json`. They keep `grid: true`
+(their actual purpose — list columns, still emitted in `ProductTable.jsx`), drop out of
+`getReadOnlyFields()`, and the `summary` array becomes empty so the strip is not rendered.
+They also stop appearing in the `Others` form (`ProductForm.jsx`). No generator or
+`SummaryBar` change, so no other window is affected.
+
+Regenerated with `make regen ONLY=product FROM_CACHE=1` (contract `0.26.0 → 0.26.1`;
+`FROM_CACHE=1` is required in this environment or the local DB's missing `es_ES` ref-list
+translations strip enum labels repo-wide). `sf-validate-pipeline --scope=product`: OK.
