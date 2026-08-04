@@ -86,6 +86,11 @@ Hiding the route would imply the flag was protecting something, which it is not.
    ```
 
 3. Make sure the backend enforces whatever the flag reveals.
+4. If the flag is to be toggled remotely, create the setting in the control plane
+   with the key **exactly** as declared in step 1 — not the feature id from
+   `flags-registry.json`, which is a different name. A mismatch is not an error:
+   the provider reports `FLAG_NOT_FOUND`, the caller gets its declared default,
+   and the flag reads as permanently off with nothing in the UI to say why.
 
 Flag keys are kebab-case, which is also the Mixpanel convention — so keys carry
 over unchanged when the control plane moves.
@@ -160,8 +165,29 @@ VITE_FEATURE_FLAGS='{"tenant-upgrade":true}' make dev
 new environment plumbing and there is no kebab-case-to-SCREAMING_SNAKE naming
 convention to keep in sync. Non-boolean values are ignored.
 
-Keep the SDK key out of version control: it belongs in
-`tools/app-shell/.env.development.local`, which is gitignored.
+### Where the SDK key lives
+
+Keep it out of version control, but do **not** treat it as a secret. Vite bakes
+`VITE_CONFIGCAT_SDK_KEY` into the JS bundle, so anyone can read it — and read the
+whole environment's config off ConfigCat's CDN with it. Storing it as a GitHub
+*secret* would mask it in build logs while it stays published in the bundle,
+which buys nothing and makes rotation harder to audit. What actually protects a
+targeting list is ConfigCat's hashed comparator (`SENSITIVE_IS_ONE_OF`), not the
+key. Corollary: never put anything confidential in flag keys or values of an
+environment whose key ships to a browser.
+
+| Where | How it gets there |
+|-------|-------------------|
+| Local dev (frontend) | `tools/app-shell/.env.development.local`, gitignored. **Development mode only** — `vite build` runs in production mode and never reads this file. |
+| Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*, so the pilot key reaches experimental and not staging or production. |
+| Backend | Its own configuration, resolved by `ConfigPropertyReader`: `etendo.go.configcat.sdk-key` or `ETGO_CONFIGCAT_SDK_KEY`. Not under the `etendo.go.flags.` prefix, which is the flag namespace. See the module's `docs/feature-flags-and-tenant-upgrade.md`. |
+
+One SDK key addresses exactly one ConfigCat environment, and both ends must use
+the **same** one or the frontend and the backend evaluate different config and
+bucket the same user differently.
+
+Rotating the key therefore means updating every row above plus the local
+backend configuration — four places, none of which observe the others.
 
 ### Provider precedence
 
@@ -185,13 +211,23 @@ the main bundle.
 
 ## Evaluation context
 
-Set at startup from `localStorage`, then re-applied on sign-in by
-`trackSessionStarted` in `lib/observability/health-events.js`:
+Set at startup from `localStorage`, re-applied on sign-in by `trackSessionStarted`
+in `lib/observability/health-events.js`, and re-applied again once the account
+identity resolves — `useAccountIdentity()` in `layout/AppLayout.jsx` calls
+`refreshAccountIdentity`, which reads `GET /sws/neo/session` and caches the result
+(ETP-4693):
 
 | Context key | Source | Purpose |
 |-------------|--------|---------|
-| `targetingKey` | `sf_auth_user` (username) | OpenFeature's standard identity key |
-| `account_id` | `sf_auth_client_id` (tenant) | Tenant-level targeting; matches the Mixpanel group the analytics layer already sets |
+| `targetingKey` | `sf_account_id`, falling back to `sf_auth_user` | OpenFeature's standard identity key. The account is preferred because it is what the backend targets on; the ERP username only stands in until the session answers. |
+| `accountId` | `sf_account_id` (`ETGO_ACCOUNT`) | Account-level targeting, opaque — no PII reaches the vendor |
+| `email` | `sf_account_email` | The attribute ConfigCat's `User.Email` rules and segments read. The provider maps OpenFeature's `email` onto `User.Email`; anything else would arrive as a custom attribute. |
+| `account_id` | `sf_auth_client_id` (tenant) | Tenant-level targeting; matches the Mixpanel group the analytics layer already sets. **A different identity from `accountId`** — this one is the `AD_Client`. |
+
+Both account values arrive only for sessions that carry a token and whose account
+resolves, so a rule keyed on the account or the email evaluates **once the session
+has answered**, not at first paint. Startup falls back to the ERP username, which
+the backend never sees.
 
 ## Swapping the control plane
 
@@ -222,25 +258,28 @@ ready-to-register provider. Two behaviours matter downstream:
   surfaces as a rejected registration, which `initFeatureFlags` catches and
   degrades to the declared defaults — the safe-default rule holds.
 
-#### Targeting rules will not match: the frontend sends no email
+#### Email targeting works only after the session answers
 
-The `tenant-upgrade` setting in ConfigCat carries a targeting rule on
-`User.Email`, and the SDK says so at runtime:
+The `tenant-upgrade` setting carries a targeting rule on a segment matching
+`User.Email`. Since ETP-4693 the frontend does send an email (see [Evaluation
+context](#evaluation-context)), so such a rule can match — but only from the
+moment `GET /sws/neo/session` has returned an `accountEmail` for that session.
+Before that, and for any session without a token or without a resolvable
+`ETGO_ACCOUNT`, the attribute is absent and the SDK says so:
 
 ```
 ConfigCat - WARN - [3003] Cannot evaluate condition (User.Email IS ONE OF [...])
 for setting 'tenant-upgrade' (the User.Email attribute is missing).
 ```
 
-The evaluation context sends `targetingKey` (the ERP username) and
-`account_id`, never an email — the frontend does not have one, which is the
-same open item recorded under the tenant upgrade flow below. So **only the
-setting's fallback ("To all users") value has any effect**; a rule targeting
-specific emails silently matches nobody and the flag stays at its fallback.
+When the attribute is missing, only the setting's fallback ("To all users") value
+has any effect. Two consequences when testing a toggle:
 
-This matters when testing a toggle: flipping the *targeting rule* changes
-nothing observable, while flipping the *fallback value* works. Anyone who
-wants real email targeting has to close the account-email item first.
+- Flipping the **fallback** always shows up. Flipping a **targeting rule** shows up
+  only for sessions whose email resolved, so "nothing happened" is ambiguous —
+  check for the warning above before concluding the rule is wrong.
+- The email must be the account email (`ETGO_ACCOUNT`), which is what the backend
+  targets on too. It is **not** the ERP admin username in `sf_auth_user`.
 
 To move to Mixpanel instead:
 
@@ -330,46 +369,28 @@ tenant selection happens at sign-in and there is no in-app tenant switcher in v1
 | Backend targeting key is the **account email**, now returned as `accountEmail` at the top level of `GET /sws/go/environments` | Not consumed yet — see below. |
 | `GET /sws/go/environments` items now carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Not consumed yet — see below. |
 
-**Open: targeting keys do not match.** The backend buckets on the account
-email. The frontend uses `localStorage.sf_auth_user`, which
-`buildEnvironmentSessionStorage` sets to `env.adminUserName || env.adminUser` —
-the environment's ERP admin username, not the account email. This is inert today
-because the local `TypedInMemoryProvider` ignores the targeting key entirely, but it
-must be resolved **before** Mixpanel is wired, or the two ends will bucket the
-same user differently.
+**Closed (ETP-4693): both ends target the same identity.** The backend buckets on
+the account, and the frontend now reads that same account from
+`GET /sws/neo/session` — a JWT-authenticated endpoint the app-shell already calls
+every session — rather than from `sf_auth_user`, the environment's ERP admin
+username that the backend never sees. `refreshAccountIdentity` caches `accountId`
+and `accountEmail` and re-targets the evaluation context; see [Evaluation
+context](#evaluation-context) for what each key carries and when it arrives.
 
-The backend now exposes `accountEmail` on `GET /sws/go/environments`, but
-adopting it is not a one-line change, for three reasons:
+`/sws/neo/session` was chosen over `GET /sws/go/environments` (which also returns
+`accountEmail`) for three reasons: the core helper `fetchEnvironments` returns
+`data.environments || []` and drops the top-level field; the context must be set
+app-wide at startup rather than only for users who reach `/upgrade`; and the
+environments call needs `sf_platform_token`, which is not part of
+`ENVIRONMENT_SESSION_KEYS` and is absent in some sessions. Bucketing only when a
+token happens to be present would make targeting inconsistent, which is worse
+than uniformly wrong because it is invisible in aggregate.
 
-1. **The core helper drops it.** `fetchEnvironments` in
-   `@etendosoftware/etendo-go-core` returns `data.environments || []`, discarding
-   the top-level field. Reading `accountEmail` needs a direct fetch in app-shell
-   (the same reason `lib/upgrade/api.js` calls the onboarding endpoint directly).
-2. **Scope.** The evaluation context must be set app-wide at startup, before any
-   gated UI renders — the flag decides whether the `/upgrade` link is even shown.
-   Reusing the `/upgrade` page's existing call would set it only for users who
-   reach that page, so the same user would bucket differently depending on where
-   they had navigated. Inconsistent targeting is worse than uniformly wrong
-   targeting, because it is invisible in aggregate.
-3. **Availability.** The call needs `sf_platform_token`, which is not guaranteed
-   in every app-shell session — it is not part of `ENVIRONMENT_SESSION_KEYS`, and
-   `UpgradePage` already handles its absence. Bucketing on email only when the
-   token happens to be present reintroduces the same inconsistency.
-
-The clean fix is to decide on one identity the frontend can know for **every**
-session — for example persisting the account email at login, which is core-owned
-code — and to set it once during flag bootstrap. That is a design decision, not
-a local edit, so it is recorded here rather than half-applied.
-
-There is a second option, should changing core login code prove awkward: the
-account email is recoverable server-side from an authenticated `AD_User`, so a
-JWT-authenticated endpoint could serve it for precisely the sessions that hold
-an Etendo JWT but no `sf_platform_token` — the gap described above. Whoever
-builds it must resolve against the `ETGO_ACCOUNT` record rather than derive the
-email by string manipulation: onboarding composes the environment username from
-the account email, but `+` is legal in an address, so splitting on it would
-mangle plus-addressed users and surface as a rare unexplained mismatch instead
-of an obvious failure. Both options are open; neither is chosen.
+One rule survives for anyone touching this: resolve the email against the
+`ETGO_ACCOUNT` record, never by string manipulation of the environment username.
+Onboarding composes that username from the account email, and `+` is legal in an
+address — splitting on it would mangle plus-addressed users and surface as a rare
+unexplained mismatch instead of an obvious failure.
 
 **Open: `plan` is not shown anywhere.** The natural place to badge it is the
 environment picker, which lives in `@etendosoftware/etendo-go-core`
