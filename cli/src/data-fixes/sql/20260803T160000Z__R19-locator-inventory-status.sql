@@ -92,6 +92,7 @@ JOIN m_product p ON p.m_product_id = sd.m_product_id
 LEFT JOIN c_uom u ON u.c_uom_id = sd.c_uom_id
 LEFT JOIN m_attributesetinstance asi ON asi.m_attributesetinstance_id = sd.m_attributesetinstance_id
 WHERE l.ad_client_id = :client_id
+  AND l.isactive = 'Y'
   AND l.m_inventorystatus_id = '0'
   AND sd.qtyonhand < 0
 ORDER BY l.value, p.value;

@@ -156,6 +156,10 @@ describe('R19 data-fix — @report (surfacing skipped locators for manual correc
     assert.match(normReport, /sd\.qtyonhand < 0/);
   });
 
+  it('scopes to active locators, matching @check/@apply (no inactive-locator noise)', () => {
+    assert.match(normReport, /l\.isactive = 'Y'/);
+  });
+
   it('identifies the product+attribute+UOM+locator combination needed for manual correction', () => {
     assert.match(normReport, /l\.value AS locator/);
     assert.match(normReport, /p\.(?:value|name) AS product_(?:code|name)/);
