@@ -12,6 +12,12 @@ export function buildEmailContractCommand(contractName, documentId, options = {}
     recordId: documentId,
     intent: 'send-document',
   };
+  // ETP-4717 — opt-in, mirrors recipientEdits: only present when the operator
+  // actually changed subject/message away from their auto-derived defaults,
+  // so an untouched send stays byte-identical to the legacy payload shape.
+  if (options.messageEdits) {
+    command.messageEdits = options.messageEdits;
+  }
   if (options.recipientEdits) {
     // Server derives the idempotency key from the final recipient set.
     command.recipientEdits = options.recipientEdits;
@@ -132,6 +138,7 @@ export async function sendDocumentEmail({
   pdfBlob,
   pdfBlobUrl,
   recipientEdits,
+  messageEdits,
 }) {
   const contractName = resolveDocumentEmailContract(windowName);
   await cacheDocumentPreviewFile({
@@ -149,7 +156,7 @@ export async function sendDocumentEmail({
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits })),
+    body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits, messageEdits })),
   });
   return readEmailContractResponse(res);
 }
