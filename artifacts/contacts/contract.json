@@ -65,7 +65,8 @@
             "customerReceivablesNo",
             "customerPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         },
         "vendorAccounting": {
           "tabMode": "table-form",
@@ -76,7 +77,8 @@
             "vendorLiability",
             "vendorPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -2074,6 +2076,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "customerAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -3126,6 +3129,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "vendorAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -5053,7 +5057,8 @@
             "customerReceivablesNo",
             "customerPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         },
         "vendorAccounting": {
           "tabMode": "table-form",
@@ -5064,7 +5069,8 @@
             "vendorLiability",
             "vendorPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -11194,7 +11200,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/customerAccounting",
         "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
         "supportedFilters": []
@@ -11227,7 +11233,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/vendorAccounting",
         "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
         "supportedFilters": []

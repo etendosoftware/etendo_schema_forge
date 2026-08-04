@@ -37,7 +37,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/customerAccounting",
         "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
         "supportedFilters": []
@@ -70,7 +70,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/vendorAccounting",
         "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
         "supportedFilters": []
@@ -1250,5 +1250,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "c73d71483905860d"
+  "checksum": "797b377ec4918de9"
 }
