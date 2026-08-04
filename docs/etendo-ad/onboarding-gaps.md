@@ -19,6 +19,15 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
 | D1 | Legal entity | SII fields empty; legal-entity resolution returns NULL | *Initial Client Setup* — verify/recompute `AD_LegalEntity_Org_ID` after `AD_Org_Ready` | ETP-4177 |
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
+| H3 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
+
+> **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
+> authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
+> (roles provisioning, ETP-4515/4516) below in **§H** — `H` was not actually a fresh series. Corrected
+> to `H3` (2026-08-03) across the SQL header, regression test, this table, and the
+> `onboarding-and-datafixes-map.md`/`tenant-remediation-knowledge.md` references. No functional impact
+> either way — `@gap` is a documentation/categorization tag only, never stored in
+> `ETGO_DATA_FIX_HISTORY` or read by the runner.
 
 ---
 
