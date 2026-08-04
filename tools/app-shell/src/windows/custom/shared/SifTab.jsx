@@ -184,11 +184,13 @@ function ReadOnlyField({ id, labelKey, value, ui }) {
 // exemption cause" case is NOT shown inline here — it is surfaced as a warning toast fired
 // on invoice LINE save (see the exemption-signal effect below), because the field lives in
 // the SIF tab (not the header) and gluing the warning to the field is poor UX.
+// No hardcoded `label` here — the visible label/placeholder is resolved through
+// i18n at render time (see `resolvedLabel` below), which SelectorInput uses for
+// both the field label and the "Select …" placeholder.
 const EXEMPTION_CAUSE_FIELD = {
   id: 'sif-exemption',
   key: 'aeatsiiCauseExemption',
   column: 'aeatsiiCauseExemption',
-  label: 'exemptionCause',
   required: false,
 };
 
@@ -225,7 +227,7 @@ function ExemptionCauseField({ ui, data, apiBaseUrl, token, editable, onChange }
           onChange?.('aeatsiiCauseExemption$_identifier', lbl ?? '');
         }}
         catalogs={null}
-        resolvedLabel=""
+        resolvedLabel={ui('sifDataTabs.field.exemptionCause')}
         selectorUrl={selectorUrl}
         token={token}
         data-testid="SelectorInput__b99c8b" />
