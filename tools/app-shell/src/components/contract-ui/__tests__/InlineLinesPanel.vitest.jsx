@@ -13,9 +13,13 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
+// ETP-4685 — a handful of enum i18n keys translated for the "resolves enum option
+// labels through ui()" test below; any other key falls through unchanged, so this
+// stays a no-op for every other test in this file.
+const ETP4685_TEST_TRANSLATIONS = { taxCategoryVat21: 'Artículo (prueba)', taxCategoryVat10: 'Servicio (prueba)' };
 vi.mock('@/i18n', () => ({
   useLabel: () => () => '',
-  useUI: () => (key) => key,
+  useUI: () => (key) => ETP4685_TEST_TRANSLATIONS[key] ?? key,
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
@@ -113,6 +117,17 @@ function renderPanel(props = {}) {
   );
   return { ...result, ref };
 }
+
+// Radix Select needs a few pointer-capture DOM APIs jsdom does not implement —
+// only exercised by the "resolves enum option labels through ui()" test below,
+// which opens a real Select dropdown (see AccountBadgeSelect.vitest.jsx for the
+// same pattern).
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 // --- Tests ---
 
@@ -701,6 +716,51 @@ describe('InlineLinesPanel', () => {
     // Enum field should render a Select trigger
     const trigger = within(row).getByTestId('field-taxCategory');
     expect(trigger).toBeInTheDocument();
+  });
+
+  // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw display
+  // text; the inline-edit <Select> must resolve each option through ui() like
+  // DistinctEnumPicker/ListFilterBar do, or it shows the raw internal key.
+  it('resolves enum option labels through ui() instead of showing the raw enumLabels key', async () => {
+    const columns = [
+      {
+        key: 'taxCategory',
+        label: 'Tax',
+        type: 'enum',
+        column: 'C_TaxCategory_ID',
+        enumLabels: { VAT21: 'taxCategoryVat21', VAT10: 'taxCategoryVat10' },
+      },
+    ];
+    const rows = [{ id: 'E1', taxCategory: 'VAT21' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-E1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    const trigger = within(row).getByTestId('field-taxCategory');
+    await act(async () => { await userEvent.click(trigger); });
+    const options = screen.getAllByTestId('SelectItem__3b7ec2');
+    const optionTexts = options.map((o) => o.textContent);
+    // The mocked ui() (see top-of-file TRANSLATIONS) maps these keys to Spanish text;
+    // the raw keys must never reach the DOM.
+    expect(optionTexts).toContain('Artículo (prueba)');
+    expect(optionTexts).not.toContain('taxCategoryVat21');
+    expect(optionTexts).not.toContain('taxCategoryVat10');
   });
 
   it('renders date input type in edit mode', async () => {
