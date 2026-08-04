@@ -423,6 +423,18 @@ function ReadCell({ row, col, locale, t, ui }) {
   if (col.type === 'date') {
     return renderDateCell(row[col.key], locale);
   }
+  // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
+  // display text; resolve through ui() like EditCell already does, or the
+  // read-only cell (what the user sees before ever clicking to edit it)
+  // falls through to the raw backend identifier below, untranslated.
+  if (col.type === 'enum' || col.type === 'select' || col.type === 'status') {
+    const raw = row[col.key];
+    const key = col.enumLabels?.[raw];
+    if (key != null) {
+      const label = ui?.(key) ?? key;
+      return <span className="block truncate" title={label || undefined}>{label}</span>;
+    }
+  }
   const display = resolveIdentifier(row, col.key);
   if (typeof display === 'string') {
     return <span className="block truncate" title={display || undefined}>{display}</span>;
