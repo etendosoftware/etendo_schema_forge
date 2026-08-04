@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-07-31T14:37:13.834Z",
-  "updatedAt": "2026-07-31T16:47:08.597Z",
-  "checksum": "684388e0ec2d012e",
+  "updatedAt": "2026-08-03T19:39:29.352Z",
+  "checksum": "355ad0fd63362b9d",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -583,6 +583,7 @@
             "required": false,
             "grid": true,
             "form": true,
+            "inputPrefix": "https://",
             "section": "principal",
             "validation": {
               "maxLength": 60

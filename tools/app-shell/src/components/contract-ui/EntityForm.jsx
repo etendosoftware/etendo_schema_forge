@@ -18,6 +18,7 @@ import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
 import { CurrencyRatePicker } from './CurrencyRatePicker.jsx';
+import PrefixedInput from './PrefixedInput.jsx';
 import { SelectorChip } from './SelectorChip.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
@@ -1035,6 +1036,58 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
 
   const renderInputField = (f, label, isReadOnly, displayValue) => {
     const calloutOnBlur = f.calloutOn === 'blur';
+    // ETP-4749: a fixed, non-editable chip (e.g. "https://") shown immediately before
+    // the input when `f.inputPrefix` is declared — shared with OrganizationPage.jsx's
+    // hand-built "Sitio web" field via PrefixedInput.jsx (single source for the chip
+    // markup, not a parallel hand-copied implementation). `border-0` on the input hands
+    // the border to the wrapper (Input's own cn() merges it correctly regardless of prop
+    // order). `rounded-none focus-visible:ring-0 focus-visible:outline-none` hands the
+    // FOCUS ring to the wrapper too (QA review round) — without this, the input drew its
+    // own rounded ring at its own (larger) radius, floating inside the wrapper's smaller
+    // one instead of the whole chip+input lighting up as one piece. Fields without
+    // `inputPrefix` render exactly as before — PrefixedInput passes `children` through
+    // unwrapped in that case, byte-identical output.
+    const hasPrefix = Boolean(f.inputPrefix);
+    // `prefixed-input-control` is a stable marker (not a Tailwind utility) so
+    // per-window CSS that themes `input.rounded-lg` (e.g. Contacts' contacts.css,
+    // scoped to `.contacts-rows`) can still apply its default/hover background to
+    // this input even though it no longer carries `rounded-lg` — the input lost that
+    // class here on purpose so it stops drawing its own (mismatched-radius) border/
+    // focus ring, but it should still LOOK like every other input otherwise.
+    const inputClassName = getInputStateClass(isReadOnly)
+      + (hasPrefix ? ' border-0 rounded-none focus-visible:ring-0 focus-visible:outline-none prefixed-input-control' : '');
+    const inputEl = calloutOnBlur && !isReadOnly ? (
+      <DeferredInput
+        f={f}
+        committedValue={data?.[f.key] ?? ''}
+        onCommit={onChange}
+        onFieldBlur={onFieldBlur}
+        onValidateBlur={validateNumericOnBlur}
+        placeholder={resolveUiKey(ui, f.placeholderKey)}
+        className={inputClassName}
+        required={f.required && !isReadOnly}
+        disabled={isReadOnly || savingField === f.key}
+        data-testid="DeferredInput__a8d626" />
+    ) : (
+      <Input
+        id={f.key}
+        name={f.key}
+        data-testid={`field-${f.key}`}
+        type={getInputType(f)}
+        value={getFieldValue(isReadOnly, displayValue, data, f)}
+        onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
+        onBlur={(e) => {
+          if (!isReadOnly) {
+            validateNumericOnBlur(f, e.target.value);
+          }
+          onFieldBlur?.(f.key);
+        }}
+        placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
+        className={inputClassName}
+        required={f.required && !isReadOnly}
+        disabled={isReadOnly || savingField === f.key}
+      />
+    );
     return (
       <div key={f.key} className={LABEL_GAP}>
         <Label
@@ -1043,38 +1096,9 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           data-testid="Label__a8d626">
           {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
         </Label>
-        {calloutOnBlur && !isReadOnly ? (
-          <DeferredInput
-            f={f}
-            committedValue={data?.[f.key] ?? ''}
-            onCommit={onChange}
-            onFieldBlur={onFieldBlur}
-            onValidateBlur={validateNumericOnBlur}
-            placeholder={resolveUiKey(ui, f.placeholderKey)}
-            className={getInputStateClass(isReadOnly)}
-            required={f.required && !isReadOnly}
-            disabled={isReadOnly || savingField === f.key}
-            data-testid="DeferredInput__a8d626" />
-        ) : (
-          <Input
-            id={f.key}
-            name={f.key}
-            data-testid={`field-${f.key}`}
-            type={getInputType(f)}
-            value={getFieldValue(isReadOnly, displayValue, data, f)}
-            onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
-            onBlur={(e) => {
-              if (!isReadOnly) {
-                validateNumericOnBlur(f, e.target.value);
-              }
-              onFieldBlur?.(f.key);
-            }}
-            placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
-            className={getInputStateClass(isReadOnly)}
-            required={f.required && !isReadOnly}
-            disabled={isReadOnly || savingField === f.key}
-          />
-        )}
+        <PrefixedInput prefix={f.inputPrefix} testId={`field-${f.key}-prefix-wrapper`}>
+          {inputEl}
+        </PrefixedInput>
       </div>
     );
   };

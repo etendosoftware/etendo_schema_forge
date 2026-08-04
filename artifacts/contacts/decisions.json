@@ -266,7 +266,8 @@
           "grid": true,
           "label": "Web",
           "section": "principal",
-          "order": 9
+          "order": 9,
+          "inputPrefix": "https://"
         },
         "etgoEmail": {
           "visibility": "editable",
