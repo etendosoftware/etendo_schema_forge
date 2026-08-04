@@ -27,7 +27,7 @@ function classifyInstallment(inst) {
 const BADGE_STYLES = {
   paid:    { bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)', dot: 'var(--status-success-fg)', accent: 'var(--status-success-fg)' },
   partial: { bg: 'var(--status-info-bg)', color: 'var(--status-info-fg)', dot: 'var(--status-info-border)', accent: 'var(--status-info-border)' },
-  overdue: { bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive))', dot: 'hsl(var(--destructive))', accent: 'hsl(var(--destructive))' },
+  overdue: { bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive-foreground))', dot: 'hsl(var(--destructive))', accent: 'hsl(var(--destructive))' },
   pending: { bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', dot: 'var(--status-warning-border)', accent: 'var(--status-warning-border)' },
 };
 

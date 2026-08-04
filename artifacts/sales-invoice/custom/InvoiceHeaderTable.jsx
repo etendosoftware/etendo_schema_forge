@@ -90,9 +90,9 @@ export default function InvoiceHeaderTable(props) {
         render: (row) => {
           const sub = getArSubtype(row);
           const cfg = sub === 'NC'
-            ? { color: 'hsl(var(--primary))', bg: 'hsl(var(--foreground))', label: t('creditNotesTab') }
+            ? { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: t('creditNotesTab') }
             : sub === 'DEV'
-              ? { color: 'hsl(var(--destructive))', bg: 'hsl(var(--foreground))', label: t('returnsTab') }
+              ? { color: 'var(--status-destructive-fg)', bg: 'var(--status-destructive-bg)', label: t('returnsTab') }
               : { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: t('invoicesTab') };
           return (
             <span
