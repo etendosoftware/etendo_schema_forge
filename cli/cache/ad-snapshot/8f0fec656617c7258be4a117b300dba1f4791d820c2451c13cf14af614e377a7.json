@@ -15388,7 +15388,7 @@
       ]
     },
     "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
-      "checksum": "7edcc6ae86857d38aca146669195b626ba5ad9bc132e40f20e2c28b6786d0799",
+      "checksum": "bb20a65d408c7235d83070a0b04b66535a4e21caf42932621fa600af13c6d0b4",
       "params": [
         "184"
       ],
@@ -16118,6 +16118,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
@@ -36226,7 +36232,7 @@
       ]
     },
     "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
-      "checksum": "96d9413a33fdcc94f6768fa4b3b2aa04bebd3fafbec91b334942e35313fe9e2a",
+      "checksum": "9e4453dcb4689ee44dbb1f1e18865c1c1c4b015d47f9b9a08bc14c5cfb31d2a1",
       "params": [
         "169"
       ],
@@ -36956,6 +36962,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",

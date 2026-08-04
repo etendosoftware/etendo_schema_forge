@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
-  "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-07-30T04:12:09.988Z",
-  "checksum": "b026eced958d6cf2",
+  "version": "0.3.0",
+  "generatedAt": "2026-07-30T22:14:36.474Z",
+  "updatedAt": "2026-08-03T18:34:06.686Z",
+  "checksum": "cbf537cdb2eac631",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -37,6 +37,14 @@
           "destructive": true
         }
       ],
+      "labelOverrides": {
+        "en_US": {
+          "EM_ETGO_Currency_ID": "Currency"
+        },
+        "es_ES": {
+          "EM_ETGO_Currency_ID": "Moneda"
+        }
+      },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
       "sendDocument": {
@@ -573,6 +581,32 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            }
+          },
+          {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "label": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Currency",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 45,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
             }
           }
         ],
@@ -1122,6 +1156,14 @@
           "destructive": true
         }
       ],
+      "labelOverrides": {
+        "en_US": {
+          "EM_ETGO_Currency_ID": "Currency"
+        },
+        "es_ES": {
+          "EM_ETGO_Currency_ID": "Moneda"
+        }
+      },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
       "sendDocument": {
@@ -1480,11 +1522,99 @@
             "required": false
           },
           {
-            "name": "receiveMaterials",
-            "apiKey": "receiveMaterials",
-            "column": "RM_Receipt_PickEdit",
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
             "type": "button",
             "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "orderDate",
+            "apiKey": "orderDate",
+            "column": "DateOrdered",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_InOut_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "datePrinted",
+            "apiKey": "datePrinted",
+            "column": "DatePrinted",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesTransaction",
+            "apiKey": "salesTransaction",
+            "column": "IsSOTrx",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "print",
+            "apiKey": "print",
+            "column": "IsPrinted",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": false
           },
           {
@@ -1492,6 +1622,14 @@
             "apiKey": "pickDate",
             "column": "PickDate",
             "type": "dateTime",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "trackingNo",
+            "apiKey": "trackingNo",
+            "column": "TrackingNo",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -1528,27 +1666,11 @@
             "required": false
           },
           {
-            "name": "print",
-            "apiKey": "print",
-            "column": "IsPrinted",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "salesTransaction",
-            "apiKey": "salesTransaction",
-            "column": "IsSOTrx",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "invoice",
-            "apiKey": "invoice",
-            "column": "C_Invoice_ID",
-            "type": "foreignKey",
-            "visibility": "system",
+            "name": "receiveMaterials",
+            "apiKey": "receiveMaterials",
+            "column": "RM_Receipt_PickEdit",
+            "type": "button",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1558,70 +1680,6 @@
             "type": "button",
             "visibility": "discarded",
             "required": false
-          },
-          {
-            "name": "processed",
-            "apiKey": "processed",
-            "column": "Processed",
-            "type": "boolean",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "datePrinted",
-            "apiKey": "datePrinted",
-            "column": "DatePrinted",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "processNow",
-            "apiKey": "processNow",
-            "column": "Processing",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_InOut_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "orderDate",
-            "apiKey": "orderDate",
-            "column": "DateOrdered",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "trackingNo",
-            "apiKey": "trackingNo",
-            "column": "TrackingNo",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "externalBusinessPartnerReference",
@@ -1688,19 +1746,11 @@
             "required": true
           },
           {
-            "name": "etblkpAccountingstatus",
-            "apiKey": "etblkpAccountingstatus",
-            "column": "EM_Etblkp_Accountingstatus",
-            "type": "enum",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "etblkpBulkposting",
-            "apiKey": "etblkpBulkposting",
-            "column": "EM_Etblkp_Bulkposting",
-            "type": "button",
-            "visibility": "discarded",
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
             "required": true
           }
         ],
@@ -1912,14 +1962,6 @@
             "required": true
           },
           {
-            "name": "shipmentReceipt",
-            "apiKey": "shipmentReceipt",
-            "column": "M_InOut_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "reinvoice",
             "apiKey": "reinvoice",
             "column": "IsInvoiced",
@@ -1940,6 +1982,14 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "shipmentReceipt",
+            "apiKey": "shipmentReceipt",
+            "column": "M_InOut_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
@@ -2194,6 +2244,14 @@
         "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/ndDimension"
       },
       {
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "column": "EM_ETGO_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/etgoCurrency"
+      },
+      {
         "entity": "goodsReceiptLine",
         "field": "product",
         "column": "M_Product_ID",
@@ -2337,10 +2395,10 @@
       },
       {
         "entity": "goodsReceipt",
-        "field": "receiveMaterials",
-        "column": "RM_Receipt_PickEdit",
-        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
-        "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -2350,6 +2408,14 @@
         "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/updateLines",
         "processId": "800010",
         "processType": "classic"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "receiveMaterials",
+        "column": "RM_Receipt_PickEdit",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
+        "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+        "processType": "obuiapp"
       },
       {
         "entity": "goodsReceipt",
@@ -2365,14 +2431,6 @@
         "column": "Invoicefromshipment",
         "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/invoicefromshipment",
         "processId": "62250E8866EA4D96A66C309878DC039E",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "goodsReceipt",
-        "field": "etblkpBulkposting",
-        "column": "EM_Etblkp_Bulkposting",
-        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
-        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -2407,6 +2465,14 @@
     },
     "window": {
       "category": "purchases"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
     }
   },
   "testManifest": {
@@ -2722,6 +2788,14 @@
         "description": "Field 'documentStatus' should be present in goodsReceipt"
       },
       {
+        "id": "t-field-presence-goodsReceipt-etgoCurrency",
+        "category": "field-presence",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Field 'etgoCurrency' should be present in goodsReceipt"
+      },
+      {
         "id": "t-field-presence-goodsReceipt-invoiceStatus",
         "category": "field-presence",
         "entity": "goodsReceipt",
@@ -2994,6 +3068,14 @@
         "description": "Field 'documentStatus' should have type 'string' in goodsReceipt"
       },
       {
+        "id": "t-field-type-goodsReceipt-etgoCurrency",
+        "category": "field-type",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Field 'etgoCurrency' should have type 'string' in goodsReceipt"
+      },
+      {
         "id": "t-field-type-goodsReceipt-invoiceStatus",
         "category": "field-type",
         "entity": "goodsReceipt",
@@ -3258,6 +3340,14 @@
         "description": "Read-only logic for 'documentNo' in goodsReceipt should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-goodsReceipt-etgoCurrency",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Read-only logic for 'etgoCurrency' in goodsReceipt should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-goodsReceipt-movementDate",
         "category": "readonlylogic-evaluable",
         "entity": "goodsReceipt",
@@ -3464,6 +3554,14 @@
         "field": "documentNo",
         "runner": "node",
         "description": "Read-only logic for 'documentNo' in goodsReceipt should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsReceipt-etgoCurrency",
+        "category": "readonlylogic-valid",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Read-only logic for 'etgoCurrency' in goodsReceipt should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsReceipt-movementDate",
@@ -3962,6 +4060,14 @@
         "field": "costcenter",
         "runner": "node",
         "description": "Selector endpoint for 'costcenter' in goodsReceipt should exist"
+      },
+      {
+        "id": "t-selector-endpoint-goodsReceipt-etgoCurrency",
+        "category": "selector-endpoint",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Selector endpoint for 'etgoCurrency' in goodsReceipt should exist"
       },
       {
         "id": "t-selector-endpoint-goodsReceipt-ndDimension",
@@ -4675,25 +4781,25 @@
       }
     ],
     "summary": {
-      "total": 288,
+      "total": 293,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
         "default-value-type": 7,
         "displaylogic-evaluable": 6,
         "displaylogic-valid": 6,
-        "field-presence": 34,
-        "field-type": 34,
-        "readonlylogic-evaluable": 26,
-        "readonlylogic-valid": 26,
+        "field-presence": 35,
+        "field-type": 35,
+        "readonlylogic-evaluable": 27,
+        "readonlylogic-valid": 27,
         "rule-declared": 38,
         "searchable-filters": 5,
-        "selector-endpoint": 19,
+        "selector-endpoint": 20,
         "system-field": 71,
         "visibility": 2
       },
       "byRunner": {
-        "node": 288,
+        "node": 293,
         "junit": 0
       }
     }
