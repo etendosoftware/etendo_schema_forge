@@ -87,6 +87,37 @@ describe('FmCatalogPage — rendering', () => {
     expect(pillText).toContain('fm.catalog.periodicity.monthly');
     expect(pillText).toContain('fm.catalog.periodicity.quarterly');
   });
+
+  it('303 pills render in exact declared order: quarterly then monthly', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const card303 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.textContent.includes('303'));
+    const pillText = Array.from(card303.querySelectorAll('.fm-catalog-card__pill'))
+      .map(p => p.textContent);
+    expect(pillText).toEqual([
+      'fm.catalog.periodicity.quarterly',
+      'fm.catalog.periodicity.monthly',
+    ]);
+  });
+
+  it('349 pills render in exact declared order: monthly then quarterly', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.textContent.includes('349'));
+    const pillText = Array.from(card349.querySelectorAll('.fm-catalog-card__pill'))
+      .map(p => p.textContent);
+    expect(pillText).toEqual([
+      'fm.catalog.periodicity.monthly',
+      'fm.catalog.periodicity.quarterly',
+    ]);
+  });
+
+  it('303 and 349 pills render simultaneously without cross-contamination', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const allPills = container.querySelectorAll('.fm-catalog-card__pill');
+    // 2 pills per model x 2 models = 4 pills total, rendered together.
+    expect(allPills.length).toBe(4);
+  });
 });
 
 // ── Toggle behavior ──────────────────────────────────────────────────────────
@@ -122,6 +153,22 @@ describe('FmCatalogPage — toggle', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const locked = container.querySelectorAll('.fm-catalog-card--locked');
     expect(locked.length).toBe(0);
+  });
+
+  it('re-sorts cards so the still-active model renders first after a toggle', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    // Initially both active — id order wins the tie-break (303 before 349).
+    let order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
+      .map(b => b.textContent);
+    expect(order).toEqual(['303', '349']);
+
+    // Deactivate 303 (first switch) — 349 (still active) should now sort first.
+    const switches = container.querySelectorAll('[role="switch"]');
+    fireEvent.click(switches[0]);
+
+    order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
+      .map(b => b.textContent);
+    expect(order).toEqual(['349', '303']);
   });
 });
 

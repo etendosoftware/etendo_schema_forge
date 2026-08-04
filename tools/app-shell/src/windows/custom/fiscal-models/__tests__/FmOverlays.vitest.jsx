@@ -316,6 +316,18 @@ describe('NewDeclModal', () => {
     expect(select.value).toBe('303');
   });
 
+  it('legacy fallback (no activeModels prop) offers both 303 and 349, enabled', () => {
+    const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
+    const select = container.querySelector('select');
+    const optionValues = Array.from(select.querySelectorAll('option')).map(o => o.value);
+    expect(optionValues).toEqual(['303', '349']);
+    expect(select.disabled).toBe(false);
+    const createBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.create'));
+    expect(createBtn.disabled).toBe(false);
+    expect(document.body.textContent).not.toContain('fm.new_decl.no_active_models');
+  });
+
   it('calls onConfirm with model, year, period, and draft status', () => {
     const onConfirm = vi.fn();
     const onClose = vi.fn();
@@ -355,6 +367,39 @@ describe('NewDeclModal', () => {
     expect(select.value).toBe('349');
   });
 
+  it('when only 303 is active, offers exactly 303 and creates for it', () => {
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const { container } = render(
+      <NewDeclModal onConfirm={onConfirm} onClose={onClose} activeModels={{ '303': true, '349': false }} />
+    );
+    const select = container.querySelector('select');
+    const optionValues = Array.from(select.querySelectorAll('option')).map(o => o.value);
+    expect(optionValues).toEqual(['303']);
+    expect(select.value).toBe('303');
+    expect(select.disabled).toBe(false);
+
+    const createBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.create'));
+    expect(createBtn.disabled).toBe(false);
+    fireEvent.click(createBtn);
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ model: '303', status: 'draft' })
+    );
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('when only 349 is active, the period select still lists monthly and quarterly options', () => {
+    const { container } = render(
+      <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': false, '349': true }} />
+    );
+    const selects = container.querySelectorAll('select');
+    const periodSelect = selects[2]; // model, year, period (in DOM order)
+    const optgroups = periodSelect.querySelectorAll('optgroup');
+    expect(optgroups.length).toBe(2);
+    expect(periodSelect.value).toBe('T1');
+  });
+
   it('disables the select and the Crear button when no model is active', () => {
     const { container } = render(
       <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': false, '349': false }} />
@@ -375,6 +420,28 @@ describe('NewDeclModal', () => {
     const createBtn = Array.from(container.querySelectorAll('button'))
       .find(b => b.textContent.includes('fm.action.create'));
     fireEvent.click(createBtn);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('Crear button carries a real disabled attribute, not just disabled styling', () => {
+    const { container } = render(
+      <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': false, '349': false }} />
+    );
+    const createBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.create'));
+    // hasAttribute confirms the real DOM `disabled` attribute is set (a11y-relevant,
+    // not merely a CSS/visual cue) — a screen reader / keyboard user cannot activate it.
+    expect(createBtn.hasAttribute('disabled')).toBe(true);
+    expect(createBtn.disabled).toBe(true);
+  });
+
+  it('renders without crashing and does not auto-invoke onConfirm when all models are false', () => {
+    const onConfirm = vi.fn();
+    expect(() =>
+      render(
+        <NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={{ '303': false, '349': false }} />
+      )
+    ).not.toThrow();
     expect(onConfirm).not.toHaveBeenCalled();
   });
 });
