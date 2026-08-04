@@ -46,6 +46,15 @@ function ArrowRight() {
   );
 }
 
+// ─── Arrow left icon ──────────────────────────────────────────────────────────
+function ArrowLeft() {
+  return (
+    <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 7H2M6 3 2 7l4 4"/>
+    </svg>
+  );
+}
+
 // ─── Check circle icon ────────────────────────────────────────────────────────
 function CheckCircle() {
   return (
@@ -244,7 +253,7 @@ function CannedResponseGrid({ options, onPick }) {
 }
 
 // ─── Ghost button (skip) ─────────────────────────────────────────────────────
-function GhostBtn({ children, onClick }) {
+function GhostBtn({ children, onClick, ...rest }) {
   return (
     <button
       onClick={onClick}
@@ -253,6 +262,7 @@ function GhostBtn({ children, onClick }) {
         border: 'none', background: 'transparent', color: T.fg3,
         font: font(12, 500), cursor: 'pointer',
       }}
+      {...rest}
     >
       {children}
     </button>
@@ -281,13 +291,22 @@ function PrimaryBtn({ children, onClick, disabled }) {
 }
 
 // ─── Survey footer ────────────────────────────────────────────────────────────
-function SurveyFooter({ onSkip, onSubmit, submitLabel, disabled, skipLabel }) {
+function SurveyFooter({ onBack, backLabel, onSkip, onSubmit, submitLabel, disabled, skipLabel }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-      {onSkip && <GhostBtn onClick={onSkip} data-testid="GhostBtn__91aeca">{skipLabel}</GhostBtn>}
-      <PrimaryBtn onClick={onSubmit} disabled={disabled} data-testid="PrimaryBtn__91aeca">
-        {submitLabel} <ArrowRight data-testid="ArrowRight__91aeca" />
-      </PrimaryBtn>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: onBack ? 'space-between' : 'flex-end', gap: 8, marginTop: 16 }}>
+      {onBack ? (
+        <GhostBtn onClick={onBack} data-testid="SurveyModal__back">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <ArrowLeft data-testid="ArrowLeft__91aeca" /> {backLabel}
+          </span>
+        </GhostBtn>
+      ) : <span />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {onSkip && <GhostBtn onClick={onSkip} data-testid="GhostBtn__91aeca">{skipLabel}</GhostBtn>}
+        <PrimaryBtn onClick={onSubmit} disabled={disabled} data-testid="PrimaryBtn__91aeca">
+          {submitLabel} <ArrowRight data-testid="ArrowRight__91aeca" />
+        </PrimaryBtn>
+      </div>
     </div>
   );
 }
@@ -367,6 +386,15 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
             data-testid="ChipGroup__91aeca" />
         </div>
         <SurveyFooter
+          onBack={() => {
+            // Clear followup input before returning to score selection: otherwise a stale
+            // feedback/tags combo typed against the previous score/segment could be resubmitted
+            // unchanged against a new score picked after Back (see docs/surveys.md "Back Navigation").
+            setFeedback('');
+            setTags([]);
+            setPhase('initial');
+          }}
+          backLabel={ui('surveyBack')}
           onSubmit={() => setPhase('thanks')}
           submitLabel={ui('surveySubmit')}
           data-testid="SurveyFooter__91aeca" />
@@ -400,11 +428,17 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
 // Prefers canned responses configured in the backoffice "Survey Configuration" window
 // (already resolved to plain, language-specific text — no ui() lookup needed) over the
 // hardcoded locale-key list in surveys.js, which only serves as an offline/unreachable-
-// backend fallback.
-function resolveCannedOptions(survey, locale, ui) {
+// backend fallback. Remote entries carry a { minScore, maxScore } band (configurable per
+// phrase in the backoffice) — filtered against the score the user actually picked, so e.g.
+// a 1-star and a 3-star CSAT response can surface different phrases. The hardcoded fallback
+// list has no ranges and keeps showing unconditionally within the followup phase (offline
+// degradation only, not expected to need this granularity).
+function resolveCannedOptions(survey, locale, ui, score) {
   const remote = getRemoteCannedResponses(survey.id, locale);
   if (remote) {
-    return remote.map(({ icon, text }) => ({ icon, label: text }));
+    return remote
+      .filter(({ minScore, maxScore }) => score >= minScore && score <= maxScore)
+      .map(({ icon, text }) => ({ icon, label: text }));
   }
   return (survey.canned ?? []).map(({ icon, key }) => ({ icon, label: ui(key) }));
 }
@@ -429,7 +463,7 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
         </div>
         <div style={{ font: font(13, 400, 18), color: T.fg3, marginBottom: 14 }}>{ui('surveyQ2Optional')}</div>
         <CannedResponseGrid
-          options={resolveCannedOptions(survey, locale, ui)}
+          options={resolveCannedOptions(survey, locale, ui, score)}
           onPick={setFeedback}
           data-testid="CannedResponseGrid__91aeca" />
         <textarea
@@ -445,6 +479,15 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
           }}
         />
         <SurveyFooter
+          onBack={() => {
+            // Clear the typed feedback before returning to star selection. CSAT's initial-phase
+            // submit branches on score (<=3 -> followup, >3 -> thanks), so without this a score
+            // typed against e.g. a 2-star rating could be silently resubmitted attached to a
+            // 5-star rating that skips followup entirely (see docs/surveys.md "Back Navigation").
+            setFeedback('');
+            setPhase('initial');
+          }}
+          backLabel={ui('surveyBack')}
           onSubmit={() => setPhase('thanks')}
           submitLabel={ui('surveySubmit')}
           data-testid="SurveyFooter__91aeca" />

@@ -102,6 +102,22 @@ belong in a workflow-usability survey).
 
 ---
 
+## Back Navigation
+
+Both NPS and CSAT `followup` phases (Q2 free-text + canned responses / chips) show a **Back** button
+in the footer, next to Submit. Clicking it returns to the score-selection phase (`setPhase('initial')`)
+without resetting `score` — the previously picked NPS number / CSAT star stays selected, so the user
+can revise it and move forward again. No Mixpanel event fires on Back.
+
+`feedback` (and, for NPS, `tags`) ARE cleared on Back, unlike `score`. This matters most for CSAT:
+the initial phase routes `score <= 3` to `followup` and `score > 3` straight to `thanks`, so a user
+who types feedback against a low score, goes Back, and raises the score above 3 would otherwise
+resubmit via the `thanks` branch with the old feedback still attached to the new (unrelated) score —
+a data-integrity bug, not a UX nicety. Clearing `feedback`/`tags` in the `onBack` handler (before
+`setPhase('initial')`) ensures a resubmission after Back always starts the followup phase fresh.
+
+---
+
 ## Anti-Fatigue Rules
 
 `selectNextSurvey` applies these guards in order before any per-survey eligibility check:
