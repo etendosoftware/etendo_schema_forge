@@ -528,3 +528,57 @@
   2026-07-14 R3 note's `:org_id` latent-bug lesson (multi-org tenants can silently diverge from a
   single-org-tested fix's assumptions) — here caught by QA before any multi-org tenant existed to
   hit it, rather than after.
+- **2026-08-04 — CI FAILURE (real, caught in `etendo-go-tests` #2008 Playwright onboarding smoke
+  test) — `M_COSTING_RULE.DATEFROM` is `AD_Reference_ID=16` ("DateTime"), NOT `15` ("Date") like
+  `C_Period.StartDate`/`EndDate`, and the two references go through COMPLETELY DIFFERENT parsers
+  during XML dataset import — a space-separated timestamp that works for one throws for the
+  other.** Symptom: the FIRST real onboarding run to ever import `M_COSTING_RULE.xml` (the table
+  was added to `INCLUDED_TABLES` this same ticket) failed with `java.text.ParseException:
+  Unparseable date: "2025-12-31 03:00:00.0"` on `DATEFROM`, cascading into `Referenced object
+  CostingRule (...) not present in the xml or in the database` (the entity never got fully
+  registered because parsing its property threw before the entity resolver saw a complete row).
+  **Root cause, confirmed via `ad_column`:** `M_Costing_Rule.Datefrom` (and `Dateto`, `Created`,
+  `Updated`) are reference `16` = "DateTime", handled by
+  `org.openbravo.base.model.domaintype.DatetimeDomainType` (`src/org/openbravo/base/model/domaintype/DatetimeDomainType.java`).
+  `C_Period.StartDate`/`EndDate` are reference `15` = "Date", handled by the SIBLING class
+  `DateDomainType` in the same package. Both classes' primary format is the same strict pattern
+  (`new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.S'Z'")`, literal `T` and literal `Z`, NOT an ISO
+  timezone offset) — **but `DateDomainType.createFromString` has a second branch `DateDomainType`
+  lacks: if the string does NOT contain `"T"`, it falls back to `new
+  SimpleDateFormat("yyyy-MM-dd")` via `parseObject(strValue)`, which (per plain `java.text
+  .DateFormat.parse(String)` semantics) only requires a successful match from position 0 — it does
+  NOT require the whole string to be consumed, so the trailing `" HH:mm:ss.S"` on
+  `C_Period.xml`'s `"2026-03-01 00:00:00.0"`-shaped values is silently ignored, not an error.
+  `DatetimeDomainType` has ONLY the strict `T`/`Z` pattern with no such fallback**, so a
+  space-separated value is unconditionally unparseable for it. Two visually-identical-looking
+  sample-data date values (`"2026-03-01 00:00:00.0"` on a working `Date` column vs `"2025-12-31
+  03:00:00.0"` on a broken `DateTime` column) hit entirely different code paths — the shared visual
+  shape is coincidental, not evidence they're validated the same way. **Empirically verified (not
+  just read) using Etendo's own ALREADY-COMPILED core class**
+  (`build/classes/org/openbravo/base/model/domaintype/DatetimeDomainType.class`, loaded directly —
+  not a reimplementation): `new DatetimeDomainType().createFromString("2025-12-31 03:00:00.0")`
+  throws the EXACT reported `ParseException` message character-for-character;
+  `createFromString("2025-12-31T03:00:00.0Z")` parses cleanly to `Wed Dec 31 03:00:00 UTC 2025`;
+  and `convertToString(parsed)` round-trips back to the exact same string, confirming
+  `yyyy-MM-dd'T'HH:mm:ss.S'Z'` (e.g. `2025-12-31T03:00:00.0Z`) is the canonical, self-consistent
+  shape this exact class both emits and expects. **Fix:** `GOClient/M_COSTING_RULE.xml`'s
+  `DATEFROM` changed from `2025-12-31 03:00:00.0` to `2025-12-31T03:00:00.0Z` (value unchanged,
+  format only). **Apply generally:** before writing ANY date/timestamp CDATA value into a bundled
+  onboarding sample-data XML, check the target column's `ad_reference_id` first (`15`=Date vs
+  `16`=DateTime/Timestamp are NOT interchangeable at import time despite both accepting the same
+  strict `T`/`Z` primary format) — do not copy a working date shape from a sibling XML file without
+  confirming the two columns share the same reference type; `CREATED`/`UPDATED` on the SAME table
+  are also reference `16` but are safe because `OnboardingDatasetDefinition.STRIPPED_FIELDS`
+  removes them before import regardless of their XML value — `DATEFROM` had no such protection and
+  was the first-ever literal reference-16 value actually imported through this onboarding path in
+  this module's sample data (grepped the whole `referencedata/` tree: no other bundled XML anywhere
+  in this module carries a literal `T...Z`-shaped date value — this ticket is the first to need
+  one). **Caught by:** the `etendo-go-tests` Jenkins job's Playwright `onboarding-register
+  .integration.spec.js` smoke test, which actually drives the real `/sws/go/onboarding` endpoint
+  end-to-end — this class of format bug is invisible to the Java unit tests in this module (pure
+  Mockito, no real `DataImportService`/`StaxXMLEntityConverter` call) and to the JS data-fixes
+  tests (SQL-only, no XML import path at all). **Apply generally #2:** a preventive fix that adds a
+  brand-new table to `OnboardingDatasetDefinition.INCLUDED_TABLES` should be smoke-tested against a
+  REAL onboarding run (or at minimum have its literal date/timestamp values checked against
+  `ad_reference_id`) before merging — Java unit tests and SQL-only data-fix tests structurally
+  cannot catch an XML-import-time parsing bug in this codebase's current test pyramid.
