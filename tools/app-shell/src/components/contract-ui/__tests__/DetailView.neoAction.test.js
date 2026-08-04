@@ -21,9 +21,12 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
   });
 
   it('instantiates useNeoAction with specName=windowName and the same entity docAction uses', () => {
+    // ETP-4576 — the `token` option is gone: the session is the `__Host-` cookie
+    // and the hook reads its CSRF proof from the auth context itself, so callers
+    // pass no credential. The three options this guard exists for are unchanged.
     assert.match(
       src,
-      /const\s+neoAction\s*=\s*useNeoAction\(\{\s*specName:\s*windowName,\s*entityName:\s*entity,\s*apiBaseUrl,\s*token\s*\}\)/,
+      /const\s+neoAction\s*=\s*useNeoAction\(\{\s*specName:\s*windowName,\s*entityName:\s*entity,\s*apiBaseUrl\s*\}\)/,
     );
   });
 
