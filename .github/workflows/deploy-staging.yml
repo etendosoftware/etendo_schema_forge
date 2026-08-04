@@ -41,24 +41,33 @@ jobs:
             TARGET="experimental"
           fi
 
+          # configcat_sdk_key is resolved PER TARGET on purpose. The ConfigCat
+          # control plane is a pilot (ETP-4691) running on experimental only, and
+          # one SDK key addresses exactly one ConfigCat environment — a single
+          # shared variable would make production read the environment the pilot
+          # is toggling. An empty value leaves createFlagProvider() on the
+          # declared in-memory defaults, i.e. today's behaviour.
           case "$TARGET" in
             production)
               echo "s3_bucket=${{ vars.S3_BUCKET_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "cf_distribution=${{ vars.CF_DISTRIBUTION_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "env_label=production" >> $GITHUB_OUTPUT
               echo "public_origin=https://go.etendo.cloud" >> $GITHUB_OUTPUT
+              echo "configcat_sdk_key=" >> $GITHUB_OUTPUT
               ;;
             staging)
               echo "s3_bucket=${{ vars.S3_BUCKET_STAGING }}" >> $GITHUB_OUTPUT
               echo "cf_distribution=${{ vars.CF_DISTRIBUTION_STAGING }}" >> $GITHUB_OUTPUT
               echo "env_label=staging" >> $GITHUB_OUTPUT
               echo "public_origin=https://go.staging.etendo.cloud" >> $GITHUB_OUTPUT
+              echo "configcat_sdk_key=" >> $GITHUB_OUTPUT
               ;;
             *)
               echo "s3_bucket=${{ vars.S3_BUCKET_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               echo "cf_distribution=${{ vars.CF_DISTRIBUTION_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               echo "env_label=experimental" >> $GITHUB_OUTPUT
               echo "public_origin=https://go.experimental.etendo.cloud" >> $GITHUB_OUTPUT
+              echo "configcat_sdk_key=${{ vars.VITE_CONFIGCAT_SDK_KEY_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               ;;
           esac
 
@@ -99,6 +108,15 @@ jobs:
           VITE_MIXPANEL_DEBUG: "false"
           VITE_MIXPANEL_API_HOST: ${{ vars.VITE_MIXPANEL_API_HOST }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          # ConfigCat control plane (ETP-4691) — key as variable, not secret: Vite
+          # bakes it into the JS bundle, so it is public by construction and
+          # masking it would only hide it from the build log. Empty on
+          # staging/production while the pilot runs on experimental.
+          # `.env.development.local` is NOT read here: it is development-mode only,
+          # so without this the deployed bundle has no key and every flag resolves
+          # to its declared default.
+          VITE_CONFIGCAT_SDK_KEY: ${{ steps.target.outputs.configcat_sdk_key }}
+          VITE_CONFIGCAT_POLL_SECONDS: "60"
         # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
 
       - name: Generate reports manifest

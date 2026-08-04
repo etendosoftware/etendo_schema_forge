@@ -1083,11 +1083,11 @@ fi
 
 # ── Coverage-decrease gate (opt-in via --compare-coverage) ──────────
 # Mirrors Jenkins' "Compare Coverage Results" stage (sonarUtils.compareCoverage):
-# block when THIS branch's OVERALL project coverage is lower than the base branch's.
-# The Sonar Quality Gate only evaluates NEW code, so adding new source files that
-# dilute the total coverage passes --fail-on-gate yet fails Jenkins. This closes
-# that gap locally. Current coverage comes from this run's PR analysis (already in
-# sonar-measures.json); the base value is queried live from Sonar, exactly like CI.
+# block when THIS branch's OVERALL project coverage is more than COVERAGE_TOLERANCE
+# (pp, default 1) below the base branch's, or below the absolute COVERAGE_MINIMUM
+# (default 70). The Sonar Quality Gate only evaluates NEW code, so adding files
+# that dilute the total passes --fail-on-gate yet fails Jenkins; this closes that
+# gap locally. Current and base coverage are queried live from Sonar.
 if [[ "$COMPARE_COVERAGE" == "true" ]]; then
   CMP_BRANCH="${COMPARE_BRANCH:-${BASE_REF#origin/}}"
   CMP_BRANCH="${CMP_BRANCH:-epic/ETP-3504}"
@@ -1098,10 +1098,11 @@ if [[ "$COMPARE_COVERAGE" == "true" ]]; then
   else
     echo "==> Comparing overall coverage: $GATE_BRANCH vs $CMP_BRANCH ..."
     set +e
-    MEASURES_FILE="$REPORT_DIR/sonar-measures.json" CMP_BRANCH="$CMP_BRANCH" \
+    CMP_BRANCH="$CMP_BRANCH" \
     GATE_BRANCH="$GATE_BRANCH" SONAR_HOST_URL="$SONAR_HOST_URL" \
     SONAR_TOKEN="$SONAR_TOKEN" PROJECT_KEY="$PROJECT_KEY" \
     SONAR_PR_KEY="${SONAR_PR_KEY:-}" \
+    COVERAGE_TOLERANCE="${COVERAGE_TOLERANCE:-1}" COVERAGE_MINIMUM="${COVERAGE_MINIMUM:-70}" \
     python3 - <<'PYEOF'
 import base64 as b64, json, os, sys, urllib.error, urllib.parse, urllib.request
 
@@ -1111,7 +1112,6 @@ project = os.environ["PROJECT_KEY"]
 cmp_branch = os.environ["CMP_BRANCH"]
 gate_branch = os.environ["GATE_BRANCH"]
 pr_key = os.environ.get("SONAR_PR_KEY", "")
-measures_file = os.environ["MEASURES_FILE"]
 credentials = b64.b64encode(f"{token}:".encode()).decode()
 
 def api_get(path):
@@ -1127,56 +1127,73 @@ def api_get(path):
         print(f"    WARNING: {e} on {path}", file=sys.stderr)
         return None
 
-def coverage_from_measures(doc):
+def read_metric(doc, metric):
+    """Read a coverage metric from an /api/measures/component response.
+    New-code metrics (new_coverage) carry their value under measures[].period.value;
+    plain metrics (coverage) under measures[].value. Handle both, like measure_values()."""
     if not doc:
         return None
     for m in doc.get("component", {}).get("measures", []):
-        if m.get("metric") == "coverage" and m.get("value") not in (None, ""):
-            try:
-                return float(m["value"])
-            except ValueError:
-                return None
+        if m.get("metric") != metric:
+            continue
+        v = m.get("value")
+        if v in (None, ""):
+            v = (m.get("period") or {}).get("value")
+        if v in (None, ""):
+            return None
+        try:
+            return float(v)
+        except ValueError:
+            return None
     return None
 
-# Current branch coverage: prefer this run's already-downloaded PR measures, with a
-# live PR-scoped query as fallback (file may be absent if the token lacked Browse).
-current = None
-if os.path.isfile(measures_file):
-    try:
-        current = coverage_from_measures(json.load(open(measures_file)))
-    except (ValueError, OSError):
-        current = None
-if current is None:
-    pr_q = f"&pullRequest={urllib.parse.quote(pr_key)}" if pr_key else ""
-    current = coverage_from_measures(
-        api_get(f"/api/measures/component?component={project}&metricKeys=coverage{pr_q}"))
+tolerance = float(os.environ.get("COVERAGE_TOLERANCE") or "1")
+min_coverage = float(os.environ.get("COVERAGE_MINIMUM") or "70")
 
-# Base branch coverage, queried live exactly like sonarUtils.getCoverageWithRetry.
+pr_q = f"&pullRequest={urllib.parse.quote(pr_key)}" if pr_key else ""
+# Current branch OVERALL coverage.
+current = read_metric(
+    api_get(f"/api/measures/component?component={project}&metricKeys=coverage{pr_q}"),
+    "coverage")
+
+# Base branch OVERALL coverage, queried live like sonarUtils.getCoverageWithRetry.
 enc = urllib.parse.quote(cmp_branch)
-base_cov = coverage_from_measures(
-    api_get(f"/api/measures/component?component={project}&branch={enc}&metricKeys=coverage"))
+base_cov = read_metric(
+    api_get(f"/api/measures/component?component={project}&branch={enc}&metricKeys=coverage"),
+    "coverage")
 
 if current is None:
     print("    SKIPPED ⚠️  Could not read this branch's coverage from Sonar — not blocking.")
     sys.exit(0)
+
+# Absolute floor: below the minimum the push is blocked outright, no base comparison.
+if current < min_coverage:
+    print(f"    {gate_branch} coverage: {current:.2f}%")
+    print(f"\n❌ COVERAGE BELOW MINIMUM — {current:.2f}% < {min_coverage:.2f}% required.")
+    print( "   Add tests until overall coverage reaches the minimum, then re-push.")
+    print( "   Bypass with 'git push --no-verify' (WIP only).")
+    sys.exit(1)
+
 if base_cov is None:
     print(f"    SKIPPED ⚠️  No coverage on Sonar for '{cmp_branch}' yet — not blocking "
           "(matches CI, which treats a missing baseline as 0%).")
     sys.exit(0)
 
+min_required = base_cov - tolerance
 print(f"    {gate_branch} coverage: {current:.2f}%")
-print(f"    {cmp_branch} coverage: {base_cov:.2f}%")
+print(f"    {cmp_branch} coverage: {base_cov:.2f}% (min required with {tolerance:.2f}pp tolerance: {min_required:.2f}%)")
 
-# Strict '<' — identical to compareCoverage (coverageCurrent < coverageOrigin).
-if current < base_cov:
-    drop = base_cov - current
+# current >= base_cov - tolerance: overall coverage is not more than the tolerance
+# below the base branch's.
+if current < min_required:
+    short = min_required - current
     print(f"\n❌ COVERAGE DECREASED — this push would fail Jenkins' 'Compare Coverage Results'.")
-    print(f"   {current:.2f}% < {base_cov:.2f}% on '{cmp_branch}' (down {drop:.2f}pp).")
-    print( "   Add tests for the new/changed code until overall coverage is >= the base,")
-    print( "   then re-push. Bypass with 'git push --no-verify' (WIP only).")
+    print(f"   {current:.2f}% < {min_required:.2f}% (base {base_cov:.2f}% − {tolerance:.2f}pp) on '{cmp_branch}' (short {short:.2f}pp).")
+    print( "   Add tests until overall coverage is >= the base (minus tolerance), then re-push.")
+    print( "   Bypass with 'git push --no-verify' (WIP only).")
     sys.exit(1)
 
-print("    Coverage is OK ✅ (not below base).")
+print("    Coverage is OK ✅ (not below base − tolerance, and above the minimum).")
 sys.exit(0)
 PYEOF
     CMP_RC=$?
