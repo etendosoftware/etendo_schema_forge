@@ -1,8 +1,8 @@
 {
   "version": "0.34.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-30T04:12:10.235Z",
-  "checksum": "e7d163e989c97f04",
+  "updatedAt": "2026-08-04T17:33:33.330Z",
+  "checksum": "92f4922bbe34b7dc",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -47,6 +47,13 @@
       "salesTheme": true,
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "statusPills": [
@@ -973,6 +980,13 @@
       "salesTheme": true,
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "linesLayout": "inlineEditable",
       "statusPills": [
         {

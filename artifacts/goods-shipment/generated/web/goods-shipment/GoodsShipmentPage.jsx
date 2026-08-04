@@ -369,7 +369,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
       dateFilterKey="movementDate"
       bulkActions={(ctx) => <BulkInvoiceFromShipment {...ctx} />}
       hidePrint
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@='CO'"}}}}
       sendDocument
       {...props} window={effectiveWindow}
     />

@@ -1,8 +1,8 @@
 {
   "version": "0.68.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-30T04:12:10.800Z",
-  "checksum": "1174b21d351facfb",
+  "updatedAt": "2026-08-04T17:33:33.710Z",
+  "checksum": "da722085e9f3dfe6",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -100,6 +100,13 @@
           "placement": "tab"
         }
       ],
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "statusPills": [
@@ -2696,6 +2703,13 @@
           "placement": "tab"
         }
       ],
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "linesLayout": "inlineEditable",
       "statusPills": [
         {

@@ -192,7 +192,9 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
         </button>
       )}
       {cloneButton}
-      {(isDraft || isCompleted) && <SendDocumentButton
+      {/* ETP-4717 — Send is only available once the order is Confirmed (CO),
+          matching the grid row quick-action's status gate. */}
+      {isCompleted && <SendDocumentButton
         onClick={() => setShowSend(true)}
         data-testid="SendDocumentButton__8b5323" />}
       {clonePortal}
@@ -221,7 +223,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           data-testid="CreateDocsModal__8b5323" />,
         document.body,
       )}
-      {(isDraft || isCompleted) && showSend && createPortal(
+      {isCompleted && showSend && createPortal(
         <SendDocumentModal
           documentType={tMenu('Purchase Order')}
           documentNo={data?.documentNo}

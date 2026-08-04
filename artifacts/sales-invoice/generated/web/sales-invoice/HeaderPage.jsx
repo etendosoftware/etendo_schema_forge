@@ -703,7 +703,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       dateFilterKey="invoiceDate"
       hidePrint
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@='CO'"}}}}
       sendDocument
       {...props} window={effectiveWindow}
     />

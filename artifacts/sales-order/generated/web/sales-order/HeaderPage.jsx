@@ -513,7 +513,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       bulkActions={(ctx) => <OrderReactivateBulkAction {...ctx} />}
       hidePrint
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@='CO'"}}}}
       sendDocument
       {...props} window={effectiveWindow}
     />

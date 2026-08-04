@@ -205,9 +205,11 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
         </button>
       )}
       {cloneButton}
-      {/* ETP-4372 — form-view Send envelope must stay available once the order
-          is confirmed (CO), not only in Draft. Mirrors purchase-order. */}
-      {(isDraft || isCompleted) && <SendDocumentButton
+      {/* ETP-4717 — Send is only available once the order is Confirmed (CO),
+          matching the grid row quick-action's status gate. Previously also
+          shown on Draft (ETP-4372); that was inconsistent with the other
+          document windows and has been corrected. */}
+      {isCompleted && <SendDocumentButton
         onClick={() => setShowSend(true)}
         data-testid="SendDocumentButton__18d1f0" />}
       {clonePortal}
@@ -236,7 +238,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           data-testid="CreateDocsModal__18d1f0" />,
         document.body,
       )}
-      {(isDraft || isCompleted) && showSend && createPortal(
+      {isCompleted && showSend && createPortal(
         <SendDocumentModal
           documentType={tMenu('Sales Order')}
           documentNo={data?.documentNo}

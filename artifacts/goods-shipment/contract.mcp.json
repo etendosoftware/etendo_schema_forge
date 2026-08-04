@@ -2,7 +2,7 @@
   "version": "0.34.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
   "updatedAt": "2026-07-28T13:29:09.185Z",
-  "contractChecksum": "e7d163e989c97f04",
+  "contractChecksum": "92f4922bbe34b7dc",
   "apiPrediction": {
     "specName": "goods-shipment",
     "baseUrl": "/sws/neo/goods-shipment",

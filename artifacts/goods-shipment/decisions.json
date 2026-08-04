@@ -49,7 +49,14 @@
         "falseKey": "notPostedStatus",
         "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
       }
-    ]
+    ],
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@='CO'"
+        }
+      }
+    }
   },
   "entities": {
     "header": {
