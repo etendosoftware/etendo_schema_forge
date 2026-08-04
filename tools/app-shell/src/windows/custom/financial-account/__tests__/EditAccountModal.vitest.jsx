@@ -38,10 +38,13 @@ const fetchStatus = vi.fn();
 const sync = vi.fn();
 const disconnect = vi.fn();
 const reconnect = vi.fn();
+const finishReconnect = vi.fn();
 const saveImportSettings = vi.fn();
 const launchSaltEdgePopup = vi.fn();
 vi.mock('@/hooks/useBankConnectionActions', () => ({
-  useBankConnectionActions: () => ({ fetchStatus, sync, disconnect, reconnect, saveImportSettings }),
+  useBankConnectionActions: () => ({
+    fetchStatus, sync, disconnect, reconnect, finishReconnect, saveImportSettings,
+  }),
   launchSaltEdgePopup: (...a) => launchSaltEdgePopup(...a),
 }));
 
@@ -124,8 +127,13 @@ describe('EditAccountModal', () => {
     sync.mockReset();
     disconnect.mockReset();
     reconnect.mockReset();
+    finishReconnect.mockReset();
+    finishReconnect.mockResolvedValue({ connected: true });
     saveImportSettings.mockReset();
     launchSaltEdgePopup.mockReset();
+    // The popup resolves to the Salt Edge connection id it relayed back; the reconnect flow needs
+    // that id to ask the bridge to reactivate the connection.
+    launchSaltEdgePopup.mockResolvedValue('SE-CONN-1');
     fetchDefaults.mockResolvedValue({ currencies: [{ id: '102', iso: 'EUR' }] });
     updateAccount.mockResolvedValue({ id: 'acc-1', name: 'BBVA Renamed' });
     fetchStatus.mockResolvedValue({
@@ -365,10 +373,119 @@ describe('EditAccountModal', () => {
       // Footer button opens the styled confirm dialog; its action button performs the disconnect.
       await user.click(screen.getByText('financeAccountsMenuDisconnect'));
       await user.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
-      await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9'));
+      // The plain action is the SOFT disconnect: it deactivates the connection but keeps the link.
+      await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9', { permanentDeletion: false }));
       await waitFor(() => expect(onSaved).toHaveBeenCalled());
       expect(onClose).toHaveBeenCalled();
       expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDisconnectDone');
+    });
+
+    it('deletes the connection permanently from the split button menu', async () => {
+      const user = userEvent.setup();
+      const onSaved = vi.fn();
+      const onClose = vi.fn();
+      disconnect.mockResolvedValue({ disconnected: true, permanent: true, reconnectable: false });
+      renderModal({ account: CONNECTED_ACCOUNT, onSaved, onClose });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      // The permanent action gets the richer warning cartel, not the plain confirm dialog.
+      await user.click(await screen.findByTestId('bank-connection-delete-confirm-accept'));
+
+      await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9', { permanentDeletion: true }));
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(onClose).toHaveBeenCalled();
+      expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDeleteDone');
+    });
+
+    it('does not delete until the warning cartel is accepted', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      await screen.findByTestId('bank-connection-delete-confirm-modal');
+      expect(disconnect).not.toHaveBeenCalled();
+    });
+
+    // The cartel portals to <body>, i.e. outside the Radix dialog content. Without explicit
+    // guards Radix treats clicks on it as outside-interactions and closes the edit modal, so
+    // Cancel/X would dismiss the wrong thing and leave the cartel stuck open underneath.
+    it('cancels the warning cartel without closing the edit modal', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      renderModal({ account: CONNECTED_ACCOUNT, onClose });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      await user.click(await screen.findByTestId('bank-connection-delete-confirm-cancel'));
+
+      await waitFor(() => expect(screen.queryByTestId('bank-connection-delete-confirm-modal')).toBeNull());
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByTestId('edit-account-modal')).toBeTruthy();
+      expect(disconnect).not.toHaveBeenCalled();
+    });
+
+    it('closes the warning cartel from its X without closing the edit modal', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      renderModal({ account: CONNECTED_ACCOUNT, onClose });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      await user.click(await screen.findByTestId('bank-connection-delete-confirm-close'));
+
+      await waitFor(() => expect(screen.queryByTestId('bank-connection-delete-confirm-modal')).toBeNull());
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // The modal stays mounted while closed, so a cartel left open would still be showing on the
+    // next open.
+    it('does not reopen with the warning cartel still showing', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      await user.click(screen.getByTestId('bank-connection-disconnect-split'));
+      await user.click(await screen.findByTestId('bank-connection-disconnect-menu-item'));
+      await screen.findByTestId('bank-connection-delete-confirm-modal');
+
+      rerender(<EditAccountModal open={false} account={CONNECTED_ACCOUNT} onClose={() => {}} />);
+      rerender(<EditAccountModal open account={CONNECTED_ACCOUNT} onClose={() => {}} />);
+
+      await waitFor(() => expect(screen.queryByTestId('bank-connection-delete-confirm-modal')).toBeNull());
+    });
+
+    // The modal stays mounted while closed, so the status fetched for the connected account would
+    // otherwise still be in state when it reopens on the now-unlinked one — and nothing refetches
+    // for an account with no bank link, so the deleted connection would look live again.
+    it('does not show a stale connection after the link is deleted', async () => {
+      const { rerender } = renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('bank-connection-edit-sync');
+
+      rerender(<EditAccountModal open={false} account={CONNECTED_ACCOUNT} onClose={() => {}} />);
+      // Reopens on the same account as the list now reports it: no connection, no reconnectable link.
+      const unlinked = { ...CONNECTED_ACCOUNT, bankConnected: false, bankReconnectable: false };
+      rerender(<EditAccountModal open account={unlinked} onClose={() => {}} />);
+
+      await screen.findByTestId('edit-account-connect-bank');
+      expect(screen.queryByTestId('bank-connection-edit-sync')).toBeNull();
+      expect(screen.queryByText('financeAccountsBankConnectionStatusConnected')).toBeNull();
+    });
+
+    it('reports a permanent deletion when the bridge overrides a soft request', async () => {
+      const user = userEvent.setup();
+      // A connection shared with other accounts is always unlinked, whatever was requested.
+      disconnect.mockResolvedValue({ disconnected: true, permanent: true, reconnectable: false });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      await screen.findByTestId('bank-connection-edit-sync');
+      await user.click(screen.getByText('financeAccountsMenuDisconnect'));
+      await user.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDeleteDone'));
     });
 
     it('does not disconnect until the confirm dialog action is clicked', async () => {
@@ -391,6 +508,99 @@ describe('EditAccountModal', () => {
       await waitFor(() => expect(toastError).toHaveBeenCalledWith('disc-fail'));
     });
 
+  });
+
+  // A soft-disconnected account: no live connection, but the Salt Edge link survives so the
+  // existing connection can be revived instead of starting a new one from scratch (ETP-4764).
+  describe('deactivated (soft-disconnected) account', () => {
+    const DEACTIVATED_ACCOUNT = { ...CONNECTED_ACCOUNT, bankConnected: false, bankReconnectable: true };
+
+    beforeEach(() => {
+      fetchStatus.mockResolvedValue({ connected: false, reconnectable: true, providerName: 'BBVA' });
+    });
+
+    it('offers Reconectar instead of a from-scratch connect', async () => {
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await screen.findByTestId('edit-account-reconnect-bank');
+      // Connecting from scratch would create a second connection and orphan the existing one.
+      expect(screen.queryByTestId('edit-account-connect-bank')).toBeNull();
+    });
+
+    it('marks the connection as deactivated and explains how to resume syncing', async () => {
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      expect(await screen.findByText('financeAccountsBankConnectionStatusDeactivated')).toBeTruthy();
+      expect(await screen.findByTestId('edit-account-deactivated-hint')).toBeTruthy();
+    });
+
+    it('launches the reconnect flow from the Reconectar button', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await user.click(await screen.findByTestId('edit-account-reconnect-bank'));
+      await waitFor(() => expect(launchSaltEdgePopup).toHaveBeenCalled());
+    });
+
+    // Salt Edge redirects to an app route that only relays the connection id, so the SPA has to
+    // finalize the reconnect itself. Skipping this leaves the connection inactive and the account
+    // stuck on "deactivated" no matter how many times the user reconnects.
+    it('finalizes the reconnect with the id the popup relayed back', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await user.click(await screen.findByTestId('edit-account-reconnect-bank'));
+      await waitFor(() => expect(finishReconnect).toHaveBeenCalledWith('acc-9', 'SE-CONN-1'));
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionReauthDone'));
+    });
+
+    // The modal must reflect the reconnect without being closed and reopened: it renders from the
+    // connection hook's live view, not from the account record it was opened with, which still
+    // says "deactivated" at this point.
+    it('switches to the connected panel without reopening', async () => {
+      const user = userEvent.setup();
+      fetchStatus
+        .mockResolvedValueOnce({ connected: false, reconnectable: true, providerName: 'BBVA' })
+        .mockResolvedValueOnce({ connected: true, reconnectable: false, providerName: 'BBVA' });
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+
+      await user.click(await screen.findByTestId('edit-account-reconnect-bank'));
+
+      await screen.findByTestId('bank-connection-edit-sync');
+      expect(screen.queryByTestId('edit-account-reconnect-bank')).toBeNull();
+      expect(screen.queryByTestId('edit-account-deactivated-hint')).toBeNull();
+      // Least obvious regression: reading a stale record made it fall through to the
+      // never-connected branch and offer a from-scratch connect.
+      expect(screen.queryByTestId('edit-account-connect-bank')).toBeNull();
+    });
+
+    it('does not finalize when the popup is closed without reconnecting', async () => {
+      const user = userEvent.setup();
+      launchSaltEdgePopup.mockResolvedValue(null);
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await user.click(await screen.findByTestId('edit-account-reconnect-bank'));
+      await waitFor(() => expect(launchSaltEdgePopup).toHaveBeenCalled());
+      expect(finishReconnect).not.toHaveBeenCalled();
+      expect(toastSuccess).not.toHaveBeenCalledWith('financeAccountsBankConnectionReauthDone');
+    });
+
+    // The account is still bound to one Salt Edge account, so the fields the bank owns must stay
+    // locked. Editing the currency here and then reconnecting would silently desync the account
+    // from the bank account it re-binds to (the link filters the bank's accounts by currency).
+    it('keeps the bank-owned fields locked while deactivated', async () => {
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      await screen.findByTestId('edit-account-reconnect-bank');
+
+      expect(screen.queryByTestId('edit-account-iban')).toBeNull();
+      expect(screen.queryByTestId('edit-account-type')).toBeNull();
+      expect(screen.queryByTestId('edit-account-currency')).toBeNull();
+    });
+
+    it('still allows releasing the surviving link without reconnecting first', async () => {
+      const user = userEvent.setup();
+      disconnect.mockResolvedValue({ disconnected: true, permanent: true, reconnectable: false });
+      renderModal({ account: DEACTIVATED_ACCOUNT });
+      // The soft disconnect no longer applies here, so only the permanent action is offered.
+      await user.click(await screen.findByTestId('bank-connection-delete-only'));
+      await user.click(await screen.findByTestId('bank-connection-delete-confirm-accept'));
+      await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9', { permanentDeletion: true }));
+    });
   });
 
   describe('non-connected editing', () => {

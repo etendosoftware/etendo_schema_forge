@@ -239,10 +239,49 @@ native app-shell UI; only the bank login is an external popup.
 - **Sidebar:** the "Pendientes por conciliar" card shows only "Cuentas con pendientes" (the former
   "Sugerencias listas" / "Por regla" indicators were removed).
 
+### Disconnecting: two modes (ETP-4764)
+
+Disconnecting mirrors Etendo Classic's "Permanent deletion" checkbox, as two distinct actions:
+
+| Action | `permanentDeletion` | Effect | Confirmation |
+|---|---|---|---|
+| **Desconectar** | `false` | Deactivates the connection on Salt Edge and locally. The account keeps its Salt Edge link, so it stays reconnectable and no history is lost. | `ConfirmDialog` with an explanatory body |
+| **Borrar conexión** | `true` | Deletes the connection at the provider and unlinks the account. Irreversible. | `BankConnectionDeleteConfirmModal` — the full warning cartel (consequence list + yellow warning box), carrying Classic's irreversibility text |
+
+Both are reachable from the Edit modal footer (a split button: primary "Desconectar" plus a
+chevron revealing "Borrar conexión") and from the row kebab.
+
+**Three connection states.** A soft disconnect leaves the account neither connected nor
+unconnected, so `bankConnected` alone is no longer enough. The backend also emits
+**`bankReconnectable`** — `true` when the account is not connected but still holds its Salt Edge
+link (`EM_PSD2_Salt_Edge_Account_ID` survives a soft disconnect; a permanent deletion clears it).
+It is a separate flag rather than a tri-state `bankConnected` because several SPA call sites test
+`bankConnected === true`.
+
+- connected → sync, import settings, Desconectar / Borrar conexión
+- deactivated (`bankReconnectable`) → **Reconectar** + Borrar conexión. Offering a from-scratch
+  "Conectar banco" here would create a second connection and orphan the surviving one.
+- no link → Conectar banco
+
+`disconnect` reports what actually happened (`permanent` / `reconnectable`) rather than echoing the
+request: a Salt Edge connection shared by several accounts is always unlinked, even when a soft
+disconnect was asked for, since deactivating it would break the sibling accounts. The
+`Automatic Withdrawn` restore (ETP-4406) therefore runs only on the permanent path.
+
+**Reconnect is a two-step handshake.** `reconnect` only returns the Salt Edge URL; the popup then
+redirects to the SPA callback route, which relays the connection id back to the opener. The SPA
+must follow up with **`reconnect-callback`** (`financialAccountId` + `connectionId`) to actually
+mark the connection active again and refresh the consent expiry. Classic does not need this — Salt
+Edge redirects straight into `AisConnectionCallback`, which does the same work server-side. Without
+the follow-up call the connection stays inactive and a deactivated account can never be revived.
+
 Bridge actions: `connect` (optional `financialAccountId` → provider preselect) · `accounts` ·
-`providers` · `link` · `createAndLink` · `reconnect` · `disconnect` · `sync` · `import-settings` ·
-`status`. Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
-`pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`.
+`providers` · `link` · `createAndLink` · `reconnect` · `reconnect-callback` · `disconnect`
+(optional `permanentDeletion`, default `false`) · `sync` · `import-settings` · `status` (returns
+`reconnectable`).
+Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
+`pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
+`windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
 
 ## Archive Dialog
 
