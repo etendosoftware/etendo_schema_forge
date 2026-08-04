@@ -448,7 +448,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const modelTab = model ?? '303';
   const [activeTab, setActiveTab] = useState('declarante');
 
-  const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '', conceptCondition: 'condición', amountTolerance: '0%' });
+  const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '' });
   const [redeme, setRedeme] = useState(true);
   const [recc, setRecc] = useState(false);
   const [iban, setIban] = useState('');
@@ -552,28 +552,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
                   <input type="text" value={form.address} onChange={set('address')} style={INPUT_ST} />
                 </CfgField>
               </div>
-              {/* Row 3: Condición sobre el concepto + Tolerancia de importe */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <CfgField
-                  label={t('fm.config.declarant.concept_condition') ?? 'Condición sobre el concepto'}
-                  data-testid="CfgField__cda0bb">
-                  <select value={form.conceptCondition} onChange={set('conceptCondition')} style={INPUT_ST}>
-                    <option value="condición">condición</option>
-                    <option value="ninguna">ninguna</option>
-                  </select>
-                </CfgField>
-                <CfgField
-                  label={t('fm.config.declarant.amount_tolerance') ?? 'Tolerancia de importe'}
-                  data-testid="CfgField__cda0bb">
-                  <select value={form.amountTolerance} onChange={set('amountTolerance')} style={INPUT_ST}>
-                    <option value="0%">0%</option>
-                    <option value="1%">1%</option>
-                    <option value="2%">2%</option>
-                    <option value="5%">5%</option>
-                  </select>
-                </CfgField>
-              </div>
-              {/* Row 4: CP + Municipio + Provincia */}
+              {/* Row 3: CP + Municipio + Provincia */}
               <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: 12 }}>
                 <CfgField
                   label={t('fm.config.declarant.postal') ?? 'CP'}

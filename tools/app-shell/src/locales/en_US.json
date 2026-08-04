@@ -20504,8 +20504,6 @@
     "fm.action.more_options": "More options",
     "fm.action.new_operator": "New operator",
     "fm.config.m303.regimes": "Tax regimes",
-    "fm.config.declarant.concept_condition": "Concept condition",
-    "fm.config.declarant.amount_tolerance": "Amount tolerance",
     "fm.m303.kpi.incidents": "Incidents",
     "fm.col.model": "Model",
     "fm.col.year": "Year",
