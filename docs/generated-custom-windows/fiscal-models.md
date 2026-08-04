@@ -153,7 +153,7 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 
 ## Model catalog (`FmCatalogPage`)
 
-The catalog drawer is opened from a dedicated toolbar button — **"Catálogo de modelos (N)"**, `N = activeCount` — placed immediately before "+ Nueva declaración" (after the row kebab). It is **not** an item inside the row kebab menu: the kebab (`RowKebab`) only holds Demo and Configuración now. The toolbar button reuses `fm.catalog.title` for its label and `onCatalog` (`setShowCatalog(true)`) for its click handler — the same handler the kebab item used before this UX change. It uses the `fm-toolbar__btn` (non-`--primary`) style so it reads as a secondary action next to "+ Nueva declaración".
+The catalog drawer is opened from a dedicated toolbar button — **"Catálogo de modelos (N)"**, `N = activeCount` — placed immediately before "+ Nueva declaración" (after the row kebab). It is **not** an item inside the row kebab menu: the kebab (`RowKebab`) only holds Demo and Configuración now (the `onCatalog`/`activeCount` props and the "Catálogo de modelos" menu item were removed from `RowKebab` in this change). The toolbar button reuses `fm.catalog.title` for its label and calls `setShowCatalog(true)` inline on click — the same state setter the kebab item used before this UX change. It uses the `fm-toolbar__btn` (non-`--primary`) style so it reads as a secondary action next to "+ Nueva declaración".
 
 The catalog drawer lists the tax forms the tenant can enable/disable. It currently exposes only the two supported forms — no locked/"coming soon" entries:
 
