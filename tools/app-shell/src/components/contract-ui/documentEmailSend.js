@@ -14,7 +14,7 @@ export function buildEmailContractCommand(contractName, documentId, options = {}
   };
   // ETP-4717 — opt-in, mirrors recipientEdits: only present when the operator
   // actually changed subject/message away from their auto-derived defaults,
-  // so an untouched send stays byte-identical to the legacy payload shape.
+  // so an untouched send stays byte-identical with the legacy payload shape.
   if (options.messageEdits) {
     command.messageEdits = options.messageEdits;
   }
