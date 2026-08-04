@@ -1,7 +1,7 @@
 {
   "version": "0.22.0",
   "generatedAt": "2026-07-06T16:17:20.534Z",
-  "contractChecksum": "a7808c99a8b397bd",
+  "contractChecksum": "8618a7b8f36b98cf",
   "apiPrediction": {
     "specName": "return-to-vendor-shipment",
     "baseUrl": "/sws/neo/return-to-vendor-shipment",
