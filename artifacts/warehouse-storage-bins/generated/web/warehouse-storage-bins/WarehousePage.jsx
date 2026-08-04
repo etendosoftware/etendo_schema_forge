@@ -1,4 +1,5 @@
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import WarehouseTable from './WarehouseTable';
 import WarehouseForm from './WarehouseForm';
 import LocatorTable from './LocatorTable';

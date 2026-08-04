@@ -244,16 +244,15 @@
           "readOnlyLogic": null
         },
         "project": {
-          "section": "other",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
-          "visibility": "discarded",
+          "visibility": "editable",
+          "section": "principal",
           "reference": "CostCenter",
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "asset": {
           "visibility": "discarded",
@@ -355,7 +354,8 @@
         "documentAction": {
           "visibility": "system",
           "form": false,
-          "displayLogic": null
+          "displayLogic": null,
+          "agentPrompt": "Document workflow action for this purchase invoice. Fire it with neo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it computes taxes and totals and creates the payment plan; VO voids it. From documentStatus=CO (Completed): RE reactivates it back to DR, and the UI unposts the invoice first when it was already posted — so check the posted field and expect the accounting entries to be removed. CL closes it. Preconditions for CO: at least one line, a vendor with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger: posting is a separate action on this window (not a documentAction value), so never send PO here — read the posted field to know the accounting state. Read documentStatus and posted with neo_get before acting. The remaining values offered in actionValues (AP, PR, RA, RC, RJ, XL) come from the shared AD list and are not part of this window's flow."
         },
         "createLinesFromOrder": {
           "visibility": "discarded",
@@ -636,15 +636,17 @@
           "inputMode": "selector"
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "costcenter": {
-          "form": false,
+          "visibility": "editable",
+          "grid": false,
           "reference": "CostCenter",
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "asset": {
           "form": false,

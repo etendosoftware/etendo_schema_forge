@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
+import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { useConversionRate } from './useConversionRate.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
 
@@ -116,26 +117,15 @@ function buildPisPaymentFields(template, creditorValues) {
   };
 }
 
-/**
- * Resolves a currency's real symbol via Intl (no hardcoded currency→symbol map). es-ES 'symbol'
- * mode falls back to the raw ISO code for some currencies (e.g. GBP), so 'narrowSymbol' is used
- * to get a distinct symbol for every currency actually in use here (USD "$", EUR "€", GBP "£").
- */
-function currencySymbol(currency) {
-  if (!currency) return '';
-  try {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
-      .formatToParts(0).find(p => p.type === 'currency')?.value || currency;
-  } catch { return currency; }
-}
 /** Currency suffix for plain-text (non-JSX) spots — the real symbol, Intl-derived. */
 function curSuffix(currency) {
-  return currencySymbol(currency);
+  return getCurrencySymbol(currency);
 }
 /** Formats an amount with its currency symbol in es-ES grouping ("6.420,00 €"), for the spots
- *  that need a plain string rather than JSX (e.g. interpolated into a ui() translation). */
+ *  that need a plain string rather than JSX (e.g. interpolated into a ui() translation).
+ *  Delegates entirely to the shared formatCurrency() — do not hand-roll Intl calls here. */
 function fmtCur(n, currency) {
-  return `${formatPlain(n)} ${curSuffix(currency)}`.trim();
+  return formatCurrency(currency, n);
 }
 
 /** Label for the balance delta (excess / missing / exact). */
@@ -178,7 +168,7 @@ function mapAccounts(json) {
     currency: a.currency || null, currencyId: a.currencyId || null,
     // PSD2/PIS enrichment (ETP-4406) — absent on older backends, so default
     // to "not connected" rather than throwing off the eligibility gate.
-    psd2Connected: !!a.psd2Connected, maskedPan: a.maskedPan || null,
+    bankConnected: !!a.bankConnected, maskedPan: a.maskedPan || null,
   }));
 }
 
@@ -300,7 +290,7 @@ function extractSaveError(json, ui) {
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
 function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
   const pisEligible = dir === 'out'
-    && !!selectedAccount?.psd2Connected
+    && !!selectedAccount?.bankConnected
     && looksLikeTransfer(selectedMethodObj?.name)
     && PIS_ELIGIBLE_CURRENCIES.has(currency);
   // A foreign-currency payment (invoice ≠ account currency) MUST carry a positive conversion
@@ -875,7 +865,7 @@ export default function NewPaymentEntryModal({
   }, [accounts]);
 
   // ── PIS (Salt Edge bank transfer) eligibility — ETP-4406 ────────────────────
-  // Purchase-invoice payments only, on a PSD2-connected account, paid via a
+  // Purchase-invoice payments only, on a bank-connected account, paid via a
   // transfer-like method, in a currency Salt Edge supports. Imperfect by design
   // (mirrors the backend's own heuristic) — not meant to be exhaustive.
   const selectedAccount = useMemo(() => accounts.find(a => a.id === accountId), [accounts, accountId]);

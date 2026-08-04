@@ -1,6 +1,13 @@
 {
   "sql": "SELECT 'tab_process' AS mechanism, p.AD_Process_ID AS process_id, NULL AS obuiapp_process_id, p.Name, p.Classname, NULL AS column_name FROM AD_Process p JOIN AD_Tab t ON t.AD_Process_ID = p.AD_Process_ID WHERE t.AD_Window_ID = $1 UNION ALL SELECT 'classic_process' AS mechanism, p.AD_Process_ID AS process_id, NULL AS obuiapp_process_id, p.Name, p.Classname, c.ColumnName FROM AD_Process p JOIN AD_Column c ON c.AD_Process_ID = p.AD_Process_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 UNION ALL SELECT 'obuiapp_process' AS mechanism, NULL AS process_id, op.OBUIAPP_Process_ID AS obuiapp_process_id, op.Name, op.Classname, c.ColumnName FROM OBUIAPP_Process op JOIN AD_Column c ON c.EM_OBUIAPP_Process_ID = op.OBUIAPP_Process_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 ORDER BY mechanism, name",
   "versions": {
+    "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "24963D64E83B4543A7F6BD248CF944EE"
+      ],
+      "rows": []
+    },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
       "checksum": "28c4e1a74bffade779e5f26580e5b7de73a1319751fef649e9d02a0035c76957",
       "params": [
@@ -3394,6 +3401,13 @@
           "process_id": null
         }
       ]
+    },
+    "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "82922976BB524D1BAA3CF8462B9219FE"
+      ],
+      "rows": []
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",

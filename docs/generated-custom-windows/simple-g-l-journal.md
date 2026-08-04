@@ -95,3 +95,88 @@ This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDeb
 5. Confirm no Post/Complete action is offered and no posting status field is shown (posting deferred; `Posted` is hidden).
 6. Open a line in the side panel, tick **Open Items**, and confirm the five dimension fields (Business Partner, Product, Project, Cost Center, Asset) appear; untick it and confirm they hide again.
 7. Confirm the window appears in the Finance menu as **Manual Journals** (es: **Asientos Manuales**).
+
+## Accounting dimension visibility per section — ETP-4529
+
+The ETP-4529 matrix asks for all four dimensions (Contacto, Producto, Proyecto, Centro de costo) to
+be **Por config** on both Cabecera and Líneas — the only window in the matrix with a uniform
+"Por config" row.
+
+**Header — intentional design reversal (confirmed by ETP-4529's acceptance criteria,
+approved through REVIEW and QA):** `businessPartner`, `product`, `project`, and `costCenter`
+were previously all `visibility: "discarded"` with the reason "Header accounting dimension —
+not part of the simplified 7-field header form" (a deliberate prior scope decision). ETP-4529's
+own matrix (`Asientos Manuales | Cabecera` = Por config for all four) explicitly supersedes
+that prior decision: all four are now `visibility: "editable", section: "other"` with no
+`displayLogic` override, so the raw AD `@ACCT_DIMENSION_DISPLAY@` passes through and each field
+is shown only when the client's accounting-dimension configuration enables it for GL Journal
+headers. This reverses the "simplified 7-field header" decision — the reversal is the ticket's
+literal requirement, not an incidental side effect, and both REVIEW and QA passed it.
+
+**Lines — latent bug fixed:** all four dimension fields previously shared the identical override
+`"displayLogic": "@Open_Items@='Y'"` (visible only when the line's Open Items checkbox is ticked),
+copied across all four regardless of each field's actual raw AD display logic. Checking the raw
+schema:
+- `businessPartner`: raw AD `displayLogic` is `@Open_Items@='Y' | @ACCT_DIMENSION_DISPLAY@` (an OR
+  of the Open-Items rule and the dimension macro) — the override was accidentally discarding the
+  macro branch. Removed the override so the real compound expression passes through: the field now
+  shows on Open-Items lines **or** when config-enabled (strict superset of the old behavior).
+- `product`, `project`, `costCenter`: raw AD `displayLogic` is plain `@ACCT_DIMENSION_DISPLAY@` —
+  these were never actually tied to Open Items at the AD level; the shared override was a
+  copy-paste that didn't match. Removed for all three; they are now purely config-gated.
+
+**Runtime evaluator — fixed (ETP-4529 follow-up), fully effective for this window.** Three
+generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. Both `header.*` and `lines.*` dimension fields are now genuinely
+config-gated at runtime. Unlike the inlineEditable windows (sales-invoice, purchase-invoice,
+goods-shipment, goods-receipt, physical-inventory, goods-movements), this window uses the
+classic `linesLayout`, so `LinesForm.jsx`'s sidebar always mounts and the lines-scoped evaluator
+fix is fully effective here — no residual UI-surface limitation.
+
+### Header section placement fix (ETP-4529 follow-up)
+
+All four header dimension fields — `businessPartner`, `product`, `project`, `costCenter` (all
+already present and config-gated, confirmed — no AD-level gap) — had `"section": "other"`
+instead of `"section": "principal"`, making them render in the secondary/collapsed area instead
+of the main visible form, even though the header design reversal above intentionally promoted
+them from `discarded`. Fixed by changing `section` to `"principal"` for all four fields in
+`decisions.json` and regenerating; confirmed in `contract.json` (`section: "principal"`) and in
+the generated `GLJournalForm.jsx`.
+
+### Lines dimensions had no rendering surface at all (ETP-4529 gap fix)
+
+Confirmed by direct inspection: despite the `displayLogic` fix above, `businessPartner`,
+`product`, `project`, and `costCenter` on the `lines` entity were `{"visibility": "editable",
+"grid": false}` with **no `grid` and no `dimensionsPanel` key set to `true`**. Since the
+generator only emits a lines-grid entry for a field when either `grid: true` or
+`dimensionsPanel: true` is set, these four fields had **no rendering surface whatsoever** in the
+generated `GLJournalLineTable.jsx` — not hidden-but-present, entirely absent from the columns
+array. TC-106 ("Asientos Manuales header and lines: all four dimensions follow global config in
+both sections") could not pass on the lines side because there was nothing to show or hide.
+
+Fixed by adding `"dimensionsPanel": true` to all four fields in `decisions.json` (keeping
+`grid: false` and the raw-AD-passthrough `displayLogic`/`reason` as-is). Regenerated
+`GLJournalLineTable.jsx` now emits a synthetic `dimensions` column
+(`type: 'dimensionsPanel'`, `label`/`labels: {"Dimensiones contables"}`) listing all four fields
+as `dimensionFields`. This column definition is passed to both `InlineLinesPanel` and
+`DataTable`, so the expand-row "Dimensiones contables" panel renders in the lines grid for this
+window's classic grid + side-panel layout too — in addition to (not instead of) the existing
+side-panel editor, which still separately gates `asset` behind the Open Items checkbox.
+
+### Regen gap re-closed + "Añadir dimensiones" moved to a hover action (ETP-4610)
+
+The regeneration described above had not actually landed in the committed `contract.json`/
+`GLJournalLineTable.jsx` (zero `dimensionsPanel` references found there while validating
+ETP-4610) — likely lost across the `epic/ETP-3504` merges preceding this branch. Re-ran
+`make regen ONLY=simple-g-l-journal SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed clean
+(`sf-validate-pipeline`, 0 violations, additive version bump, no unrelated translation drift).
+Separately, `InlineLinesPanel` no longer renders the `dimensionsPanel` type as a grid column in
+its own `inlineEditable` layout — "Añadir dimensiones" is now a hover action next to Edit/Delete,
+gated on at least one visible dimension field, with the expand-chevron column unchanged. The
+label/icon is adaptive: "Añadir dimensiones" while the line has no dimension values, "Editar
+dimensiones" once at least one is set. (The
+`DataTable`-driven classic-grid path this window also uses does not render `dimensionsPanel` at
+all — pre-existing behavior, unrelated to and unchanged by ETP-4610.) See
+`docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.

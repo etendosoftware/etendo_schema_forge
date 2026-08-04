@@ -54,7 +54,11 @@ describe('useRoleMenu', () => {
 
     await waitFor(() => expect(mockFetchMenuTree).toHaveBeenCalledTimes(1));
 
-    expect(result.current).toBeNull();
+    // The hook is `undefined` while the fetch is in flight and only flips to `null` once the
+    // rejection's `.catch` runs (a microtask after fetchMenuTree is called). Await that state
+    // instead of asserting synchronously — under full-suite load the catch hasn't run yet when the
+    // fetchMenuTree-called waitFor resolves, which flaked as "expected undefined to be null".
+    await waitFor(() => expect(result.current).toBeNull());
     expect(mockCollectAllowedIds).not.toHaveBeenCalled();
   });
 

@@ -221,6 +221,31 @@ matches by `@Named` value — no servlet restart needed (just compile + deploy).
 
 Place handlers in: `src/com/etendoerp/go/schemaforge/handlers/` (one class per window/entity).
 
+> **⚠️ `Java_Qualifier` must be declared in TWO places, not one — both are required (ETP-4670).**
+> Setting it only in the DB (or only via a one-off `SFUpsertEntity`/SQL `UPDATE`) is not durable. It
+> must ALSO be declared in the artifact's `decisions.json`, or the next `push-to-neo.js` run silently
+> wipes it:
+> 1. **`artifacts/<window>/decisions.json`** — `"javaQualifier": "<name>"` at the entity level
+>    (`entities.<entity>.javaQualifier`). `push-to-neo.js` regenerates the `ETGO_SF_ENTITY` rows for
+>    the whole spec from the artifact; a `javaQualifier` not present there is not written, clearing
+>    whatever the DB had.
+> 2. **`src-db/database/sourcedata/ETGO_SF_ENTITY.xml`** (the module's own DB seed) —
+>    `<JAVA_QUALIFIER><![CDATA[<name>]]></JAVA_QUALIFIER>` on that entity's row. `update.database`
+>    reimports this seed and overwrites the live DB row, so a qualifier missing from the seed is
+>    lost on the next database sync even if `decisions.json` has it.
+>
+> **Symptoms when only one of the two is set (or neither):** the handler stops running with **no
+> error and no log line** — the request is served exactly as if no hook existed at all. The
+> `java_qualifier` column on `etgo_sf_entity` for that row reads empty/`NULL`. This is easy to miss
+> because nothing fails loudly; it just silently regresses to default CRUD behavior.
+>
+> `decisions.json` already supports `javaQualifier` for detail/child entities — e.g. `price`,
+> `stock`, and `accounting` on the Product window (`docs/generated-custom-windows/product.md`) all
+> declare it. The trap is specifically forgetting it on the **header** entity (e.g. `product`,
+> `productCategory`), since header entities are edited less often and it's easy to add a handler,
+> wire the DB row by hand, verify it works, and never circle back to add the `decisions.json` +
+> `ETGO_SF_ENTITY.xml` seed entries — until the next regen or `update.database` erases it.
+
 ### 2.3 Hook Dispatch Flow
 
 ```
@@ -601,6 +626,55 @@ public NeoResponse handle(NeoContext ctx) {
 Real implementations: `GlJournalHeaderHandler#completeJournal` (ETP-4244),
 `AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` (ETP-4388, shared by
 `SalesInvoiceHeaderHandler` and `PurchaseInvoiceHeaderHandler`).
+
+### Pre-hook: Fill AD-Mandatory Columns the Window Does Not Expose
+
+**Trigger condition:** a column is mandatory in the Application Dictionary but the window has
+no editable field for it, so a create built only from the visible fields fails validation.
+This is the shape that most often tempts a client-side workaround — the front-end knows the
+values it is about to send, so it is trivially easy to patch the payload there. Don't: the
+app-shell is metadata-driven and must stay entity-agnostic, and a client-side fix covers only
+the path that goes through the form (never `/batch` imports, MCP, or any other API caller).
+
+Before writing a handler, check whether `NeoHiddenMandatoryDefaultsResolver` already covers
+the case. It resolves mandatory AD columns automatically, but only when **both** hold:
+
+- the column is **not** exposed as a Schema Forge field (`ETGO_SF_FIELD`), and
+- the column has an AD default value to resolve.
+
+Anything derived from *other values in the same request* is out of its reach — it runs on the
+`/defaults` (pre-fill) path, before the user has typed anything. That derivation belongs in a
+`handle()` pre-hook, which mutates `ctx.getRequestBody()` and returns `null` so the default
+CRUD path still runs:
+
+```java
+@Named("contactHandler")   // ETGO_SF_ENTITY.Java_Qualifier of the contacts spec's `contact`
+public class ContactHandler implements NeoHandler {
+  @Override
+  public NeoResponse handle(NeoContext ctx) {
+    JSONObject body = ctx.getRequestBody();
+    if (body == null || !isWrite(ctx.getHttpMethod())) return null;
+    deriveName(ctx, body);                                     // AD_User.Name
+    if ("POST".equals(ctx.getHttpMethod())) deriveUsername(body); // AD_User.Username
+    return null;                                               // continue to default CRUD
+  }
+}
+```
+
+Two rules this recipe encodes:
+
+- **Truncate to the column length.** The derived value can exceed the target column even when
+  its source fits — `C_BPartner.Value` is `VARCHAR(40)` while `Name` is 60, so using the name
+  verbatim as a placeholder search key fails with *"Value too long. Length 48, maximum
+  allowed 40"*.
+- **Derive on POST only, unless the update genuinely needs it.** Rewriting a derived column on
+  every update can silently reassign a value other systems depend on — `AD_User.Username` is
+  unique and is the login identifier, so `ContactHandler` never touches it on PATCH/PUT.
+
+Real implementations (ETP-4156): `ContactHandler` (`AD_User.Name` / `AD_User.Username` for the
+contacts spec), `BusinessPartnerHandler#deriveNameFromPerson` + its placeholder `searchKey`
+(`C_BPartner`). Both replaced hardcoded entity-name branches in the app-shell's generic
+`useEntity` hook.
 
 ---
 

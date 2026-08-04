@@ -167,6 +167,30 @@ describe('AmountInput', () => {
     render(<AmountInput value="10.00" readOnly />);
     expect(screen.getByRole('textbox')).toBeDisabled();
   });
+
+  // ETP-4314 — AmountInput used to hardcode a literal '€' suffix regardless of
+  // the actual account/document currency (visually confirmed on a real USD
+  // financial account). It now resolves the real symbol from the `currency`
+  // prop via getCurrencySymbol(), with '€' kept only as the backward-compatible
+  // default when no `currency` prop is passed at all.
+  describe('currency symbol (ETP-4314)', () => {
+    it('falls back to the literal € when no currency prop is given', () => {
+      render(<AmountInput value="10.00" />);
+      expect(screen.getByText('€')).toBeInTheDocument();
+    });
+
+    it('shows $ for currency="USD" (not the hardcoded €)', () => {
+      render(<AmountInput value="10.00" currency="USD" />);
+      expect(screen.getByText('$')).toBeInTheDocument();
+      expect(screen.queryByText('€')).not.toBeInTheDocument();
+    });
+
+    it('shows £ for currency="GBP"', () => {
+      render(<AmountInput value="10.00" currency="GBP" />);
+      expect(screen.getByText('£')).toBeInTheDocument();
+      expect(screen.queryByText('€')).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe('MoneyInput', () => {

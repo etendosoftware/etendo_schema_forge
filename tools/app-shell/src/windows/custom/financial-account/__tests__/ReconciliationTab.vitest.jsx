@@ -14,7 +14,7 @@ describe('ReconciliationTab', () => {
   it('renders the reconciliation split panel', () => {
     render(
       <MemoryRouter>
-        <ReconciliationTab account={{ id: 'ACC-1', currency: 'EUR' }} />
+        <ReconciliationTab account={{ id: 'ACC-1', currencyIso: 'EUR' }} />
       </MemoryRouter>,
     );
     expect(screen.getByTestId('split-panel')).toBeDefined();
@@ -23,7 +23,7 @@ describe('ReconciliationTab', () => {
   it('forwards the account id and currency to the split panel', () => {
     render(
       <MemoryRouter>
-        <ReconciliationTab account={{ id: 'ACC-9', currency: 'USD' }} />
+        <ReconciliationTab account={{ id: 'ACC-9', currencyIso: 'USD' }} />
       </MemoryRouter>,
     );
     const panel = screen.getByTestId('split-panel');

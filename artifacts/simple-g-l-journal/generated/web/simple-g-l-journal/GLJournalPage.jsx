@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import GLJournalTable from './GLJournalTable';
@@ -115,6 +116,38 @@ export const api = {
       "reference": "Currency",
       "inputMode": "selector",
       "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/currency"
+    },
+    {
+      "entity": "gLJournal",
+      "field": "businessPartner",
+      "column": "C_Bpartner_ID",
+      "reference": "BPartner",
+      "inputMode": "search",
+      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/businessPartner"
+    },
+    {
+      "entity": "gLJournal",
+      "field": "product",
+      "column": "M_Product_ID",
+      "reference": "Product",
+      "inputMode": "search",
+      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/product"
+    },
+    {
+      "entity": "gLJournal",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "selector",
+      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/project"
+    },
+    {
+      "entity": "gLJournal",
+      "field": "costCenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/costCenter"
     },
     {
       "entity": "gLJournalLine",
@@ -245,6 +278,7 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        dimensionsPanelFieldKeys={["businessPartner","product","project","costCenter"]}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "GL_Journal", config: {} } }]}
         menuActions={({ data, status }) => [
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },

@@ -117,7 +117,7 @@ i18n keys added: `invoicePdfSubtotalNoDiscount`, `invoicePdfProductDiscount`, `i
 ## Manual verification
 
 1. Open `/sales-invoice` and confirm the list shows exactly Invoice Date (no dot), Document No., Due Date (4-state dot driven by date plus `outstandingAmount`), Business Partner, Document Status (AD status badge only — no payment-derived pills), Total Gross Amount, and Total Outstanding in that order. For Due Date confirm: "—" when no payment plan exists; green dot for invoices with `outstandingAmount ≤ 0` regardless of how their date sits relative to today (an overdue but fully-paid invoice must render green, never red); red dot plus red date text for past-due rows that still carry an outstanding balance; yellow dot for rows due within the next 7 days with outstanding balance; gray dot for everything else. Also confirm date-only values such as an immediate-payment invoice created today render on the same calendar day instead of shifting backward by one day.
-2. Open `/sales-invoice?filter=overdue` and confirm the list starts in the overdue-only quick filter.
+2. Open `/sales-invoice?filter=overdue` and confirm the list starts in the overdue-only quick filter. Open the **Filtros** funnel (badge "2") and confirm the second preloaded condition reads `Y | Pendiente de pago | Mayor que | 0` — the operator must be visible (not the placeholder) and its value box must be a numeric input. Opening the operator dropdown must offer `=, ≠, >, ≥, <, ≤, Entre`. Also filter by **Vencimiento** and confirm it offers `Es / Antes de / Después de / Entre` with a date picker (ETP-4681).
 3. Click a row from the list and confirm a lateral invoice preview opens instead of immediately navigating to `/sales-invoice/:recordId`. In that preview, confirm `General` is data-backed while `Messages` and `History` remain placeholder states, and for invoices with a billing contact location the embedded PDF shows the full address in postal order: first line, second line, postal code plus city, then region plus country.
 4. From the preview, choose **Edit** and confirm navigation to `/sales-invoice/:recordId`.
 5. Start or reopen a draft invoice and confirm a business partner is required before adding lines, partner address reacts to the chosen customer, and the line area offers manual entry plus shipment import and sales-order import when a customer is already selected. For shipment import, expanding a row must keep the originating sales-order reference visible in the row header (it should not be replaced by the computed shipment total).
@@ -334,6 +334,202 @@ affected and required no change.
 Regression coverage:
 `tools/app-shell/src/windows/custom/shared/__tests__/useFiscalStatus.vitest.jsx`.
 
+## Accounting dimension visibility per section — ETP-4529
+
+Per-entity, per-section visibility for the four accounting dimensions (Contacto/`businessPartner`,
+Producto/`product`, Proyecto/`project`, Centro de costo/`costcenter`) now follows the ETP-4529
+matrix:
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` | **Siempre** — `displayLogic: null` override, always shown regardless of the client's accounting-dimension configuration | **Nunca** — discarded |
+| `product` | *(no such field on the header)* | **Siempre** — no dimension gating (raw AD display logic is an unrelated `@Financial_Invoice_Line@` rule, already bypassed) |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+| `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+
+"Por config" means the field's visibility is resolved server-side at runtime via
+`POST /sws/neo/sales-invoice/{entity}/evaluate-display`, which expands
+`@ACCT_DIMENSION_DISPLAY@` through `DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`
+against the client's `AD_Client` per-dimension configuration (`Project_Acctdim_Header`, etc.).
+
+### Runtime evaluator — fixed (ETP-4529 follow-up)
+
+Three bugs made this mechanism a near-total no-op at runtime, found and fixed in this
+same ticket (generic fixes — they apply to every window, not only the ones in the
+ETP-4529 matrix):
+
+1. **`EntityForm.jsx`'s visibility filter never actually consulted the evaluate-display
+   result.** `generate-frontend.js` emits non-evaluable ("Por config") fields with
+   `visible: null, visibilitySource: 'server', displayLogicReason: '...'` — but **no**
+   `displayLogic` property. `EntityForm.jsx`'s filter read `!f.displayLogic` as "this field
+   has a static visibility decision, never override it" — true for every server-macro
+   field, since none of them ever carry a `displayLogic` property. The filter's OR-chain
+   short-circuited before ever reaching the real `visibility[key] !== false` check, so
+   **no field was ever hidden by evaluate-display, on any window, ever** — this was the
+   root cause, more fundamental than the two gaps below. Fixed: the filter now also checks
+   `f.visibilitySource === 'server'` before falling back to "always visible".
+2. **The `principal` form section hardcoded `visibility: {}`** in `DetailView.jsx`'s `Form`
+   call (~line 3609), discarding whatever `useDisplayLogic` actually resolved. Fixed: it
+   now passes the real `displayLogic` object through, same as the `other`/`collapsed`
+   sections.
+3. **No `useDisplayLogic` call existed for the lines/detail entity at all.** Added a second
+   hook call, `lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, ...)`, and
+   wired its `visibility` map into the `DetailForm` (generated `LinesForm.jsx`) call as
+   `displayLogic={{ readOnly: {}, visibility: lineDisplayLogic.visibility }}` (`readOnly`
+   stays `{}` there deliberately — each line field's own `readOnlyLogic` already handles
+   per-row read-only state against the correct record; only `visibility` needed a source).
+   Dimension-macro visibility doesn't depend on which specific line record is open, so one
+   evaluate-display call (scoped to the lines entity, using the header record as a
+   representative context) correctly covers every row.
+
+### Non-grid line fields under inlineEditable — resolved (ETP-4543)
+
+Filed while implementing ETP-4529 and explicitly left out of scope for it (Jira ETP-4543 /
+GitHub `etendosoftware/etendo_schema_forge#895`, "Non-grid line fields invisible under
+inlineEditable line layout"): this window uses `window.linesLayout = "inlineEditable"`. For
+inlineEditable windows, `DetailForm`/`LinesForm.jsx` is never rendered at all
+(`shouldShowDetailFormSidebar` returns `false` whenever `linesLayout === 'inlineEditable'`),
+so a `grid: false` line field (which `project`/`costcenter` were, being form-only) had no
+inline-table column and no sidebar to render in either — a total rendering-surface gap,
+independent of whether the ETP-4529 evaluator fix said the field should be visible.
+
+**Fix:** rather than build the larger "expandable per-row detail" feature the original
+investigation floated, `project`/`costcenter` are now declared as regular grid columns
+(`InvoiceLinesTable.jsx`, the hand-written line table shared by `sales-invoice` and
+`purchase-invoice`, hardcodes them — this component does not read `decisions.json`'s `grid`
+flag, so no decisions change was needed here) and dynamic visibility was wired through two
+generic components so the "Por config" toggle still governs whether the columns actually show:
+
+1. `InlineLinesPanel.jsx` gained a `hiddenColumns = []` prop, filtered the same way
+   `DataTable.jsx` already did (`columns.filter(c => !c.hidden && !hiddenColumns.includes(c.key))`).
+2. `DetailView.jsx`'s primary `<DetailTable>` call — previously hardcoded to
+   `hiddenColumns={[]}` — now passes a memoized list of every key whose
+   `lineDisplayLogic.visibility[key]` resolves to exactly `false` (the same live map
+   already threaded into the secondary `DetailForm`'s `displayLogic` prop).
+
+Net effect: with the client's Proyecto/Centro de costo dimension toggles OFF, `project`/
+`costcenter` do not render as columns in this window's line grid; with them ON, both columns
+appear and behave like any other inline-editable selector column. **Applies to:**
+`sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt` — the four
+`inlineEditable` windows that actually carry `lines.project`/`lines.costcenter` as real,
+non-discarded fields (verified against each window's `decisions.json`). For `goods-shipment`/
+`goods-receipt` the columns are pipeline-generated (`decisions.json`'s `lines.project.grid`/
+`lines.costcenter.grid` flipped `false → true`, then `make regen`), since their line tables
+are fully generated rather than hand-written. `physical-inventory` and `goods-movements` also
+use `linesLayout: "inlineEditable"` but were never affected by this gap in the first place:
+neither `M_InventoryLine` nor `M_MovementLine` has a `project`/`costCenter` column at all (no
+such field exists in their `lines` entity — see each window's own doc, "N/A"/"Nunca"), so
+there was nothing to make visible. Windows using the classic `linesLayout`
+(`simple-g-l-journal`) were already fully covered by the evaluator fix above — their line
+dimension fields render through `LinesForm.jsx`'s sidebar and were already correctly
+config-gated before this ticket.
+
+The generic `hiddenColumns` mechanism on `InlineLinesPanel`/`DetailView` is not
+window-specific — it applies to every window that uses the primary inline lines grid.
+
+### Regression — product/listPrice/grossAmount vanished from the Lines grid (ETP-4530)
+
+The paragraph above ("any other line field ... will now also be hidden as a column") was an
+acknowledged risk when ETP-4543 shipped, and it materialized for real: live manual testing on
+this window found `product`, `listPrice` (List Price), and `grossAmount` (Line Gross Amount)
+missing entirely from the Lines grid for a saved line, alongside the expected
+`project`/`costcenter` gating.
+
+**Root cause:** `lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, ...)`
+evaluates the lines tab's `evaluate-display` against the HEADER record snapshot as a
+"representative" line — valid ONLY for `@ACCT_DIMENSION_DISPLAY@`, since its expansion
+(`DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`) depends solely on the
+client's dimension config, never on record field values. `NeoDisplayLogicHandler`
+(`com.etendoerp.go`), however, evaluates **every** active `AD_Field.displaylogic` on the tab,
+not just the dimension macro. On the Sales Invoice Lines tab, three real AD fields carry
+genuine, record-dependent `displayLogic` (confirmed via direct DB query against
+`ad_field`/`ad_column`):
+
+| Field | Raw `AD_Field.displaylogic` | Dependency |
+| --- | --- | --- |
+| Product (`M_Product_ID`) | `@Financial_Invoice_Line@='N'` | a sibling per-line field (`Financial_Invoice_Line`) |
+| List Price (`PriceList`) | `@GROSSPRICE@='N'` | `GROSSPRICE`, an `AD_AuxiliaryInput` (`SELECT istaxincluded FROM m_pricelist WHERE m_pricelist_id = @M_PRICELIST_ID@`) |
+| Line Gross Amount (`Line_Gross_Amount`) | `@GROSSPRICE@='Y'` | same `GROSSPRICE` auxiliary input |
+
+Neither the sibling field nor the auxiliary-input SQL result exists in the header-record
+snapshot sent as `fieldValues`. `NeoDisplayLogicHandler.buildEvalContext()` only special-cases
+`$Element_*` dimension preferences — it never executes `AD_AuxiliaryInput` SQL and never
+carries per-line field values. `DynamicExpressionParser` compiles both references to plain
+property/context lookups (`OB.Utilities.getValue(currentValues, 'financialInvoiceLine')` and
+`context.GROSSPRICE`), which resolve to `undefined` against missing keys — a property access
+on a defined object, not a `ReferenceError`, so it never hits the evaluator's `catch` block
+(whose fail-open default is "visible"). The `'N'`/`'Y'` string comparison against `undefined`
+just silently evaluates to `false`, indistinguishable at the JSON level from a legitimate
+"hide this column" signal. `decisions.json` had in fact explicitly nullified `product`'s and
+`grossAmount`'s `displayLogic` (`"displayLogic": null`, per the ETP-4529 "Siempre" decision in
+the matrix above) — but that override only affects `contract.json`/generated JS; the NEO
+evaluate-display endpoint reads `AD_Field.displaylogic` straight from the database and has no
+notion of Schema Forge's contract-level override.
+
+**Fix:** `lineHiddenColumns` (`DetailView.jsx`) now only trusts the visibility map for the
+field keys the representative-header-record trick was actually built for —
+`project`/`costcenter`/`businessPartner` (`DIMENSION_MACRO_KEYS`, a module-level allowlist next
+to `DetailView.jsx`'s existing `WINDOW_DELETE_ACTIONS` constant) — instead of blindly hiding
+every key resolving to `false`. Any other field's spurious `false` from this evaluator's known
+representative-context limitation is now ignored, matching the fail-open design already in
+place for absent/`true` keys. Generic, not window-specific: applies to every window that
+consumes `lineHiddenColumns` (the same four `inlineEditable` windows above), and regression
+coverage was added directly against the reported symptom (visibility map with
+`product/listPrice/grossAmount/project/costcenter` all `false` — asserts only the dimension
+keys get hidden) in
+`tools/app-shell/src/components/contract-ui/__tests__/DetailView.lineHiddenColumns.vitest.jsx`.
+
+### Header section placement fix (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` had `"section": "other"` (the secondary/collapsed area)
+instead of `"section": "principal"` (the main visible form) — this made them appear as
+missing blank space rather than as visible fields, even after the runtime-evaluator and
+`hiddenColumns` fixes above made their config-gated visibility resolve correctly. Fixed by
+changing `section` to `"principal"` in `decisions.json` and regenerating; confirmed in
+`contract.json` (`section: "principal"`) and in the generated `HeaderForm.jsx`.
+
+### Plain grid columns superseded by the "Dimensiones contables" expand panel (ETP-4529)
+
+The `project`/`costcenter` plain grid columns added by ETP-4543 (just above) were a stopgap.
+After reviewing the live app, the user asked for the same expand-row "Dimensiones contables"
+UX Amortización already has instead of two permanently-visible columns — a plain column reads
+as a field the client always has, even with no accounting-dimension config at all.
+`InvoiceLinesTable.jsx` now declares one `type: 'dimensionsPanel'` column instead (see
+`docs/ui-customization.md` §14b for the column shape), driven by the exact same `hiddenColumns`
+this fix introduced (filtering `DIMENSION_FIELD_CANDIDATES_BASE` down to visible fields instead
+of hiding a whole plain column). Full write-up, including a **wiring gap discovered while doing
+this**: `InvoiceLinesTable.jsx` is not currently reachable from the running sales-invoice
+window at all (`HeaderPage.jsx` renders the plain generated `LinesTable.jsx` via
+`DetailTable={LinesTable}`, not `InvoiceLinesTable.jsx` via `CustomLines` — neither window's
+`decisions.json` sets `window.customLinesComponent`) — see `docs/feedback.md`'s ETP-4543
+supersession note.
+
+### Generator support closes the reachability gap (ETP-4529 follow-up)
+
+Since `InvoiceLinesTable.jsx` is dead code for this window (the point above), the fix is at the
+generator level, not in that component: `generate-frontend.js`'s `generateTableComponent`
+(`schema_forge_core`) now emits the `dimensionsPanel` column directly from `decisions.json` for
+ANY pipeline-generated lines table. `lines.project.dimensionsPanel` and
+`lines.costcenter.dimensionsPanel` are `true` (grid stays `false`); the actually-rendered
+generated `LinesTable.jsx` now declares the synthetic column, so the "Dimensiones contables"
+panel renders for real on this window regardless of the `InvoiceLinesTable.jsx` gap above. See
+`docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customization.md` §14b.
+
+### "Añadir dimensiones" moved to a hover action, column no longer shown (ETP-4610)
+
+The "Dimensiones contables" grid column described above no longer renders at all — `InlineLinesPanel`
+filters the `dimensionsPanel` column type out of the grid unconditionally. The "Añadir dimensiones"
+trigger moved into the line's hover-action strip (next to Edit/Delete), shown only when at least one
+dimension field is currently visible; the leading expand-chevron column is unchanged and still opens
+the same expand-row. The label/icon is adaptive: "Añadir dimensiones" while the line has no dimension
+values set, "Editar dimensiones" once at least one is filled. See `docs/ui-customization.md` §14b/§14c
+and `docs/feedback.md`'s ETP-4610 entry.
+
+Regenerated cleanly (`make regen ONLY=sales-invoice,purchase-invoice SKIP_EXTRACT=1 LOCAL_CORE=1`,
+`sf-validate-pipeline` clean, committed) as part of validating this window's `dimensionsPanel`
+flags — see `docs/feedback.md`'s ETP-4610 entry for the full regen log across all five in-scope
+windows.
+
 ## Multi-currency support in the Cobros/Pagos modal — ETP-4504
 
 The two-step Cobros/Pagos modal (`NewPaymentEntryModal.jsx`, launched from the invoice
@@ -430,3 +626,61 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Advanced-filter mode on rich cells — ETP-4681
+
+Two list columns render bespoke cells and are therefore declared `type: 'custom'`
+in `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`:
+
+| Column | Why it is `custom` | Declared `filterMode` |
+|--------|--------------------|-----------------------|
+| `outstandingAmount` (`OutstandingAmt`) | "Cobrada" / "Saldo a favor · X" pills and a clickable payment button | `numeric` |
+| `eTGODueDate` (`EM_Etgo_Due_Date`) | 4-state coloured due-date dot | `date` |
+
+`type: 'custom'` carries no filter semantics — `resolveFilterMode` cannot see the
+underlying data type behind a bespoke `render`, so without an explicit
+`filterMode` both columns fell back to text mode. The visible symptom was on the
+Dashboard shortcuts: "Facturas de ventas · Vencidas" and "Por cobrar" navigate to
+`/sales-invoice?filter=overdue`, which preloads
+`documentStatus equals CO` **and** `outstandingAmount greaterThan 0`. In text mode
+the operator set has no `greaterThan`, so the operator `<Select>` matched no item
+and rendered its placeholder — the condition looked malformed, and the value box
+was a text input instead of a number input.
+
+The rows returned were never wrong (the text branch of `buildRowCriteria` passes
+the operator straight through, so the emitted criteria stayed
+`{ fieldName: 'outstandingAmount', operator: 'greaterThan', value: 0 }`), but
+touching the operator dropdown lost `greaterThan` permanently.
+
+The fix is the explicit `filterMode` on each column plus a generic change in
+`resolveFilterMode` so unrecognized types no longer skip the `_ID` foreign-key
+heuristic — that is what restores `identifier` mode on the `transactionDocument`
+(`C_DocTypeTarget_ID`) custom column. Rule **F19** of `sf-validate-pipeline` now
+blocks any new `custom` column over a numeric/date/enum contract field that omits
+`filterMode`. Full reference: [`list-filters.md`](../list-filters.md).
+
+## MCP document actions (agents)
+
+The header's `documentAction` button is what an AI agent uses to move this invoice through its
+workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+active AD list of the `C_Invoice.DocAction` reference — note `CO` is labelled **Complete** here,
+not Book) and `actionParameter: "docAction"`; its `agentPrompt` — defined in `decisions.json` ->
+`entities.header.fields.documentAction.agentPrompt` — states which transitions are legal and
+their preconditions.
+
+Completing a draft invoice over MCP:
+
+    neo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>",
+                 action: "documentAction", parameters: { docAction: "CO" } }
+
+Flow encoded in the prompt: `DR -> CO` completes (assigns the final document number, computes
+taxes/totals, creates the payment plan), `DR -> VO` voids, `CO -> RE` reactivates and **unposts
+first** when the invoice was already posted (the Reactivate menu action carries
+`preUnpost: true`), `CO -> CL` closes. Posting is a **separate** action on this window
+(`menuActions` key `post`, gated on `processed && !posted`) and is **not** a `documentAction`
+value — the prompt explicitly tells the agent never to send `PO` here.
+
+This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `ProcessInvoiceHook`
+routing on completion — because `neo_action` executes the entity's `NeoHandler` hooks
+(ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
+change: it is the only thing telling the agent what is legal.

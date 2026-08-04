@@ -5,7 +5,8 @@ import HeaderTable from '@generated/sales-order/generated/web/sales-order/Header
 import OrderReactivateBulkAction from '@generated/sales-order/custom/OrderReactivateBulkAction';
 import BulkOrderMoreMenu from '@generated/sales-order/custom/BulkOrderMoreMenu';
 import { ConfirmModal, ManageDocsLauncher } from '@generated/sales-order/custom/OrderCreateInvoice';
-import { ConfirmResultModal, ListView } from '@/components/contract-ui';
+import { ConfirmResultModal } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
@@ -16,11 +17,11 @@ import { useOrderWindow } from '../shared/useOrderWindow.jsx';
 import { useOrderPdf } from '../shared/useOrderPdf.js';
 
 const LIST_COLUMNS = [
-  { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Order Date', dot: false },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount' },
+  { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Order Date', dot: false, required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent', label: 'Invoice Status' },
   { key: 'deliveryStatus', column: 'DeliveryStatus', type: 'percent', label: 'Shipment Status' },
 ];

@@ -14,8 +14,7 @@ import CrmPage from './pages/CrmPage.jsx';
 import HrPage from './pages/HrPage.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import ReportViewerPage from './pages/ReportViewerPage.jsx';
-import FinancialAccountsPage from './pages/FinancialAccountsPage.jsx';
-import Psd2CallbackPage from './pages/Psd2CallbackPage.jsx';
+import BankConnectionCallbackPage from './pages/BankConnectionCallbackPage.jsx';
 import PisCallbackPage from './pages/PisCallbackPage.jsx';
 import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
 
@@ -27,6 +26,7 @@ const AuthorizePage = lazy(() => import('./pages/AuthorizePage.jsx'));
 const QuickSalesOrderPage = lazy(() => import('./pages/QuickSalesOrderPage.jsx'));
 const QuickPurchaseOrderPage = lazy(() => import('./pages/QuickPurchaseOrderPage.jsx'));
 const AppStorePage = lazy(() => import('./pages/AppStorePage.jsx'));
+const UpgradePage = lazy(() => import('./pages/UpgradePage.jsx'));
 
 const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</div>;
 
@@ -50,7 +50,7 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
       ) },
     { path: 'login', public: true, element: <Navigate to="/onboarding" replace data-testid="Navigate__e8c60d" /> },
     { path: 'logout', public: true, element: <LogoutRoute safeDestination="/onboarding" data-testid="LogoutRoute__e8c60d" /> },
-    { path: 'financial-account/psd2-callback', public: true, element: <Psd2CallbackPage data-testid="Psd2CallbackPage__e8c60d" /> },
+    { path: 'financial-account/bank-connection-callback', public: true, element: <BankConnectionCallbackPage data-testid="BankConnectionCallbackPage__e8c60d" /> },
     { path: 'financial-account/pis-callback', public: true, element: <PisCallbackPage data-testid="PisCallbackPage__e8c60d" /> },
     { path: 'dashboard', public: false, element: <DashboardPage apiBaseUrl={apiBaseUrl} data-testid="DashboardPage__e8c60d" /> },
     { path: 'first-steps', public: false, element: <FirstStepsPage data-testid="FirstStepsPage__e8c60d" /> },
@@ -59,7 +59,11 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     { path: 'inventory', public: false, element: <InventoryPage data-testid="InventoryPage__e8c60d" /> },
     { path: 'purchases', public: false, element: <PurchasesPage data-testid="PurchasesPage__e8c60d" /> },
     { path: 'accounting', public: false, element: <AccountingPage data-testid="AccountingPage__e8c60d" /> },
-    { path: 'finance/accounts', public: false, element: <FinancialAccountsPage data-testid="FinancialAccountsPage__e8c60d" /> },
+    // The accounts list is now the `financial-account` window's own list branch
+    // (generated ListView + the AccountsHeaderTable slot), reached through the
+    // standard `:windowName` route. This legacy path is kept as a redirect so
+    // bookmarks, the archive-dialog return and existing E2E gotos keep working.
+    { path: 'finance/accounts', public: false, element: <Navigate to="/financial-account" replace data-testid="Navigate__accounts" /> },
     { path: 'reports', public: false, element: <ReportsPage data-testid="ReportsPage__e8c60d" /> },
     { path: 'report-viewer', public: false, element: <ReportViewerPage data-testid="ReportViewerPage__e8c60d" /> },
     { path: 'crm', public: false, element: <CrmPage data-testid="CrmPage__e8c60d" /> },
@@ -72,6 +76,9 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     lazyRoute('quick-sales-order', QuickSalesOrderPage, { apiBaseUrl }),
     lazyRoute('quick-purchase-order', QuickPurchaseOrderPage, { apiBaseUrl }),
     lazyRoute('app-store', AppStorePage),
+    // Registered unconditionally: the feature flag gates the visible entry
+    // point, not the route, and the backend enforces the paywall regardless.
+    lazyRoute('upgrade', UpgradePage),
     { path: 'artifacts', public: false, element: <ArtifactViewerPage data-testid="ArtifactViewerPage__e8c60d" /> },
     { path: 'artifacts/:windowName', public: false, element: <ArtifactViewerPage data-testid="ArtifactViewerPage__e8c60d" /> },
     { path: ':windowName/:recordId', public: false, element: (

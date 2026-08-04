@@ -41,7 +41,7 @@ describe('contacts import descriptor', () => {
     assert.equal(contact.body.name, 'Lucia Fernandez');
   });
 
-  it('regression: derives contact.name (AD_User.Name) from the contact-level firstName/lastName when both are present, mirroring useEntity.js\'s applyContactNameDefaults', async () => {
+  it('regression: derives contact.name (AD_User.Name) from the contact-level firstName/lastName when both are present, mirroring the server-side ContactHandler derivation', async () => {
     const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com', firstName: 'Andres', lastName: 'Rojaz' };
     const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
     const contact = ops.find((op) => op.entity === 'contact');
@@ -112,6 +112,22 @@ describe('contacts import descriptor', () => {
     await assert.rejects(
       () => buildOperations(baseRow, { spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry }),
       /country .* could not be resolved/i,
+    );
+  });
+
+  it('regression (ETP-4669): localizes the unresolved-country error via config.translate when ImportDialog injects one', async () => {
+    // The descriptor is module-scope async code (no hooks), so it can't call useUI() — the
+    // dialog injects the app translator as config.translate. When present, the thrown error is
+    // the localized string with the row's country interpolated, not the English fallback.
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'needs-review', candidates: [] });
+    const translate = vi.fn((key, params) => `No se pudo resolver el país "${params.country}".`);
+    await assert.rejects(
+      () => buildOperations(baseRow, { spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry, translate }),
+      /No se pudo resolver el país "Argentina"\./,
+    );
+    assert.ok(
+      translate.mock.calls.some(([key, params]) => key === 'importErrorCountryUnresolved' && params?.country === 'Argentina'),
+      'expected the descriptor to call translate with the importErrorCountryUnresolved key and the row country',
     );
   });
 

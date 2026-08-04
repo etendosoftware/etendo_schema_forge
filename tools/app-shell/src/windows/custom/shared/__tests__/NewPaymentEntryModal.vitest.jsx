@@ -1,6 +1,13 @@
 // Mocks must be hoisted before imports (Vitest hoisting)
+// NOTE (ETP-4314): the mock now interpolates params (rather than swallowing them)
+// so fmtCur()'s output (ExcessBand's excess amount, the PIS "dinero"/"credito"
+// clauses) actually reaches the DOM — needed for the thousands-grouping
+// regressions below. Calls made with no params still return the bare key, so
+// every other `getByText('someKey')` exact-match assertion in this file is
+// unaffected (only 'cpExcessInline', which IS called with params, was updated
+// to a regex match accordingly).
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (params ? `${key} ${JSON.stringify(params)}` : key),
 }));
 
 // NOTE: `@/lib/formatCurrency` is intentionally NOT mocked. MoneyAmount now delegates to the
@@ -107,13 +114,13 @@ function buildApiFetch(cfg = {}) {
 
 /**
  * Build an apiFetch mock for PIS-eligible scenarios (ETP-4406): a
- * psd2Connected account, a transfer-like payment method, and a supplier
+ * bankConnected account, a transfer-like payment method, and a supplier
  * IBAN list — plus overrides for the registerPayment response and the
  * pisPaymentStatus sequence returned across successive polls.
  */
 function buildPisApiFetch(cfg = {}) {
   const {
-    accounts = [{ id: 'acc-1', label: 'Banco PIS', psd2Connected: true, maskedPan: '****1234' }],
+    accounts = [{ id: 'acc-1', label: 'Banco PIS', bankConnected: true, maskedPan: '****1234' }],
     methods = [{ id: 'm-1', label: 'Transferencia' }],
     sources = [],
     plan = [{ finPaymentScheduleID: 'sched-1', outstandingAmount: '1000' }],
@@ -453,7 +460,7 @@ describe('NewPaymentEntryModal', () => {
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
       const confirm = screen.getByText('cpConfirm').closest('button');
       expect(confirm).toBeDisabled();
-      expect(screen.getByText('cpExcessInline')).toBeInTheDocument();
+      expect(screen.getByText(/^cpExcessInline/)).toBeInTheDocument();
     });
   });
 
@@ -527,9 +534,9 @@ describe('NewPaymentEntryModal', () => {
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '800' } });
       expect(screen.getByText('cpMissing')).toBeInTheDocument();
-      // the delta amount (200.00) should be rendered nearby — MoneyAmount now renders
-      // en-US digits via the shared formatCurrency util ("200.00 €" for the EUR invoice).
-      expect(screen.getByText(/200\.00/)).toBeInTheDocument();
+      // the delta amount (200,00) should be rendered nearby — MoneyAmount now renders
+      // es-ES digits via the shared formatCurrency util ("200,00 €" for the EUR invoice).
+      expect(screen.getByText(/200,00/)).toBeInTheDocument();
       // Confirmar stays enabled for a partial payment — only excess blocks it.
       const confirm = screen.getByText('cpConfirm').closest('button');
       expect(confirm).not.toBeDisabled();
@@ -1066,7 +1073,7 @@ describe('NewPaymentEntryModal', () => {
       // Neither card renders (shared gate off) — only the inline "adjust the amount" guidance.
       expect(screen.queryByTestId('cp-excess-credit')).not.toBeInTheDocument();
       expect(screen.queryByTestId('cp-excess-refund')).not.toBeInTheDocument();
-      expect(screen.getByText('cpExcessInline')).toBeInTheDocument();
+      expect(screen.getByText(/^cpExcessInline/)).toBeInTheDocument();
       // Confirm stays blocked while the excess is unresolved.
       expect(screen.getByTestId('cp-confirm')).toBeDisabled();
 
@@ -1093,8 +1100,22 @@ describe('NewPaymentEntryModal', () => {
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
       expect(screen.queryByTestId('cp-excess-credit')).not.toBeInTheDocument();
       expect(screen.queryByTestId('cp-excess-refund')).not.toBeInTheDocument();
-      expect(screen.getByText('cpExcessInline')).toBeInTheDocument();
+      expect(screen.getByText(/^cpExcessInline/)).toBeInTheDocument();
       expect(screen.getByTestId('cp-confirm')).toBeDisabled();
+    });
+
+    // ETP-4314 regression: ExcessBand's `amount` (fmtCur(balance.excessAmount, currency))
+    // used a hand-rolled Intl.NumberFormat call missing `useGrouping: true`, so an excess
+    // >= 1000 rendered without the thousands separator (e.g. "1500,00 €" instead of
+    // "1.500,00 €"). Now delegates to the shared formatCurrency(), which sets it explicitly.
+    it('groups thousands in the inline excess amount when the excess is >= 1000', async () => {
+      renderModal({ dir: 'out', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      // outstanding 1000, amount 2500 -> excess 1500.
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '2500' } });
+      const inlineError = screen.getByText(/^cpExcessInline/);
+      expect(inlineError).toHaveTextContent(/1\.500,00/);
+      expect(inlineError).toHaveTextContent('€');
     });
   });
 
@@ -1601,7 +1622,7 @@ describe('NewPaymentEntryModal', () => {
     });
 
     describe('visibility gate', () => {
-      it('shows the PIS block when the account is PSD2-connected, the method is a transfer, dir is "out", and the currency is EUR', async () => {
+      it('shows the PIS block when the account is bank-connected, the method is a transfer, dir is "out", and the currency is EUR', async () => {
         mockApiFetch = buildPisApiFetch();
         renderModal({ dir: 'out', specName: 'purchase-invoice' });
         expect(await screen.findByTestId('cp-pis-section')).toBeInTheDocument();
@@ -1615,9 +1636,9 @@ describe('NewPaymentEntryModal', () => {
         expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
       });
 
-      it('hides the PIS block when the selected account is not PSD2-connected', async () => {
+      it('hides the PIS block when the selected account is not bank-connected', async () => {
         mockApiFetch = buildPisApiFetch({
-          accounts: [{ id: 'acc-1', label: 'Banco Clásico', psd2Connected: false }],
+          accounts: [{ id: 'acc-1', label: 'Banco Clásico', bankConnected: false }],
         });
         renderModal({ dir: 'out', specName: 'purchase-invoice' });
         await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
@@ -1706,7 +1727,7 @@ describe('NewPaymentEntryModal', () => {
       });
 
       it('does not send a pis field at all on the regular (non-PIS) confirm path — regression guard', async () => {
-        // Default buildApiFetch() account has no psd2Connected flag -> block never renders.
+        // Default buildApiFetch() account has no bankConnected flag -> block never renders.
         renderModal({ dir: 'out', specName: 'purchase-invoice' });
         await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
         expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
@@ -1737,6 +1758,41 @@ describe('NewPaymentEntryModal', () => {
         fireEvent.click(row);
 
         await waitFor(() => expect(screen.getByText(/cpPisAlertCredit/)).toBeInTheDocument());
+      });
+    });
+
+    // ETP-4314 regressions: both fmtCur() call sites feeding the PIS alert text
+    // (`dinero` and `credito`) used to hand-roll Intl.NumberFormat without
+    // `useGrouping: true`, dropping the thousands separator for amounts >= 1000.
+    // Both now delegate to the shared formatCurrency().
+    describe('PIS alert — currency formatting (ETP-4314)', () => {
+      it('groups thousands in the "dinero" clause when balance.amount is >= 1000', async () => {
+        mockApiFetch = buildPisApiFetch();
+        // Default outstanding (from `defaults`) is 1000, prefilling balance.amount.
+        renderModal({ dir: 'out', specName: 'purchase-invoice', outstanding: 1000 });
+        await screen.findByTestId('cp-pis-section');
+
+        const alert = screen.getByText(/^cpPisAlertTransfer/);
+        expect(alert).toHaveTextContent(/1\.000,00/);
+        expect(alert).toHaveTextContent('€');
+      });
+
+      it('groups thousands in the "credito" clause when balance.usedCredit is >= 1000', async () => {
+        mockApiFetch = buildPisApiFetch({
+          sources: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 1500 }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice', outstanding: 2000 });
+        await screen.findByTestId('cp-pis-section');
+
+        // Selecting the line auto-caps usage to min(avail, need) = min(1500, 2000) = 1500.
+        const row = await screen.findByTestId('cp-credit-row-s1');
+        fireEvent.click(row);
+
+        await waitFor(() => {
+          const alert = screen.getByText(/cpPisAlertCredit/);
+          expect(alert).toHaveTextContent(/1\.500,00/);
+          expect(alert).toHaveTextContent('€');
+        });
       });
     });
 

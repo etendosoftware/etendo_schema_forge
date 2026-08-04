@@ -35,8 +35,8 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 vi.mock('@/lib/resolveColumnLabel.js', () => ({
   resolveColumnLabel: (col) => col.label ?? col.key,
 }));
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (val) => val != null ? String(val) : '',
+vi.mock('@/lib/formatCurrency.js', () => ({
+  formatCurrency: (cur, val) => val != null ? String(val) : '',
 }));
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),
@@ -87,10 +87,13 @@ describe('DataTable', () => {
     expect(screen.getByText('Order B')).toBeInTheDocument();
   });
 
-  it('renders amount values', () => {
+  it('renders amount values formatted with the canonical es-ES, two-decimal rule', () => {
     render(<DataTable columns={COLUMNS} data={DATA} />);
-    expect(screen.getByText('100')).toBeInTheDocument();
-    expect(screen.getByText('200')).toBeInTheDocument();
+    // Amount cells go through `formatAmount`. These rows carry no currency code,
+    // so the plain-number es-ES fallback runs: two decimals, comma separator.
+    // (Asserting bare '100'/'200' silently regresses the moment formatting works.)
+    expect(screen.getByText('100,00')).toBeInTheDocument();
+    expect(screen.getByText('200,00')).toBeInTheDocument();
   });
 
   it('renders row test ids', () => {

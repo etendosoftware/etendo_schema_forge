@@ -52,13 +52,15 @@
           "productRevenue",
           "productCOGS"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       }
     },
     "import": {
       "enabled": true,
       "spec": "product",
       "entity": "product",
+      "descriptor": "product",
       "formats": ["csv", "txt"],
       "limit": { "maxRows": 5000, "concurrency": 4 },
       "dedupe": { "scope": "file", "key": ["searchKey"] },
@@ -66,15 +68,14 @@
         { "target": "searchKey", "aliases": ["codigo", "código", "sku"] },
         { "target": "name", "aliases": ["nombre"] },
         { "target": "description", "aliases": ["descripcion", "descripción"] },
-        { "target": "uOM", "aliases": ["unidad de medida", "uom"], "matchEntity": "UOM" },
-        { "target": "productCategory", "aliases": ["categoria", "categoría"], "matchEntity": "ProductCategory" },
-        { "target": "taxCategory", "aliases": ["categoria impositiva", "categoría impositiva", "impuesto"], "matchEntity": "FinancialMgmtTaxCategory" }
+        { "target": "price", "aliases": ["precio"], "label": "Price" }
       ]
     }
   },
   "entities": {
     "intrastat": { "exclude": true },
     "product": {
+      "javaQualifier": "productDefaultsHandler",
       "formCols": 3,
       "fields": {
         "searchKey": {
@@ -87,12 +88,20 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 2
+          "seq": 2,
+          "multiField": {
+            "subtitle": "searchKey",
+            "media": { "field": "image", "kind": "neoImage", "fallback": "box" },
+            "parts": [
+              { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
+              { "field": "name", "labels": { "en_US": "Name", "es_ES": "Nombre" } }
+            ]
+          }
         },
         "description": {
           "type": "textarea",
           "section": "principal",
-          "seq": 6,
+          "seq": 7,
           "span": 3
         },
         "productType": {
@@ -121,14 +130,13 @@
           "grid": true,
           "section": "principal",
           "seq": 5,
-          "inputMode": "search",
-          "clearable": false
+          "inputMode": "search"
         },
         "image": {
           "type": "image",
           "inline": false,
           "section": "principal",
-          "seq": 7
+          "seq": 8
         },
         "taxCategory": {
           "section": "other",
@@ -155,6 +163,21 @@
           "section": "other",
           "displayLogic": null
         },
+        "eTGOSalePrice": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "other"
+        },
+        "eTGOPurchasePrice": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "other"
+        },
+        "eTGOStock": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "other"
+        },
         "stocked": {
           "section": "other",
           "readOnlyLogic": null,
@@ -166,6 +189,14 @@
         },
         "returnable": {
           "section": "other",
+          "displayLogic": null
+        },
+        "active": {
+          "visibility": "editable",
+          "grid": false,
+          "section": "principal",
+          "seq": 6,
+          "readOnlyLogic": null,
           "displayLogic": null
         },
         "characteristicDescription": {
@@ -414,6 +445,7 @@
     },
     "accounting": {
       "javaQualifier": "productAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "fixedAsset": {
