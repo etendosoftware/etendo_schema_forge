@@ -403,3 +403,108 @@
 - **2026-08-03 — GAP CROSS-REFERENCE: a Goods Receipt's OWN posting can still fail with `"Account could not be found."` even after H3/R18 is fully applied — this is a SEPARATE, already-tracked gap, not a new one and not R18's scope.** Root cause: `C_BP_Group_Acct.NotInvoicedReceipts_Acct` NULL for the receipt's business-partner group (core resolves this account purely by BP group, `AcctServer#getAccount` `ACCTTYPE_NotInvoicedReceipts`/`selectNotInvoicedReceiptsAcct` — never by product/product-category). **Already diagnosed and already fixed on a different, unmerged branch:** `.worktrees/ETP-4706/cli/src/data-fixes/sql/20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql` (gap A2b, ETP-4706) — same GOClient tenant, same BP group (`DBBD00C9E0B9442188FCDDA3F601DAEA`), same NULL column, backfilling from `C_AcctSchema_Default.NotInvoicedReceipts_Acct`. **Apply:** if a Goods Receipt post fails with a generic "Account could not be found" AFTER confirming the transaction itself is costed (`m_transaction.isprocessed='Y'`), check `C_BP_Group_Acct` for the receipt's BP group before assuming it's a costing/H3 regression — it's most likely gap A2b, and R17 (ETP-4706) is the existing remedy; don't re-diagnose or re-fix from scratch, just sequence that branch's merge.
 - **2026-08-03 — KNOWN LIMITATION (review-flagged, verified against core source, NOT fixed — R18's `blocking_products` candidate query is missing core's own `costingStatus <> 'S'` filter.** Read `src/org/openbravo/costing/CostingBackground.java` (`getTransactionsBatch()`/`getTransactionsBatchCount()`, this local Etendo core checkout) directly to confirm: the real HQL candidate-selection predicate is `trx.isProcessed = false AND trx.costingStatus <> 'S' AND p.productType = 'I' AND p.stocked = true AND trxtype.reference.id = :refid AND trxtype.searchKey = trx.movementType AND trx.transactionProcessDate <= now() AND trx.organization.id in (:orgs)`. R18's `blocking_products` CTE (both `@check` and `@apply`) reproduces every other predicate (`isactive='Y'`, `isprocessed='N'`, `producttype='I'`, `isstocked='Y'`, the `ad_ref_list`/reference-189 movement-type join) but never filters `costing_status <> 'S'` (column `M_TRANSACTION.COSTING_STATUS`, default `'NC'`, VARCHAR(60), set to `'CC'` by `CostingRuleProcess`/`CostingServer` once a transaction is cost-cleared/adjusted — no `'S'`-setter found in this checkout, so its origin/meaning is not yet pinned down here). **Consequence:** a transaction sitting in `costing_status='S'` would be miscounted as "blocking" by R18's `@check`/`@apply` even though core's own background job would skip it outright — a real, structural drift from the query R18's header claims to mirror. **Unexercised on every tenant checked this session** (no transaction anywhere in the local sandbox has `costing_status='S'`), so it has not caused an observed incorrect apply — flagged as a follow-up, not blocking. **Apply:** any future revision of R18 (or a sibling costing fix) should add `AND t.costing_status <> 'S'` to `blocking_products` in both `@check` and `@apply` to fully match core's candidate-selection semantics.
 - **2026-08-03 — KNOWN LIMITATION (review-flagged, verified against core source, NOT fixed) — R18's seeded `m_warehouse_id` ignores `AverageAlgorithm.getProductCost()`'s production override, independent of `M_Costing_Rule.WAREHOUSE_DIMENSION`.** Read `src/org/openbravo/costing/AverageAlgorithm.java`'s `getProductCost(...)` directly: the warehouse filter is gated by `if (costDimensions.get(CostDimension.Warehouse) != null && !product.isProduction())` — i.e. even when the applicable `M_Costing_Rule.WAREHOUSE_DIMENSION='Y'`, a lookup for a **production-flagged** product (`M_Product.Production='Y'`) ALWAYS falls to the `warehouse is null` branch, never `warehouse.id = :warehouse`. R18's `uses_warehouse_dimension` flag (feeding `CASE WHEN uses_warehouse_dimension THEN trx_warehouse_id ELSE NULL END`) is derived purely from the `M_Costing_Rule.WAREHOUSE_DIMENSION`/`ISVALIDATED` check and never consults `is_production` (a column R18 already resolves, for the SEPARATE `cost_org_id` decision) — so a production-flagged blocking product under a warehouse-dimensioned rule would get a seeded row with a non-NULL `m_warehouse_id` that `getProductCost()` would never actually match against for that product (it always searches `warehouse IS NULL` for production items), silently defeating the anchor for that one product/warehouse-rule combination. **Unexercised on every tenant checked this session** (every `M_Costing_Rule` row found had `WAREHOUSE_DIMENSION='N'`, so the interaction never triggers here). **Apply:** any future revision should extend `uses_warehouse_dimension` (or the final `m_warehouse_id` `CASE`) with `AND NOT f2.is_production`/`f.is_production='N'`, mirroring the same override `cost_org_id` already applies for production products.
+## ETP-4761 — Locator inventory status defaults to Available, negative-stock guard (I1, R19, 2026-08-03)
+
+- **2026-08-03 — `M_INVENTORYSTATUS` fixed system ids (confirmed live, `ad_client_id='0'`):**
+  `0`="Undefined-OverIssue" (`OVERISSUE='Y'`, allows negative stock), `00`="Backflush"
+  (`OVERISSUE='Y'`), `1`="Blocked", `11`="Scrap", `2`="Available" (`OVERISSUE='N'`), `3`="Transit",
+  `33`="Inspect", `3FD24EDEA17B4E429CDEF49B6BBC59D2`="Receipts",
+  `7B3DC15A20234C418D26EECDC5D59003`="Undefined" (also `OVERISSUE='N'` — the DB column's own
+  default; functionally identical to Available but a different, mislabeled row — never conflate the
+  two when writing a `@check`/`@apply` that means "any OverIssue-allowing status", which today is
+  only `0`/`00`), `F2FA420060DB468190580397E1F510B5`="Shipping". **Apply:** a future fix that also
+  needs to close the `00`/"Backflush" OverIssue gap should extend R19's predicate to
+  `m_inventorystatus_id IN ('0','00')`, not assume `'0'` is the only OverIssue-allowing value.
+- **2026-08-03 — Live sweep confirmed the gap on THIS shared dev DB: 45 active locators at status
+  `'0'` across 11 tenants (GOClient:1, QA Testing:26, the rest 2 each).** Of those, 42 had zero
+  negative-stock rows (flippable) and exactly 3 (all on QA Testing: `L03`, `Return bin`
+  `3A5DE05B092A40AD9403D2A3CA5AFB3D`, `T02`) had at least one `m_storage_detail.qtyonhand < 0` row
+  and must be skipped. **Apply:** always run the live sweep query before assuming a fix's blast
+  radius — this confirmed the "skip 3, flip 42" split R19 was designed around, and that the
+  negative-stock cases are concentrated on one non-production QA tenant, not spread evenly.
+- **2026-08-03 — a single skipped locator can carry HUNDREDS of `@report` rows.** QA Testing's 3
+  skipped locators together produced **445** distinct negative-stock `m_storage_detail` rows (many
+  attribute-set-instance/lot combinations per product per locator) — not 3 rows, one per locator.
+  **Apply:** any `@report` design must assume row counts far larger than the count of skipped
+  parent entities, and its formatter needs a length cap (see `formatReportDetail`, `maxLen` default
+  4000) — the header line (`"N row(s) need manual attention:"`) must be computed from the FULL row
+  count BEFORE truncation, or an operator reading a truncated `detail` would undercount the problem.
+- **2026-08-03 — introduced the data-fixes framework's first optional `@report` section**
+  (`cli/src/data-fixes/parse-fix.js` + `run.js`, backward compatible — a fix with no `@report`
+  behaves exactly as before, `detail` stays `null` on `APPLIED`). Rationale: `@check` gates whether
+  `@apply` runs at ALL, but R19 needed a THIRD state — "ran, fixed what it safely could, but some
+  rows were deliberately left broken and a human needs to know which ones." The runner executes
+  `@report` (read-only SELECT, same `:client_id`/`:org_id` binds as `@check`/`@apply`) right AFTER a
+  successful `@apply`, in the SAME transaction (so it sees post-apply state), and formats its rows
+  into the ledger `detail` column via the new exported `formatReportDetail(rows, {maxLen})` helper.
+  **Apply:** prefer `@check` broad enough to fire even when NOTHING is flippable (see next note)
+  rather than narrowing `@check` to only the safely-fixable subset — the report is what surfaces the
+  "all blocked" case, not `@check`.
+- **2026-08-03 — deliberate design: `@check` fires on ANY status-0 locator, not just flippable
+  ones — so a tenant where EVERY candidate is blocked by negative stock still gets `APPLIED` with
+  `rows_affected=0` and a full report, never a false `SKIPPED_NOT_NEEDED`.** Trade-off accepted: this
+  makes `@check`'s "needed" broader than `@apply`'s actual effect, which is unusual for this
+  framework's fixes (most `@check`/`@apply` pairs target identical rows) — documented explicitly in
+  the SQL header and mirrored in the corresponding JS test (`R19 data-fix — @check` describes this as
+  intentional, not a bug, via `assert.doesNotMatch(normCheck, /qtyonhand/)`).
+- **2026-08-03 — known, accepted limitation: a fix runs at most ONCE per tenant (the strict
+  watermark), so a locator skipped for negative stock is never automatically retried once the stock
+  is corrected by hand.** An operator must force it with
+  `--fix R19-locator-inventory-status --client <id>` after the physical-inventory correction. This
+  is inherent to the framework's one-run-per-tenant-per-fix model (documented in
+  `.claude/agents/tenant-fixer.md`), not something R19 could design around.
+- **2026-08-03 — `Rn`/gap-label collision hunt across ALL local branches found R14 claimed by
+  THREE unrelated in-flight fixes** (`R14-conversion-rate-system`, `R14-payment-method-multicurrency`,
+  `R14-asset-group-generic-consolidation`) and **R17 claimed by two**
+  (`R17-bp-group-acct-notinvoiced-receipts`, `R17-rectificativa-doctype-sequence`), found via
+  `git rev-list --all | xargs git ls-tree -r --name-only | grep -oE '...R[0-9]+...'` — none of these
+  were visible from `git log <my-branch>` alone. R18 was claimed same-day by a sibling ETP-4736
+  branch (which itself had just relabeled an H1 gap collision to H3 — a live example of the exact
+  collision this hunt exists to catch). **Apply:** R19 and gap label `I1` were chosen only after this
+  full-history sweep confirmed both were free; this reconfirms the KB's 2026-07-06 rule to always run
+  the sweep before naming, not just check your own branch's `sql/` directory.
+- **2026-08-03 — preventive fix here is a data-only change with NO Java service, confirmed via the
+  same whitelist check the task brief asked to verify:** `M_WAREHOUSE`/`M_LOCATOR` are ALREADY in
+  `OnboardingDatasetDefinition.INCLUDED_TABLES` (grepped `src/com/etendoerp/go/onboarding/
+  OnboardingDatasetDefinition.java` directly — both present, lines 85/91), and the bundled
+  `M_LOCATOR.xml` is imported verbatim by `importOnboardingDataset` (step 1 of the live chain) with
+  no onboarding Java code referencing `M_INVENTORYSTATUS_ID` at all (same "dataset-only, no new
+  service" pattern as A3/A3b/G1 — mirrors ETP-4341's payment-methods precedent exactly). **Apply:**
+  the `ONBOARDING_PROVISIONED_THROUGH` CUT bump has NO ordering dependency on any other onboarding
+  step for this gap, unlike A1/A2-style gaps that depend on `AD_Org_Ready` having already run.
+- **2026-08-03 — `OnboardingDatasetNormalizerTest`'s mocked `Entity`/`Property` convention
+  (`mockEntityForTable`/`mockProperty`, NOT the real Openbravo DAL model) makes property-name
+  prediction mechanical: `toLowerCamel(columnName)` — split the (already-lowercased) column name on
+  `_`, capitalize the first letter of every part after the first.** For `M_LOCATOR` (entity name
+  `mLocator`) and its `M_INVENTORYSTATUS_ID` column, this predicts `<mInventorystatusId>` as the
+  emitted child-element tag (verified against `appendPropertyElement`'s source: `isPrimitive()` is
+  always `true` in this mock convention except the one hand-special-cased `C_CURRENCY_ID`, so the
+  value renders as element TEXT CONTENT, never a `id="..."` attribute). **Apply:** to predict any new
+  test assertion against `pathBackedNormalizer().buildDatasetXml()` output for a column not already
+  covered by an existing test, apply `toLowerCamel` to both the table name (→ element tag) and the
+  column name (→ child element tag) rather than guessing the real Openbravo bean property name — the
+  mock convention is what the test actually exercises, and it is a fixed, mechanical transform.
+- **2026-08-03 — could NOT compile/run the new `OnboardingDatasetNormalizerTest` assertion this
+  session** — same worktree/Gradle limitation already recorded 2026-07-06 (`./gradlew` from the
+  Etendo root always resolves `modules/com.etendoerp.go` to the MAIN checkout, never a sibling
+  worktree). Documented as "not executed this session" per that note's own recommendation; the
+  prediction above is the closest verification available without a build.
+- **2026-08-03 — `cli/src/data-fixes/lib/sampledata-xml.js` (schema_forge repo) exists but has ZERO
+  production usages** (`goClientSampledataDir`/`parseSourcedata`/`buildSourcedata`, grepped `cli/src/`
+  outside `test/` — no hits). It reads the OTHER repo's bundled XML (`modules/com.etendoerp.go/
+  referencedata/sampledata/GOClient/*.xml`) from an `etendoRoot` path passed in by the caller — looks
+  like scaffolding for a not-yet-built "generate the corrective `.sql` from the same XML records"
+  tool. **Apply:** did NOT build a new cross-repo consistency test around it for R19 (would need
+  `ETENDO_ROOT`/worktree-nesting path resolution, a known footgun per the 2026-07-14 nested-worktree
+  KB entry, and this helper is unused/unproven elsewhere) — the Java-side
+  `OnboardingDatasetNormalizerTest` addition already covers the preventive XML's content.
+- **2026-08-03 — CORRECTION: a multi-line `-- @description:` header in this framework is silently
+  truncated to its FIRST physical line by the parser.** `parse-fix.js`'s header handling only matches
+  lines against `-- @key: value` (`HEADER_LINE` regex); a continuation line with no `-- @key:` marker
+  is treated as a "free comment in the header region" and dropped entirely — it never gets appended
+  to `meta.description`. This affects EVERY existing multi-line `@description` header in the catalog
+  (e.g. R15's own two-line description), not just R19's — `fix.description` for all of them is
+  actually just their first line, even though the `.sql` file visually reads as a longer sentence.
+  **Apply:** write a single self-contained sentence on the `@description:` line itself if the test
+  suite will assert against `fix.description`; use the file's free-text background comments (asserted
+  against `rawText`, not `fix.description`) for anything that needs more than one line.

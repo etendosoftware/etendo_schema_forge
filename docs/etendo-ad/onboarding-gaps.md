@@ -20,6 +20,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | D1 | Legal entity | SII fields empty; legal-entity resolution returns NULL | *Initial Client Setup* — verify/recompute `AD_LegalEntity_Org_ID` after `AD_Org_Ready` | ETP-4177 |
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
 | H3 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
+| I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -734,6 +735,68 @@ SELECT name FROM ad_role WHERE ad_client_id = '<CLIENT_ID>' AND isactive = 'Y';
 **Live-DB staleness found and fixed while building this fix (2026-07-27):** correct reference values are `Y` for Finance and GOClient Admin, `N` for Sales/Purchasing/Inventory/GOuser — confirmed with the user. `referencedata/sampledata/GOClient/AD_ROLE.xml` already ships these correctly (a first check mis-grepped the tag's actual all-caps name, `EM_ETGO_SHOW_ACCT_FIELDS`, and wrongly concluded the XML never set it). The real gap was this local dev DB's live `ad_role` rows being stale relative to that already-correct XML — Finance and GOClient Admin both showed `N` live, same "referencedata not reapplied to an existing install" pattern as H1, just for this column instead of webhook grants. Corrected directly (`UPDATE ad_role SET em_etgo_show_acct_fields='Y' ...`) for this DB. Since Step 1 of the corrective fix always reads GOClient's *live* row (not the XML), any other environment whose GOClient copy is similarly stale would clone the wrong value until its own live data is corrected the same way.
 
 **Preventive fix (ETP-4515, implemented 2026-07-27, same day as the corrective fix):** `com.etendoerp.go/src/com/etendoerp/go/onboarding/OnboardingRoleProvisioningService.java`, wired into `EtendoGoJwtServlet`'s onboarding chain right after the existing `ensureWebhookAccess` step (both are client-wide, neither needs the organization to exist yet). Same GOClient-as-template logic as the corrective data-fix above. Written and manually cross-checked against the real DAL model classes, but not compiled/run against a live onboarding flow in this session — needs that verification before being trusted end-to-end.
+
+---
+
+## I — Inventory / Warehouse
+
+**New gap-label series `I`.** Storage-bin (locator) provisioning defaults don't fit the A–H
+provisioning-gap taxonomy (A=accounting, B=org tree, C=period, D=legal entity, E=session,
+F=default customer/org info, G=payment method config, H=NEO Headless/webhook access). Used
+`@gap: I1` for R19 — the same pattern G1/H1/H2 established for their own new categories. Future
+warehouse/inventory provisioning gaps continue the `I` series.
+
+### I1 — Locators born with inventory status "Undefined-OverIssue" (allows negative stock, ETP-4761)
+
+**Symptom:** any new tenant's default storage bins can post negative stock from day one — the
+Locator/Storage Bin window shows "Undefined-OverIssue" as the Inventory Status instead of
+"Available".
+
+**Root cause:** `M_InventoryStatus` is a fixed system reference (`ad_client_id='0'`): id `'0'` =
+"Undefined-OverIssue" (`OVERISSUE='Y'`, lets a locator go negative), id `'2'` = "Available"
+(`OVERISSUE='N'`, blocks it); id `7B3DC15A20234C418D26EECDC5D59003` = "Undefined" (also
+`OVERISSUE='N'` — the DB column's own default, mislabeled but functionally equal to Available).
+The bundled onboarding sampledata (`referencedata/sampledata/GOClient/M_LOCATOR.xml`, in
+`com.etendoerp.go`) shipped BOTH of GOClient's bundled locators with `M_INVENTORYSTATUS_ID='0'` —
+imported verbatim into every new tenant via `importOnboardingDataset` — so every tenant onboarded
+before this fix has at least its default warehouse bin able to go negative. Separately, the
+frontend's default-storage-bin creation (`tools/app-shell/src/windows/custom/warehouse/index.jsx`,
+Schema Forge repo) omitted the field entirely, so the DB column default (`'0'`) applied there too;
+that half of the fix is a one-line payload addition (`inventoryStatus: '2'`) in the same repo,
+delivered alongside this gap closure but outside Remedy's remit (frontend custom-component code,
+not onboarding/data-fix).
+
+**Hard business rule (confirmed live, not a DB constraint):** flipping a locator's status to one
+that disallows OverIssue FAILS at the application/callout layer if that locator currently has
+negative on-hand stock (`m_storage_detail.qtyonhand < 0` for any product/attribute/UOM) — error:
+"There is negative Stock for Product: ... The Storage Bin can not be changed to an Inventory
+Status that does not allow Over Issue". Both fronts below respect this rule: the preventive fix
+never applies to a locator that already has stock (a fresh sampledata import never does), and the
+corrective fix never flips a locator carrying negative stock — it skips it and reports the
+combination for manual physical-inventory correction instead.
+
+**Verification (per tenant):**
+
+```sql
+SELECT l.value, l.m_inventorystatus_id, ist.name
+FROM m_locator l
+JOIN m_inventorystatus ist ON ist.m_inventorystatus_id = l.m_inventorystatus_id
+WHERE l.ad_client_id = '<CLIENT_ID>' AND l.isactive = 'Y'
+ORDER BY l.value;
+-- Gap present if any row shows m_inventorystatus_id = '0' ("Undefined-OverIssue").
+```
+
+**Both fronts closed (2026-08-03):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260803T160000Z__R19-locator-inventory-status.sql` — flips every active, status-`0` locator to `'2'` UNLESS it carries any negative-stock `m_storage_detail` row (per-locator granularity: `m_locator.m_inventorystatus_id` is one column per locator, so a locator with even one negative combination is left untouched entirely). A new optional `@report` section (added to the data-fixes framework's parser/runner as part of this fix — see `cli/src/data-fixes/sql/README.md`) lists every skipped locator's product/attribute/UOM/qtyonhand into the ledger's `detail` column, so an operator can find and correct the negative stock before forcing a re-check with `--fix R19-locator-inventory-status --client <id>`. Live-validated in rolled-back transactions: QA Testing (26 status-0 locators → 23 flipped, 3 skipped for negative stock, 445 report rows across those 3 locators' many attribute-set-instance combinations) and GOClient (1 status-0 locator → flipped, 0 report rows). |
+| **Preventive** | `referencedata/sampledata/GOClient/M_LOCATOR.xml` (`com.etendoerp.go`) — both bundled locators now ship `M_INVENTORYSTATUS_ID='2'`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-03T16:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by `OnboardingDatasetNormalizerTest.testNormalizerLocatorsDefaultToAvailableInventoryStatus`. **Not compiled/run this session** — this worktree cannot build against the module's real Gradle project (known limitation, see `docs/etendo-ad/tenant-remediation-knowledge.md` §ETP-4245 2026-07-06 note); the assertion was hand-verified against the normalizer's mocking convention (`toLowerCamel` property-name derivation) instead. |
+
+**Known limitation (accepted):** because the corrective fix runs at most once per tenant (the
+runner's strict watermark never revisits a `PROCESSED` fix), a locator skipped for negative stock
+is not automatically retried once the stock is corrected by hand — an operator must force it with
+`--fix R19-locator-inventory-status --client <id>`.
 
 ---
 
