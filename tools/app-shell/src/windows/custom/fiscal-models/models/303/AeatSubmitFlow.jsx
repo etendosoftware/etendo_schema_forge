@@ -88,14 +88,14 @@ function resolveDeclTypeLabel(declarationType, t) {
 
 const INPUT_ST = {
   width: 376, height: 40, fontSize: 14, padding: '8px 12px',
-  border: '1px solid #D1D4DB', borderRadius: 8,
-  boxSizing: 'border-box', color: '#121217', outline: 'none', background: '#fff',
+  border: '1px solid hsl(var(--border-control))', borderRadius: 8,
+  boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none', background: 'hsl(var(--card))',
 };
 
 function Field({ label, children }) {
   return (
     <div style={{ width: 376 }}>
-      <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{label}</div>
       {children}
     </div>
   );
@@ -104,9 +104,9 @@ function Field({ label, children }) {
 function InfoRow({ label, value }) {
   if (value == null || value === '') return null;
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '9px 0', borderBottom: '1px solid #F5F7F9', fontSize: 14 }}>
-      <span style={{ color: '#828FA3' }}>{label}</span>
-      <span style={{ color: '#121217', fontWeight: 500, textAlign: 'right' }}>{value}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '9px 0', borderBottom: '1px solid hsl(var(--border-subtle))', fontSize: 14 }}>
+      <span style={{ color: 'hsl(var(--muted-foreground))' }}>{label}</span>
+      <span style={{ color: 'hsl(var(--foreground))', fontWeight: 500, textAlign: 'right' }}>{value}</span>
     </div>
   );
 }
@@ -271,7 +271,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                   data-testid="InfoRow__fc2aac" />
               </div>
 
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#121217', marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'hsl(var(--foreground))', marginBottom: 12 }}>
                 {t('fm.aeat.presenter.title') ?? 'Presenter (certificate holder)'}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
@@ -310,7 +310,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                 )}
               </div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer', marginBottom: testMode ? 12 : 0 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: testMode ? 12 : 0 }}>
                 <input
                   type="checkbox"
                   checked={testMode}
@@ -386,7 +386,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                 </button>
               )}
               {response?.warnings?.length > 0 && (
-                <div style={{ marginTop: 16, fontSize: 13, color: '#828FA3' }}>
+                <div style={{ marginTop: 16, fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('fm.aeat.warnings.title') ?? 'Warnings'}</div>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {response.warnings.map(w => <li key={w}>{w}</li>)}
