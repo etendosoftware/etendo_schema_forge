@@ -1,8 +1,8 @@
 {
   "version": "0.43.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-07-28T13:29:08.917Z",
-  "checksum": "cdaecf249e05d686",
+  "updatedAt": "2026-08-04T11:59:29.579Z",
+  "checksum": "164b53c906e6770b",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -15,7 +15,6 @@
       "hideMoreDetails": true,
       "contentBg": "bg-card",
       "hideLink": true,
-      "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
       "processOverrides": {
         "processAsset": {
@@ -1050,7 +1049,6 @@
       "hideMoreDetails": true,
       "contentBg": "bg-card",
       "hideLink": true,
-      "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
       "processOverrides": {
         "processAsset": {

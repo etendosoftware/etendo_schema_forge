@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-07-31T19:26:59.736Z",
-  "updatedAt": "2026-07-31T20:04:13.219Z",
-  "checksum": "fc8d658a3248b85d",
+  "updatedAt": "2026-08-04T11:59:29.808Z",
+  "checksum": "5ef1f553d0fa8ad9",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -117,7 +117,6 @@
       ],
       "listViewOptions": {
         "hidePrint": true,
-        "hideEye": true,
         "hideCounter": true,
         "hideLink": true
       },
@@ -5108,7 +5107,6 @@
       ],
       "listViewOptions": {
         "hidePrint": true,
-        "hideEye": true,
         "hideCounter": true,
         "hideLink": true
       },

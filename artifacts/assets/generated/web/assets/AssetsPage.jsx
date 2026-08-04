@@ -307,7 +307,6 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
       hidePrint
       hideMoreMenu
       hideLink
-      hideEyeCount
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
