@@ -92,7 +92,7 @@
           "searchable": true,
           "section": "principal",
           "seq": 30,
-          "defaultValue": "@Today@",
+          "defaultValue": "@#Date@",
           "readOnlyLogic": "@Processed@='Y'"
         },
         "orderReference": {
@@ -129,15 +129,15 @@
           "searchable": true
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
+          "visibility": "editable",
+          "section": "principal",
           "reference": "CostCenter",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "asset": {
           "form": false,
@@ -264,21 +264,21 @@
           "displayLogic": null
         },
         "businessPartner": {
-          "reference": "BusinessPartner",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "discarded",
+          "reason": "ETP-4529 — never applicable as a dimension on Albarán compra lines."
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "costcenter": {
+          "visibility": "editable",
+          "grid": false,
           "reference": "CostCenter",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "asset": {
           "form": false,

@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import InternalConsumptionTable from './InternalConsumptionTable';
 import InternalConsumptionForm from './InternalConsumptionForm';
@@ -168,6 +169,13 @@ export const api = {
 
 // @sf-generated-start component:InternalConsumptionPage
 export default function InternalConsumptionPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('800076');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="800076" />;
+  }
   if (recordId) {
     return (
       <>
@@ -189,6 +197,7 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteWhenComplete
         hidePrint
         noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Internal_Consumption", config: {} } }]}
@@ -197,7 +206,7 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         linesLayout="inlineEditable"
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -218,7 +227,7 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
       SortIconComponent={SortIcon}
       RefreshIconComponent={RefreshIcon}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -125,10 +125,10 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
   const section = CASILLAS_SECTIONS.find(s => s.id === activeSection) ?? CASILLAS_SECTIONS[0];
 
   return (
-    <div style={{ background: '#fff', flex: 1, overflow: 'auto', padding: '0' }}>
+    <div style={{ background: 'hsl(var(--card))', flex: 1, overflow: 'auto', padding: '0' }}>
       <div style={{
         display: 'flex',
-        background: '#fff',
+        background: 'hsl(var(--card))',
         overflow: 'auto',
         minWidth: 'fit-content',
       }}>
@@ -144,8 +144,8 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
               onClick={() => setActiveSection(s.id)}
               style={{
                 padding: '8px 12px', fontSize: 14, textAlign: 'left', border: 'none', width: '100%',
-                background: activeSection === s.id ? '#E8EAED' : 'transparent',
-                color: '#121217',
+                background: activeSection === s.id ? 'hsl(var(--muted))' : 'transparent',
+                color: 'hsl(var(--foreground))',
                 fontWeight: activeSection === s.id ? 500 : 400,
                 cursor: 'pointer',
                 borderRadius: 8,
@@ -186,7 +186,7 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         className="fm-section-header__icon-btn"
-        style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', background: '#fff' }}
+        style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', background: 'hsl(var(--card))' }}
         onClick={() => setOpen(o => !o)}
         aria-label="Más opciones"
       >
@@ -198,7 +198,7 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
             <ArrowLeftRight
               size={14}
               strokeWidth={1.75}
-              style={{ color: '#121217' }}
+              style={{ color: 'hsl(var(--foreground))' }}
               data-testid="ArrowLeftRight__4f6c0d" />
             {t('fm.action.compare') ?? 'Comparar'}
           </button>
@@ -206,7 +206,7 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
             <Settings
               size={14}
               strokeWidth={1.75}
-              style={{ color: '#121217' }}
+              style={{ color: 'hsl(var(--foreground))' }}
               data-testid="Settings__4f6c0d" />
             {t('fm.config.title') ?? 'Configuración'}
           </button>
@@ -219,7 +219,7 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
             <Download
               size={14}
               strokeWidth={1.75}
-              style={{ color: fileBlocked ? '#dc2626' : '#121217' }}
+              style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
               data-testid="Download__4f6c0d" />
             {t('fm.action.gen303') ?? 'Generar fichero 303'}
           </button>
@@ -239,9 +239,9 @@ function buildIncidentVariants(blocking, warning, t) {
   if (blocking > 0) tone = 'danger';
   else if (warning > 0) tone = 'warn';
 
-  let iconColor = '#828FA3';
-  if (blocking > 0) iconColor = '#D50B3E';
-  else if (warning > 0) iconColor = '#8A6100';
+  let iconColor = 'hsl(var(--text-disabled))';
+  if (blocking > 0) iconColor = 'hsl(var(--destructive))';
+  else if (warning > 0) iconColor = 'var(--status-warning-fg)';
 
   let badge = null;
   if (blocking > 0) badge = t('fm.incidents.severity.block') ?? 'Bloqueante';
@@ -424,20 +424,20 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       {/* ── Title bar ────────────────────────────────────────────── */}
       <div style={{
         padding: '10px 20px',
-        background: '#fff', flexShrink: 0,
+        background: 'hsl(var(--card))', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="fm-model-badge fm-model-badge--303">303</span>
-          <span style={{ fontWeight: 600, fontSize: 20, color: '#121217' }}>
+          <span style={{ fontWeight: 600, fontSize: 20, color: 'hsl(var(--foreground))' }}>
             Modelo 303 - {periodLabel}
           </span>
           <MoreVertical
             size={14}
             strokeWidth={1.75}
-            style={{ color: '#9ca3af', cursor: 'pointer' }}
+            style={{ color: 'hsl(var(--text-disabled))', cursor: 'pointer' }}
             data-testid="MoreVertical__4f6c0d" />
         </div>
-        <div style={{ fontSize: 12, color: '#828FA3', marginTop: 1 }}>
+        <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 1 }}>
           Tesorería / Modelo 303 - {periodLabel}
         </div>
       </div>
@@ -445,18 +445,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '6px 20px 10px',
-        background: '#fff', flexShrink: 0,
+        background: 'hsl(var(--card))', flexShrink: 0,
       }}>
         <button
           className="fm-btn"
           onClick={onBack}
-          style={{ borderRadius: 8, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', fontSize: 14, color: '#121217' }}
+          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', fontSize: 14, color: 'hsl(var(--foreground))' }}
         >
           {t('fm.action.cancel') ?? 'Cancelar'}
         </button>
         <span style={{
           padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
-          background: '#F5F7F9', color: '#3F3F50',
+          background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
         }}>
           {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${status}`) ?? status}
         </span>
@@ -476,7 +476,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           className="fm-btn"
           onClick={handleCompute}
           disabled={computing}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', border: '1px solid #D1D4DB' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))' }}
         >
           {computing
             ? <Loader2
@@ -505,7 +505,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         display: 'flex', flexDirection: 'row', alignItems: 'center',
         gap: 12, padding: '12px 16px',
         flexShrink: 0,
-        background: '#fff',
+        background: 'hsl(var(--card))',
       }}>
         {/* Incidencias */}
         <KpiWidget
@@ -517,41 +517,41 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           label={t('fm.tab.incidents') ?? 'Incidencias'}
           value={String(incidentCount)}
           badge={incidentBadge}
-          badgeBg={blocking > 0 ? '#FEF0F4' : '#FFF9EB'}
-          badgeColor={blocking > 0 ? '#D50B3E' : '#8A6100'}
+          badgeBg={blocking > 0 ? 'var(--status-destructive-bg)' : 'var(--status-warning-bg)'}
+          badgeColor={blocking > 0 ? 'hsl(var(--destructive))' : 'var(--status-warning-fg)'}
           data-testid="KpiWidget__4f6c0d" />
 
         {/* IVA Devengado */}
         <KpiWidget
           icon={<TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__4f6c0d" />}
-          iconColor="#121217"
+          iconColor="hsl(var(--foreground))"
           label={t('fm.m303.summary.accrued') ?? 'IVA Devengado'}
           value={formatAmount(summary.accrued ?? 0)}
           badge={t('fm.m303.summary.accrued_sub') ?? 'De ventas'}
-          badgeBg="#F5F7F9"
-          badgeColor="#3F3F50"
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
           data-testid="KpiWidget__4f6c0d" />
 
         {/* IVA Deducible */}
         <KpiWidget
           icon={<TrendingDown size={20} strokeWidth={1.75} data-testid="TrendingDown__4f6c0d" />}
-          iconColor="#121217"
+          iconColor="hsl(var(--foreground))"
           label={t('fm.m303.summary.deductible') ?? 'IVA Deducible'}
           value={formatAmount(summary.deductible ?? 0)}
           badge={t('fm.m303.summary.deductible_sub') ?? 'De compras'}
-          badgeBg="#F5F7F9"
-          badgeColor="#3F3F50"
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
           data-testid="KpiWidget__4f6c0d" />
 
         {/* Resultado */}
         <KpiWidget
           icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
-          iconColor="#121217"
+          iconColor="hsl(var(--foreground))"
           label={t('fm.m303.summary.result') ?? 'Resultado'}
           value={formatAmount(summary.result ?? 0)}
           badge={resultSubLabel}
-          badgeBg="#F5F7F9"
-          badgeColor="#3F3F50"
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
           data-testid="KpiWidget__4f6c0d" />
       </div>
       {/* ── Inline generate error ────────────────────────────────── */}
@@ -559,11 +559,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         <div style={{
           margin: '4px 20px 0',
           padding: '8px 14px',
-          background: '#FEF0F4',
-          border: '1px solid #F9B8C8',
+          background: 'var(--status-destructive-bg)',
+          border: '1px solid hsl(var(--destructive) / 0.3)',
           borderRadius: 8,
           fontSize: 13,
-          color: '#D50B3E',
+          color: 'hsl(var(--destructive))',
           display: 'flex',
           alignItems: 'center',
           gap: 8,

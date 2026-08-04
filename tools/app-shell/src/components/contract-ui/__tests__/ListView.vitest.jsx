@@ -7,12 +7,14 @@ vi.mock('react-router-dom', () => ({
   NavLink: ({ children, ...props }) => <a {...props}>{children}</a>,
 }));
 
-// Mock i18n hooks
+// Mock i18n hooks. The active locale is read from a mutable holder so a test
+// can drive expandMultiFieldColumns's per-locale `labels` resolution (CHANGE 2).
+let currentLocale = 'en_US';
 vi.mock('@/i18n', () => ({
   useLabel: () => (key) => key,
   useMenuLabel: () => (key, { field } = {}) => field ? null : key,
   useUI: () => (key) => key,
-  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+  useLocaleSwitch: () => ({ locale: currentLocale, setLocale: vi.fn() }),
 }));
 
 // Mock useEntity hook
@@ -47,8 +49,12 @@ vi.mock('../DocumentPrintDrawer.jsx', () => ({
   default: () => null,
   printDocuments: vi.fn(),
 }));
+let capturedFilterBarColumns = null;
 vi.mock('../ListFilterBar.jsx', () => ({
-  ListFilterBar: () => <div data-testid="list-filter-bar" />,
+  ListFilterBar: ({ columns }) => {
+    capturedFilterBarColumns = columns;
+    return <div data-testid="list-filter-bar" />;
+  },
 }));
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: () => null,
@@ -272,6 +278,149 @@ describe('ListView', () => {
       expect(() => capturedRowQuickActions.onEdit({ id: 'r1' })).not.toThrow();
       // A row without an id must not navigate (row?.id short-circuit).
       expect(() => capturedRowQuickActions.onEdit({})).not.toThrow();
+    });
+
+    // ETP-4520 — the runtime per-tier override passed via the `window` prop
+    // (buildWindowAccessWiring's effectiveWindow / the hand-wired custom windows'
+    // equivalent), distinct from the static api.window.readOnly case above.
+    it('marks rowQuickActions readOnly and drops the write handlers when window.readOnly is true', () => {
+      render(
+        <ListView
+          {...defaultProps}
+          Table={CapturingMockTable}
+          window={{ readOnly: true }}
+          rowQuickActions={{}}
+        />,
+      );
+      expect(capturedRowQuickActions.readOnly).toBe(true);
+      expect(capturedRowQuickActions.onEdit).toBeUndefined();
+      expect(capturedRowQuickActions.onDelete).toBeUndefined();
+    });
+
+    it('hides the new record button when window.readOnly is true', () => {
+      render(<ListView {...defaultProps} window={{ readOnly: true }} />);
+      expect(screen.queryByTestId('action-new')).not.toBeInTheDocument();
+    });
+
+    it('hides the new record button when api.window.readOnly is true', () => {
+      render(<ListView {...defaultProps} api={{ window: { readOnly: true } }} />);
+      expect(screen.queryByTestId('action-new')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── expandMultiFieldColumns: filter-bar column expansion ───────────────
+  describe('multiField column expansion for the advanced filter', () => {
+    beforeEach(() => { capturedFilterBarColumns = null; currentLocale = 'en_US'; });
+    afterEach(() => { currentLocale = 'en_US'; });
+
+    const MF_COLUMNS = [
+      {
+        key: 'name',
+        type: 'multiField',
+        title: 'name',
+        subtitle: 'searchKey',
+        parts: [
+          { key: 'searchKey', type: 'string', label: 'Identifier' },
+          { key: 'name', type: 'string', label: 'Name' },
+        ],
+      },
+      { key: 'status', type: 'status', label: 'Status' },
+    ];
+
+    it('expands a multiField column into one filter field per part, dropping the parent', () => {
+      render(<ListView {...defaultProps} initialColumns={MF_COLUMNS} />);
+      const keys = capturedFilterBarColumns.map((c) => c.key);
+      expect(keys).toEqual(['searchKey', 'name', 'status']);
+      // The parent multiField column itself must not appear.
+      expect(capturedFilterBarColumns.some((c) => c.type === 'multiField')).toBe(false);
+    });
+
+    it('resolves the label from the part definition, not the AD column label', () => {
+      render(<ListView {...defaultProps} initialColumns={MF_COLUMNS} />);
+      const searchKeyField = capturedFilterBarColumns.find((c) => c.key === 'searchKey');
+      const nameField = capturedFilterBarColumns.find((c) => c.key === 'name');
+      expect(searchKeyField.label).toBe('Identifier');
+      expect(nameField.label).toBe('Name');
+    });
+
+    it('omits parts marked filterable: false', () => {
+      const cols = [
+        {
+          ...MF_COLUMNS[0],
+          parts: [
+            { key: 'searchKey', type: 'string', label: 'Identifier', filterable: false },
+            { key: 'name', type: 'string', label: 'Name' },
+          ],
+        },
+      ];
+      render(<ListView {...defaultProps} initialColumns={cols} />);
+      const keys = capturedFilterBarColumns.map((c) => c.key);
+      expect(keys).toEqual(['name']);
+    });
+
+    it('leaves non-multiField columns unchanged', () => {
+      render(<ListView {...defaultProps} initialColumns={[{ key: 'status', type: 'status', label: 'Status' }]} />);
+      expect(capturedFilterBarColumns).toEqual([{ key: 'status', type: 'status', label: 'Status' }]);
+    });
+
+    // ── CHANGE 2: per-locale `labels` map → singular localized `label` ──────
+    // A plain (non-multiField) column carrying only a `labels` map (e.g. the
+    // product sale/purchase/stock custom cells) must be relabeled with the
+    // active-locale entry so the advanced-filter field picker shows the
+    // localized word instead of the lowercase key.
+    it('resolves a plain column label from labels[locale] when the locale entry exists', () => {
+      currentLocale = 'es_ES';
+      render(
+        <ListView
+          {...defaultProps}
+          initialColumns={[{ key: 'sale', type: 'custom', labels: { en_US: 'Sales', es_ES: 'Venta' } }]}
+        />,
+      );
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      expect(saleField.label).toBe('Venta');
+    });
+
+    it('falls back to labels.en_US when the active locale has no entry', () => {
+      currentLocale = 'fr_FR'; // no French entry in the labels map
+      render(
+        <ListView
+          {...defaultProps}
+          initialColumns={[{ key: 'sale', type: 'custom', labels: { en_US: 'Sales', es_ES: 'Venta' } }]}
+        />,
+      );
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      expect(saleField.label).toBe('Sales');
+    });
+
+    it('falls back to the key when neither the locale nor en_US is present in labels', () => {
+      currentLocale = 'fr_FR';
+      render(
+        <ListView
+          {...defaultProps}
+          initialColumns={[{ key: 'sale', type: 'custom', labels: { es_ES: 'Venta' } }]}
+        />,
+      );
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      expect(saleField.label).toBe('sale');
+    });
+
+    it('leaves a column that already has a singular label unchanged (labels guard requires !label)', () => {
+      currentLocale = 'es_ES';
+      const col = { key: 'sale', type: 'custom', label: 'Existing', labels: { es_ES: 'Venta' } };
+      render(<ListView {...defaultProps} initialColumns={[col]} />);
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      expect(saleField.label).toBe('Existing');
+    });
+
+    it('does not relabel a column that carries a `column` field even if it has labels', () => {
+      currentLocale = 'es_ES';
+      const col = { key: 'sale', type: 'custom', column: 'ETGO_SalePrice', labels: { es_ES: 'Venta' } };
+      render(<ListView {...defaultProps} initialColumns={[col]} />);
+      const saleField = capturedFilterBarColumns.find((c) => c.key === 'sale');
+      // The `!col.column` guard skips the labels branch: the column passes
+      // through untouched, so no `label` is injected.
+      expect(saleField).toEqual(col);
+      expect(saleField.label).toBeUndefined();
     });
   });
 });

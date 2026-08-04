@@ -10,12 +10,14 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
 function flexSpec(col, idx) {
@@ -38,6 +40,7 @@ function growColumnWidth(basisPx, fixedTotalPx, growCount) {
 }
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
+import { ComputedFreshnessHint } from './ComputedFreshnessHint.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
@@ -307,9 +310,10 @@ function isStaticSelectField(field) {
 }
 
 /**
- * Renders the inline-add-row cell for a `selector` field. When the catalog has
- * pre-loaded options it shows a Radix <Select>; otherwise it falls back to the
- * lazy-loading <InlineSearchCombo> backed by the selector URL.
+ * Renders the inline-add-row cell for a `selector` field. Always uses the
+ * searchable <InlineSearchCombo>, preloaded with the catalog's options (if any)
+ * and backed by the selector URL for server-side search / lazy loading —
+ * mirroring the `search`-type add-row cell and the header's unified selector.
  */
 function renderSelectorCell({
   catalogs, entity, field, apiBaseUrl, col, values, touchedFieldsRef,
@@ -319,75 +323,40 @@ function renderSelectorCell({
   const allOptions = getCatalogOptions(catalogs, entity, field);
   const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
   // Exclude the option equal to the current value of a sibling field on this add-line row
-  // (e.g. newStorageBin can't equal storageBin). Applies to both the URL-backed combo and
-  // the preloaded-catalog dropdown.
+  // (e.g. newStorageBin can't equal storageBin). Applies to both the preloaded catalog and
+  // any server-side search results.
   const excludeId = field.excludeValueOf ? (values[field.excludeValueOf] ?? null) : null;
   const options = excludeId != null ? allOptions.filter(o => o.id !== excludeId) : allOptions;
 
-  if (options.length === 0) {
-    if (!selectorUrl) return (
+  if (options.length === 0 && !selectorUrl) {
+    return (
       <TableCell
         key={col.key}
         className="py-1 px-2"
         data-testid={"TableCell__" + field.id} />
     );
-    return (
-      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-        <InlineSearchCombo
-          field={field}
-          value={values[field.key] ?? ''}
-          displayLabel={values[field.key + '$_identifier'] || ''}
-          options={[]}
-          onChange={(id, label, selectedItem) => {
-            touchedFieldsRef.current.add(field.key);
-            handleChange(field.key + '$_identifier', label || '');
-            handleFieldChange(field.key, id, selectedItem);
-          }}
-          onKeyDown={handleKeyDown}
-          inputRef={isFirst ? firstInputRef : undefined}
-          placeholder={fieldLabel}
-          selectorUrl={selectorUrl}
-          selectorContext={selectorContext}
-          excludeId={excludeId}
-          token={token}
-          data-testid={"InlineSearchCombo__" + field.id} />
-      </TableCell>
-    );
   }
+
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-      <Select
-        value={values[field.key] || undefined}
-        onValueChange={(val) => {
-          if (val === '__empty__') {
-            handleChange(field.key + '$_identifier', '');
-            handleFieldChange(field.key, '', null);
-            return;
-          }
-          const opt = options.find(o => o.id === val);
-          if (opt) {
-            handleChange(field.key + '$_identifier', opt.name || opt.label || opt._identifier || '');
-          }
-          handleFieldChange(field.key, val, opt);
+      <InlineSearchCombo
+        field={field}
+        value={values[field.key] ?? ''}
+        displayLabel={values[field.key + '$_identifier'] || ''}
+        options={options}
+        onChange={(id, label, selectedItem) => {
+          touchedFieldsRef.current.add(field.key);
+          handleChange(field.key + '$_identifier', label || '');
+          handleFieldChange(field.key, id, selectedItem);
         }}
-        data-testid={"Select__" + field.id}>
-        <SelectTrigger
-            ref={isFirst ? firstInputRef : undefined}
-            data-testid={`inline-add-field-${field.key}`}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') handleKeyDown(e);
-            }}
-            className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
-        >
-          <SelectValue placeholder={fieldLabel} data-testid={"SelectValue__" + field.id} />
-        </SelectTrigger>
-        <SelectContent data-testid={"SelectContent__" + field.id}>
-          <SelectItem value="__empty__" data-testid={"SelectItem__" + field.id}>&nbsp;</SelectItem>
-          {options.map(opt => (
-              <SelectItem key={opt.id} value={opt.id} data-testid={"SelectItem__" + field.id}>{opt.name || opt.label || opt._identifier || opt.id}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        onKeyDown={handleKeyDown}
+        inputRef={isFirst ? firstInputRef : undefined}
+        placeholder={fieldLabel}
+        selectorUrl={selectorUrl}
+        selectorContext={selectorContext}
+        excludeId={excludeId}
+        token={token}
+        data-testid={"InlineSearchCombo__" + field.id} />
     </TableCell>
   );
 }
@@ -452,7 +421,7 @@ function renderInputCell({
         onKeyDown={handleKeyDown}
         placeholder={fieldLabel}
         required={field.required}
-        className={`w-full h-8 text-sm rounded-md border bg-white px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-red-500 focus:ring-red-500' : ' border-input focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
       />
     </TableCell>
   );
@@ -547,7 +516,7 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
             ref={isFirst ? firstInputRef : undefined}
             data-testid={`inline-add-field-${field.key}`}
             onKeyDown={(e) => { if (e.key === 'Escape') handleKeyDown(e); }}
-            className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
+            className="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
           >
             <SelectValue placeholder={field.label ?? field.key} data-testid="SelectValue__eb5261" />
           </SelectTrigger>
@@ -611,6 +580,71 @@ function renderInlineAddCell(col, ctx) {
 // make buildEmpty's effect re-run, wiping in-progress input. Share one frozen ref.
 const EMPTY_SEED = {};
 
+// First pass of buildEmpty: seed every field with its literal default, the
+// auto-computed lineNo, or '' when neither applies.
+function buildFieldDefaults(fields, defaultLineNo) {
+  const empty = {};
+  for (const f of fields) {
+    if (f.key === 'lineNo') {
+      empty[f.key] = defaultLineNo;
+    } else if (f.defaultValue !== undefined && !/^@[^@]+@$/.test(String(f.defaultValue))) {
+      empty[f.key] = f.defaultValue;
+    } else {
+      empty[f.key] = '';
+    }
+  }
+  return empty;
+}
+
+// Seed display-only (non-editable) columns — e.g. a parent-derived currency —
+// so they render their value immediately instead of "—" until the row is saved.
+// Editable fields are never overwritten; the seed only fills keys with no input.
+function applyDisplaySeed(empty, seedValues, fieldMap) {
+  for (const [key, val] of Object.entries(seedValues)) {
+    if (!fieldMap[key]) empty[key] = val;
+  }
+  return empty;
+}
+
+// HandleDefaults: fill EMPTY editable fields from backend-resolved line
+// defaults (e.g. a macro default like @DESCRIPTION1@ → the parent's value).
+// Fill-empties-only: never override a literal default, the client lineNo, a
+// display seed, or a field opted out via skipDefault.
+function applyResolvedFieldDefaults(empty, resolvedDefaults, fieldMap) {
+  for (const [key, val] of Object.entries(resolvedDefaults)) {
+    if (key.endsWith('$_identifier')) continue; // handled by applyResolvedIdentifiers
+    const f = fieldMap[key];
+    if (!f || f.skipDefault) continue;
+    const cur = empty[key];
+    if ((cur == null || cur === '') && val != null && val !== '') {
+      empty[key] = val;
+    }
+  }
+  return empty;
+}
+
+// Companion `<key>$_identifier` labels (e.g. country$_identifier: "Spain") have no
+// entry in `fieldMap` — they're display text for a selector field, not a field of
+// their own — so applyResolvedFieldDefaults always skips them. Without this, a
+// selector/search field resolved from resolvedDefaults (e.g. country: "106") renders
+// a chip with a working Clear button but an EMPTY label, because InlineSearchCombo's
+// `displayLabel` reads `values[field.key + '$_identifier']` and finds nothing. Only
+// seed the identifier when its base field actually received ITS value from
+// resolvedDefaults (not from a literal decisions.json defaultValue or a seeded
+// display column) so a stale label never gets attached to an unrelated value.
+function applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap) {
+  for (const [key, val] of Object.entries(resolvedDefaults)) {
+    if (!key.endsWith('$_identifier')) continue;
+    const baseKey = key.slice(0, -'$_identifier'.length);
+    const f = fieldMap[baseKey];
+    if (!f || f.skipDefault) continue;
+    if (empty[baseKey] === resolvedDefaults[baseKey] && val != null && val !== '') {
+      empty[key] = val;
+    }
+  }
+  return empty;
+}
+
 const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice }, ref) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
@@ -628,34 +662,10 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
   }, [data]);
 
   const buildEmpty = useCallback(() => {
-    const empty = {};
-    for (const f of fields) {
-      if (f.key === 'lineNo') {
-        empty[f.key] = defaultLineNo;
-      } else if (f.defaultValue !== undefined && !/^@[^@]+@$/.test(String(f.defaultValue))) {
-        empty[f.key] = f.defaultValue;
-      } else {
-        empty[f.key] = '';
-      }
-    }
-    // Seed display-only (non-editable) columns — e.g. a parent-derived currency —
-    // so they render their value immediately instead of "—" until the row is saved.
-    // Editable fields are never overwritten; the seed only fills keys with no input.
-    for (const [key, val] of Object.entries(seedValues)) {
-      if (!fieldMap[key]) empty[key] = val;
-    }
-    // HandleDefaults: fill EMPTY editable fields from backend-resolved line
-    // defaults (e.g. a macro default like @DESCRIPTION1@ → the parent's value).
-    // Fill-empties-only: never override a literal default, the client lineNo, a
-    // display seed, or a field opted out via skipDefault.
-    for (const [key, val] of Object.entries(resolvedDefaults)) {
-      const f = fieldMap[key];
-      if (!f || f.skipDefault) continue;
-      const cur = empty[key];
-      if ((cur == null || cur === '') && val != null && val !== '') {
-        empty[key] = val;
-      }
-    }
+    let empty = buildFieldDefaults(fields, defaultLineNo);
+    empty = applyDisplaySeed(empty, seedValues, fieldMap);
+    empty = applyResolvedFieldDefaults(empty, resolvedDefaults, fieldMap);
+    empty = applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap);
     return empty;
   }, [fields, defaultLineNo, seedValues, fieldMap, resolvedDefaults]);
 
@@ -724,7 +734,9 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     const belowMin = fields.filter(f => isBelowMin(f, valuesRef));
     if (belowMin.length > 0) {
       setInvalidFields(new Set(belowMin.map(f => f.key)));
-      toast.error(ui('fieldMinValueError'));
+      // Interpolate the offending field's `min` so the message is precise
+      // ("Value must be at least 1") rather than the imprecise negative wording.
+      toast.error(ui('fieldMinValueError', { min: belowMin[0].min }));
       const firstInvalid = belowMin[0];
       const inputEl = document.querySelector(`[data-testid="field-${firstInvalid.key}"]`);
       inputEl?.focus?.({ preventScroll: true });
@@ -764,31 +776,17 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
           onCancel();
           return true;
         }
-        // Reset for next rapid entry — recompute lineNo
+        // Reset for next rapid entry — recompute lineNo. Reuses buildEmpty() (single
+        // source of truth for the macro-defaultValue guard, resolvedDefaults fill and
+        // its $_identifier companion pass) instead of re-deriving field defaults here —
+        // a prior duplicated loop applied `f.defaultValue` unconditionally, so an
+        // unresolved AD macro token (e.g. '@COUNTRYDEF@') on a selector/search field
+        // would leak into the next line's value, and resolvedDefaults (with its
+        // identifier labels) was never reapplied at all.
         const nums = [...(data || []).map(r => Number(r.lineNo) || 0), Number(valuesRef.current.lineNo) || 0];
         const nextLineNo = Math.max(...nums) + 10;
-        const next = {};
-        for (const f of fields) {
-          if (f.key === 'lineNo') {
-            next[f.key] = nextLineNo;
-          } else if (f.defaultValue === undefined) {
-            next[f.key] = '';
-          } else {
-            next[f.key] = f.defaultValue;
-          }
-        }
-        // Clear any $_identifier companion values
-        for (const key of Object.keys(valuesRef.current)) {
-          if (key.includes('$_identifier') && !(key in next)) {
-            next[key] = '';
-          }
-        }
-        // Re-apply seeded display values so a parent-derived column (e.g. currency)
-        // stays populated for the next rapid entry instead of resetting to "—".
-        // Runs after the $_identifier clearing loop so seeded identifiers survive.
-        for (const [key, val] of Object.entries(seedValues)) {
-          if (!fieldMap[key]) next[key] = val;
-        }
+        const next = buildEmpty();
+        next.lineNo = nextLineNo;
 
         valuesRef.current = next;
         setValues(next);
@@ -803,7 +801,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     })();
     inflightRef.current = run;
     return run;
-  }, [data, fields, onAdd, onCancel, ui, seedValues, fieldMap]);
+  }, [data, fields, onAdd, onCancel, ui, buildEmpty]);
 
   // Enter → confirm without closing (rapid entry). Outside-click / parent flush close.
   const handleConfirm = useCallback(() => submitLine({ closeAfterSave: false }), [submitLine]);
@@ -933,7 +931,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
   const firstInputCtx = { assigned: false };
 
   return (
-    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-blue-50/50 border-t-2 border-primary/20">
+    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">
       {/* Saving spinner — aligned with selection checkbox column (empty when idle). */}
       {selectable && (
         <TableCell className="w-10 px-1" data-testid="TableCell__eb5261">
@@ -982,7 +980,9 @@ function formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived) {
   let displayVal = identVal || rawVal;
   if (isTwoDecimalDerived && displayVal != null && displayVal !== '') {
     const n = typeof displayVal === 'string' ? Number.parseFloat(displayVal) : displayVal;
-    if (Number.isFinite(n)) displayVal = n.toFixed(2);
+    if (Number.isFinite(n)) {
+      displayVal = n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+    }
   }
   return displayVal;
 }
@@ -1079,7 +1079,7 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); }
           else if (onKeyDown) onKeyDown(e);
         }}
-        className={`w-full h-8 text-sm rounded-md border bg-white px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-red-500 focus:ring-red-500' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-destructive focus:ring-destructive' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -1186,19 +1186,43 @@ function isQuickActionsEnabled(rowQuickActions) {
   return !!rowQuickActions && rowQuickActions.enabled !== false;
 }
 
-function getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine) {
+/**
+ * `rowHoverStyle` picks how a clickable row reacts to hover:
+ *   - `tint` (default) tints the background, the behaviour every grid has today.
+ *   - `elevated` lifts the row instead — an opaque background plus a drop shadow
+ *     and `z-10`, so the shadow spills over the neighbouring row separators. Used
+ *     by card-like lists (Accounts) where the row reads as a raised surface.
+ * Selection always wins over hover, in both styles.
+ */
+function getRowClassName({
+  onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine,
+  rowHoverStyle = 'tint',
+}) {
+  const clickable = onRowClick || onNavigate;
+  const elevated = rowHoverStyle === 'elevated';
+  // `bg-card` is what makes the drop shadow readable, but it competes with the
+  // selection backgrounds below on the same CSS property (Tailwind resolves that
+  // by stylesheet order, not by class order), so only opt in when no selection
+  // state is painting the row.
+  const selectionPainted = isChecked || isSelectedLine || (selectedId != null && row.id === selectedId);
   let hoverClass;
   if (isSelectedLine) {
-    hoverClass = 'hover:bg-slate-300/80';
+    hoverClass = 'hover:bg-muted';
+  } else if (!clickable) {
+    hoverClass = '';
+  } else if (elevated) {
+    hoverClass = 'hover:z-10 hover:bg-card hover:shadow-lg';
   } else {
-    hoverClass = (onRowClick || onNavigate) ? 'hover:bg-muted/50' : '';
+    hoverClass = 'hover:bg-muted/50';
   }
   return [
-    'transition-colors h-12 group/row',
-    (onRowClick || onNavigate) ? 'cursor-pointer' : 'cursor-default',
+    'h-12 group/row',
+    elevated ? 'relative transition-shadow' : 'transition-colors',
+    elevated && !selectionPainted ? 'bg-card' : '',
+    clickable ? 'cursor-pointer' : 'cursor-default',
     isChecked ? selectedRowBg : '',
     selectedId != null && row.id === selectedId ? 'bg-primary/10' : '',
-    isSelectedLine ? 'bg-slate-200/90 ring-1 ring-slate-300' : '',
+    isSelectedLine ? 'bg-muted ring-1 ring-focus-ring' : '',
     hoverClass,
   ].filter(Boolean).join(' ');
 }
@@ -1269,6 +1293,62 @@ function renderLinesColgroup({
 }
 
 /**
+ * Renders the header for a `multiField` column as N independently sortable
+ * segments joined by `col.partSeparator` (default ' & '). Each segment sorts on
+ * its own `part.key` (a real NEO field), reusing the same none→asc→desc→clear
+ * cycle as any other column via `onSort(part.key)`. The direction arrow shows
+ * only on the currently active part (single active part at a time).
+ */
+function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle }) {
+  const separator = col.partSeparator ?? ' & ';
+  return (
+    <TableHead
+      key={col.key}
+      data-testid={`column-header-${col.key}`}
+      className="align-middle"
+      style={headStyle}
+    >
+      <span className="inline-flex items-center text-xs leading-4 font-semibold text-text-primary tracking-normal">
+        {col.parts.map((part, partIdx) => {
+          const partLabel = resolveColumnLabel(part, locale, t);
+          const partSorted = sortColumn === part.key;
+          const partSortable = onSort && part.sortable !== false;
+          const arrow = partSorted
+            ? <span className="text-primary/70 pointer-events-none ml-0.5">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+            : null;
+          return (
+            <span key={part.key} className="inline-flex items-center">
+              {partIdx > 0 && (
+                <span className="mx-0.5 font-normal text-text-primary/40 select-none">{separator}</span>
+              )}
+              {partSortable ? (
+                <button
+                  type="button"
+                  data-testid={`column-header-sort-${part.key}`}
+                  className="inline-flex items-center cursor-pointer select-none transition-colors bg-transparent border-0 p-0 font-semibold text-inherit"
+                  onClick={() => onSort(part.key)}
+                >
+                  {partLabel}
+                  {arrow}
+                </button>
+              ) : (
+                <span
+                  data-testid={`column-header-sort-${part.key}`}
+                  className="inline-flex items-center"
+                >
+                  {partLabel}
+                  {arrow}
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </span>
+    </TableHead>
+  );
+}
+
+/**
  * Renders a single sortable column header cell, including the sort-direction
  * arrow. Extracted from the `visibleColumns.map(...)` callback in DataTable's
  * header row so its onSort/isSorted branching lives in its own function.
@@ -1280,6 +1360,13 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   const headStyle = linesLayout === 'inlineEditable'
     ? { minWidth: columnMinWidthPx(col, colIdx) }
     : undefined;
+  // `multiField` columns expose N constituent fields as independently
+  // sortable header segments (e.g. "Identifier & Name"); each part cycles the
+  // sort on its own NEO field key. Non-multiField columns keep the single-label
+  // branch below untouched.
+  if (Array.isArray(col.parts) && col.parts.length > 0) {
+    return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle });
+  }
   const sortArrowClass = NUMERIC_FIELD_TYPES.has(col.type)
     ? 'left-0 -translate-x-full pr-0.5'
     : 'right-0 translate-x-full pl-0.5';
@@ -1287,7 +1374,15 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
     <TableHead
       key={col.key}
       data-testid={`column-header-${col.key}`}
-      className={['align-middle', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : ''].filter(Boolean).join(' ')}
+      className={[
+        'align-middle',
+        NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : '',
+        // Opt-in fixed-width / per-column header styling. Needed by list windows
+        // whose design pins column widths (e.g. financial-account's Figma layout,
+        // where the "Cuenta" header must align with the row avatar). Absent =
+        // unchanged auto layout, so every existing window is unaffected.
+        col.headClass || '',
+      ].filter(Boolean).join(' ')}
       style={headStyle}
     >
       {onSort && isSortable ? (
@@ -1296,14 +1391,20 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
           className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
           onClick={() => onSort(col.key)}
         >
-          {colLabel}
+          <span className="inline-flex items-center gap-1 align-middle">
+            {colLabel}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
+          </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
           )}
         </button>
       ) : (
         <span className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
-          {colLabel}
+          <span className="inline-flex items-center gap-1 align-middle">
+            {colLabel}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
+          </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
           )}
@@ -1354,6 +1455,7 @@ function TableDataRow({
   selectedRowBg,
   selectedId,
   selectedRowId,
+  rowHoverStyle,
   editingRowId,
   handleRowActivation,
   hoverRowActions,
@@ -1384,7 +1486,9 @@ function TableDataRow({
         if (editingRowId === row.id) return;
         handleRowActivation(row, idx);
       }}
-      className={getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine)}
+      className={getRowClassName({
+        onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine, rowHoverStyle,
+      })}
     >
       {selectable && (
         <TableCell
@@ -1406,7 +1510,14 @@ function TableDataRow({
             key={col.key}
             data-testid={`cell-${row.id ?? idx}-${col.key}`}
             data-value={row[col.key] ?? ''}
-            className={['text-sm', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right tabular-nums' : ''].filter(Boolean).join(' ')}
+            className={[
+              'text-sm',
+              NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right tabular-nums' : '',
+              // Opt-in per-column cell styling, the body-side counterpart of
+              // `col.headClass` (see renderColumnHeaderCell). Lets a window pin a
+              // column's width so header and cells stay aligned. Absent = unchanged.
+              col.cellClass || '',
+            ].filter(Boolean).join(' ')}
           >
             {isTrailingHover ? (
               <span className="block transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
@@ -1428,7 +1539,7 @@ function TableDataRow({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onSaveRow?.(); }}
-                className="h-8 w-8 flex items-center justify-center rounded-full text-[#17663A] hover:bg-[#EEFBF4] transition-all"
+                className="h-8 w-8 flex items-center justify-center rounded-full text-[var(--status-success-fg)] hover:bg-[var(--status-success-bg)] transition-all"
                 aria-label={ui('save')}
               >
                 <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
@@ -1441,7 +1552,7 @@ function TableDataRow({
                   if (onEditRow) { onEditRow(row); }
                   else { handleRowActivation(row, idx); }
                 }}
-                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
+                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
                 aria-label={ui('edit')}
               >
                 <Pencil className="h-5 w-5" aria-hidden="true" data-testid="Pencil__eb5261" />
@@ -1457,7 +1568,7 @@ function TableDataRow({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onCancelEdit?.(); }}
-                  className="h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
+                  className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
                   aria-label={ui('cancel')}
                 >
                   <X className="h-5 w-5" aria-hidden="true" data-testid="X__eb5261" />
@@ -1470,7 +1581,7 @@ function TableDataRow({
                     e.stopPropagation();
                     await handleDeleteRowClick(row, onDeleteRow, setDeletingRows);
                   }}
-                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:bg-[#FEF0F4] transition-all"
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] transition-all"
                   aria-label={ui('deleteRowTooltip')}
                   data-testid={`row-delete-${row.id}`}
                 >
@@ -1519,13 +1630,13 @@ function TableDataRow({
                 <button
                   type="button"
                   onClick={() => onCloneRow(row)}
-                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-white text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
                   style={{ width: 26, height: 26 }}
                   aria-label={ui('cloneOrderBtn')}
                 >
                   <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__eb5261" />
                 </button>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-primary-foreground bg-foreground rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
                   {ui('cloneOrderBtn')}
                 </div>
               </div>
@@ -1619,7 +1730,7 @@ function renderFooterRow({
             className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}
             data-testid="TableCell__eb5261">
             {col.type === 'amount'
-              ? formatAmount(totals[col.key], filteredData[0]?.['currency$_identifier'])
+              ? formatCurrency(filteredData[0]?.['currency$_identifier'], totals[col.key])
               : ''}
           </TableCell>
         ))}
@@ -1658,6 +1769,7 @@ export function DataTable({
   onRowClick,
   selectedRowId,
   selectedId,
+  rowHoverStyle = 'tint',
   compact,
   loading,
   addRow,
@@ -1716,6 +1828,13 @@ export function DataTable({
   onSaveRow = null,
   onCancelEdit = null,
   clearSelectionTrigger = 0,
+  // ETP-4656 — partial bulk-delete outcome: bump `deselectTrigger` with the ids
+  // of the rows that succeeded (`deselectRowIds`) so only those drop out of the
+  // internal selection Set, leaving the failed rows checked. A dedicated pair
+  // instead of overloading `clearSelectionTrigger` (which always clears
+  // everything) so existing full-clear callers stay untouched.
+  deselectTrigger = 0,
+  deselectRowIds = [],
   hideHeader = false,
   hideDataRows = false,
 }) {
@@ -1724,6 +1843,8 @@ export function DataTable({
   const ui = useUI();
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
+  // ETP-4520 — capability map for visibleWhenCapability-gated columns (below).
+  const capabilities = useCapabilitiesSafe();
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale.replace('_', '-'), { year: 'numeric', month: '2-digit', day: '2-digit' }),
     [locale]
@@ -1735,6 +1856,16 @@ export function DataTable({
     if (!clearSelectionTrigger) return;
     setSelectedRows(new Set());
   }, [clearSelectionTrigger]);
+
+  useEffect(() => {
+    if (!deselectTrigger || !deselectRowIds?.length) return;
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      deselectRowIds.forEach((id) => next.delete(id));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deselectTrigger]);
 
   const [optimisticToggles, setOptimisticToggles] = useState({});
   const [savingToggles, setSavingToggles] = useState({});
@@ -1795,8 +1926,12 @@ export function DataTable({
         return anyDataRow || addRowActive;
       });
     }
+    // ETP-4520 — drop columns gated by a capability the current role doesn't
+    // hold (e.g. `posted` on sales-invoice/purchase-invoice, restricted to
+    // "showAccountingFields"). Absent visibleWhenCapability ⇒ always kept.
+    base = base.filter(col => isCapabilityVisible(capabilities, col.visibleWhenCapability));
     return base;
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues]);
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities]);
 
   const amountColumns = useMemo(
     () => visibleColumns.filter(col => col.type === 'amount'),
@@ -1860,6 +1995,8 @@ export function DataTable({
       t,
       ui,
       dateFormatter,
+      token,
+      apiBaseUrl,
     });
   };
 
@@ -1920,7 +2057,7 @@ export function DataTable({
   const quickActionsCol = oneIfTrue(quickActionsEnabled);
   const actionCols = hoverRowActions ? 1 + deleteCol : deleteCol + cloneCol;
   const colSpan = visibleColumns.length + oneIfTrue(selectable) + actionCols + quickActionsCol;
-  const selectedRowBg = hoverRowActions ? 'bg-[#F5F7F9]' : 'bg-primary/5';
+  const selectedRowBg = hoverRowActions ? 'bg-[hsl(var(--muted))]' : 'bg-primary/5';
 
   // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders
   // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel
@@ -1944,7 +2081,20 @@ export function DataTable({
 
   return (
     <div className="space-y-0">
-      <div className={linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible'}>
+      {/*
+        `overflow-y-visible` next to `overflow-x-auto` is computed as `auto` by the CSS
+        spec, so this wrapper does clip vertically. With `rowHoverStyle="elevated"` the
+        hovered row's `shadow-lg` reaches ~22px below it (10px offset + 15px blur - 3px
+        spread); for the LAST row that lands past the table and got clipped away, which
+        read as "hover doesn't work on the last row". Overflow clips at the PADDING box,
+        so 24px of bottom padding gives the shadow room inside the visible area.
+      */}
+      <div
+        className={[
+          linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible',
+          rowHoverStyle === 'elevated' ? 'pb-6' : '',
+        ].filter(Boolean).join(' ')}
+      >
         <Table style={getTableContainerStyle(hideHeader)} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), a <colgroup> drives column
               widths — see renderLinesColgroup() above for the full rationale. */}
@@ -1954,7 +2104,7 @@ export function DataTable({
             quickActionsEnabled, ilpHasNoAmountCol,
           })}
           <TableHeader
-            className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-white' : ''}
+            className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
             aria-hidden={hideHeader || undefined}
             style={hideHeader ? { display: 'none' } : undefined}
             data-testid="TableHeader__eb5261">
@@ -1982,6 +2132,7 @@ export function DataTable({
               hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
               selectable, isRowSelectable, toggleRow, visibleColumns, trailingHoverColumn,
               renderCellValue, onRowClick, onNavigate, selectedRowBg, selectedId, selectedRowId,
+              rowHoverStyle,
               editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
               onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
               onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,

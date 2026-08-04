@@ -98,6 +98,34 @@ visibility enum into the **`ISINCLUDED` / `ISREADONLY`** pair instead
 The enum mapping (`mapVisibility`): `editable`→(included, not-readonly); `readOnly`/
 `system`→(included, readonly); `discarded`→(not-included).
 
+### `userRequired` also derives from `preconditions` (ETP-4276) — second, generic source
+
+Since ETP-4276 there is a **second source** for `userRequired`, independent of visibility/AD-mandatory
+and applicable to **any** entity — not just assets: `neo_schema` reads the entity's
+`ETGO_SF_ENTITY.preconditions` (the same declaration the runtime gate
+`NeoProcessPreconditionValidator` enforces, ETP-4275) and, for every field named in a precondition
+rule, emits:
+
+- `userRequired: true` (overrides the visibility-derived value for that field), and
+- `requiredWhen: "<expr>"` when the rule is conditional (so the agent knows the requirement depends
+  on other field values).
+
+This is **data-driven and window-agnostic** — any window whose entity declares `preconditions`
+gets the proactive signal with zero per-window code (`McpSchemaFieldBuilder.loadPreconditionRequirements`
++ `applyPreconditionRequirement`, applied in `buildSchemaField`). It is the proactive half of a
+two-layer model: this hint is advisory; the runtime gate is the enforcement. It does **not** need
+`ETGO_SF_FIELD.VISIBILITY` to be populated (unlike the visibility-derived value above), so it works
+today.
+
+**Caveat — aggregation across processes.** `neo_schema` describes an entity at the *window* level,
+not per process invocation. `loadPreconditionRequirements` therefore **flattens the requirements of
+all processes** declared on the entity into one map: a field required only by process B is flagged
+`userRequired` on the window even when the agent intends process A, and if the same field appears
+under two processes with different `requiredWhen`, an unconditional rule wins (else the first seen).
+For single-process windows (assets / "Create Amortization") this is exact. For a future multi-process
+entity it can over-signal; scoping the hint per target process would require passing process context
+into the schema build (not done — declare it as a follow-up if such an entity appears).
+
 ---
 
 ## Fix recipe (for any decisions-driven value above)

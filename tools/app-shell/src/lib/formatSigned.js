@@ -3,6 +3,7 @@
  * and the reconciliation split panel. Single source of truth — do NOT copy
  * these into individual components.
  */
+import { formatCurrency } from './formatCurrency.js';
 
 /**
  * Formats an ISO date string in UTC. The backend sends date-only values as UTC
@@ -23,20 +24,19 @@ export function formatDate(iso, bcpLocale) {
 }
 
 /**
- * Formats a signed money value as a `±X,XX €` string (always es-ES currency
- * formatting) for action bars / footers: the absolute value is currency-
- * formatted and a leading '-' / '+' sign is prepended.
+ * Formats a signed money value as a `±X,XX €` string (delegates to the shared
+ * `formatCurrency()` for the actual number/symbol formatting) for action bars /
+ * footers: the absolute value is currency-formatted and a leading '-' / '+'
+ * sign is prepended.
  *
  * @param {number|string} amount
  * @param {string} currency - ISO 4217 currency code.
  * @returns {string}
  */
 export function formatSigned(amount, currency) {
-  const abs = Math.abs(Number(amount) || 0);
-  const formatted = new Intl.NumberFormat('es-ES', {
-    style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(abs);
-  return (Number(amount) < 0 ? '-' : '+') + formatted;
+  const num = Number(amount) || 0;
+  const sign = num < 0 ? '-' : '+';
+  return sign + formatCurrency(currency, Math.abs(num));
 }
 
 /**
@@ -52,7 +52,7 @@ export function formatSigned(amount, currency) {
  * @returns {{ text: string, tone: 'positive'|'negative'|'neutral' }}
  *   `text` is `±0` for exactly zero, `+N` for positive, `-N` for negative.
  *   `tone` maps 1:1 to the TONE_CLASS keys in components/ui/money-amount.jsx
- *   (positive #1E874C, negative #d50b3e, neutral #121217).
+ *   (positive/negative/neutral semantic theme roles).
  */
 export function formatSignedDelta(value) {
   const num = Number(value) || 0;

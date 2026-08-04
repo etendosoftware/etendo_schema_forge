@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
-const AMOUNT_FMT = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-function fmtAmt(val) {
+function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  return (n < 0 ? '-' : '') + AMOUNT_FMT.format(Math.abs(n)) + ' €';
+  return formatCurrency(currency || 'EUR', n);
 }
 
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
@@ -21,14 +21,14 @@ function fmtDate(raw) {
 }
 
 function Separator() {
-  return <div style={{ height: 0, border: '1px solid rgba(18,18,23,0.05)', alignSelf: 'stretch' }} />;
+  return <div style={{ height: 0, border: '1px solid hsl(var(--foreground) / 0.05)', alignSelf: 'stretch' }} />;
 }
 
 function BreakdownRow({ label, value, muted }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ font: '400 12px/16px Inter', color: '#555B6D' }}>{label}</span>
-      <span className="tabular-nums" style={{ font: '500 14px/20px Inter', color: muted ? '#6C6C89' : '#121217', whiteSpace: 'nowrap' }}>
+      <span style={{ font: '400 12px/16px Inter', color: 'hsl(var(--muted-foreground))' }}>{label}</span>
+      <span className="tabular-nums" style={{ font: '500 14px/20px Inter', color: muted ? 'hsl(var(--muted-foreground))' : 'hsl(var(--foreground))', whiteSpace: 'nowrap' }}>
         {value}
       </span>
     </div>
@@ -108,6 +108,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const status = data?.status || '';
   const isDraft = !PAID_STATUSES.has(status);
   const totalAmount = parseFloat(data?.amount ?? 0);
+  const currency = data?.['currency$_identifier'];
 
   useEffect(() => {
     if (!data?.id) return;
@@ -190,7 +191,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
     {
       label: ui(isIn ? 'cobroCreado' : 'pagoCreado'),
       date: createdDate,
-      dot: isDraft ? '#FAAF00' : '#17663A',
+      dot: isDraft ? 'var(--status-warning-fg)' : 'var(--status-success-fg)',
     },
     // Every confirm/reactivate ever recorded — a full cycle (confirm →
     // reactivate → confirm) shows as three separate rows, not just the
@@ -199,7 +200,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       label: ui(eventLabelKey(ev)),
       confirmedAt: new Date(ev.at),
       date: null,
-      dot: ev.type === 'reactivated' ? '#6C6C89' : '#2DCA72',
+      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : 'var(--status-success-fg)',
     })),
     // Fallback for the rare case where the record is currently confirmed but
     // no event (live or backfilled) could be recorded — still show it once.
@@ -207,13 +208,13 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       label: ui(isIn ? 'cobroConfirmado' : 'pagoConfirmado'),
       confirmedAt: null,
       date: paymentDate,
-      dot: '#2DCA72',
+      dot: 'var(--status-success-fg)',
     }] : []),
     ...((!isDraft && data?.posted === 'Y') || postedAt ? [{
       label: ui('asientoContabilizado'),
       confirmedAt: postedAt,
       date: data?.updated,
-      dot: '#D0D5DD',
+      dot: 'hsl(var(--text-disabled))',
     }] : []),
   ].map((item, index) => ({
     ...item,
@@ -227,19 +228,19 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
     >
       {/* Cabecera: padding 8px 12px 4px */}
       <div style={{ padding: '8px 12px 4px' }}>
-        <h2 style={{ margin: 0, font: '600 20px/28px Inter', color: '#121217' }}>
+        <h2 style={{ margin: 0, font: '600 20px/28px Inter', color: 'hsl(var(--foreground))' }}>
           {ui(titleKey)}
         </h2>
       </div>
       {/* Datos: amount, padding 4px 12px 8px */}
       <div style={{ padding: '4px 12px 8px' }}>
         {(() => {
-          const formatted = sign + fmtAmt(Math.abs(totalAmount));
+          const formatted = sign + fmtAmt(Math.abs(totalAmount), currency);
           const len = formatted.length;
           const fs = len <= 13 ? 30 : 26;
           const lh = fs === 30 ? '32px' : '30px';
           return (
-            <span className="tabular-nums" style={{ font: `500 ${fs}px/${lh} Inter`, color: '#121217' }}>
+            <span className="tabular-nums" style={{ font: `500 ${fs}px/${lh} Inter`, color: 'hsl(var(--foreground))' }}>
               {formatted}
             </span>
           );
@@ -248,22 +249,22 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       {/* Breakdown outer: padding 12px, gap 10px */}
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* Detalle moneda card: padding 12px, gap 12px — Info sub-section has gap 8px */}
-        <div style={{ background: '#F5F7F9', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ background: 'hsl(var(--muted))', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Info: rows + separators with gap 8px */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <BreakdownRow
               label={ui('totalAmount')}
-              value={fmtAmt(totalAmount)}
+              value={fmtAmt(totalAmount, currency)}
               data-testid="BreakdownRow__624cef" />
             <Separator data-testid="Separator__624cef" />
             <BreakdownRow
               label={ui('appliedToInvoices')}
-              value={lines === null ? '...' : fmtAmt(applied)}
+              value={lines === null ? '...' : fmtAmt(applied, currency)}
               data-testid="BreakdownRow__624cef" />
             <Separator data-testid="Separator__624cef" />
             <BreakdownRow
               label={ui('unallocated')}
-              value={lines === null ? '...' : fmtAmt(unapplied)}
+              value={lines === null ? '...' : fmtAmt(unapplied, currency)}
               muted={unapplied === 0}
               data-testid="BreakdownRow__624cef" />
           </div>
@@ -272,7 +273,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       {/* Actividad: padding 8px 12px 0, column gap 10px */}
       <div style={{ padding: '8px 12px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* Title with 4px bottom padding */}
-        <div style={{ font: '400 14px/20px Inter', color: '#3F3F50', paddingBottom: 4 }}>
+        <div style={{ font: '400 14px/20px Inter', color: 'hsl(var(--muted-foreground))', paddingBottom: 4 }}>
           {ui('activity')}
         </div>
         {activityItems.map((item, index) => (
@@ -282,11 +283,11 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
               <div style={{ width: 24, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.dot }} />
               </div>
-              <span style={{ font: '500 14px/20px Inter', color: '#121217' }}>{item.label}</span>
+              <span style={{ font: '500 14px/20px Inter', color: 'hsl(var(--foreground))' }}>{item.label}</span>
             </div>
             {/* Date: 24px left indent, 12px font */}
             {(item.confirmedAt || item.date) && (
-              <div style={{ paddingLeft: 24, font: '400 12px/16px Inter', color: '#6C6C89' }}>
+              <div style={{ paddingLeft: 24, font: '400 12px/16px Inter', color: 'hsl(var(--muted-foreground))' }}>
                 {item.confirmedAt ? fmtNow(item.confirmedAt) : fmtDate(item.date)}
               </div>
             )}

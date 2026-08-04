@@ -74,20 +74,26 @@ export default function InvoiceHeaderTable(props) {
     }
 
     return [
-      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false },
+      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false, required: true },
       {
         key: 'transactionDocument',
         column: 'C_DocTypeTarget_ID',
         type: 'custom',
+        required: true,
+        // `type: 'custom'` drives the badge cell render, but that would make the
+        // advanced filter fall back to a free-text input. `filterMode` (honored
+        // first by resolveFilterMode, ignored by DataTable) restores the correct
+        // identifier picker for this FK column without touching the grid cell.
+        filterMode: 'identifier',
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
         render: (row) => {
           const sub = getArSubtype(row);
           const cfg = sub === 'NC'
-            ? { color: '#6d28d9', bg: '#f5f3ff', label: t('creditNotesTab') }
+            ? { color: 'hsl(var(--primary))', bg: 'hsl(var(--foreground))', label: t('creditNotesTab') }
             : sub === 'DEV'
-              ? { color: '#9a3412', bg: '#fff7ed', label: t('returnsTab') }
-              : { color: '#1d4ed8', bg: '#eff6ff', label: t('invoicesTab') };
+              ? { color: 'hsl(var(--destructive))', bg: 'hsl(var(--foreground))', label: t('returnsTab') }
+              : { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: t('invoicesTab') };
           return (
             <span
               className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
@@ -98,9 +104,13 @@ export default function InvoiceHeaderTable(props) {
           );
         },
       },
-      { key: 'documentNo', column: 'DocumentNo', type: 'string', label: gl['documentNo'] || 'Document No.' },
+      { key: 'documentNo', column: 'DocumentNo', type: 'string', label: gl['documentNo'] || 'Document No.', required: true },
       {
         key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        // The cell renders a coloured due-date dot, so it must stay `custom` —
+        // but the underlying column is a plain date. Without this the advanced
+        // filter would offer text operators instead of Before/After/Between.
+        filterMode: 'date',
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
@@ -114,16 +124,23 @@ export default function InvoiceHeaderTable(props) {
           );
         },
       },
-      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
-      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn') },
-      { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string', required: true },
+      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn'), required: true },
+      { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
       ...fiscalCols,
-      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: t('impTotal') },
+      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: t('impTotal'), required: true },
       {
         key: 'outstandingAmount',
         column: 'OutstandingAmt',
         type: 'custom',
+        required: true,
         label: t('pendingPaymentColumn'),
+        // The cell renders status pills and a payment button, so it must stay
+        // `custom` — but the underlying column is an amount. Without this the
+        // `?filter=overdue` preload (outstandingAmount greaterThan 0) resolves
+        // to text mode, which has no `greaterThan`, and the operator select
+        // renders empty (ETP-4681).
+        filterMode: 'numeric',
         render: (row) => {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);
           const currency = row['currency$_identifier'] || 'EUR';
@@ -132,7 +149,7 @@ export default function InvoiceHeaderTable(props) {
             const outstandingAbs = Math.abs(outstanding);
             if (outstandingAbs < 0.001) {
               return (
-                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'hsl(var(--card))',color:'var(--status-success-bg)'}}>
                   <Check size={12}/>Aplicada
                 </span>
               );
@@ -145,16 +162,16 @@ export default function InvoiceHeaderTable(props) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
-                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#F5F3FF',border:'1px solid #DDD6FE',color:'#6D28D9',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'hsl(var(--card))',border:'1px solid var(--status-info-bg)',color:'hsl(var(--primary))',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
-                <span style={{width:8,height:8,borderRadius:'50%',background:'#7C3AED',flexShrink:0,display:'inline-block'}}/>
+                <span style={{width:8,height:8,borderRadius:'50%',background:'hsl(var(--primary))',flexShrink:0,display:'inline-block'}}/>
                 Saldo a favor · {fmtAmt(outstandingAbs, currency)}
               </button>
             );
           }
           if (outstanding <= 0) {
             return (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'hsl(var(--card))',color:'var(--status-success-bg)'}}>
                 <Check size={12}/>{t('cobrada')}
               </span>
             );
@@ -164,11 +181,11 @@ export default function InvoiceHeaderTable(props) {
               type="button"
               onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
               aria-label={t('addCobro')}
-              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#FFF9EB',border:'1px solid #F2E2BC',color:'#8A6E25',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'hsl(var(--card))',border:'1px solid var(--status-warning-bg)',color:'var(--status-warning-bg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
             >
-              <span style={{width:8,height:8,borderRadius:'50%',background:'#F59E0B',flexShrink:0,display:'inline-block'}}/>
+              <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-bg)',flexShrink:0,display:'inline-block'}}/>
               {fmtAmt(outstanding, currency)}
-              <span style={{display:'inline-flex',alignItems:'center',color:'#A37700'}}><Plus size={13}/></span>
+              <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13}/></span>
             </button>
           );
         },

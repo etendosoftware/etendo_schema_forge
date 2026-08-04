@@ -5,11 +5,15 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', lookup: true },
   { key: 'description', column: 'Description', type: 'string', label: 'Description' },
-  { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', label: 'Invoiced Quantity', required: true, min: 0 },
-  { key: 'listPrice', column: 'PriceList', type: 'amount', label: 'List Price', required: true, min: 0 },
+  { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', label: 'Invoiced Quantity', required: true },
+  { key: 'listPrice', column: 'PriceList', type: 'amount', label: 'List Price', required: true },
   { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', min: 0, max: 100 },
   { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax' },
   { key: 'grossAmount', column: 'Line_Gross_Amount', type: 'amount', label: 'Line Gross Amount' },
+  { key: 'dimensions', type: 'dimensionsPanel', label: 'Accounting dimensions', labels: { en_US: 'Accounting dimensions', es_ES: 'Dimensiones contables' }, dimensionFields: [
+    { key: 'project', column: 'C_Project_ID', type: 'selector', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'Costcenter', inputMode: 'selector' },
+  ] },
 ];
 // @sf-generated-end columns:lines
 

@@ -2,20 +2,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
-
-const CURRENCY_SYMBOLS = {
-  USD: '$', EUR: '\u20ac', GBP: '\u00a3', JPY: '\u00a5',
-  CHF: 'CHF', BRL: 'R$', ARS: '$', MXN: '$', COP: '$', PEN: 'S/',
-};
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 function formatAmount(value, currency) {
   const num = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0);
-  const symbol = CURRENCY_SYMBOLS[currency] || currency || '';
-  const formatted = num.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return symbol ? `${symbol} ${formatted}` : formatted;
+  return formatCurrency(currency, num);
 }
 
 const cellStyle = { borderBottom: '0.5px solid hsl(var(--border) / 0.5)' };
@@ -360,7 +351,7 @@ export default function ApplyToInvoices({
                       value={amounts[inv.scheduleId] ?? 0}
                       onChange={(e) => setApplyAmount(inv.scheduleId, e.target.value, outstanding)}
                       disabled={!isSelected}
-                      className="w-24 text-right text-sm border border-border rounded px-2 py-1 tabular-nums bg-muted/20 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-30 disabled:bg-transparent"
+                      className="w-24 text-right text-sm border border-border rounded px-2 py-1 tabular-nums bg-muted/20 focus:bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-30 disabled:bg-transparent"
                       style={{ borderWidth: '0.5px', borderRadius: '4px' }}
                     />
                   </td>
@@ -400,7 +391,7 @@ export default function ApplyToInvoices({
           type="button"
           onClick={handleApplyAndProcess}
           disabled={saving || selected.size === 0 || totalApplied > paymentNum}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? ui('processing') : ui('applyAndProcessPayment')}
         </button>

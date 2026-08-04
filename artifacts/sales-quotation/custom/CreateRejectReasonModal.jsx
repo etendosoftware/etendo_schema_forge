@@ -75,14 +75,14 @@ export default function CreateRejectReasonModal({
           >
             &times;
           </button>
-          <div style={{ fontSize: 14, fontWeight: 500, color: '#111827', marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))', marginBottom: 12 }}>
             {ui('createRejectReasonTitle')}
           </div>
         </div>
 
         <div style={{ padding: '0 16px 14px' }}>
           <label htmlFor="reject-reason-name"
-            style={{ display: 'block', fontSize: 11, color: '#374151', fontWeight: 500, marginBottom: 6 }}>
+            style={{ display: 'block', fontSize: 11, color: 'var(--status-info-fg)', fontWeight: 500, marginBottom: 6 }}>
             {ui('rejectReasonNameLabel')}
           </label>
           <input
@@ -106,8 +106,8 @@ export default function CreateRejectReasonModal({
 
         {error && (
           <div style={{
-            padding: '8px 16px', fontSize: 12, color: '#DC2626',
-            background: '#FEF2F2', borderTop: '0.5px solid #FECACA',
+            padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))',
+            background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))',
           }}>
             {error}
           </div>
@@ -115,7 +115,7 @@ export default function CreateRejectReasonModal({
 
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
-          padding: '12px 16px', borderTop: '0.5px solid #E5E7EB',
+          padding: '12px 16px', borderTop: '0.5px solid hsl(var(--card))',
         }}>
           <button
             type="button"
@@ -157,25 +157,25 @@ export default function CreateRejectReasonModal({
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 60,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: 'rgba(0,0,0,0.3)',
+  backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
 const cardStyle = {
   width: 400, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB',
+  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))',
 };
 
 const closeBtnStyle = {
   position: 'absolute', top: 10, right: 12,
   fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-  background: 'none', border: 'none', color: '#9CA3AF',
+  background: 'none', border: 'none', color: 'hsl(var(--muted-foreground))',
 };
 
 const inputStyle = {
-  width: '100%', fontSize: 13, color: '#111827',
-  border: '1px solid #D1D5DB', borderRadius: 6, padding: '7px 10px',
-  background: '#FFFFFF',
+  width: '100%', fontSize: 13, color: 'hsl(var(--foreground))',
+  border: '1px solid hsl(var(--card))', borderRadius: 6, padding: '7px 10px',
+  background: 'hsl(var(--card))',
   outline: 'none',
 };
 
@@ -186,18 +186,18 @@ const inputStyle = {
 const btnSecondary = {
   fontSize: 14, fontWeight: 500, padding: '8px 18px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: '1px solid #D1D4DB', background: '#FFFFFF', color: '#121217',
-  boxShadow: '0px 1px 2px rgba(18, 18, 23, 0.05)',
+  border: '1px solid hsl(var(--card))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
+  boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
 };
 
 const btnPrimary = {
   fontSize: 14, fontWeight: 500, padding: '8px 18px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: 'none', background: '#121217', color: '#FFFFFF',
+  border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))',
 };
 
 const btnPrimaryDisabled = {
   fontSize: 14, fontWeight: 500, padding: '8px 18px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: 'none', background: '#D1D4DB', color: '#FFFFFF',
+  border: 'none', background: 'hsl(var(--card))', color: 'hsl(var(--card))',
 };

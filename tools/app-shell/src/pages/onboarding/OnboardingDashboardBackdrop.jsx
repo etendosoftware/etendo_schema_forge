@@ -54,7 +54,7 @@ function RailSkeleton() {
         ))}
       </div>
       <div className="mt-auto flex flex-col shrink-0 gap-1 px-2 pb-2">
-        <div className="mb-1 w-10 self-center border-t border-[#E8EAEF]" />
+        <div className="mb-1 w-10 self-center border-t border-[hsl(var(--border-subtle))]" />
         <div className="flex justify-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground">
             <Headphones className="h-5 w-5" data-testid="Headphones__2c996d" />
@@ -103,7 +103,7 @@ export function OnboardingDashboardBackdrop() {
           {/* [&_.animate-pulse]:animate-none — DashboardSkeleton pulses when used
               as a real loader; as a static backdrop we keep it still so it does
               not compete with the loader ring animation. */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/30 bg-white [&_.animate-pulse]:animate-none">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/30 bg-card [&_.animate-pulse]:animate-none">
             <DashboardSkeleton data-testid="DashboardSkeleton__2c996d" />
           </div>
         </div>

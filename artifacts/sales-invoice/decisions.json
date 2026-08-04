@@ -74,7 +74,8 @@
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de entrega",
-        "C_DocTypeTarget_ID": "Tipo de documento"
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",
@@ -234,6 +235,7 @@
           "grid": true,
           "gridOrder": 5,
           "badge": true,
+          "visibleWhenCapability": "showAccountingFields",
           "badgeLabels": {
             "true": {
               "en_US": "Posted",
@@ -358,10 +360,14 @@
           "visibility": "system"
         },
         "project": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "salesCampaign": {
           "visibility": "discarded"
@@ -512,7 +518,7 @@
           "order": 3,
           "gridOrder": 3,
           "section": "principal",
-          "min": 0
+          "min": false
         },
         "uOM": {
           "visibility": "system"
@@ -526,7 +532,7 @@
           "gridOrder": 4,
           "section": "principal",
           "columnType": "amount",
-          "min": 0
+          "min": false
         },
         "etgoDiscount": {
           "visibility": "editable",
@@ -628,10 +634,16 @@
           "visibility": "discarded"
         },
         "project": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "costcenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "asset": {
           "visibility": "discarded"

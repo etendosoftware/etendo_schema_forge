@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 // Processed APRM statuses. PWNC ("Withdrawn not Cleared") and RPAE ("Awaiting
 // Execution") are the processed states for payments-out / deferred accounts.
@@ -10,29 +11,14 @@ function fmtPayDate(raw) {
   return formatCalendarDate(raw, 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function addThousandDots(s) {
-  let out = '';
-  for (let i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 === 0) out += '.';
-    out += s[i];
-  }
-  return out;
-}
-
-function fmt(val) {
-  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  const abs = Math.abs(n).toFixed(2).split('.');
-  return (n < 0 ? '-' : '') + addThousandDots(abs[0]) + ',' + abs[1];
-}
-
 function SectionCard({ title, titleRight, children }) {
   return (
     <div className="mx-4 mt-5">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</span>
         {titleRight}
       </div>
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-card rounded-xl border border-border-subtle overflow-hidden">
         {children}
       </div>
     </div>
@@ -40,8 +26,8 @@ function SectionCard({ title, titleRight, children }) {
 }
 
 function DirBadge({ isIn, size = 26 }) {
-  const bg = isIn ? '#E2F7EA' : '#FDE2E9';
-  const color = isIn ? '#17663A' : '#C5234A';
+  const bg = isIn ? 'var(--status-success-bg)' : 'var(--status-destructive-bg)';
+  const color = isIn ? 'var(--status-success-fg)' : 'hsl(var(--destructive))';
   const half = Math.round(size * 0.5);
   return (
     <div style={{ width: size, height: size, borderRadius: 7, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
@@ -74,15 +60,15 @@ function StateTag({ status, processed, ui }) {
   const isDeposited = processed === true || PAID_STATUSES.has(status);
   if (isDeposited) {
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 5, background: '#E2F7EA', color: '#17663A', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#2DCA72', flexShrink: 0 }} />
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 5, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--status-success-fg)', flexShrink: 0 }} />
         {ui('statusDeposited')}
       </span>
     );
   }
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 5, background: '#F1F2F4', color: '#55556D', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#A9A9BC', flexShrink: 0 }} />
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 5, background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'hsl(var(--text-disabled))', flexShrink: 0 }} />
       {ui('statusDraft')}
     </span>
   );
@@ -120,8 +106,8 @@ export default function PaymentsCard({
   let titleRight = null;
   if (isCreditNote) {
     titleRight = (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, padding: '1px 8px', borderRadius: 5, background: '#EDE9FE', color: '#5B21B6' }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#7C3AED', flexShrink: 0 }} />
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, padding: '1px 8px', borderRadius: 5, background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--status-info-fg)', flexShrink: 0 }} />
         {ui('creditBalance')}
       </span>
     );
@@ -129,14 +115,14 @@ export default function PaymentsCard({
     titleRight = (
       <button
         onClick={onAddPayment}
-        className="text-xs font-medium text-gray-900 underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
+        className="text-xs font-medium text-foreground underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
       >
         {ui('previewCardAddPayment')}
       </button>
     );
   } else if (isFullyPaid) {
     titleRight = (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: '#17663A' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: 'var(--status-success-fg)' }}>
         <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         {isIn ? ui('cobrada') : ui('pagada')}
       </span>
@@ -145,7 +131,7 @@ export default function PaymentsCard({
 
   let content;
   if (loading) {
-    content = <p className="text-xs text-gray-400 py-4 text-center">{ui('loading')}</p>;
+    content = <p className="text-xs text-muted-foreground py-4 text-center">{ui('loading')}</p>;
   } else if (payments.length === 0) {
     let emptyLabel;
     if (isCreditNote) {
@@ -158,7 +144,7 @@ export default function PaymentsCard({
     content = (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px', gap: 8 }}>
         {/* Neutral document icon — the empty state has no direction, so no in/out arrow. */}
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F1F2F4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#828FA3', flexShrink: 0 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'hsl(var(--muted))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-disabled))', flexShrink: 0 }}>
           <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
@@ -166,7 +152,7 @@ export default function PaymentsCard({
             <line x1="8" y1="17" x2="16" y2="17" />
           </svg>
         </div>
-        <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', textAlign: 'center', margin: 0 }}>
           {emptyLabel}
         </p>
       </div>
@@ -177,7 +163,7 @@ export default function PaymentsCard({
         {payments.map((p, idx) => {
           const methodRaw = p['paymentMethod$_identifier'] || p.paymentMethod || '';
           const methodKey = resolveMethodKey(methodRaw);
-          const amtColor = isIn ? '#17663A' : '#19191D';
+          const amtColor = isIn ? 'var(--status-success-fg)' : 'hsl(var(--foreground))';
           const amtSign = isIn ? '+ ' : '− ';
           const currency = currencyCode || p['currency$_identifier'] || '';
           return (
@@ -189,19 +175,19 @@ export default function PaymentsCard({
                 gridTemplateColumns: '26px 1fr auto',
                 gap: 8,
                 padding: '11px 14px',
-                borderBottom: idx < payments.length - 1 ? '0.5px solid #F3F4F6' : 'none',
+                borderBottom: idx < payments.length - 1 ? '0.5px solid hsl(var(--muted))' : 'none',
                 alignItems: 'center',
                 cursor: 'pointer',
               }}
-              className="hover:bg-gray-50 transition-colors"
+              className="hover:bg-muted transition-colors"
               data-testid={`PaymentsCard__row-${idx}`}
             >
               <DirBadge isIn={isIn} data-testid="DirBadge__c6fe34" />
               <div style={{ minWidth: 0 }}>
-                <div style={{ font: '600 12px/16px JetBrains Mono, monospace', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ font: '600 12px/16px JetBrains Mono, monospace', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {p.documentNo || p.id}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, color: '#9CA3AF' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, color: 'hsl(var(--text-disabled))' }}>
                   <span style={{ display: 'inline-flex' }}>{METHOD_ICONS[methodKey]}</span>
                   <span style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {methodRaw || fmtPayDate(p.paymentDate)}
@@ -210,7 +196,7 @@ export default function PaymentsCard({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
                 <span className="tabular-nums" style={{ font: '600 13px/17px Inter', color: amtColor, whiteSpace: 'nowrap' }}>
-                  {amtSign}{fmt(p.amount)} {currency}
+                  {amtSign}{formatCurrency(currency, p.amount)}
                 </span>
                 <StateTag status={p.status || ''} processed={p.processed} ui={ui} data-testid="StateTag__c6fe34" />
               </div>
@@ -218,10 +204,10 @@ export default function PaymentsCard({
           );
         })}
         {totalOutstanding > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', borderTop: '0.5px solid #F3F4F6', background: '#FFFBEB' }}>
-            <span style={{ fontSize: 12, color: '#92400E' }}>{ui('invoicePendingPayment')}</span>
-            <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: '#92400E' }}>
-              {fmt(totalOutstanding)} {currencyCode}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', borderTop: '0.5px solid hsl(var(--muted))', background: 'var(--status-warning-bg)' }}>
+            <span style={{ fontSize: 12, color: 'var(--status-warning-fg)' }}>{ui('invoicePendingPayment')}</span>
+            <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: 'var(--status-warning-fg)' }}>
+              {formatCurrency(currencyCode, totalOutstanding)}
             </span>
           </div>
         )}

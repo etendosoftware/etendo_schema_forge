@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import MovementTable from './MovementTable';
 import MovementForm from './MovementForm';
@@ -103,6 +104,22 @@ export const api = {
   },
   "selectors": [
     {
+      "entity": "movement",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/goods-movements/movement/selectors/project"
+    },
+    {
+      "entity": "movement",
+      "field": "costCenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-movements/movement/selectors/costCenter"
+    },
+    {
       "entity": "movementLine",
       "field": "product",
       "column": "M_Product_ID",
@@ -203,6 +220,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:MovementPage
 export default function MovementPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('170');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="170" />;
+  }
   if (recordId) {
     return (
       <>
@@ -224,6 +248,7 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteWhenComplete
         hidePrint
         noHeaderBorder
         whiteFormBackground
@@ -240,7 +265,7 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -263,7 +288,7 @@ export default function MovementPage({ windowName, recordId, ...props }) {
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument={{"enabled":false}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /* eslint-disable react/prop-types */
 
@@ -90,7 +91,7 @@ function InfoTooltip({ text }) {
         <Info className="h-3.5 w-3.5" data-testid="Info__4395d6" />
       </button>
       {visible && (
-        <div className="absolute left-6 top-0 z-50 w-72 rounded-lg bg-gray-800 px-3 py-2 text-xs text-white shadow-lg">
+        <div className="absolute left-6 top-0 z-50 w-72 rounded-lg bg-inverse px-3 py-2 text-xs text-inverse-foreground shadow-lg">
           {text}
         </div>
       )}
@@ -152,61 +153,61 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
     <div
       key={inv.id}
       onClick={() => { onSelect(inv.id, inv.documentNo || inv._identifier || inv.id); onClose(); }}
-      style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', cursor: 'pointer', borderBottom: '0.5px solid #F3F4F6' }}
-      onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB'; }}
+      style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', cursor: 'pointer', borderBottom: '0.5px solid hsl(var(--border) / 0.3)' }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--muted))'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{inv.documentNo || inv._identifier}</span>
-          <span style={{ fontSize: 12, color: '#6B7280' }}>{fmtDate(inv.invoiceDate)}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{inv.documentNo || inv._identifier}</span>
+          <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtDate(inv.invoiceDate)}</span>
         </div>
         {inv['businessPartner$_identifier'] && (
-          <div style={{ fontSize: 12, color: '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {inv['businessPartner$_identifier']}
           </div>
         )}
       </div>
-      <span style={{ fontSize: 12, color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(inv.grandTotalAmount ?? inv.grandTotalAmt)}</span>
+      <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(inv.grandTotalAmount ?? inv.grandTotalAmt)}</span>
     </div>
   );
 
   let listBody;
   if (loading) {
-    listBody = <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>;
+    listBody = <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>;
   } else if (filtered.length === 0) {
-    listBody = <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('rectNoInvoices')}</p>;
+    listBody = <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('rectNoInvoices')}</p>;
   } else {
     listBody = filtered.map(invoiceRow);
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onClick={onClose}>
       <div
         onClick={e => e.stopPropagation()}
-        style={{ width: 580, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB' }}
+        style={{ width: 580, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border))' }}
       >
-        <div style={{ padding: '14px 16px', borderBottom: '2px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{ui('rectPickerTitle')}</span>
-          <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}>&times;</button>
+        <div style={{ padding: '14px 16px', borderBottom: '2px solid hsl(var(--border))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{ui('rectPickerTitle')}</span>
+          <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>&times;</button>
         </div>
         <div style={{ padding: '10px 16px 0' }}>
           <input
             type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder={ui('rectSearchInvoice')} autoFocus
-            style={{ width: '100%', fontSize: 13, padding: '7px 10px', border: '0.5px solid #E5E7EB', borderRadius: 6, outline: 'none', color: '#111827' }}
+            style={{ width: '100%', fontSize: 13, padding: '7px 10px', border: '0.5px solid hsl(var(--border))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))' }}
           />
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
           {listBody}
           {hiddenCount > 0 && (
-            <p style={{ fontSize: 12, color: '#9ca3af', padding: '8px 16px 4px', textAlign: 'center' }}>
+            <p style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '8px 16px 4px', textAlign: 'center' }}>
               +{hiddenCount} {ui('rectMoreInvoicesHint')}
             </p>
           )}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', background: '#F8F9FA', borderTop: '1px solid #E5E7EB', padding: '10px 16px' }}>
-          <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '1px solid #E5E7EB', background: 'transparent', color: '#6B7280', cursor: 'pointer' }}>{ui('cancel')}</button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border))', padding: '10px 16px' }}>
+          <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '1px solid hsl(var(--border))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}>{ui('cancel')}</button>
         </div>
       </div>
     </div>
@@ -239,7 +240,7 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
       <input
         value={displayValue || value || ''}
         disabled readOnly
-        className="flex h-10 w-full rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm disabled:opacity-70"
+        className="flex h-10 w-full rounded-lg border border-border-control bg-card px-3 text-sm disabled:opacity-70"
       />
     );
   }
@@ -252,7 +253,7 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
         const opt = (years || []).find(y => y.id === e.target.value);
         onChange(e.target.value, opt?.label ?? '');
       }}
-      className="flex h-10 w-full rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm focus:outline-none disabled:opacity-70"
+      className="flex h-10 w-full rounded-lg border border-border-control bg-card px-3 text-sm focus:outline-none disabled:opacity-70"
     >
       <option value="">Seleccionar...</option>
       {(years || []).map(y => <option key={y.id} value={y.id}>{y.label}</option>)}
@@ -266,8 +267,8 @@ function AmountInput({ label, value }) {
   return (
     <div className="space-y-1.5">
       <label className="text-sm font-medium text-foreground block">{label}</label>
-      <div className="flex items-center h-10 rounded-lg border border-[#D1D4DB] bg-[#F9FAFB] overflow-hidden">
-        <span className="px-3 text-sm text-muted-foreground border-r border-[#D1D4DB] flex items-center h-full">EUR</span>
+      <div className="flex items-center h-10 rounded-lg border border-border-control bg-muted overflow-hidden">
+        <span className="px-3 text-sm text-muted-foreground border-r border-border-control flex items-center h-full">EUR</span>
         <input
           type="text"
           value={value}
@@ -295,7 +296,7 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground block">
           {t('EM_AEAT349_C_Year_ID') ?? 'Año'}
-          {!readOnly && <span className="text-red-500 ml-0.5">*</span>}
+          {!readOnly && <span className="text-destructive ml-0.5">*</span>}
         </label>
         <YearPickerSelect
           apiBaseUrl={apiBaseUrl}
@@ -314,12 +315,12 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground block">
           {t('EM_AEAT349_Period') ?? 'Periodo'}
-          {!readOnly && <span className="text-red-500 ml-0.5">*</span>}
+          {!readOnly && <span className="text-destructive ml-0.5">*</span>}
         </label>
         <select
           value={data?.aEAT349Period ?? ''}
           disabled={readOnly}
-          className="flex h-10 w-full rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm focus:outline-none disabled:opacity-70"
+          className="flex h-10 w-full rounded-lg border border-border-control bg-card px-3 text-sm focus:outline-none disabled:opacity-70"
           onChange={e => {
             onChange('aEAT349Period', e.target.value);
             onFieldSave?.('aEAT349Period', e.target.value);
@@ -393,7 +394,7 @@ function ExpandedForm({
   if (readOnly) {
     invoiceField = (
       <div className="flex items-center gap-2">
-        <div className="flex h-10 flex-1 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-foreground">
+        <div className="flex h-10 flex-1 items-center rounded-lg border border-border-control bg-card px-3 text-sm text-foreground">
           {invoiceDisplay || '—'}
         </div>
       </div>
@@ -404,7 +405,7 @@ function ExpandedForm({
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
-          className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm hover:bg-[#F9FAFB] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border-control bg-card px-3 text-sm hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <span className={`truncate ${lineData?.reversedInvoice ? 'text-foreground' : 'text-muted-foreground'}`}>
             {lineData?.['reversedInvoice$_identifier'] || 'Seleccionar...'}
@@ -421,14 +422,14 @@ function ExpandedForm({
           <button
             type="button"
             onClick={() => setPickerOpen(true)}
-            className="flex h-10 flex-1 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-foreground truncate text-left hover:bg-[#F9FAFB] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="flex h-10 flex-1 items-center rounded-lg border border-border-control bg-card px-3 text-sm text-foreground truncate text-left hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
             {invoiceDisplay || invoiceIdentifier || '—'}
           </button>
           <button
             type="button"
             onClick={() => setPickerOpen(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-muted-foreground hover:text-foreground transition-colors"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-control bg-card text-muted-foreground hover:text-foreground transition-colors"
             aria-label={ui('rectSearchAria')}
           >
             <Search className="h-4 w-4" data-testid="Search__4395d6" />
@@ -440,17 +441,17 @@ function ExpandedForm({
   }
 
   return (
-    <div className="px-6 py-4 space-y-4 bg-white border-t border-border/30">
+    <div className="px-6 py-4 space-y-4 bg-card border-t border-border/30">
       {/* Factura original — compact field + search icon, per UX spec */}
       <div className="space-y-1.5 max-w-[360px]">
         <label className="text-sm font-medium text-foreground">
           {t('Reversed_C_Invoice_ID') ?? 'Factura original'}
-          <span className="text-red-500 ml-0.5">*</span>
+          <span className="text-destructive ml-0.5">*</span>
         </label>
         {invoiceField}
       </div>
       {/* Gray panel: Correctiva del 349 checkbox + conditional AEAT fields, per UX spec */}
-      <div className="rounded-lg bg-[#F8F9FA] px-4 py-3 space-y-4">
+      <div className="rounded-lg bg-muted px-4 py-3 space-y-4">
         <div className="flex items-start gap-3">
           <button
             type="button"
@@ -464,9 +465,9 @@ function ExpandedForm({
               onFieldSave?.('aEAT349IsCorrective', next);
             }}
             className={[
-              'mt-0.5 h-5 w-5 shrink-0 rounded-sm border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
+              'mt-0.5 h-5 w-5 shrink-0 rounded-sm border border-border-control shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
               'flex items-center justify-center transition-colors focus-visible:outline-none',
-              corrective ? 'bg-primary text-primary-foreground border-primary' : 'bg-white',
+              corrective ? 'bg-primary text-primary-foreground border-primary' : 'bg-card',
               readOnly ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
             ].join(' ')}
             data-testid="checkbox__isCorrective"
@@ -501,7 +502,7 @@ function ExpandedForm({
       </div>
       {/* Draft-only: error + save / cancel buttons */}
       {isDraft && error && (
-        <p className="text-sm text-red-600" data-testid="text__saveError">{error}</p>
+        <p className="text-sm text-destructive" data-testid="text__saveError">{error}</p>
       )}
       {isDraft && (
         <div className="flex items-center gap-2 pt-1">
@@ -518,7 +519,7 @@ function ExpandedForm({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex items-center rounded-lg border border-[#D1D4DB] px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+            className="inline-flex items-center rounded-lg border border-border-control px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             data-testid="btn__cancelNewLine"
           >
             {ui('cancel')}
@@ -774,7 +775,7 @@ export default function ReversedInvoicesPanel({
       {/* ── table ── */}
       {(lines.length > 0 || loading || addingLine) && (
         <table className="w-full">
-          <thead className="sticky top-0 z-20 bg-white">
+          <thead className="sticky top-0 z-20 bg-card">
             <tr className="border-b border-border/40">
               {/* expand toggle placeholder */}
               <th className="h-10 w-10 px-3" />
@@ -809,7 +810,7 @@ export default function ReversedInvoicesPanel({
               const displayDate = ref.date ?? '—';
               const docNo = ref.docNo ?? identifier;
               const totalDisplay = ref.amount != null
-                ? `${ref.amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR`
+                ? formatCurrency('EUR', ref.amount)
                 : '—';
 
               return (
@@ -824,11 +825,11 @@ export default function ReversedInvoicesPanel({
                       <button
                         type="button"
                         onClick={() => setExpandedId(isExpanded ? null : line.id)}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#D1D4DB] bg-white hover:bg-[#F5F7F9] transition-colors"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border-control bg-card hover:bg-page-bg transition-colors"
                         aria-label={isExpanded ? ui('rectCollapse') : ui('rectExpand')}
                       >
                         <ChevronDown
-                          className={`h-4 w-4 text-[#828FA3] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                           data-testid="ChevronDown__4395d6" />
                       </button>
                     </td>
@@ -858,7 +859,7 @@ export default function ReversedInvoicesPanel({
                           type="button"
                           onClick={() => deleteLine(line.id)}
                           disabled={deleting === line.id}
-                          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
                           aria-label={ui('delete')}
                           data-testid="btn__deleteLine"
                         >
@@ -937,9 +938,9 @@ export default function ReversedInvoicesPanel({
       {/* ── empty state ── */}
       {showEmptyState && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#F5F7F9] flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-page-bg flex items-center justify-center">
             <FileText
-              className="h-5 w-5 text-[#9ca3af]"
+              className="h-5 w-5 text-muted-foreground"
               strokeWidth={1.5}
               data-testid="FileText__4395d6" />
           </div>

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ListView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
 import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
@@ -40,21 +41,21 @@ function applyDocTypeLabels(record) {
 
 const LIST_COLUMNS = [
   { key: 'orderReference', column: 'POReference', type: 'string', label: 'Document No.' },
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount' },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
 ];
 // Mirrors PurchaseInvoiceHeaderTable columns (key + column + type only) so that
 // buildAdvancedFilterCriteria can resolve filter modes on the first render,
 // before DataTable fires onColumnsReady.
 const OVERDUE_INITIAL_COLUMNS = [
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', required: true },
+  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', required: true },
   { key: 'eTGODueDate', column: 'em_etgo_due_date', type: 'date' },
 ];
 
@@ -123,10 +124,10 @@ export default function PurchaseInvoiceWindow(props) {
   );
 
   const summary = [
-    { key: 'summedLineAmount', column: 'TotalLines', type: 'amount', label: ui('totalNetAmount') },
-    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: ui('totalGrossAmount') },
-    { key: 'totalPaid', column: 'Totalpaid', type: 'amount', label: ui('paidAmount') },
-    { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', label: ui('outstandingAmount') },
+    { key: 'summedLineAmount', column: 'TotalLines', type: 'amount', label: ui('totalNetAmount'), required: true },
+    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: ui('totalGrossAmount'), required: true },
+    { key: 'totalPaid', column: 'Totalpaid', type: 'amount', label: ui('paidAmount'), required: true },
+    { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', label: ui('outstandingAmount'), required: true },
   ];
 
   // Pick up the saved record from navigation state when arriving at the list view
@@ -134,6 +135,22 @@ export default function PurchaseInvoiceWindow(props) {
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
   const draftModeOverride = getInvoiceDraftMode(ui);
+
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('183');
+  // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
+  // ListView below never picked up the read-only tier either, unlike GeneratedApp
+  // (which already forces window.readOnly internally for the detail branch).
+  // Computed unconditionally, before the early return below, so hook order stays
+  // stable across renders regardless of windowAccessTier.
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="183" data-testid="WindowAccessGuard__c20e53" />;
+  }
 
   if (recordId) {
     return (
@@ -213,6 +230,7 @@ export default function PurchaseInvoiceWindow(props) {
         )}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
+        window={effectiveWindow}
         data-testid="ListView__c20e53" />
       {deleteDialog}
       {cloneTargets && createPortal(

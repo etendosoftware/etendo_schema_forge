@@ -239,6 +239,15 @@ See `docs/window-templates.md` for layout types (kanban, calendar, custom), conf
 
 **Every user-visible string MUST be translated.** The app is primarily used in Spanish by real clients. Hardcoded English strings are treated as bugs. See `docs/i18n-guide.md` for the full reference (hooks, locale JSON structure, rules for adding keys). Key hooks: `useUI()` for generic labels, `useLabel()` for AD fields, `useMenuLabel()` for menus/tabs. All new keys must be added to BOTH `en_US.json` and `es_ES.json`.
 
+## Currency & Amount Formatting (MANDATORY)
+
+**Every monetary value MUST be formatted through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString` call.** A hardcoded locale (`'en-US'`, unpinned `undefined`) or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. Treat any new ad-hoc money formatter as a bug, not a style nit.
+
+- **Browser (React components):** `formatCurrency(currencyCode, value)` and `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`. Never format an amount with `.toFixed()`, `toLocaleString()`, or your own `Intl.NumberFormat` for currency/amount display.
+- **jsreport / PDF / printed reports:** `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js` — this is the only helper string that may cross the HTTP boundary into the jsreport container. Never write a second `formatCurrency`/`formatNumber` Handlebars helper by hand.
+- Both read the instance-wide thousands/decimal separators from one shared NEO config source (`GET /sws/neo/currency-format`, `currencyFormatConfig.js`) — see `docs/plans/2026-07-28-currency-format-centralization-proposal.md` for the full architecture.
+- Before adding a new component or report that displays an amount, **grep for `formatCurrency` first** — there is almost certainly an existing pattern to copy in a sibling window/component.
+
 ## Testing
 
 Contract tests (Node.js), Unit tests (JUnit in Etendo Go), Integration tests (OBBaseTest), E2E (Playwright).
@@ -440,3 +449,15 @@ public class InternalConsumptionLineHandler implements NeoHandler {
 - Place handlers in: `{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/`
 
 Full reference: `docs/neo-headless-extensibility.md`
+
+## Adding a New Etendo GO Webhook — NEO Pseudo-Spec Bridge Pattern (com.etendoerp.go)
+
+**A different extension point from `NeoHandler` above** — for a brand-new, standalone
+Etendo-GO-authored webhook (e.g. `SFListMenu`, `SFWindowAccessMap`, `SFRolesOverview`), default to
+routing it through the **NEO pseudo-spec bridge** (`NeoGoWebhookBridge`, wired in `NeoServlet`)
+instead of exposing it only via the Webhooks module's `/webhooks/*` + `SMFWHE_DEFINEDWEBHOOK_ROLE`
+grant. That grant table is reset to its XML-only baseline by `update.database`, silently wiping any
+tenant-specific grant — the NEO bridge needs only a valid NEO bearer token, no per-role grant. No
+security is weakened: each webhook's own access rule inside `get()` is unchanged either way.
+
+Full reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.10–4.11.

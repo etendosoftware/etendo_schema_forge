@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
+import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidation.js';
 import { buildHeaders } from '@/auth/api.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
-import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { ImageField } from './ImageField.jsx';
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { CreateContactContext } from './CreateContactContext.js';
@@ -25,6 +26,15 @@ import LocationModalField from './LocationModalField.jsx';
 
 function buildSelectPlaceholder(ui, label) {
   return `${ui('selectLabelPrefix')} ${label}...`;
+}
+
+// Static-select onChange value mapping: boolean-backed options may carry real
+// booleans OR string values from different sources, hence the `String(id)`
+// coercion before comparing to 'true'. Non-boolean fields pass the id through.
+function resolveEnumChangeValue(id, isBoolean) {
+  if (!isBoolean) return id;
+  if (id === '' || id === null || id === undefined) return '';
+  return String(id) === 'true';
 }
 
 function evalReadOnlyLogic(field, data) {
@@ -81,7 +91,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         type="button"
         onClick={() => setOpen(true)}
         data-testid={`field-${field.key}`}
-        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[#D1D4DB] bg-white p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
+        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -106,267 +116,41 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
 }
 
 /**
- * Dropdown selector for FK fields with many options (inputMode: search).
- * Supports both static catalog data (mock) and server-side filtering via API.
+ * Dropdown selector for plain FK fields with many options (inputMode: 'search') — e.g.
+ * Business Partner/Contacto, Warehouse/Almacén, UoM. Delegates the actual search UI to
+ * CreatableSearchSelect in `serverSearch` mode (ETP-4600 Phase 2b) so all FK search pickers
+ * share one component. This thin wrapper only exists because the "Create contact" affordance
+ * reads CreateContactContext via a hook, which is only legal inside a component body —
+ * `renderSearchField` itself is a plain function, not a component, so the hook can't be
+ * called there directly.
  */
-function SearchInput({ entityName, field, value, displayValue, onChange, catalogs, resolvedLabel, selectorUrl, selectorContext, token }) {
+function SearchSelectField({ f, value, displayValue, onChange, formData, resolvedLabel, selectorUrl, selectorContext, token }) {
   const ui = useUI();
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState(displayValue || value || '');
-  const [serverResults, setServerResults] = useState(null);
-  const [fetching, setFetching] = useState(false);
-  // When a value is selected, the field renders as a chip (Figma spec).
-  // editingIntent flips to true when the user clicks the chip to switch back to
-  // typing mode, and resets after a fresh selection / clear.
-  const [editingIntent, setEditingIntent] = useState(false);
-  // Tracks whether the user is actively typing so the sync effect doesn't fight keystrokes.
-  const isEditingRef = useRef(false);
-  const debounceRef = useRef(null);
-  const inputRef = useRef(null);
-
-  // Optional "Create contact" capability injected by custom windows via context.
+  // Optional "Create contact" capability injected by custom windows via context (ported
+  // 1:1 from the old SearchInput): gates the create action to a single configured field,
+  // e.g. sales-order's Business Partner (createContactCtxValue.fieldKey === 'businessPartner').
   const createCtx = React.useContext(CreateContactContext);
-  const canCreate = !!createCtx && createCtx.fieldKey === field.key;
-
-  React.useEffect(() => {
-    // Only sync from outside when the user is NOT actively editing.
-    // This prevents the parent state update (triggered by onChange while typing)
-    // from immediately reverting the input text.
-    if (!isEditingRef.current) {
-      setQuery(displayValue || value || '');
-    }
-  }, [value, displayValue]);
-
-  // When a selectorUrl is configured, always use server search — ignore local catalog.
-  // Mock catalog data is only a fallback for when no server is available (e.g. mock mode).
-  const catalogOptions = selectorUrl ? null : catalogs?.[field.reference];
-
-  // If we have an initial value but no label yet (and no catalog), try to fetch the single record
-  const searchContextKey = JSON.stringify(selectorContext ?? {});
-  React.useEffect(() => {
-    if (!value || displayValue || isEditingRef.current) return;
-    // Try local catalog
-    const localOptions = getCatalogOptions(catalogs, entityName, field);
-    const local = localOptions.find(opt => opt.id === value);
-    if (local) { setQuery(local.name || value); return; }
-    // Try server selector with ?id=
-    if (!selectorUrl || !token) return;
-    fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), {
-      headers: buildHeaders(token),
-    })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        const match = (data?.items || []).find(i => i.id === value);
-        if (match) {
-          setQuery(match.label || match.name || value);
-          // Don't auto-select here, just set display text to avoid loop
-        }
-      })
-      .catch(() => { });
-  }, [value, displayValue, selectorUrl, searchContextKey, token, catalogs, entityName, field]);
-
-  // Server-side search triggered on typing or on focus (empty query = load initial options).
-  const triggerServerSearch = (searchQuery) => {
-    if (catalogOptions || !selectorUrl || !token) return;
-
-    // Build params: include q only when the user has typed enough to filter
-    const params = { ...selectorContext };
-    if (searchQuery && searchQuery.length >= 2) params.q = searchQuery.trim();
-
-    setFetching(true);
-    fetch(buildUrlWithParams(selectorUrl, params), {
-      headers: buildHeaders(token),
-    })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data) {
-          setServerResults((data.items || []).map(item => ({
-            id: item.id,
-            name: item.label || item.name || item.id,
-            ...item
-          })));
-        }
-      })
-      .catch(() => { })
-      .finally(() => setFetching(false));
-  };
-
-  // Local fallback: filter the pre-loaded catalog (used when selectorUrl not available)
-  const localOptions = getCatalogOptions(catalogs, entityName, field);
-  const filtered = useMemo(() => {
-    // Server results take priority when available
-    if (serverResults !== null) return serverResults.slice(0, 20);
-    // When a real API selector is configured, don't show mock locals — wait for user to type
-    if (selectorUrl) return [];
-    if (!query || query.length === 0) return localOptions.slice(0, 10);
-    const q = query.toLowerCase();
-    return localOptions.filter(opt => opt.name.toLowerCase().includes(q)).slice(0, 10);
-  }, [serverResults, query, localOptions, selectorUrl]);
-
-  const handleSelect = (opt) => {
-    isEditingRef.current = false; // Finished editing
-    setEditingIntent(false);
-    setQuery(opt.name);
-    setOpen(false);
-
-    // Pass full record as 3rd arg so auxiliary fields (like M_PriceList_ID) can be mapped
-    // by the parent Form (if the schema defines mapped column suffixes).
-    onChange(opt.id, opt.name, opt);
-  };
-
-  const handleClear = () => {
-    isEditingRef.current = false;
-    setEditingIntent(false);
-    setQuery('');
-    setServerResults(null);
-    setOpen(false);
-    onChange('', '');
-  };
-
-  // If field is mandatory but value is empty, or if we have a value, don't show clear unless value exists
-  const hasSelection = value != null && value !== '';
-  // Chip mode: a selected value renders as the Figma tag/chip; clicking the chip
-  // body flips editingIntent so the user can type to search again.
-  const showChip = hasSelection && !editingIntent && field.clearable !== false;
-  const handleChipClick = () => {
-    setEditingIntent(true);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
-  };
-
-  const createBtn = canCreate ? (
-    <button
-      type="button"
-      data-testid={`action-create-${field.key}`}
-      className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-blue-50 border-b border-border/40 transition-colors"
-      style={{ color: '#202452' }}
-      onMouseDown={e => { e.preventDefault(); setOpen(false); createCtx.onOpen(query, handleSelect); }}
-    >
-      + {ui('createContact')}
-    </button>
-  ) : null;
-
+  const canCreate = !!createCtx && createCtx.fieldKey === f.key;
   return (
-    /*
-      Single wrapper that doubles as the visual "field" element (border + shadow
-      + bg live here, like SelectTrigger) AND as the popup anchor (relative for
-      the absolute-positioned dropdowns below). The inner <input> is borderless
-      and transparent so DevTools highlights this same wrapper as the field box
-      — matching the SelectorInput inspector experience.
-    */
-    <div
-      data-testid={`field-${field.key}-wrapper`}
-      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary`}
-      onClick={showChip ? handleChipClick : undefined}
-    >
-      {showChip ? (
-        <SelectorChip
-          label={displayValue || query}
-          onClick={handleChipClick}
-          onClear={handleClear}
-          clearAriaLabel={ui('clear')}
-          testId={`field-${field.key}-chip`}
-          clearable={field.clearable !== false}
-          data-testid={"SelectorChip__" + field.id} />
-      ) : (
-        <input
-          ref={inputRef}
-          id={field.key}
-          name={field.key}
-          data-testid={`field-${field.key}`}
-          type="text"
-          placeholder={buildSearchPlaceholder(ui, resolvedLabel)}
-          value={query}
-          onChange={(e) => {
-            isEditingRef.current = true;
-            const newQuery = e.target.value;
-            setQuery(newQuery);
-            if (!open) setOpen(true);
-
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-            debounceRef.current = setTimeout(() => {
-              triggerServerSearch(newQuery);
-            }, 300);
-          }}
-          onFocus={() => {
-            setOpen(true);
-            // Always load options on focus when none are cached yet (covers empty/cleared field)
-            if (!catalogOptions && !serverResults) {
-              triggerServerSearch(query);
-            }
-          }}
-          onBlur={() => {
-            // Delay closing so click events on dropdown items can fire first
-            isEditingRef.current = false;
-            setTimeout(() => {
-              setOpen(false);
-              // If the user clicked away without picking a new option, revert to chip mode
-              // so the previously-selected value stays visible (no destructive cancel).
-              if (hasSelection) setEditingIntent(false);
-            }, 200);
-          }}
-          className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none py-2 text-sm placeholder:text-[#6C6C89]"
-          required={field.required}
-          autoComplete="off"
-        />
-      )}
-      {fetching ? (
-        <Loader2
-          className="h-4 w-4 text-[#828FA3] animate-spin shrink-0 ml-auto"
-          data-testid={"Loader2__" + field.id} />
-      ) : (
-        <button
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            if (showChip) { handleChipClick(); return; }
-            if (open) {
-              setOpen(false);
-            } else {
-              setOpen(true);
-              inputRef.current?.focus();
-              if (!catalogOptions && !serverResults) triggerServerSearch(query);
-            }
-          }}
-          className="shrink-0 ml-auto flex items-center"
-        >
-          <ChevronDown
-            className="h-4 w-4 text-[#828FA3]"
-            data-testid={"ChevronDown__" + field.id} />
-        </button>
-      )}
-      {open && (canCreate || filtered.length > 0) && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
-          {createBtn}
-          {filtered.map(opt => (
-            <button
-              key={opt.id}
-              type="button"
-              data-testid={`option-${field.key}-${opt.id}`}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer"
-              onMouseDown={() => handleSelect(opt)}
-            >
-              {opt.name}
-            </button>
-          ))}
-        </div>
-      )}
-      {open && query.length > 0 && !fetching && filtered.length === 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
-          {createBtn}
-          <div className="px-3 py-2 text-xs text-muted-foreground">
-            {ui('noResultsFor')} &ldquo;{query}&rdquo;
-          </div>
-        </div>
-      )}
-      {open && !query && !fetching && canCreate && filtered.length === 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg">
-          {createBtn}
-        </div>
-      )}
-    </div>
+    <CreatableSearchSelect
+      field={f}
+      value={value}
+      displayValue={displayValue}
+      onChange={onChange}
+      formData={formData}
+      resolvedLabel={resolvedLabel}
+      selectorUrl={selectorUrl}
+      selectorContext={selectorContext}
+      token={token}
+      serverSearch
+      createLabel={canCreate ? `+ ${ui('createContact')}` : undefined}
+      onCreateRequest={canCreate
+        // createCtx.onOpen(query, onSelect) opens the caller's creation modal; onSelect is
+        // invoked with a `{ id, name }` object (see useCreateContactModal.jsx), whereas
+        // CreatableSearchSelect's onCreated expects `(id, name)` positional args — adapt here.
+        ? (query, onCreated) => createCtx.onOpen(query, (opt) => onCreated(opt.id, opt.name))
+        : undefined}
+      data-testid="CreatableSearchSelect__a8d626" />
   );
 }
 
@@ -487,7 +271,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm text-left shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
+        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm text-left shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -514,6 +298,14 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
   );
 }
 
+// Only two shapes of `auxData` are a real aux contract: the `standardPrice` price-list
+// mapping (below) and the nested `_aux` object (e.g. `product_PSTD`, `_PLIM`, `_UOM`,
+// `_CURR` — suffixes that already start with `_`, so `f.key + auxSuffix` composes a valid
+// field name). Every OTHER top-level key on `auxData` is just a raw field the selector's
+// server item happened to carry (id, name, active, searchKey, ...) — NOT a suffix to
+// concatenate onto `f.key`. Treating it as one produced bogus field names like
+// `assetCategoryid` (f.key + 'id', no separator) that then slipped past the callout
+// ignore-guard and fired spurious duplicate callouts (ETP-4600 regression).
 function applyLookupAuxData(auxData, isGross, onChange, f) {
   for (const [suffix, auxVal] of Object.entries(auxData)) {
     // Price from the document's price list. Mapping depends on price list type:
@@ -532,84 +324,10 @@ function applyLookupAuxData(auxData, isGross, onChange, f) {
       for (const [auxSuffix, auxSuffixVal] of Object.entries(auxVal)) {
         onChange?.(f.key + auxSuffix, auxSuffixVal);
       }
-    } else {
-      onChange?.(f.key + suffix, auxVal);
     }
+    // Any other key (id, name, active, searchKey, isTaxIncluded, ...) is intentionally
+    // ignored — it is a raw selector-item field, not an aux suffix.
   }
-}
-
-function renderSelectField(f, data, label, isReadOnly, onChange, ctx) {
-  const { ui, tMenu, optionalSuffix = false, locale = 'es_ES' } = ctx;
-  const optionLabel = (opt) => opt.labels?.[locale] ?? tMenu(opt.label);
-  let selectValue;
-  if (f.valueType === 'boolean') {
-    if (data?.[f.key] === true || data?.[f.key] === 'Y' || data?.[f.key] === 'true') {
-      selectValue = 'true';
-    } else {
-      if (data?.[f.key] === false || data?.[f.key] === 'N' || data?.[f.key] === 'false') {
-        selectValue = 'false';
-      } else {
-        selectValue = '';
-      }
-    }
-  } else {
-    selectValue = data?.[f.key] ?? '';
-  }
-
-  if (isReadOnly) {
-    const matchedOption = f.options?.find(o => String(o.value) === String(selectValue));
-    const displayLabel = matchedOption ? tMenu(matchedOption.label) : selectValue;
-    return (
-      <div key={f.key} className="space-y-1.5">
-        <Label htmlFor={f.key} className="text-sm text-foreground font-medium" data-testid="Label__a8d626">
-          {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
-        </Label>
-        <Input
-          id={f.key}
-          data-testid={`field-${f.key}`}
-          value={displayLabel}
-          readOnly
-          disabled
-          className="bg-muted/50 cursor-default"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div key={f.key} className={LABEL_GAP}>
-      <Label
-        htmlFor={f.key}
-        className="text-sm text-foreground font-medium"
-        data-testid="Label__a8d626">
-        {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
-      </Label>
-      <Select
-        value={selectValue || '__empty__'}
-        onValueChange={(val) => {
-          if (val === '__empty__') {
-            onChange?.(f.key, '', f.column);
-            return;
-          }
-          onChange?.(f.key, f.valueType === 'boolean' ? val === 'true' : val, f.column);
-        }}
-        disabled={isReadOnly}
-        required={f.required}
-        data-testid="Select__a8d626">
-        <SelectTrigger id={f.key} data-testid={`field-${f.key}`} className="bg-white focus:ring-2 focus:ring-primary">
-          <SelectValue
-            placeholder={buildSelectPlaceholder(ui, label)}
-            data-testid="SelectValue__a8d626" />
-        </SelectTrigger>
-        <SelectContent data-testid="SelectContent__a8d626">
-          {!f.required && <SelectItem value="__empty__" data-testid="SelectItem__a8d626">&nbsp;</SelectItem>}
-          {f.options.map(opt => (
-              <SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__a8d626">{optionLabel(opt)}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
 }
 
 function PopupSearchField(props) {
@@ -618,7 +336,7 @@ function PopupSearchField(props) {
       <Label
         className="text-sm text-foreground font-medium"
         data-testid="Label__a8d626">
-        {props.label}{(props.f.required || props.f.requiredVisual) ? <span className="text-red-500 ml-0.5">*</span> : ""}
+        {props.label}{(props.f.required || props.f.requiredVisual) ? <span className="text-destructive ml-0.5">*</span> : ""}
       </Label>
       <PopupSearchInput
         field={props.f}
@@ -646,7 +364,7 @@ function getCheckboxStateClass(checked) {
 // display before the label is built), so no explicit isReadOnly gate is needed
 // here — see labelMarker/requiredAsteriskIfEditable for the gated equivalents.
 function requiredAsterisk(f) {
-  return (f.required || f.requiredVisual) ? <span className="text-red-500 ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) ? <span className="text-destructive ml-0.5">*</span> : null;
 }
 
 /**
@@ -660,11 +378,11 @@ function requiredAsterisk(f) {
  * `required: true`.
  */
 function labelMarker(f, isReadOnly, optionalSuffix, ui) {
-  if ((f.required || f.requiredVisual) && !isReadOnly) return <span className="text-[#F53D6B] ml-0.5">*</span>;
+  if ((f.required || f.requiredVisual) && !isReadOnly) return <span className="text-[hsl(var(--destructive))] ml-0.5">*</span>;
   if (optionalSuffix && !isReadOnly) {
-    return <span className="ml-1 font-normal text-[#6C6C89]">({ui('optional')})</span>;
+    return <span className="ml-1 font-normal text-[hsl(var(--muted-foreground))]">({ui('optional')})</span>;
   }
-  return '';
+  return null;
 }
 
 /**
@@ -675,7 +393,7 @@ function labelMarker(f, isReadOnly, optionalSuffix, ui) {
 function FieldHelp({ field, ui }) {
   if (!field?.help) return null;
   const text = ui(field.help) ?? field.help;
-  return <p className="text-sm leading-6 text-[#6C6C89]" data-testid={`help-${field.key}`}>{text}</p>;
+  return <p className="text-sm leading-6 text-[hsl(var(--muted-foreground))]" data-testid={`help-${field.key}`}>{text}</p>;
 }
 
 function formatReadOnlyDisplayValue(f, isReadOnly, rawDisplayValue) {
@@ -696,11 +414,11 @@ function buildSearchSelectorUrl(apiBaseUrl, entity, f, apiSelectorEntry) {
 }
 
 function requiredAsteriskIfEditable(f, isReadOnly) {
-  return (f.required || f.requiredVisual) && !isReadOnly ? <span className="text-red-500 ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) && !isReadOnly ? <span className="text-destructive ml-0.5">*</span> : null;
 }
 
 function getInputStateClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50' : 'bg-white focus:ring-2 focus:ring-primary focus:outline-none';
+  return isReadOnly ? 'bg-muted/50' : 'bg-card focus:ring-2 focus:ring-focus-ring focus:outline-none';
 }
 
 function DependentFkField(props) {
@@ -757,17 +475,19 @@ function buildEntitySelectorUrl(apiBaseUrl, entity, f, api) {
   return entry?.url?.includes('?') ? `${base}?${entry.url.split('?')[1]}` : base;
 }
 
-// Propagate a selector's aux payload onto sibling form fields. `_aux` nests an
-// object of extra suffix→value pairs; any other key is a direct suffix write.
+// Propagate a selector's aux payload onto sibling form fields. `_aux` is the ONLY known
+// aux contract here: a nested object of suffix→value pairs whose suffixes already start
+// with `_` (e.g. `_PSTD`, `_PLIM`, `_UOM`), so `f.key + auxSuffix` composes a valid field
+// name. `auxData` itself is the raw selector-item object (CreatableSearchSelect's
+// `handleSelect` passes the whole `opt`), so every OTHER top-level key (id, name, active,
+// searchKey, ...) must be ignored — treating them as suffixes produced bogus concatenated
+// field names (e.g. `assetCategoryid`) that slipped past the callout ignore-guard and
+// fired spurious duplicate callouts (ETP-4600 regression).
 function applySelectorAuxData(auxData, onChange, f) {
-  for (const [suffix, auxVal] of Object.entries(auxData)) {
-    if (suffix === '_aux' && auxVal && typeof auxVal === 'object') {
-      for (const [auxSuffix, auxSuffixVal] of Object.entries(auxVal)) {
-        onChange?.(f.key + auxSuffix, auxSuffixVal);
-      }
-    } else {
-      onChange?.(f.key + suffix, auxVal);
-    }
+  const auxObj = auxData?._aux;
+  if (!auxObj || typeof auxObj !== 'object') return;
+  for (const [auxSuffix, auxSuffixVal] of Object.entries(auxObj)) {
+    onChange?.(f.key + auxSuffix, auxSuffixVal);
   }
 }
 
@@ -791,7 +511,7 @@ function getFieldValue(isReadOnly, displayValue, data, f) {
 }
 
 function getReadOnlyBgClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-white';
+  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-card';
 }
 
 /**
@@ -817,7 +537,7 @@ function getReadOnlyBgClass(isReadOnly) {
  * `committedValue` is the same `data?.[f.key] ?? ''` the default path reads, so the
  * value semantics are identical — only the commit TIMING differs.
  */
-function DeferredInput({ f, committedValue, onCommit, onFieldBlur, placeholder, className, required, disabled }) {
+function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlur, placeholder, className, required, disabled }) {
   const [buffer, setBuffer] = useState(committedValue);
   const focusedRef = useRef(false);
   // The last value the USER actually committed (or that arrived externally while the field
@@ -875,6 +595,9 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, placeholder, 
         const changed = !sameAsLast(v);
         lastUserValueRef.current = v;
         if (changed) onCommit?.(f.key, v, f.column);
+        // Validate the RAW value the user left (pre-'0' coercion) so a genuinely
+        // empty field is not reported as below-min. ETP-4542.
+        onValidateBlur?.(f, raw);
         onFieldBlur?.(f.key);
       }}
       placeholder={placeholder}
@@ -914,15 +637,21 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   }
 
   // Apply visibility from evaluate-display (hide fields where visibility === false).
-  // Only honor the evaluate-display result if the field itself declares a displayLogic
-  // in its contract definition. Fields without displayLogic have a static visibility
-  // decision that evaluate-display must not override (prevents AD displayLogic bugs
-  // from incorrectly hiding fields like businessPartner).
+  // Only honor the evaluate-display result if the field declares server-side gating —
+  // either a truthy `displayLogic` value OR `visibilitySource === 'server'` (the marker
+  // generate-frontend.js emits for non-evaluable raw AD expressions, e.g. server macros
+  // like @ACCT_DIMENSION_DISPLAY@ — those fields carry NO `displayLogic` property at all,
+  // only `visible: null, visibilitySource: 'server', displayLogicReason: '...'`, per
+  // buildDisplayLogicPart() in generate-frontend.js). Fields with neither marker have a
+  // static visibility decision that evaluate-display must not override (prevents AD
+  // displayLogic bugs from incorrectly hiding fields like businessPartner).
   // Fields with a function-based displayLogic are handled entirely client-side (second
   // filter below) and must NOT be removed here — the server result is irrelevant for them.
   if (displayLogic?.visibility && Object.keys(displayLogic.visibility).length > 0) {
     displayFields = displayFields.filter(f =>
-      typeof f.displayLogic === 'function' || !f.displayLogic || displayLogic.visibility[f.key] !== false
+      typeof f.displayLogic === 'function'
+        || (!f.displayLogic && f.visibilitySource !== 'server')
+        || displayLogic.visibility[f.key] !== false
     );
   }
 
@@ -951,7 +680,13 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   if (displayFields.length === 0) return null;
 
   const gridClass = resolveGridClass(cols, layout);
-  const gridStyle = cols ? { gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 16 } : undefined;
+  // minmax(0, 1fr) (not bare `1fr`) — a plain `1fr` track's implicit minimum is
+  // `auto` (the item's min-content size), so a long unbreakable value (e.g. a
+  // long contact name in a CreatableSearchSelect chip) would grow the column
+  // past its fair share instead of letting `truncate` clip it (ETP-4600 Gap D).
+  // Tailwind's own `grid-cols-N` utility (the `resolveGridClass` default path)
+  // already bakes this in; this inline-style override path needs it explicitly.
+  const gridStyle = cols ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 16 } : undefined;
 
   // If there's an image field (not inline), pin it to the right — rest of fields render in a 3-col grid on the left
   const imageField = displayFields.find(f => f.type === 'image' && !f.inline);
@@ -977,11 +712,17 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     </div>
   );
 
-  // Opt-in (decisions: `searchSelect: true`): the searchable combobox instead of the
-  // plain pick-only dropdown. When the field also declares `allowCreate` + create target,
-  // render the create-capable variant whose "+ create" action opens a name-only modal
-  // (e.g. match-rule transaction type → ETGO_Transaction_Type). Only reached for editable
-  // fields (renderSelectorField returns early when read-only).
+  // Renders the shared searchable combobox (CreatableSearchSelect, serverSearch mode) for
+  // FK `type:'selector'` fields — both the opt-in `searchSelect: true` fields (decisions)
+  // and, since ETP-4600, the DEFAULT for any plain FK selector (see renderSelectorField).
+  // When the field also declares `allowCreate` + create target, render the create-capable
+  // variant whose "+ create" action opens a name-only modal (e.g. match-rule transaction
+  // type → ETGO_Transaction_Type). Only reached for editable fields (renderSelectorField
+  // returns early when read-only). `serverSearch: true` is always on here: every
+  // `type:'selector'` field resolves to the same `/selectors/{column}` endpoint
+  // (buildEntitySelectorUrl / buildSearchSelectorUrl produce the same URL shape), which
+  // already supports the `?q=` server-side search used by `type:'search'` fields — data
+  // must come from the DB, never a locally-filtered fetch-once page.
   const renderSearchSelectField = (f, label, selectorOnChange, selectorUrl) => {
     const commonProps = {
       field: f,
@@ -994,6 +735,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
       selectorContext: effectiveSelectorContext,
       token,
       emptyOptionLabel: resolveUiKey(ui, f.emptyOptionLabelKey),
+      serverSearch: true,
     };
     const canCreate = !!(f.allowCreate && f.createSpec && f.createEntity && apiBaseUrl);
     const createTitle = f.createTitleKey
@@ -1033,17 +775,38 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
       if (auxData) applySelectorAuxData(auxData, onChange, f);
     };
     const selectorUrl = buildEntitySelectorUrl(apiBaseUrl, entity, f, api);
-    if (f.searchSelect) {
+    // DocumentType-reference selector fields (e.g. purchase/sales-invoice's
+    // "transactionDocument") drive an optionTranslator that renames/hides options
+    // (invoices vs. returns vs. credit-notes tab labels) — CreatableSearchSelect has no
+    // equivalent prop, so these stay on the plain SelectorInput rather than silently
+    // dropping the translation (ETP-4600 narrow carve-out). Every other `type:'selector'`
+    // field — explicit `searchSelect: true` AND, as of ETP-4600, the plain default case —
+    // renders the shared searchable component instead of the plain dropdown.
+    const needsOptionTranslator = f.reference === 'DocumentType';
+    // Explicit per-field OPT-OUT: `searchSelect: false` (not merely absent) forces the
+    // field back onto the old plain SelectorInput below, bypassing the ETP-4600 default.
+    // TEMPORARY carve-out for Assets' `assetCategory` (see AssetsDetailPanel.jsx) — the
+    // unified CreatableSearchSelect's interaction timing exposes a pre-existing DetailView
+    // save→refetch/callout race (`pendingEditingRef`/fresh-callout snapshot) that silently
+    // reverts `depreciate` to false on save, so the "Crear Amortización" button never
+    // renders. Remove this opt-out once that race has its own fix (tracked separately from
+    // ETP-4600). Absent/`true` still routes to the unified component — no behavior change
+    // for any other field.
+    const explicitOptOut = f.searchSelect === false;
+    if (!explicitOptOut && (f.searchSelect || !needsOptionTranslator)) {
       return renderSearchSelectField(f, label, selectorOnChange, selectorUrl);
     }
-    const optionTranslator = f.reference === 'DocumentType'
+    // Only the DocumentType carve-out needs option renaming — the explicit `searchSelect:
+    // false` opt-out (e.g. Assets' assetCategory) just wants the plain SelectorInput with
+    // its options unchanged, so it must NOT get the DocumentType-specific translator.
+    const optionTranslator = needsOptionTranslator
       ? (name) => {
-          const lower = name.toLowerCase();
-          if (lower.includes('reversed')) return null;
-          if (lower.includes('credit') || lower.includes('memo')) return ui('creditNotesTab');
-          if (lower.includes('return') || lower.includes('devoluci')) return ui('returnsTab');
-          return ui('invoicesTab');
-        }
+        const lower = name.toLowerCase();
+        if (lower.includes('reversed')) return null;
+        if (lower.includes('credit') || lower.includes('memo')) return ui('creditNotesTab');
+        if (lower.includes('return') || lower.includes('devoluci')) return ui('returnsTab');
+        return ui('invoicesTab');
+      }
       : undefined;
     return (
       <div key={f.key} className={LABEL_GAP}>
@@ -1149,26 +912,45 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           data-testid="Label__a8d626">
           {label}{requiredAsterisk(f)}
         </Label>
-        <SearchInput
-          entityName={entity}
-          field={f}
+        <SearchSelectField
+          f={f}
           value={data?.[f.key] ?? ''}
           displayValue={data?.[f.key + '$_identifier']}
           onChange={searchOnChange}
-          catalogs={catalogs}
+          formData={data}
           resolvedLabel={label}
           selectorUrl={selectorUrl}
           selectorContext={effectiveSelectorContext}
           token={token}
-          data-testid="SearchInput__a8d626" />
+          data-testid="SearchSelectField__a8d626" />
       </div>
     );
   };
 
-  // Enum/list field (`type: 'select'` with options) opted into the searchable combobox:
-  // local-filtered static options, no API call. Read-only renders a plain disabled input.
+  // Enum/list field (`type: 'select'` with options) — DEFAULT rendering (ETP-4600) for
+  // every fixed-list enum: local-filtered static options via the unified searchable chip,
+  // no API call. Read-only renders a plain disabled input. This is the parity-complete
+  // successor to the old renderSelectField (plain Radix Select) below: it matches its
+  // boolean valueType mapping, locale-aware labels, and empty/clear choice for optional
+  // fields, so `searchSelect: true` is no longer required to opt in — see the renderField
+  // gate below.
+  const staticSelectOptionLabel = (opt) => opt.labels?.[locale] ?? tMenu(opt.label);
   const renderStaticCreatableSelect = (f, label, isReadOnly) => {
-    const selOpt = f.options.find(o => o.value === (data?.[f.key] ?? ''));
+    const isBoolean = f.valueType === 'boolean';
+    const rawVal = data?.[f.key];
+    let selectValue;
+    if (isBoolean) {
+      if (rawVal === true || rawVal === 'Y' || rawVal === 'true') {
+        selectValue = 'true';
+      } else if (rawVal === false || rawVal === 'N' || rawVal === 'false') {
+        selectValue = 'false';
+      } else {
+        selectValue = '';
+      }
+    } else {
+      selectValue = rawVal ?? '';
+    }
+    const selOpt = f.options.find(o => String(o.value) === String(selectValue));
     if (isReadOnly) {
       return (
         <div key={f.key} data-testid={`field-${f.key}`} className={LABEL_GAP}>
@@ -1179,13 +961,16 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           <Input
             id={f.key}
             name={f.key}
-            value={selOpt ? tMenu(selOpt.label) : ''}
+            value={selOpt ? staticSelectOptionLabel(selOpt) : ''}
             disabled
             data-testid="Input__a8d626" />
         </div>
       );
     }
-    const staticOpts = f.options.map(o => ({ id: o.value, name: tMenu(o.label) }));
+    const staticOpts = f.options.map(o => ({ id: o.value, name: staticSelectOptionLabel(o) }));
+    const emptyOptionLabel = f.required
+      ? undefined
+      : (resolveUiKey(ui, f.emptyOptionLabelKey) ?? ' ');
     return (
       <div key={f.key} className={LABEL_GAP}>
         <Label
@@ -1196,11 +981,12 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         </Label>
         <CreatableSearchSelect
           field={f}
-          value={data?.[f.key] ?? ''}
-          displayValue={selOpt ? tMenu(selOpt.label) : ''}
-          onChange={(id) => onChange?.(f.key, id, f.column)}
+          value={selectValue}
+          displayValue={selOpt ? staticSelectOptionLabel(selOpt) : ''}
+          onChange={(id) => onChange?.(f.key, resolveEnumChangeValue(id, isBoolean), f.column)}
           resolvedLabel={label}
           staticOptions={staticOpts}
+          emptyOptionLabel={emptyOptionLabel}
           data-testid="CreatableSearchSelect__a8d626" />
       </div>
     );
@@ -1235,6 +1021,18 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   // both updates `editing` (so anything mirroring it, e.g. the Assets sidebar, defers too)
   // AND fires the callout in one shot. Fields without the flag keep the default fully
   // controlled path: every keystroke commits and fires the callout immediately.
+  // Generic on-blur numeric feedback (min / integer), driven by the field config.
+  // A no-op for fields that declare neither constraint (getNumericFieldError → null),
+  // so no existing window changes behaviour. ETP-4542.
+  const validateNumericOnBlur = (f, value) => {
+    const err = getNumericFieldError(f, value);
+    // Shared `id` with the useEntity.js save-gate toast for this same field: if
+    // the user clicks "Save" without leaving the input first, blur fires just
+    // before the click's onClick, and sonner dedupes the two same-id calls into
+    // one visible toast instead of stacking duplicates. ETP-4542.
+    if (err) toast.error(ui(err.key, err.params), { id: numericFieldToastId(f.key) });
+  };
+
   const renderInputField = (f, label, isReadOnly, displayValue) => {
     const calloutOnBlur = f.calloutOn === 'blur';
     return (
@@ -1251,6 +1049,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
             committedValue={data?.[f.key] ?? ''}
             onCommit={onChange}
             onFieldBlur={onFieldBlur}
+            onValidateBlur={validateNumericOnBlur}
             placeholder={resolveUiKey(ui, f.placeholderKey)}
             className={getInputStateClass(isReadOnly)}
             required={f.required && !isReadOnly}
@@ -1264,7 +1063,12 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
             type={getInputType(f)}
             value={getFieldValue(isReadOnly, displayValue, data, f)}
             onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
-            onBlur={() => onFieldBlur?.(f.key)}
+            onBlur={(e) => {
+              if (!isReadOnly) {
+                validateNumericOnBlur(f, e.target.value);
+              }
+              onFieldBlur?.(f.key);
+            }}
             placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
             className={getInputStateClass(isReadOnly)}
             required={f.required && !isReadOnly}
@@ -1299,7 +1103,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           placeholder={placeholder}
           disabled={isReadOnly}
           className={[
-            'flex w-full rounded-lg border border-[#D1D4DB] p-2 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
+            'flex w-full rounded-lg border border-[hsl(var(--border-control))] p-2 text-sm shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
             `placeholder:text-muted-foreground resize-none${minHeightClass}`,
             'focus:outline-none focus:ring-2 focus:ring-primary',
             'disabled:bg-muted/50 disabled:cursor-not-allowed',
@@ -1348,7 +1152,30 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           disabled={isReadOnly}
           id={f.key}
           data-testid={`field-${f.key}`}
-          onClick={() => !isReadOnly && onChange?.(f.key, !checked, f.column)}
+          onClick={() => {
+            if (isReadOnly) return;
+            onChange?.(f.key, !checked, f.column);
+            // Checkboxes have no native blur event to hang autosave off of
+            // (unlike text/selector fields, whose onBlur already drives
+            // autoSaveOnBlur — see DetailView's handleFieldBlur). Firing
+            // onFieldBlur right after onChange gives checkbox/toggle fields
+            // the same immediate-save + error-toast + revert-on-failure
+            // behavior. No-op when the window doesn't pass onFieldBlur
+            // (autoSaveOnBlur off). ETP-4670.
+            //
+            // MUST be deferred to a macrotask (setTimeout 0), not called
+            // synchronously: onChange schedules a React state update that
+            // hasn't committed yet when this handler runs, so DetailView's
+            // handleFieldBlurRef still holds the closure from the PREVIOUS
+            // render — hasUnsavedEdits(oldEditing, selected) sees no diff
+            // (the flip hasn't landed in `editing` yet) and handleSave()
+            // never fires. React flushes the re-render before a setTimeout(0)
+            // callback runs, so by then the ref has the fresh closure with
+            // the flipped value already in `editing`. A queueMicrotask does
+            // NOT work here — microtasks run before the browser yields to
+            // paint/commit, still ahead of the DOM-effect timing React needs.
+            setTimeout(() => onFieldBlur?.(f.key), 0);
+          }}
           className={[
             'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow',
             'flex items-center justify-center',
@@ -1391,7 +1218,16 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         <PillToggle
           checked={checked}
           disabled={isReadOnly}
-          onCheckedChange={(next) => !isReadOnly && onChange?.(f.key, next, f.column)}
+          onCheckedChange={(next) => {
+            if (isReadOnly) return;
+            onChange?.(f.key, next, f.column);
+            // See renderCheckboxField above (ETP-4670): toggles have no blur
+            // event either, so fire onFieldBlur right after onChange — but
+            // deferred to setTimeout(0), not synchronously (same stale-ref
+            // race as the checkbox: onChange's state update hasn't committed
+            // when this handler runs).
+            setTimeout(() => onFieldBlur?.(f.key), 0);
+          }}
           id={f.key}
           data-testid={`field-${f.key}`} />
         <Label
@@ -1474,11 +1310,8 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     if (f.type === 'search') {
       return renderSearchField(f, label, isReadOnly);
     }
-    if (f.type === 'select' && f.options?.length && f.searchSelect) {
-      return renderStaticCreatableSelect(f, label, isReadOnly);
-    }
     if (isSelectFieldWithOptions(f)) {
-      return renderSelectField(f, data, label, isReadOnly, onChange, { ui, tMenu, optionalSuffix, locale });
+      return renderStaticCreatableSelect(f, label, isReadOnly);
     }
     if (f.type === 'textarea') {
       return renderTextareaField(f, label, isReadOnly, displayValue);
@@ -1541,7 +1374,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         existing,
         React.createElement(
           'p',
-          { key: '__err', role: 'alert', className: 'text-xs text-red-500 mt-0.5', 'data-testid': `error-${f.key}` },
+          { key: '__err', role: 'alert', className: 'text-xs text-destructive mt-0.5', 'data-testid': `error-${f.key}` },
           err
         )
       );

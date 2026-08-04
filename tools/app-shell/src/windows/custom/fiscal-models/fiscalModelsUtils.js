@@ -1,3 +1,5 @@
+import { formatCurrency } from '../../../lib/formatCurrency.js';
+
 // ── Box computation ──────────────────────────────────────────────────
 // Returns { boxes, summary } from GET /neo/fiscal303/boxes?year=&period=.
 // Falls back to hardcoded GOOrg mock data when token/apiBaseUrl are absent or the request fails.
@@ -301,8 +303,7 @@ export function formatPeriod(period) {
 }
 
 export function formatAmount(amount) {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+  return formatCurrency('EUR', amount);
 }
 
 export function formatPercent(value) {

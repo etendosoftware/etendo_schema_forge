@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
-import { useMenuLabel, useLabel, useUI } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload } from 'lucide-react';
+import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
+import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -61,6 +62,43 @@ export function splitFilterParts(parts) {
   return { allCriteria, passthrough };
 }
 
+/**
+ * Pre-expand `multiField` columns into ordinary pseudo-columns for the
+ * advanced-filter path, so each constituent part shows up as its own filterable
+ * field with zero core changes. The `multiField` parent itself has no queryable
+ * key and is dropped. `column` is intentionally omitted on each pseudo-column:
+ * AdvancedFilterBuilder resolves its field label as
+ * `labelOf(col.column) ?? col.label ?? col.key`, so dropping `column` makes it
+ * fall through to our locale-resolved header wording (e.g. "Identificador"/
+ * "Nombre") instead of the AD column label ("Search Key").
+ */
+function expandMultiFieldColumns(columns, locale) {
+  const out = [];
+  for (const col of columns) {
+    if (col?.type === 'multiField' && Array.isArray(col.parts)) {
+      for (const part of col.parts) {
+        if (part.filterable === false) continue;
+        out.push({
+          key: part.key,
+          type: part.type,
+          label: part.labels?.[locale] ?? part.labels?.en_US ?? part.label ?? part.key,
+        });
+      }
+      continue;
+    }
+    // Plain columns that carry a per-locale `labels` map but no singular `label`
+    // (e.g. custom cells) would otherwise fall through to `col.key` in the
+    // advanced-filter field picker — a lowercase, unlocalized identifier. Resolve
+    // the localized label here so the builder shows "Venta"/"Compra"/"Stock".
+    if (col?.labels && !col.label && !col.column) {
+      out.push({ ...col, label: col.labels[locale] ?? col.labels.en_US ?? col.key });
+      continue;
+    }
+    out.push(col);
+  }
+  return out;
+}
+
 function ListFilterBarSection(props) {
   return (
     <>
@@ -84,6 +122,75 @@ function ListFilterBarSection(props) {
           data-testid="ListFilterBar__620cbc" />
       )}
     </>
+  );
+}
+
+/**
+ * The list's table region, in either of its two wrappers.
+ *
+ * Default: a ScrollPane that owns the scroll and drives infinite loading, showing
+ * skeletons on the initial fetch and the gallery renderer when that view mode is on.
+ *
+ * `ownScroll`: skip the ScrollPane entirely and hand the table a bounded flex box, for
+ * a custom headerTable that scrolls one of its own regions (e.g. financial-account pins
+ * its toolbar and KPI panel and scrolls only the rows). Wrapping such a table in the
+ * ScrollPane gives it a SECOND, outer scroll that drags the pinned parts away, plus
+ * ScrollPane's always-visible shadow scrollbar. Infinite scroll (`onReachBottom`)
+ * belongs to the ScrollPane, so it is inert in this mode — the table owns paging if it
+ * needs it. This branch also forwards `loading`, since there is no skeleton wrapper
+ * around it to stand in for the initial fetch.
+ *
+ * Extracted from ListView for two reasons: the ~28 `Table` props were written out once
+ * per branch (Sonar flagged the duplicated block), and the branches counted towards
+ * ListView's cognitive complexity. `tableProps` is built by the caller, where the
+ * handlers are in scope, and lands here as a single object.
+ */
+function ListTableRegion({
+  ownScroll, Table, tableProps, hook, ui, tablePaddingX, tablePaddingBottom,
+  onReachBottom, viewMode, galleryRenderer, navigate, windowName, token, apiBaseUrl,
+}) {
+  if (ownScroll) {
+    return (
+      <div className={`flex min-h-0 flex-1 flex-col ${tablePaddingX}`} data-testid="list-table-region">
+        <div
+          className={tableOpacityClass(hook)}
+          style={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column' }}>
+          <Table {...tableProps} loading={hook.loading} data-testid="Table__620cbc" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ScrollPane
+      onReachBottom={onReachBottom}
+      className={`${tablePaddingX} ${tablePaddingBottom}`}
+      data-testid="ScrollPane__620cbc">
+      {hook.loading && hook.items.length === 0 ? (
+        <div className="space-y-3">
+          <Skeleton className="h-10 w-full" data-testid="Skeleton__620cbc" />
+          <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
+          <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
+          <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
+        </div>
+      ) : (
+        <div className={tableOpacityClass(hook)}>
+          {viewMode === 'gallery' && galleryRenderer
+            ? galleryRenderer({ data: hook.items, onNavigate: (id) => navigate(`/${windowName}/${id}`), token, apiBaseUrl })
+            : <Table {...tableProps} data-testid="Table__620cbc" />
+          }
+          {hook.loadingMore && (
+            <div className="flex items-center justify-center py-4">
+              <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              <span className="ml-2 text-sm text-muted-foreground">{ui('loadingMore')}</span>
+            </div>
+          )}
+          {!hook.hasMore && hook.items.length > 0 && !hook.loadingMore && (
+            <p className="text-center text-xs text-muted-foreground/60 py-3">{ui('allRecordsLoaded')}</p>
+          )}
+        </div>
+      )}
+    </ScrollPane>
   );
 }
 
@@ -130,20 +237,20 @@ function TableRowsIcon({ size = 24, color = 'currentColor' }) {
 function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode }) {
   if (!galleryRenderer) return null;
   return (
-    <div data-testid="view-toggle" className="flex flex-row items-center p-1 gap-1 h-10 w-[108px] bg-[#F5F7F9] rounded-xl">
+    <div data-testid="view-toggle" className="flex flex-row items-center p-1 gap-1 h-10 w-[108px] bg-[hsl(var(--muted))] rounded-xl">
       <button
         onClick={onSelectList}
-        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
+        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "list" ? "bg-card shadow-sm" : ""}`}
       >
-        <TableRowsIcon size={24} color="#828FA3" data-testid="TableRowsIcon__620cbc" />
+        <TableRowsIcon size={24} color="hsl(var(--text-disabled))" data-testid="TableRowsIcon__620cbc" />
       </button>
       <button
         onClick={onSelectGallery}
-        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "gallery" ? "bg-white shadow-sm" : ""}`}
+        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "gallery" ? "bg-card shadow-sm" : ""}`}
       >
         <LayoutGrid
           className="h-6 w-6"
-          style={{ color: '#828FA3' }}
+          style={{ color: 'hsl(var(--text-disabled))' }}
           data-testid="LayoutGrid__620cbc" />
       </button>
     </div>
@@ -190,10 +297,26 @@ export function ListView({
   hidePrint = false,
   hideMoreMenu = false,
   hideListFilters = false,
+  // Drops the whole list bar (filters + sort/refresh/link/print/New) instead of
+  // just its individual controls. For windows whose headerTable renders its own
+  // complete toolbar — without this, `hideCreate`/`hidePrint`/`hideListFilters`
+  // still leave an empty padded strip with the sort/refresh icons, which have no
+  // flag of their own. Also settable through `listViewOptions.hideListBar`.
+  hideListBar = false,
+  // The Table scrolls one of its own regions: render it in a bounded flex box
+  // instead of ListView's ScrollPane (see the Table block below for the rationale).
+  // Also settable through `listViewOptions.tableOwnsScroll`.
+  tableOwnsScroll = false,
   hideLink = false,
   hideEyeCount = false,
   headerContent = null,
   api = null,
+  // ETP-4520 — the runtime per-tier window override (`useWindowAccess`'s 'read-only'
+  // tier forces `{ readOnly: true }` here — see buildWindowAccessWiring/effectiveWindow
+  // in generate-frontend.js and the equivalent hand-wired custom windows). Distinct from
+  // `api.window.readOnly` below, which is the static decisions.json-authored flag for a
+  // window that's ALWAYS view-only regardless of role. Either one forces read-only.
+  window: windowProp = null,
   bulkActions = null,
   isRowSelectable = null,
   listViewOptions = {},
@@ -273,12 +396,21 @@ export function ListView({
 
   const [showImportDialog, setShowImportDialog] = useState(false);
   const { runBatch } = useBatch({ apiBaseUrl, token });
+  const { locale } = useLocaleSwitch();
+
+  // `multiField` columns are opaque to the advanced filter: expand each into
+  // per-part pseudo-columns so the builder and criteria composer treat every
+  // constituent field as an independent filterable field (no core edits).
+  const filterColumns = useMemo(
+    () => expandMultiFieldColumns(tableColumns, locale),
+    [tableColumns, locale],
+  );
 
   const advancedFilterPart = useMemo(() => {
-    const criteria = buildAdvancedFilterCriteria(advancedFilter, tableColumns);
+    const criteria = buildAdvancedFilterCriteria(advancedFilter, filterColumns);
     if (!criteria || criteria.length === 0) return null;
     return `criteria=${encodeURIComponent(JSON.stringify(criteria))}`;
-  }, [advancedFilter, tableColumns]);
+  }, [advancedFilter, filterColumns]);
 
   const effectiveFilter = useMemo(() => {
     // Composition here covers window-scope filters only:
@@ -479,10 +611,11 @@ export function ListView({
   const sendDocumentEnabled = !!effectiveSendDocument && effectiveSendDocument.enabled !== false;
   const allowEmail = effectiveSendDocument?.allowEmail !== false;
 
-  // View-only window (decisions.json → window.readOnly): suppress the write quick
+  // View-only window (decisions.json → window.readOnly, OR the ETP-4520 runtime
+  // 'read-only' access tier via the `window` prop): suppress the write quick
   // actions and don't wire their default handlers. Row click still opens the
   // (read-only) detail, so viewing is preserved. Complements DetailView's own gate.
-  const windowReadOnly = api?.window?.readOnly === true;
+  const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
 
   const effectiveRowQuickActions = useMemo(() => {
     if (!quickActionsEnabled) return rowQuickActions;
@@ -505,6 +638,79 @@ export function ListView({
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
+  // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
+  // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
+  // the nested `labels` object ImportDialog forwards to each child (shape documented in
+  // app-shell-core's ImportDialog.jsx) and pass `translate={ui}` so the send pipeline
+  // localizes backend errors too. Templated strings (mappedSummary/{mapped}/{total},
+  // tooltips, bulkApply/{count}/{raw}/{value}) keep their {placeholders} — the child fills
+  // them at render time; the (n) => string labels interpolate here. `save`/`cancel`/`retry`/
+  // `close` reuse existing generic keys per the i18n guide's "reuse before adding" rule.
+  const importLabels = useMemo(() => ({
+    title: ui('importDialogTitle'),
+    revalidating: ui('importRevalidating'),
+    downloadTemplate: ui('importDownloadTemplate'),
+    importButton: (n) => ui('importButtonCount', { n }),
+    dropzone: {
+      dropHere: ui('importDropHere'),
+      dropHint: ui('importDropHint'),
+    },
+    progress: {
+      title: ui('importProgressTitle'),
+      subtitle: ui('importProgressSubtitle'),
+    },
+    mapping: {
+      notImported: ui('importNotImported'),
+      mappedSummary: ui('importMappedSummary'),
+      editMatch: ui('importEditMatch'),
+      editTitle: ui('importEditColumnTitle'),
+      save: ui('save'),
+      cancel: ui('cancel'),
+    },
+    confirm: {
+      title: ui('importConfirmTitle'),
+      willImport: (n) => ui('importWillImport', { n }),
+      willSkip: (n) => ui('importWillSkip', { n }),
+      cancel: ui('cancel'),
+      confirm: ui('importConfirmButton'),
+    },
+    fileError: {
+      title: ui('importFileErrorTitle'),
+      cancel: ui('cancel'),
+      retry: ui('retry'),
+    },
+    reviewQueue: {
+      filterAll: ui('importFilterAll'),
+      filterOk: ui('importFilterOk'),
+      filterError: ui('importFilterError'),
+      skip: ui('importSkip'),
+      skipped: ui('importSkipped'),
+      unskip: ui('importUnskip'),
+      downloadErrors: ui('importDownloadErrors'),
+      status: ui('importStatus'),
+      statusOk: ui('importStatusOk'),
+      statusError: ui('importStatusError'),
+      fieldErrorsTooltip: ui('importFieldErrorsTooltip'),
+      bulkApplyTitle: ui('importBulkApplyTitle'),
+      bulkApplyDescription: ui('importBulkApplyDescription'),
+      bulkApplyOnlyThis: ui('importBulkApplyOnlyThis'),
+      bulkApplyAll: ui('importBulkApplyAll'),
+      retry: ui('retry'),
+    },
+    systemError: {
+      title: ui('importSystemErrorTitle'),
+      subtitle: ui('importSystemErrorSubtitle'),
+      copy: ui('importSystemErrorCopy'),
+      copied: ui('importSystemErrorCopied'),
+      copyFailed: ui('importSystemErrorCopyFailed'),
+      close: ui('close'),
+      showReport: ui('importSystemErrorShowReport'),
+      hideReport: ui('importSystemErrorHideReport'),
+      rowData: ui('importSystemErrorRowData'),
+      requestSent: ui('importSystemErrorRequestSent'),
+      serverResponse: ui('importSystemErrorServerResponse'),
+    },
+  }), [ui]);
   const label = tMenu(entityLabel) || entityLabel || entity;
   const { toggleFavorite, isFavorite } = useFavorites();
   const favKey = windowName || entity || '';
@@ -521,6 +727,12 @@ export function ListView({
   }, [favActive, hook.items.length]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
+  // ETP-4656 — partial bulk-delete outcome: bump deselectTrigger with the ids of
+  // the rows that were successfully deleted so DataTable drops only those from
+  // its internal selection Set, leaving the failed rows checked (see
+  // useBulkRowDelete below and DataTable's matching deselectTrigger effect).
+  const [deselectTrigger, setDeselectTrigger] = useState(0);
+  const [deselectRowIds, setDeselectRowIds] = useState([]);
   const [previewRow, setPreviewRow] = useState(null);
   const activePreviewRow = previewRow ?? externalPreviewRow ?? null;
 
@@ -541,6 +753,31 @@ export function ListView({
     setSelectedRows([]);
     setClearSelectionCounter((c) => c + 1);
   }, []);
+
+  // ETP-4656 — grid multi-select "Delete selected". Outcome handling per the
+  // standardized delete UX:
+  //   - all succeeded  → refetch (deleted rows disappear) + clear selection.
+  //   - partial failure → refetch (succeeded rows disappear) + keep only the
+  //     failed rows selected, both in our own state and in DataTable's
+  //     internal checkbox Set (via deselectTrigger/deselectRowIds).
+  //   - all failed      → no refetch, selection untouched.
+  const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
+    apiBaseUrl,
+    entity: entity || 'header',
+    token,
+    onSuccess: (succeeded, failed) => {
+      if (succeeded.length > 0) hook.refresh();
+      if (failed.length === 0) {
+        clearSelection();
+      } else {
+        setSelectedRows(failed);
+        if (succeeded.length > 0) {
+          setDeselectRowIds(succeeded.map((r) => r.id));
+          setDeselectTrigger((c) => c + 1);
+        }
+      }
+    },
+  });
 
   // Register this list view with the current-window context so the Copilot
   // widget can auto-attach it when opened. Memoized so the hook's signature
@@ -615,12 +852,79 @@ export function ListView({
     if (hook.hasMore && !hook.loadingMore) hook.loadMore();
   }, [hook.hasMore, hook.loadingMore, hook.loadMore]);
 
+  // A custom headerTable that renders the window's whole toolbar itself needs the native
+  // list bar dropped entirely — the individual hide* flags leave an empty padded strip
+  // behind, since sort/refresh have no flag of their own.
+  const listBarHidden = listViewOptions?.hideListBar ?? hideListBar;
+
+  // Everything the Table needs, in one object, because ListTableRegion renders it from
+  // either of two wrappers and these used to be written out once per branch. `meta` is
+  // the same list-response envelope `headerContent` gets: a custom headerTable that
+  // renders its own aggregate panel (e.g. financial-account's balance sidebar) needs it
+  // here, since that panel lives inside the table slot rather than above it.
+  const tableProps = {
+    entity,
+    specName: windowName,
+    data: hook.items,
+    meta: hook.meta,
+    onNavigate: buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName),
+    onSelectionChange: setSelectedRows,
+    // ETP-4656 — the AUTHORITATIVE selection, read-only for the slot. A custom
+    // headerTable that has to react to selection (e.g. financial-account swaps its own
+    // toolbar for the selection bar) must not mirror this by wrapping
+    // `onSelectionChange`: DataTable clears/prunes its internal Set silently from the
+    // `clearSelectionTrigger` and `deselectTrigger` effects WITHOUT calling
+    // `onSelectionChange`, so any locally-mirrored count goes stale the moment a bulk
+    // delete succeeds or the selection is cancelled — and the slot's toolbar would
+    // never come back. DataTable itself has no `selectedRows` prop (it is local state
+    // there), so forwarding this through a spread is inert.
+    selectedRows,
+    onDataMutated: hook.refresh,
+    isRowSelectable,
+    compact: false,
+    sortColumn: hook.sortColumn,
+    sortDirection: hook.sortDirection,
+    onSort: handleColumnSort,
+    onColumnsReady: setTableColumns,
+    api,
+    token,
+    apiBaseUrl,
+    labelOverrides,
+    onFilterChange: handleFilterChange,
+    onClearAllFilters: handleClearAllFilters,
+    columnFilters,
+    onCloneRow,
+    rowFilter: effectiveRowFilter,
+    hoverRowActions,
+    clearSelectionTrigger: clearSelectionCounter,
+    deselectTrigger,
+    deselectRowIds,
+    rowQuickActions: effectiveRowQuickActions,
+    hiddenColumns,
+  };
+
   return (
     <>
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
         {/* White content card with rounded top-left corner */}
-        <div className="flex-1 flex flex-col bg-white rounded-tl-2xl overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
           {/* Selection bar or filter bar */}
+          {/* Selection bar when rows are picked, otherwise the filter bar. Kept as a
+              ternary whose alternate is a plain `&&`: nesting one ternary inside
+              another here is what Sonar S3358 flags.
+
+              ETP-4658/ETP-4656 — `hideListBar` gates ONLY the idle filter bar, not the
+              selection bar. The flag exists because a custom headerTable draws the
+              window's own toolbar, so the native idle strip is a duplicate that leaves
+              an empty padded band behind (sort/refresh have no hide* flag of their own).
+              The selection bar is a different thing: transient, never empty, and the
+              standardized home of "Delete selected" — no headerTable replaces it, so
+              suppressing it here silently dropped grid multi-select delete from every
+              custom-headerTable window (that is how Cuentas financieras lost it).
+              This is safe by construction rather than by convention: the bar is
+              unreachable unless the grid is selectable, so a custom headerTable that
+              wants no selection at all simply keeps `selectable={false}` on its own
+              DataTable and never renders rows that can be picked. */}
           {selectedRows.length > 0 ? (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
               <div className="flex items-center gap-3 h-10">
@@ -659,6 +963,25 @@ export function ListView({
                     {ui('cloneOrderBtn')} ({selectedRows.length})
                   </Button>
                 )}
+                {/* ETP-4656 — generic "Delete selected". Suppressed when the window is
+                    read-only or via the explicit `listViewOptions.hideBulkDelete` opt-out
+                    (e.g. a host that already renders its own delete affordance through
+                    selectionBarRightActions for an unrelated reason must opt out
+                    explicitly — inferring it from that prop's mere presence was fragile,
+                    since selectionBarRightActions can be used for things other than
+                    delete). */}
+                {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
+                  <Button
+                    variant="outline"
+                    size={selectionBarSize}
+                    className="gap-1.5"
+                    disabled={bulkDeleting}
+                    onClick={() => requestBulkDelete(selectedRows)}
+                    data-testid="bulk-delete-selected">
+                    <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
+                    {ui('bulkDeleteSelected')} ({selectedRows.length})
+                  </Button>
+                )}
                 {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
                 {selectionBarRightActions && selectionBarRightActions({
                   selectedRows,
@@ -669,21 +992,21 @@ export function ListView({
                 })}
               </div>
             </div>
-          ) : (
+          ) : !listBarHidden && (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
               <div className="flex items-center gap-2">
                 {subsetFilters && (
-                  <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[#F5F7F9] p-1 h-10">
+                  <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
                     {subsetFilters.map((sf, i) => (
                       <button
                         key={i}
                         onClick={() => selectSubset(i)}
                         data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
                         className={[
-                          'h-8 px-3 text-sm font-medium text-[#121217] rounded-lg transition-all whitespace-nowrap',
+                          'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
                           activeSubsetIndex === i
-                            ? 'bg-white shadow-sm'
-                            : 'bg-[#F5F7F9] hover:brightness-95',
+                            ? 'bg-card shadow-sm'
+                            : 'bg-[hsl(var(--muted))] hover:brightness-95',
                         ].join(' ')}
                       >
                         {ui(sf.label)}
@@ -699,7 +1022,7 @@ export function ListView({
                         onClick={() => toggleQuickFilter(i)}
                         data-testid={`quick-filter-${qf.key || qf.label?.toLowerCase()}`}
                         className={[
-                          'h-9 px-3 text-xs rounded-lg border bg-white transition-colors',
+                          'h-9 px-3 text-xs rounded-lg border bg-card transition-colors',
                           activeFilterIndices.has(i)
                             ? 'border-primary text-primary bg-primary/5 font-medium'
                             : 'border-border text-muted-foreground hover:text-foreground',
@@ -716,7 +1039,7 @@ export function ListView({
                   hideStatusFilter={listViewOptions?.hideStatusFilter}
                   entity={entity}
                   apiBaseUrl={apiBaseUrl}
-                  columns={tableColumns}
+                  columns={filterColumns}
                   columnFilters={columnFilters}
                   onFilterChange={handleFilterChange}
                   advancedFilter={advancedFilter}
@@ -801,7 +1124,7 @@ export function ListView({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
                     onClick={() => setShowImportDialog(true)}
                     aria-label={ui('import')}
                     title={ui('import')}
@@ -814,7 +1137,7 @@ export function ListView({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
                     onClick={() => setShowReport(true)}
                     data-testid="Button__620cbc">
                     <Printer className="h-3.5 w-3.5" data-testid="Printer__620cbc" />
@@ -822,10 +1145,10 @@ export function ListView({
                   </Button>
                 )}
                 {/* Split "New" button */}
-                {!hideCreate && (
+                {!hideCreate && !windowReadOnly && (
                   <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
                     <Button
-                      className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[#FFD500] hover:text-[#121217] transition-colors"
+                      className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
                       data-testid="action-new"
                       onClick={() => onNew ? onNew() : navigate(`/${windowName}/new`)}
                     >
@@ -838,7 +1161,7 @@ export function ListView({
                         <DropdownMenu data-testid="DropdownMenu__620cbc">
                           <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
                             <Button
-                              className="rounded-none rounded-r-lg px-2 hover:bg-[#FFD500] hover:text-[#121217] transition-colors"
+                              className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
                               data-testid="action-new-more">
                               <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
                             </Button>
@@ -867,7 +1190,7 @@ export function ListView({
           {headerContent && (
             <div className="px-6 pt-4">
               {typeof headerContent === 'function'
-                ? headerContent({ api, token, apiBaseUrl, items: hook.items, loading: hook.loading })
+                ? headerContent({ api, token, apiBaseUrl, items: hook.items, loading: hook.loading, meta: hook.meta })
                 : headerContent}
             </div>
           )}
@@ -885,64 +1208,24 @@ export function ListView({
             </>
           )}
 
-          {/* Table */}
-          <ScrollPane
+          {/* Table region (ScrollPane, or a bounded flex box when the table owns its
+              own scroll) — see ListTableRegion for the full rationale. */}
+          <ListTableRegion
+            ownScroll={listViewOptions?.tableOwnsScroll ?? tableOwnsScroll}
+            Table={Table}
+            tableProps={tableProps}
+            hook={hook}
+            ui={ui}
+            tablePaddingX={tablePaddingX}
+            tablePaddingBottom={tablePaddingBottom}
             onReachBottom={handleReachBottom}
-            className={`${tablePaddingX} ${tablePaddingBottom}`}
-            data-testid="ScrollPane__620cbc">
-            {hook.loading && hook.items.length === 0 ? (
-              <div className="space-y-3">
-                <Skeleton className="h-10 w-full" data-testid="Skeleton__620cbc" />
-                <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
-                <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
-                <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
-              </div>
-            ) : (
-              <div className={tableOpacityClass(hook)}>
-                {viewMode === 'gallery' && galleryRenderer
-                  ? galleryRenderer({ data: hook.items, onNavigate: (id) => navigate(`/${windowName}/${id}`), token, apiBaseUrl })
-                  : (
-                    <Table
-                      entity={entity}
-                      specName={windowName}
-                      data={hook.items}
-                      onNavigate={buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName)}
-                      onSelectionChange={setSelectedRows}
-                      onDataMutated={hook.refresh}
-                      isRowSelectable={isRowSelectable}
-                      compact={false}
-                      sortColumn={hook.sortColumn}
-                      sortDirection={hook.sortDirection}
-                      onSort={handleColumnSort}
-                      onColumnsReady={setTableColumns}
-                      api={api}
-                      token={token}
-                      apiBaseUrl={apiBaseUrl}
-                      labelOverrides={labelOverrides}
-                      onFilterChange={handleFilterChange}
-                      onClearAllFilters={handleClearAllFilters}
-                      columnFilters={columnFilters}
-                      onCloneRow={onCloneRow}
-                      rowFilter={effectiveRowFilter}
-                      hoverRowActions={hoverRowActions}
-                      clearSelectionTrigger={clearSelectionCounter}
-                      rowQuickActions={effectiveRowQuickActions}
-                      hiddenColumns={hiddenColumns}
-                      data-testid="Table__620cbc" />
-                  )
-                }
-                {hook.loadingMore && (
-                  <div className="flex items-center justify-center py-4">
-                    <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                    <span className="ml-2 text-sm text-muted-foreground">{ui('loadingMore')}</span>
-                  </div>
-                )}
-                {!hook.hasMore && hook.items.length > 0 && !hook.loadingMore && (
-                  <p className="text-center text-xs text-muted-foreground/60 py-3">{ui('allRecordsLoaded')}</p>
-                )}
-              </div>
-            )}
-          </ScrollPane>
+            viewMode={viewMode}
+            galleryRenderer={galleryRenderer}
+            navigate={navigate}
+            windowName={windowName}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="ListTableRegion__620cbc" />
         </div>
         <ReportDrawer
           open={showReport}
@@ -964,6 +1247,7 @@ export function ListView({
           token={token}
           data-testid="DocumentPrintDrawer__620cbc" />
         {quickActionsEnabled && !rowQuickActions?.onDelete && defaultDeleteDialog}
+        {bulkDeleteDialog}
         {/* ETP-3914 — Generic Send/Download modal mount for any documental window
           that did not bring its own `onEmail`. Custom windows that mount the
           modal manually (sales-invoice, purchase-invoice) keep doing so because
@@ -991,6 +1275,8 @@ export function ListView({
             token={token}
             postBatch={runBatch}
             simSearchFn={simSearch}
+            labels={importLabels}
+            translate={ui}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
               // failed. Only auto-close when there is nothing left to review: closing

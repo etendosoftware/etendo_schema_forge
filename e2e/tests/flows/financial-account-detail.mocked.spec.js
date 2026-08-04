@@ -10,10 +10,19 @@ import { login } from '../helpers/auth.js';
  * couple of filters (status + type) plus the free-text search, copy the
  * IBAN, and back-navigate to the list.
  *
- * Mock mode only: installs `/sws/neo/financial-accounts-page` and
- * `/sws/neo/financial-account-transactions` AFTER the generic /sws/**
- * stub seeded by login() so the specific handlers win (Playwright
- * matches routes in reverse registration order).
+ * Mock mode only: installs `/sws/neo/financial-account/account` (the window list),
+ * `/sws/neo/financial-accounts-page` (still the source for `useFinancialAccount`, the
+ * DETAIL hook) and `/sws/neo/financial-account-transactions` AFTER the generic /sws/**
+ * stub seeded by login() so the specific handlers win (Playwright matches routes in
+ * reverse registration order).
+ *
+ * ETP-4658: the entry point is now the `financial-account` window itself — the spec loads
+ * the list once (so `navigate(-1)` has somewhere to go back to) and then navigates straight
+ * to `/financial-account/{id}`. Most tests deliberately do NOT click through the list to get
+ * here: the list→detail row click is the accounts-list spec's subject, and it is currently
+ * broken (see the `test.fail` in `financial-accounts-page.mocked.spec.js`). The one exception
+ * is the back-arrow round trip, which needs a real history entry pushed by the list itself
+ * and therefore enters the detail through the row kebab's "Abrir".
  *
  * Default app locale is es_ES (see useLocaleState.DEFAULT_LOCALE), so
  * assertions target the Spanish copy.
@@ -32,7 +41,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000001',
     isDefault: true,
     pendingCount: 4,
-    psd2Connected: true,
+    bankConnected: true,
   },
   {
     id: 'acc-galicia',
@@ -44,7 +53,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000002',
     isDefault: false,
     pendingCount: 0,
-    psd2Connected: false,
+    bankConnected: false,
   },
 ];
 
@@ -118,7 +127,20 @@ const TOTALS = {
 };
 
 async function installFinancialAccountMocks(page) {
-  // List endpoint — used by both /finance/accounts (page) and useFinancialAccount
+  // Window list endpoint — the generated ListView's own useEntity fetch. Matched by RegExp
+  // on the query string so it never swallows the entity's other verbs/sub-paths.
+  await page.route(/\/sws\/neo\/financial-account\/account\?/, async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        response: { data: ACCOUNTS, totalRows: ACCOUNTS.length, summary: SUMMARY },
+      }),
+    });
+  });
+
+  // Detail endpoint — still the R spec, which `useFinancialAccount` reads.
   await page.route('**/sws/neo/financial-accounts-page', async (route) => {
     await route.fulfill({
       status: 200,
@@ -148,16 +170,19 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
 
     await login(page);
     await installFinancialAccountMocks(page);
-    await page.goto('/finance/accounts');
+    // Land on the window list first so the detail's back button (navigate(-1)) has a
+    // history entry, then go straight to the detail route.
+    await page.goto('/financial-account');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.goto(`/financial-account/${ACCOUNT_ID}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('clicking an account row navigates to the detail view', async ({ page }) => {
-    const row = page.getByTestId(`account-row-${ACCOUNT_ID}`);
-    await expect(row).toBeVisible();
-    await row.click();
-
+  test('the detail route renders the hand-written tabs, not the generated DetailView', async ({ page }) => {
     await expect(page).toHaveURL(new RegExp(`/financial-account/${ACCOUNT_ID}$`));
+    // The wrapper must NOT forward recordId to the generated AccountPage, otherwise the
+    // generic DetailView would render here instead of these tabs.
+    await expect(page.getByTestId('detail-view')).toHaveCount(0);
 
     // Detail view rendered: tabs + summary strip + table all visible.
     await expect(page.getByRole('tab', { name: /Movimientos/i })).toBeVisible();
@@ -166,8 +191,6 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
   });
 
   test('breadcrumb and account name are set via useSetPageMeta', async ({ page }) => {
-    await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();
-    await expect(page).toHaveURL(new RegExp(`/financial-account/${ACCOUNT_ID}$`));
 
     // The TopBar renders the breadcrumb: "Finanzas / Cuentas / Banco Santander"
     await expect(
@@ -176,8 +199,6 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
   });
 
   test('the three tabs are visible with correct counts', async ({ page }) => {
-    await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();
-    await expect(page).toHaveURL(new RegExp(`/financial-account/${ACCOUNT_ID}$`));
 
     // Wait for movements to load (5 transactions in mock)
     await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
@@ -197,8 +218,6 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
   });
 
   test('summary strip shows IBAN chunked and the three KPI labels', async ({ page }) => {
-    await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();
-    await expect(page).toHaveURL(new RegExp(`/financial-account/${ACCOUNT_ID}$`));
     await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
 
     // IBAN chunked into groups of 4: "ES12 1234 0000 0000 0000 0001"
@@ -209,13 +228,11 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
     await expect(page.getByTestId('kpi-inflows')).toContainText('Entradas');
     await expect(page.getByTestId('kpi-outflows')).toContainText('Salidas');
 
-    // en-US currency formatting: "211,841.01" appears in the balance KPI.
-    await expect(page.getByTestId('kpi-balance')).toContainText('211,841.01');
+    // es-ES currency formatting: "211.841,01 €" appears in the balance KPI.
+    await expect(page.getByTestId('kpi-balance')).toContainText('211.841,01');
   });
 
   test('all five mocked movement rows are visible in the table', async ({ page }) => {
-    await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();
-    await expect(page).toHaveURL(new RegExp(`/financial-account/${ACCOUNT_ID}$`));
 
     for (const m of MOVEMENTS) {
       await expect(page.getByTestId(`movement-row-${m.id}`)).toBeVisible();
@@ -223,7 +240,6 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
   });
 
   test('Type filter narrows the table to BPD (Cobro) rows only', async ({ page }) => {
-    await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();
     await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
 
     // Open the Type filter (trigger shows "Cualquier tipo" while no value is selected).
@@ -250,7 +266,6 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
   // toolbar control that no longer exists.
 
   test('search input filters by document number / contact / description', async ({ page }) => {
-    await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();
     await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
 
     // Search for "DHL" → matches tx-1 and tx-5 (contact = "DHL Technologies SL").
@@ -270,7 +285,6 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
   });
 
   test('clicking the IBAN copy button writes to clipboard and shows the success toast', async ({ page }) => {
-    await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();
     await expect(page.getByTestId('iban-copy-button')).toBeVisible();
 
     await page.getByTestId('iban-copy-button').click();
@@ -283,15 +297,33 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
     expect(clipboardValue).toBe('ES1212340000000000000001');
   });
 
-  test('clicking the back arrow returns to the accounts list', async ({ page }) => {
-    await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();
+  test('the movements toolbar exposes the back arrow', async ({ page }) => {
+    await expect(page.getByTestId('movements-toolbar-back')).toBeVisible();
+  });
+
+  // The back arrow is `navigate(-1)` (MovementsToolbar/index.jsx ~99) — browser history, NOT a
+  // fixed route — so the round trip is only meaningful when the detail was actually entered
+  // FROM the list. The detail is opened through the row kebab's "Abrir" (which hands the whole
+  // account to `onOpen`); a plain row click is still broken, see the `test.fail` in
+  // `financial-accounts-page.mocked.spec.js`.
+  test('entering the detail from the list and pressing back returns to the list', async ({ page }) => {
+    await page.goto('/financial-account');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const row = page.getByTestId(`row-${ACCOUNT_ID}`);
+    await expect(row).toBeVisible();
+    await row.hover();
+    await row.getByTestId(`account-row-menu-trigger-${ACCOUNT_ID}`).click();
+    await page.getByTestId(`account-row-menu-open-${ACCOUNT_ID}`).click();
+
     await expect(page).toHaveURL(new RegExp(`/financial-account/${ACCOUNT_ID}$`));
     await expect(page.getByTestId('movements-toolbar-back')).toBeVisible();
 
     await page.getByTestId('movements-toolbar-back').click();
 
-    await expect(page).toHaveURL(/\/finance\/accounts$/);
-    // List rendering is back: the same account row is visible again.
-    await expect(page.getByTestId(`account-row-${ACCOUNT_ID}`)).toBeVisible();
+    // Back on the window's own list branch at /financial-account, whose rows carry the
+    // generic DataTable testid.
+    await expect(page).toHaveURL(/\/financial-account$/);
+    await expect(page.getByTestId(`row-${ACCOUNT_ID}`)).toBeVisible();
   });
 });

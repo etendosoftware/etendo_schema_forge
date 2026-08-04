@@ -2,17 +2,41 @@
   "$schema": "decisions-v2",
   "window": {
     "category": "finance",
-    "name": "Financial Account Detail",
-    "layoutType": "custom"
+    "name": "Accounts",
+    "detailEntity": null,
+    "customComponents": {
+      "headerTable": "AccountsHeaderTable"
+    },
+    "rowQuickActions": { "enabled": false },
+    "hideCreate": true,
+    "hidePrint": true,
+    "hideMoreMenu": true,
+    "hideListFilters": true,
+    "labelOverrides": {
+      "en_US": { "pendingCount": "Pending" },
+      "es_ES": { "pendingCount": "Por conciliar" }
+    }
   },
   "entities": {
     "account": {
       "javaQualifier": "financialAccountHeaderHandler",
+      "virtualFields": [
+        {
+          "name": "pendingCount",
+          "column": "pendingCount",
+          "label": "Pending",
+          "type": "integer",
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 4
+        }
+      ],
       "fields": {
-        "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true },
-        "type": { "visibility": "editable", "grid": true, "gridOrder": 2 },
+        "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
+        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType" },
         "currency": { "visibility": "editable", "grid": false, "required": true },
-        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
         "description": { "visibility": "editable", "grid": false },
         "iBAN": { "visibility": "editable", "grid": false },
         "swiftCode": { "visibility": "editable", "grid": false },
@@ -25,7 +49,7 @@
         "initialBalance": { "visibility": "system" },
         "creditLimit": { "visibility": "discarded" },
         "locationAddress": { "visibility": "discarded" },
-        "default": { "visibility": "discarded" },
+        "default": { "visibility": "readOnly", "grid": false },
         "genericAccountNo": { "visibility": "discarded" },
         "iNENo": { "visibility": "discarded" },
         "country": { "visibility": "system" },
@@ -48,7 +72,7 @@
       "fields": {
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
-        "businessPartner": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "businessPartner": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "displayLogic": "@Trxtype@!''", "displayLogicJs": "record['transactionType'] !== ''", "reason": "ETP-4529 — Contacto is always shown regardless of the accounting-dimension config (strips @ACCT_DIMENSION_DISPLAY@ from the raw '@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!\\'\\'' expression), but the unrelated Trxtype condition is preserved as client-evaluable JS: Trxtype (Transaction Type — BP Deposit/Withdrawal/Bank fee) is mandatory with a default, so this only hides the field for the instant before a type is set on a brand-new record." },
         "description": { "visibility": "readOnly", "grid": true, "gridOrder": 4 },
         "status": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
         "transactionType": { "visibility": "readOnly", "grid": true, "gridOrder": 6 },

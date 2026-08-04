@@ -12,7 +12,7 @@ import {
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 
 /* eslint-disable react/prop-types */
@@ -22,10 +22,10 @@ const filters = ['documentNo', 'invoiceDate', 'businessPartner', 'orderReference
 const NC_RETURN_TYPES = new Set(['AP CreditMemo', 'Return Material Purchase Invoice', 'Reversed Purchase Invoice']);
 
 const DOC_TYPE_BADGE = {
-  'AP Invoice':                         { color: '#1d4ed8', bg: '#eff6ff', label: 'invoicesTab' },
-  'AP CreditMemo':                      { color: '#92400e', bg: '#fffbeb', label: 'creditNotesTab' },
-  'Return Material Purchase Invoice':   { color: '#9a3412', bg: '#fff7ed', label: 'returnInvoiceTab' },
-  'Reversed Purchase Invoice':          { color: '#9a3412', bg: '#fff7ed', label: 'returnInvoiceTab' },
+  'AP Invoice':                         { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
+  'AP CreditMemo':                      { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'creditNotesTab' },
+  'Return Material Purchase Invoice':   { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
+  'Reversed Purchase Invoice':          { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
 };
 
 function isNcOrReturn(row) {
@@ -61,11 +61,17 @@ export default function PurchaseInvoiceHeaderTable(props) {
     }
 
     return [
-      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false },
+      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false, required: true },
       {
         key: 'transactionDocument',
         column: 'C_DocTypeTarget_ID',
         type: 'custom',
+        required: true,
+        // `type: 'custom'` drives the badge cell render, but that would make the
+        // advanced filter fall back to a free-text input. `filterMode` (honored
+        // first by resolveFilterMode, ignored by DataTable) restores the correct
+        // identifier picker for this FK column without touching the grid cell.
+        filterMode: 'identifier',
         // `labels` (priority 1 in resolveColumnLabel) must be set so this header
         // outranks the AD-dictionary fallback translate('C_DocTypeTarget_ID'),
         // which otherwise resolves to "Documento transacción".
@@ -88,6 +94,10 @@ export default function PurchaseInvoiceHeaderTable(props) {
       { key: 'orderReference', column: 'POReference', type: 'string' },
       {
         key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        // The cell renders a coloured due-date dot, so it must stay `custom` —
+        // but the underlying column is a plain date. Without this the advanced
+        // filter would offer text operators instead of Before/After/Between.
+        filterMode: 'date',
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
@@ -103,25 +113,36 @@ export default function PurchaseInvoiceHeaderTable(props) {
           );
         },
       },
-      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn') },
-      { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn'), required: true },
+      { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
       ...fiscalCols,
       {
-        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom',
+        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true,
         label: t('impTotal'),
+        // The cell sign-flips credit notes / returns, so it must stay `custom`
+        // — but the underlying column is an amount (sales-invoice declares the
+        // same column as `type: 'amount'`).
+        filterMode: 'numeric',
         render: (row) => {
           const raw = row.grandTotalAmount;
           const currency = row['currency$_identifier'];
           const amount = isNcOrReturn(row) ? -Math.abs(Number(raw)) : Number(raw);
-          return <span className="tabular-nums">{formatAmount(amount, currency)}</span>;
+          return <span className="tabular-nums">{formatCurrency(currency, amount)}</span>;
         },
       },
       {
         key: 'outstandingAmount',
         column: 'OutstandingAmt',
         type: 'custom',
+        required: true,
         label: t('pendingPaymentColumn'),
+        // The cell renders status pills and a payment button, so it must stay
+        // `custom` — but the underlying column is an amount. Without this the
+        // `?filter=overdue` preload (outstandingAmount greaterThan 0) resolves
+        // to text mode, which has no `greaterThan`, and the operator select
+        // renders empty (ETP-4681).
+        filterMode: 'numeric',
         render: (row) => {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);
           const currency = row['currency$_identifier'] || 'EUR';
@@ -130,7 +151,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
             const outstandingAbs = Math.abs(outstanding);
             if (outstandingAbs < 0.001) {
               return (
-                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                   <Check size={12} data-testid="Check__6b7cdb" />Aplicada
                                   </span>
               );
@@ -143,16 +164,16 @@ export default function PurchaseInvoiceHeaderTable(props) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
-                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#F5F3FF',border:'1px solid #DDD6FE',color:'#6D28D9',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'var(--status-info-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
-                <span style={{width:8,height:8,borderRadius:'50%',background:'#7C3AED',flexShrink:0,display:'inline-block'}}/>
-                Saldo a favor · {formatAmount(outstandingAbs, currency)}
+                <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-info-fg)',flexShrink:0,display:'inline-block'}}/>
+                Saldo a favor · {formatCurrency(currency, outstandingAbs)}
               </button>
             );
           }
           if (outstanding <= 0) {
             return (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                 <Check size={12} data-testid="Check__6b7cdb" />{t('pagada')}
               </span>
             );
@@ -162,11 +183,11 @@ export default function PurchaseInvoiceHeaderTable(props) {
               type="button"
               onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
               aria-label={t('addPago')}
-              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#FFF9EB',border:'1px solid #F2E2BC',color:'#8A6E25',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-warning-bg)',border:'1px solid var(--status-warning-border)',color:'var(--status-warning-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
             >
-              <span style={{width:8,height:8,borderRadius:'50%',background:'#F59E0B',flexShrink:0,display:'inline-block'}}/>
-              {formatAmount(outstanding, currency)}
-              <span style={{display:'inline-flex',alignItems:'center',color:'#A37700'}}><Plus size={13} data-testid="Plus__6b7cdb" /></span>
+              <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
+              {formatCurrency(currency, outstanding)}
+              <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13} data-testid="Plus__6b7cdb" /></span>
             </button>
           );
         },

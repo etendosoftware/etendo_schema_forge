@@ -35,12 +35,12 @@ describe('TabBar — rendering', () => {
 });
 
 describe('TabBar — active state styling', () => {
-  it('applies white background to the active tab', () => {
+  it('applies semantic card background to the active tab', () => {
     assert.match(src, /active === i/);
-    assert.match(src, /bg-white/);
+    assert.match(src, /bg-card/);
   });
 
   it('applies hover style to inactive tabs', () => {
-    assert.match(src, /hover:bg-white\/50/);
+    assert.match(src, /hover:bg-card\/50/);
   });
 });

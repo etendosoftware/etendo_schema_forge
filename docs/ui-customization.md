@@ -362,6 +362,148 @@ defense-in-depth: the API capability is disabled AND the UI icon is hidden).
 
 ---
 
+### 9c. Standardized delete UX & `listViewOptions.hideBulkDelete` (ETP-4656)
+
+`ListView` now renders a generic **"Delete selected"** action in the multi-select
+toolbar (grid checkboxes), wired through the `useBulkRowDelete` hook
+(`tools/app-shell/src/hooks/useBulkRowDelete.jsx`). This is **on by default** —
+no `decisions.json` key is needed to enable it — and is suppressed only when:
+- the window is read-only (`windowReadOnly`), or
+- `listViewOptions.hideBulkDelete` is set (see below).
+
+This complements the pre-existing single-row delete affordances
+(`useRowDelete`, `DetailView`'s header delete) — all three delete surfaces
+(header, row, bulk) now share the same failure-handling contract described
+below.
+
+**Opting out — `listViewOptions.hideBulkDelete`:**
+
+```jsx
+<ListView
+  listViewOptions={{ hideBulkDelete: true }}
+  ...
+/>
+```
+
+Use this when a window already ships **its own** delete or bulk-delete
+affordance and stacking the generic action would be redundant/confusing.
+
+Unlike `hidePrint` / `hideStatusFilter` / `hideEye` (documented in
+`docs/decisions-reference.md` as `window.*` decisions.json keys that the
+generator compiles into the `listViewOptions` prop it passes to `ListView`),
+`hideBulkDelete` has **no decisions.json/generator wiring yet** — that
+compilation step lives in the generator (`schema_forge_core`, out of scope for
+this sub-task). Today the only way to set it is to pass `listViewOptions`
+directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
+same way `contacts` does it. **That object REPLACES — it does not merge with —
+the `listViewOptions` the generated page already passes to `ListView`**, so the
+wrapper must repeat every flag the generated page sets (`hidePrint`, `hideEye`,
+`hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
+dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
+canonical example.
+
+**Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
+does **not** mean "this window has no bulk delete." `contacts` has its own,
+older bulk-delete affordance (a trash + X button pair rendered via
+`selectionBarRightActions`, predating this mechanism) that was **not**
+unified with `useBulkRowDelete` in this sub-task — that migration is tracked
+as a follow-up. Read `hideBulkDelete: true` on a window as "has a different,
+not-yet-migrated bulk-delete," never as "has none."
+
+**`listViewOptions.hideListBar` gates only the IDLE list bar — never the
+selection bar (ETP-4658 regression fix).** `hideListBar` exists for windows whose
+custom `headerTable` slot draws the window's whole toolbar itself: the native
+idle strip is then a duplicate that leaves an empty padded band behind, because
+sort/refresh have no `hide*` flag of their own. It does **not** suppress the
+selection bar, which is a different thing — transient, never empty, and the
+standardized home of "Delete selected". While it did suppress both, every
+custom-`headerTable` window silently lost grid multi-select delete; that is how
+`financial-account` lost it, since the flag hid the only delete affordance even
+once the grid was selectable again.
+
+This is safe by construction rather than by convention: **the selection bar is
+unreachable unless the grid is selectable.** A custom `headerTable` that wants no
+selection at all simply keeps `selectable={false}` on its own `DataTable` and
+never renders rows that can be picked — so it never sees a selection bar either
+way. Conversely, a window that wants checkboxes but not the *generic* delete
+button uses `hideBulkDelete`, not `hideListBar`.
+
+Note that a window doing this swaps two bars, not stacks them: `ListView` renders
+its selection bar as a **sibling above** the slot and cannot reach inside it, so
+the slot must hide its own toolbar while a selection exists. To let it, `ListView`
+now forwards its authoritative **`selectedRows`** in the Table-slot props
+(read-only for the slot; `DataTable` has no such prop, so the spread is inert):
+
+```jsx
+function MyHeaderTable({ data, meta, selectedRows, ...props }) {
+  const selectionActive = (selectedRows?.length ?? 0) > 0;
+  return (
+    <>
+      {!selectionActive && <MyToolbar />}
+      <DataTable {...props} data={data} /* selectable stays at its default */ />
+    </>
+  );
+}
+```
+
+**Do NOT mirror the selection into slot-local state by wrapping
+`onSelectionChange`.** `DataTable` empties and prunes its internal selection `Set`
+silently from its `clearSelectionTrigger` / `deselectTrigger` effects **without**
+calling `onSelectionChange`, so a local mirror still reads "selected" after a
+successful bulk delete or a cancel — and the slot's toolbar never comes back.
+Always derive from the `selectedRows` prop. See
+`artifacts/financial-account/custom/AccountsHeaderTable.jsx` for the canonical
+example — including why the toolbar is unmounted rather than merely hidden.
+
+**Standardized delete-failure UX (applies to header, row, and bulk delete —
+no configuration needed):**
+
+- `useEntity`'s `extractErrorMessage`/`normalizeServerError` recognize
+  FK-constraint-violation errors — both the raw Postgres RESTRICT wording and
+  the classic Etendo `ErrorTextParser` AD_Message wording — and map them to one
+  standardized, translated message (i18n key `deleteBlockedByReferences`):
+  *"No es posible eliminar este registro porque tiene registros asociados."*
+- `useEntity`'s `handleDelete` now **returns a boolean** (`true`/`false`).
+  Callers must check it before navigating away or closing a confirm dialog —
+  `DetailView`'s `confirmHeaderDelete` only navigates back to the grid on
+  success, and `useRowDelete`'s confirm dialog now closes on failure too
+  (previously it left a failed dialog open indefinitely, or navigated away on
+  a failed header delete, with only a toast as feedback). Any new delete
+  entry point built on `useEntity`/`useRowDelete` must follow the same
+  check-before-navigate/close rule.
+
+**Bulk-delete outcome contract — exactly ONE toast per outcome (never one per
+row):** `useBulkRowDelete` issues one `DELETE` per selected row in parallel
+(`Promise.allSettled`), then reports a single combined toast:
+
+| Outcome | Toast | i18n key |
+|---------|-------|----------|
+| All rows succeed | success — "{count} registros eliminados correctamente." | `bulkDeleteAllSucceeded` |
+| Partial failure | single warning — "{succeeded} de {total} registros eliminados. {failed} no pudieron eliminarse." | `bulkDeletePartialFailure` |
+| All rows fail | error — "No se pudo eliminar ninguno de los {count} registros seleccionados." | `bulkDeleteAllFailed` |
+
+On a partial failure, `ListView` keeps only the failed rows selected: `DataTable`
+gained a paired `deselectTrigger`/`deselectRowIds` prop (alongside the existing
+all-or-nothing `clearSelectionTrigger`) so only the succeeded row ids drop out
+of the internal checkbox selection, leaving the failed ones checked for retry.
+
+**Known, accepted wording limitation:** `bulkDeletePartialFailure`'s "{failed}
+no pudieron eliminarse" does not grammatically vary for a singular failure
+(reads "1 no pudieron eliminarse" instead of "1 no pudo eliminarse"). This is
+deliberate — it matches the design doc's (Confluence "Eliminación de Registros
+— Comportamiento Estándar") literal wording — not a bug to fix.
+
+**New i18n keys** (all under `genericLabels`, both `en_US.json`/`es_ES.json`):
+`deleteBlockedByReferences`, `bulkDeleteConfirmTitle`, `bulkDeleteConfirmMessage`,
+`bulkDeleteSelected`, `bulkDeleteAllSucceeded`, `bulkDeletePartialFailure`,
+`bulkDeleteAllFailed`.
+
+**Real examples:** the generic mechanism applies to every window using the
+standard `ListView` (nothing to declare). `contacts` is the one window that
+currently opts out (see the known gap above).
+
+---
+
 ### 10. `window.dateFilterKey` — date range filter column
 
 Declares which list column the date range shortcut in the list toolbar targets.
@@ -614,6 +756,7 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 - Pencil and trash carry full logic. No other action icons are rendered in this iteration.
 - Desktop only (>= 1280 px). Tablet/mobile responsive support is out of scope for this iteration.
 - **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
+- **Dynamic column visibility (ETP-4543):** `InlineLinesPanel` accepts a `hiddenColumns = []` prop (mirroring `DataTable`'s existing one) that hides columns whose key is in the list, on top of any static `col.hidden` flag. `DetailView.jsx` computes this list from `lineDisplayLogic.visibility` (the same live evaluate-display map already threaded into the secondary `DetailForm`) and passes it to the primary lines table — so a grid column whose field resolves to `visibility: false` (e.g. a config-gated accounting dimension behind `@ACCT_DIMENSION_DISPLAY@`) is hidden at runtime rather than always shown just because it exists as a column. This makes `grid: true` fields under `inlineEditable` layouts respect the same runtime visibility rules non-grid fields already got via `DetailForm` — see `docs/feedback.md` ("ETP-4543") and `docs/generated-custom-windows/sales-invoice.md` for the full write-up.
 
 **How it threads through the pipeline:**
 - `cli/src/resolve-curated.js` — added to `WINDOW_TRUTHY_PROPS` (auto-passes through).
@@ -623,6 +766,80 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 - `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — owns rendering of the table block (header strip + rows + hover-action strip).
 
 **Real example:** `sales-quotation` (pilot — the first window to ship the new layout).
+
+---
+
+### 14b. `dimensionsPanel` — expand-row accounting-dimension panel (`InlineLinesPanel` column type)
+
+**What it does:** an opt-in column `type` for `InlineLinesPanel`, either declared directly in a hand-written `columns` array (e.g. `InvoiceLinesTable.jsx`) or generated automatically from a `"dimensionsPanel": true` flag on a field in `decisions.json` (see "Pipeline-generator support" below).
+
+**ETP-4610 update — no longer a fixed grid column.** `InlineLinesPanel` filters this column type out of `visibleColumns` unconditionally: no header cell, no width reservation, no per-row badges/trigger rendered inline in the grid. Its `dimensionFields` metadata still drives two things:
+- the pre-existing leading expand-chevron column (unchanged since ETP-4529) — expands/collapses the full-width sub-row of selectors below the data row;
+- a **static hover-action icon** rendered next to Edit/Delete in the row's hover strip, through the generic `rowActions` extension slot (§14c below) — shown only when at least one `dimensionFields` candidate is currently visible for that entity. It always shows the `Layers` icon with the **"Edit dimensions"** tooltip (`editDimensionsTooltip` i18n key), regardless of whether the line already has a dimension value set.
+
+**ETP-4610 live-UX follow-up (post-deploy):** an earlier iteration made this icon/tooltip *adaptive* — `Plus`/"Add dimensions" while every candidate field was empty, switching to `Pencil`/"Edit dimensions" once at least one had a value (computed per-row by a `hasFilledDimensionValues()` helper). That helper and the conditional were removed after a live review: the "edit" state's `Pencil` icon sat immediately next to the row's own built-in Edit action, reading as two identical duplicate pencil buttons. The icon/tooltip are now unconditional on purpose — see `docs/feedback.md` for the dated entry.
+
+Clicking either the chevron or the hover action toggles the same expand state — there is exactly one way the panel opens, just two entry points into it now. The previously-permanent "Dimensiones contables" column text and the collapsed `DimSummary` badges/dashed trigger are gone; discoverability now relies on the icon + tooltip, matching how the pre-existing Edit/Delete icons are already discovered (hover + tooltip, no permanent label).
+
+**Why it exists (ETP-4529, updated by ETP-4610):** ETP-4529 superseded ETP-4543's plain, always-rendered `project`/`costcenter` grid columns (see `docs/feedback.md`) — a permanently-visible column reads as a field the client always has, even with no accounting-dimension config at all. ETP-4610 went one step further: even the expand-row's own summary column read as a permanent grid column once dimensions were configured. Moving the "add" affordance into the hover strip (alongside the row's other actions, which are also hover-only) keeps the grid free of a column whose only job was inviting the user into an action, not displaying data the user scans regularly.
+
+**Column shape (unchanged by ETP-4610 — this is generator/metadata surface, not the render decision):**
+```js
+{
+  key: 'dimensions',           // any unique key, like any other column
+  type: 'dimensionsPanel',
+  label: ui('dimensionsPanelTitle'),   // metadata only — never rendered as a header now
+  dimensionFields: [                    // candidate fields, already visibility-filtered by the caller
+    { key: 'project', column: 'C_Project_ID', type: 'selector', label: t('C_Project_ID'), lookup: true },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: t('C_Costcenter_ID') },
+  ],
+  emptyLabel: undefined,        // vestigial — DimSummary (the only reader) is no longer used by InlineLinesPanel
+}
+```
+`dimensionFields` entries are ordinary column-shaped objects (`key`/`column`/`type`/`label`) — `InlineLinesPanel` reuses the same `commitField` path every other inline edit uses to persist a dimension-field change, so no special save wiring is needed. Drop the column entirely (don't include it in `columns`) when every candidate would be hidden — `InvoiceLinesTable.jsx` does this via `dimensionFields.length > 0 ? [...] : []`.
+
+**Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, no "Edit dimensions" hover action. Verified against the full existing `InlineLinesPanel` test suite.
+
+**Shared building blocks:** `tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx` exports `DimBadge`, `DimSummary`, `DimensionGrid`. `InlineLinesPanel` only uses `DimensionGrid` now (the expanded content). **Update (same ticket, follow-up pass):** `AmortizationLinesTable.jsx` also stopped using `DimSummary`/`DimBadge` — it hand-patched the same static Layers/"Edit dimensions" hover-action pattern (see below) instead of the permanent grid-column summary it used to render. `DimSummary`/`DimBadge` currently have no consumer left in this repo but remain exported as reusable building blocks.
+
+**Pipeline-generator support (unchanged by ETP-4610):** `generateTableComponent` (`schema_forge_core`'s `cli/src/generate-frontend.js`) still emits this column type directly from `decisions.json` — no generator change was needed for the column-hiding requirement, since `InlineLinesPanel` (a generic component owned entirely by this functional repo, not part of `@etendosoftware/app-shell-core`) decides how the metadata renders, not the generator. Flag a field `"dimensionsPanel": true` (any `grid` value; see `docs/decisions-reference.md`) and the generator collects it into the synthetic column automatically for the pipeline-generated `<Window>LineTable.jsx`/`LinesTable.jsx`/`GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` files. Fully additive — an entity with zero `dimensionsPanel: true` fields generates byte-for-byte the same `columns` array as before.
+
+**Real example:** the generated `LinesTable.jsx` (sales-invoice, purchase-invoice), `GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` (goods-shipment, goods-receipt), and `GLJournalLineTable.jsx` (simple-g-l-journal) — all driven purely by `decisions.json`, all 5 in-scope windows regenerated and validated as part of ETP-4610. `goods-shipment` needed two extra local-DB regen attempts reverted (this sandbox's incomplete `AD_Ref_List_Trl` es_ES data silently strips unrelated translations on this window) before ultimately regenerating clean via the pre-push hook's offline/cached-AD-snapshot pipeline run — see `docs/feedback.md` for the full trail. Also `InvoiceLinesTable.jsx` (hand-written, **not currently reachable from the running app** — see `docs/feedback.md`).
+
+**`AmortizationLinesTable.jsx` — hand-patched, not an `InlineLinesPanel` consumer (follow-up pass, same ticket).** This component is a wholly custom `<table>` (its own fetch/CRUD, multi-select, and inline add-row draft-line flow — none of which `InlineLinesPanel` has an equivalent for), so wrapping it in `InlineLinesPanel` was investigated and rejected as disproportionate rework relative to this ticket's actual gap (see `docs/feedback.md` for the full comparison). Instead, its own hover strip was hand-patched to match the *visible* mechanism above: the permanent "Accounting dimensions" grid column was removed, and a third hover-action button (`Layers` icon, static `editDimensionsTooltip` — the same i18n key, no separate one introduced) was added ahead of its existing Pencil/Trash, gated on `dimensionFields.length > 0` and `!isReadOnly`, toggling the same `expandedId` state its pre-existing chevron already drove. Two independent implementations of the same UX on purpose — not a shared code path — because this component was never built on top of `InlineLinesPanel` to begin with.
+
+---
+
+### 14c. `InlineLinesPanel` row hover-action extension slot (`rowActions` prop)
+
+**What it does:** a generic extension point on `InlineLinesPanel` for adding extra icon buttons to a row's hover-action strip, alongside the built-in Edit (pencil) / Delete (trash) icons. Added by ETP-4610 to move the "Add dimensions" trigger there without hardcoding it — any future action (window-specific or generic) can reuse the exact same mechanism instead of re-implementing the strip.
+
+**Before this ticket:** the hover strip (`renderRowActionStrip` in `InlineLinesPanel.jsx`) rendered exactly two hardcoded buttons (Pencil → edit, Trash2 → delete) with no extension point. There was no mechanism for conditional-per-row visibility beyond the two existing handlers' own `isDocumentReadOnly` gate.
+
+**Prop shape:**
+```jsx
+<InlineLinesPanel
+  columns={columns}
+  data={data}
+  // ...
+  rowActions={[
+    {
+      key: 'archive',            // unique key — also the default data-testid suffix
+      icon: ArchiveIcon,         // any lucide-react icon component
+      tooltip: ui('archiveLineTooltip'),   // aria-label + title — the icon's only label, matches Pencil/Trash's own pattern
+      onClick: (row) => handleArchive(row),
+      show: (row) => row.status !== 'archived',  // optional: boolean OR (row) => boolean, defaults to visible
+      testId: 'line-action-archive',  // optional override; defaults to `line-action-${key}`
+    },
+  ]}
+/>
+```
+- `show` supports both a static boolean (hide/show for every row identically) and a per-row function, satisfying conditional-per-line visibility generically — not hardcoded to any one action's business rule.
+- Extra actions render **before** Pencil/Trash, in the order declared in the array.
+- The built-in "Edit dimensions" action (§14b) is computed internally by `InlineLinesPanel` from its own `dimensionFields` metadata and merged into the same list ahead of any caller-supplied `rowActions` — both render through the identical `renderRowActionStrip({ extraActions })` code path, so there is only one hover-action rendering mechanism in the component, not two.
+- Purely additive: omitting `rowActions` (every existing caller today) renders byte-for-byte the same strip as before this slot existed.
+
+**Real example:** the internal "Edit dimensions" action is the only current consumer; no external caller passes `rowActions` yet. See `tools/app-shell/src/components/contract-ui/__tests__/InlineLinesPanel.vitest.jsx`'s `rowActions — generic hover-action extension slot` describe block for the mechanism's own regression tests (rendering, static `show: false`, per-row `show` function, declared-order rendering).
 
 ---
 
@@ -784,6 +1001,162 @@ different real spec).
 
 ---
 
+### 18. `multiField` — composite list column (stacked identity cell)
+
+**What it does:** turns a single list column into a **composite identity cell** that stacks several
+row fields together — a bold **title**, an optional **subtitle chip**, and an optional **authenticated
+media image** — while still behaving like real, first-class columns: each declared *part* is a
+clickable sort header (own `_sortBy`) and expands into its own pseudo-column in the advanced filter.
+It is **not** a new component and **not** a custom slot: it is a `type: 'multiField'` decorator on the
+existing `DataTable`, declared entirely in `decisions.json`. No hand-written JSX, no file in
+`windows/custom/`.
+
+Introduced in ETP-4603. It replaces the previous pattern of a bespoke per-window cell component (e.g.
+Product's old `ProductNameCell`) with a generic, config-driven column that any window can adopt.
+
+**Design note — columns are derived from grid fields (Design A).** There is **no** `window.listColumns`
+array. List columns are derived from the entity's grid fields, so `multiField` is declared as a
+**decorator on a "host" grid field** (the field whose value becomes the title). The decorator absorbs
+the sibling fields it references — they stop rendering as their own standalone columns and fold into
+the composite cell instead.
+
+**Use when:** a list row's identity is better read as one rich cell than as three separate columns —
+typically a master-data window (Product, Business Partner, etc.) where users recognize a record by an
+image + a primary name + a secondary code, and still want to sort/filter by each of those parts.
+
+**Avoid when:** the fields are unrelated data points that users genuinely compare column-by-column, or
+the "title" field is not the natural primary label of the row.
+
+#### Decision tree (inside the feature)
+
+```
+I want to combine several list fields into one column
+│
+├─ Just a title + a small code/label underneath it
+│   └─ → multiField with subtitle (no media)
+│
+├─ Title + code + a thumbnail image (product photo, avatar…)
+│   └─ → multiField with subtitle + media { kind: "neoImage" }
+│
+├─ I want users to still sort/filter by each stacked field
+│   └─ → declare each as a parts[] entry (default: sortable + filterable)
+│
+├─ One stacked field should be display-only (no sort header, no filter)
+│   └─ → parts[].sortable: false  and/or  parts[].filterable: false
+│
+└─ I need a fully bespoke rendering the decorator can't express
+    └─ → not multiField — use a cellType renderer or a custom layout
+```
+
+#### The decorator shape (declared in `decisions.json`)
+
+Set `multiField` on the **host** grid field. The host field's own value is the **title** — there is no
+`title` key in the declaration; the field you attach the decorator to *is* the title.
+
+```json
+"name": {
+  "visibility": "editable",
+  "grid": true,
+  "multiField": {
+    "subtitle": "searchKey",
+    "media": { "field": "image", "kind": "neoImage", "fallback": "box" },
+    "parts": [
+      { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
+      { "field": "name",      "labels": { "en_US": "Name",       "es_ES": "Nombre" } }
+    ],
+    "partSeparator": " & "
+  }
+}
+```
+
+| Key | Type | Default | Semantics |
+|-----|------|---------|-----------|
+| *(host field)* | — | — | The grid field carrying the decorator. Its value renders as the **bold title**. |
+| `subtitle` | string | `null` | Sibling field name whose value renders as the **chip** under the title. Omit for a title-only cell. |
+| `media` | object | `null` | `{ field, kind: "neoImage", fallback: "box" }`. `field` = row property holding the image id; `kind: "neoImage"` fetches the image with an authenticated Bearer request (see below); `fallback: "box"` shows a package glyph when empty. Omit for no image. |
+| `parts` | array | `[title, subtitle]` | Ordered segments that behave like real columns for **per-part sort** and **filter expansion**. Each entry: `{ field, sortable?, filterable?, labels?, label? }`. `sortable`/`filterable` default `true`. `labels` (`{ en_US, es_ES }`) or `label` relabel that segment's header (e.g. show *Identifier* for `searchKey`) without renaming the underlying field. When omitted, defaults to the title field plus the subtitle field (if any). |
+| `partSeparator` | string | `" & "` | String joining the part labels in the composite column header (part order drives the header text). |
+
+#### The emitted contract (what the generator writes into `columnsArray`)
+
+The generator resolves each `parts[].field`, the `subtitle`, and `media.field` against the resolved
+contract to fill in the runtime `key`/`column`/`type`/`label(s)`, and emits a single resolved column
+descriptor:
+
+```js
+{
+  key: 'name', column: 'Name', type: 'multiField',
+  title: 'name',                 // row field → bold title
+  subtitle: 'searchKey',         // row field → chip (optional)
+  media: { field: 'image', kind: 'neoImage', fallback: 'box' },   // optional
+  parts: [                       // per-part: sort header + filter expansion
+    { key: 'searchKey', column: 'Value', type: 'string', labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
+    { key: 'name',      column: 'Name',  type: 'string', labels: { en_US: 'Name',       es_ES: 'Nombre' } },
+  ],
+  partSeparator: ' & ',
+}
+```
+
+So the declared `field` (decisions.json) becomes the resolved `key`/`column`/`type` (contract). You edit
+the `field` form; you never hand-write the resolved form.
+
+#### Per-part sort
+
+Each `parts[]` entry with `sortable !== false` renders its label as a **clickable header button** with
+its own `_sortBy` — clicking *Identifier* sorts the list by `searchKey`, clicking *Name* sorts by
+`name`, independently, even though both live in one visual column. `sortable: false` renders the part
+label as plain, non-clickable text.
+
+#### Advanced-filter expansion
+
+Each `parts[]` entry with `filterable !== false` **expands into its own pseudo-column** in the advanced
+filter builder — so a user filtering the list sees *Identifier* and *Name* as separately filterable
+fields, not one opaque "multiField" blob. `filterable: false` keeps that segment out of the filter
+builder.
+
+#### Absorbed fields still carry their data
+
+The `subtitle` field, `media.field`, and any `parts[]` field that is **not** the host are **dropped
+from `columnsArray`** — they no longer render as standalone columns. **Their data still arrives**,
+though, because the list fetch sends **no field projection**: NEO Headless returns every configured
+entity field for each row regardless of which columns are shown. That is what lets the renderer paint
+the subtitle/image and lets per-part sort/filter target the absorbed fields.
+
+#### Authenticated media (`useNeoImage`)
+
+`media.kind: "neoImage"` renders through the `useNeoImage(imageId, token, apiBaseUrl)` hook, which
+issues an **authenticated Bearer fetch** to `{apiBaseUrl}/image/{imageId}` and returns an object URL for
+an `<img>` src. On a missing id or a failed fetch it falls back to the `BoxIcon` package glyph
+(`fallback: "box"`). The hook now lives in the core package (`@etendosoftware/app-shell-core`) and is
+consumed via the shim `@/hooks/useNeoImage`.
+
+#### Validation (rule F18)
+
+Pipeline validator rule **F18** (implemented in `schema_forge_core`) blocks the pipeline when a
+`multiField` decorator references a sibling field that does not exist on the same entity (`subtitle`,
+`media.field`, or any `parts[].field`), or when a **sort-enabled** part (`sortable !== false`) — or the
+host — is **not queryable** (missing from the entity's `searchableFields` / `supportedFilters`, so the
+backend would reject `_sortBy` on it). It is a no-op for windows without any `multiField` decorator.
+Fix by referencing only real same-entity fields and marking non-queryable segments `sortable: false`
+(or making the field searchable). Full row: [`docs/pipeline-validator-reference.md`](pipeline-validator-reference.md) (F18).
+
+#### Real example — the Product identity column
+
+Product's list uses `multiField` on its `name` grid field to render the product identity as one cell:
+the **name** in bold as the title, the **search key** as a subtitle chip, and the product **image**
+(authenticated `neoImage`, `box` fallback) to the left. Two `parts` — *Identifier* (`searchKey`) and
+*Name* (`name`) — make the cell sortable per part (clicking each header sorts by that field) and
+filterable (each part expands as its own pseudo-column in the advanced filter). The composite header
+reads *"Identifier & Name"* / *"Identificador & Nombre"*. See the exact declaration in
+[`docs/decisions-reference.md`](decisions-reference.md) → *Composite list column (`multiField`)* and the
+window guide [`docs/generated-custom-windows/product.md`](generated-custom-windows/product.md).
+
+**Cross-references:**
+- [`docs/decisions-reference.md`](decisions-reference.md) — canonical decorator key table (*Composite list column (`multiField`)*).
+- [`docs/pipeline-validator-reference.md`](pipeline-validator-reference.md) — rule F18.
+
+---
+
 ## Decision tree: which option to use?
 
 ```
@@ -818,6 +1191,9 @@ I need to customize the UI of a window
 │   ├─ Replace the master list table
 │   │   └─ → window.customComponents.headerTable
 │   │
+│   ├─ Stack title + code + image into one sortable/filterable list column
+│   │   └─ → multiField decorator on the host grid field (decisions.json)
+│   │
 │   └─ Secondary document actions (cancel, reverse, duplicate)
 │       └─ → window.menuActions
 │
@@ -832,6 +1208,8 @@ I need to customize the UI of a window
     ├─ Hide ⋮ menu on new/processed records → hideMoreMenu prop (boolean or function)
     ├─ Hover overlay with per-row actions on the list (Edit/Duplicate/Email/kebab/Delete)
     │   └─ → window.rowQuickActions (on by default; declare only to disable or override)
+    ├─ Opt out of the generic grid "Delete selected" bulk-delete action
+    │   └─ → listViewOptions.hideBulkDelete (ListView prop; window already has its own bulk-delete)
     └─ Show a required-looking asterisk on a conditionally-required field, without validation
         └─ → requiredVisual: true on the field descriptor (EntityForm prop, not decisions.json)
 ```

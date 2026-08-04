@@ -22,7 +22,7 @@ Use this page as the entry point to the reconciliation module. It lists the fina
 ## What is intentionally out of scope for T1
 
 - "+ Nueva cuenta" button: disabled in T1, modal arrives with ETP-4096 (T2).
-- PSD2 wiring (`Sync now`, `Connect`, `Disconnect`): every kebab item except "Abrir cuenta" is disabled; the connection model arrives with ETP-4097 (T3).
+- Bank connection wiring (`Sync now`, `Connect`, `Disconnect`): every kebab item except "Abrir cuenta" is disabled; the connection model arrives with ETP-4097 (T3).
 - Matching rules drawer and the suggestions engine: ETP-4099 (T5).
 - Manual reconciliation split panel and the reconcile handler: ETP-4100 (T6) and ETP-4101 (T7).
 - Deferred accounting and reactivate flow: ETP-4102 (T8).
@@ -32,7 +32,7 @@ Use this page as the entry point to the reconciliation module. It lists the fina
 > **Story:** ETP-4096. The toolbar's **+ Nueva cuenta** button and two row-kebab
 > actions (**Editar cuenta**, **Archivar cuenta**) are now active. All of this is the
 > *offline* flow — accounts created without a bank connection. The "Con conexión"
-> (PSD2) path is visible but disabled; it ships in a later iteration.
+> (bank connection) path is visible but disabled; it ships in a later iteration.
 
 ### New account wizard (`NewAccountWizard`)
 
@@ -59,7 +59,7 @@ omitted from the top-level form; the backend leaves any field absent from the re
 untouched, so editing never wipes a stored BIC.
 
 > This description reflects T2 (ETP-4096) scope only. The modal has since gained a
-> live PSD2 connection block (ETP-4097 / T3), a General/Contabilidad tab split with a
+> live bank connection block (ETP-4097 / T3), a General/Contabilidad tab split with a
 > conditional Currency lock (ETP-4530), and a second entry point from the account
 > detail view — see `financial-account.md` → "Edit Account Modal" for the current
 > behavior.
@@ -144,17 +144,27 @@ spec + entity records live in `src-db/database/sourcedata/ETGO_SF_SPEC.xml` and
 
 ## Frontend file map
 
+> **Superseded by ETP-4658.** The list is no longer a hand-written page on a hardcoded
+> route: it is the generated window's `ListView` with an `AccountsHeaderTable` slot, and
+> its columns come from `decisions.json`. `pages/FinancialAccountsPage.jsx` and the
+> hand-rolled `AccountsTable` host (table + header + row) are **deleted**. The canonical
+> reference for the current list is **`financial-account.md`**; what stays accurate here
+> is the backend of the `financial-accounts-page` spec.
+
 ```
 tools/app-shell/src/
-├── pages/FinancialAccountsPage.jsx           # mounts the wizard / edit / archive dialogs
 ├── components/financial-accounts/
 │   ├── index.js, tokens.js
 │   ├── AccountsToolbar.jsx                    # + Nueva cuenta button
 │   ├── AccountsSidebar/index.jsx
-│   ├── AccountsTable/{index, AccountsTableHeader, AccountRow}.jsx
+│   ├── AccountsTable/accountColumns.jsx       # cell bodies only (NameCell/TypeCell/BalanceCell)
+│   ├── accountCellTypes.jsx                   # binds contract `cellType` → renderer
+│   ├── contractColumns.js                     # reads the grid columns from contract.json
+│   ├── AccountRowActions.jsx                  # pencil / PSD2 sync / kebab, on row hover
 │   ├── AccountLogoAvatar.jsx, SyncStatusInline.jsx, ReconcilePill.jsx
 │   ├── AccountTypeFilter.jsx
-│   └── AccountRowMenu.jsx                     # Abrir / Editar / Archivar + PSD2 (disabled)
+│   └── AccountRowMenu.jsx                     # Abrir / Editar / Archivar + bank connection (disabled)
+├── (the list body itself lives in artifacts/financial-account/custom/AccountsHeaderTable.jsx)
 ├── windows/custom/financial-account/          # account-management modals (ETP-4096)
 │   ├── NewAccountWizard.jsx
 │   ├── AccountConnectionToggle.jsx

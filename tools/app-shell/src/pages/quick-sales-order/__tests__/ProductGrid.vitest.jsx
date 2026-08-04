@@ -26,6 +26,7 @@ const PRODUCTS = [
   { id: 'p1', productId: 'p1', name: 'Alpha Widget', searchKey: 'AW-001', price: 10.5, stock: 25, category: 'Electronics' },
   { id: 'p2', productId: 'p2', name: 'Beta Gadget', searchKey: 'BG-002', price: 5.0, stock: 0, category: 'Toys' },
   { id: 'p3', productId: 'p3', name: 'Gamma Tool', searchKey: 'GT-003', price: 99.99, stock: null, category: 'Electronics' },
+  { id: 'p4', productId: 'p4', name: 'Delta Machine', searchKey: 'DM-004', price: 1500, stock: 3, category: 'Electronics' },
 ];
 
 const defaultProps = {
@@ -83,10 +84,18 @@ describe('ProductGrid', () => {
     expect(screen.getByText('qsoNoResults')).toBeInTheDocument();
   });
 
-  it('renders product prices', () => {
+  it('renders product prices in es-ES format (comma decimal, real € symbol)', () => {
     render(<ProductGrid {...defaultProps} />);
-    expect(screen.getByText(/10\.50/)).toBeInTheDocument();
-    expect(screen.getByText(/5\.00/)).toBeInTheDocument();
+    expect(screen.getByText('10,50 €')).toBeInTheDocument();
+    expect(screen.getByText('5,00 €')).toBeInTheDocument();
+    // Never the US-format dot-decimal rendering (bare .toFixed(2) output).
+    expect(screen.queryByText('10.50')).toBeNull();
+    expect(screen.queryByText('5.00')).toBeNull();
+  });
+
+  it('groups thousands in product prices (1000-9999 range silently drops grouping with bare toFixed/unfixed Intl)', () => {
+    render(<ProductGrid {...defaultProps} />);
+    expect(screen.getByText('1.500,00 €')).toBeInTheDocument();
   });
 
   it('renders product search keys', () => {

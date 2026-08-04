@@ -29,6 +29,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 ## Reactive behavior and dependencies
 
 - Header defaults are visible in the contract for invoice date and accounting date (`@#Date@`), document status (`DR`), currency, and zeroed payable amounts such as total paid and outstanding amount. Currency is editable on the header via the `CurrencyRatePicker` component (see "Currency and exchange rate — ETP-4029" below), not a read-only defaulted value.
+- **Capability-gated `posted` field/status pill (ETP-4520):** the header `posted` field (rendered as a `Posted`/`Not posted` status pill on the detail header and as a `Posted` boolean badge column in the grid) carries `"visibleWhenCapability": "showAccountingFields"` in `artifacts/purchase-invoice/decisions.json`, mirroring the sales-invoice implementation. This is resolved against `capabilities.showAccountingFields`, fetched once at role-selection via `GET /sws/neo/windowaccessmap` (NEO pseudo-spec bridge) and exposed through `useAuth().capabilities`. The field backs the `AD_Role.EM_ETGO_Show_Acct_Fields` ("Show Accounting Fields") checkbox — Etendo Classic-only for this MVP, no GO-app UI to toggle it — and the server resolves it with an Administrator bypass. A role without the capability never sees the column or the pill at all (the field is omitted, not disabled/hidden): `DataTable.jsx` filters the column out of `visibleColumns` and `DetailView.jsx` returns `null` for the status pill before it renders, both via the shared `isCapabilityVisible()` helper (`tools/app-shell/src/lib/capabilityVisibility.js`) fed by `useCapabilitiesSafe()`. Administrator sessions always see the field regardless of the checkbox.
 - Unified document/accounting date (ETP-4531, redefined 2026-07-17): `accountingDate` (`DateAcct`) is `visibility: system` — fully hidden from the UI, not present in `frontendContract.entities.header.fields` at all. `invoiceDate` is the single visible date field. Per classic AD metadata, `C_Invoice.DateInvoiced` carries `AD_Column.AD_Callout_ID = com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout`, which extends `org.openbravo.erpCommon.ad_callouts.SE_Invoice_AccountingDate` and auto-fills `dateAcct` from `dateInvoiced`. This cascade is now intentionally allowed to flow through untouched — the earlier `PurchaseInvoiceHeaderHandler#afterCallout` guard that stripped it (ETP-4531's original, now-superseded scope; see `docs/feedback.md`) has been removed on the `com.etendoerp.go` side, so saving the invoice writes the same date to both `invoiceDate` and `accountingDate` internally, and the accounting facts generated on posting reflect that unified value as the journal entry's accounting date.
 - The `date` field in `AddPaymentModal.jsx` (the "New payment" popup triggered from the invoice detail) uses the generic `DateField` component (`tools/app-shell/src/components/ui/date-field.jsx`) — Figma-aligned calendar popover with always-visible calendar icon, month/year picker, and Etendo yellow hover on filled-black elements. These defaults matter because a new payable document starts as draft and incomplete before lines and payment activity exist.
 - Partner address is a dependent selector filtered by the selected business partner. The business partner also drives header callouts, and the custom page blocks line creation until a business partner is present.
@@ -67,7 +68,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 15. Open a completed purchase invoice and verify that **Contacto** (`businessPartner`), **Dirección** (`partnerAddress`), **Método de pago** (`paymentMethod`), **Condiciones de pago** (`paymentTerms`), and **Tarifa** (`priceList`) fields are all disabled (read-only). Confirm that **Nº documento** (`orderReference`) remains editable.
 2. Click a list row and confirm the preview modal opens instead of immediate navigation.
 3. In the preview modal, verify the General tab shows total, due/payable state, and payment history, while Messages and History remain placeholder states.
-4. Open `/purchase-invoice?filter=overdue` and confirm the quick filter keeps invoices with an outstanding amount.
+4. Open `/purchase-invoice?filter=overdue` and confirm the quick filter keeps invoices with an outstanding amount. Open the **Filtros** funnel (badge "2") and confirm the second preloaded condition reads `Y | Pendiente de pago | Mayor que | 0` — the operator must be visible (not the placeholder) and its value box must be a numeric input. Also confirm **Imp. total** offers numeric operators and **Vencimiento** offers `Es / Antes de / Después de / Entre` with a date picker (ETP-4681).
 5. Open a draft invoice detail and confirm adding a line is blocked until a business partner is selected.
 6. On the detail page, confirm the custom lines table shows product, description, invoiced quantity, net unit price (`listPrice`), % discount (`etgoDiscount`), tax, and line gross amount in that exact column order, and that the footer shows subtotal, inferred tax, and total. Open a line for edit and confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured purchase taxes (filtered by `IsSOTrx=N` and validity against the invoice date), not a free-text search that returns "Sin resultados". Confirm that selecting a product populates the net unit price field (`listPrice`, the PriceList value from the document's price list) and resets the discount to 0, and that typing a new quantity, price, or discount immediately updates the gross amount without a server round-trip. The net unit price field must be editable in the add-line row.
 7. Open a completed invoice with pending balance and confirm the topbar payment-status pill appears, opens the payment modal, and reflects the invoice as pending or paid based on outstanding amount.
@@ -85,6 +86,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 - `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-action component mounted in the purchase-invoice list selection bar, mounted with `labelKey="confirmBulk"` so the button renders as "Confirmar" / "Confirm". The `menuActions` array in `artifacts/purchase-invoice/decisions.json` is empty — no kebab document actions (including `Reactivate`) are declared for this window. Reactivation is not supported in the purchase-invoice detail view.
 - `tools/app-shell/src/lib/__tests__/dateOnly.test.js`, `tools/app-shell/src/lib/__tests__/invoiceDueDate.test.js`, and `tools/app-shell/src/windows/custom/purchase-invoice/__tests__/PurchaseInvoiceHeaderTable.test.js` provide source-level and helper-level regression coverage for due-date calendar normalization, locale formatting, max-installment selection, and the paid/overdue/soon/ok state derivation that drives the dot color and the red-text reinforcement on overdue rows in the purchase-invoice list.
 - Shared shell and entity-loading behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.
+- **ETP-4520** — `artifacts/purchase-invoice/decisions.json`, `artifacts/purchase-invoice/contract.json`, and the generated `HeaderPage.jsx`/`HeaderTable.jsx` all carry `"visibleWhenCapability": "showAccountingFields"` on the `posted` field. `tools/app-shell/src/lib/capabilityVisibility.js`, `tools/app-shell/src/hooks/useCapabilitiesSafe.js`, `tools/app-shell/src/components/contract-ui/DataTable.jsx`, and `tools/app-shell/src/components/contract-ui/DetailView.jsx` prove the shared omit-not-disable gating mechanism, with source-reading coverage in `tools/app-shell/src/lib/__tests__/capabilityVisibility.test.js`, `tools/app-shell/src/hooks/__tests__/useCapabilitiesSafe.vitest.jsx`, `tools/app-shell/src/components/contract-ui/__tests__/DataTable.capabilityVisibility.vitest.jsx`, and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.capabilityVisibility.vitest.jsx`.
 - Contract and UI evidence reviewed for this rewrite:
   - `tools/app-shell/src/menu.json`
   - `tools/app-shell/src/windows/registry.js`
@@ -108,7 +110,12 @@ Use this window to register supplier invoices, keep the payable document aligned
 
 ## Validation & Error Handling — ETP-4005
 
-See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for the full list: inline line min-value enforcement, payment modal date validation, single confirmation toast, and callout message sanitization.
+See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for the full list: inline line min-value enforcement, payment modal date validation, single confirmation toast, and callout message sanitization. `etgoDiscount` keeps its `min: 0, max: 100` range.
+
+## Negative quantity/price and price-list label — ETP-4567
+
+- `invoicedQuantity` and `listPrice` no longer declare `min: 0` in `decisions.json`. Both the add-line row and inline grid edit now accept negative values — needed for credit/return-style adjustments modeled as negative-quantity or negative-price lines. `etgoDiscount` is unaffected and keeps its `min: 0, max: 100` range.
+- The `listPrice` (AD `PriceList` column) label is now overridden to **"Precio"** in Spanish via `window.labelOverrides.es_ES.PriceList` in `decisions.json` (English label unchanged). Same declarative mechanism already used for `POReference`, `OutstandingAmt`, `EM_Etgo_Due_Date`, `em_etgo_delivery_status`, and `C_DocTypeTarget_ID` on this window.
 
 ## Pipeline regeneration — ETP-3908
 
@@ -369,7 +376,7 @@ footer, only when **all** hold (mirrors the backend's own eligibility check, so 
 heuristic, not exhaustive):
 
 - direction is **payment out** (`dir === 'out'` — purchase invoice), and
-- the selected financial account is **PSD2-connected** (`psd2Connected`, sourced from the
+- the selected financial account is **bank-connected** (`bankConnected`, sourced from the
   enriched `invoiceAccounts` action — same `EM_PSD2_Connection_Status='CO'` check as
   `FinancialAccountsPageHandler`), and
 - the payment method looks like a transfer (name contains "transfer"/"transferencia"), and
@@ -387,8 +394,8 @@ On confirm with `pis: true`, the `registerPayment` action creates and links the 
 and **processes it to status `PPM`** ("Payment Made") — applied to the invoice but with **no
 `FIN_Finacc_Transaction` yet**. The bank transaction is created only once Salt Edge confirms
 execution, by the PSD2 module's own `PisPaymentCallback` → `PISTransactionUtils` (idempotent).
-To keep config and runtime aligned, connecting an account to PSD2 **from Etendo Go** clears the
-transfer method's **Automatic Withdrawn** flag (`FinancialAccountPsd2Handler`) — Payment OUT
+To keep config and runtime aligned, connecting an account to its bank **from Etendo Go** clears the
+transfer method's **Automatic Withdrawn** flag (`FinancialAccountBankConnectionHandler`) — Payment OUT
 only; Automatic Deposit is left untouched, since PIS only initiates outbound transfers.
 
 The response carries `pisPaymentUrl` + `pisPaymentId`; the modal opens the Salt Edge SCA widget
@@ -401,7 +408,7 @@ reactivates + removes the unauthorized payment). The non-PIS path is byte-for-by
 
 ### Payment history badge
 
-Payments that have a linked `PSD2_PIS_PAYMENT` row show a **"Realizado vía PSD2"** badge
+Payments that have a linked `PSD2_PIS_PAYMENT` row show a **"Realizado vía banco"** badge
 (`cpPisViaLabel`) in the history modal. The flag comes from a direct `OBCriteria<PisPayment>`
 query in the GO module (`PisPaymentService.hasLinkedPisPayment`), not a new PSD2-module method.
 
@@ -416,6 +423,71 @@ query in the GO module (`PisPaymentService.hasLinkedPisPayment`), not a new PSD2
 
 Scope v1: purchase invoices only, EUR (SEPA) / GBP (FPS). Out of scope: receipts, batch/multi-invoice
 PIS, other currencies, scheduled payments.
+
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` | **Siempre** — `displayLogic: null` override | **Nunca** — discarded |
+| `product` | *(no such field on the header)* | **Siempre** — no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+| `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`) | **Por config** — same passthrough |
+
+**Fixed a pre-existing gap:** `header.project`, `header.costcenter`, `lines.project`, and
+`lines.costcenter` previously carried `"form": false, "readOnlyLogic": null, "displayLogic": null`
+in `decisions.json`, which both hid the fields unconditionally AND silenced their raw
+`@Posted@='Y'` read-only rule. Both are now restored: the fields render (gated by the
+accounting-dimension macro) and are correctly locked once the invoice is posted.
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).**
+Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
+runtime.
+
+**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
+`lines.costcenter` carry correct contract metadata and are correctly evaluated, but this
+window uses `window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` (the sidebar
+that would otherwise render them) never mounts — so the two fields had no UI surface at all,
+evaluator fix notwithstanding (Jira ETP-4543 / GitHub `etendosoftware/etendo_schema_forge#895`).
+Fixed by adding `project`/`costcenter` as columns to `InvoiceLinesTable.jsx` (the shared,
+hand-written line table used by both `sales-invoice` and `purchase-invoice`) and wiring
+dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
+`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
+dimension toggles OFF, the columns do not render; with them ON, they do. See `sales-invoice.md`
+for the full write-up (including the verified list of which windows actually hit this gap).
+
+### Header section placement fix + expand-panel supersession (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
+so they render in the main visible form area instead of the secondary/collapsed one — same fix
+as `sales-invoice.md`. Separately, the plain `project`/`costcenter` grid columns added above
+were superseded by a single `type: 'dimensionsPanel'` column on `InvoiceLinesTable.jsx` (the
+same shared component both windows use) — full write-up, including a wiring gap discovered
+while doing this (`InvoiceLinesTable.jsx` is not currently reachable from either window's
+running app), in `sales-invoice.md` and `docs/feedback.md`'s ETP-4543 supersession note.
+
+**Resolved (ETP-4529 generator support):** since `InvoiceLinesTable.jsx` doesn't actually render
+for this window either, `generate-frontend.js`'s `generateTableComponent` (`schema_forge_core`)
+now emits the `dimensionsPanel` column directly from `decisions.json`. `lines.project.dimensionsPanel`
+and `lines.costcenter.dimensionsPanel` are `true` (grid stays `false`); the actually-rendered
+generated `LinesTable.jsx` declares the synthetic column, so the panel renders for real — see
+`sales-invoice.md`'s matching note, `docs/decisions-reference.md` (`dimensionsPanel`), and
+`docs/ui-customization.md` §14b.
+
+### "Añadir dimensiones" moved to a hover action, column no longer shown (ETP-4610)
+
+Same change as `sales-invoice.md`: the "Dimensiones contables" grid column no longer renders.
+"Añadir dimensiones" moved into the line's hover-action strip next to Edit/Delete, gated on at
+least one visible dimension field; the expand-chevron column is unchanged. Label/icon is adaptive
+("Añadir dimensiones" → "Editar dimensiones" once the line has a dimension value set). See
+`docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
+
+Regenerated cleanly (`make regen ONLY=sales-invoice,purchase-invoice SKIP_EXTRACT=1 LOCAL_CORE=1`,
+`sf-validate-pipeline` clean, committed) as part of validating this window's `dimensionsPanel`
+flags — see `docs/feedback.md`'s ETP-4610 entry for the full regen log across all five in-scope
+windows.
 
 ## Multi-currency support in the Cobros/Pagos modal — ETP-4504
 
@@ -474,3 +546,40 @@ submitted `conversionRate`.
 - `tools/app-shell/src/windows/custom/shared/usePaymentBalance.js` — excess gating; refund removed.
 - i18n keys `cpConversionRate` / `cpAmountInAccount` / `cpConversionRateRequired` /
   `cpConversionRateInvalid` present in `en_US.json`, `es_ES.json`, and `es_AR.json`.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.
+
+## Advanced-filter mode on rich cells — ETP-4681
+
+Three list columns render bespoke cells and are therefore declared `type: 'custom'`
+in `tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`
+(the live table — note `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` is
+an unreachable decoy):
+
+| Column | Why it is `custom` | Declared `filterMode` |
+|--------|--------------------|-----------------------|
+| `outstandingAmount` (`OutstandingAmt`) | "Pagada" pill and an "Añadir pago" button | `numeric` |
+| `grandTotalAmount` (`GrandTotal`) | sign-flips credit notes and returns | `numeric` |
+| `eTGODueDate` (`EM_Etgo_Due_Date`) | 4-state coloured due-date dot | `date` |
+
+`type: 'custom'` carries no filter semantics — `resolveFilterMode` cannot see the
+underlying data type behind a bespoke `render`, so without an explicit
+`filterMode` all three fell back to text mode. The visible symptom was on the
+Dashboard shortcut "Por pagar", which navigates to
+`/purchase-invoice?filter=overdue` and preloads `documentStatus equals CO` **and**
+`outstandingAmount greaterThan 0`. Text mode has no `greaterThan` in its operator
+set, so the operator `<Select>` matched no item and rendered its placeholder.
+
+Note the divergence this also settles: sales-invoice declares `grandTotalAmount`
+as `type: 'amount'` (which infers `numeric` on its own), while purchase-invoice
+needs `custom` for the sign flip and therefore needs the explicit `filterMode`.
+
+Rule **F19** of `sf-validate-pipeline` now blocks any new `custom` column over a
+numeric/date/enum contract field that omits `filterMode`. Full reference:
+[`list-filters.md`](../list-filters.md).

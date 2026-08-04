@@ -1,14 +1,17 @@
 {
-  "version": "0.16.0",
+  "version": "0.18.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-07-21T12:35:24.907Z",
-  "checksum": "386a4817461acdb9",
+  "updatedAt": "2026-07-28T12:25:33.114Z",
+  "checksum": "89f16e235abaf513",
   "frontendContract": {
     "window": {
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
       "category": "settings",
+      "headerExtra": {
+        "customForm": "AssignRoleControl"
+      },
       "layoutType": "default"
     },
     "entities": {
@@ -262,12 +265,12 @@
             "label": "Default Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "reference": "Role",
-            "inputMode": "selector",
+            "inputMode": "search",
             "section": "defaults",
             "validation": {
               "maxLength": 12
@@ -436,7 +439,8 @@
               "source": "@#Date@"
             }
           }
-        ]
+        ],
+        "javaQualifier": "user"
       },
       "userRoles": {
         "tableName": "AD_User_Roles",
@@ -451,7 +455,7 @@
             "label": "Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -477,7 +481,7 @@
             "label": "Role Administrator",
             "type": "boolean",
             "tsType": "boolean",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -504,7 +508,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "hideDelete": true
       },
       "emailConfiguration": {
         "tableName": "C_POC_CONFIGURATION",
@@ -863,7 +868,10 @@
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
-      "category": "settings"
+      "category": "settings",
+      "headerExtra": {
+        "customForm": "AssignRoleControl"
+      }
     },
     "entities": {
       "user": {
@@ -1060,7 +1068,7 @@
             "apiKey": "defaultRole",
             "column": "Default_Ad_Role_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1239,7 +1247,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "user"
       },
       "userRoles": {
         "tableName": "AD_User_Roles",
@@ -1251,7 +1260,7 @@
             "apiKey": "role",
             "column": "AD_Role_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1267,7 +1276,7 @@
             "apiKey": "roleAdmin",
             "column": "Is_Role_Admin",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1671,7 +1680,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/user/userRoles",
         "detailUrl": "/sws/neo/user/userRoles/{id}",
         "supportedFilters": [
@@ -1714,7 +1723,7 @@
         "field": "defaultRole",
         "column": "Default_Ad_Role_ID",
         "reference": "Role",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/user/user/selectors/defaultRole"
       },
       {

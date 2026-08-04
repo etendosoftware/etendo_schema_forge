@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import { INVOICE_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
 import HeaderTable from '../../../custom/InvoiceHeaderTable';
@@ -29,7 +30,7 @@ const statusField = 'documentStatus';
 
 // @sf-generated-start extraBadges:header
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:header
 
@@ -57,10 +58,12 @@ const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', forceCalloutFields: ["listPrice","unitPrice","tax","uOM","grossUnitPrice"] },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
-    { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', required: true, label: 'Invoiced Quantity', defaultValue: 1, min: 0 },
-    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price', min: 0 },
+    { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', required: true, label: 'Invoiced Quantity', defaultValue: 1 },
+    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price' },
     { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineNetAmount"] },
+    { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'CostCenter', inputMode: 'selector' },
   ],
   derived: [
 
@@ -377,6 +380,14 @@ export const api = {
           }
         ]
       }
+    },
+    {
+      "entity": "header",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "CostCenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/purchase-invoice/header/selectors/costcenter"
     },
     {
       "entity": "header",
@@ -955,7 +966,8 @@ export const api = {
       "OutstandingAmt": "Pendiente de pago",
       "EM_Etgo_Due_Date": "Vencimiento",
       "em_etgo_delivery_status": "Estado de recepción",
-      "C_DocTypeTarget_ID": "Tipo de documento"
+      "C_DocTypeTarget_ID": "Tipo de documento",
+      "PriceList": "Precio"
     },
     "en_US": {
       "POReference": "Document No.",
@@ -971,6 +983,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:HeaderPage
 export default function HeaderPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('183');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="183" />;
+  }
   if (recordId) {
     return (
       <>
@@ -998,6 +1017,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         hideDeleteWhenComplete
         noHeaderBorder
         notesField="description"
+        dimensionsPanelFieldKeys={["project","costcenter"]}
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' }]}
         bottomSection={PurchaseInvoiceBottomPanel}
         menuActions={({ data, status }) => [
@@ -1011,7 +1031,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         lineConfig={INVOICE_LINE_CONFIG}
         linesLayout="inlineEditable"
         sendDocument={{"enabled":true,"allowEmail":false}}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -1030,7 +1050,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument={{"enabled":true,"allowEmail":false}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -86,7 +86,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `formCardPadding` | string | `null` | Any Tailwind padding class | Override the Tailwind padding class applied to the form card div in the detail view. When `null`, `DetailView` falls back to `p-6`. Use `"px-2 pb-2"` for tighter (8px horizontal) padding, for example on windows with dense form layouts. |
 | `hideDelete` | boolean | `false` | — | Disables the CRUD delete capability at the contract/API level — emits `apiPrediction.crud.<entity>.delete: false` in `contract.json` for the window's entities. This is an **API-level** declaration only; it does not by itself remove the delete button/icon from the UI (see `hideDeleteButton` below for that). Used for master-data windows whose records are provisioned/retired outside the app (e.g. `tax`, `tax-category`, `open-close-period-control`). |
-| `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. |
+| `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. Gates on `window.statusField`: string status codes (e.g. `DR`/`RPAP`/`N`, see `DELETABLE_DOC_STATUSES` in `tools/app-shell/src/utils/recordActions.js`) are treated as deletable, all other codes as not. When `statusField` points to a **boolean** field instead (e.g. `processed` on `physical-inventory`/`goods-movements`), `false` (not yet processed) is deletable and `true` (processed) is not — handled automatically by `isDeleteVisibleForRecord`, no extra config needed. |
 | `hideDeleteButton` | boolean | `false` | — | **Unconditionally** hides the Delete (trash) button/icon in **both** the detail view toolbar and the list-row hover quick actions, for every record regardless of status. Distinct from `hideDelete` (which only disables the CRUD delete capability declared in `contract.json`/the API) — use `hideDeleteButton` when you also need to remove the UI affordance. Use this instead of `hideDeleteWhenComplete` when Delete should never be available, not just once the document leaves Draft; when set, `hideDeleteWhenComplete` becomes redundant (the button is always hidden). When `false`/absent, delete visibility is unchanged. |
 | `customComponents` | object | `null` | See below | Override generated components with custom ones from `artifacts/{window}/custom/`. The generator emits the correct imports and props automatically. |
 | `menuActions` | array | `[]` | See below | Additional actions in the detail view's "more" menu (triple dot). Each action can have visibility conditions based on document status. |
@@ -533,7 +533,40 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
 | `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
+| `virtualFields` | array | `[]` | Columns with **no AD column behind them**, injected per row by the entity's NeoHandler in `afterHandle`. See below. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
+| `hideDelete` | boolean | `false` | Disables the CRUD delete capability for **this entity only** (`apiPrediction.crud.<entity>.delete: false`) — unlike `window.hideDelete`, which disables delete uniformly across every entity in the window. `DetailView`'s row-delete handler, bulk-delete bar, and delete-eligibility checks all gate directly on this same `crud.delete` flag, so setting it also removes the row-level delete icon/checkbox in the UI, not just the declared API capability. Use for a child/detail entity whose rows are exclusively managed as a side effect of the parent's own save (e.g. a NeoHandler syncing a join table from a parent field) — manual row deletion there would let a user bypass that invariant. Added ETP-4512 (`userRoles` on the `user` window). |
+
+### Virtual fields (`entities.{name}.virtualFields`)
+
+For a column the backend computes and injects but that has **no AD column** — so
+extraction can never discover it. The entity's `NeoHandler` must `put` it into each row
+in `afterHandle`; NEO will not derive it (no AD column → no OBDal property → no value).
+
+```json
+"account": {
+  "javaQualifier": "financialAccountHeaderHandler",
+  "virtualFields": [
+    { "name": "pendingCount", "column": "pendingCount", "label": "Pending",
+      "type": "integer", "visibility": "readOnly", "form": false,
+      "grid": true, "gridOrder": 4 }
+  ]
+}
+```
+
+- **`column` must match the JSON key the handler writes exactly** — that is how the row
+  value is found. It is not an AD column name.
+- Keep `visibility: "readOnly"`: there is nothing to write to.
+- `form: false` keeps it out of the generated form; `grid` + `gridOrder` place it in the grid.
+- Safe with `push-to-neo`: no `ad_column` matches, so the field is skipped rather than
+  inserted into `ETGO_SF_FIELD`.
+- **Only a closed set of keys is copied** (`name`, `column`, `label`, `type`, `visibility`,
+  `required`, `form`, `grid`, `gridOrder`, `section`). Anything else — notably `cellType`,
+  `gridLabelKey`, `seq` — is silently dropped, so a virtual field cannot declare its own
+  renderer; bind it in the consuming component instead.
+
+Shipped by: `payment-in`, `payment-out`, `return-material-receipt`,
+`return-to-vendor-shipment` (`invoiceDocumentNo`) and `financial-account` (`pendingCount`).
 
 ### Line HandleDefaults (`entities.{name}.handlesDefaults`)
 
@@ -604,7 +637,107 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `inlineEdit` | boolean | `false` | Mark a column as inline-editable (carried into the contract as `inlineEdit: true`). Consumed by `list-modal`; editing is also available via the modal. |
 | `gridReadOnly` | boolean | `false` | Make an otherwise-editable column read-only in the grid. |
 | `grow` | boolean | `false` | Let the column grow to fill available width. |
-| `cellType` | string | `null` | Selects a cell renderer from the registry (see below). Generic to any grid; the `list-modal` layout ships a styled set. |
+| `cellType` | string | `null` | Names the cell renderer for this column. Carried decisions → contract for **any** window, but **who honours it depends on the layout** — it is not generic to every grid. See the `cellType` section below for the three paths. |
+| `multiField` | object | `null` | Compose this "host" grid field with sibling fields into **one** composite column: bold title + optional subtitle chip + optional authenticated media image. See below. |
+| `dimensionsPanel` | boolean | `false` | Collect this field into the ONE synthetic `type: 'dimensionsPanel'` grid column instead of its own column — see below. Read regardless of the field's own `grid` value (typically `grid: false`, since the field renders inside the expand-row panel, not as a standalone column). |
+| `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
+
+#### Composite list column (`multiField`)
+
+Declares a single list column that stacks a bold **title**, an optional **subtitle**
+chip, and an optional **media** image (e.g. a product photo) — the pattern used by
+the Product list identity cell — without any custom JSX. The decorator sits on the
+**host** grid field (whose value becomes the title); it absorbs the sibling fields it
+references so they no longer render as their own columns. The absorbed fields' data is
+still fetched (the list request sends no field projection — NEO Headless returns every
+configured entity field), so the renderer, per-part sort, and advanced filter keep
+working.
+
+| Key | Type | Default | Purpose |
+|-----|------|---------|---------|
+| `subtitle` | string | `null` | Field name whose value renders as the subtitle chip under the title. Omit for a title-only column. |
+| `media` | object | `null` | `{ field, kind: "neoImage", fallback: "box" }`. `field` is the row property holding the image id; `kind: "neoImage"` fetches `{neoBase}/image/{id}` with the auth token; `fallback: "box"` shows the package glyph when empty. Omit for no image. |
+| `parts` | array | `[title, subtitle]` | Ordered segments that behave like real columns for the header per-part sort and the advanced-filter expansion. Each entry: `{ field, sortable?, filterable?, labels?, label? }`. `sortable`/`filterable` default `true`; set `false` to opt a segment out. `labels` (`{ en_US, es_ES }`) or `label` override the contract field's own label for that segment's header — use it to relabel a segment (e.g. show *Identifier* for `searchKey`) without renaming the underlying field. When `parts` is omitted, defaults to the title field plus the subtitle field (if any). The composite header joins the segment labels in order using `partSeparator`. |
+| `partSeparator` | string | `" & "` | String rendered between part labels in the composite column header. |
+
+The generator resolves each `parts[].field` (and the `subtitle`/`media.field`) against
+the contract to fill the runtime `key`/`column`/`type`/`label(s)`, so references must be
+real fields on the same entity. Fields used for sort (`sortable !== false`) must be
+queryable (in the entity's searchable/supported filters). Both constraints are enforced
+by pipeline validator rule **F18**.
+
+**Example — a Product-style identity column on the `name` field:**
+
+```json
+"name": {
+  "visibility": "editable",
+  "grid": true,
+  "multiField": {
+    "subtitle": "searchKey",
+    "media": { "field": "image", "kind": "neoImage", "fallback": "box" },
+    "parts": [
+      { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
+      { "field": "name",      "labels": { "en_US": "Name",       "es_ES": "Nombre" } }
+    ]
+  }
+}
+```
+
+This renders one column: the product name in bold, the search key as a chip below it,
+and the product image (or a box fallback) to the left. `searchKey` and `image` no longer
+appear as standalone columns, but sorting/filtering by name or search key still works via
+the two header segments. Part order drives the composite header — here it reads
+*"Identifier & Name"* (*"Identificador & Nombre"*), with each segment relabeled via its
+own `labels` rather than the contract field's default (`Search Key` / `Name`).
+
+#### Accounting dimensions panel (`dimensionsPanel`)
+
+Fields flagged `dimensionsPanel: true` (any number, on any inline-editable-layout entity) are collected by `generateTableComponent` into ONE synthetic column instead of individual grid columns:
+
+```js
+{
+  key: 'dimensions',
+  type: 'dimensionsPanel',
+  label: 'Accounting dimensions',
+  labels: { en_US: 'Accounting dimensions', es_ES: 'Dimensiones contables' },
+  dimensionFields: [
+    { key: 'project', column: 'C_Project_ID', type: 'selector', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'Costcenter', inputMode: 'selector' },
+  ],
+}
+```
+
+`InlineLinesPanel` never renders this column type in the grid itself (ETP-4610 — no header cell, no width, no per-row badges). Instead it drives two things: a leading expand-chevron column (unchanged since ETP-4529) and an adaptive "Add dimensions"/"Edit dimensions" entry in the row's hover-action strip, next to the Edit/Delete icons, shown only when at least one `dimensionFields` candidate is currently visible. Clicking either the chevron or the hover action expands the same full-width sub-row of selectors below the data row — see `docs/ui-customization.md` §14b for the full UX and the shared `DimensionsPanel.jsx` building blocks (still used for the expanded `DimensionGrid`; the collapsed `DimSummary` badge/trigger is no longer used by `InlineLinesPanel`).
+
+**Rules:**
+
+- Emitted **only** when at least one field on the entity has `dimensionsPanel: true`; otherwise the entity's `columns` array is byte-for-byte the same as before this feature existed (fully additive).
+- Always emitted **last** in the `columns` array — `gridOrder` does not apply to it (it only reorders normal grid columns).
+- Each `dimensionFields` entry reuses the same per-field extraction as a normal grid column (`mapFieldType` for `type`, static baked `label`, FK `reference`/`inputMode`, `required`/`lookup`/`popup`) — trimmed to what `DimensionsPanel.jsx` (`DimSummary`/`DimensionGrid`), `SelectorInput`, and `selectorCatalog.js` actually read.
+- The panel's own `label`/`labels` are baked by the generator (not translated via `useUI()` — the `columns` array is module-scope code, so it cannot call a hook); `emptyLabel` is left unset so the empty-state trigger falls back to the generic `dimensionsPanelEmpty` i18n key at render time.
+- Only affects the **grid/table** rendering. A field flagged `dimensionsPanel: true` still appears as its own field in the lines entity's `addLineFields` (the add-new-row form) if `form: true` — the add-row flow is a separate, flat-form UX not covered by this flag.
+- A field with `grid: true` AND `dimensionsPanel: true` is collected into the panel only — it is excluded from `gridFieldsRaw` regardless of its own `grid` value.
+
+**`dimensionsPanelFieldKeys` — per-window dimension-macro trust (ETP-4610):**
+
+`generatePageComponent` (`schema_forge_core`'s `generate-frontend.js`) also collects the same `dimensionsPanel: true` field keys for the lines entity and forwards them to the generated `<DetailView dimensionsPanelFieldKeys={[...]} />` prop — omitted entirely when the entity has none, so this is purely additive. `DetailView.jsx` uses it to widen, **scoped to that one window instance**, which keys its `lineHiddenColumns` computation (and the expanded-row `DetailForm`'s `displayLogic`) is willing to trust as config-driven "dimension macro" visibility: a key is trusted if it's in the component's small global `DIMENSION_MACRO_KEYS` allowlist (`project`/`costcenter`/`costCenter`/`businessPartner`) **or** it's listed in this prop.
+
+This exists because `product` cannot be added to the global allowlist: in `sales-invoice`/`purchase-invoice` it's a real per-line field with its own record-dependent AD `displayLogic` (`@Financial_Invoice_Line@='N'`), and trusting it globally would reintroduce the ETP-4530 regression (product/listPrice/grossAmount silently vanishing from those windows' grids). `simple-g-l-journal`, however, genuinely flags `product` `dimensionsPanel: true` as an `@ACCT_DIMENSION_DISPLAY@` accounting dimension — so its generated page passes `dimensionsPanelFieldKeys={['businessPartner', 'product', 'project', 'costCenter']}`, and only *that* window instance trusts `product`'s config-hide signal. Windows that never flag any lines field `dimensionsPanel: true` get no prop at all and see no behavior change. See `DetailView.lineHiddenColumns.vitest.jsx` for both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped instances).
+
+**Real example** (`sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt` — `lines.project`/`lines.costcenter`):
+
+```json
+"project": {
+  "visibility": "editable",
+  "grid": false,
+  "dimensionsPanel": true
+},
+"costcenter": {
+  "visibility": "editable",
+  "grid": false,
+  "dimensionsPanel": true
+}
+```
 
 #### Status column rendering (`columnType` and `enumValues`)
 
@@ -684,15 +817,30 @@ introducing a different number format for one column.
 }
 ```
 
-#### `list-modal` cell renderers (`cellType`)
+#### Cell renderers (`cellType`) — three paths, not one
 
-The `list-modal` grid renders each cell through a registry keyed by `cellType`
-(`tools/app-shell/src/components/contract-ui/listModalCells.jsx`). The renderers
-are generic and backend-agnostic — every cell reads only from the row payload and
-the column descriptor. Set them per grid field in `decisions.json`; the generator
-emits them into the contract column descriptors and the page consumes them. When
-no `cellType` is set, the cell falls back to a plain value (with enum-label / FK
-identifier resolution).
+`cellType` always survives decisions → `contract.json`, but **which grids act on it
+differs**, so check which path your window is on before declaring one:
+
+| Path | Who honours it | What you can declare |
+|---|---|---|
+| **`layoutType: "list-modal"`** | `buildListModalColumns` emits it into the column descriptor; `ListModalWindow` renders it through the registry in `tools/app-shell/src/components/contract-ui/listModalCells.jsx` | the 7 values in the table below |
+| **The standard generated table** | The generator recognises only three hardcoded, window-specific values — `depreciationProgress`, `taxRate`, `taxScope` — and inlines a `render:` for them. `DataTable` itself never reads `cellType`. | nothing new without a `schema_forge_core` change |
+| **A `customComponents.headerTable` slot** | The slot builds its own column descriptors, so it can read `cellType` off the contract and resolve it against a window-scoped registry | any name that registry defines |
+
+The third path is how `financial-account`'s accounts list works: `cellType` names
+(`accountName`, `accountType`, `accountBalance`, `reconcilePill`) resolve through
+`components/financial-accounts/accountCellTypes.jsx`. Use it when the cells are
+window-specific enough that they do not belong in a shared registry, and note what it
+buys: the **binding** (which column uses which renderer) becomes declarative, the
+renderers stay React.
+
+Nothing validates `cellType` — no pipeline-validator rule, no whitelist. An unknown
+value degrades to the generic type-based renderer rather than failing.
+
+The `list-modal` renderers below are generic and backend-agnostic — every cell reads
+only from the row payload and the column descriptor. When no `cellType` is set, the
+cell falls back to a plain value (with enum-label / FK identifier resolution).
 
 | `cellType` | Extra keys | Renders |
 |------------|-----------|---------|
@@ -710,8 +858,9 @@ identifier resolution).
 |----------|------|---------|---------|
 | `reference` | string \| null | Auto from targetTable | Catalog name for FK lookup (e.g., `"BusinessPartner"`). Set `null` to omit. |
 | `inputMode` | string \| null | Auto from reference type | `"selector"` (dropdown), `"search"` (searchable), `"dependent"` (cascading). Set `null` to omit. |
-| `searchSelect` | boolean | `false` | Opt-in: render an `inputMode: "selector"` FK field as the **searchable combobox** (`CreatableSearchSelect`) — text search + select — instead of the plain pick-only dropdown (`SelectorInput`). When absent/false the dropdown rendering is unchanged. Preserves `required`, the empty/null choice (`emptyOptionLabelKey`), and the same selector URL/context. **Not** the same as `searchable` (which enables a field as a list-API filter parameter). |
-| `allowCreate` | boolean | `false` | Opt-in (future): on a `searchSelect` field, surface the inline "+ create" action in the combobox. Currently OFF for all windows — the flag flows through the pipeline so a field can wire `createLabel`/`onCreateRequest` later without a generator change. |
+| `searchSelect` | boolean | `false` | **Legacy/ignored (post-ETP-4600).** Since ETP-4600, the searchable combobox (`CreatableSearchSelect`) is the DEFAULT rendering for every `inputMode: "selector"` FK field AND every `type: 'select'` fixed-list enum with options — the plain pick-only dropdown (`SelectorInput`) is only used for the `DocumentType` reference carve-out (which keeps its own `optionTranslator`). Setting `searchSelect: true` is now a no-op; leaving it out (or removing it) does not change rendering. **Not** the same as `searchable` (which enables a field as a list-API filter parameter). |
+| `allowCreate` | boolean | `false` | Opt-in (future): on a selector/enum field, surface the inline "+ create" action in the combobox. Currently OFF for all windows — the flag flows through the pipeline so a field can wire `createLabel`/`onCreateRequest` later without a generator change. |
+| `clearable` | boolean | `true` (header) / `!required` (line grid) | Controls the chip's clear (`×`) button. On the header's unified `CreatableSearchSelect`, defaults to `true` (shown) for every selector/enum field, including required ones — the header form has an explicit Save step, so a required field cleared to empty is caught before it ever reaches the backend. On the **line grid**'s `InlineSearchCombo` (`artifacts/{w}/generated/.../DataTable.jsx`, `InlineLinesPanel.jsx`), every field edit auto-saves immediately with no review step, so the `×` defaults to **hidden** whenever `field.required === true` (e.g. Sales Order line's `tax`) — clearing it there always fails against a NOT NULL column and the grid can't turn the resulting generic backend error into a helpful field-level message. Set `"clearable": false` to force-hide it on a specific field regardless of `required`, or `"clearable": true` to force-show it (opt back into the risk) on a required field that has a safe fallback (e.g. a server-side default kicks in on save). |
 | `dependsOn` | object \| null | `null` | Parent field dependency for cascading selectors. |
 
 **dependsOn format:**
@@ -785,8 +934,9 @@ instead of the default input when it detects this property.
 |----------|------|---------|---------|
 | `name` | string | Raw field name | Override field's public API name. |
 | `required` | boolean | From AD mandatory | Force field as required. |
-| `min` | number | `undefined` | Minimum allowed value for numeric fields. On blur the UI autocorrects values below this limit to `min`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). |
-| `max` | number | `undefined` | Maximum allowed value for numeric fields. On blur the UI autocorrects values above this limit to `max`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). Example: `"max": 100` on a discount (%) field prevents values above 100. |
+| `min` | number | `undefined` | Minimum allowed value for numeric fields. In **grid / inline rows** (DataTable) the UI autocorrects values below this limit to `min` on blur. In **detail forms** (EntityForm) a value below `min` raises a `fieldMinValueError` toast on blur and blocks the save (via `getNumericFieldViolation` in `useEntity`). The toast interpolates the declared threshold — "Value must be at least `{min}`" — so a `0` on a `min: 1` field is reported accurately (never as "negative"). Travels through the full pipeline (`decisions.json` → `resolve-curated` → contract → generated FieldDefs). |
+| `max` | number | `undefined` | Maximum allowed value for numeric fields. On blur the grid UI autocorrects values above this limit to `max`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). Example: `"max": 100` on a discount (%) field prevents values above 100. |
+| `integer` | boolean | `undefined` (decimals allowed) | When `true`, the numeric field rejects decimal values. In detail forms a decimal raises a `fieldIntegerError` toast on blur and blocks the save. **Default (flag absent or `false`) accepts decimals** — omit it for the common case; only set `integer: true` for whole-number fields (e.g. Assets `usableLifeMonths` / `usableLifeYears`, declared `"min": 1, "integer": true`). Fully backwards-compatible: a field that declares neither `min` nor `integer` performs no numeric validation. Travels through the full pipeline (`decisions.json` → `resolve-curated` → contract → generated FieldDefs). |
 | `readOnlyLogic` | string \| null | `null` | Expression for conditional read-only. Set `null` to omit. |
 | `displayLogic` | string \| null | `null` | Expression for conditional visibility. Set `null` to omit. |
 | `businessCritical` | boolean | `false` | Advisory-only metadata flag. When `true`, marks the field as business-critical data. This flag does **not** change any functional behavior (validation, read-only logic, visibility, etc.). It travels through the pipeline (`decisions.json` → `resolve-curated` → `contract.json` → `push-to-neo` → `ETGO_SF_FIELD.ISBUSINESSCRITICAL`) so that downstream consumers (e.g., AI agents reading `neo_schema`) know they must confirm with the user before creating or updating records that include this field. |

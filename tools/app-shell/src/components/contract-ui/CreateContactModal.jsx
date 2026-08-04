@@ -34,7 +34,7 @@ function ContactModeToggle({ contactType, onChange }) {
   return (
     <div
       className="flex items-center gap-1 p-1 rounded-xl"
-      style={{ background: '#F5F7F9', width: '240px' }}
+      style={{ background: 'hsl(var(--muted))', width: '240px' }}
     >
       <button
         type="button"
@@ -43,11 +43,11 @@ function ContactModeToggle({ contactType, onChange }) {
         style={
           contactType === 'person'
             ? {
-                background: '#FFFFFF',
-                color: '#121217',
-                boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)',
+                background: 'hsl(var(--card))',
+                color: 'hsl(var(--foreground))',
+                boxShadow: '0px 1px 3px hsl(var(--foreground) / 0.10), 0px 1px 2px hsl(var(--foreground) / 0.06)',
               }
-            : { color: '#121217' }
+            : { color: 'hsl(var(--foreground))' }
         }
       >
         {ui('Person')}
@@ -59,11 +59,11 @@ function ContactModeToggle({ contactType, onChange }) {
         style={
           contactType === 'company'
             ? {
-                background: '#FFFFFF',
-                color: '#121217',
-                boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)',
+                background: 'hsl(var(--card))',
+                color: 'hsl(var(--foreground))',
+                boxShadow: '0px 1px 3px hsl(var(--foreground) / 0.10), 0px 1px 2px hsl(var(--foreground) / 0.06)',
               }
-            : { color: '#121217' }
+            : { color: 'hsl(var(--foreground))' }
         }
       >
         {ui('company')}
@@ -391,7 +391,7 @@ export default function CreateContactModal({
         toErrMsg(errData?.message) ||
         toErrMsg(errData?.error) ||
         toErrMsg(errData?.response?.error) ||
-        `${ui('createContactError')} (HTTP ${res.status})`
+        ui('createContactError')
       );
     }
 

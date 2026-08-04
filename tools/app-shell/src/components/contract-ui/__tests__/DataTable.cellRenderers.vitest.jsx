@@ -43,8 +43,18 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
   resolveColumnLabel: (col) => col.label ?? col.key,
 }));
 
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (val, currency) => `${currency ?? ''}${val != null ? String(val) : ''}`.trim(),
+vi.mock('@/lib/formatCurrency.js', () => ({
+  formatCurrency: (currency, val) => `${currency ?? ''}${val != null ? String(val) : ''}`.trim(),
+}));
+
+const useNeoImageMock = vi.fn();
+
+vi.mock('@/hooks/useNeoImage', () => ({
+  useNeoImage: (...args) => useNeoImageMock(...args),
+}));
+
+vi.mock('@/components/ui/box-icon', () => ({
+  BoxIcon: () => <span data-testid="box-icon" />,
 }));
 
 import {
@@ -54,6 +64,7 @@ import {
   renderDateCell,
   renderDefaultCell,
   renderEnumCell,
+  renderMultiFieldCell,
   renderPercentCell,
   renderSignedDeltaCell,
   renderStatusCell,
@@ -90,6 +101,7 @@ describe('CELL_RENDERERS', () => {
       date: renderDateCell,
       amount: renderAmountCell,
       signedDelta: renderSignedDeltaCell,
+      multiField: renderMultiFieldCell,
       default: renderDefaultCell,
     });
   });
@@ -167,7 +179,7 @@ describe('renderPercentCell', () => {
     }));
 
     expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-amber-400')).toBeTruthy();
+    expect(container.querySelector('.bg-status-warning')).toBeTruthy();
   });
 });
 
@@ -180,7 +192,7 @@ describe('renderBooleanCell', () => {
     }));
 
     expect(screen.getByText('yes')).toBeInTheDocument();
-    expect(container.querySelector('.text-emerald-600')).toBeTruthy();
+    expect(container.querySelector('.text-status-success-foreground')).toBeTruthy();
   });
 });
 
@@ -219,7 +231,7 @@ describe('renderSignedDeltaCell', () => {
 
     const cell = screen.getByText('-8');
     expect(cell).toBeInTheDocument();
-    expect(cell.style.color).toBe('rgb(213, 11, 62)'); // #D50B3E
+    expect(cell.style.color).toBe('hsl(var(--destructive))');
     expect(container.querySelector('span.text-right.tabular-nums')).toBeTruthy();
   });
 
@@ -232,7 +244,7 @@ describe('renderSignedDeltaCell', () => {
 
     const cell = screen.getByText('±0');
     expect(cell).toBeInTheDocument();
-    expect(cell.style.color).toBe('rgb(18, 18, 23)'); // #121217
+    expect(cell.style.color).toBe('hsl(var(--foreground))');
   });
 
   it('renders a positive value as "+N" with the positive color', () => {
@@ -244,7 +256,7 @@ describe('renderSignedDeltaCell', () => {
 
     const cell = screen.getByText('+2');
     expect(cell).toBeInTheDocument();
-    expect(cell.style.color).toBe('rgb(30, 135, 76)'); // #1E874C
+    expect(cell.style.color).toBe('var(--status-success-fg)');
   });
 
   it('renders the signed text with fontWeight 600', () => {
@@ -273,5 +285,94 @@ describe('renderDefaultCell', () => {
     expect(truncated).toBeTruthy();
     expect(truncated).toHaveAttribute('title', long);
     expect(truncated).toHaveTextContent(long);
+  });
+});
+
+describe('renderMultiFieldCell', () => {
+  beforeEach(() => {
+    useNeoImageMock.mockReset();
+    useNeoImageMock.mockReturnValue(null);
+  });
+
+  it('renders the title in bold from row[col.title]', () => {
+    const { container } = renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A' },
+      col: { key: 'name', type: 'multiField', title: 'name' },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    const title = screen.getByText('Widget A');
+    expect(title.className).toBe('text-sm font-semibold text-[hsl(var(--foreground))] leading-5');
+    expect(container.querySelector('.flex.items-center.gap-3')).toBeTruthy();
+  });
+
+  it('renders the subtitle chip only when row[col.subtitle] is present', () => {
+    renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A', searchKey: 'SKU-1' },
+      col: { key: 'name', type: 'multiField', title: 'name', subtitle: 'searchKey' },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    const chip = screen.getByText('SKU-1');
+    expect(chip.className).toBe(
+      'inline-flex items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit',
+    );
+  });
+
+  it('omits the subtitle chip when row[col.subtitle] is absent', () => {
+    renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A' },
+      col: { key: 'name', type: 'multiField', title: 'name', subtitle: 'searchKey' },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    expect(screen.queryByText('SKU-1')).toBeNull();
+  });
+
+  it('does not render a media box when col.media is not configured', () => {
+    const { container } = renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A' },
+      col: { key: 'name', type: 'multiField', title: 'name' },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    expect(container.querySelector('.w-10.h-10.rounded-lg')).toBeNull();
+    expect(useNeoImageMock).toHaveBeenCalledWith(undefined, 'tok', '/api');
+  });
+
+  it('renders the resolved image when useNeoImage returns a url', () => {
+    useNeoImageMock.mockReturnValue('blob:fake-url');
+    const { container } = renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A', image: 'img-1' },
+      col: { key: 'name', type: 'multiField', title: 'name', media: { field: 'image', kind: 'neoImage', fallback: 'box' } },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    const box = container.querySelector('.w-10.h-10.rounded-lg.bg-\\[hsl\\(var\\(--muted\\)\\)\\]');
+    expect(box).toBeTruthy();
+    const img = box.querySelector('img');
+    expect(img).toHaveAttribute('src', 'blob:fake-url');
+    expect(img).toHaveAttribute('alt', 'Widget A');
+    expect(useNeoImageMock).toHaveBeenCalledWith('img-1', 'tok', '/api');
+  });
+
+  it('renders the BoxIcon fallback when useNeoImage returns null', () => {
+    useNeoImageMock.mockReturnValue(null);
+    const { container } = renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A', image: 'img-1' },
+      col: { key: 'name', type: 'multiField', title: 'name', media: { field: 'image', kind: 'neoImage', fallback: 'box' } },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    const box = container.querySelector('.w-10.h-10.rounded-lg.bg-\\[hsl\\(var\\(--muted\\)\\)\\]');
+    expect(box).toBeTruthy();
+    expect(screen.getByTestId('box-icon')).toBeInTheDocument();
+    expect(box.querySelector('img')).toBeNull();
   });
 });

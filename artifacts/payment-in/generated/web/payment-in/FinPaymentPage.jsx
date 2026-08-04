@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import FinPaymentTable from '../../../custom/PaymentHeaderTable';
 import FinPaymentForm from './FinPaymentForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
@@ -244,7 +245,14 @@ export const api = {
 
 // @sf-generated-start component:FinPaymentPage
 export default function FinPaymentPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('E547CE89D4C04429B6340FFA44E70716');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
   const [showNewModal, setShowNewModal] = useState(false);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="E547CE89D4C04429B6340FFA44E70716" />;
+  }
   if (recordId) {
     return (
       <>
@@ -272,12 +280,12 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         bottomSection={PaymentBottomPanel}
         topbarExtra={PaymentConciliadoBadge}
         sidePanel={PaymentDetailSidebar}
-        sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid #E8EAEF","padding":0}}
+        sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid hsl(var(--border-subtle))","padding":0}}
         processConfirmModal={ReactivarConfirmModal}
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"cobroDepositado","RDNC":"cobroDepositado","RPPC":"cobroDepositado","PPM":"cobroDepositado","PWNC":"cobroDepositado"}}
         statusFieldLabel="statusColumnLabel"
         sendDocument
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -297,7 +305,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
       hideCreate
       rowQuickActions={{}}
       sendDocument
-      {...props}
+      {...props} window={effectiveWindow}
       onNew={() => setShowNewModal(true)}
     />
     {showNewModal && <NewPaymentModal token={props.token} apiBaseUrl={props.apiBaseUrl} windowName={windowName} onClose={() => setShowNewModal(false)} />}

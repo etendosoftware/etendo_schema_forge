@@ -34,6 +34,23 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 
+// ETP-4520 batch regen (00062c488) wired `useWindowAccess`/`WindowAccessGuard`
+// into every generated Page — including payment-in/payment-out — reading them
+// from `@/auth/AuthContext.jsx`. This suite renders those REAL generated pages
+// with no `AuthProvider` ancestor, so the real hook throws "must be used
+// within AuthProvider". Mocked here the same way
+// `PurchaseInvoiceTopbar.vitest.jsx` mocks `@etendosoftware/app-shell-core/auth`
+// for the identical situation — full, non-fail-closed access so the guard
+// never blocks the render and the reactivate-confirm assertions are
+// unaffected.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn(), windowAccess: {}, capabilities: {} }),
+  useWindowAccess: () => 'full',
+  useHasCapability: () => true,
+  WindowAccessGuard: ({ children }) => children,
+  AuthProvider: ({ children }) => children,
+}));
+
 // One shared, mutable hook double per test file — mirrors the convention in
 // DetailView.processesAndBadges.vitest.jsx. `handleProcess` is the spy we
 // assert on: if it fires before the modal's confirm button is clicked, the

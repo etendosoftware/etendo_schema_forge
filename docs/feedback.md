@@ -243,6 +243,57 @@ Owner: whoever next touches the goods-shipment window.
 
 ---
 
+## ETP-4543: Non-Grid Line Fields Invisible Under inlineEditable Line Layout
+
+**Components:**
+- `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx`
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx`
+- `tools/app-shell/src/windows/custom/shared/InvoiceLinesTable.jsx`
+
+**Affected windows:** sales-invoice, purchase-invoice, goods-shipment, goods-receipt (all four `inlineEditable`-layout windows that actually carry `lines.project`/`lines.costcenter` as real fields; `physical-inventory` and `goods-movements` use the same layout but their underlying AD tables — `M_InventoryLine`/`M_MovementLine` — have no `project`/`costCenter` column at all, so they were never affected).
+
+**Symptom:** A line field with `form: true` but not promoted to an inline grid column (`grid: false`) had no rendering surface at all when the entity's `linesLayout` was `"inlineEditable"`. `DetailView.jsx` only mounts the secondary detail form (`DetailForm`/`LinesForm.jsx`) when `linesLayout !== 'inlineEditable'`; for inline-editable windows that mount is unconditionally skipped, and `InlineLinesPanel` only ever rendered fields already promoted to grid columns. Discovered while implementing ETP-4529 for the config-gated `project`/`costcenter` accounting-dimension fields: even after the ETP-4529 evaluator fix correctly resolved their visibility, the fields still never appeared anywhere in the UI.
+
+**Root cause:** Architectural gap, not a one-line bug — `InlineLinesPanel` had no concept of an "off-grid" field, and `DetailView`'s primary `<DetailTable>` call hardcoded `hiddenColumns={[]}`, discarding the live visibility map (`lineDisplayLogic.visibility`) that had already been computed and was correctly threaded into the secondary `DetailForm`'s `displayLogic` prop.
+
+**Fix (scoped to making the two dimension fields visible-when-enabled, not the larger "expandable per-row detail" feature originally floated):**
+1. `InlineLinesPanel.jsx` gained a `hiddenColumns = []` prop, filtering the same way `DataTable.jsx` already did: `columns.filter(c => !c.hidden && !hiddenColumns.includes(c.key))`.
+2. `DetailView.jsx`'s primary `<DetailTable>` call now passes a memoized `lineHiddenColumns` — every key from `lineDisplayLogic.visibility` whose value is exactly `false` — instead of the hardcoded `[]`.
+3. For `sales-invoice`/`purchase-invoice`, `project`/`costcenter` were added as hardcoded columns to `InvoiceLinesTable.jsx` (this component ignores `decisions.json`'s `grid` flag entirely — its column list ships independent of the contract). For `goods-shipment`/`goods-receipt`, whose line tables are pipeline-generated, `lines.project.grid`/`lines.costcenter.grid` were flipped `false → true` in `decisions.json` and the windows were regenerated (`make regen`).
+
+**Rejected approach:** An expandable per-row detail surface inside `InlineLinesPanel` (mirroring what `DetailForm` does for non-inline layouts) — a much larger feature. Deferred; the grid-column + dynamic-`hiddenColumns` approach fully covers the two dimension fields without it.
+
+**Blast radius note:** `hiddenColumns` is generic, not scoped to these two fields or five windows — any window whose lines entity has a field key that `evaluate-display` resolves to `visibility: false` will now have that column hidden dynamically, wherever `DetailView`'s primary lines grid is used. `InlineLinesPanel`'s new prop defaults to `[]`, so every caller that does not pass it (the vast majority of generated `<Window>LineTable.jsx` files) behaves identically to before.
+
+**Lesson:** A hardcoded `hiddenColumns={[]}` (or any prop wired to a static empty value) silently discards a hook result computed one line above it — check for this pattern whenever a "correctly computed but seemingly ignored" value is reported. When a shared component's column list is fully hardcoded in a hand-written custom component (`InvoiceLinesTable.jsx`), decisions.json's `grid` flag has no effect on it at all — verify which mechanism actually drives a given window's columns before assuming a `decisions.json` change is required.
+
+**Superseded by ETP-4529 (plain-column approach replaced by the expand-row "Dimensiones contables" UX):** the always-rendered `project`/`costcenter` grid columns above were a stopgap. After reviewing the live app, the user asked for the same expand-row pattern Amortización already had instead of permanently-visible columns — a plain column reads as a field the client always has, even when they have no accounting-dimension config at all. This is a UX correction, not a revert of the underlying fix: the `hiddenColumns` plumbing (`InlineLinesPanel.jsx`'s `hiddenColumns` prop, `DetailView.jsx`'s `lineHiddenColumns` memo) stays and is now also the exact mechanism that computes `dimensionFields` for `InvoiceLinesTable.jsx`'s new `dimensionsPanel` column (see `docs/ui-customization.md`). What changed:
+- `InvoiceLinesTable.jsx` (sales-invoice/purchase-invoice): the two plain `project`/`costcenter` columns were removed; one `type: 'dimensionsPanel'` column replaces them, driven by `dimensionFields` filtered from the same `hiddenColumns` this fix introduced.
+- `goods-shipment`/`goods-receipt`: `lines.project.grid`/`lines.costcenter.grid` were flipped back `true → false` in `decisions.json` (undoing this fix's step 3) and regenerated. Their pipeline-generated `<Window>LineTable.jsx` has **no equivalent override mechanism yet** for the `dimensionsPanel` column type — the only existing lines-tab override point, `window.customLinesComponent`/`CustomLines`, is shaped for a fully self-fetching component (matching `AmortizationLinesTable.jsx`'s own `recordId`/`data`=header-record/`onRefresh`/`onSave` contract), not a drop-in replacement for the `columns`-array + pre-fetched-`data`-array + `onUpdateRow`/`onDeleteRow` contract the generated `<Window>LineTable.jsx` (and `InvoiceLinesTable.jsx`) use. These two windows are back to their pre-ETP-4543 state (no project/costcenter surface on the lines grid) pending a coordinator decision on how to add that override point — see `docs/generated-custom-windows/goods-shipment.md` and `goods-receipt.md`.
+- The "Rejected approach" note above (an expandable per-row detail surface inside `InlineLinesPanel`) is what ETP-4529 ultimately built as the generic, opt-in `dimensionsPanel` column type — it was deferred at ETP-4543 time as "a much larger feature," not permanently rejected.
+- Also discovered while wiring this in: for sales-invoice/purchase-invoice, `InvoiceLinesTable.jsx` (and its per-window wrapper components `SalesInvoiceLinesTable.jsx`/`InvoiceLineTableCustom.jsx`) are **not currently reachable from the running app** — neither window's `decisions.json` sets `window.customLinesComponent`, so `HeaderPage.jsx` renders the plain generated `LinesTable.jsx` (a separate file with its own hardcoded columns, no project/costcenter, no dimensionsPanel) via `DetailTable={LinesTable}`, never `InvoiceLinesTable.jsx` via `CustomLines`. This predates ETP-4529 (the wrapper files exist since ETP-3908/ETP-3569) and is unrelated to this fix's correctness — flagged for the coordinator since it means neither ETP-4543's original columns nor ETP-4529's `dimensionsPanel` column render live for these two windows today without further wiring work (and, per the point above, `customLinesComponent`'s contract doesn't fit `InvoiceLinesTable.jsx` as-is either).
+
+**Resolved (ETP-4529, generator support in `schema_forge_core`):** the "coordinator decision" and the "no equivalent override mechanism" gap called out above are both closed — not by adding a lines-tab override point, but by extending the generator itself. `generate-frontend.js`'s `generateTableComponent` now emits the synthetic `dimensionsPanel` column directly from a new `decisions.json` field flag (`dimensionsPanel: true`, read independently of `grid` — see `docs/decisions-reference.md`), for ANY pipeline-generated lines table. This sidesteps the `InvoiceLinesTable.jsx` reachability gap entirely for sales-invoice/purchase-invoice (that component stays dead code; the fix lives in the ACTUALLY-rendered generated `LinesTable.jsx`) and gives goods-shipment/goods-receipt the column for the first time. All four windows now set `lines.project.dimensionsPanel`/`lines.costcenter.dimensionsPanel` to `true` (grid stays `false`) and were regenerated. Verified additive: `generateTableComponent` on an entity with zero `dimensionsPanel: true` fields (e.g. `physical-inventory`) produces a byte-identical `contract.json`/generated output (same checksum, only `updatedAt` differs). Full generator design + verification: see the ETP-4529 developer delivery report (or `git log` on `cli/src/generate-frontend.js`/`resolve-curated.js`/`generate-contract.js` in `schema_forge_core` for "ETP-4529"). One pre-existing, unrelated item surfaced while regenerating these 4 windows: their committed `apiPrediction.actions` were stale relative to already-published core behavior (a `field` key dropped in favor of richer `name`/`actionType`/`parameters`/etc. metadata) — confirmed to reproduce with the plain published `@etendosoftware/schema-forge-cli@0.3.9` too, unrelated to this change; worth a coordinator-scheduled `make regen` sweep across the repo.
+---
+
+## `lineHiddenColumns` Hid Unrelated Grid Columns (product/listPrice/grossAmount) — ETP-4530
+
+**Component:** `tools/app-shell/src/components/contract-ui/DetailView.jsx`
+
+**Affected windows:** sales-invoice, purchase-invoice, goods-shipment, goods-receipt (the same four `inlineEditable` windows that consume `lineHiddenColumns`, per the ETP-4529/4543 entry above).
+
+**Symptom:** Live manual testing on sales-invoice found the Líneas grid missing `Producto`, `Precio Tarifa`, and `Importe bruto de línea` entirely for an existing saved line — not hidden-but-present, gone from the rendered columns — alongside the expected `project`/`costcenter` dimension gating. This is exactly the risk the ETP-4543 "Blast radius note" above flagged as generic-and-unscoped; it materialized for real.
+
+**Root cause:** `lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, ...)` evaluates the lines-tab `evaluate-display` call against the HEADER record snapshot as a stand-in for "any line" — valid only for `@ACCT_DIMENSION_DISPLAY@` (a config-only macro, independent of record field values). `NeoDisplayLogicHandler` (`com.etendoerp.go`) evaluates **every** active `AD_Field.displaylogic` on the tab, though, not just the dimension macro. Confirmed via direct DB query: Sales Invoice's Lines tab has real, record-dependent `AD_Field.displaylogic` on Product (`@Financial_Invoice_Line@='N'`, a sibling per-line field), List Price (`@GROSSPRICE@='N'`), and Line Gross Amount (`@GROSSPRICE@='Y'`, both against `GROSSPRICE`, an `AD_AuxiliaryInput` running `SELECT istaxincluded FROM m_pricelist WHERE m_pricelist_id = @M_PRICELIST_ID@`). Neither dependency exists in the header-record snapshot; `NeoDisplayLogicHandler.buildEvalContext()` only special-resolves `$Element_*` dimension prefs, never executes `AD_AuxiliaryInput` SQL, and never carries per-line field values. `DynamicExpressionParser` compiles both to plain property/context lookups that resolve to `undefined` against the missing keys (a property read on a defined object, not a thrown error, so the evaluator's fail-open `catch` — which defaults to "visible" — never triggers). `undefined === 'N'`/`'Y'` is simply `false`, indistinguishable at the JSON level from a real "hide this column" signal — even though `decisions.json` had explicitly nullified `product`'s and `grossAmount`'s `displayLogic` (`"displayLogic": null`, the ETP-4529 "Siempre" decision), an override that only reaches `contract.json`/generated JS, never the NEO endpoint (which reads straight from the DB, with no notion of Schema Forge's contract-level override).
+
+**Fix:** `lineHiddenColumns` now only trusts the visibility map for keys in a new module-level allowlist, `DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'businessPartner'])` (declared next to `DetailView.jsx`'s existing `WINDOW_DELETE_ACTIONS` constant) — the field keys the representative-header-record trick was actually built for. Any other field's spurious `false` from this evaluator's known context limitation is now ignored, same as the existing fail-open handling of absent/`true` keys. Single-repo, generic fix (no `schema_forge_core` change, no regen needed) since `lineHiddenColumns` lives entirely in this hand-written runtime component.
+
+**Lesson:** A generic "any explicitly-false key hides the column" filter over a per-tab evaluator's full field list is only as safe as the evaluator's input context. When that context is a stand-in/representative record (documented here as intentional for the dimension macro), any OTHER field on the same tab with genuine record- or aux-input-dependent `displayLogic` will silently misresolve — and a `decisions.json`-level `displayLogic: null` override does NOT suppress this, because the raw AD metadata evaluator is a separate, DB-backed code path that knows nothing about Schema Forge's contract. Prefer an explicit allowlist of the keys a representative-context call is actually valid for, over trusting the full response.
+
+Regression coverage: `tools/app-shell/src/components/contract-ui/__tests__/DetailView.lineHiddenColumns.vitest.jsx` (asserts `product`/`listPrice`/`grossAmount` stay visible even when the mocked evaluator resolves them `false`, while `project`/`costcenter`/`businessPartner` still hide correctly).
+
+---
+
 ## `make regen` Silently Strips es_ES Enum Labels on a DB Missing `AD_Ref_List_Trl` Rows
 
 **Component:** none (not a code bug) — local DB data gap, hit while running `make regen ONLY=financial-account` for ETP-4530
@@ -282,4 +333,184 @@ Owner: whoever next touches the goods-shipment window.
 
 **Java-side counterpart (separate change, tracked by a companion task, not this repo):** the `blockCalloutFieldUpdate` guard in `com.etendoerp.go` that stripped the cascade is being removed, so the native classic-AD `documentDate → accountingDate` callout cascade is now intentionally allowed to flow through unmodified on save.
 
+---
+
+## [2026-07-27] ETP-4609 (QA finding, DOCS write-up) — Latent `hiddenColumns` Clobbering Bug in Dead `ContactsTable.jsx`
+
+**Note:** this is NOT an active bug — it documents a landmine found in dead code so it isn't silently rediscovered (and re-diagnosed from scratch) if the file is ever revived. No fix was applied.
+
+**Component:** `tools/app-shell/src/windows/custom/contacts/ContactsTable.jsx`
+
+**Status: dead code, confirmed unreachable.** `contacts/index.jsx` renders the generated `BusinessPartnerPage` and does not import `ContactsTable.jsx`. A repo-wide search found no other import of the component either (only its own test file references it). Nothing currently mounts this component.
+
+**The bug (same shape as the real ETP-4609 fix in `ProductCustomTable.jsx`):** `ContactsTable.jsx` declares `const HIDDEN_COLS = ['__contactType']`, passes `hiddenColumns={HIDDEN_COLS}` to `DataTable`, and then spreads `{...rest}` (containing whatever the caller passed in) *after* that prop, e.g. `hiddenColumns={HIDDEN_COLS} ... {...rest}`. `ListView.jsx` unconditionally forwards its own `hiddenColumns` prop (default `[]`) to whatever `Table` component a window wires in. Because the spread lands after the local assignment, a live caller's `hiddenColumns={[]}` (or any other value) would silently clobber `HIDDEN_COLS`, and `__contactType` would render as a visible grid column instead of staying hidden. This is exactly the bug ETP-4609 fixed in `ProductCustomTable.jsx` by destructuring the incoming prop and merging (`[...new Set([...local, ...incoming])]`) instead of relying on spread order.
+
+**Why it wasn't fixed here:** out of scope for ETP-4609 (that ticket's QA pass found this only as a cross-window regression check while verifying the real fix, and the bug predates ETP-4609). Since the file is currently unreachable from any live window, there is no user-facing impact today.
+
+**Evidence:** `tools/app-shell/src/windows/custom/contacts/__tests__/ContactsTable.vitest.jsx` has a corresponding `it.skip(...)` test (`'keeps HIDDEN_COLS even when the parent forwards its own hiddenColumns=[] (ListView default)'`) that reproduces the clobbering and is skipped rather than deleted, precisely so it stays discoverable.
+
+**If `ContactsTable.jsx` is ever un-deadened (imported/mounted again):** apply the same destructure-and-merge fix used in `ProductCustomTable.jsx` before shipping, and un-skip the test above (or delete both the component and the test if the file is instead removed as confirmed dead code during cleanup).
+
 **Lesson:** when a ticket's scope reverses mid-implementation, don't just overwrite the old work silently — leave a dated trail (here + the affected window docs) explaining that the earlier "independence" behavior was intentional, correct-at-the-time, and has been superseded by an explicit redefinition, not reverted because it was wrong. Also: `visibility: readOnly` + `form: false` and `visibility: system` can look functionally equivalent in the rendered UI (both fully suppressed from form and grid), but only `system` fully excludes the field from `frontendContract.entities.*.fields` — prefer `system` for "never shown, never independently editable" fields over the readOnly+form:false combination, to avoid two different-looking representations of the same "fully hidden" intent across sibling windows.
+
+---
+
+## [2026-07-27] Tooling — no DB-free way to regenerate a contract (`sf-resolve-curated` broken)
+
+Found while working ETP-4156, which changes only `decisions.json` (adds `entities.contact.javaQualifier`) and therefore needs a contract regeneration but no DB data.
+
+**Three separate defects, all in the published `@etendosoftware/schema-forge-cli` (and its `schema_forge_core` source):**
+
+1. **`resolve-curated.js` ignores `SF_ROOT`.** Line 22 is `const ROOT = join(__dirname, '..', '..')`, while every sibling module (`extract-fields.js`, `extract-from-db.js`, `check-version.js`, …) uses `process.env.SF_ROOT || join(__dirname, '..', '..')`. Consequence: the single-phase command documented in `CLAUDE.md` ("`resolve-curated.js --window <name> --write` — single phase, no extract, no push") cannot work from published packages — it looks for `node_modules/@etendosoftware/artifacts/<window>/schema-raw.json`. `LOCAL_CORE=1` does not help either: `cli/sf-local` correctly keeps the cwd on the functional repo, but `__dirname` then resolves to the core repo, so it looks for `schema_forge_core/artifacts/<window>/rules-raw.json`. **One-line fix**, and it restores the only DB-free path to a contract regeneration.
+2. **`node_modules/.bin/sf-resolve-curated` is not an executable script.** It is the raw ESM source with no shebang, so the shell tries to interpret it (`/Applications: is a directory`, `AGENTS.md: command not found`, then a syntax error on the JSDoc). Other bins in the same map work, so this is a per-entry packaging problem.
+3. **`sf-regen-all --skip-extract` still hits the database, and swallows the error.** `Skip extract: YES` is printed, then `[F1a] Extracting fields...` runs `extract-fields.js` (a DB reader) and fails. `--skip-extract` apparently only skips `[F0] extract-from-db`. Worse, the failure is reported as a bare `✗ FAILED:` with an empty message, so there is nothing to diagnose — the actual cause (no DB reachable) only becomes visible by running a full `make regen` and watching it die at `[F0]` instead.
+
+**Impact:** any change that touches only `decisions.json` currently requires a live database to regenerate the contract, even though the inputs (`schema-raw.json`, `rules-raw.json`, `decisions.json`) are all on disk. Also worth noting: a failed run left a stray empty `curated` file at the repo root.
+
+**Workaround until fixed:** leave the contract stale and regenerate with `make regen ONLY=<window> PUSH_TO_NEO=1` in an environment with the DB up — which is needed anyway whenever `javaQualifier` changes, since the handler only activates once `ETGO_SF_ENTITY.Java_Qualifier` is persisted and exported.
+
+---
+
+## [2026-07-27] ETP-4609 (DOCS write-up) — Dead `purchase-invoice/custom/InvoiceHeaderTable.jsx`; `sales-invoice` counterpart is LIVE, not dead (correction of an initial finding)
+
+**Note:** this is NOT an active bug in either file. It documents (a) a confirmed-dead file so nobody wastes time "fixing" its `required` flags thinking it's a live bug, and (b) a correction — its sibling file with the identical name in `sales-invoice` was initially suspected dead by the same reasoning but traced out to be reachable after all. Read both halves before touching either file.
+
+### `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` — confirmed dead code, unreachable
+
+**Status: dead code, confirmed via code tracing (not assumed).** The generated `artifacts/purchase-invoice/generated/web/purchase-invoice/HeaderPage.jsx` imports it (`import HeaderTable from '../../../custom/InvoiceHeaderTable'`) and wires it as `Table={HeaderTable}` inside its own no-`recordId` `<ListView>` branch. That branch is never reached in the running app: `tools/app-shell/src/windows/registry.js` resolves loaders in the order **customLoaders > windowLoaders > PlaceholderWindow** (see the comment at that line), and `purchase-invoice` has a `customLoaders` entry (`./custom/purchase-invoice/index.jsx`) that always wins over the generated `windowLoaders` entry. That custom `index.jsx` has its own branching (`recordId ? <HeaderPage .../> : <ListView Table={PurchaseInvoiceTable} .../>`) and its own, entirely separate list-view table component — `PurchaseInvoiceHeaderTable.jsx` in `tools/app-shell/src/windows/custom/purchase-invoice/` — imported and used instead. It never imports `InvoiceHeaderTable.jsx` at all. So generated `HeaderPage.jsx` is only ever mounted with a `recordId` present (DetailView branch), and its own no-`recordId` branch — and therefore `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` — is never executed by user navigation. Repo-wide search confirms no other importer.
+
+Confirming this mattered in practice: the ETP-4609 required-flag-drift fix for purchase-invoice (commit `324166402`, this branch) correctly touched only the two live files (`PurchaseInvoiceHeaderTable.jsx` + `index.jsx`, both in `tools/app-shell`) and left this dead artifact file untouched — that was the right call, not an oversight.
+
+### `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx` — LIVE, do not treat as dead
+
+Same-shaped file, same generated-`HeaderPage.jsx` import site, same unreachable-branch reasoning as above for *that* import — but this file has a **second importer that IS reachable**: `tools/app-shell/src/windows/custom/sales-invoice/index.jsx` imports it directly via the `@generated` alias (`import InvoiceHeaderTable from '@generated/sales-invoice/custom/InvoiceHeaderTable.jsx'`, where `@generated` resolves to `../../artifacts` — see `vite.config.js`), wraps it as `SalesInvoiceTable`, and passes it as `Table={SalesInvoiceTable}` to its *own* `<ListView>` in the no-`recordId` branch — the branch that customLoaders resolution actually renders. So unlike `purchase-invoice`, `sales-invoice`'s custom `index.jsx` reuses the artifact-directory component instead of maintaining a separate one in `tools/app-shell`. This file is executed on every visit to the Sales Invoice list.
+
+**Open item surfaced by this correction:** as of this write-up, none of this file's grid columns carry `required: true` (checked all `key:` entries), while `contract.json` marks `documentNo` and `businessPartner` as required. The ETP-4609 fix commit for sales-invoice (`509650592`) only touched `sales-invoice/index.jsx`, not this file — so the required-flag drift this ticket exists to fix may still be present here and was not part of the 13-window pass. Not fixed as part of this DOCS entry (out of scope for Sage); flagged for whoever picks up the open "extend audit to `artifacts/*/custom/` locations" task.
+
+**Lesson:** the registry `customLoaders > windowLoaders` unreachability argument only proves the *generated* `HeaderPage.jsx` import site is dead — it says nothing about whether the same artifact file has a second, independent importer elsewhere (as happened here via the `@generated` alias). Always grep for **all** importers of a suspected-dead file before declaring it dead, even when two sibling windows look identical at a glance; `purchase-invoice` and `sales-invoice` diverged in exactly this way despite having same-named custom files.
+## [2026-07-28] ETP-4610 — "Add dimensions" moved from a fixed grid column to a hover action; regen-gap on goods-receipt/simple-g-l-journal closed
+
+**Follow-up to ETP-4529/ETP-4543.** Scope: move the "+ Añadir dimensiones" trigger out of the `dimensionsPanel` grid column and into `InlineLinesPanel`'s per-row hover-action strip (next to Pencil/Trash), and hide the "Dimensiones contables" column entirely. See `docs/ui-customization.md` §14b/§14c for the resulting UX and the new generic `rowActions` extension slot this introduced.
+
+**No `schema_forge_core` change was needed.** `InlineLinesPanel.jsx`, `DimensionsPanel.jsx`, and `useAccountingDimensionFields` all live only in this functional repo's `tools/app-shell/src/` — none of them are part of `@etendosoftware/app-shell-core` (verified: `diff` against `../schema_forge_core/packages/app-shell-core/src/components/contract-ui/` shows `InlineLinesPanel.jsx`/`DimensionsPanel.jsx` don't exist there at all, and the `@` vite alias always resolves `@/components/contract-ui/*` to this repo's own `./src`, never the core package, even in `LOCAL_CORE=1` mode). `generate-frontend.js`'s `buildDimensionsPanelColumn` still emits the exact same `type: 'dimensionsPanel'` column literal as before — the generator's job (declaring the metadata) didn't change, only how the generic consumer renders it.
+
+**Regen-gap discovered and closed while validating:** `goods-receipt` and `simple-g-l-journal`'s generated `<Window>LineTable.jsx` had NOT actually picked up their `decisions.json` `dimensionsPanel: true` flags — `contract.json` for both had zero `dimensionsPanel` references despite the flags being present and committed (likely lost across the `epic/ETP-3504` merges preceding this branch — the earlier ETP-4529 feedback entry above claims all four original windows, including goods-receipt/goods-shipment, were already regenerated). Regenerated both via `make regen ONLY=<window> SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed clean (`sf-validate-pipeline`, 0 violations) and additive version bumps in both `contract-changelog.json`s.
+
+**goods-shipment hit the already-documented `AD_Ref_List_Trl` translation-stripping issue** (see "`make regen` Silently Strips es_ES Enum Labels..." entry above) on its `etblkpAccountingstatus` field — regenerating it on this sandbox silently dropped 18 `es_ES` option labels, an unrelated local-DB data gap, not a real change. Per that entry's own lesson, the regen was NOT committed for goods-shipment; `sales-invoice`/`purchase-invoice` were left un-regenerated in this pass too (their `decisions.json` flags are already correct — see the ETP-4529 entry above — regenerating them was optional validation, not required to ship this ticket, and re-running risked hitting the same translation-stripping symptom on unrelated fields). `goods-receipt` and `simple-g-l-journal` did not hit this symptom (neither has that reference list on an entity touched by the regen) and were safe to commit as regenerated.
+
+**`purchase-invoice`, `goods-shipment` still not validated end-to-end via `make regen` in this pass** — a future task should re-attempt them once the sandbox's `AD_Ref_List_Trl` es_ES rows are backfilled (see the entry above), or regen with the label-restore workaround already documented there.
+
+**Update — `sales-invoice`/`purchase-invoice` regenerated cleanly in a later pass** (`make regen ONLY=sales-invoice,purchase-invoice SKIP_EXTRACT=1 LOCAL_CORE=1`): the diff for both was exactly the expected `dimensionsPanel: true` metadata on `project`/`costcenter` plus a version/checksum bump, `sf-validate-pipeline` clean on both, committed. **`goods-shipment` hit the translation-stripping trap again on this second attempt too** (same 18 `etblkpAccountingstatus` es_ES labels dropped, `⚠️ AD cache looks STALE` warning on the same `AD_Ref_List`/`AD_Ref_List_Trl` query) — reverted again via `git checkout -- artifacts/goods-shipment/`, still not regenerated on this branch. Its `decisions.json` flags are already correct (unaffected by this), so the window's runtime behavior is not blocked — only the `contract.json`/generated-JSX regen is deferred until the sandbox's `AD_Ref_List_Trl` es_ES rows are backfilled.
+
+**Also observed:** `SKIP_EXTRACT=1` did NOT actually skip the DB extraction phase in either attempt — `make regen`'s log still showed `[F1a] Extracting fields...`/`[F1b] Extracting rules...` running against the DB for all windows passed, contrary to what the flag name implies. Did not affect correctness here (`schema-raw.json`/`rules-raw.json` were left unmodified in `git status` both times), so not chased further in this pass — but flag as a `sf-bug` candidate if a future task actually needs to skip the DB hit (e.g. no DB connectivity available) and finds `SKIP_EXTRACT=1` doesn't help.
+
+**Follow-up in the same session — adaptive hover-action label, and a `''` vs `null` trap:** the hover action's label/icon was made adaptive ("Add dimensions" → "Edit dimensions" once the line has a dimension value set), via a new `hasFilledDimensionValues()` helper (`tools/app-shell/src/lib/hasFilledDimensionValues.js`) that reuses `resolveIdentifier()` to check each candidate field. First implementation checked `resolveIdentifier(row, key) != null` and failed a test for a row with NO dimension values at all — because `resolveIdentifier`'s test mock (and some real call sites) return `''` for a missing value, not `undefined`/`null`, so the `!= null` check treated an empty string as "filled". Fixed by checking truthiness (`Boolean(...)`) instead. **Lesson:** when checking "does this field have a value" against `resolveIdentifier()` (or any helper that may fall back to `''`), always check truthiness, never `!= null` — an empty string is a valid non-null return for "no value" in this codebase's convention.
+
+**Test coverage added post-QA:** following Sentinel's one recommendation, dedicated coverage was added for both the live label/icon transition and the helper in isolation: `InlineLinesPanel.vitest.jsx` gained a `rowActions — generic hover-action extension slot` describe block (rendering, static `show: false`, per-row `show` function, declared-order rendering) plus explicit "flips from addDimensionsTooltip to editDimensionsTooltip"/"flips back" live-transition tests inside the `dimensionsPanel column` describe block; `hasFilledDimensionValues.js` gained its own dedicated `hasFilledDimensionValues.vitest.js` (7 cases, deliberately not mocking `resolveIdentifier` so the real `''`-vs-`null` contract above is exercised end-to-end).
+
+**`goods-shipment` regen finally resolved, plus the deferred `contract.mcp.json`/`contract.prev.json` drift closed — via the pre-push hook itself.** `git push` on this branch failed its CI-parity "UI / contract drift" check (`make regen`-from-cache against the PINNED published core package + a frozen cached AD snapshot, compared against committed artifacts) with drift on 10 files: `financial-account/contract.mcp.json` (the version-stuck drift from earlier in this entry), `goods-receipt`/`purchase-invoice`'s `contract.mcp.json`+`contract.prev.json` (version/checksum only, catching up to already-committed `contract.json` content), `sales-invoice`/`simple-g-l-journal`'s `contract.mcp.json` (same), and — notably — `goods-shipment`'s `contract.json`, `contract.mcp.json`, AND `GoodsShipmentLineTable.jsx`. Inspected every diff: all 9 non-goods-shipment files were pure version/checksum/sync catch-up, zero structural change. `goods-shipment`'s diff was the expected clean `dimensionsPanel: true` addition on `project`/`costcenter` — **no translation-label loss at all**, because this offline pipeline regenerates from a frozen cached AD snapshot, not the local sandbox's live (translation-incomplete) DB. This confirms the two earlier `goods-shipment` regen failures were purely a local-DB data gap, never a real blocker — the fix was already sitting in the CI-parity codepath the whole time. Accepted this regen output wholesale (`sf-validate-pipeline --scope=goods-shipment`: OK, full suite: 9746 passing), closing both the goods-shipment deferral AND the 3-file deferred drift from the top of this entry in one commit. **Lesson:** when a local-DB `make regen` hits a translation-stripping symptom, the pre-push hook's own offline/cached-snapshot regen (or `sf-validate-pipeline`'s underlying drift check) may succeed cleanly where the live-DB regen can't — worth trying before accepting a window as "regen blocked until the sandbox is backfilled."
+
+---
+
+## [2026-07-28] ETP-4610 — live-UX-review follow-up: static "Edit dimensions" icon, chevron left padding, dimension sub-row alignment
+
+**Follow-up to the entry above, after PR #975 was already through DEV→REVIEW→QA→DOCS once and deployed.** The user tested the running instance and found 3 visual issues by eye; all fixed as new commits on the same branch.
+
+**1. Dropped the adaptive Add/Edit hover-action icon, went static.** The previous pass's adaptive label (`Plus`/"Add dimensions" while empty → `Pencil`/"Edit dimensions" once filled, driven by `hasFilledDimensionValues()`) looked wrong in the deployed UI: the filled-state `Pencil` icon sat immediately next to the row's own built-in Edit action, reading as two identical duplicate pencil buttons rather than two distinct affordances. Per the user's explicit decision ("to avoid conditionals"), the action now always renders the `Layers` icon (lucide-react) with the **"Edit dimensions"** tooltip, regardless of fill state. `hasFilledDimensionValues(row, fields)`/`rowHasDimensionValues` had no other consumer, so it (and its dedicated `hasFilledDimensionValues.vitest.js`) were deleted outright rather than left dead; the now-unreferenced `addDimensionsTooltip` i18n key was removed from `en_US.json`/`es_ES.json` after confirming (grep) it had no other reference. The four adaptive-label tests in `InlineLinesPanel.vitest.jsx` (static before/after + two live-transition tests) were replaced with one static assertion that the tooltip reads "Edit dimensions" on both a filled and an empty row. **Lesson:** an adaptive icon/label that depends on per-row state is not automatically better UX than a static one — when the two states can visually collide with an unrelated, already-present icon (here: two Pencils in the same hover strip), static-and-unconditional is the safer default. `docs/ui-customization.md` §14b updated to describe the static behavior and record why the adaptive variant was dropped.
+
+**2. Chevron sat flush against the row's left border.** The expand/collapse chevron column (`hasDimensionsPanel` — `InlineLinesPanel.jsx`) had no left padding at all, unlike the selection-checkbox column right next to it (`px-2` = 8px each side, already an established convention in the same row). Added the same `px-2` to the chevron's container and widened both the header placeholder and the row's chevron `<div>` from a bare `32px` to `44px` (28px `h-7 w-7` button + 8px padding on each side) — introduced as named constants `CHEVRON_COLUMN_WIDTH`/`CHECKBOX_COLUMN_WIDTH` in `InlineLinesPanel.jsx` rather than duplicated literals, since the next fix needed the same numbers.
+
+**3. Dimension sub-row's first field ("Proyecto") didn't line up with the first grid column ("Producto") above it.** The expand sub-row (`renderDimensionsSubRow` → `DimensionGrid`) used a flat `px-10` (40px) left padding, unrelated to where the actual first data column starts (chevron column + checkbox column + the first cell's own `cellPaddingX`). Replaced the hardcoded `px-10` with a computed `DIMENSIONS_ROW_INDENT = CHEVRON_COLUMN_WIDTH + CHECKBOX_COLUMN_WIDTH + TOKENS.cellPaddingX` (= 96px with the widened chevron column from fix 2), applied via inline `paddingLeft` (right padding kept at the original 40px via `pr-10`). This ties the sub-row's indent to the same layout constants the leading columns use, so it stays correct if either column's width changes later instead of silently drifting back out of alignment.
+
+**Not visually verified in a real browser** in this pass (no local Etendo/dev-server instance available in this environment) — verified via the full `make test` suite plus a manual review of the computed offsets against the DOM structure (chevron 44px + checkbox 40px + cellPaddingX 12px = 96px, matching the first grid column's text start). The user has a live deployed instance and will confirm the actual pixel result.
+
+---
+
+## [2026-07-28] ETP-4610 — Amortización lines: dimensions moved from a fixed column to a hover action (bringing it in line with the other 5 windows)
+
+**Component:** `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx`
+
+**Gap:** the earlier ETP-4610 passes (see the two entries above) moved the "Add dimensions"
+trigger into the hover-action strip for the 5 pipeline-generated windows that render their lines
+through `InlineLinesPanel`'s generic `rowActions`/`dimensionsPanel` mechanism. `AmortizationLinesTable`
+was missed because it is a fully hand-built `customLinesComponent` (its own `<table>`, its own
+fetch/PUT/POST/DELETE, its own multi-select and inline add-row draft-line flow) that never used
+`InlineLinesPanel` at all — it still had a permanent "Accounting dimensions" grid column rendering
+`DimSummary` badges/the dashed "+ Añadir dimensiones" affordance, the exact pre-ETP-4610 pattern
+the other 5 windows originated from and then moved away from.
+
+**Investigated wrapping `InlineLinesPanel` first (the preferred, DRY-er option) — rejected as
+disproportionate.** `InvoiceLinesTable.jsx`/`SalesInvoiceLinesTable.jsx` (the thin adapters the
+other 5 windows use) work because `DetailView` already owns line CRUD, the add-row flow, and
+selection state, and just forwards them as props. `AmortizationLinesTable` owns all of that itself
+with no equivalent host — `InlineLinesPanel` has no built-in inline-add-draft-row mechanism at all
+(that lives entirely outside it in the generated-window wiring this component never had), and its
+DOM is a flex-row grid, not a `<table>`. Rewriting the component around `InlineLinesPanel` would
+mean re-deriving the add-row/selection-bar/CRUD wiring from scratch and rewriting both existing
+regression-test suites (which assert on `<table>`/`<tr>`/`<td>` DOM) — a full rewrite disproportionate
+to relocating one hover UI element. **Fix (hand-patch instead):** removed the "Accounting dimensions"
+`<th>`/`<td>` column and its `DimSummary` usage; added a third hover-action button (`Layers` icon,
+static "Edit dimensions" tooltip via the existing `editDimensionsTooltip` i18n key — no adaptive
+variant, matching the already-established decision from the entry above) ahead of Pencil/Trash,
+gated on `dimensionFields.length > 0` and on `!isReadOnly` (same gating as Pencil/Trash); it toggles
+the same `expandedId` state the existing circular chevron already drove, so clicking either opens
+the identical `DimensionGrid` expand row. `colSpan` on the loading/expand rows dropped from `7` to
+`6`; the add-line draft row's now-orphaned placeholder `<td>` for the removed column was also
+dropped.
+
+**Test helper fallout:** `AmortizationLinesTable.vitest.jsx`'s `getPencilButton`/`getTrashButton`
+helpers picked buttons by fixed array index (`buttons[0]`/`buttons[1]`) in the hover strip — adding
+a button ahead of Pencil shifted those indices. Fixed by giving Pencil/Trash explicit `title`/
+`aria-label` attributes (they had neither before) and switching the helpers to attribute-based
+lookups (`[title="editLineTooltip"]`/`[title="deleteRowTooltip"]`), which is robust regardless of
+how many buttons precede them.
+
+**Lesson:** when a UX/UI convention is generalized into a shared mechanism (here:
+`InlineLinesPanel`'s hover-action dimensions entry point), grep for *other* components implementing
+the same visible pattern independently — `customLinesComponent`/hand-built tables are easy to miss
+because they don't import the shared component at all, so a search for `InlineLinesPanel` usage
+alone won't surface them. A search for the shared i18n keys or visual pattern name (here:
+`amortizationDimensionsTitle`/`DimSummary`) across the whole `tools/app-shell/src` tree is what
+actually surfaced this gap.
+
+**Not visually verified in a real browser** in this pass — no local Etendo/dev-server instance was
+started in this environment. Verified via the full `make test` suite (531 vitest files / 9739 tests
+passed, 1 pre-existing unrelated skip; all 4 `node --test` groups green) plus manual review of the
+DOM structure and gating conditions.
+
+---
+
+## [2026-07-28] ETP-4610 — Amortización hover-action strip was transparent, overlapping the Amount column
+
+**Component:** `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx`
+
+**Symptom:** reported by the user against the deployed build — the row hover-action strip (Layers/
+Pencil/Trash) rendered with visible overlap onto the Amount column's text, and the strip itself
+looked "totally transparent."
+
+**Root cause:** the strip's wrapper `<div>` (`position: absolute`, faded in via
+`opacity-0 group-hover/row:opacity-100`) had **no background of its own** — only the icon glyphs
+were opaque, each button only getting a background on its own individual `:hover`. With the
+original 2 buttons (Pencil/Trash) this was invisible: they fit entirely inside their own dedicated,
+otherwise-empty actions column (`w-20` = 80px), so there was nothing behind them to bleed through.
+Adding a 3rd button (Layers, for "Edit dimensions" — see the entry above) pushed the strip's actual
+rendered width past 80px; because the wrapper is `position: absolute`, it does not influence the
+table's own column-width layout, so on hover it visually spilled into the neighboring Amount
+column and — being transparent — let that column's text show through underneath the icons.
+
+**Fix:** gave the wrapper a solid `bg-card` pill background (+ `shadow-sm ring-1 ring-border/40`,
+matching the codebase's existing `QUICK_ACTIONS_PILL_CLASS` convention in
+`quickActionsStyle.js`, even though that specific flag is currently disabled elsewhere) so the
+strip occludes whatever is behind it instead of being see-through, AND widened the actions column
+from `w-20` (80px) to `w-32` (128px) so the 3-button pill fits inside its own column without
+needing to spill over at all — the background is now a safeguard, not the only thing hiding the
+overlap.
+
+**Lesson:** an absolutely-positioned hover overlay with a transparent background is only safe when
+its rendered footprint is guaranteed smaller than its reserved column — that guarantee silently
+breaks the moment a new button is added to the strip, and the resulting bug (see-through overlap)
+is easy to miss in code review because nothing in the diff itself looks wrong; it only becomes
+visible when someone actually hovers a row in a running instance. When adding a button to any
+`position: absolute` hover strip, always re-check (a) whether the strip still fits inside its
+reserved column at the new width, and (b) whether the strip has an opaque background as a
+second line of defense in case it doesn't.

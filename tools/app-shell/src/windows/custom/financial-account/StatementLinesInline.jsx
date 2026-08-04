@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { ArrowUpRight, Layers } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTag } from '@/components/ui/status-tag';
 import { cn } from '@/lib/utils';
@@ -12,10 +13,10 @@ import { getContractGridColumns } from '@/components/financial-accounts/contract
 // the window contract (entity `bankStatementLines`); the synthetic tail (match
 // pill, transaction chip, flexible spacer) stays fixed. Grid template built
 // dynamically and applied inline (Tailwind can't JIT a dynamic class).
-//   <contract columns> · 100 status pill · 120 txn chip
+//   <contract columns> · 136 status pill (+ pending-amount caption for PARTIAL) · 120 txn chip
 // No trailing spacer: the description column (2fr) absorbs the leftover width.
 const MINI_GRID_CLASS = 'grid gap-3';
-const MINI_TAIL_TRACKS = '100px 120px';
+const MINI_TAIL_TRACKS = '136px 120px';
 
 // Contract field name → width + i18n header + cell renderer. Amount OUT/IN are
 // derived from the signed `line.amount`, so dramount/cramount render the split.
@@ -23,13 +24,13 @@ const LINE_CELL_RENDERERS = {
   transactionDate: {
     width: '100px',
     labelKey: 'financeAccountStatementLinesColDate',
-    render: (line, ctx) => <span className="whitespace-nowrap text-[#121217]">{formatDate(line.date, ctx.bcpLocale)}</span>,
+    render: (line, ctx) => <span className="whitespace-nowrap text-[hsl(var(--foreground))]">{formatDate(line.date, ctx.bcpLocale)}</span>,
   },
   description: {
     width: 'minmax(220px,2fr)',
     labelKey: 'financeAccountStatementLinesColDescription',
     render: (line) => (
-      <span className={cn('truncate', line.description ? 'text-[#3F3F50]' : 'text-[#C1C3CC]')} title={line.description || ''}>
+      <span className={cn('truncate', line.description ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--text-disabled))]')} title={line.description || ''}>
         {line.description || '—'}
       </span>
     ),
@@ -38,7 +39,7 @@ const LINE_CELL_RENDERERS = {
     width: 'minmax(140px,1fr)',
     labelKey: 'financeAccountStatementLinesColBpartner',
     render: (line) => (
-      <span className={cn('truncate', line.bpartnerName ? 'text-[#3F3F50]' : 'text-[#C1C3CC]')} title={line.bpartnerName || ''}>
+      <span className={cn('truncate', line.bpartnerName ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--text-disabled))]')} title={line.bpartnerName || ''}>
         {line.bpartnerName || '—'}
       </span>
     ),
@@ -47,7 +48,7 @@ const LINE_CELL_RENDERERS = {
     width: 'minmax(140px,1fr)',
     labelKey: 'financeAccountStatementLinesColContact',
     render: (line) => (
-      <span className={cn('truncate', line.bpartnerFkName ? 'text-[#3F3F50]' : 'text-[#C1C3CC]')} title={line.bpartnerFkName || ''}>
+      <span className={cn('truncate', line.bpartnerFkName ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--text-disabled))]')} title={line.bpartnerFkName || ''}>
         {line.bpartnerFkName || '—'}
       </span>
     ),
@@ -56,7 +57,7 @@ const LINE_CELL_RENDERERS = {
     width: 'minmax(140px,1fr)',
     labelKey: 'financeAccountStatementLinesColGlItem',
     render: (line) => (
-      <span className={cn('truncate', line.glItemName ? 'text-[#3F3F50]' : 'text-[#C1C3CC]')} title={line.glItemName || ''}>
+      <span className={cn('truncate', line.glItemName ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--text-disabled))]')} title={line.glItemName || ''}>
         {line.glItemName || '—'}
       </span>
     ),
@@ -65,7 +66,7 @@ const LINE_CELL_RENDERERS = {
     width: 'minmax(120px,1fr)',
     labelKey: 'financeAccountStatementLinesColReference',
     render: (line) => (
-      <span className={cn('truncate', line.reference ? 'text-[#3F3F50]' : 'text-[#C1C3CC]')} title={line.reference || ''}>
+      <span className={cn('truncate', line.reference ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--text-disabled))]')} title={line.reference || ''}>
         {line.reference || '—'}
       </span>
     ),
@@ -81,9 +82,8 @@ const LINE_CELL_RENDERERS = {
           <AmountCell
             value={out}
             sign="−"
-            toneClass="font-semibold text-red-700"
+            toneClass="font-semibold text-destructive"
             currency={ctx.currency}
-            bcpLocale={ctx.bcpLocale}
             data-testid="AmountCell__10cf4a" />
         </span>
       );
@@ -100,9 +100,8 @@ const LINE_CELL_RENDERERS = {
           <AmountCell
             value={inn}
             sign="+"
-            toneClass="font-semibold text-green-700"
+            toneClass="font-semibold text-status-success-foreground"
             currency={ctx.currency}
-            bcpLocale={ctx.bcpLocale}
             data-testid="AmountCell__10cf4a" />
         </span>
       );
@@ -128,13 +127,24 @@ const MINI_GRID_STYLE = { gridTemplateColumns: MINI_GRID_TEMPLATE };
 // Stable keys for the skeleton cells (contract columns + match + txn).
 const SKELETON_CELL_KEYS = [...LINE_COLUMNS.map((c) => `c_${c.name}`), 'matched', 'txns'];
 
-// kind → (StatusTag tone, i18n key). The only signal we have per line is whether
-// it is linked to a movement or not, so the badge simply reflects reconciled vs
-// not reconciled (the "Auto"/"Manual" distinction is not meaningful here).
+// kind → (StatusTag tone, i18n key). Three states: fully reconciled, not reconciled at all, or
+// PARTIAL — a line that was matched against less than its full amount (e.g. one invoice smaller
+// than the line) and got split by Core into a reconciled portion + a pending remainder, which
+// BankStatementsSupport.mergeMatchGroups re-collapses into this single row (ETP-4502 iteration 4,
+// mirroring how Holded shows "X pending" on a partially-matched movement instead of a second row).
 const MATCH_TONE = {
   reconciled: { tone: 'success', labelKey: 'financeAccountStatementLinesStatusReconciled' },
+  partial:    { tone: 'warning', labelKey: 'financeAccountStatementLinesStatusPartial' },
   pending:    { tone: 'warning', labelKey: 'financeAccountStatementLinesStatusUnmatched' },
 };
+
+// Backend `reconcileStatus` ("RECONCILED"/"PARTIAL"/"PENDING") → local pill kind. Falls back to
+// the plain `matched` boolean for any row that predates the field (defensive, not expected once
+// this ships).
+function matchKindFor(line) {
+  const byStatus = { RECONCILED: 'reconciled', PARTIAL: 'partial', PENDING: 'pending' };
+  return byStatus[line.reconcileStatus] ?? (line.matched ? 'reconciled' : 'pending');
+}
 
 function MatchPill({ kind, ui }) {
   const entry = MATCH_TONE[kind] ?? MATCH_TONE.pending;
@@ -153,7 +163,7 @@ function MatchPill({ kind, ui }) {
 function TxnChip({ line, ui, onOpen }) {
   const txns = line.txns || [];
   if (txns.length === 0) {
-    return <span className="text-[#C1C3CC]">—</span>;
+    return <span className="text-[hsl(var(--text-disabled))]">—</span>;
   }
   const multi = txns.length > 1;
   return (
@@ -162,11 +172,11 @@ function TxnChip({ line, ui, onOpen }) {
       data-testid={`statement-line-txn-${line.id}`}
       onClick={() => onOpen(line)}
       className={cn(
-        'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full bg-[#F5F7F9] px-2 text-xs font-normal text-[#3F3F50] hover:bg-[#EBEEF2] hover:text-[#121217]',
+        'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full bg-[hsl(var(--muted))] px-2 text-xs font-normal text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]',
         multi && 'font-medium',
       )}
     >
-      {multi ? <Layers className="h-3.5 w-3.5 flex-none text-[#828FA3]" data-testid="Layers__10cf4a" /> : <ArrowUpRight className="h-3.5 w-3.5 flex-none text-[#828FA3]" data-testid="ArrowUpRight__10cf4a" />}
+      {multi ? <Layers className="h-3.5 w-3.5 flex-none text-[hsl(var(--text-disabled))]" data-testid="Layers__10cf4a" /> : <ArrowUpRight className="h-3.5 w-3.5 flex-none text-[hsl(var(--text-disabled))]" data-testid="ArrowUpRight__10cf4a" />}
       <span className="truncate">
         {multi ? ui('financeAccountStatementLinesTxnChipMulti', { count: txns.length }) : txns[0].documentNo}
       </span>
@@ -185,15 +195,8 @@ function formatDate(iso, bcpLocale) {
   }).format(d);
 }
 
-function formatMoney(amount, currency, bcpLocale) {
-  try {
-    return new Intl.NumberFormat(bcpLocale, {
-      style: 'currency', currency,
-      minimumFractionDigits: 2, maximumFractionDigits: 2,
-    }).format(Number(amount));
-  } catch {
-    return `${Number(amount).toFixed(2)} ${currency}`;
-  }
+function formatMoney(amount, currency) {
+  return formatCurrency(currency, amount);
 }
 
 /**
@@ -220,14 +223,14 @@ export function StatementLinesInline({ statementId, currency = 'EUR' }) {
 
   return (
     <>
-      <div className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+      <div className="overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
         {/* Column header — same style as the parent Statements table headers. */}
         <div
           style={MINI_GRID_STYLE}
           className={cn(
             // Same recipe as the parent Statements table header (h-10 items-center) — centered.
             MINI_GRID_CLASS,
-            'h-10 items-center border-b border-[#E8EAEF] px-3 text-xs font-semibold leading-4 text-[#121217]',
+            'h-10 items-center border-b border-[hsl(var(--border-subtle))] px-3 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
           )}
         >
           {LEAD_COLUMNS.map((col) => (
@@ -264,7 +267,7 @@ export function StatementLinesInline({ statementId, currency = 'EUR' }) {
 function renderBody({ loading, lines, ui, currency, bcpLocale, onOpenTxns }) {
   if (loading) {
     return [1, 2, 3].map((n) => (
-      <div key={n} style={MINI_GRID_STYLE} className={cn(MINI_GRID_CLASS, 'items-center border-b border-[#F0F2F5] px-3 py-2.5')}>
+      <div key={n} style={MINI_GRID_STYLE} className={cn(MINI_GRID_CLASS, 'items-center border-b border-[hsl(var(--border-subtle))] px-3 py-2.5')}>
         {SKELETON_CELL_KEYS.map((k) => (
           <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__10cf4a" />
         ))}
@@ -273,7 +276,7 @@ function renderBody({ loading, lines, ui, currency, bcpLocale, onOpenTxns }) {
   }
   if (lines.length === 0) {
     return (
-      <div className="px-3 py-8 text-center text-sm text-[#6C6C89]" role="row">
+      <div className="px-3 py-8 text-center text-sm text-[hsl(var(--muted-foreground))]" role="row">
         {ui('financeAccountStatementLinesEmpty')}
       </div>
     );
@@ -293,15 +296,20 @@ function renderBody({ loading, lines, ui, currency, bcpLocale, onOpenTxns }) {
 // Single row of the lines table — split out so we can render the amount
 // columns with simple if/else branching instead of nested ternaries.
 function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
-  const matchKind = line.matched ? 'reconciled' : 'pending';
+  const matchKind = matchKindFor(line);
   const cellCtx = { ui, currency, bcpLocale };
+  const pendingAmountLabel = matchKind === 'partial'
+    ? ui('financeAccountStatementLinesPendingAmount', {
+      amount: formatMoney(Math.abs(Number(line.pendingAmount) || 0), currency),
+    })
+    : null;
   return (
     <div
       data-testid={`statement-line-row-${line.id}`}
       style={MINI_GRID_STYLE}
       className={cn(
         MINI_GRID_CLASS,
-        'items-center border-b border-[#F0F2F5] px-3 py-2.5 text-sm transition-colors last:border-0 hover:bg-[#FAFBFC]',
+        'items-center border-b border-[hsl(var(--border-subtle))] px-3 py-2.5 text-sm transition-colors last:border-0 hover:bg-[hsl(var(--muted))]',
       )}
     >
       {/* Lead data columns (contract order, minus the amount columns) */}
@@ -311,11 +319,22 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
           <Fragment key={col.name} data-testid="Fragment__10cf4a">
             {renderer
               ? renderer.render(line, cellCtx)
-              : <span className="truncate text-[#3F3F50]">{line[col.name] ?? '—'}</span>}
+              : <span className="truncate text-[hsl(var(--muted-foreground))]">{line[col.name] ?? '—'}</span>}
           </Fragment>
         );
       })}
-      <span><MatchPill kind={matchKind} ui={ui} data-testid="MatchPill__10cf4a" /></span>
+      <span className="flex min-w-0 flex-col items-start gap-0.5" data-testid="MatchCell__10cf4a">
+        <MatchPill kind={matchKind} ui={ui} data-testid="MatchPill__10cf4a" />
+        {matchKind === 'partial' ? (
+          <span
+            className="max-w-full truncate text-[11px] leading-none text-[hsl(var(--muted-foreground))]"
+            title={pendingAmountLabel}
+            data-testid="statement-line-pending-amount"
+          >
+            {pendingAmountLabel}
+          </span>
+        ) : null}
+      </span>
       <span className="min-w-0"><TxnChip line={line} ui={ui} onOpen={onOpenTxns} data-testid="TxnChip__10cf4a" /></span>
       {/* Amount columns last, matching the Figma column order */}
       {AMOUNT_COLUMNS.map((col) => {
@@ -324,7 +343,7 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
           <Fragment key={col.name} data-testid="Fragment__10cf4a">
             {renderer
               ? renderer.render(line, cellCtx)
-              : <span className="truncate text-[#3F3F50]">{line[col.name] ?? '—'}</span>}
+              : <span className="truncate text-[hsl(var(--muted-foreground))]">{line[col.name] ?? '—'}</span>}
           </Fragment>
         );
       })}
@@ -332,9 +351,9 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
   );
 }
 
-function AmountCell({ value, sign, toneClass, currency, bcpLocale }) {
+function AmountCell({ value, sign, toneClass, currency }) {
   if (value > 0) {
-    return <span className={toneClass}>{sign}{formatMoney(value, currency, bcpLocale)}</span>;
+    return <span className={toneClass}>{sign}{formatMoney(value, currency)}</span>;
   }
-  return <span className="text-[#C1C3CC]">—</span>;
+  return <span className="text-[hsl(var(--text-disabled))]">—</span>;
 }

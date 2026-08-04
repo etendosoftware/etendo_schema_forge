@@ -20,6 +20,13 @@ const BACKEND_ERROR_MAP = {
   'The regular expression is too complex (possible catastrophic backtracking)': 'backendError.matchRuleRegexComplex',
   'Invalid regular expression': 'backendError.matchRuleRegexInvalid',
   'A rule with this priority already exists for the selected scope': 'backendError.matchRulePriorityConflict',
+  // Price list (PriceListHeaderHandler) validation messages
+  'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
+  'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
+  // Goods Movements line (GoodsMovementLineHandler) validation messages
+  'This product is of type Service and cannot be used in inventory movements.': 'backendError.productNotStockable',
+  // Product category (ProductCategoryDefaultHandler) validation messages
+  'Only one product category can be marked as default.': 'backendError.productCategoryCannotSetMultipleDefault',
 };
 
 export function translateBackendError(msg, t) {

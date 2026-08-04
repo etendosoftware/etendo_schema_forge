@@ -26,6 +26,30 @@ describe('createMockFetch', () => {
     expect(res).toBeUndefined();
   });
 
+  describe('SFWindowAccessMap webhook (ETP-4520)', () => {
+    it('is intercepted even though it lives outside basePath', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/sws/neo/windowaccessmap');
+      expect(res.ok).toBe(true);
+      expect(res.status).toBe(200);
+    });
+
+    it('grants full access to any window id', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/sws/neo/windowaccessmap');
+      const data = await res.json();
+      expect(data.windowAccess['some-window-id']).toBe('full');
+      expect(data.windowAccess['some-other-window-id']).toBe('full');
+    });
+
+    it('grants the showAccountingFields capability', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/sws/neo/windowaccessmap');
+      const data = await res.json();
+      expect(data.capabilities.showAccountingFields).toBe(true);
+    });
+  });
+
   describe('GET', () => {
     it('lists all records for an entity', async () => {
       const fetch = createMockFetch(mockData, basePath);
@@ -216,6 +240,140 @@ describe('createMockFetch', () => {
       const fetch = createMockFetch(mockData, basePath, catalogData);
       const res = await fetch('/api/catalog/unknown');
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('SFRolesOverview webhook (ETP-4513)', () => {
+    it('is intercepted even though it lives outside basePath', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/sws/neo/rolesoverview');
+      expect(res.ok).toBe(true);
+      expect(res.status).toBe(200);
+    });
+
+    it('returns the 5 fixed GOClient roles with their window grants', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/sws/neo/rolesoverview');
+      const data = await res.json();
+      expect(data.roles).toHaveLength(5);
+      const admin = data.roles.find(r => r.name === 'GOClient Admin');
+      expect(admin.userCount).toBe(2);
+      expect(admin.windows.find(w => w.name === 'User').tier).toBe('full');
+    });
+
+    it('reuses the same boilerplate description across non-admin roles', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/sws/neo/rolesoverview');
+      const data = await res.json();
+      const finance = data.roles.find(r => r.name === 'Finance');
+      const sales = data.roles.find(r => r.name === 'Sales');
+      expect(finance.rawDescription).toBe(sales.rawDescription);
+      expect(finance.rawDescription).toContain('Copy Record');
+    });
+  });
+
+  describe('unsupported entity method', () => {
+    it('returns 404 for a method/segment combo nothing handles (e.g. DELETE)', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/api/header/1', { method: 'DELETE' });
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 404 for GET requests nested more than 3 segments deep', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/api/header/1/lines/extra');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('process — edge cases', () => {
+    it('returns 400 for an invalid JSON body', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/api/process/completeOrder', {
+        method: 'POST',
+        body: 'not-json',
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it('still succeeds (as a no-op) when the id does not match any record', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/api/process/completeOrder', {
+        method: 'POST',
+        body: JSON.stringify({ id: 'ghost-id' }),
+      });
+      expect(res.ok).toBe(true);
+      const data = await res.json();
+      expect(data.status).toBe('success');
+      // Nothing in the store should have changed docStatus.
+      const list = await (await fetch('/api/header')).json();
+      expect(list.every(r => r.docStatus === 'DR')).toBe(true);
+    });
+  });
+
+  describe('catalog — additional edge cases', () => {
+    it('returns 404 when no reference name is given', async () => {
+      const fetch = createMockFetch(mockData, basePath, catalogData);
+      const res = await fetch('/api/catalog');
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 404 for an unsupported catalog method/segment combo', async () => {
+      const fetch = createMockFetch(mockData, basePath, catalogData);
+      const res = await fetch('/api/catalog/taxCategory/TC1/extra', { method: 'DELETE' });
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 400 for an invalid JSON body on POST', async () => {
+      const fetch = createMockFetch(mockData, basePath, catalogData);
+      const res = await fetch('/api/catalog/taxCategory', {
+        method: 'POST',
+        body: 'not-json',
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 404 on PUT to an unknown catalog', async () => {
+      const fetch = createMockFetch(mockData, basePath, catalogData);
+      const res = await fetch('/api/catalog/unknownCatalog/TC1', {
+        method: 'PUT',
+        body: JSON.stringify({ name: 'x' }),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 404 on PUT to an unknown item id in a known catalog', async () => {
+      const fetch = createMockFetch(mockData, basePath, catalogData);
+      const res = await fetch('/api/catalog/taxCategory/GHOST', {
+        method: 'PUT',
+        body: JSON.stringify({ name: 'x' }),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 400 for an invalid JSON body on PUT', async () => {
+      const fetch = createMockFetch(mockData, basePath, catalogData);
+      const res = await fetch('/api/catalog/taxCategory/TC1', {
+        method: 'PUT',
+        body: 'not-json',
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 404 on DELETE of an unknown item id in a known catalog', async () => {
+      const fetch = createMockFetch(mockData, basePath, catalogData);
+      const res = await fetch('/api/catalog/taxCategory/GHOST', { method: 'DELETE' });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('response shape', () => {
+    it('.text() returns the JSON-stringified body, matching .json()', async () => {
+      const fetch = createMockFetch(mockData, basePath);
+      const res = await fetch('/api/header/999');
+      const json = await res.json();
+      const text = await res.text();
+      expect(text).toBe(JSON.stringify(json));
     });
   });
 
