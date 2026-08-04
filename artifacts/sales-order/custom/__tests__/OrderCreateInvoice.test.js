@@ -273,4 +273,28 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /if\s*\(!saved\?\.id\)\s*\{\s*setError\(ui\('soSaveBeforeConfirmError'\)\);/);
     });
   });
+
+  // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
+  // the order is Confirmed (CO), not while it is still Draft (DR). Grid and
+  // Form-view must agree on the same rule.
+  describe('Send button visibility gated by document status (ETP-4717)', () => {
+    it('does NOT show the Send button while the order is still Draft (DR)', () => {
+      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+    });
+
+    it('shows the Send button only when the order is Completed (CO)', () => {
+      assert.match(src, /\{isCompleted && <SendDocumentButton/);
+    });
+
+    it('does NOT gate the SendDocumentModal render on isDraft', () => {
+      assert.doesNotMatch(
+        src,
+        /\{\(isDraft \|\| isCompleted\) && showSend && createPortal\(\s*<SendDocumentModal/,
+      );
+    });
+
+    it('gates the SendDocumentModal render on isCompleted only', () => {
+      assert.match(src, /\{isCompleted && showSend && createPortal\(\s*<SendDocumentModal/);
+    });
+  });
 });

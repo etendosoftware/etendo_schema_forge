@@ -145,4 +145,19 @@ describe('GoodsShipmentActions', () => {
       assert.doesNotMatch(fmtAmount(1234.56, 'EUR'), /EUR/);
     });
   });
+
+  // ETP-4717 (Pair 2 — P2) — regression lock-in. Unlike sales-order,
+  // purchase-order, sales-invoice, and sales-quotation, this window already
+  // gates the Send button correctly (Completed/CO only). This test locks that
+  // in so a future shared-logic refactor across the 5 windows cannot silently
+  // regress the one window that already does it right.
+  describe('Send button visibility gated by document status (ETP-4717 — already correct)', () => {
+    it('gates the Send button on isCompleted only (not isDraft || isCompleted)', () => {
+      assert.match(src, /\{isCompleted && <SendDocumentButton/);
+    });
+
+    it('does not also show the Send button while in Draft (DR)', () => {
+      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+    });
+  });
 });
