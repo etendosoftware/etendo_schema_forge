@@ -31,13 +31,23 @@ vi.mock('../FmOverlays.jsx', () => ({
     }),
 }));
 vi.mock('../FmCatalogPage.jsx', () => ({
-  // Exposes an onSave trigger so tests can simulate deactivating every model
-  // from the catalog drawer without depending on FmCatalogPage's own UI.
+  // Exposes onSave triggers so tests can simulate different catalog outcomes
+  // (deactivate everything / activate only one model) without depending on
+  // FmCatalogPage's own UI.
   default: ({ onSave }) =>
     React.createElement(
-      'button',
-      { 'data-testid': 'catalog-save-none', onClick: () => onSave({ '303': false, '349': false }) },
-      'deactivate-all',
+      React.Fragment,
+      null,
+      React.createElement(
+        'button',
+        { 'data-testid': 'catalog-save-none', onClick: () => onSave({ '303': false, '349': false }) },
+        'deactivate-all',
+      ),
+      React.createElement(
+        'button',
+        { 'data-testid': 'catalog-save-303-only', onClick: () => onSave({ '303': true, '349': false }) },
+        'activate-303-only',
+      ),
     ),
 }));
 vi.mock('@/components/ui/checkbox', () => ({
@@ -278,6 +288,19 @@ describe('FmListPage — model catalog moved to toolbar', () => {
     expect(menu).toBeTruthy();
     expect(menu.textContent).not.toContain('fm.catalog.title');
   });
+
+  it('the row kebab only exposes Demo and Configuración — no catalog trace at all', () => {
+    const { container } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    const kebabBtn = container.querySelector('[aria-label="Más opciones"]');
+    fireEvent.click(kebabBtn);
+    const items = container.querySelectorAll('[role="menu"] [role="menuitem"]');
+    expect(items.length).toBe(2);
+    const labels = Array.from(items).map(i => i.textContent);
+    expect(labels.some(l => l.includes('Demo'))).toBe(true);
+    expect(labels.some(l => l.includes('fm.config.title'))).toBe(true);
+    // Explicit negative: no menu item references the catalog, hidden or not.
+    expect(labels.some(l => l.includes('fm.catalog.title') || l.toLowerCase().includes('catálogo'))).toBe(false);
+  });
 });
 
 // ── No active models: hide new-decl, show dedicated empty state ────────────
@@ -314,6 +337,54 @@ describe('FmListPage — no active models', () => {
     expect(container.querySelector('table')).toBeFalsy();
     const empty = container.querySelector('.fm-empty-state');
     expect(empty.textContent).toContain('fm.list.empty_no_active_models');
+  });
+
+  it('reactivating a model from the catalog restores "+ Nueva declaración" and the table, in the same session', () => {
+    const decls = [makeDecl(), makeDecl()];
+    const { container, getByText, queryByText } = render(<FmListPage declarations={decls} {...defaultProps} />);
+
+    // Start with 0 active models: button hidden, dedicated empty state shown.
+    deactivateAllModels(container, getByText);
+    expect(queryByText('+ Nueva declaración')).toBeFalsy();
+    expect(container.querySelector('table')).toBeFalsy();
+    expect(container.querySelector('.fm-empty-state').textContent).toContain('fm.list.empty_no_active_models');
+
+    // Reopen the catalog and activate model 303 only.
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
+
+    // Empty state is gone, the CTA/no-active message no longer shows, button and table are back.
+    expect(queryByText('+ Nueva declaración')).toBeTruthy();
+    expect(container.querySelector('table')).toBeTruthy();
+    const empty = container.querySelector('.fm-empty-state');
+    expect(empty).toBeFalsy();
+  });
+
+  it('the catalog toolbar button count reflects 1 vs 2 active models correctly', () => {
+    const { container, getByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
+
+    // Default state: both models active → count is 2.
+    expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
+
+    // Deactivate 349, keep 303 active → count is 1, "+ Nueva declaración" still shows.
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
+
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+    expect(container.querySelector('table') || container.querySelector('.fm-empty-state')).toBeTruthy();
+  });
+
+  it('clicking the CTA inside the no-active-models empty state reopens the catalog drawer', () => {
+    const { container, getByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    deactivateAllModels(container, getByText);
+
+    // Catalog drawer auto-closes after onSave — confirm it's actually closed first.
+    expect(container.querySelector('.fm-catalog-drawer')).toBeFalsy();
+
+    const cta = getByText(/fm\.list\.empty_no_active_models_cta/);
+    fireEvent.click(cta);
+
+    expect(container.querySelector('.fm-catalog-drawer')).toBeTruthy();
   });
 });
 
