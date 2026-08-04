@@ -845,7 +845,7 @@ describe('ListView — selection bar actions', () => {
 
     await user.click(screen.getByText(/^print/).closest('button'));
 
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token');
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function));
   });
 
   it('hands the selected rows to onCloneRow', async () => {
@@ -868,7 +868,7 @@ describe('ListView — selection bar actions', () => {
     expect(docPrintProps.documentIds).toEqual(['r1', 'r2']);
 
     await user.click(screen.getByText(/^print/).closest('button'));
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token');
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function));
   });
 
   it('renders host-supplied bulkActions with the selection context', () => {

@@ -17473,6 +17473,8 @@
     "download": "Download",
     "documentPreview": "Document preview",
     "comingSoon": "Coming soon",
+    "reportServiceUnavailable": "The reporting service is unavailable. Please try again in a moment.",
+    "pdfGenerationFailed": "Could not generate the PDF. Please try again.",
     "report": "Report",
     "records": "records",
     "loadingAllRecords": "Loading all records...",

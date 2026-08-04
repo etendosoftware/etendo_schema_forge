@@ -9,11 +9,15 @@ vi.mock('@/lib/useAnimatedOpen.js', () => ({
   useAnimatedOpen: (open) => ({ shouldRender: open, isClosing: false }),
 }));
 
-import DocumentPrintDrawer from '../DocumentPrintDrawer.jsx';
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+import { toast } from 'sonner';
+import DocumentPrintDrawer, { printDocuments } from '../DocumentPrintDrawer.jsx';
 
 describe('DocumentPrintDrawer', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    toast.error.mockClear();
   });
 
   it('does not render when open is false', () => {
@@ -129,5 +133,130 @@ describe('DocumentPrintDrawer', () => {
       <DocumentPrintDrawer open={true} onClose={vi.fn()} windowName="order" documentIds={['d1']} token="tok" />,
     );
     expect(screen.getByText('download')).toBeInTheDocument();
+  });
+
+  // ETP-4728 — jsreport failures on the Download button must surface via
+  // toast, not fail silently (previously: no content-type/status check, no
+  // user-visible feedback beyond a bare "PDF generation failed").
+  describe('handleDownload — jsreport error handling (ETP-4728)', () => {
+    const mockFetchByUrl = (jsreportImpl) => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+        if (typeof url === 'string' && url.endsWith('/render')) {
+          return Promise.resolve({ ok: true, text: () => Promise.resolve('<html>Doc</html>') });
+        }
+        if (url === '/jsreport/api/report') return jsreportImpl();
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('') });
+      });
+    };
+
+    it('toasts a service-unavailable message when the jsreport fetch itself rejects (connection refused)', async () => {
+      const user = userEvent.setup();
+      mockFetchByUrl(() => Promise.reject(new TypeError('Failed to fetch')));
+      render(
+        <DocumentPrintDrawer open={true} onClose={vi.fn()} windowName="order" documentIds={['d1']} token="tok" />,
+      );
+      await waitFor(() => expect(screen.getByText('download')).toBeInTheDocument());
+      await user.click(screen.getByText('download'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('reportServiceUnavailable'));
+    });
+
+    it('toasts a PDF-generation-failed message on a non-2xx jsreport response', async () => {
+      const user = userEvent.setup();
+      mockFetchByUrl(() => Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('Internal Server Error') }));
+      render(
+        <DocumentPrintDrawer open={true} onClose={vi.fn()} windowName="order" documentIds={['d1']} token="tok" />,
+      );
+      await waitFor(() => expect(screen.getByText('download')).toBeInTheDocument());
+      await user.click(screen.getByText('download'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('pdfGenerationFailed'));
+    });
+
+    it('toasts a PDF-generation-failed message when jsreport returns a non-PDF body', async () => {
+      const user = userEvent.setup();
+      mockFetchByUrl(() => Promise.resolve({
+        ok: true,
+        headers: { get: (h) => (h === 'content-type' ? 'text/plain' : null) },
+        text: () => Promise.resolve('not a pdf'),
+      }));
+      render(
+        <DocumentPrintDrawer open={true} onClose={vi.fn()} windowName="order" documentIds={['d1']} token="tok" />,
+      );
+      await waitFor(() => expect(screen.getByText('download')).toBeInTheDocument());
+      await user.click(screen.getByText('download'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('pdfGenerationFailed'));
+    });
+
+    it('downloads successfully when jsreport returns a real PDF', async () => {
+      const user = userEvent.setup();
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      URL.createObjectURL = vi.fn(() => 'blob:generated');
+      URL.revokeObjectURL = vi.fn();
+      mockFetchByUrl(() => Promise.resolve({
+        ok: true,
+        headers: { get: (h) => (h === 'content-type' ? 'application/pdf' : null) },
+        blob: () => Promise.resolve(new Blob(['%PDF'])),
+      }));
+      render(
+        <DocumentPrintDrawer open={true} onClose={vi.fn()} windowName="order" documentIds={['d1']} token="tok" />,
+      );
+      await waitFor(() => expect(screen.getByText('download')).toBeInTheDocument());
+      await user.click(screen.getByText('download'));
+      await waitFor(() => expect(clickSpy).toHaveBeenCalled());
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// ETP-4728 — printDocuments is a fire-and-forget onClick handler in ListView
+// (never awaited/caught by its caller), so it must swallow its own failures
+// and surface them via toast — otherwise they were unhandled promise
+// rejections, invisible to the user.
+describe('printDocuments (ETP-4728)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    toast.error.mockClear();
+  });
+
+  const mockFetchByUrl = (jsreportImpl) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (typeof url === 'string' && url.endsWith('/render')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('<html>Doc</html>') });
+      }
+      if (url === '/jsreport/api/report') return jsreportImpl();
+      return Promise.resolve({ ok: true, text: () => Promise.resolve('') });
+    });
+  };
+
+  it('does nothing when token or documentIds are missing', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await printDocuments('order', [], 'tok');
+    await printDocuments('order', ['d1'], '');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('toasts a service-unavailable message when jsreport is unreachable, using the injected translator', async () => {
+    mockFetchByUrl(() => Promise.reject(new TypeError('Failed to fetch')));
+    const translate = vi.fn((key) => `t:${key}`);
+    await printDocuments('order', ['d1'], 'tok', translate);
+    expect(toast.error).toHaveBeenCalledWith('t:reportServiceUnavailable');
+  });
+
+  it('falls back to the raw key when no translator is injected', async () => {
+    mockFetchByUrl(() => Promise.reject(new TypeError('Failed to fetch')));
+    await printDocuments('order', ['d1'], 'tok');
+    expect(toast.error).toHaveBeenCalledWith('reportServiceUnavailable');
+  });
+
+  it('opens a print window on success', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:generated');
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    mockFetchByUrl(() => Promise.resolve({
+      ok: true,
+      headers: { get: (h) => (h === 'content-type' ? 'application/pdf' : null) },
+      blob: () => Promise.resolve(new Blob(['%PDF'])),
+    }));
+    await printDocuments('order', ['d1'], 'tok');
+    expect(openSpy).toHaveBeenCalledWith('blob:generated', '_blank');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

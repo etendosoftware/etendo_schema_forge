@@ -1,7 +1,58 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { X, ChevronLeft, ChevronRight, Loader2, Send, Download } from 'lucide-react';
+import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
+
+/**
+ * Posts rendered HTML to jsreport (through the Vite `/jsreport` proxy) and
+ * returns the resulting PDF blob.
+ *
+ * This is the one hop that has NO server-side friendly-error handling of its
+ * own (unlike `/api/reports/{id}/render`, which the dev server already wraps
+ * with a readable message — see `tools/app-shell/vite-plugins/report-api.js`).
+ * When the jsreport container is down, the Vite proxy either rejects the
+ * `fetch()` outright or forwards a bare 500 `text/plain` body, so every
+ * failure mode is classified here and turned into one translated, actionable
+ * message instead of reaching the caller as an unhandled rejection.
+ *
+ * `translate` is a `(key) => string` function — normally `useUI()`'s `ui`,
+ * or an injected translator for non-hook call sites (see `printDocuments`).
+ */
+async function renderPdfViaJsreport(htmlContent, translate = (key) => key) {
+  let pdfRes;
+  try {
+    pdfRes = await fetch('/jsreport/api/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template: { content: htmlContent, engine: 'none', recipe: 'chrome-pdf', chrome: { format: 'A4', marginTop: '10mm', marginBottom: '10mm', marginLeft: '10mm', marginRight: '10mm' } },
+        data: {},
+      }),
+    });
+  } catch (networkErr) {
+    // fetch() itself rejects (TypeError) when the jsreport container is
+    // unreachable through the proxy (connection refused/reset) — the proxy
+    // never gets to produce an HTTP response at all.
+    console.error('[DocumentPrintDrawer] jsreport request failed (service unreachable):', networkErr);
+    throw new Error(translate('reportServiceUnavailable'));
+  }
+
+  if (!pdfRes.ok) {
+    const detail = await pdfRes.text().catch(() => '');
+    console.error(`[DocumentPrintDrawer] jsreport responded ${pdfRes.status}:`, detail);
+    throw new Error(translate('pdfGenerationFailed'));
+  }
+
+  const contentType = typeof pdfRes.headers?.get === 'function' ? (pdfRes.headers.get('content-type') || '') : 'application/pdf';
+  if (!contentType.includes('application/pdf')) {
+    const detail = await pdfRes.text().catch(() => '');
+    console.error('[DocumentPrintDrawer] jsreport returned a non-PDF response:', contentType, detail);
+    throw new Error(translate('pdfGenerationFailed'));
+  }
+
+  return pdfRes.blob();
+}
 
 /**
  * Preview drawer: shows document preview one at a time with < > navigation.
@@ -59,19 +110,10 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ format: 'html', params: { documentId: currentDocId } }),
       });
-      if (!res.ok) throw new Error('Failed to render');
+      if (!res.ok) throw new Error(ui('actionFailed'));
       const html = await res.text();
       // Generate PDF via jsreport
-      const pdfRes = await fetch('/jsreport/api/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          template: { content: html, engine: 'none', recipe: 'chrome-pdf', chrome: { format: 'A4', marginTop: '10mm', marginBottom: '10mm', marginLeft: '10mm', marginRight: '10mm' } },
-          data: {},
-        }),
-      });
-      if (!pdfRes.ok) throw new Error('PDF generation failed');
-      const blob = await pdfRes.blob();
+      const blob = await renderPdfViaJsreport(html, ui);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -79,7 +121,8 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.message);
+      console.error('[DocumentPrintDrawer] handleDownload failed:', err);
+      toast.error(err.message);
     }
     setDownloading(false);
   };
@@ -147,48 +190,48 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
 /**
  * Print all selected documents: generates a combined PDF and opens print dialog.
  * Call this function directly — no drawer needed.
+ *
+ * `translate` is a `(key) => string` i18n function — this is module-scope code
+ * with no hooks, so callers (e.g. `ListView`) must inject their own `useUI()`
+ * result. Falls back to the raw key when no translator is passed, mirroring
+ * the injected-translate convention used elsewhere for non-hook code
+ * (see `windows/custom/contacts/contactsImportDescriptor.js`).
+ *
+ * Any failure — including a jsreport outage — is caught here and surfaced via
+ * `toast.error()` instead of propagating as an unhandled promise rejection
+ * (the previous behavior: this function's caller never awaits/catches it).
  */
-export async function printDocuments(windowName, documentIds, token) {
+export async function printDocuments(windowName, documentIds, token, translate = (key) => key) {
   const reportId = `print-${windowName}`;
   if (!reportId || !token || documentIds.length === 0) return;
 
-  // Fetch HTML for each document
-  const htmlParts = [];
-  for (const docId of documentIds) {
-    const res = await fetch(`/api/reports/${reportId}/render`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
-    });
-    if (!res.ok) throw new Error(`Failed to render document`);
-    htmlParts.push(await res.text());
-  }
+  try {
+    // Fetch HTML for each document
+    const htmlParts = [];
+    for (const docId of documentIds) {
+      const res = await fetch(`/api/reports/${reportId}/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
+      });
+      if (!res.ok) throw new Error(translate('actionFailed'));
+      htmlParts.push(await res.text());
+    }
 
-  // Combine with page breaks
-  const combined = htmlParts.join('<div style="page-break-after: always;"></div>');
+    // Combine with page breaks
+    const combined = htmlParts.join('<div style="page-break-after: always;"></div>');
 
-  // Generate PDF via jsreport
-  const pdfRes = await fetch('/jsreport/api/report', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      template: {
-        content: combined,
-        engine: 'none',
-        recipe: 'chrome-pdf',
-        chrome: { format: 'A4', marginTop: '10mm', marginBottom: '10mm', marginLeft: '10mm', marginRight: '10mm' },
-      },
-      data: {},
-    }),
-  });
+    // Generate PDF via jsreport
+    const blob = await renderPdfViaJsreport(combined, translate);
+    const url = URL.createObjectURL(blob);
 
-  if (!pdfRes.ok) throw new Error('PDF generation failed');
-  const blob = await pdfRes.blob();
-  const url = URL.createObjectURL(blob);
-
-  // Open in new window for print dialog
-  const printWin = window.open(url, '_blank');
-  if (printWin) {
-    printWin.onload = () => { printWin.print(); };
+    // Open in new window for print dialog
+    const printWin = window.open(url, '_blank');
+    if (printWin) {
+      printWin.onload = () => { printWin.print(); };
+    }
+  } catch (err) {
+    console.error('[DocumentPrintDrawer] printDocuments failed:', err);
+    toast.error(err.message);
   }
 }

@@ -396,7 +396,7 @@ describe('ListView — ETP-4603 coverage top-up', () => {
     renderListView();
     fireEvent.click(screen.getByTestId('trigger-select'));
     fireEvent.click(screen.getByText(/^print/).closest('button'));
-    expect(printDocumentsMock).toHaveBeenCalledWith('sales-order', ['r1'], 'fake-token');
+    expect(printDocumentsMock).toHaveBeenCalledWith('sales-order', ['r1'], 'fake-token', expect.any(Function));
   });
 
   it('invokes onCloneRow with the selected rows from the selection-bar clone button', () => {

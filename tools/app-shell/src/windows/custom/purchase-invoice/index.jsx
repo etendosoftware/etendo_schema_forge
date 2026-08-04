@@ -216,6 +216,8 @@ export default function PurchaseInvoiceWindow(props) {
         rowQuickActions={rowQuickActions}
         sendDocument={{ enabled: false, allowEmail: false }}
         bulkActions={PurchaseInvoiceBulkAction}
+        hidePrint
+        hideEyeCount
         refreshTrigger={refreshKey}
         renderPreview={({ row, onClose, onEdit }) => (
           <InvoicePreview
