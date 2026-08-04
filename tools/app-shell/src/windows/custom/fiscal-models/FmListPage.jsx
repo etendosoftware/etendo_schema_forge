@@ -103,8 +103,8 @@ function FilterDropdown({ label, value, options, onChange }) {
   );
 }
 
-// Row-level kebab menu — Demo, Configuración, Catálogo de modelos
-function RowKebab({ onDemo, onConfig, onCatalog, activeCount, t }) {
+// Row-level kebab menu — Demo, Configuración
+function RowKebab({ onDemo, onConfig, t }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -138,14 +138,6 @@ function RowKebab({ onDemo, onConfig, onCatalog, activeCount, t }) {
               style={{ color: 'hsl(var(--foreground))' }}
               data-testid="Settings__cb728e" />
             {t('fm.config.title') ?? 'Configuración'}
-          </button>
-          <button className="fm-status-select__item" role="menuitem" onClick={(e) => { e.stopPropagation(); onCatalog(); setOpen(false); }}>
-            <LayoutGrid
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="LayoutGrid__cb728e" />
-            {t('fm.catalog.title') ?? 'Catálogo de modelos'} ({activeCount})
           </button>
         </div>
       )}
@@ -605,26 +597,47 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
         <RowKebab
           onDemo={() => setDecls(DEMO_DECLARATIONS.map(normDecl))}
           onConfig={() => setShowConfig(true)}
-          onCatalog={() => setShowCatalog(true)}
-          activeCount={activeCount}
           t={t}
           data-testid="RowKebab__cb728e" />
 
         <button
-          className="fm-toolbar__btn fm-toolbar__btn--primary"
+          className="fm-toolbar__btn"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
-          onClick={() => setShowNewDecl(true)}
+          onClick={() => setShowCatalog(true)}
         >
-          + Nueva declaración
+          <LayoutGrid size={14} strokeWidth={1.75} data-testid="LayoutGrid__cb728e" />
+          {t('fm.catalog.title') ?? 'Catálogo de modelos'} ({activeCount})
         </button>
+
+        {activeCount > 0 && (
+          <button
+            className="fm-toolbar__btn fm-toolbar__btn--primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+            onClick={() => setShowNewDecl(true)}
+          >
+            + Nueva declaración
+          </button>
+        )}
       </div>
       {/* ── KPI cards row ─────────────────────────────────────── */}
       <KpiCardsRow decls={modelYearFiltered} t={t} data-testid="KpiCardsRow__cb728e" />
       {/* ── Table ──────────────────────────────────────────────── */}
       <div className="fm-table-wrap">
-        {filtered.length === 0
-          ? <EmptyState data-testid="EmptyState__cb728e" />
-          : (
+        {activeCount === 0
+          ? (
+            <EmptyState
+              title={t('fm.list.empty_no_active_models') ?? 'No tienen modelos activos, configure desde el Catálogo de modelos.'}
+              cta={(
+                <button className="fm-toolbar__btn" onClick={() => setShowCatalog(true)}>
+                  <LayoutGrid size={14} strokeWidth={1.75} data-testid="LayoutGrid__cb728e" />
+                  {t('fm.list.empty_no_active_models_cta') ?? 'Ir al catálogo de modelos'}
+                </button>
+              )}
+              data-testid="EmptyState__cb728e" />
+          )
+          : filtered.length === 0
+            ? <EmptyState data-testid="EmptyState__cb728e" />
+            : (
             <table className="fm-table">
               <thead>
                 <tr>

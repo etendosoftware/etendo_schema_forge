@@ -153,7 +153,9 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 
 ## Model catalog (`FmCatalogPage`)
 
-The catalog drawer (opened from the list toolbar kebab menu) lists the tax forms the tenant can enable/disable. It currently exposes only the two supported forms — no locked/"coming soon" entries:
+The catalog drawer is opened from a dedicated toolbar button — **"Catálogo de modelos (N)"**, `N = activeCount` — placed immediately before "+ Nueva declaración" (after the row kebab). It is **not** an item inside the row kebab menu: the kebab (`RowKebab`) only holds Demo and Configuración now. The toolbar button reuses `fm.catalog.title` for its label and `onCatalog` (`setShowCatalog(true)`) for its click handler — the same handler the kebab item used before this UX change. It uses the `fm-toolbar__btn` (non-`--primary`) style so it reads as a secondary action next to "+ Nueva declaración".
+
+The catalog drawer lists the tax forms the tenant can enable/disable. It currently exposes only the two supported forms — no locked/"coming soon" entries:
 
 | Model | Name | Periodicity tags | Description |
 |-------|------|-------------------|--------------|
@@ -167,6 +169,15 @@ Toggling a model on/off in the drawer updates the `activeModels` map (`{ [modelI
 ### "Nueva declaración" respects the active catalog
 
 `NewDeclModal` (in `FmOverlays.jsx`) receives an `activeModels` prop from `FmListPage` and builds its model `<select>` from `Object.keys(activeModels).filter(id => activeModels[id])` instead of a hardcoded `303`/`349` option list. If the previously-selected default (`303`) is not active, the modal falls back to the first available active model. If **no** model is active, the select and the "Crear" button are disabled and the modal shows `fm.new_decl.no_active_models` instead of leaving an empty, non-functional dropdown. Callers that don't pass `activeModels` (e.g. older tests) keep the legacy behavior of offering both `303` and `349`.
+
+This in-modal guard is now **defense in depth**: `FmListPage`'s "+ Nueva declaración" toolbar button only renders when `activeCount > 0` (see below), so in practice `NewDeclModal` should never open with zero active models. It stays in place in case the toolbar is customized further or the modal is reused elsewhere.
+
+### No active models — hides the CTA and shows a dedicated empty state
+
+`FmListPage` derives `activeCount = Object.values(activeModels).filter(Boolean).length` and uses it for two UX guards:
+
+- **"+ Nueva declaración" toolbar button is not rendered at all** (not just disabled) when `activeCount === 0` — there is nothing productive to create until a model is enabled.
+- **Table region shows a dedicated empty state** — `EmptyState` with `title = fm.list.empty_no_active_models` ("No tienen modelos activos, configure desde el Catálogo de modelos.") and a `cta` button (`fm.list.empty_no_active_models_cta`) that opens the catalog drawer directly. This message takes priority over the generic `fm.list.empty` state even when `filtered` still holds stale rows from before all models were deactivated — the check is `activeCount === 0`, evaluated before `filtered.length === 0`.
 
 ## Key files
 

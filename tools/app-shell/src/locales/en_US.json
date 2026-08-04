@@ -20564,6 +20564,8 @@
     "fm.result.N": "Zero result",
     "fm.result.info": "No operators",
     "fm.list.empty": "No declarations found.",
+    "fm.list.empty_no_active_models": "No active forms. Enable one from the model catalog.",
+    "fm.list.empty_no_active_models_cta": "Go to model catalog",
     "fm.present.title": "Mark as submitted",
     "fm.present.subtitle": "Select how the declaration was submitted",
     "fm.present.path.acuse": "With acknowledgement receipt",

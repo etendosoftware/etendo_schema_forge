@@ -20814,6 +20814,8 @@
     "fm.result.N": "Sin resultado",
     "fm.result.info": "Sin operadores",
     "fm.list.empty": "No se encontraron declaraciones.",
+    "fm.list.empty_no_active_models": "No tienen modelos activos, configure desde el Catálogo de modelos.",
+    "fm.list.empty_no_active_models_cta": "Ir al catálogo de modelos",
     "fm.present.title": "Marcar como presentada",
     "fm.present.subtitle": "Selecciona cómo fue presentada la declaración",
     "fm.present.path.acuse": "Con acuse de recibo",

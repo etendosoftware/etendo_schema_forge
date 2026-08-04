@@ -31,7 +31,14 @@ vi.mock('../FmOverlays.jsx', () => ({
     }),
 }));
 vi.mock('../FmCatalogPage.jsx', () => ({
-  default: () => null,
+  // Exposes an onSave trigger so tests can simulate deactivating every model
+  // from the catalog drawer without depending on FmCatalogPage's own UI.
+  default: ({ onSave }) =>
+    React.createElement(
+      'button',
+      { 'data-testid': 'catalog-save-none', onClick: () => onSave({ '303': false, '349': false }) },
+      'deactivate-all',
+    ),
 }));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) =>
@@ -47,7 +54,13 @@ vi.mock('lucide-react', () => ({
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
   ResultPill: () => null,
-  EmptyState: () => React.createElement('div', { className: 'fm-empty-state' }, 'empty'),
+  EmptyState: ({ title, message, cta }) =>
+    React.createElement(
+      'div',
+      { className: 'fm-empty-state' },
+      title || message || 'empty',
+      cta ?? null,
+    ),
   KpiWidget: ({ value }) => React.createElement('span', { className: 'test-kpi' }, value),
 }));
 
@@ -240,6 +253,67 @@ describe('FmListPage — new declaration modal', () => {
     const modal = container.querySelector('[data-testid="new-decl-modal"]');
     expect(modal).toBeTruthy();
     expect(JSON.parse(modal.getAttribute('data-active-models'))).toEqual({ '303': true, '349': true });
+  });
+});
+
+// ── Model catalog toolbar button ───────────────────────────────────────────
+
+describe('FmListPage — model catalog moved to toolbar', () => {
+  it('renders a "Catálogo de modelos" button in the toolbar with the active count', () => {
+    const { getByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    expect(getByText(/fm\.catalog\.title/)).toBeTruthy();
+  });
+
+  it('clicking the toolbar catalog button opens the catalog drawer', () => {
+    const { getByText, container } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    expect(container.querySelector('.fm-catalog-drawer')).toBeTruthy();
+  });
+
+  it('does not list "Catálogo de modelos" inside the row kebab menu anymore', () => {
+    const { container } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    const kebabBtn = container.querySelector('[aria-label="Más opciones"]');
+    fireEvent.click(kebabBtn);
+    const menu = container.querySelector('[role="menu"]');
+    expect(menu).toBeTruthy();
+    expect(menu.textContent).not.toContain('fm.catalog.title');
+  });
+});
+
+// ── No active models: hide new-decl, show dedicated empty state ────────────
+
+function deactivateAllModels(container, getByText) {
+  fireEvent.click(getByText(/fm\.catalog\.title/));
+  fireEvent.click(container.querySelector('[data-testid="catalog-save-none"]'));
+}
+
+describe('FmListPage — no active models', () => {
+  it('shows "+ Nueva declaración" when at least one model is active (default)', () => {
+    const { queryByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    expect(queryByText('+ Nueva declaración')).toBeTruthy();
+  });
+
+  it('hides "+ Nueva declaración" once every model is deactivated', () => {
+    const { container, getByText, queryByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    deactivateAllModels(container, getByText);
+    expect(queryByText('+ Nueva declaración')).toBeFalsy();
+  });
+
+  it('shows the no-active-models empty state message instead of the generic one', () => {
+    const { container, getByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    deactivateAllModels(container, getByText);
+    const empty = container.querySelector('.fm-empty-state');
+    expect(empty).toBeTruthy();
+    expect(empty.textContent).toContain('fm.list.empty_no_active_models');
+  });
+
+  it('prioritizes the no-active-models message even when stale rows still match filters', () => {
+    const decls = [makeDecl(), makeDecl()];
+    const { container, getByText } = render(<FmListPage declarations={decls} {...defaultProps} />);
+    deactivateAllModels(container, getByText);
+    expect(container.querySelector('table')).toBeFalsy();
+    const empty = container.querySelector('.fm-empty-state');
+    expect(empty.textContent).toContain('fm.list.empty_no_active_models');
   });
 });
 
