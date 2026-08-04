@@ -24,7 +24,11 @@ vi.mock('../fiscalModelsUtils.js', async (importOriginal) => {
 });
 vi.mock('../FmOverlays.jsx', () => ({
   ConfigDrawer: () => null,
-  NewDeclModal: () => null,
+  NewDeclModal: (props) =>
+    React.createElement('div', {
+      'data-testid': 'new-decl-modal',
+      'data-active-models': JSON.stringify(props.activeModels ?? null),
+    }),
 }));
 vi.mock('../FmCatalogPage.jsx', () => ({
   default: () => null,
@@ -224,6 +228,18 @@ describe('FmListPage — KPI cards row', () => {
     const kpis = container.querySelectorAll('.test-kpi');
     // The 2nd KPI is the pending count (index 1)
     expect(kpis[1].textContent).toBe('2');
+  });
+});
+
+// ── New declaration modal ────────────────────────────────────────────────────
+
+describe('FmListPage — new declaration modal', () => {
+  it('passes the current activeModels state to NewDeclModal when opened', () => {
+    const { container, getByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    fireEvent.click(getByText('+ Nueva declaración'));
+    const modal = container.querySelector('[data-testid="new-decl-modal"]');
+    expect(modal).toBeTruthy();
+    expect(JSON.parse(modal.getAttribute('data-active-models'))).toEqual({ '303': true, '349': true });
   });
 });
 

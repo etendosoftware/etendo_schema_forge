@@ -310,7 +310,7 @@ describe('NewDeclModal', () => {
     expect(document.body.textContent).toContain('fm.new_decl.title');
   });
 
-  it('defaults to model 303', () => {
+  it('defaults to model 303 when no activeModels prop is passed', () => {
     const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
     const select = container.querySelector('select');
     expect(select.value).toBe('303');
@@ -336,5 +336,45 @@ describe('NewDeclModal', () => {
       .find(b => b.textContent.includes('fm.action.cancel'));
     fireEvent.click(cancelBtn);
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('only lists models that are active in the catalog', () => {
+    const { container } = render(
+      <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': false, '349': true }} />
+    );
+    const select = container.querySelector('select');
+    const optionValues = Array.from(select.querySelectorAll('option')).map(o => o.value);
+    expect(optionValues).toEqual(['349']);
+  });
+
+  it('defaults to the first active model when 303 is not active', () => {
+    const { container } = render(
+      <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': false, '349': true }} />
+    );
+    const select = container.querySelector('select');
+    expect(select.value).toBe('349');
+  });
+
+  it('disables the select and the Crear button when no model is active', () => {
+    const { container } = render(
+      <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': false, '349': false }} />
+    );
+    const select = container.querySelector('select');
+    expect(select.disabled).toBe(true);
+    const createBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.create'));
+    expect(createBtn.disabled).toBe(true);
+    expect(document.body.textContent).toContain('fm.new_decl.no_active_models');
+  });
+
+  it('does not call onConfirm when no model is active and Crear is clicked', () => {
+    const onConfirm = vi.fn();
+    const { container } = render(
+      <NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={{ '303': false, '349': false }} />
+    );
+    const createBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.create'));
+    fireEvent.click(createBtn);
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 });

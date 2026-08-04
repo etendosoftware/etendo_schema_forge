@@ -261,12 +261,18 @@ export function FileGenModal303({ decl, defaultFilename, onConfirm, onClose }) {
   );
 }
 
-export function NewDeclModal({ onConfirm, onClose }) {
+export function NewDeclModal({ onConfirm, onClose, activeModels }) {
   const ui = useUI();
   const t = ui;
   const QUARTERLY_PERIODS = ['T1', 'T2', 'T3', 'T4'];
   const MONTHLY_PERIODS   = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-  const [model, setModel] = useState('303');
+  // Only offer models the user activated in the catalog. When no `activeModels`
+  // map is provided (e.g. legacy callers), fall back to all known models.
+  const availableModels = activeModels
+    ? Object.keys(activeModels).filter(id => activeModels[id])
+    : ['303', '349'];
+  const canCreate = availableModels.length > 0;
+  const [model, setModel] = useState(availableModels[0] ?? '303');
   const _cy = new Date().getFullYear();
   const [year, setYear] = useState(SUPPORTED_YEARS.includes(_cy) ? _cy : SUPPORTED_YEARS[SUPPORTED_YEARS.length - 1]);
   const [period, setPeriod] = useState('T1');
@@ -275,11 +281,20 @@ export function NewDeclModal({ onConfirm, onClose }) {
       <div className="fm-present-modal">
         <div className="fm-present-modal__title">{t('fm.new_decl.title')}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          {!canCreate && (
+            <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))' }}>
+              {t('fm.new_decl.no_active_models')}
+            </div>
+          )}
           <label style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
             {t('fm.new_decl.model')}
-            <select value={model} onChange={e => { setModel(e.target.value); setPeriod('T1'); }} style={{ marginLeft: 8, fontSize: 12 }}>
-              <option value="303">303</option>
-              <option value="349">349</option>
+            <select
+              value={model}
+              onChange={e => { setModel(e.target.value); setPeriod('T1'); }}
+              disabled={!canCreate}
+              style={{ marginLeft: 8, fontSize: 12 }}
+            >
+              {availableModels.map(id => <option key={id} value={id}>{id}</option>)}
             </select>
           </label>
           <label style={{ fontSize: 12, color: 'hsl(var(--foreground))' }}>
@@ -310,6 +325,7 @@ export function NewDeclModal({ onConfirm, onClose }) {
           <button className="fm-present-modal__btn" onClick={onClose}>{t('fm.action.cancel')}</button>
           <button
             className="fm-present-modal__btn fm-present-modal__btn--primary"
+            disabled={!canCreate}
             onClick={() => { onConfirm?.({ model, year, period, status: 'draft' }); onClose(); }}
           >
             {t('fm.action.create')}

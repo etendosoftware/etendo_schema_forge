@@ -724,6 +724,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
       {showNewDecl && <NewDeclModal
         onConfirm={handleNewDecl}
         onClose={() => setShowNewDecl(false)}
+        activeModels={activeModels}
         data-testid="NewDeclModal__cb728e" />}
       {/* ── Catalog drawer (slides from right) ───────────────────── */}
       {showCatalog && (

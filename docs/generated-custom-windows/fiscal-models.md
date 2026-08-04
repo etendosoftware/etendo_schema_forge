@@ -151,12 +151,30 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 
 `FiscalModelsPage` keeps `FmListPage` mounted (hidden) while in a detail view so the auto-compute polling interval stays alive. When polling fires, `onComputeUpdate` propagates the updated `_precomputed` to `FmModel349Page` via a `useEffect` on `decl._precomputed`.
 
+## Model catalog (`FmCatalogPage`)
+
+The catalog drawer (opened from the list toolbar kebab menu) lists the tax forms the tenant can enable/disable. It currently exposes only the two supported forms — no locked/"coming soon" entries:
+
+| Model | Name | Periodicity tags | Description |
+|-------|------|-------------------|--------------|
+| `303` | Modelo 303 - Autoliquidación IVA | Trimestral + Mensual | Autoliquidación del IVA |
+| `349` | Modelo 349 — Operaciones intracomunitarias | Mensual + Trimestral | Declaración informativa de operaciones con empresas de la Unión Europea |
+
+Each catalog entry declares a `periodicities: string[]` array (not a single `periodicity` string) — `FmCatalogPage` renders one `.fm-catalog-card__pill` per value, reusing the existing `fm.catalog.periodicity.monthly/quarterly/annual` locale keys. The header's model-count badge (`CATALOG.length`) and the "active models" counter are always derived from the `CATALOG` array, never hardcoded.
+
+Toggling a model on/off in the drawer updates the `activeModels` map (`{ [modelId]: boolean }`) that `FmListPage` owns and persists via `onSave`. That same map is threaded down to `NewDeclModal` (see below) so the "new declaration" flow only ever offers models the tenant actually activated.
+
+### "Nueva declaración" respects the active catalog
+
+`NewDeclModal` (in `FmOverlays.jsx`) receives an `activeModels` prop from `FmListPage` and builds its model `<select>` from `Object.keys(activeModels).filter(id => activeModels[id])` instead of a hardcoded `303`/`349` option list. If the previously-selected default (`303`) is not active, the modal falls back to the first available active model. If **no** model is active, the select and the "Crear" button are disabled and the modal shows `fm.new_decl.no_active_models` instead of leaving an empty, non-functional dropdown. Callers that don't pass `activeModels` (e.g. older tests) keep the legacy behavior of offering both `303` and `349`.
+
 ## Key files
 
 | File | Role |
 |------|------|
 | `FiscalModelsPage.jsx` | Root — routes between list and per-model detail |
 | `FmListPage.jsx` | Declaration table, toolbar, auto-compute wiring |
+| `FmCatalogPage.jsx` | Model catalog drawer — enable/disable tax forms, drives `activeModels` |
 | `useFiscalAutoCompute.js` | Background compute + polling hook |
 | `fiscalModelsUtils.js` | `computeBoxes303`, `checkModified303`, `generate303File`, formatters, deadline logic |
 | `models/303/FmModel303Page.jsx` | Modelo 303 detail — boxes, sources, stepper, file gen |
@@ -164,7 +182,7 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 | `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels) |
 | `models/349/FmModel349Page.jsx` | Modelo 349 detail |
 | `FmCommon.jsx` | Shared components: `NumberedStepper`, `ResultPill`, `StatusPillMenu`, `SummaryCard` |
-| `FmOverlays.jsx` | Modals and drawers: `PresentModal`, `FileGenModal`, `ConfigDrawer`, `CompareDrawer` |
+| `FmOverlays.jsx` | Modals and drawers: `PresentModal`, `FileGenModal`, `NewDeclModal`, `ConfigDrawer`, `CompareDrawer` |
 | `FmDebugPanel.jsx` | Developer panel (keystroke-activated) for testing with fixture data |
 
 ## NEO Headless endpoints

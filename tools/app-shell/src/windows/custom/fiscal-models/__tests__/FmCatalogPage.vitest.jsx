@@ -37,16 +37,16 @@ describe('FmCatalogPage — rendering', () => {
     expect(document.body.textContent).toContain('fm.catalog.title');
   });
 
-  it('renders a card for each catalog model (6 total)', () => {
+  it('renders a card for each catalog model (2 total)', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const cards = container.querySelectorAll('.fm-catalog-card');
-    expect(cards.length).toBe(6);
+    expect(cards.length).toBe(2);
   });
 
-  it('shows total catalog count badge (6)', () => {
+  it('shows total catalog count badge (2)', () => {
     render(<FmCatalogPage {...defaultProps} />);
-    // The count badge text contains '6'
-    expect(document.body.textContent).toContain('6');
+    // The count badge text contains '2'
+    expect(document.body.textContent).toContain('2');
   });
 
   it('shows model 303 and 349 name keys', () => {
@@ -55,15 +55,37 @@ describe('FmCatalogPage — rendering', () => {
     expect(document.body.textContent).toContain('fm.catalog.349.name');
   });
 
+  it('does not render discontinued models 111, 115, 180, 190', () => {
+    render(<FmCatalogPage {...defaultProps} />);
+    for (const id of ['111', '115', '180', '190']) {
+      expect(document.body.textContent).not.toContain(`fm.catalog.${id}.name`);
+    }
+  });
+
   it('shows periodicity labels from i18n', () => {
     render(<FmCatalogPage {...defaultProps} />);
     expect(document.body.textContent).toContain('fm.catalog.periodicity.quarterly');
     expect(document.body.textContent).toContain('fm.catalog.periodicity.monthly');
   });
 
-  it('shows "Próximamente" text for locked models', () => {
-    render(<FmCatalogPage {...defaultProps} />);
-    expect(document.body.textContent).toContain('fm.catalog.coming_soon');
+  it('303 shows both Trimestral and Mensual periodicity pills', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const card303 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.textContent.includes('303'));
+    const pills = card303.querySelectorAll('.fm-catalog-card__pill');
+    const pillText = Array.from(pills).map(p => p.textContent);
+    expect(pillText).toContain('fm.catalog.periodicity.quarterly');
+    expect(pillText).toContain('fm.catalog.periodicity.monthly');
+  });
+
+  it('349 shows both Mensual and Trimestral periodicity pills', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.textContent.includes('349'));
+    const pills = card349.querySelectorAll('.fm-catalog-card__pill');
+    const pillText = Array.from(pills).map(p => p.textContent);
+    expect(pillText).toContain('fm.catalog.periodicity.monthly');
+    expect(pillText).toContain('fm.catalog.periodicity.quarterly');
   });
 });
 
@@ -90,17 +112,16 @@ describe('FmCatalogPage — toggle', () => {
     expect(document.body.textContent).toContain('1');
   });
 
-  it('locked models do not have a switch (no toggle)', () => {
+  it('both 303 and 349 have a toggle switch (no locked models in the catalog)', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const switches = container.querySelectorAll('[role="switch"]');
-    // Only 303 and 349 are not locked → 2 switches max
-    expect(switches.length).toBeLessThanOrEqual(2);
+    expect(switches.length).toBe(2);
   });
 
-  it('locked cards have --locked CSS class', () => {
+  it('no cards have the --locked CSS class', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const locked = container.querySelectorAll('.fm-catalog-card--locked');
-    expect(locked.length).toBeGreaterThan(0);
+    expect(locked.length).toBe(0);
   });
 });
 

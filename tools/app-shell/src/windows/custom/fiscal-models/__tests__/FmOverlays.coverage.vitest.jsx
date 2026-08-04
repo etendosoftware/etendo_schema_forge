@@ -95,7 +95,7 @@ describe('FmOverlays interactive coverage', () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
     const onClose = vi.fn();
-    render(<NewDeclModal onConfirm={onConfirm} onClose={onClose} />);
+    render(<NewDeclModal onConfirm={onConfirm} onClose={onClose} activeModels={{ '303': true, '349': true }} />);
 
     await user.selectOptions(screen.getByLabelText(/fm\.new_decl\.model/), '349');
     await user.selectOptions(screen.getByLabelText(/fm\.new_decl\.year/), '2025');
@@ -103,6 +103,21 @@ describe('FmOverlays interactive coverage', () => {
     await user.click(screen.getByText('fm.action.create'));
 
     expect(onConfirm).toHaveBeenCalledWith({ model: '349', year: 2025, period: '01', status: 'draft' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('only offers active models and creates a declaration for the sole active one', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    render(<NewDeclModal onConfirm={onConfirm} onClose={onClose} activeModels={{ '303': false, '349': true }} />);
+
+    const select = screen.getByLabelText(/fm\.new_decl\.model/);
+    expect(Array.from(select.querySelectorAll('option')).map(o => o.value)).toEqual(['349']);
+
+    await user.click(screen.getByText('fm.action.create'));
+
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ model: '349', status: 'draft' }));
     expect(onClose).toHaveBeenCalled();
   });
 

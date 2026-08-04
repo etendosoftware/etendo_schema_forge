@@ -4,12 +4,8 @@ import { X } from 'lucide-react';
 import { ConfigDrawer } from './FmOverlays.jsx';
 
 const CATALOG = [
-  { id: '303', cat: 'iva',  periodicity: 'quarterly', defaultActive: true,  locked: false },
-  { id: '349', cat: 'iva',  periodicity: 'monthly',   defaultActive: true,  locked: false },
-  { id: '115', cat: 'ret',  periodicity: 'quarterly', defaultActive: false, locked: true  },
-  { id: '111', cat: 'ret',  periodicity: 'quarterly', defaultActive: false, locked: true  },
-  { id: '190', cat: 'ret',  periodicity: 'annual',    defaultActive: false, locked: true  },
-  { id: '180', cat: 'ret',  periodicity: 'annual',    defaultActive: false, locked: true  },
+  { id: '303', cat: 'iva', periodicities: ['quarterly', 'monthly'], defaultActive: true, locked: false },
+  { id: '349', cat: 'iva', periodicities: ['monthly', 'quarterly'], defaultActive: true, locked: false },
 ];
 
 // Only 303 and 349 support per-model configuration
@@ -112,9 +108,11 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
                 <div className="fm-catalog-card__name">{t(`fm.catalog.${model.id}.name`)}</div>
                 <div className="fm-catalog-card__desc">{t(`fm.catalog.${model.id}.desc`)}</div>
                 <div className="fm-catalog-card__meta">
-                  <span className="fm-catalog-card__pill">
-                    {t(`fm.catalog.periodicity.${model.periodicity}`)}
-                  </span>
+                  {(model.periodicities ?? []).map(p => (
+                    <span key={p} className="fm-catalog-card__pill">
+                      {t(`fm.catalog.periodicity.${p}`)}
+                    </span>
+                  ))}
                 </div>
               </div>
               <div className="fm-catalog-card__actions" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
