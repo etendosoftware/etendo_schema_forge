@@ -1096,7 +1096,10 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           data-testid="Label__a8d626">
           {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
         </Label>
-        <PrefixedInput prefix={f.inputPrefix} testId={`field-${f.key}-prefix-wrapper`}>
+        <PrefixedInput
+          prefix={f.inputPrefix}
+          testId={`field-${f.key}-prefix-wrapper`}
+          data-testid="PrefixedInput__a8d626">
           {inputEl}
         </PrefixedInput>
       </div>

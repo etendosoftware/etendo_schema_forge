@@ -280,14 +280,15 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSectionIdentity"
           descKey="orgSectionIdentityDesc"
-          testId="OrganizationPage__section-identity">
+          testId="OrganizationPage__section-identity"
+          data-testid="SectionRow__a5f503">
           <OrgLogoField
             imageId={form.yourCompanyDocumentImage}
             orgName={form.name}
             token={token}
             apiBaseUrl={apiBaseUrl}
             onChange={(id) => updateField('yourCompanyDocumentImage', id)}
-          />
+            data-testid="OrgLogoField__a5f503" />
           {/* grid-cols-2 with an empty second cell — matches the paired fields'
               column width (e.g. NIF/Nombre comercial below) instead of stretching
               to the full row width now that this field has no sibling in Identidad
@@ -311,7 +312,10 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
                 aria-invalid={Boolean(fieldErrors.name)}
                 className={'bg-card hover:bg-muted focus-visible:bg-card' + (fieldErrors.name ? ' border-destructive' : '')}
                 data-testid="OrganizationPage__name" />
-              <FieldError message={fieldErrors.name} testId="OrganizationPage__error-name" />
+              <FieldError
+                message={fieldErrors.name}
+                testId="OrganizationPage__error-name"
+                data-testid="FieldError__a5f503" />
             </div>
           </div>
           <div className="flex flex-col gap-2">
@@ -319,7 +323,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             <BusinessTypeCards
               value={form.etgoBusinessType}
               onChange={(v) => updateField('etgoBusinessType', v)}
-            />
+              data-testid="BusinessTypeCards__a5f503" />
           </div>
         </SectionRow>
 
@@ -327,7 +331,8 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSectionFiscal"
           descKey="orgSectionFiscalDesc"
-          testId="OrganizationPage__section-fiscal">
+          testId="OrganizationPage__section-fiscal"
+          data-testid="SectionRow__a5f503">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="org-nif" className="text-sm text-foreground font-medium" data-testid="Label__org-nif">
@@ -340,7 +345,10 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
                 aria-invalid={Boolean(fieldErrors.taxID)}
                 className={'bg-card hover:bg-muted focus-visible:bg-card' + (fieldErrors.taxID ? ' border-destructive' : '')}
                 data-testid="OrganizationPage__taxid" />
-              <FieldError message={fieldErrors.taxID} testId="OrganizationPage__error-taxID" />
+              <FieldError
+                message={fieldErrors.taxID}
+                testId="OrganizationPage__error-taxID"
+                data-testid="FieldError__a5f503" />
             </div>
             <div className="flex flex-col gap-1.5">
               {/* Field/testid names stay "legal-name"/socialName on purpose — this is
@@ -357,7 +365,10 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
                 aria-invalid={Boolean(fieldErrors.socialName)}
                 className={'bg-card hover:bg-muted focus-visible:bg-card' + (fieldErrors.socialName ? ' border-destructive' : '')}
                 data-testid="OrganizationPage__legal-name" />
-              <FieldError message={fieldErrors.socialName} testId="OrganizationPage__error-socialName" />
+              <FieldError
+                message={fieldErrors.socialName}
+                testId="OrganizationPage__error-socialName"
+                data-testid="FieldError__a5f503" />
             </div>
           </div>
           {/* Dirección fiscal | País — paired per Ivan's request (review round):
@@ -383,8 +394,11 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
                 token={token}
                 resolvedLabel={ui('orgFiscalAddressLabel')}
                 required
-              />
-              <FieldError message={fieldErrors.locationAddress} testId="OrganizationPage__error-locationAddress" />
+                data-testid="LocationModalField__a5f503" />
+              <FieldError
+                message={fieldErrors.locationAddress}
+                testId="OrganizationPage__error-locationAddress"
+                data-testid="FieldError__a5f503" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-sm text-foreground font-medium" data-testid="Label__org-country">{ui('orgCountryLabel')}</Label>
@@ -427,7 +441,8 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
           titleKey="orgSectionContact"
           descKey="orgSectionContactDesc"
           divider={false}
-          testId="OrganizationPage__section-contact">
+          testId="OrganizationPage__section-contact"
+          data-testid="SectionRow__a5f503">
           {/* Email/Phone/Website now live directly on AD_OrgInfo (em_etgo_email/phone/web) —
               optional, standalone columns unrelated to any Business Partner. The former
               "no BP linked" / "BP linked but failed to load" read-only states (and their
@@ -463,7 +478,10 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
                   ring is the wrapper's job now (PrefixedInput's focus-within:ring-2) —
                   QA review round fix for a floating second rounded ring on this input's
                   own (larger) radius, previously visible on focus. */}
-              <PrefixedInput prefix="https://" testId="OrganizationPage__web-prefix-wrapper">
+              <PrefixedInput
+                prefix="https://"
+                testId="OrganizationPage__web-prefix-wrapper"
+                data-testid="PrefixedInput__a5f503">
                 <Input
                   id="org-web"
                   value={form.web}
@@ -476,7 +494,6 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         </SectionRow>
         </div>
       </div>
-
       {isDirty && (
         <div
           className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-4 border-t border-border bg-card px-6 py-3 shadow-lg"
