@@ -3093,7 +3093,7 @@ export function DetailView({
                               }
                             }}
                             className={`w-full text-left px-2 py-1 text-sm leading-6 transition-colors flex items-center gap-2 ${action.destructive
-                              ? 'text-destructive hover:bg-destructive'
+                              ? 'text-destructive hover:bg-destructive hover:text-destructive-foreground'
                               : 'text-foreground hover:bg-secondary'
                               } ${docAction.loading || neoAction.loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                             style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400 }}

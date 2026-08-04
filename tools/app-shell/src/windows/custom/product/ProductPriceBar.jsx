@@ -484,7 +484,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                     disabled={saving}
                     title={ui('priceRemove')}
                     data-testid={`price-delete-${row.id}`}
-                    className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive disabled:opacity-40 opacity-0 group-hover/row:opacity-100 transition-all"
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive disabled:opacity-40 opacity-0 group-hover/row:opacity-100 transition-all"
                   >
                     {saving ? <Loader2 size={18} className="animate-spin" data-testid="Loader2__d76b90" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />}
                   </button>
@@ -540,7 +540,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 disabled={savingId === 'new'}
                 title={ui('cancel')}
                 data-testid="price-add-cancel"
-                className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive disabled:opacity-40 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive disabled:opacity-40 transition-all"
               >
                 <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />
               </button>
