@@ -110,7 +110,7 @@ index math is needed.
 
 ### `customTabsAfterBottom` incompatibility
 
-New pipeline-validator rule **F11** (`schema_forge_core/cli/src/validate-pipeline.js`, fixtures
+New pipeline-validator rule **F21** (`schema_forge_core/cli/src/validate-pipeline.js`, fixtures
 in `cli/test/fixtures/pipeline-validator/`, tests in `cli/test/validate-pipeline.test.js`):
 flags any window where `window.customTabsAfterBottom === true` **and** any of
 `customPanelTabs[].tabOrder`, `extraTabs[].tabOrder`, or `attachments.tabOrder` is set — those
@@ -130,9 +130,9 @@ isn't there doesn't exist, per this repo's own policy).
    `tabOrder` into each generated item literal for `customPanelTabs` entries, `extraTabs`
    entries, and the attachments tab (when `attachments` is the object form); default to `999`
    when absent so unmodified windows keep today's rendering.
-3. **`cli/src/validate-pipeline.js`** — new rule F11 (see above).
+3. **`cli/src/validate-pipeline.js`** — new rule F21 (see above).
 4. **Generator tests / fixtures** — cover: `tabOrder` passthrough on `secondaryTabs` and each
-   custom-tab group; F11 firing on `customTabsAfterBottom: true` + a custom `tabOrder`; F11
+   custom-tab group; F21 firing on `customTabsAfterBottom: true` + a custom `tabOrder`; F21
    staying quiet when `customTabsAfterBottom` is unset/false.
 
 ### B) `schema_forge` — runtime sort + window rollout (no publish; ships from this repo)
@@ -158,7 +158,7 @@ isn't there doesn't exist, per this repo's own policy).
 9. **`docs/ui-customization.md`** and **`docs/decisions-reference.md`** — document
    `tabOrder` as a cross-group key (not just intra-`secondaryTabs`), `window.detailTabOrder`,
    the `detailTabIndex` deprecation, and the documented default-tab side effect.
-10. **`docs/pipeline-validator-reference.md`** — add the F11 row.
+10. **`docs/pipeline-validator-reference.md`** — add the F21 row.
 11. **Tests (Vitest, delegated to Tester)** — `buildInitialTabs()` unit coverage: mixed-group
     sort, tie-break by insertion order, `detailTabIndex` conversion, hidden-tab exclusion before
     sort; regenerated-contract assertions for Producto and Activo (Contabilidad sorts last in
@@ -166,7 +166,7 @@ isn't there doesn't exist, per this repo's own policy).
 
 ## Testing strategy
 
-- **Core:** generator fixtures asserting `tabOrder` passthrough for every group, and F11
+- **Core:** generator fixtures asserting `tabOrder` passthrough for every group, and F21
   fires/stays-quiet as specified above.
 - **schema_forge:** Vitest for `buildInitialTabs()` covering the sort algorithm directly
   (cheaper and more precise than only asserting through full component render); assertions on
