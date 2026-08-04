@@ -10,6 +10,7 @@ const columns = [
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', label: 'Warehouse', required: true },
   { key: 'sourceShipmentDocNo', column: 'sourceShipmentDocNo', type: 'string', label: 'Source Shipment' },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent', label: 'Invoice Status' },
+  { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true, visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end columns:returnMaterialReceipt
 
