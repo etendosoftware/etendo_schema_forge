@@ -71,9 +71,21 @@ On successful warehouse creation, the wrapper calls `createDefaultStorageBin`, w
   "searchKey": "<warehouse.searchKey>-0-0-0",
   "rowX": "0", "stackY": "0", "levelZ": "0",
   "relativePriority": 50,
-  "default": true
+  "default": true,
+  "inventoryStatus": "2"
 }
 ```
+
+`inventoryStatus: "2"` (ETP-4761) explicitly sets the new bin's `M_InventoryStatus` to the fixed
+system id for "Available" (`OVERISSUE = 'N'`). Without it, the storage-bin table's own DB column
+default applies — the "Undefined" status (`7B3DC15A20234C418D26EECDC5D59003`), which also has
+`OVERISSUE = 'N'` and so behaves identically for negative-stock purposes, but is semantically
+mislabeled for a bin the user just created as their working default. This is a separate, narrower
+fix from the onboarding-sampledata gap fixed in the same ticket (`com.etendoerp.go`'s bundled
+GOClient locators previously shipped `M_INVENTORYSTATUS_ID = '0'`, "Undefined-OverIssue" with
+`OVERISSUE = 'Y'`, which did allow negative stock — see `docs/etendo-ad/onboarding-gaps.md` §I1 in
+this repo). This wrapper's fix applies to every warehouse created through this window, not just
+onboarding-seeded ones.
 
 If this POST fails, the warehouse remains saved and a `toast.warning` is shown — no rollback of the warehouse itself.
 
@@ -276,6 +288,7 @@ Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=wareh
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/warehouseUtils.test.js` / `warehouseUtils.vitest.js` — unit tests for `aggregateProducts` (cross-bin summation, UOM resolution, numeric coercion; no longer filters by qty).
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseProductsTab.vitest.jsx` — regression guard: list keeps negative-stock rows, hides exact-zero.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseSummary.test.js` / `WarehouseSummary.vitest.jsx` — regression guard: KPI predicate stays `> 0` (excludes negatives and zero).
+- `tools/app-shell/src/windows/custom/warehouse/__tests__/index.vitest.jsx` — regression guard: `createDefaultStorageBin` sends `inventoryStatus: '2'` (ETP-4761) on the default-bin creation POST.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseCustomTable.test.js` — regression guard: list-view product-count cell uses `!= 0`.
 - `tools/app-shell/src/windows/__tests__/registry.test.js` — proves the `warehouse` slug is registered in the window map.
 
