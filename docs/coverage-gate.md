@@ -40,7 +40,10 @@ fluctuation on an otherwise-identical commit no longer flips the gate.
 | current coverage not readable on Sonar | ⚠️ skip — not blocking |
 | base branch not yet analysed on Sonar | ⚠️ skip (matches CI treating a missing baseline as 0%) |
 
-Bypass a block with `git push --no-verify` (WIP only).
+Bypass a block with `git push --no-verify` (WIP only, and by a human in their own
+terminal — the committed `PreToolUse` hook `.claude/hooks/block-push-no-verify.sh`
+denies that flag when an agent tries it through Claude Code's Bash tool. See
+**Agent Guardrails** in `CLAUDE.md`).
 
 ## Where it runs
 
