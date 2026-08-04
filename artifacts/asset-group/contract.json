@@ -1,8 +1,8 @@
 {
   "version": "0.15.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-07-22T14:46:22.094Z",
-  "checksum": "d38438032c817d5d",
+  "updatedAt": "2026-07-30T17:46:32.135Z",
+  "checksum": "c5ababcca50b7799",
   "frontendContract": {
     "window": {
       "id": "252",
@@ -15,7 +15,8 @@
       "secondaryTabs": {
         "accounting": {
           "tabOrder": 1,
-          "label": "Accounting"
+          "label": "Accounting",
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -321,7 +322,8 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "hideDelete": true
       }
     }
   },
@@ -337,7 +339,8 @@
       "secondaryTabs": {
         "accounting": {
           "tabOrder": 1,
-          "label": "Accounting"
+          "label": "Accounting",
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -725,7 +728,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/asset-group/accounting",
         "detailUrl": "/sws/neo/asset-group/accounting/{id}",
         "supportedFilters": []

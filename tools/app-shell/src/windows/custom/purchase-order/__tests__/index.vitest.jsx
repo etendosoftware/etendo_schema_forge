@@ -75,7 +75,7 @@ vi.mock('@/components/contract-ui/LinesEmptyState.jsx', () => ({
 }));
 
 let lastListViewProps;
-vi.mock('@/components/contract-ui', () => ({
+vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   ListView: (props) => {
     lastListViewProps = props;
     return <div data-testid="list-view" />;
