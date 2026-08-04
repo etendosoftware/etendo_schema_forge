@@ -763,6 +763,44 @@ describe('InlineLinesPanel', () => {
     expect(optionTexts).not.toContain('taxCategoryVat10');
   });
 
+  // ETP-4685 — ReadCell (the cell as shown BEFORE the user clicks to edit it)
+  // has no branch for `type: 'enum'`/`type: 'status'`, so it falls through to
+  // the generic `resolveIdentifier` fallback — the raw backend identifier
+  // (an untranslated AD Name), never the enumLabels-resolved, ui()-translated
+  // text EditCell already shows once editing starts. This is what the user
+  // sees by default, on every row, without ever clicking anything.
+  it('resolves enum column labels through ui() in read-only mode (before editing)', () => {
+    const columns = [
+      {
+        key: 'taxCategory',
+        label: 'Tax',
+        type: 'enum',
+        column: 'C_TaxCategory_ID',
+        enumLabels: { VAT21: 'taxCategoryVat21', VAT10: 'taxCategoryVat10' },
+      },
+    ];
+    const rows = [{ id: 'E1', taxCategory: 'VAT21', 'taxCategory$_identifier': '21% VAT' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-E1');
+    expect(within(row).getByText('Artículo (prueba)')).toBeInTheDocument();
+    expect(within(row).queryByText('taxCategoryVat21')).not.toBeInTheDocument();
+    expect(within(row).queryByText('21% VAT')).not.toBeInTheDocument();
+  });
+
   it('renders date input type in edit mode', async () => {
     const columns = [
       { key: 'orderDate', label: 'Date', type: 'date', column: 'DateOrdered' },
