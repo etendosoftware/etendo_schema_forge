@@ -1,8 +1,8 @@
 {
   "version": "0.26.1",
   "generatedAt": "2026-07-30T22:44:13.503Z",
-  "updatedAt": "2026-08-04T00:03:30.819Z",
-  "checksum": "4a8dab6521214ea5",
+  "updatedAt": "2026-08-04T00:31:37.014Z",
+  "checksum": "1dacf0ff6275a2be",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -25,7 +25,8 @@
             "productRevenue",
             "productCOGS"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -996,6 +997,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "productAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -2384,7 +2386,8 @@
             "productRevenue",
             "productCOGS"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -5674,7 +5677,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/product/accounting",
         "detailUrl": "/sws/neo/product/accounting/{id}",
         "supportedFilters": []

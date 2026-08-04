@@ -52,7 +52,8 @@
           "productRevenue",
           "productCOGS"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       }
     },
     "import": {
@@ -447,6 +448,7 @@
     },
     "accounting": {
       "javaQualifier": "productAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "fixedAsset": {

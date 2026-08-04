@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { clickEmptyStateAddLine } from '../helpers/secondaryTabsInteractions.js';
 
 /**
  * Product Pricing tab — mocked spec.
@@ -507,6 +508,18 @@ test.describe('Product Accounting tab — mocked', () => {
    *     copies it client-side from the previous row, and `ProductAccountingHandler`
    *     auto-fills it server-side on POST when absent (covering the very
    *     first row, which has no sibling to copy from).
+   *
+   * ETP-4565 added `"maxDetailLines": 1` to the `accounting` secondary-tab
+   * entry in `decisions.json` — the tab is now capped at a single,
+   * non-deletable record (see `DetailView.jsx`,
+   * `st.maxDetailLines == null || childrenCount < st.maxDetailLines` gating
+   * `action-add-line`, and `docs/ui-customization.md` §17). With the seeded
+   * ACCOUNTING_ROW present (the default state exercised by the "columns"
+   * test), Add Line is correctly hidden — so the GL-fields-but-not-
+   * accountingSchema coverage below now runs against an empty-seed variant
+   * (the one state where Add Line is still reachable), and a companion test
+   * asserts the cap itself: Add Line is absent once the single allowed
+   * record exists.
    */
 
   test.beforeEach(async ({ page }) => {
@@ -535,15 +548,35 @@ test.describe('Product Accounting tab — mocked', () => {
     await expect(page.getByText('6000000 Compras de mercaderías')).toBeVisible();
   });
 
+  test('Add Line is hidden once the accounting record already exists (maxDetailLines: 1 cap)', async ({ page }) => {
+    await page.getByTestId('tab-accounting').click();
+
+    // ETP-4565: maxDetailLines: 1 hides action-add-line once childrenCount
+    // reaches the cap — the seeded ACCOUNTING_ROW already fills it.
+    await expect(page.getByTestId('column-header-fixedAsset')).toBeVisible({ timeout: 8_000 });
+    // Scoped to the DetailView-rendered button: the pricing tab renders its own
+    // `action-add-line` (shared AddLineButton) and every custom tab panel stays
+    // mounted, so a global count would never be 0 in this window.
+    await expect(
+      page.locator('[data-inline-add-portal="true"] [data-testid="action-add-line"]'),
+    ).toHaveCount(0);
+  });
+});
+
+test.describe('Product Accounting tab (empty state) — mocked', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await mockProductAccounting(page, []);
+    await mockProductDetail(page, PRODUCT_FOR_ACCOUNTING);
+
+    await page.goto(`/product/${PRODUCT_FOR_ACCOUNTING.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
   test('Add Line exposes the four GL account fields; accountingSchema is never editable', async ({ page }) => {
     await page.getByTestId('tab-accounting').click();
 
-    // The pricing tab reuses the same shared AddLineButton (hardcoded
-    // `action-add-line`) and every custom tab panel stays mounted, so scope this to the
-    // DetailView-rendered one via its `data-inline-add-portal` wrapper.
-    const addBtn = page.locator('[data-inline-add-portal="true"] [data-testid="action-add-line"]');
-    await expect(addBtn).toBeVisible({ timeout: 8_000 });
-    await addBtn.click();
+    await clickEmptyStateAddLine(page);
 
     await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('inline-add-field-fixedAsset')).toBeVisible();

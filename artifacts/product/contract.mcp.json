@@ -1,7 +1,8 @@
 {
-  "version": "0.26.0",
+  "version": "0.26.1",
   "generatedAt": "2026-07-30T22:44:13.503Z",
-  "contractChecksum": "4a8dab6521214ea5",
+  "updatedAt": "2026-08-04T00:31:37.014Z",
+  "contractChecksum": "1dacf0ff6275a2be",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -51,7 +52,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/product/accounting",
         "detailUrl": "/sws/neo/product/accounting/{id}",
         "supportedFilters": []
@@ -1073,5 +1074,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "3625c8b412c7c60b"
+  "checksum": "ef6d3b34680e4841"
 }
