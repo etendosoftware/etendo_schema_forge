@@ -543,9 +543,8 @@ export function buildInitialTabs(p) {
     });
   }
 
-  return entries
-    .sort((a, b) => a.weight - b.weight || a.insertionIndex - b.insertionIndex)
-    .map(e => e.tab);
+  entries.sort((a, b) => a.weight - b.weight || a.insertionIndex - b.insertionIndex);
+  return entries.map(e => e.tab);
 }
 
 export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
