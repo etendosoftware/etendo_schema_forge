@@ -457,6 +457,97 @@ export function customTabKey(ct) {
   return `custom:${ct.key}`;
 }
 
+const SECONDARY_DEFAULT_WEIGHT = 99;
+const CUSTOM_DEFAULT_WEIGHT = 999;
+const LINES_DEFAULT_WEIGHT = -1;
+
+/**
+ * Computes the lines tab's (weight, insertionIndex) sort key (ETP-4415).
+ * `detailTabOrder` (new, preferred) is used directly as the weight when set,
+ * with no special insertionIndex handling needed. Otherwise `detailTabIndex`
+ * (legacy) is converted to an equivalent key that reproduces its old
+ * splice-position semantics EXACTLY, including when neighboring secondaryTabs
+ * share the same (default) weight — which they usually do, since untouched
+ * secondaryTabs all default to SECONDARY_DEFAULT_WEIGHT. Matching a neighbor's
+ * weight and using a fractional insertionIndex strictly between the two
+ * neighbors' positions (idx - 0.5) places lines at the exact splice point
+ * regardless of whether the neighbors' weights tie or differ. Any invalid
+ * value (unset, negative, out of range) falls back to LINES_DEFAULT_WEIGHT,
+ * matching the old `insertLinesTab`'s unshift fallback.
+ */
+function computeLinesEntryKey(detailTabOrder, detailTabIndex, secondaryEntries) {
+  if (typeof detailTabOrder === 'number') return { weight: detailTabOrder, insertionIndex: -0.5 };
+  const isValidSpliceIndex = typeof detailTabIndex === 'number'
+    && detailTabIndex >= 0
+    && detailTabIndex <= secondaryEntries.length;
+  if (!isValidSpliceIndex) return { weight: LINES_DEFAULT_WEIGHT, insertionIndex: -0.5 };
+  const after = secondaryEntries[detailTabIndex];
+  const before = secondaryEntries[detailTabIndex - 1];
+  const weight = after?.weight ?? before?.weight ?? LINES_DEFAULT_WEIGHT;
+  return { weight, insertionIndex: detailTabIndex - 0.5 };
+}
+
+/**
+ * Builds the initial tab list (secondary tabs + lines/customLines + inline custom
+ * tabs) as a single weighted sort (ETP-4415) instead of the old fixed group
+ * concatenation. Every entry gets a numeric weight (secondaryTabs/customTabs
+ * default to their pre-ETP-4415 group position; a window opts into cross-group
+ * reordering via `tabOrder` on any entry, or `detailTabOrder`/`detailTabIndex`
+ * for the lines tab). Ties keep insertion order (stable sort). Visibility is
+ * filtered BEFORE sorting so a hidden custom tab never affects tiebreaks.
+ * `Others` is appended later via pushOthers.
+ */
+export function buildInitialTabs(p) {
+  const secondaryEntries = p.secondaryTabs.map((st, i) => {
+    const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
+    const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
+    const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
+    return {
+      tab: { key: st.key, label, count: childCount },
+      weight: st.tabOrder ?? SECONDARY_DEFAULT_WEIGHT,
+      insertionIndex: i,
+    };
+  });
+
+  const entries = [...secondaryEntries];
+
+  if (p.DetailTable) {
+    const linesTab = { key: 'lines', label: p.detailLabel || p.detailEntity || 'Lines', count: p.hook.children?.length || 0 };
+    entries.push({ tab: linesTab, ...computeLinesEntryKey(p.detailTabOrder, p.detailTabIndex, secondaryEntries) });
+  } else if (p.CustomLines) {
+    entries.push({
+      tab: { key: 'customLines', label: p.customLinesLabel, count: p.customLinesCount ?? null },
+      weight: LINES_DEFAULT_WEIGHT,
+      insertionIndex: -0.5,
+    });
+  }
+
+  // Append 'tab' placement custom items — a tab-placement custom component may opt
+  // out of being shown entirely by calling `onVisibilityChange(false)` (see
+  // customTabVisibility state in DetailView); until it does, it defaults to visible.
+  // customTabsAfterBottom suppresses this group from the sorted list entirely — those
+  // tabs render in a separate strip below bottomSection instead (see F21 in
+  // schema_forge_core's validate-pipeline.js, which flags a tabOrder set in that mode).
+  // Custom entries get an insertionIndex well past any secondaryTabs/lines index so a
+  // weight tie against them (e.g. an explicit custom tabOrder matching a secondary's
+  // default) resolves after secondaryTabs/lines, matching customs' default position.
+  if (!p.customTabsAfterBottom) {
+    p.tabCustomTabs.forEach((ct, i) => {
+      if (p.customTabVisibility[ct.key] === false) return;
+      const resolvedLabel = ct.labelKey ? p.ui(ct.labelKey) : ct.label;
+      entries.push({
+        tab: { key: customTabKey(ct), label: resolvedLabel, count: p.customTabCounts[ct.key] ?? null },
+        weight: ct.tabOrder ?? CUSTOM_DEFAULT_WEIGHT,
+        insertionIndex: 10000 + i,
+      });
+    });
+  }
+
+  return entries
+    .sort((a, b) => a.weight - b.weight || a.insertionIndex - b.insertionIndex)
+    .map(e => e.tab);
+}
+
 export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   return (typeof extraActions === 'function' ? extraActions({
     data,
