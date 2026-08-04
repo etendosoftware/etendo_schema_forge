@@ -1129,7 +1129,9 @@ describe('DetailView exported helpers', () => {
       const rows = [{ lineGrossAmount: 50 }];
       const data = { 'currency$_identifier': 'EUR' };
       const result = helpers.getSelectedLinesTotalLabel({}, rows, { grossField: 'lineGrossAmount' }, data);
-      expect(result).toContain('EUR');
+      // Delegates to formatCurrency (es-ES, narrowSymbol) — EUR renders as '€', not the
+      // literal code 'EUR'. \s matches the non-breaking space Intl inserts before the symbol.
+      expect(result).toMatch(/50,00\s€/);
     });
   });
 
@@ -2349,7 +2351,9 @@ describe('getSelectedLinesTotalLabel', () => {
   it('computes total from grossField', () => {
     const rows = [{ lineGrossAmount: 100 }, { lineGrossAmount: 50.5 }];
     const result = getSelectedLinesTotalLabel({}, rows, { grossField: 'lineGrossAmount' }, { 'currency$_identifier': 'EUR' });
-    expect(result).toContain('EUR');
+    // Delegates to formatCurrency (es-ES, narrowSymbol) — EUR renders as '€', not the
+    // literal code 'EUR'. \s matches the non-breaking space Intl inserts before the symbol.
+    expect(result).toMatch(/150,50\s€/);
   });
 
   it('returns null when showLineTotals is false', () => {
@@ -2360,6 +2364,20 @@ describe('getSelectedLinesTotalLabel', () => {
     const rows = [{ lineGrossAmount: 100 }];
     const result = getSelectedLinesTotalLabel({}, rows, { grossField: 'lineGrossAmount' }, {});
     expect(result).not.toContain('EUR');
+    expect(result).toBe('100,00');
+  });
+
+  it('pins the locale to es-ES for the no-currency path (not the runtime default)', () => {
+    // toBe('100,00') above can pass by coincidence on a machine whose default ICU
+    // locale happens to already use a comma decimal separator (e.g. es-AR) even
+    // when the code passes `undefined` as the locale — this assertion checks the
+    // actual mechanism instead of the output, so it fails regardless of the
+    // runner's own locale.
+    const rows = [{ lineGrossAmount: 100 }];
+    const spy = vi.spyOn(Number.prototype, 'toLocaleString');
+    getSelectedLinesTotalLabel({}, rows, { grossField: 'lineGrossAmount' }, {});
+    expect(spy).toHaveBeenCalledWith('es-ES', expect.anything());
+    spy.mockRestore();
   });
 
   it('handles NaN values gracefully (skips them)', () => {

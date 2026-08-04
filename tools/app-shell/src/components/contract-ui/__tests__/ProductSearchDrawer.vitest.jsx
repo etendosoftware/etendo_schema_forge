@@ -114,15 +114,28 @@ describe('ProductSearchDrawer', () => {
     });
   });
 
-  it('shows prices formatted to 2 decimal places', async () => {
+  it('shows prices via the shared formatCurrency (es-ES, grouped, real symbol), never the bare toFixed fallback', async () => {
     const items = [
       { id: '1', label: 'Widget A', searchKey: 'W001', standardPrice: 10.5 },
     ];
     setupFetchMock(items);
     render(<ProductSearchDrawer {...BASE_PROPS} />);
     await waitFor(() => {
-      expect(screen.getByText('10.50')).toBeInTheDocument();
+      expect(screen.getByText('10,50 $')).toBeInTheDocument();
     });
+    expect(screen.queryByText('10.50')).toBeNull();
+  });
+
+  it('groups thousands in the price even with no currency context supplied (1000-9999 range)', async () => {
+    const items = [
+      { id: '1', label: 'Widget A', searchKey: 'W001', standardPrice: 1500.5 },
+    ];
+    setupFetchMock(items);
+    render(<ProductSearchDrawer {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByText('1.500,50 $')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('1500.50')).toBeNull();
   });
 
   it('calls onSelect when a product is clicked', async () => {

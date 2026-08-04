@@ -278,6 +278,24 @@ describe('useNeoAction', () => {
     expect(res).toEqual({ success: true, message: 'Action completed' });
   });
 
+  // ETP-4706: NeoResponse.error(int, String) — the standard error envelope used by most NEO
+  // action handlers across the backend — wraps the message as {"error":{"message","status"}},
+  // not a top-level `message` field. Before this fix, that shape fell through every branch of
+  // the extraction chain and the hook returned `res.statusText` (e.g. "Unprocessable Entity" for
+  // a 422) instead of the real backend message, discarding the actual accounting/business-rule
+  // detail for every window that hits this common envelope.
+  it('extracts message from the nested error.message envelope on non-ok response', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      statusText: 'Unprocessable Entity',
+      json: async () => ({ error: { message: 'Account could not be found.', status: 422 } }),
+    });
+    const { result } = renderHook(() => useNeoAction(baseOpts));
+    let res;
+    await act(async () => { res = await result.current.execute('rec-12', 'post'); });
+    expect(res).toEqual({ success: false, message: 'Account could not be found.' });
+  });
+
   it('extracts error message from nested data on non-ok response', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: false,

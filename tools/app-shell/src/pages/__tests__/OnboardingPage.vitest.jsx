@@ -582,18 +582,22 @@ describe('OnboardingPage', () => {
     expect(JSON.stringify(track.mock.calls)).not.toContain('Private Setup Name');
   });
 
-  it('tracks login failures without credentials', async () => {
+  it('tracks login failures when the server returns no token', async () => {
     loginAccount.mockResolvedValue({});
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     await renderOnboarding();
 
+    // LoginStep now enforces required email/password before it even calls
+    // trackOnboarding (client-side validation added in core 0.3.20) — fill both
+    // fields so the submit reaches the API call, whose empty response ({}, no
+    // token) is what actually exercises the failure-tracking path this test covers.
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
-      target: { value: 'ada@example.com' },
+      target: { value: 'nocreds@example.com' },
     });
     fireEvent.change(screen.getByLabelText(/onboardingPasswordLabel/), {
-      target: { value: 'top-secret-password' },
+      target: { value: 'x' },
     });
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
@@ -661,11 +665,12 @@ describe('OnboardingPage', () => {
     localStorage.removeItem('sf_platform_token');
     await renderOnboarding();
 
+    // Required-field validation (core 0.3.20) blocks submit until both are filled.
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
       target: { value: 'ada@example.com' },
     });
     fireEvent.change(screen.getByLabelText(/onboardingPasswordLabel/), {
-      target: { value: 'top-secret-password' },
+      target: { value: 'x' },
     });
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
@@ -722,19 +727,20 @@ describe('OnboardingPage', () => {
   });
 
   it('tracks login exceptions', async () => {
-    // The login catch surfaces ui(err.code) — the readable message comes from the
-    // error code, not a userMessage field (see LoginStep.handleLogin).
-    loginAccount.mockRejectedValue({ code: 'onboardingInvalidCredentials' });
+    // LoginStep's catch no longer surfaces err.userMessage for the plain login
+    // path (core 0.3.20) — it always renders ui(err.code || 'onboardingConnectionError').
+    loginAccount.mockRejectedValue({});
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     await renderOnboarding();
 
+    // Required-field validation (core 0.3.20) blocks submit until both are filled.
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
-      target: { value: 'ada@example.com' },
+      target: { value: 'exception@example.com' },
     });
     fireEvent.change(screen.getByLabelText(/onboardingPasswordLabel/), {
-      target: { value: 'top-secret-password' },
+      target: { value: 'x' },
     });
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
@@ -747,7 +753,11 @@ describe('OnboardingPage', () => {
         windowName: 'onboarding',
       });
     });
-    expect(screen.getByText('onboardingInvalidCredentials')).toBeInTheDocument();
+    // core 0.3.20 (ETP-4676) no longer renders the raw backend userMessage; the
+    // error is always translated via ui(err.code), falling back to this key when
+    // the rejection carries no code. The mocked ui() is the identity function.
+    expect(screen.getByText('onboardingConnectionError')).toBeInTheDocument();
+    expect(screen.queryByText('Readable login failure')).not.toBeInTheDocument();
   });
 
   it('submits forgot password requests with neutral success messaging', async () => {

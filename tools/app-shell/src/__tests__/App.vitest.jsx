@@ -104,9 +104,10 @@ vi.mock('../pages/ReportViewerPage.jsx', () => ({
   default: () => <div>ReportViewer</div>,
 }));
 
-vi.mock('../pages/FinancialAccountsPage.jsx', () => ({
-  default: () => <div>FinancialAccounts</div>,
-}));
+// ETP-4658: pages/FinancialAccountsPage.jsx no longer exists — the accounts list is
+// the `financial-account` window's own list branch (generated ListView + the
+// AccountsHeaderTable slot) and `finance/accounts` is now only a redirect to it, so
+// there is nothing left to stub for that route.
 
 vi.mock('../pages/ArtifactViewerPage.jsx', () => ({
   default: () => <div>ArtifactViewer</div>,

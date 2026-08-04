@@ -258,17 +258,17 @@
   (`FinancialAccountSupport.isBankTransferMethod`) and the R14 `.sql` use the identical predicate;
   keep them in lockstep. Column accessor: `FIN_PaymentMethod.isPSD2IsBankTransfer()` (Boolean),
   setter `setPSD2IsBankTransfer(Boolean)`.
-- **2026-07-16 — The multicurrency PSD2 exception is applied on the per-account LINK, never the
-  template.** A Bank account (`type='B'`) with an active PSD2 connection must have multicurrency OFF
+- **2026-07-16 — The multicurrency bank-connection exception is applied on the per-account LINK, never the
+  template.** A Bank account (`type='B'`) with an active bank connection must have multicurrency OFF
   on ITS "Transferencia bancaria" `fin_finacc_paymentmethod` link; the `fin_paymentmethod` template
-  stays `'Y'`. "Active PSD2" = `fin_financial_account.em_psd2_connection_status='CO'`
+  stays `'Y'`. "Active connection" = `fin_financial_account.em_psd2_connection_status='CO'`
   (`BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`) OR an active row in
   `psd2_finacc_connection (connection_status='AC' AND isactive='Y')` — two independent signals, OR
   them. Live sweep found exactly ONE such account fleet-wide (GOClient "Societe Generale Luxembourg
   Corporate", both signals true), and its transfer link was already `N/N`. Non-transfer links on the
-  same PSD2 account (Cheque, Tarjeta) are NOT excepted — they go to `Y/Y`.
+  same bank-connected account (Cheque, Tarjeta) are NOT excepted — they go to `Y/Y`.
 - **2026-07-16 — Runtime placement: put the exception in the shared `linkAccount(...)` choke point,
-  not in each handler.** `FinancialAccountPsd2Handler.handleCreateAndLink` and `handleLink` both
+  not in each handler.** `FinancialAccountBankConnectionHandler.handleCreateAndLink` and `handleLink` both
   call the private `linkAccount(...)` helper (which is where `linkAccountToFinancialAccount` persists
   `em_psd2_connection_status='CO'` and where `disableAutomaticWithdrawnForTransferMethod` already
   lives). Adding `FinancialAccountSupport.disableMulticurrencyForBankTransfer(finAcc)` there covers
@@ -314,3 +314,64 @@
 - **2026-07-20 — A pre-existing near-duplicate legacy group can coexist with the canonical accented name.** Client "Ivan Test" already had an unaccented `A_Asset_Group` row literally named `"Generico"` (no tilde) before R14 ran — a different literal string from the requested `"Genérico"`. R14's `@check`/`@apply` match on exact name (`= 'Genérico'`), so it created a SECOND, correctly-accented row rather than renaming/reusing the legacy one — live-verified after apply (both rows now coexist on that tenant, only the new one has an accounting row wired to 282/682). **Apply:** whenever a fix's `@check` is a literal string match, a pre-existing near-miss (typo, missing accent, different casing) will NOT be treated as "already satisfies the requirement" and a second row will be created — decide explicitly whether that's acceptable or whether the fix needs a fuzzy/normalize-first match.
 - **2026-07-20 — R14 Step 5 added: delete the unused legacy asset groups ("Vehiculos"/"Otros") — three FKs reference `a_asset_group`, and a name-based delete across tenants needs a reference guard.** After consolidating every asset under "Genérico", the product owner asked to remove the two legacy groups the assets used to live in. **Delete by NAME (`name IN ('Vehiculos','Otros')`), never by id** — the old `A_ASSET_GROUP.xml` the owner provided lists GOClient-specific ids (`465220689C8743CB8EED836CC98FFC55`/`C77E2F5FD65F48278A6DCE67760F08FD`) but every tenant has its own ids for the same names. **`a_asset_group` is referenced by THREE FKs (confirmed via `pg_constraint`): `a_asset` (assets), `a_asset_group_acct` (accounting, auto-deleted by BEFORE-DELETE trigger `a_asset_group_trg2` → never blocks), and — easy to miss — `m_product_category` (`m_product_category.a_asset_group_id`, a product category can point at an amortization group).** The DELETE is double-`NOT EXISTS`-guarded (no `a_asset` AND no `m_product_category` referencing the group) so it only removes truly-orphaned groups. **This guard is what keeps a name-based cross-tenant delete safe:** F&B International Group (excluded from Steps 1–4 for lacking 282/682, so its assets never moved off "Otros"/"Vehiculos") has non-empty legacy groups → guard finds them referenced → not deleted → NO FK violation, NO chain halt. **Ordering is load-bearing:** Step 5 MUST run after Step 4 (asset reassignment) inside the same transaction, or the `a_asset` FK aborts the delete. **Validated live:** GOClient applied (2 rows = Otros+Vehiculos deleted, only "Genérico" with 6 assets remains); F&B dry-run → SKIPPED (all 4 legacy groups + assets intact); GOClient re-check → SKIPPED_NOT_NEEDED (idempotent). **Apply generally:** before shipping a name-scoped DELETE of an AD reference row across the whole tenant fleet, enumerate ALL FKs pointing at that table (`pg_constraint` `confrelid`) and guard against every one that isn't trigger-cascaded — a single overlooked referencing table turns a "cleanup" into a fleet-wide transaction abort.
 - **2026-07-20 — CORRECTION of the earlier "XML does not exist on this checkout" note + R14 BUG FIX SHIPPED.** The prior audit note (above) said `referencedata/sampledata/GOClient/A_ASSET_GROUP.xml` did not exist here and only `/Users/futit/...` had it. **That was wrong for the current working machine:** on `/Users/ivanrobledo/Documents/EtendoGO/modules/com.etendoerp.go/referencedata/sampledata/GOClient/`, both `A_ASSET_GROUP.xml` and `A_ASSET_GROUP_ACCT.xml` DO exist and ARE the canonical source of truth. Read `A_ASSET_GROUP.xml` directly (2026-07-20): the "Genérico" row is `NAME='Genérico'`, `ISOWNED='Y'`, `ISDEPRECIATED='N'`, `AMORTIZATIONTYPE='LI'`, `AMORTIZATIONCALCTYPE='PE'`, `ASSETSCHEDULE='MO'`, `IS30DAYMONTH='Y'` (no `DESCRIPTION` element → NULL) — exactly matching every correctly-wired live tenant. **Apply:** the module path is repo-relative (`modules/com.etendoerp.go/referencedata/sampledata/GOClient/`), not the schema_forge repo — a prior "file not found" was searching the wrong repo. **Fix delivered in R14:** (1) Step 1 INSERT now sets the full canonical column set (`amortizationtype='LI', amortizationcalctype='PE', assetschedule='MO', is30daymonth='Y'`); (2) a NEW guarded Step 2 UPDATE sanitizes any pre-existing "Genérico" whose 3 ONCREATEDEFAULT amortization columns were left NULL by the earlier buggy revision (accounting UPDATE renumbered to Step 3, asset reassignment to Step 4); (3) `@check` extended with a branch detecting the NULL-amortization malformation so a broken group is repaired on re-run instead of reporting SKIPPED. `is30daymonth` is `NOT NULL DEFAULT 'Y'` (confirmed via `information_schema`) so it is never left NULL and needs no sanitizing. **Validated live** on "Ivan Test" (`43B9B25213204AA487E00D9CC3C390A1`): the malformed accented "Genérico" (created 2026-07-20T15:59, `atype/acalc/asched = NULL`) was repaired to `LI/PE/MO` via `--fix` targeted run (1 row); re-check dry-run → `SKIPPED_NOT_NEEDED`; healthy GOClient dry-run → `SKIPPED_NOT_NEEDED` (no false positive). F&B consolidation and the "Generico"/"Genérico" duplicate remain DEFERRED business decisions (documented in the R14 header), not touched by this revision.
+
+---
+
+## ETP-4706 — "Account could not be found" on Goods Receipt posting (A2b, 2026-07-29)
+
+- **2026-07-29 — Corrected misinterpretation: the ticket's original diagnosis ("missing product-category
+  account column") was WRONG.** The brief assumed `M_Product_Category_Acct`/`M_Product_Acct` needed a
+  new `p_notinvoicedreceipts_acct`-style column. Verified via `information_schema.columns`: **neither
+  table has ANY not-invoiced-receipts column** (`m_product_category_acct` has 23 columns, none named
+  `*notinvoiced*`; same for `m_product_acct`). The real resolution path (confirmed by reading
+  `org.openbravo.erpCommon.ad_forms.AcctServer#getAccount`, `ACCTTYPE_NotInvoicedReceipts = "51"`) is
+  `AcctServerData.selectNotInvoicedReceiptsAcct` (`AcctServer_data.xsql`):
+  `SELECT NotInvoicedReceipts_Acct FROM C_BP_Group_Acct a, C_BPartner bp WHERE a.C_BP_Group_ID =
+  bp.C_BP_Group_ID AND bp.C_BPartner_ID = ? AND a.C_AcctSchema_ID = ?` — entirely BP-GROUP scoped, via
+  the transaction's business partner. The error log line ("No Account Not Invoiced Receipts for
+  product: X") names the product only in its message text; the actual lookup key is the BP's group,
+  not the product or product category. **Apply:** when an `AcctServer` "account could not be found"
+  error names a product/entity, do not assume the FK lives on that entity's own `*_acct` table — trace
+  the actual `getAccount`/`AcctType` call site in the relevant `Doc*.java` class first (here
+  `DocInOut.java` line ~372, `getAccount(AcctServer.ACCTTYPE_NotInvoicedReceipts, ...)` on `this`, not
+  `line.getAccount(...)` on the product) before assuming which table owns the missing column.
+- **2026-07-29 — Live-DB root cause: one stale pre-existing `C_BP_Group_Acct` row, not a systemic
+  onboarding gap.** GOClient's "Cliente" BP group (`DBBD00C9E0B9442188FCDDA3F601DAEA`, the group ETP-4402
+  renamed from "Consumidor Final") has a `C_BP_Group_Acct` row for "Esquema GO"
+  (`C06B100312FA48159DB36B9A4B461019`) with `notinvoicedreceipts_acct = NULL`, while
+  `C_AcctSchema_Default.notinvoicedreceipts_acct` on the same schema is populated
+  (`6E9DA718417A48A290FE376448A12BF6`). Row `created = 2026-04-07 14:59:32`; the sibling
+  "Proveedor"/"Acreedor" groups on the same schema already have this column set. **Root cause:**
+  `OnboardingAccountingWiringService#provisionEntityPostingAccounts`'s `BP_GROUP_ACCT_SQL` (and the
+  `c_bp_group_trg()` core trigger, same story) is guarded by `NOT EXISTS` at the ROW level — once a
+  `(group, schema)` row exists at all, neither the trigger nor the onboarding insert ever revisits it,
+  so any column that got its default populated AFTER the row's creation stays permanently NULL. This
+  matches the exact class of bug already documented for `C_ACCTSCHEMA_DEFAULT` (A3b) and
+  `C_ACCTSCHEMA_TABLE` (A4) drift — "someone/something backfilled a default later; pre-existing rows
+  never got the memo" — just on `C_BP_Group_Acct` this time.
+- **2026-07-29 — Fleet-wide sweep CONFIRMS corrective-only; no preventive fix needed.** Queried every
+  `C_BP_Group_Acct` row across every tenant on this DB for `notinvoicedreceipts_acct IS NULL`: **only
+  GOClient's "Cliente" row matched.** Critically, tenants onboarded via the CURRENT onboarding code the
+  SAME DAY as this diagnosis (e.g. "Empresa E2E d5be89a8", onboarded 2026-07-29) already have this
+  column correctly populated on every group — proving `BP_GROUP_ACCT_SQL` already sources
+  `notinvoicedreceipts_acct` correctly for any row inserted fresh today. **Apply:** per the map's
+  §0 "Boundary" rule, a gap confirmed to be purely existing-tenant state with a demonstrably-correct
+  current onboarding path may ship corrective-only — verify this with a fleet sweep (not just the one
+  repro tenant) before deciding to skip the preventive front, and state the N/A explicitly in the gap
+  table rather than silently omitting it.
+- **2026-07-29 — Same stale row has MANY other `*_acct` columns NULL — flagged, not fixed (scope
+  discipline).** The identical "Cliente"/GOClient row also has `notinvoicedrevenue_acct`,
+  `notinvoicedreceivables_acct`, `unearnedrevenue_acct`, `paydiscount_exp_acct`, `paydiscount_rev_acct`,
+  `writeoff_rev_acct`, `v_liability_services_acct`, `doubtfuldebt_acct`, `baddebtexpense_acct`,
+  `baddebtrevenue_acct`, `allowancefordoubtful_acct` all NULL — the same drift class, other account
+  types, same row. ETP-4706 explicitly scoped itself to Not-Invoiced-Receipts only (per its own
+  "don't silently expand scope" instruction). **Apply:** a future ticket should consider generalizing
+  R17 into a "resync every NULL `*_acct` column on a `C_BP_Group_Acct` row against the schema default"
+  fix (one UPDATE per column, or a single dynamic one) rather than shipping one column-specific R-fix
+  at a time whenever the next symptom surfaces on this same row.
+- **2026-07-29 — Fix:** `cli/src/data-fixes/sql/20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql`
+  — single guarded `UPDATE` joining `c_bp_group_acct` → `c_bp_group` (tenant scope) →
+  `c_acctschema_default` (source value), backfilling `notinvoicedreceipts_acct` only where NULL and a
+  schema default exists. Verified live in a rolled-back transaction on GOClient: `BEFORE: NULL` →
+  `AFTER: 6E9DA718417A48A290FE376448A12BF6`; re-check (same predicate) matches 0 rows, confirming
+  idempotency. `ONBOARDING_PROVISIONED_THROUGH` intentionally NOT bumped (no preventive change).

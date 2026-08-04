@@ -59,7 +59,7 @@ vi.mock('@/lib/lineFieldChange.js', () => ({
 vi.mock('@/lib/selectorCatalog.js', () => ({ getCatalogOptions: () => [] }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (val) => (val != null ? String(val) : '') }));
 vi.mock('@/lib/utils.js', () => ({ cn: (...args) => args.filter(Boolean).join(' ') }));
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() } }));
 
 // The REAL production factory under test.
 import { buildSecondaryLineHandlers } from '../DetailView.jsx';
@@ -254,13 +254,16 @@ describe('buildSecondaryLineHandlers.onDelete', () => {
     // Selection cleared via the inline-lines ref handle, then state reset.
     expect(clearSelection).toHaveBeenCalled();
     expect(deps.setSecondarySelectedRows).toHaveBeenCalledWith(expect.any(Function));
-    expect(toast.success).toHaveBeenCalledWith('recordsDeleted:{"count":2}');
+    // ETP-4656 — single combined outcome toast (bulkDeleteAllSucceeded), not the
+    // old two-independent-if recordsDeleted/recordsCouldNotBeDeleted pattern.
+    expect(toast.success).toHaveBeenCalledWith('bulkDeleteAllSucceeded:{"count":2}');
+    expect(toast.warning).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
     // Deleting flag toggled on then off.
     expect(deps.setSecondaryDeleting).toHaveBeenCalledTimes(2);
   });
 
-  it('mixed batch (one ok, one http-fail, one rejected): only successes removed, both toasts fired', async () => {
+  it('mixed batch (one ok, one http-fail, one rejected): only successes removed, ONE combined warning toast fired', async () => {
     global.fetch = vi.fn((url) => {
       if (url === '/api/rate/ok') return Promise.resolve({ ok: true });
       if (url === '/api/rate/httpfail') return Promise.resolve({ ok: false });
@@ -279,9 +282,11 @@ describe('buildSecondaryLineHandlers.onDelete', () => {
     expect(deps.secondaryHooks[0].handleDeleteChild).not.toHaveBeenCalledWith('httpfail');
     expect(deps.secondaryHooks[0].handleDeleteChild).not.toHaveBeenCalledWith('rejected');
 
-    // 1 deleted, 2 failed.
-    expect(toast.success).toHaveBeenCalledWith('recordsDeleted:{"count":1}');
-    expect(toast.error).toHaveBeenCalledWith('recordsCouldNotBeDeleted:{"count":2}');
+    // 1 deleted, 2 failed — ETP-4656: ONE combined warning toast (bulkDeletePartialFailure),
+    // not two stacked success+error toasts.
+    expect(toast.warning).toHaveBeenCalledWith('bulkDeletePartialFailure:{"succeeded":1,"total":3,"failed":2}');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('uses api.crud detailUrl template when present', async () => {

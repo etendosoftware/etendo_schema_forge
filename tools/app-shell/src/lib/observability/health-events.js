@@ -1,6 +1,7 @@
 import { track, group, groupSet, identify, flush } from '../observability.js';
 import { extractWindowName } from './payload.js';
 import { HEALTH_EVENTS_MAP } from './health-events.map.js';
+import { setFeatureFlagContext } from '../flags/bootstrap.js';
 
 function getWindowName() {
   try {
@@ -22,6 +23,9 @@ function getSessionContext() {
 }
 
 export async function trackSessionStarted({ username, clientId, clientName } = {}) {
+  // Re-target feature flags on the signed-in identity so bucketing matches the
+  // Mixpanel user this session reports as.
+  setFeatureFlagContext({ username, clientId });
   if (username) {
     await identify(username);
   }

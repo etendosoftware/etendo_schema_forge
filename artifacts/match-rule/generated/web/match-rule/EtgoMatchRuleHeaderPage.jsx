@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { ListModalWindow } from '@/components/contract-ui';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 
 // @sf-generated-start columns:etgoMatchRuleHeader
 const columns = [
@@ -207,6 +209,13 @@ export const api = {
 
 // @sf-generated-start component:EtgoMatchRuleHeaderPage
 export default function EtgoMatchRuleHeaderPage({ windowName, ...props }) {
+  const windowAccessTier = useWindowAccess('24963D64E83B4543A7F6BD248CF944EE');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="24963D64E83B4543A7F6BD248CF944EE" />;
+  }
   return (
     <ListModalWindow
       entity="etgoMatchRuleHeader"
@@ -219,7 +228,7 @@ export default function EtgoMatchRuleHeaderPage({ windowName, ...props }) {
       filters={filters}
       config={listModalConfig}
       api={api}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

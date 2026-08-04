@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import AssetsTable from './AssetsTable';
 import AssetsForm from './AssetsForm';
@@ -121,22 +122,6 @@ export const api = {
       "reference": "Project",
       "inputMode": "search",
       "url": "/sws/neo/assets/assets/selectors/project"
-    },
-    {
-      "entity": "assets",
-      "field": "businessPartner",
-      "column": "C_BPartner_ID",
-      "reference": "BPartner",
-      "inputMode": "search",
-      "url": "/sws/neo/assets/assets/selectors/businessPartner"
-    },
-    {
-      "entity": "assets",
-      "field": "eTADASCostCenter",
-      "column": "EM_Etadas_Costcenter_ID",
-      "reference": "Costcenter",
-      "inputMode": "selector",
-      "url": "/sws/neo/assets/assets/selectors/eTADASCostCenter"
     },
     {
       "entity": "amortizationLine",

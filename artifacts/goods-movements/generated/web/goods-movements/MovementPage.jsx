@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import MovementTable from './MovementTable';
@@ -103,6 +104,22 @@ export const api = {
     }
   },
   "selectors": [
+    {
+      "entity": "movement",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/goods-movements/movement/selectors/project"
+    },
+    {
+      "entity": "movement",
+      "field": "costCenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-movements/movement/selectors/costCenter"
+    },
     {
       "entity": "movementLine",
       "field": "product",
@@ -232,6 +249,7 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteWhenComplete
         hidePrint
         noHeaderBorder
         whiteFormBackground

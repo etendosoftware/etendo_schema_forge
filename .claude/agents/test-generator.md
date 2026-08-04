@@ -405,6 +405,10 @@ vi.mock('@/i18n', () => ({
 }));
 ```
 
+## Currency/Amount Formatting Convention
+
+**Never write your own money formatter inside a test's mocked component or fixture.** Every component that displays an amount must go through `formatCurrency(currencyCode, value)` / `getCurrencySymbol(currencyCode)` (`tools/app-shell/src/lib/formatCurrency.js`) — assert against its real output (e.g. `'1.234,50 €'`), not a loosely-tolerant regex that would also pass with the old buggy `en-US`/no-grouping output. If the file under test hand-rolls `Intl.NumberFormat`/`toLocaleString` for currency instead of importing the canonical utility, that is itself the bug to report — see CLAUDE.md § Currency & Amount Formatting.
+
 ## Fetch Mocking Convention
 
 ```javascript

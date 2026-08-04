@@ -7,13 +7,13 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Pencil, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, Layers, Pencil, Search, Trash2 } from 'lucide-react';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
@@ -24,6 +24,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex } from '@/lib/linesColumnWidth.js';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+// ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
+// AmortizationLinesTable.jsx). ETP-4610 moved the per-row entry point from a fixed
+// grid column (DimSummary, no longer used here) to a hover action + the existing
+// expand chevron — DimensionGrid (the expanded content) is still reused as-is.
+import { DimensionGrid } from './DimensionsPanel.jsx';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
 const TOKENS = {
@@ -36,6 +41,19 @@ const TOKENS = {
   cellFontSize: 14,
   cellFontWeight: 400,
 };
+
+// Leading row columns, in order: [expand chevron?] [selection checkbox] [first data cell].
+// CHECKBOX_COLUMN_WIDTH mirrors its own `px-2` (8px each side) padding, already applied
+// consistently at both the header and body checkbox cells. CHEVRON_COLUMN_WIDTH follows
+// the same pattern (`px-2` around the 28px/h-7 w-7 toggle button = 44px total) so the
+// chevron gets the same breathing room from the row's left border that every other
+// leading column already has — it previously had none, sitting flush against the edge.
+const CHECKBOX_COLUMN_WIDTH = 40;
+const CHEVRON_COLUMN_WIDTH = 44;
+// Left indent for the dimensions expand sub-row so its first field aligns with the first
+// real grid column above it: chevron column + checkbox column + the first cell's own
+// leading `cellPaddingX`.
+const DIMENSIONS_ROW_INDENT = CHEVRON_COLUMN_WIDTH + CHECKBOX_COLUMN_WIDTH + TOKENS.cellPaddingX;
 
 const NUMERIC_TYPES = new Set(['number', 'amount', 'integer', 'percent', 'decimal', 'price', 'quantity', 'signedDelta']);
 
@@ -59,6 +77,242 @@ function isCellEditable(col) {
   if (col.computed || col.derivation) return false;
   if (col.readOnly === true) return false;
   return EDITABLE_TYPES.has(col.type);
+}
+
+/** Which cell gets focused when a row enters edit mode — the last-clicked column if known,
+ *  otherwise the first editable column (skipping col 0 if it's not editable). */
+function computeAutoFocus(idx, focusColIdx, visibleColumns) {
+  if (focusColIdx !== null) return idx === focusColIdx;
+  return idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]));
+}
+
+// Catch-all Escape-to-cancel: bubbles here from any focused descendant control (Input,
+// Select, LookupTrigger's button, InlineSearchCombo) so Escape cancels uniformly regardless
+// of cell type. Only wired while the row is actually in edit mode.
+function makeRowEscapeHandler(isEditing, onCancelEdit) {
+  if (!isEditing) return undefined;
+  return (e) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    onCancelEdit();
+  };
+}
+
+// Row-body click → open detail, but not when the click originated in the checkbox or the
+// hover-action icons (they have their own handlers and stopping propagation there keeps the
+// row-click semantic clean).
+function makeRowClickHandler(onRowClick, row) {
+  if (!onRowClick) return undefined;
+  return (e) => {
+    if (e.target.closest('[data-testid="line-actions"]') || e.target.closest('button') || e.target.closest('input')) return;
+    onRowClick(row);
+  };
+}
+
+function computeRowClassName(isHighlighted, isEditing, hasRowClick) {
+  return [
+    // `hover:relative hover:z-10` lifts the row above its neighbors so the
+    // shadow can spill onto the rows below without being clipped by them.
+    'group/row flex items-stretch border-b bg-card transition-shadow',
+    'hover:relative hover:z-20 hover:shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)]',
+    isHighlighted ? 'bg-muted/40' : '',
+    isEditing ? 'shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)] relative z-20' : '',
+    hasRowClick ? 'cursor-pointer' : '',
+  ].join(' ');
+}
+
+/**
+ * Hover/edit action strip shown to the right of each row — extracted alongside
+ * renderLineCell to keep the row callback's own cognitive complexity under
+ * Sonar's threshold.
+ *
+ * ETP-4610 — `extraActions` is a generic extension slot: any number of extra
+ * icon buttons can be rendered ahead of the built-in Pencil/Trash pair. Each
+ * entry is `{ key, icon: LucideIcon, tooltip, onClick, testId? }` — the same
+ * shape InlineLinesPanel's own `rowActions` prop accepts (see below), so a
+ * caller-provided action and an internally-computed one (e.g. the
+ * "Add dimensions" trigger) render through the exact same code path. Defaults
+ * to `[]` so every existing caller renders byte-for-byte the same as before
+ * this slot existed.
+ *
+ * ETP-4565 — `canDelete` mirrors DataTable's own `{onDeleteRow && (...)}` gate
+ * (DataTable.jsx ~1450): when the caller doesn't pass `onDeleteRow` (e.g. a
+ * `hideDelete: true` entity, whose capability resolves to `delete: false` in
+ * the contract), the Trash2 button must not render at all — not just no-op on
+ * click. Edit stays unaffected; only the delete button is gated. Defaults to
+ * `true` so every existing caller (which always passes a real `onDeleteRow`
+ * today) renders byte-for-byte the same as before this gate existed.
+ */
+function renderRowActionStrip({
+  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, extraActions = [],
+}) {
+  if (!showActions && !reserveActionSlot) return null;
+  return (
+    <div
+      className="flex items-center justify-end gap-2 pr-1"
+      style={{ flex: actionStripFlex }}
+      data-testid="line-actions"
+    >
+      {showActions && (
+        <div className={`flex items-center gap-2 h-10 px-3 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
+          {extraActions.map(({ key, icon: Icon, tooltip, onClick, testId }) => (
+            <button
+              key={key}
+              type="button"
+              aria-label={tooltip}
+              title={tooltip}
+              onClick={onClick}
+              className="p-1 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+              data-testid={testId ?? `line-action-${key}`}
+            >
+              <Icon className="h-4 w-4" data-testid={`${key}Icon__3b7ec2`} />
+            </button>
+          ))}
+          <button
+            type="button"
+            aria-label={ui('editLineTooltip') ?? 'Edit line'}
+            title={ui('editLineTooltip') ?? 'Edit line'}
+            onClick={onEdit}
+            className={[
+              'p-1 rounded-full hover:bg-muted',
+              isEditing ? 'text-foreground bg-muted' : 'text-muted-foreground hover:text-foreground',
+            ].join(' ')}
+          >
+            <Pencil className="h-4 w-4" data-testid="Pencil__3b7ec2" />
+          </button>
+          {canDelete && (
+            <button
+              type="button"
+              aria-label={ui('deleteRowTooltip') ?? 'Delete'}
+              title={ui('deleteRowTooltip') ?? 'Delete'}
+              onClick={onDelete}
+              disabled={isDeleting}
+              className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Full-width dimensions sub-row shown below an expanded data row. Mirrors
+ *  AmortizationLinesTable's expand `<tr>` structure: an optional read-only
+ *  "Organización" field followed by the shared DimensionGrid. */
+function renderDimensionsSubRow({
+  isRowExpanded, row, dimRowData, visibleDimensionFields, labelOverrides, ui,
+  apiBaseUrl, token, isDocumentReadOnly, entity, onDimensionChange, onDimensionFieldSave,
+}) {
+  if (!isRowExpanded) return null;
+  return (
+    <div
+      className="border-b bg-card pb-5 pt-3 pr-10"
+      style={{ borderColor: TOKENS.separator, paddingLeft: DIMENSIONS_ROW_INDENT }}
+      data-testid={`dimensions-panel-${row.id}`}
+    >
+      {row['organization$_identifier'] && (
+        <div className="mb-4 grid grid-cols-4 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{ui('organization')} *</label>
+            <div className="h-10 flex items-center px-3 rounded-lg border border-[hsl(var(--border-control))] bg-card text-sm text-foreground">{row['organization$_identifier']}</div>
+          </div>
+        </div>
+      )}
+      <DimensionGrid
+        fields={visibleDimensionFields}
+        data={dimRowData}
+        onChange={onDimensionChange}
+        onFieldSave={onDimensionFieldSave}
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        readOnly={isDocumentReadOnly}
+        isCompleted={isDocumentReadOnly}
+        labelOverrides={labelOverrides}
+        entityName={entity}
+        data-testid="DimensionGrid__3b7ec2" />
+    </div>
+  );
+}
+
+/**
+ * Renders a single body cell for a line row — extracted out of the row-map callback
+ * (Sonar S3776: nesting this inside both the row `.map` and the column `.map` pushed
+ * cognitive complexity past the threshold). Handles the two cell shapes: a suppressed
+ * trailing amount column (hover actions take its space), and the normal edit/read cell.
+ *
+ * ETP-4610 — the `dimensionsPanel` column type is never passed here: `visibleColumns`
+ * (see below) filters it out before the cell map runs, since it no longer renders as a
+ * grid column at all (see `hasDimensionsPanel` / the hover action + expand chevron it
+ * replaced the column with).
+ */
+function renderLineCell({
+  col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+  visibleColumns, hasRowClick,
+  entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
+  locale, t, ui, onCommit, onCellClick,
+}) {
+  const isTrailing = col === trailingColumn;
+  // The trailing column is hidden when the action strip is showing,
+  // so the icons can take its space. Other amount columns stay visible.
+  if (isTrailing && showActions) return null;
+
+  const isNumeric = NUMERIC_TYPES.has(col.type);
+  const editable = isEditing && isCellEditable(col);
+  // When a cell is in edit mode, the input/trigger has its own px-2 (8px)
+  // + 1px border = 9px of internal padding. Reducing the cell's outer
+  // padding to 3px compensates: the input's CONTENT lands exactly where
+  // read-mode text lands (cell_left + 12px), so values don't visually
+  // jump when toggling between view and edit modes.
+  const baseStyle = {
+    padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
+    flex: columnFlex(col, idx),
+    justifyContent: isNumeric ? 'flex-end' : 'flex-start',
+    textAlign: isNumeric ? 'right' : 'left',
+    minWidth: 0,
+  };
+
+  const cellClickable = !isEditing && !hasRowClick && !isDocumentReadOnly;
+  return (
+    <div
+      key={col.key}
+      className={['flex items-center', cellClickable ? 'cursor-pointer' : ''].join(' ')}
+      style={baseStyle}
+      data-cell-key={col.key}
+      onClick={cellClickable ? () => onCellClick(row, idx, col) : undefined}
+    >
+      {editable ? (
+        <EditCell
+          // Re-key on the underlying value so the uncontrolled <Input> re-hydrates
+          // its defaultValue whenever a callout updates this field externally
+          // (e.g., listPrice changes after the user picks a different product).
+          // The user's currently-focused cell never has its value mutated mid-typing,
+          // so this does not interrupt their input.
+          key={`${row.id}:${col.key}:${row[col.key] ?? ''}`}
+          col={col}
+          row={row}
+          value={row[col.key]}
+          displayLabel={resolveIdentifier(row, col.key)}
+          autoFocus={computeAutoFocus(idx, focusColIdx, visibleColumns)}
+          entity={entity}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          selectorContext={selectorContext}
+          isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
+          onCommit={(val, extras) => onCommit(row, col, val, extras)}
+          data-testid="EditCell__3b7ec2" />
+      ) : (
+        <ReadCell
+          row={row}
+          col={col}
+          locale={locale}
+          t={t}
+          ui={ui}
+          data-testid="ReadCell__3b7ec2" />
+      )}
+    </div>
+  );
 }
 
 /**
@@ -145,7 +399,7 @@ function ReadCell({ row, col, locale, t, ui }) {
   }
   if (col.type === 'amount') {
     // No currency symbol on line-level cells — the currency is shown at the header level.
-    return <span className="tabular-nums">{formatAmount(row[col.key])}</span>;
+    return <span className="tabular-nums">{formatCurrency(undefined, row[col.key])}</span>;
   }
   if (col.type === 'percent') {
     const val = Number(row[col.key]);
@@ -376,6 +630,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   onSelectionChange,
   onUpdateRow,
   onDeleteRow,
+  // Dynamic column visibility (e.g. displayLogic-driven, config-gated dimensions).
+  // Mirrors DataTable's `hiddenColumns` prop exactly — a list of column keys to
+  // exclude on top of any static `col.hidden` flag. Defaults to [] so every
+  // existing caller that doesn't pass it behaves identically to before.
+  hiddenColumns = [],
   // Optional: when provided, the pencil action calls this instead of toggling
   // the inline edit mode — used by tabs whose rows open a popup modal for
   // editing (e.g. Dirección with `customAddModal`).
@@ -384,6 +643,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // Pairs with `onEditRow` for modal-style flows.
   onRowClick,
   labelOverrides,
+  // ETP-4610 — generic per-row hover-action extension slot. Additional actions
+  // rendered in the hover strip ahead of the built-in Edit/Delete icons (see
+  // `renderRowActionStrip`'s `extraActions`). Each entry:
+  //   { key, icon: LucideIcon, tooltip, onClick(row), show?: boolean | (row) => boolean, testId? }
+  // `show` defaults to visible; pass a function to condition visibility per row
+  // (e.g. only on rows meeting some business condition). Purely additive — no
+  // caller passes this today, so omitting it renders identically to before this
+  // slot existed. The built-in "Add dimensions" action (below) is merged in
+  // through the exact same mechanism, so it and any future caller-supplied
+  // action share one code path.
+  rowActions = [],
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -450,6 +720,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const [pendingDelete, setPendingDelete] = useState(null);
   const [invalidCell, setInvalidCell] = useState(null);
 
+  // ETP-4529 — row-expand state for the opt-in `dimensionsPanel` column type (see
+  // `hasDimensionsPanel` below). At most one row is expanded at a time, mirroring
+  // AmortizationLinesTable's original `expandedId` state that this generalizes.
+  // Both stay unused (and inert) for every table that doesn't declare that column.
+  const [expandedRowId, setExpandedRowId] = useState(null);
+  // Optimistic local overlay for in-flight dimension-field edits, keyed by row id,
+  // so the expand panel doesn't flash back to the pre-save value while the PATCH
+  // (routed through the same `commitField` every other inline edit uses) round-trips.
+  const [pendingDimEdits, setPendingDimEdits] = useState({});
+
   // Active in-flight edit. Holds the latest pending field commit so a global "Save"
   // can flush it via the imperative ref before the document save runs.
   const pendingEditRef = useRef(null);
@@ -461,10 +741,37 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // discarded, silently re-saving it. commitField checks this ref and bails.
   const cancelingEditRef = useRef(false);
 
-  // Visible columns: respect col.hidden flag if set (mirrors DataTable behavior).
-  const visibleColumns = useMemo(
-    () => (columns || []).filter(c => !c.hidden),
+  // ETP-4529 follow-up: dimensionFields is a nested list (project/costcenter/...) INSIDE one
+  // top-level 'dimensions' column, so the generic hiddenColumns filter below (which only
+  // matches top-level column keys) never reached it — a field disabled in GL Configuration
+  // (e.g. Cost Center) kept rendering inside the expand panel regardless, even though the
+  // SAME visibility signal correctly hid it from the header. Resolve the visible subset of
+  // dimensionFields from the RAW columns prop first (not visibleColumns below, to avoid a
+  // circular dependency), then fold it into the visibleColumns filter itself so the header
+  // row (which maps over the same array) and the data rows never disagree about whether the
+  // whole "Dimensiones contables" column exists at all.
+  const rawDimensionsColumn = useMemo(
+    () => (columns || []).find(c => c.type === 'dimensionsPanel') ?? null,
     [columns]
+  );
+  const visibleDimensionFields = useMemo(
+    () => (rawDimensionsColumn?.dimensionFields ?? []).filter(f => !hiddenColumns.includes(f.key)),
+    [rawDimensionsColumn, hiddenColumns]
+  );
+
+  // Visible columns: respect col.hidden flag (static) and hiddenColumns (dynamic,
+  // e.g. displayLogic-driven) — mirrors DataTable's hiddenColumns filter exactly.
+  //
+  // ETP-4610 — the `dimensionsPanel` column type is ALWAYS excluded here: it is no
+  // longer rendered as a fixed grid column (no header cell, no width). Its metadata
+  // (`rawDimensionsColumn`/`visibleDimensionFields` above) is still used to drive the
+  // leading expand-chevron column and the "Add dimensions" hover action — see
+  // `hasDimensionsPanel` below.
+  const visibleColumns = useMemo(
+    () => (columns || []).filter(c => (
+      c.type !== 'dimensionsPanel' && !c.hidden && !hiddenColumns.includes(c.key)
+    )),
+    [columns, hiddenColumns]
   );
   // The last "amount" column is the one that disappears on hover to make room
   // for the action strip — its 160px width matches the strip so the swap is
@@ -482,6 +789,25 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const actionStripFlex = trailingColumn
     ? columnFlex(trailingColumn, visibleColumns.indexOf(trailingColumn))
     : '0 0 160px';
+
+  // ETP-4529 — at most one column may declare `type: 'dimensionsPanel'` (see
+  // InvoiceLinesTable.jsx for a caller example). When present (and at least one
+  // candidate field is visible), an extra leading expand-chevron column and a
+  // full-width sub-row (the shared DimensionGrid) render for whichever row is
+  // expanded. ETP-4610 replaced the fixed-column entry point (badges / "+ Add
+  // dimensions" trigger) with a hover action next to Edit/Delete — see
+  // `dimensionsRowAction` below — but the chevron + expand-row mechanism is
+  // unchanged. Fully additive: `hasDimensionsPanel` is `false` for every table
+  // that doesn't declare this column type (or has every candidate hidden), so
+  // behavior for those tables is byte-for-byte unchanged.
+  const hasDimensionsPanel = visibleDimensionFields.length > 0;
+  const dimensionFieldByKey = useMemo(
+    () => Object.fromEntries(visibleDimensionFields.map(f => [f.key, f])),
+    [visibleDimensionFields]
+  );
+  const handleDimensionFieldChange = useCallback((rowId, key, value) => {
+    setPendingDimEdits(prev => ({ ...prev, [rowId]: { ...(prev[rowId] ?? {}), [key]: value } }));
+  }, []);
 
   const selectableRows = useMemo(() => data || [], [data]);
 
@@ -642,6 +968,13 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     }
   }, [editingRowId, isDocumentReadOnly, onDeleteRow, pendingDelete]);
 
+  // ETP-4565 — no `onDeleteRow` means the entity has no delete capability at all
+  // (e.g. `hideDelete: true` resolves `apiPrediction.crud.<entity>.delete` to
+  // `false`, and DetailView/secondaryTabs never pass a handler down in that
+  // case). Mirrors DataTable's `{onDeleteRow && (...)}` gate on its own trash
+  // button — without it the icon rendered anyway and silently no-opped on click.
+  const canDelete = onDeleteRow != null;
+
   // --- Render -----------------------------------------------------------------
 
   const headerStyle = {
@@ -666,7 +999,13 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
         className="flex items-stretch border-b sticky top-0 z-10 bg-card"
         style={{ borderColor: TOKENS.separator, height: TOKENS.rowHeight, ...headerStyle }}
       >
-        <div className="flex items-center justify-center px-2" style={{ width: 40, flexShrink: 0 }}>
+        {/* ETP-4529 — leading expand-chevron placeholder, only when a
+            `dimensionsPanel` column is declared (keeps header cells aligned
+            with the body rows' own chevron column below). */}
+        {hasDimensionsPanel && (
+          <div style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
+        )}
+        <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
           <Checkbox
             aria-label={ui('selectAll')}
             checked={allSelected}
@@ -708,42 +1047,41 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
         const isHighlighted = selectedRowId === row.id;
         const isDeleting = pendingDelete === row.id;
         const showActions = (isHovered || isEditing) && !isDocumentReadOnly;
+        // ETP-4529 — see `hasDimensionsPanel` above: stays `false`/unused for
+        // every table that doesn't declare a `dimensionsPanel` column.
+        const isRowExpanded = hasDimensionsPanel && expandedRowId === row.id;
+        const dimRowData = pendingDimEdits[row.id] ? { ...row, ...pendingDimEdits[row.id] } : row;
 
         return (
+          <React.Fragment key={row.id}>
           <div
-            key={row.id}
             data-testid={`line-row-${row.id}`}
-            className={[
-              // `hover:relative hover:z-10` lifts the row above its neighbors so the
-              // shadow can spill onto the rows below without being clipped by them.
-              'group/row flex items-stretch border-b bg-card transition-shadow',
-              'hover:relative hover:z-20 hover:shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)]',
-              isHighlighted ? 'bg-muted/40' : '',
-              isEditing ? 'shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)] relative z-20' : '',
-              onRowClick ? 'cursor-pointer' : '',
-            ].join(' ')}
+            className={computeRowClassName(isHighlighted, isEditing, Boolean(onRowClick))}
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
-            onKeyDown={isEditing ? (e) => {
-              // Catch-all: bubbles here from any focused descendant control
-              // (Input, Select, LookupTrigger's button, InlineSearchCombo)
-              // so Escape cancels uniformly regardless of cell type.
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                handleCancelEdit();
-              }
-            } : undefined}
-            onClick={onRowClick ? (e) => {
-              // Don't fire when the click was on the checkbox / hover actions —
-              // those have their own handlers and stopping propagation there
-              // keeps the row body click semantic (open detail).
-              if (e.target.closest('[data-testid="line-actions"]') || e.target.closest('button') || e.target.closest('input')) return;
-              onRowClick(row);
-            } : undefined}
+            onKeyDown={makeRowEscapeHandler(isEditing, handleCancelEdit)}
+            onClick={makeRowClickHandler(onRowClick, row)}
           >
+            {/* ETP-4529 — expand toggle for the dimensions sub-row, mirroring
+                AmortizationLinesTable's chevron button (rotates 180deg when expanded). */}
+            {hasDimensionsPanel && (
+              <div className="flex items-center justify-center px-2" style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedRowId(isRowExpanded ? null : row.id)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                  style={{ transform: isRowExpanded ? 'rotate(180deg)' : undefined }}
+                  aria-label={ui(isRowExpanded ? 'collapse' : 'expand')}
+                  aria-expanded={isRowExpanded}
+                  data-testid="dimensions-panel-toggle"
+                >
+                  <ChevronDown className="h-4 w-4" data-testid="ChevronDown__3b7ec2" />
+                </button>
+              </div>
+            )}
             {/* Selection checkbox */}
-            <div className="flex items-center justify-center px-2" style={{ width: 40, flexShrink: 0 }}>
+            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
               <Checkbox
                 aria-label={ui('selectRow') ?? 'Select row'}
                 checked={isSelected}
@@ -752,111 +1090,61 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 data-testid="Checkbox__3b7ec2" />
             </div>
             {/* Cells */}
-            {visibleColumns.map((col, idx) => {
-              const isTrailing = col === trailingColumn;
-              // The trailing column is hidden when the action strip is showing,
-              // so the icons can take its space. Other amount columns stay visible.
-              if (isTrailing && showActions) return null;
-
-              const isNumeric = NUMERIC_TYPES.has(col.type);
-              const editable = isEditing && isCellEditable(col);
-              // When a cell is in edit mode, the input/trigger has its own px-2 (8px)
-              // + 1px border = 9px of internal padding. Reducing the cell's outer
-              // padding to 3px compensates: the input's CONTENT lands exactly where
-              // read-mode text lands (cell_left + 12px), so values don't visually
-              // jump when toggling between view and edit modes.
-              const baseStyle = {
-                padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
-                flex: columnFlex(col, idx),
-                justifyContent: isNumeric ? 'flex-end' : 'flex-start',
-                textAlign: isNumeric ? 'right' : 'left',
-                minWidth: 0,
-              };
-
-              const cellClickable = !isEditing && !onRowClick && !isDocumentReadOnly;
-              return (
-                <div
-                  key={col.key}
-                  className={['flex items-center', cellClickable ? 'cursor-pointer' : ''].join(' ')}
-                  style={baseStyle}
-                  data-cell-key={col.key}
-                  onClick={cellClickable ? () => handleCellClick(row, idx, col) : undefined}
-                >
-                  {editable ? (
-                    <EditCell
-                      // Re-key on the underlying value so the uncontrolled <Input> re-hydrates
-                      // its defaultValue whenever a callout updates this field externally
-                      // (e.g., listPrice changes after the user picks a different product).
-                      // The user's currently-focused cell never has its value mutated mid-typing,
-                      // so this does not interrupt their input.
-                      key={`${row.id}:${col.key}:${row[col.key] ?? ''}`}
-                      col={col}
-                      row={row}
-                      value={row[col.key]}
-                      displayLabel={resolveIdentifier(row, col.key)}
-                      autoFocus={
-                        focusColIdx !== null
-                          ? idx === focusColIdx
-                          : idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]))
-                      }
-                      entity={entity}
-                      token={token}
-                      apiBaseUrl={apiBaseUrl}
-                      selectorContext={selectorContext}
-                      isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
-                      onCommit={(val, extras) => commitField(row, col, val, extras)}
-                      data-testid="EditCell__3b7ec2" />
-                  ) : (
-                    <ReadCell
-                      row={row}
-                      col={col}
-                      locale={locale}
-                      t={t}
-                      ui={ui}
-                      data-testid="ReadCell__3b7ec2" />
-                  )}
-                </div>
-              );
-            })}
+            {visibleColumns.map((col, idx) => renderLineCell({
+              col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+              visibleColumns, hasRowClick: Boolean(onRowClick),
+              entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
+              locale, t, ui, onCommit: commitField, onCellClick: handleCellClick,
+            }))}
             {/* Hover / edit action strip. When `reserveActionSlot` is true
                 (no amount column), the slot is rendered in every row so cells
-                don't reflow on hover — only the icons inside fade in. */}
-            {(showActions || reserveActionSlot) && (
-              <div
-                className="flex items-center justify-end gap-2 pr-1"
-                style={{ flex: actionStripFlex }}
-                data-testid="line-actions"
-              >
-                {showActions && (
-                  <div className={`flex items-center gap-2 h-10 px-3 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
-                    <button
-                      type="button"
-                      aria-label={ui('editLineTooltip') ?? 'Edit line'}
-                      title={ui('editLineTooltip') ?? 'Edit line'}
-                      onClick={() => handleEditClick(row)}
-                      className={[
-                        'p-1 rounded-full hover:bg-muted',
-                        isEditing ? 'text-foreground bg-muted' : 'text-muted-foreground hover:text-foreground',
-                      ].join(' ')}
-                    >
-                      <Pencil className="h-4 w-4" data-testid="Pencil__3b7ec2" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={ui('deleteRowTooltip') ?? 'Delete'}
-                      title={ui('deleteRowTooltip') ?? 'Delete'}
-                      onClick={() => handleDeleteClick(row)}
-                      disabled={isDeleting}
-                      className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                    >
-                      <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+                don't reflow on hover — only the icons inside fade in.
+                ETP-4610 — `extraActions` merges the built-in "Edit dimensions"
+                trigger (replacing the old fixed grid column, only when the
+                entity has dimensions configured) with any caller-supplied
+                `rowActions`, each filtered by its own per-row `show`. Both
+                render through the exact same generic slot in
+                `renderRowActionStrip`. The icon/tooltip are static (always
+                `Layers` / "Edit dimensions") regardless of whether the row
+                already has values set — an earlier adaptive Add/Edit variant
+                was dropped because its "edit" state (Pencil icon) sat right
+                next to the row's own Edit action and read as a duplicate
+                button (see docs/feedback.md). */}
+            {renderRowActionStrip({
+              showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui,
+              onEdit: () => handleEditClick(row),
+              onDelete: () => handleDeleteClick(row),
+              canDelete,
+              extraActions: [
+                ...(hasDimensionsPanel ? [{
+                  key: 'dimensions',
+                  icon: Layers,
+                  tooltip: ui('editDimensionsTooltip'),
+                  onClick: () => setExpandedRowId(isRowExpanded ? null : row.id),
+                  testId: 'line-action-add-dimensions',
+                }] : []),
+                ...rowActions
+                  .filter(action => (typeof action.show === 'function' ? action.show(row) : action.show !== false))
+                  .map(action => ({ ...action, onClick: () => action.onClick(row) })),
+              ],
+            })}
             <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
           </div>
+          {/* ETP-4529 — full-width dimensions sub-row, directly below the expanded
+              data row. Mirrors AmortizationLinesTable's expand `<tr>` structure:
+              an optional read-only "Organización" field followed by the shared
+              DimensionGrid. Field edits are optimistic (`pendingDimEdits`) and
+              persist through the same `commitField` every other inline edit uses. */}
+          {renderDimensionsSubRow({
+            isRowExpanded, row, dimRowData, visibleDimensionFields, labelOverrides, ui,
+            apiBaseUrl, token, isDocumentReadOnly, entity,
+            onDimensionChange: (key, value) => handleDimensionFieldChange(row.id, key, value),
+            onDimensionFieldSave: (key, value) => {
+              const field = dimensionFieldByKey[key];
+              if (field) commitField(row, field, value);
+            },
+          })}
+          </React.Fragment>
         );
       })}
     </div>

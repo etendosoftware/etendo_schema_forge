@@ -1,13 +1,28 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, Plus, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, Layers, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
+import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
 import { formatCurrency } from '@/lib/formatCurrency';
 import SelectorInput from '@/components/contract-ui/SelectorInput';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { Checkbox } from '@/components/ui/checkbox';
 import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
+// ETP-4529 — DimBadge, DimSummary, and DimensionGrid (the "Dimensiones contables"
+// badge/summary/expand-grid pattern this file originated) were extracted to the
+// shared tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx, so
+// InlineLinesPanel's new `dimensionsPanel` column type (and any future custom lines
+// table) can reuse the exact same UX instead of re-implementing it. DimensionGrid
+// still renders each SelectorInput with resolvedLabel="" so the placeholder text
+// stays controlled locally instead of by the selector's own default.
+// ETP-4610 — DimSummary (the permanent "Dimensiones contables" grid column) is no
+// longer used here: the entry point moved into the row hover-action strip (the
+// Layers/"Edit dimensions" button below), mirroring the mechanism InlineLinesPanel
+// already uses for the other 5 generated windows (sales-invoice, purchase-invoice,
+// goods-shipment, goods-receipt, simple-g-l-journal). See docs/feedback.md and
+// docs/ui-customization.md §14b for the generic pattern this now matches.
+import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
 // ── field definitions ────────────────────────────────────────────────
 const CORE_FIELDS = [
@@ -16,123 +31,20 @@ const CORE_FIELDS = [
   { key: 'amortizationAmount', column: 'Amortizationamt', type: 'number', required: true, readOnlyLogic: (r) => r['processed'] === 'Y' },
 ];
 
-const DIMENSION_FIELDS = [
+// ETP-4529 — all three are "Por config" (config-gated) per the accounting-dimension
+// matrix for Amortización líneas. Candidates only: actual visibility is resolved per
+// render by useAccountingDimensionFields (see the `dimensionFields` computation inside
+// AmortizationLinesTable below), which calls the same evaluate-display evaluator
+// DetailView uses for generated windows, instead of rendering all three unconditionally
+// as before. costcenter/eTADASBpartner currently have no raw AD_Field.DisplayLogic at
+// all (a separate, already-tracked gap — see amortization.md); the hook fails open for
+// them (stays visible) until that AD-level change lands, at which point this starts
+// respecting it automatically.
+const DIMENSION_FIELD_CANDIDATES = [
   { key: 'project', column: 'C_Project_ID', type: 'selector', reference: 'Project', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
   { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', reference: 'Costcenter', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
   { key: 'eTADASBpartner', column: 'EM_Etadas_C_Bpartner_ID', type: 'selector', reference: 'BPartner', inputMode: 'selector', readOnlyLogic: (r) => r['posted'] === 'Y' },
 ];
-
-const VISIBLE_DIMENSION_FIELDS = DIMENSION_FIELDS.filter(f => !f.hidden);
-
-// ── DimensionGrid ────────────────────────────────────────────────────
-// Renders DIMENSION_FIELDS directly via SelectorInput so we can control
-// the placeholder (empty resolvedLabel → "Seleccionar..." / "Select...").
-function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, isCompleted, labelOverrides }) {
-  const t = useLabel(labelOverrides);
-  return (
-    <div
-      className={`[&_button[role=combobox]]:!bg-card [&_button[role=combobox]:hover]:!bg-[hsl(var(--muted))] [&_input]:!bg-card${isCompleted ? '' : ' [&_input:disabled]:!opacity-100'}`}
-      style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
-    >
-      {fields.filter(f => !f.hidden).map(f => {
-        const label = t(f.column) ?? f.label ?? f.key;
-        const value = data?.[f.key] ?? '';
-        const displayValue = data?.[`${f.key}$_identifier`] ?? '';
-        const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/lines/selectors/${f.column}` : null;
-        return (
-          <div key={f.key} className="space-y-1.5">
-            <label className="text-sm text-foreground font-medium block">{label}</label>
-            {readOnly ? (
-              <input
-                className="flex h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                value={displayValue || value || ''}
-                disabled
-                readOnly
-              />
-            ) : (
-              <SelectorInput
-                entityName="lines"
-                field={f}
-                value={value}
-                displayValue={displayValue}
-                onChange={(val, lbl) => {
-                  onChange(f.key, val);
-                  onChange(`${f.key}$_identifier`, lbl ?? '');
-                  onFieldSave?.(f.key, val);
-                }}
-                catalogs={catalogs}
-                resolvedLabel=""
-                selectorUrl={selectorUrl}
-                token={token}
-                data-testid="SelectorInput__fecdcf" />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function getIdentifier(line, key) {
-  return line[`${key}$_identifier`] ?? (typeof line[key] === 'string' ? line[key] : null) ?? null;
-}
-
-// Badge with "Label: Value" format, matching the UX spec
-// (bg hsl(var(--muted)), radius 8px, padding 4px 8px, label hsl(var(--muted-foreground)), Inter 14px/20px).
-function DimBadge({ label, value }) {
-  return (
-    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 whitespace-nowrap max-w-full">
-      <span className="text-[hsl(var(--muted-foreground))]">{label}:</span>
-      <span className="ml-1 font-medium text-[hsl(var(--foreground))] truncate">{value}</span>
-    </span>
-  );
-}
-
-function DimSummary({ line, onClick, processed, labelOverrides }) {
-  const ui = useUI();
-  const t = useLabel(labelOverrides);
-  const org = line['organization$_identifier'];
-  const filled = VISIBLE_DIMENSION_FIELDS
-    .map(f => ({ column: f.column, value: getIdentifier(line, f.key) }))
-    .filter(d => d.value);
-
-  // Organization always leads the badge list (per design), followed by filled dimensions.
-  const badges = [];
-  if (org) badges.push({ label: ui('organization'), value: org });
-  filled.forEach(d => badges.push({ label: t(d.column), value: d.value }));
-
-  if (badges.length === 0) {
-    // Processed + no dimensions: the "+ Add dimensions" trigger would only reveal
-    // disabled fields, so hide it entirely. Editable docs still show the affordance.
-    if (processed) return null;
-    return (
-      <button
-        onClick={onClick}
-        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-[hsl(var(--border-control))] text-xs font-medium text-muted-foreground hover:text-foreground hover:border-[hsl(var(--text-disabled))] transition-colors"
-      >
-        <Plus className="h-3 w-3" data-testid="Plus__fecdcf" />
-        {ui('amortizationDimensionsEmpty')}
-      </button>
-    );
-  }
-
-  const MAX_BADGES = 2;
-  const shown = badges.slice(0, MAX_BADGES);
-  const extra = badges.length - shown.length;
-
-  return (
-    <button onClick={onClick} className="inline-flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer max-w-full">
-      {shown.map(b => <DimBadge
-        key={b.label}
-        label={b.label}
-        value={b.value}
-        data-testid="DimBadge__fecdcf" />)}
-      {extra > 0 && (
-        <span className="px-2 py-1 rounded-lg bg-[hsl(var(--muted))] text-sm leading-5 font-medium text-[hsl(var(--muted-foreground))]">+{extra}</span>
-      )}
-    </button>
-  );
-}
 
 // ── main component ──────────────────────────────────────────────────
 export default function AmortizationLinesTable({
@@ -170,6 +82,12 @@ export default function AmortizationLinesTable({
   const addLineWrapperRef = useRef(null);
   const addRowRef = useRef(null);
   const recordId = recordIdProp ?? data?.id;
+
+  // ETP-4529 — config-driven dimension visibility (was: DIMENSION_FIELDS always shown).
+  // One evaluate-display call per mount/header-change, shared by every line row —
+  // dimension-macro visibility depends on the client's accounting-dimension
+  // configuration, not on any individual line's field values.
+  const dimensionFields = useAccountingDimensionFields('lines', data, DIMENSION_FIELD_CANDIDATES, { token, apiBaseUrl });
 
   // ── multi-select (Sales Order / Contacts pattern) ──
   const { allSelected, someSelected } = useMemo(() => {
@@ -403,17 +321,21 @@ export default function AmortizationLinesTable({
             <th className="h-10 w-36 px-3 text-right align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
               {t('Amortizationamt')}
             </th>
-            <th className="h-10 w-96 px-3 text-left align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
-              {ui('amortizationDimensionsTitle')}
-            </th>
-            <th className="h-10 w-20 px-2" />
+            {/* ETP-4610 — the "Accounting dimensions" column header was removed:
+                the summary/entry point moved into the hover-action strip below
+                (Layers icon, "Edit dimensions" tooltip), matching InlineLinesPanel's
+                generic dimensionsPanel mechanism used by the other 5 windows.
+                Widened from w-20 (80px) to w-32 (128px): the strip now holds up to
+                3 buttons (was 2) and needs the extra room so it stays inside its
+                own column instead of spilling over the Amount column on hover. */}
+            <th className="h-10 w-32 px-2" />
           </tr>
         </thead>
 
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+              <td colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                 <Loader2
                   className="h-4 w-4 animate-spin inline mr-1.5"
                   data-testid="Loader2__fecdcf" />
@@ -519,27 +441,44 @@ export default function AmortizationLinesTable({
                       ) : (
                         <td className="px-3 text-sm text-right tabular-nums font-semibold text-foreground align-middle">
                           {line.amortizationAmount != null
-                            ? `${Number(line.amortizationAmount).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${line['currency$_identifier'] ?? ''}`
+                            ? formatCurrency(orgCurrency, line.amortizationAmount)
                             : '—'}
                         </td>
                       )}
 
-                      {/* dimension summary */}
-                      <td className="px-3 align-middle" onClick={e => e.stopPropagation()}>
-                        <DimSummary
-                          line={line}
-                          onClick={() => setExpandedId(isExpanded ? null : line.id)}
-                          processed={processed}
-                          labelOverrides={api?.labelOverrides}
-                          data-testid="DimSummary__fecdcf" />
-                      </td>
-
-                      {/* quick actions — always pencil + trash on hover */}
+                      {/* quick actions — dimensions (when applicable) + pencil + trash on hover.
+                          ETP-4610 — the "Add dimensions"/DimSummary column was removed; the
+                          entry point into the dimensions expand panel is now this hover action,
+                          matching InlineLinesPanel's generic dimensionsPanel mechanism (static
+                          Layers icon + "Edit dimensions" tooltip, no adaptive variant). Reading
+                          dimensions on a read-only/processed document still works via the
+                          always-visible chevron toggle at the start of the row — this hover
+                          shortcut, like Pencil/Trash, is only offered while the document (and
+                          therefore the row) is editable.
+                          Fix: the strip had NO background at all — only the icon glyphs were
+                          opaque — so at 3 buttons wide it visually overlapped/bled into the
+                          Amount column's text on hover instead of occluding it. Added a solid
+                          `bg-card` pill (+ shadow/ring, matching the app's established
+                          floating-action-pill look) so the strip reads as a distinct control
+                          sitting on top of the row, not a see-through overlay. */}
                       <td className="relative px-2 align-middle" onClick={e => e.stopPropagation()}>
                         {!isReadOnly && (
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity z-10">
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 h-9 px-1.5 rounded-full bg-card shadow-sm ring-1 ring-border/40 opacity-0 group-hover/row:opacity-100 transition-opacity z-10">
+                            {dimensionFields.length > 0 && (
+                              <button
+                                onClick={() => setExpandedId(isExpanded ? null : line.id)}
+                                aria-label={ui('editDimensionsTooltip')}
+                                title={ui('editDimensionsTooltip')}
+                                className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60 transition-colors"
+                                data-testid="line-action-add-dimensions"
+                              >
+                                <Layers className="h-4 w-4" data-testid="Layers__fecdcf" />
+                              </button>
+                            )}
                             <button
                               onClick={() => setEditingLineId(isEditing ? null : line.id)}
+                              aria-label={ui('editLineTooltip')}
+                              title={ui('editLineTooltip')}
                               className={`h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors ${isEditing ? 'text-primary hover:bg-primary/10' : 'text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60'}`}
                             >
                               <Pencil className="h-4 w-4" data-testid="Pencil__fecdcf" />
@@ -547,6 +486,8 @@ export default function AmortizationLinesTable({
                             <button
                               onClick={() => deleteLine(line.id)}
                               disabled={deleting === line.id}
+                              aria-label={ui('deleteRowTooltip')}
+                              title={ui('deleteRowTooltip')}
                               className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive transition-colors disabled:opacity-50"
                             >
                               {deleting === line.id ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__fecdcf" /> : <Trash2 className="h-4 w-4" data-testid="Trash2__fecdcf" />}
@@ -558,7 +499,7 @@ export default function AmortizationLinesTable({
                     {/* ── dimension expand ── */}
                     {isExpanded && (
                       <tr className="border-b border-border/30">
-                        <td colSpan={7} className="bg-card px-10 pb-5 pt-3">
+                        <td colSpan={6} className="bg-card px-10 pb-5 pt-3">
                           {line['organization$_identifier'] && (
                             <div className="mb-4 grid grid-cols-4 gap-4">
                               <div>
@@ -568,7 +509,7 @@ export default function AmortizationLinesTable({
                             </div>
                           )}
                           <DimensionGrid
-                            fields={DIMENSION_FIELDS}
+                            fields={dimensionFields}
                             data={lineData}
                             onChange={(k, v) => handleChange(line.id, k, v)}
                             onFieldSave={(k, v) => saveField(line.id, line, k, v)}
@@ -627,7 +568,6 @@ export default function AmortizationLinesTable({
                       onKeyDown={onDraftKeyDown}
                     />
                   </td>
-                  <td className="px-3 text-sm text-muted-foreground align-middle">—</td>
                   <td className="px-2 text-center text-muted-foreground align-middle">
                     {saving === 'new' ? <Loader2 className="h-4 w-4 animate-spin inline" data-testid="Loader2__fecdcf" /> : '—'}
                   </td>

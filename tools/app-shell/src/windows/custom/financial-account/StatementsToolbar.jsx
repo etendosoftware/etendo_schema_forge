@@ -64,15 +64,15 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
 }
 
 /**
- * Replaces the import split-button for PSD2-synced accounts: statements come only from Salt Edge,
- * so manual import / manual creation are not offered — instead this single action runs the PSD2
+ * Replaces the import split-button for bank-synced accounts: statements come only from Salt Edge,
+ * so manual import / manual creation are not offered — instead this single action runs the bank
  * statement fetch (the Etendo Go equivalent of Classic's "Get Bank Statement" button).
  */
 function SyncStatementsButton({ ui, onClick, syncing }) {
   return (
     <button
       type="button"
-      data-testid="statements-psd2-sync-button"
+      data-testid="statements-bank-sync-button"
       onClick={onClick}
       disabled={syncing}
       className="inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
@@ -80,7 +80,7 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
       <RefreshCw
         className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`}
         data-testid="RefreshCw__8a428c" />
-      {ui('financeAccountStatementsPsd2Sync')}
+      {ui('financeAccountStatementsBankConnectionSync')}
     </button>
   );
 }
@@ -100,7 +100,7 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
  *   rows?: Array<object>;
  *   onImportClick: () => void;
  *   onManualClick: () => void;
- *   psd2Synced?: boolean;
+ *   bankConnectionSynced?: boolean;
  *   onSyncClick?: () => void;
  *   syncing?: boolean;
  * }} props
@@ -117,7 +117,7 @@ export function StatementsToolbar({
   rows = [],
   onImportClick,
   onManualClick,
-  psd2Synced = false,
+  bankConnectionSynced = false,
   onSyncClick,
   syncing = false,
 }) {
@@ -169,9 +169,9 @@ export function StatementsToolbar({
           className="h-10 w-48 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
         />
       </div>
-      {/* PSD2-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the
+      {/* bank-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the
           manual import / manual create split-button. */}
-      {psd2Synced ? (
+      {bankConnectionSynced ? (
         <SyncStatementsButton
           ui={ui}
           onClick={onSyncClick}
