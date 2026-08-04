@@ -31,6 +31,7 @@ vi.mock('../useReturnToVendorPdf', () => ({
 }));
 
 import ConfirmWithCreditButton from '../ConfirmWithCreditButton.jsx';
+import { itRendersOnlyCopyLinkOutsideDrOrCo } from '../../shared/__tests__/confirmWithCreditButtonCopyLinkTest.jsx';
 
 const BASE_PROPS = {
   recordId: 'RTV-001',
@@ -51,15 +52,7 @@ describe('ConfirmWithCreditButton (return-to-vendor)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders only the copy-link action when status is not DR or CO', () => {
-    // ETP-4721 — CopyRecordLinkButton is a sibling of ConfirmWithCreditButtonBase,
-    // so it stays visible even though the base component itself renders null
-    // outside DR/CO (see ConfirmWithCreditButtonBase's early return).
-    render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'CL', linesCount: 2 }} />);
-    expect(screen.getByTestId('CopyRecordLinkButton')).toBeInTheDocument();
-    expect(screen.queryByTestId('action-confirm-with-credit')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
-  });
+  itRendersOnlyCopyLinkOutsideDrOrCo(ConfirmWithCreditButton, BASE_PROPS);
 
   it('renders confirm button in DR status', () => {
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'DR', linesCount: 2 }} />);
