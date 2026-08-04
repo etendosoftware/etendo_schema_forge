@@ -582,3 +582,69 @@
   REAL onboarding run (or at minimum have its literal date/timestamp values checked against
   `ad_reference_id`) before merging — Java unit tests and SQL-only data-fix tests structurally
   cannot catch an XML-import-time parsing bug in this codebase's current test pyramid.
+- **2026-08-04 — FOLLOW-UP, MORE IMPORTANT FINDING: fixing the runtime-importer date format broke
+  a SECOND, independent consumer of the SAME sample-data file — a shared XML file can have two
+  importers with genuinely INCOMPATIBLE format requirements for the identical column, and no
+  single literal satisfies both.** After shipping the `T`/`Z` fix above, CI's `com.etendoerp.go`
+  PR (`etendo-go-tests` job) failed differently, during an `antInstall`/`import.sample.data` Ant
+  step: `java.lang.IllegalArgumentException: Timestamp format must be yyyy-mm-dd hh:mm:ss
+  [.fffffffff]` at `java.sql.Timestamp.valueOf` inside `org.apache.ddlutils.io.converters
+  .TimestampConverter.convertFromString`, pointing at the exact same `DATEFROM` line. **Root
+  cause:** `referencedata/sampledata/<Client>/*.xml` files have TWO structurally independent
+  consumers in this codebase, not one: (1) `org.openbravo.ddlutils.task.ImportSampledata`
+  (`src-db/database/build.xml` target `import.sample.data`, wired into `smartbuild`/
+  `update.database`/`create.database` — i.e. how the CI environment's own core+module install
+  seeds ALL sample data, including GOClient's, for EVERY table with a bundled XML file, completely
+  independent of `com.etendoerp.go`'s own `OnboardingDatasetDefinition.INCLUDED_TABLES`
+  whitelist — ddlutils has no concept of that whitelist at all and was already reading
+  `M_COSTING_RULE.xml` long before this ticket); (2) the RUNTIME `com.etendoerp.go` onboarding
+  importer (`OnboardingDatasetNormalizer` → `DataImportService` → `DatetimeDomainType`) that this
+  ticket newly activated for this table via `INCLUDED_TABLES`. ddlutils' `TimestampConverter`
+  calls `java.sql.Timestamp.valueOf()`, which is STRICT the OPPOSITE way from
+  `DatetimeDomainType`: it requires exactly `yyyy-mm-dd hh:mm:ss[.f...]` and REJECTS a `T`/`Z` ISO
+  shape. **Confirmed this is a genuine hard conflict, not a guess:** empirically ran both parsers
+  against both candidate literals (`Timestamp.valueOf` and the real, already-compiled
+  `DatetimeDomainType`/`DateDomainType` classes) — the space-separated shape satisfies ddlutils
+  and fails the runtime importer; the `T`/`Z` shape satisfies the runtime importer and fails
+  ddlutils (`Timestamp.valueOf("2025-12-31T03:00:00.0Z")` throws immediately). **Also confirmed
+  ddlutils cares about the underlying SQL column type, not the AD_Reference_ID distinction:**
+  `information_schema.columns` shows `m_costing_rule.datefrom` AND `c_period.startdate` are BOTH
+  plain Postgres `timestamp without time zone` — so ddlutils' `TimestampConverter` would apply
+  identically to either regardless of the AD-model-level Date(15)/DateTime(16) split that only the
+  DAL-based runtime importer cares about; only the runtime side has two different domain-type
+  classes with two different parsing behaviors for the same underlying SQL type. **Resolution —
+  fix the CODE, not the shared DATA file (per explicit direction, since a data file has exactly
+  one shape but code can branch):** kept `M_COSTING_RULE.xml`'s `DATEFROM` at the ORIGINAL
+  ddlutils-compatible `2025-12-31 03:00:00.0` (reverted the `T`/`Z` edit), and instead added a
+  targeted reformatting pass inside `OnboardingDatasetNormalizer.appendPropertyElement` (new
+  private method `normalizeDateTimeValueIfNeeded`): for any property whose
+  `Property.getPrimitiveType()` is assignable to `java.util.Date` (true for BOTH `DateDomainType`
+  and `DatetimeDomainType`-backed columns — both return `Date.class`, confirmed by reading both
+  classes; ref-15/ref-16 need not be distinguished here since a T/Z-reformatted Date(15) value is
+  equally valid to `DateDomainType`, which was independently verified too), a raw value matching
+  the ddlutils shape (`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$`) is rewritten to
+  `yyyy-MM-dd'T'HH:mm:ss.S'Z'` via a pure string transform (regex capture-group rewrite, not a
+  round-trip through `java.util.Date`/`SimpleDateFormat`, to avoid any default-timezone
+  double-conversion risk) — applied ONLY to the in-memory copy `OnboardingDatasetNormalizer`
+  builds for the runtime importer; the bundled XML file on disk is never rewritten, so ddlutils
+  keeps reading the exact literal it has always required. **Verified empirically against BOTH
+  importers with the FINAL values** (not just re-read): (a) the reverted, ddlutils-shaped
+  `DATEFROM` literal in the actual committed XML file still passes `Timestamp.valueOf()` (the
+  exact call site ddlutils uses); (b) the SAME literal, after passing through the new
+  normalizer transform (verified via a dedicated `OnboardingDatasetNormalizerTest`
+  case using a temp sample-data dir + a `Property` mock stubbed with
+  `getPrimitiveType()==Date.class`, since a live DAL model isn't available in this pure-Mockito
+  test class) is emitted as `2025-12-31T03:00:00.0Z` in the runtime-only output XML, which the
+  real, already-compiled `DatetimeDomainType.createFromString` parses cleanly; (c) a companion
+  test proves a non-date column's value that merely LOOKS date-shaped is never touched by the
+  transform (guards against over-eager reformatting of unrelated string/text columns). **Apply
+  generally (supersedes the narrower "Apply generally #2" note above):** when a bundled
+  `referencedata/sampledata/**/*.xml` value needs to change format for ONE consumer, check whether
+  a SECOND consumer (ddlutils' install-time `ImportSampledata`, always active for every module
+  regardless of any `com.etendoerp.go`-specific whitelist) already depends on the CURRENT shape
+  before touching the file — these two importers are structurally independent, have no shared
+  format contract, and a fix for one is not free of risk to the other. When they genuinely
+  conflict (as here), the resolution is a reformatting pass in whichever importer's own code you
+  control (here `OnboardingDatasetNormalizer`, the runtime side, since `com.etendoerp.go` owns it
+  and ddlutils is core/third-party and out of reach) rather than trying to find a single literal
+  that satisfies both — none may exist, and here empirically none does.
