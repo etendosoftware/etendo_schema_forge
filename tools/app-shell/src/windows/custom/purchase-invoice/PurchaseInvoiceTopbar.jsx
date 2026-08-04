@@ -5,6 +5,7 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import SendToSifButton from '../shared/SendToSifButton.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import CloneButton from '../shared/CloneButton.jsx';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
@@ -57,6 +58,10 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
             apiBaseUrl={apiBaseUrl}
             status={data?.documentStatus}
             data-testid="SendToSifButton__8addd1" />
+          <CopyRecordLinkButton
+            recordId={recordId}
+            windowName="purchase-invoice"
+            data-testid="CopyRecordLinkButton__8addd1" />
           {showClone && createPortal(
             <CloneOrderModal
               recordId={recordId}

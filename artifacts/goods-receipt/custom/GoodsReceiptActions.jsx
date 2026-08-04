@@ -9,6 +9,7 @@ import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachme
 import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -137,6 +138,8 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
           {ui('createReturn')}
         </button>
       )}
+
+      <CopyRecordLinkButton recordId={recordId} windowName="goods-receipt" />
 
       {isCompleted && !isFullyInvoiced && (
         <button

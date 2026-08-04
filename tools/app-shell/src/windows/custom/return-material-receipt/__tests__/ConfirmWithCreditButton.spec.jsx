@@ -51,11 +51,14 @@ describe('ConfirmWithCreditButton', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders nothing when status is not DR or CO', () => {
-    const { container } = render(
-      <ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'CL', linesCount: 2 }} />,
-    );
-    expect(container.firstChild).toBeNull();
+  it('renders only the copy-link action when status is not DR or CO', () => {
+    // ETP-4721 — CopyRecordLinkButton is a sibling of ConfirmWithCreditButtonBase,
+    // so it stays visible even though the base component itself renders null
+    // outside DR/CO (see ConfirmWithCreditButtonBase's early return).
+    render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'CL', linesCount: 2 }} />);
+    expect(screen.getByTestId('CopyRecordLinkButton')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-confirm-with-credit')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
   });
 
   it('renders process receipt button in DR status', () => {
