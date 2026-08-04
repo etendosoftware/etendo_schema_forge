@@ -21,6 +21,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
 | H3 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
 | I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
+| J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -797,6 +798,41 @@ ORDER BY l.value;
 runner's strict watermark never revisits a `PROCESSED` fix), a locator skipped for negative stock
 is not automatically retried once the stock is corrected by hand — an operator must force it with
 `--fix R19-locator-inventory-status --client <id>`.
+## J — Costing
+
+### J1 — New tenants get ZERO `M_Costing_Rule` rows, not Average (ETP-4760, 2026-08-03)
+
+**Symptom:** the ticket was filed as "the costing rule should default to Standard, not Average". Live-DB sweep (etendogoclean, 2026-08-03) shows the actual defect is worse than the ticket's own framing: a freshly onboarded tenant gets **no costing rule at all**, of any algorithm. `M_Transaction.iscostcalculated` stays `'N'` forever for every transaction the tenant records, because there is never a rule for `CostingBackground`/`AverageAlgorithm`/`StandardAlgorithm` to apply.
+
+**Root cause:** `M_COSTING_RULE` was never in `OnboardingDatasetDefinition.INCLUDED_TABLES` (`com.etendoerp.go`). The bundled `referencedata/sampledata/GOClient/M_COSTING_RULE.xml` file existed on disk (with an Average-algorithm row) but was never actually imported for any tenant, because the dataset importer only normalizes tables present in `INCLUDED_TABLES`.
+
+**Live-DB sweep (2026-08-03, etendogoclean, `SELECT count(*) FROM m_costing_rule GROUP BY ad_client_id`):**
+
+| Client | `M_Costing_Rule` rows | Algorithm(s) | `M_Transaction.iscostcalculated` |
+|---|---|---|---|
+| acreedortest, acreetest2, empresa, Empresa E2E ×4, RolesPresa, TaxesOrg (9 tenants) | **0** | — | `'N'` on 100% of rows (where any transactions exist) |
+| GOClient | 2 (1 closed + 1 open) | Average (closed) → **Standard** (open, validated live via the real "Validate Costing Rule" process during this investigation) | `'Y'` |
+| F&B International Group | 2 | Average (both open, one per org) | `'Y'` |
+| QA Testing | 2 | Average (both open, one per org) | mixed `'Y'`/`'N'` (legacy pre-rule transactions never retroactively costed) |
+
+GOClient's original Average rule (`isvalidated='Y'`, no `M_Costing_Rule_Init` row) was confirmed hand-created by a human at some point — not representative of what onboarding gives a new tenant.
+
+**"Validate Costing Rule" process semantics (observed live, GOClient, 2026-08-03):** running the real process (`org.openbravo.costing.CostingRuleProcessActionHandler`, `obuiapp_process_id=45ED6D0400FD42BEA9771C549A9AE8AB`) closed the old Average rule (`dateto` = the validation instant), inserted+validated a new Standard rule (`datefrom` = same instant), closed all 8 open `M_Costing` anchors (0 remain open — the next transaction per product re-opens its own anchor under the new rule, confirming the documented LAZY migration), and **auto-created 4 `M_Inventory` (Physical Inventory) documents** — one closing + one opening per warehouse — each linked via its own `M_Costing_Rule_Init` row. Migration to the new rule is per-product and lazy: only products with pending/open transactions get a new cost anchor immediately; the rest keep their last anchor under the old rule until their own next transaction. **Acceptance criterion:** do not expect every product to be Standard-costed immediately — the correct criterion is "the client's active/validated rule going forward is Standard."
+
+**Scope decision — SQL-only for the "zero rule" case; existing-Average-rule tenants explicitly excluded:** replicating the real process's Physical Inventory document creation (sequences, doc types, lines, workflow, posting) in hand SQL would be a materially bigger, riskier lift than this data-fixes framework is meant for, and `@type: webhook` execution is not implemented in `run.js` yet (see `docs/etendo-ad/tenant-remediation-knowledge.md`). A brand-new tenant with zero products/transactions has no prior rule to close and no inventory to reconcile, so cloning an already-validated Standard rule directly is safe there. F&B International Group and QA Testing (the only tenants left with an existing Average rule after this fix) are deliberately **excluded** by the corrective fix's `@check`/`@apply` and flagged for a manual "Validate Costing Rule" run via the UI by an accounting admin.
+
+**Single-org restriction (QA finding, addressed same day, 2026-08-03):** the fix inserts one row with `org_dimension='N'` (a whole-client rule), but that row still carries exactly one `ad_org_id`. Etendo core's actual lookup (`CostingUtils.getCostDimensionRule` / `CostingServer.getOrganization()`) is an **exact match** on `ad_org_id` with no client-wide fallback. An earlier revision of this fix picked "the oldest non-`*` org" for any zero-rule tenant, assuming the choice was irrelevant for a whole-client rule; QA traced the core lookup and showed that a hypothetical future zero-rule tenant with **multiple Legal Entities** would get transactions under every OTHER legal entity hard-failing with `NoCostingRuleFoundForOrganizationAndDate` instead of today's silent gap — worse than the defect being closed. No currently-matched tenant is multi-org (all 9 have exactly one non-`*` org, re-verified after the fix), so this was a latent assumption, not an active bug on this DB. The fix now requires `(SELECT COUNT(*) FROM ad_org WHERE ad_client_id=:client_id AND name<>'*') = 1` in **both** `@check` and `@apply`. A future multi-org zero-rule tenant falls through to the same "needs manual handling" bucket as the existing-rule tenants — multi-org costing-rule seeding is explicitly out of scope here, not silently mishandled.
+
+**Both fronts closed (2026-08-03):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective — "zero rule", single-org tenants** | `cli/src/data-fixes/sql/20260803T180000Z__R20-default-standard-costing-rule.sql` — inserts one active, validated, whole-client Standard `M_Costing_Rule` (no `M_Product_Id`/`M_Product_Category_Id`, `org_dimension='N'`, `warehouse_dimension='N'`, `datefrom`=the tenant's own `AD_Client.created`) for the tenant's operative org, guarded `NOT EXISTS (... isactive='Y' AND isvalidated='Y')` (no existing validated rule of any algorithm) AND exactly one non-`'*'` org for the client (see single-org restriction above). Live-verified in a rolled-back transaction against "empresa": insert succeeds, immediate re-run inserts 0 rows (idempotent); F&B's 623-org count independently confirmed to trip the new guard. Dry-run across the fleet: 9 `WOULD_APPLY`, GOClient/F&B/QA Testing `SKIPPED_NOT_NEEDED` — identical to before the guard was added, since all 9 matched tenants are single-org. |
+| **Corrective — existing-Average-rule tenants (F&B, QA Testing)** | **Deliberately NOT auto-fixed.** Flagged for a manual "Validate Costing Rule" run via the classic UI by an accounting admin, once confirmed relevant for those tenants — see the scope decision above. |
+| **Corrective — future multi-org zero-rule tenants (none exist today)** | **Deliberately NOT auto-fixed.** `@check` excludes them (COUNT of non-`'*'` orgs ≠ 1); would need per-Legal-Entity rule seeding, out of scope for this fix. |
+| **Preventive** | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; `referencedata/sampledata/GOClient/M_COSTING_RULE.xml`'s `M_COSTING_ALGORITHM_ID` changed from Average (`B069080A0AE149A79CF1FA0E24F16AB6`) to Standard (`6A39D8B46CD94FE682D48758D3B7726B`) — `isvalidated`/`isactive` were already `'Y'`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-03T18:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by `OnboardingDatasetNormalizerTest.testNormalizerIncludesValidatedStandardCostingRule`. |
+
+**Open question, not blocking (per the ticket's own allowance):** whether `iscostcalculated='N'` on a tenant with no rule at all blocks document posting was not conclusively confirmed this session — worth a follow-up check, but every symptom observed (transactions exist and post; only the cost-calculation flag stays `'N'`) suggests it is a background/async concern rather than a synchronous posting blocker.
 
 ---
 

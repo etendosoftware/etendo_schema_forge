@@ -508,3 +508,273 @@
   **Apply:** write a single self-contained sentence on the `@description:` line itself if the test
   suite will assert against `fix.description`; use the file's free-text background comments (asserted
   against `rawText`, not `fix.description`) for anything that needs more than one line.
+## ETP-4760 — Default costing rule Standard, not Average (J1, R20, 2026-08-03)
+
+- **2026-08-03 — CORRECTED a coordinator-supplied precomputed fact: gap letters `F1`/`F2` are NOT
+  free — they were already taken (F1 = default-customer currency/location/contact, F2 = org-info
+  location) across every branch checked.** The task brief asserted "`A1-A5(+b), B1-B2, C1-C2, D1,
+  E1, G1, H1-H3, I1, U1-U2` are ALL taken... use gap letter `F1`, confirmed unused anywhere." Before
+  writing anything, re-verified per the mandatory pre-flight instruction (`git rev-list --all` /
+  cross-branch grep for gap letters in `docs/etendo-ad/onboarding-and-datafixes-map.md` across every
+  local branch/worktree, `~450` branches checked): `F1` and `F2` are documented and taken on
+  literally every branch that has the map file at all (including `main`, `develop`, `epic/ETP-3504`).
+  Also found `H1`/`H2` (ETP-4520/ETP-4515-4516, pre-existing, not from a sibling in-flight branch)
+  and `H3` (feature/ETP-4736, correctly self-corrected there from an initial `H1` mislabel) and `I1`
+  (feature/ETP-4761). **No `U1`/`U2` gap letter was found anywhere** (searched every branch's
+  `onboarding-gaps.md` for `### U[0-9]` / `| U[0-9]` headers — zero hits) — that part of the
+  precomputed brief could not be verified and may have been a hallucination or referred to something
+  outside these two docs. **Used gap letter `J1`** (next unused after I1) for this ticket instead of
+  the briefed `F1`. **Apply generally:** even a confident, seemingly-already-verified precomputed
+  fact handed down by the coordinator MUST be re-checked against the live repo state before use —
+  the orientation checklist's "re-verify yourself right before writing" instruction exists precisely
+  because branches move and prior verification passes can be wrong, not just stale.
+- **2026-08-03 — Confirmed the ticket's root-cause correction is right and understates nothing:
+  new tenants inherit ZERO `M_Costing_Rule` rows, not Average.** Live sweep (etendogoclean,
+  `SELECT ad_client_id, count(*), string_agg(DISTINCT m_costing_algorithm_id,',') FROM
+  m_costing_rule GROUP BY 1`): 9 of 12 real tenants (acreedortest, acreetest2, empresa, 4x
+  "Empresa E2E *", RolesPresa, TaxesOrg) have exactly 0 rows. Cross-checked against
+  `M_Transaction.iscostcalculated`: every one of the 4 zero-rule tenants that has any transaction
+  rows shows 100% `'N'`. Confirms `M_COSTING_RULE` is simply absent from
+  `OnboardingDatasetDefinition.INCLUDED_TABLES` (com.etendoerp.go) — the bundled
+  `referencedata/sampledata/GOClient/M_COSTING_RULE.xml` file existed on disk with an Average row
+  but was never actually imported by the dataset importer for any tenant, confirmed by the importer
+  only normalizing tables present in `INCLUDED_TABLES`.
+- **2026-08-03 — `M_Costing_Rule` has NO `name`/`seqno` column** (confirmed via `\d m_costing_rule`)
+  — it is identified purely by `(ad_client_id, ad_org_id, datefrom/dateto, algorithm)`, not a label.
+  Confirmed NOT NULL columns: `m_costing_algorithm_id`, `org_dimension` (default `'N'`),
+  `warehouse_dimension` (default `'N'`), `isvalidated` (default `'N'`), `isactive` (default `'Y'`).
+  `m_costing_rule_id` FK-referenced by `m_costing_rule_init` (per-warehouse close/open-inventory
+  links, only populated when the real "Validate Costing Rule" process runs) and `m_valued_stock_agg`
+  — neither needs a manual insert when seeding a bare rule cold (see next bullet).
+- **2026-08-03 — A manually-`INSERT`ed `M_Costing_Rule` row with `isvalidated='Y'` and ZERO
+  `M_Costing_Rule_Init` rows is a proven-safe shape, not a shortcut invented for this fix.**
+  GOClient's OWN original Average rule (before this session's live test converted it to Standard)
+  had exactly this shape — `isvalidated='Y'`, no init row — and had been the tenant's real, working
+  costing rule for months. The `m_costing_rule_trg()` trigger only raises `@CostingRuleValidated@`
+  on `UPDATE`/`DELETE` of an already-validated row (org/algorithm/datefrom/warehouse_dimension
+  changes, or delete); a plain `INSERT` is completely unrestricted regardless of `isvalidated`.
+  **Apply:** R20's corrective INSERT mirrors this exact proven shape — no init row needed for a
+  fresh rule with no prior state to close.
+- **2026-08-03 — `M_Costing_Rule` rows are per-(client, operative org), not one per client.**
+  Live evidence: F&B International Group (623 active orgs) and QA Testing (3 active orgs) each have
+  exactly 2 rules, one per org that actually has data — NOT one row per org in the tree, and NOT a
+  single client-wide row. GOClient (1 active org) has 2 rows (its 1 org's rule, closed+reopened).
+  Every genuinely-broken tenant checked (acreedortest, acreetest2, empresa, the 4 "Empresa E2E *",
+  RolesPresa, TaxesOrg) has exactly 1 non-System org — the standard single-org onboarding shape.
+  **Apply:** R20 resolves its target org the same way `R6-org-info-location` does (`ad_org.name <>
+  '*' ORDER BY created, ad_org_id LIMIT 1`, a self-contained subquery) rather than depending on the
+  runner's `:org_id` bind — this also sidesteps the "multi-org tenant, `:org_id` resolves the OLDEST
+  org, not necessarily the one `@check` matched" latent bug already documented above (2026-07-14,
+  R3 note) without needing to fix that bug here.
+- **2026-08-03 — Live-observed the REAL "Validate Costing Rule" process's full side-effect set on
+  GOClient (this was NOT staged by this session — the tenant's Average rule had already been
+  converted to Standard by the time this investigation started, evidently via a prior manual UI run
+  to observe the exact behavior described in the ticket brief).** Confirmed via direct DB inspection:
+  (1) the old Average rule's `dateto` was set to the validation instant; (2) a new Standard rule was
+  inserted with `datefrom` = the same instant, `isvalidated='Y'`, `dateto` NULL; (3) ALL 8 of
+  GOClient's `M_Costing` anchor rows had `dateto` set (0 remain open — confirms the LAZY per-product
+  migration: the anchors only reopen on each product's own next transaction, under the new rule);
+  (4) **4 `M_Inventory` (Physical Inventory) documents were auto-created**, timestamped to the exact
+  same instant as the rule swap — one closing + one opening per warehouse (GOClient has 2 warehouses)
+  — each linked via a fresh `M_Costing_Rule_Init` row. This is decisive, first-hand evidence (not
+  just the ticket's own secondhand description) that converting an EXISTING validated rule to a
+  different algorithm is not a data-only operation — it requires real, postable AD business
+  documents with sequences/doc types/lines/workflow, which a hand-SQL data-fix should not attempt to
+  fabricate.
+- **2026-08-03 — DECISION: SQL-first for the "zero rule" case; existing-Average-rule tenants
+  (F&B International Group, QA Testing) explicitly excluded from R20, not routed to a webhook.**
+  Reasoning: (1) `@type: webhook` execution is unimplemented in `cli/src/data-fixes/run.js` (throws
+  `"@type webhook not implemented yet"`) — choosing it here would mean building a whole new execution
+  path just for 2 known tenants, a much bigger lift than the sql_first_criterion's bar for
+  escalating; (2) the "zero rule" case (9 of 12 real tenants, and the actual onboarding-birth gap
+  this ticket is about) has NO prior rule to close and NO inventory to reconcile — it is safe,
+  idempotent, ordinary SQL, proven by a rolled-back live test against "empresa" (insert 1 row,
+  re-run inserts 0); (3) the "existing Average rule" case is small (2 tenants on this DB), is NOT the
+  onboarding-birth defect the ticket is about (both were provisioned before or outside the current
+  gap), and replicating the real process's Physical-Inventory-document side effects in hand SQL
+  (previous bullet) would be materially riskier than the value it delivers for 2 tenants — a real
+  business decision (whether/when to convert them) also belongs with an accounting admin, not an
+  automated migration. **Verdict:** ship R20 SQL-only for the zero-rule case; flag F&B/QA Testing for
+  a manual "Validate Costing Rule" UI run once/if the business wants them converted. If a THIRD or
+  later ticket ever needs to convert MANY existing-Average-rule tenants at scale, that is the
+  trigger to reconsider building `@type: webhook` execution in `run.js` — not this ticket's 2-tenant
+  edge case.
+- **2026-08-03 — `M_COSTING_RULE.xml` normalizes correctly with zero special-casing needed in
+  `OnboardingDatasetNormalizer` once added to `INCLUDED_TABLES`.** The row's `AD_ORG_ID` (a specific
+  GOClient org, not `'0'`) is remapped generically by the normalizer's existing
+  `appendOrganizationReferenceIfNeeded` (any non-`'0'` source org → the new tenant's target org) —
+  confirmed by reading the normalizer source, not assumed. No `M_Product_Id`/`M_Product_Category_Id`
+  on the row, so no FK-portability concern either (unlike `M_COSTING`, which is per-product and was
+  deliberately NOT added to `INCLUDED_TABLES` — GOClient-specific product/transaction ids would not
+  port to a new tenant; fresh anchors are created lazily by the real costing engine on the new
+  tenant's own first transactions).
+- **2026-08-03 — Gradle test execution blocked by the permission classifier, not attempted around.**
+  The documented workaround for `./gradlew test` misresolving a `com.etendoerp.go` worktree (see the
+  2026-07-06 "Worktree/Gradle mismatch" note above) is copying changed files into the MAIN checkout
+  and running there — done successfully for the 4 changed Java/XML files. The SECOND half of that
+  workaround from the ETP-4761 precedent (temporarily moving a sibling worktree's own `tasks.gradle`
+  out of the way to dodge Gradle's `.worktrees/**` duplicate-task scan bug) was attempted and
+  BLOCKED by the auto-mode permission classifier (moving a file outside this session's assigned
+  worktree). Did not attempt to bypass it — reverted the main checkout to clean (`git checkout --
+  <4 files>`, verified `git status` empty) and left the sibling worktree's `tasks.gradle` untouched.
+  **Net: `OnboardingDatasetNormalizerTest.testNormalizerIncludesValidatedStandardCostingRule` was
+  NOT executed this session.** It was, however, verified by careful static trace of
+  `OnboardingDatasetNormalizer`'s actual code (property-name derivation via `toLowerCamel`, the
+  mocked-entity `isPrimitive()==true` shape every other test in that file relies on) against the
+  exact edited XML content, matching the same verification depth used by this file's sibling `xml.
+  contains(...)` assertions. **Apply:** when this workaround is blocked, do not attempt alternate
+  tools to route around a classifier denial (e.g. `rm`+recreate, a different move command) — revert
+  cleanly and document the untested state plus the exact follow-up command, per the existing
+  "document as not executed" fallback in the 2026-07-06 note.
+- **2026-08-03 — QA FINDING (MEDIUM, addressed same day) — R20's "pick any org for a whole-client
+  rule" assumption was wrong for a hypothetical multi-Legal-Entity zero-rule tenant.** R20's first
+  shipped revision resolved its target org exactly like `R6-org-info-location` (oldest non-`'*'` org
+  for the client, `LIMIT 1`), reasoning that `org_dimension='N'` (whole-client) made the specific org
+  irrelevant. Sentinel (QA) traced Etendo core's real lookup path — `CostingUtils
+  .getCostDimensionRule()` and `CostingServer.getOrganization()` — and confirmed it does an **exact
+  match** on `M_Costing_Rule.ad_org_id`, with **no** client-wide/`org_dimension` fallback at lookup
+  time; `org_dimension` only affects how the ALGORITHM computes cost, not which rule row a
+  transaction resolves to. **Consequence:** a zero-rule tenant with more than one Legal Entity org
+  would get a rule anchored to only ONE of them; transactions posted under any OTHER legal entity
+  would hit a hard `NoCostingRuleFoundForOrganizationAndDate`, actively WORSE than the pre-fix state
+  (silent `iscostcalculated='N'`, no thrown error). **Verified no live impact:** re-queried
+  `ad_org` for every one of R20's 9 originally-matched tenants — every single one has exactly ONE
+  non-`'*'` org (this DB's tenants are all single-org, standard onboarding shape) — so this was a
+  correct-for-today, wrong-for-the-general-case assumption, not an active bug. **Fix:** added
+  `(SELECT COUNT(*) FROM ad_org o2 WHERE o2.ad_client_id = :client_id AND o2.name <> '*') = 1` to
+  BOTH `@check` and `@apply` (identical subquery in both, verified structurally identical by a
+  dedicated test — `checkMatch[0] === applyMatch[0]` — so the two-layer idempotency contract can't
+  silently drift between them). Re-ran the dry-run across the fleet after the change: byte-identical
+  outcome (9 `WOULD_APPLY`, 3 `SKIPPED_NOT_NEEDED`) — confirms the guard is a genuine no-op for every
+  tenant that exists today, only changing behavior for a tenant shape that doesn't exist yet.
+  Independently confirmed the guard actually excludes a real multi-org tenant: F&B International
+  Group's own `COUNT(non-'*' orgs)` is 623, verified directly (not just inferred from its existing
+  rule already excluding it via the OTHER guard) in the same rolled-back transaction that
+  re-confirmed the single-org apply still works. **Apply generally:** "the specific value doesn't
+  matter for a client/schema-wide setting" is a dangerous shortcut whenever the setting is still
+  stored on a per-row FK that a downstream LOOKUP resolves by exact match — verify the actual
+  read-path code (not just the write-path's own column semantics) before assuming a "doesn't matter
+  which one" simplification is safe to scale beyond today's data shape. This is a variant of the
+  2026-07-14 R3 note's `:org_id` latent-bug lesson (multi-org tenants can silently diverge from a
+  single-org-tested fix's assumptions) — here caught by QA before any multi-org tenant existed to
+  hit it, rather than after.
+- **2026-08-04 — CI FAILURE (real, caught in `etendo-go-tests` #2008 Playwright onboarding smoke
+  test) — `M_COSTING_RULE.DATEFROM` is `AD_Reference_ID=16` ("DateTime"), NOT `15` ("Date") like
+  `C_Period.StartDate`/`EndDate`, and the two references go through COMPLETELY DIFFERENT parsers
+  during XML dataset import — a space-separated timestamp that works for one throws for the
+  other.** Symptom: the FIRST real onboarding run to ever import `M_COSTING_RULE.xml` (the table
+  was added to `INCLUDED_TABLES` this same ticket) failed with `java.text.ParseException:
+  Unparseable date: "2025-12-31 03:00:00.0"` on `DATEFROM`, cascading into `Referenced object
+  CostingRule (...) not present in the xml or in the database` (the entity never got fully
+  registered because parsing its property threw before the entity resolver saw a complete row).
+  **Root cause, confirmed via `ad_column`:** `M_Costing_Rule.Datefrom` (and `Dateto`, `Created`,
+  `Updated`) are reference `16` = "DateTime", handled by
+  `org.openbravo.base.model.domaintype.DatetimeDomainType` (`src/org/openbravo/base/model/domaintype/DatetimeDomainType.java`).
+  `C_Period.StartDate`/`EndDate` are reference `15` = "Date", handled by the SIBLING class
+  `DateDomainType` in the same package. Both classes' primary format is the same strict pattern
+  (`new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.S'Z'")`, literal `T` and literal `Z`, NOT an ISO
+  timezone offset) — **but `DateDomainType.createFromString` has a second branch `DateDomainType`
+  lacks: if the string does NOT contain `"T"`, it falls back to `new
+  SimpleDateFormat("yyyy-MM-dd")` via `parseObject(strValue)`, which (per plain `java.text
+  .DateFormat.parse(String)` semantics) only requires a successful match from position 0 — it does
+  NOT require the whole string to be consumed, so the trailing `" HH:mm:ss.S"` on
+  `C_Period.xml`'s `"2026-03-01 00:00:00.0"`-shaped values is silently ignored, not an error.
+  `DatetimeDomainType` has ONLY the strict `T`/`Z` pattern with no such fallback**, so a
+  space-separated value is unconditionally unparseable for it. Two visually-identical-looking
+  sample-data date values (`"2026-03-01 00:00:00.0"` on a working `Date` column vs `"2025-12-31
+  03:00:00.0"` on a broken `DateTime` column) hit entirely different code paths — the shared visual
+  shape is coincidental, not evidence they're validated the same way. **Empirically verified (not
+  just read) using Etendo's own ALREADY-COMPILED core class**
+  (`build/classes/org/openbravo/base/model/domaintype/DatetimeDomainType.class`, loaded directly —
+  not a reimplementation): `new DatetimeDomainType().createFromString("2025-12-31 03:00:00.0")`
+  throws the EXACT reported `ParseException` message character-for-character;
+  `createFromString("2025-12-31T03:00:00.0Z")` parses cleanly to `Wed Dec 31 03:00:00 UTC 2025`;
+  and `convertToString(parsed)` round-trips back to the exact same string, confirming
+  `yyyy-MM-dd'T'HH:mm:ss.S'Z'` (e.g. `2025-12-31T03:00:00.0Z`) is the canonical, self-consistent
+  shape this exact class both emits and expects. **Fix:** `GOClient/M_COSTING_RULE.xml`'s
+  `DATEFROM` changed from `2025-12-31 03:00:00.0` to `2025-12-31T03:00:00.0Z` (value unchanged,
+  format only). **Apply generally:** before writing ANY date/timestamp CDATA value into a bundled
+  onboarding sample-data XML, check the target column's `ad_reference_id` first (`15`=Date vs
+  `16`=DateTime/Timestamp are NOT interchangeable at import time despite both accepting the same
+  strict `T`/`Z` primary format) — do not copy a working date shape from a sibling XML file without
+  confirming the two columns share the same reference type; `CREATED`/`UPDATED` on the SAME table
+  are also reference `16` but are safe because `OnboardingDatasetDefinition.STRIPPED_FIELDS`
+  removes them before import regardless of their XML value — `DATEFROM` had no such protection and
+  was the first-ever literal reference-16 value actually imported through this onboarding path in
+  this module's sample data (grepped the whole `referencedata/` tree: no other bundled XML anywhere
+  in this module carries a literal `T...Z`-shaped date value — this ticket is the first to need
+  one). **Caught by:** the `etendo-go-tests` Jenkins job's Playwright `onboarding-register
+  .integration.spec.js` smoke test, which actually drives the real `/sws/go/onboarding` endpoint
+  end-to-end — this class of format bug is invisible to the Java unit tests in this module (pure
+  Mockito, no real `DataImportService`/`StaxXMLEntityConverter` call) and to the JS data-fixes
+  tests (SQL-only, no XML import path at all). **Apply generally #2:** a preventive fix that adds a
+  brand-new table to `OnboardingDatasetDefinition.INCLUDED_TABLES` should be smoke-tested against a
+  REAL onboarding run (or at minimum have its literal date/timestamp values checked against
+  `ad_reference_id`) before merging — Java unit tests and SQL-only data-fix tests structurally
+  cannot catch an XML-import-time parsing bug in this codebase's current test pyramid.
+- **2026-08-04 — FOLLOW-UP, MORE IMPORTANT FINDING: fixing the runtime-importer date format broke
+  a SECOND, independent consumer of the SAME sample-data file — a shared XML file can have two
+  importers with genuinely INCOMPATIBLE format requirements for the identical column, and no
+  single literal satisfies both.** After shipping the `T`/`Z` fix above, CI's `com.etendoerp.go`
+  PR (`etendo-go-tests` job) failed differently, during an `antInstall`/`import.sample.data` Ant
+  step: `java.lang.IllegalArgumentException: Timestamp format must be yyyy-mm-dd hh:mm:ss
+  [.fffffffff]` at `java.sql.Timestamp.valueOf` inside `org.apache.ddlutils.io.converters
+  .TimestampConverter.convertFromString`, pointing at the exact same `DATEFROM` line. **Root
+  cause:** `referencedata/sampledata/<Client>/*.xml` files have TWO structurally independent
+  consumers in this codebase, not one: (1) `org.openbravo.ddlutils.task.ImportSampledata`
+  (`src-db/database/build.xml` target `import.sample.data`, wired into `smartbuild`/
+  `update.database`/`create.database` — i.e. how the CI environment's own core+module install
+  seeds ALL sample data, including GOClient's, for EVERY table with a bundled XML file, completely
+  independent of `com.etendoerp.go`'s own `OnboardingDatasetDefinition.INCLUDED_TABLES`
+  whitelist — ddlutils has no concept of that whitelist at all and was already reading
+  `M_COSTING_RULE.xml` long before this ticket); (2) the RUNTIME `com.etendoerp.go` onboarding
+  importer (`OnboardingDatasetNormalizer` → `DataImportService` → `DatetimeDomainType`) that this
+  ticket newly activated for this table via `INCLUDED_TABLES`. ddlutils' `TimestampConverter`
+  calls `java.sql.Timestamp.valueOf()`, which is STRICT the OPPOSITE way from
+  `DatetimeDomainType`: it requires exactly `yyyy-mm-dd hh:mm:ss[.f...]` and REJECTS a `T`/`Z` ISO
+  shape. **Confirmed this is a genuine hard conflict, not a guess:** empirically ran both parsers
+  against both candidate literals (`Timestamp.valueOf` and the real, already-compiled
+  `DatetimeDomainType`/`DateDomainType` classes) — the space-separated shape satisfies ddlutils
+  and fails the runtime importer; the `T`/`Z` shape satisfies the runtime importer and fails
+  ddlutils (`Timestamp.valueOf("2025-12-31T03:00:00.0Z")` throws immediately). **Also confirmed
+  ddlutils cares about the underlying SQL column type, not the AD_Reference_ID distinction:**
+  `information_schema.columns` shows `m_costing_rule.datefrom` AND `c_period.startdate` are BOTH
+  plain Postgres `timestamp without time zone` — so ddlutils' `TimestampConverter` would apply
+  identically to either regardless of the AD-model-level Date(15)/DateTime(16) split that only the
+  DAL-based runtime importer cares about; only the runtime side has two different domain-type
+  classes with two different parsing behaviors for the same underlying SQL type. **Resolution —
+  fix the CODE, not the shared DATA file (per explicit direction, since a data file has exactly
+  one shape but code can branch):** kept `M_COSTING_RULE.xml`'s `DATEFROM` at the ORIGINAL
+  ddlutils-compatible `2025-12-31 03:00:00.0` (reverted the `T`/`Z` edit), and instead added a
+  targeted reformatting pass inside `OnboardingDatasetNormalizer.appendPropertyElement` (new
+  private method `normalizeDateTimeValueIfNeeded`): for any property whose
+  `Property.getPrimitiveType()` is assignable to `java.util.Date` (true for BOTH `DateDomainType`
+  and `DatetimeDomainType`-backed columns — both return `Date.class`, confirmed by reading both
+  classes; ref-15/ref-16 need not be distinguished here since a T/Z-reformatted Date(15) value is
+  equally valid to `DateDomainType`, which was independently verified too), a raw value matching
+  the ddlutils shape (`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$`) is rewritten to
+  `yyyy-MM-dd'T'HH:mm:ss.S'Z'` via a pure string transform (regex capture-group rewrite, not a
+  round-trip through `java.util.Date`/`SimpleDateFormat`, to avoid any default-timezone
+  double-conversion risk) — applied ONLY to the in-memory copy `OnboardingDatasetNormalizer`
+  builds for the runtime importer; the bundled XML file on disk is never rewritten, so ddlutils
+  keeps reading the exact literal it has always required. **Verified empirically against BOTH
+  importers with the FINAL values** (not just re-read): (a) the reverted, ddlutils-shaped
+  `DATEFROM` literal in the actual committed XML file still passes `Timestamp.valueOf()` (the
+  exact call site ddlutils uses); (b) the SAME literal, after passing through the new
+  normalizer transform (verified via a dedicated `OnboardingDatasetNormalizerTest`
+  case using a temp sample-data dir + a `Property` mock stubbed with
+  `getPrimitiveType()==Date.class`, since a live DAL model isn't available in this pure-Mockito
+  test class) is emitted as `2025-12-31T03:00:00.0Z` in the runtime-only output XML, which the
+  real, already-compiled `DatetimeDomainType.createFromString` parses cleanly; (c) a companion
+  test proves a non-date column's value that merely LOOKS date-shaped is never touched by the
+  transform (guards against over-eager reformatting of unrelated string/text columns). **Apply
+  generally (supersedes the narrower "Apply generally #2" note above):** when a bundled
+  `referencedata/sampledata/**/*.xml` value needs to change format for ONE consumer, check whether
+  a SECOND consumer (ddlutils' install-time `ImportSampledata`, always active for every module
+  regardless of any `com.etendoerp.go`-specific whitelist) already depends on the CURRENT shape
+  before touching the file — these two importers are structurally independent, have no shared
+  format contract, and a fix for one is not free of risk to the other. When they genuinely
+  conflict (as here), the resolution is a reformatting pass in whichever importer's own code you
+  control (here `OnboardingDatasetNormalizer`, the runtime side, since `com.etendoerp.go` owns it
+  and ddlutils is core/third-party and out of reach) rather than trying to find a single literal
+  that satisfies both — none may exist, and here empirically none does.
