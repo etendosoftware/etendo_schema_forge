@@ -3399,6 +3399,7 @@ export function DetailView({
                             )}
                             <Form
                               entity={entity}
+                              windowName={windowName}
                               data={data}
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
@@ -3423,6 +3424,7 @@ export function DetailView({
                               <div className={`px-6 pb-6${embedded ? ' pointer-events-none' : ''}`}>
                                 <Form
                                   entity={entity}
+                                  windowName={windowName}
                                   data={data}
                                   onChange={handleChangeWithCallout}
                                   catalogs={catalogs}
@@ -4175,6 +4177,7 @@ export function DetailView({
                           <div className={getOthersTabClassName(embedded)}>
                             <Form
                               entity={entity}
+                              windowName={windowName}
                               data={data}
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
@@ -4208,6 +4211,7 @@ export function DetailView({
                     <div ref={othersRef} className="hidden">
                       <Form
                         entity={entity}
+                        windowName={windowName}
                         data={data}
                         onChange={() => { }}
                         catalogs={catalogs}

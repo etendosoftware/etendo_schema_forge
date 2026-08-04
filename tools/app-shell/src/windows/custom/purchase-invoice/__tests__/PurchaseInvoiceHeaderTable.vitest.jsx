@@ -13,7 +13,7 @@ vi.mock('@/i18n', () => ({
       pagada: 'pagada',
       addPago: 'addPago',
       invoicesTab: 'invoicesTab',
-      creditNotesTab: 'creditNotesTab',
+      rectificativeInvoicesTab: 'rectificativeInvoicesTab',
       returnInvoiceTab: 'returnInvoiceTab',
       'invoiceList.col.siiStatus': 'SII Status',
     },
@@ -289,7 +289,7 @@ describe('PurchaseInvoiceHeaderTable', () => {
   it('renders transactionDocument column with credit note badge for AP CreditMemo', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     // The column container renders multiple rows including the NC row (AP CreditMemo)
-    expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('creditNotesTab');
+    expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('rectificativeInvoicesTab');
   });
 
   it('renders transactionDocument column with dash for unknown doc type', () => {
@@ -298,7 +298,7 @@ describe('PurchaseInvoiceHeaderTable', () => {
     // The column container includes multiple rows so check via textContent
     const col = screen.getByTestId('col-render-transactionDocument');
     expect(col.textContent).toContain('invoicesTab');
-    expect(col.textContent).toContain('creditNotesTab');
+    expect(col.textContent).toContain('rectificativeInvoicesTab');
   });
 
   it('does not show SII column when showSii is false', () => {

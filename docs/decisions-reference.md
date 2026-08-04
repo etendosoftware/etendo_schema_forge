@@ -904,6 +904,19 @@ cell falls back to a plain value (with enum-label / FK identifier resolution).
 | `clearable` | boolean | `true` (header) / `!required` (line grid) | Controls the chip's clear (`×`) button. On the header's unified `CreatableSearchSelect`, defaults to `true` (shown) for every selector/enum field, including required ones — the header form has an explicit Save step, so a required field cleared to empty is caught before it ever reaches the backend. On the **line grid**'s `InlineSearchCombo` (`artifacts/{w}/generated/.../DataTable.jsx`, `InlineLinesPanel.jsx`), every field edit auto-saves immediately with no review step, so the `×` defaults to **hidden** whenever `field.required === true` (e.g. Sales Order line's `tax`) — clearing it there always fails against a NOT NULL column and the grid can't turn the resulting generic backend error into a helpful field-level message. Set `"clearable": false` to force-hide it on a specific field regardless of `required`, or `"clearable": true` to force-show it (opt back into the risk) on a required field that has a safe fallback (e.g. a server-side default kicks in on save). |
 | `dependsOn` | object \| null | `null` | Parent field dependency for cascading selectors. |
 
+**`DocumentType` carve-out — saved-value translation is window-scoped (ETP-4737):** the `optionTranslator`
+built for `reference: 'DocumentType'` fields (renames/hides options — reversed/credit/return/rectificativa
+tabs) is generic to every window, but the extra step that also translates the already-saved/selected value
+through that same translator (so a saved record shows the same label the options list would show) is
+gated to `sales-invoice` and `purchase-invoice` ONLY, via a `windowName` prop threaded from each window's
+`index.jsx` → `HeaderPage` → `DetailView` → `EntityForm` (see `SAVED_VALUE_TRANSLATION_WINDOWS` in
+`EntityForm.jsx`). `payment-out` (`documentType`) and `purchase-order` (`transactionDocument`) keep showing
+the raw AD identifier for their saved value — their real doc-type vocabulary ("AP Payment", "Credit Order",
+etc.) doesn't match the translator's invoice-specific keywords and would otherwise mislabel the field (e.g.
+falling back to "Factura"). This is a hardcoded window-name gate inside a shared component — a deliberate,
+narrow exception (same class as the pre-existing `DocumentType` carve-out itself), not a decisions.json
+option; there is nothing to configure per-window here.
+
 **dependsOn format:**
 ```json
 {

@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.19.1",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "updatedAt": "2026-07-21T12:35:22.212Z",
-  "checksum": "4062dd639dd4b6f2",
+  "updatedAt": "2026-07-31T19:07:16.203Z",
+  "checksum": "b58c6ab5ac1502bd",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -793,7 +793,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
