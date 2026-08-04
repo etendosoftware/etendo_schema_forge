@@ -1,8 +1,8 @@
 {
-  "version": "0.66.0",
+  "version": "0.67.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-31T10:48:11.600Z",
-  "checksum": "fbf9c6992addbd70",
+  "updatedAt": "2026-08-04T16:33:36.607Z",
+  "checksum": "210294a3c27703e7",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -4496,6 +4496,14 @@
             "column": "C_OrderLine_ID",
             "type": "foreignKey",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOSourceInvoiceLine",
+            "apiKey": "eTGOSourceInvoiceLine",
+            "column": "EM_Etgo_Source_Invoiceline_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
             "required": false
           }
         ],
@@ -10081,6 +10089,14 @@
         "description": "System field 'editLineAmount' should exist in backend but not frontend for lines"
       },
       {
+        "id": "t-system-field-lines-eTGOSourceInvoiceLine",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "eTGOSourceInvoiceLine",
+        "runner": "node",
+        "description": "System field 'eTGOSourceInvoiceLine' should exist in backend but not frontend for lines"
+      },
+      {
         "id": "t-system-field-lines-excludeforwithholding",
         "category": "system-field",
         "entity": "lines",
@@ -10541,7 +10557,7 @@
       }
     ],
     "summary": {
-      "total": 605,
+      "total": 606,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
@@ -10555,11 +10571,11 @@
         "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 22,
-        "system-field": 209,
+        "system-field": 210,
         "visibility": 5
       },
       "byRunner": {
-        "node": 605,
+        "node": 606,
         "junit": 0
       }
     }
