@@ -7,9 +7,9 @@ import {
   markSurveyResponded,
   markSurveyDismissed,
 } from '../lib/surveys/survey-state.js';
-import { loadRemoteSurveyConfig } from '../lib/surveys/survey-config.js';
+import { loadRemoteSurveyConfig, submitSurveyResponse } from '../lib/surveys/survey-config.js';
 import { getApiBase } from './useNeoResource.js';
-import { track, identify } from '../lib/observability.js';
+import { track } from '../lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '../lib/observability/events.js';
 
 function isAdminRole(selectedRole) {
@@ -29,7 +29,7 @@ export function useSurveyEngine() {
 
   const userProps = useMemo(() => {
     if (!username) return {};
-    return { userId: username, ...(selectedOrg?.id ? { accountId: selectedOrg.id } : {}) };
+    return { ...(selectedOrg?.id ? { orgId: selectedOrg.id } : {}) };
   }, [username, selectedOrg?.id]);
 
   const checkAndShowSurvey = useCallback((source) => {
@@ -45,12 +45,6 @@ export function useSurveyEngine() {
     });
     setActiveSurvey(survey);
   }, [isAuthenticated, selectedRole, userProps]);
-
-  useEffect(() => {
-    if (!isAuthenticated || !username) return;
-    const traits = selectedOrg?.id ? { account_id: selectedOrg.id } : {};
-    identify(username, traits);
-  }, [isAuthenticated, username, selectedOrg]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -94,11 +88,22 @@ export function useSurveyEngine() {
       type: activeSurvey.type,
       source: activeSurvey.id,
       score,
-      ...(feedback?.trim() ? { feedback: feedback.trim() } : {}),
+      hasComment: Boolean(feedback?.trim()),
       ...(tags?.length ? { tags: tags.join(',') } : {}),
       ...userProps,
     });
-  }, [activeSurvey, userProps]);
+    // The actual feedback text is never sent to Mixpanel (see hasComment above) — it's persisted
+    // server-side instead so product can still read it. Fire-and-forget, same as the Mixpanel
+    // track call above: never blocks the UI on the network round-trip.
+    Promise.resolve(submitSurveyResponse({
+      apiBaseUrl: getApiBase(),
+      token,
+      surveyKey: activeSurvey.id,
+      score,
+      feedback,
+      tags,
+    })).catch(() => {});
+  }, [activeSurvey, userProps, token]);
 
   const handleClose = useCallback(() => {
     setActiveSurvey(null);

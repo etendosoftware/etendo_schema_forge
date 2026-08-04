@@ -13,7 +13,7 @@ const OBSERVABILITY_CHANNEL_VALUES = Object.freeze({
 const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   ACTION: 'action',
   ACCURACY: 'accuracy',
-  ACCOUNT_ID: 'accountId',
+  ORG_ID: 'orgId',
   ATTEMPT: 'attempt',
   CATEGORY: 'category',
   CLIENT: 'client',
@@ -24,7 +24,6 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   OPERATION: 'operation',
   POSITION: 'position',
   PROVIDER: 'provider',
-  FEEDBACK: 'feedback',
   SCORE: 'score',
   SOURCE: 'source',
   TAGS: 'tags',
@@ -33,7 +32,6 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   STEP: 'step',
   SUPPORT_REQUESTED: 'supportRequested',
   TYPE: 'type',
-  USER_ID: 'userId',
   VALUE: 'value',
 });
 
@@ -494,22 +492,20 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   SURVEY_SHOWN: defineEvent('survey_shown', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.NPS],
     properties: [
-      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.ORG_ID,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
-      OBSERVABILITY_PROPERTY_KEYS.USER_ID,
     ],
   }),
   SURVEY_RESPONDED: defineEvent('survey_responded', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.NPS],
     properties: [
-      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
-      OBSERVABILITY_PROPERTY_KEYS.FEEDBACK,
+      OBSERVABILITY_PROPERTY_KEYS.ORG_ID,
+      OBSERVABILITY_PROPERTY_KEYS.HAS_COMMENT,
       OBSERVABILITY_PROPERTY_KEYS.SCORE,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
       OBSERVABILITY_PROPERTY_KEYS.TAGS,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
-      OBSERVABILITY_PROPERTY_KEYS.USER_ID,
     ],
   }),
   // Fired the moment the user picks a score/star, independent of whether they ever press
@@ -518,11 +514,10 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   SURVEY_SCORE_SELECTED: defineEvent('survey_score_selected', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
-      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.ORG_ID,
       OBSERVABILITY_PROPERTY_KEYS.SCORE,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
-      OBSERVABILITY_PROPERTY_KEYS.USER_ID,
     ],
   }),
   MCP_CONNECT_TAB_SELECTED: defineEvent('mcp_connect_tab_selected', {
@@ -534,10 +529,9 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   SURVEY_DISMISSED: defineEvent('survey_dismissed', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
-      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.ORG_ID,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
-      OBSERVABILITY_PROPERTY_KEYS.USER_ID,
     ],
   }),
 });

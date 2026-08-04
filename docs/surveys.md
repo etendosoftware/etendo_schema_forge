@@ -297,6 +297,14 @@ The survey remains in the `SURVEYS` array (so its `id` and locale keys are not o
 
 Four events are emitted via `track()` (from `tools/app-shell/src/lib/observability.js`), all sent to Mixpanel. `survey_shown` and `survey_responded` are also sent to the NPS channel.
 
+**GDPR remediation (ETP-4352, see [GDPR / Data Privacy Note](#gdpr--data-privacy-note-etp-4352)
+below):** none of these events identify an individual user anymore — there is no `userId` property
+and `identify()` is never called from the survey flow. `accountId` was renamed to **`orgId`** (it is
+the selected `AD_Org`, a different concept from the Client-level `account_id` Mixpanel Group set
+elsewhere — see `docs/ops/app-shell-observability.md`). `survey_responded`'s free-text `feedback`
+was replaced with a `hasComment` boolean; the actual text is persisted server-side instead (see
+[`POST /sws/survey-config/response`](#post-swssurvey-configresponse) below).
+
 ### `survey_score_selected`
 
 Fired via `useSurveyEngine.handleScoreSelected` **only when the user selects a score/star and then
@@ -311,8 +319,7 @@ carries the score in that case, so there is no overlap between the two events.
 | `type` | Survey type: `'nps'` or `'csat'` |
 | `source` | Survey id |
 | `score` | Numeric score selected by the user |
-| `userId` | Authenticated username |
-| `accountId` | Selected organization id (if available) |
+| `orgId` | Selected organization id (if available) |
 
 ### `survey_shown`
 
@@ -322,22 +329,21 @@ Fired by `useSurveyEngine.checkAndShowSurvey` immediately before setting the act
 |---|---|
 | `type` | Survey type: `'nps'` or `'csat'` |
 | `source` | Survey id (e.g. `'nps'`, `'csat_order'`) |
-| `userId` | Authenticated username |
-| `accountId` | Selected organization id (if available) |
+| `orgId` | Selected organization id (if available) |
 
 ### `survey_responded`
 
-Fired by `useSurveyEngine.handleRespond` when the user submits a score (triggered when the modal transitions to the `'thanks'` phase).
+Fired by `useSurveyEngine.handleRespond` when the user submits a score (triggered when the modal transitions to the `'thanks'` phase). The free-text feedback itself is **not** included — see
+`hasComment` below and [`POST /sws/survey-config/response`](#post-swssurvey-configresponse).
 
 | Property | Value |
 |---|---|
 | `type` | Survey type: `'nps'` or `'csat'` |
 | `source` | Survey id |
 | `score` | Numeric score selected by the user |
-| `feedback` | Free-text response (omitted if empty) |
+| `hasComment` | Boolean — whether the user typed any feedback text (the text itself is never sent to Mixpanel) |
 | `tags` | Comma-separated tag string (omitted if none selected) |
-| `userId` | Authenticated username |
-| `accountId` | Selected organization id (if available) |
+| `orgId` | Selected organization id (if available) |
 
 ### `survey_dismissed`
 
@@ -347,8 +353,7 @@ Fired by `useSurveyEngine.handleDismiss` when the user clicks the close button o
 |---|---|
 | `type` | Survey type: `'nps'` or `'csat'` |
 | `source` | Survey id |
-| `userId` | Authenticated username |
-| `accountId` | Selected organization id (if available) |
+| `orgId` | Selected organization id (if available) |
 
 **Note:** Clicking the backdrop or close button **after** the thank-you screen has appeared does not fire `survey_dismissed` — `SurveyModal.handleClose` routes through `onDismiss` only when `phase !== 'thanks'`.
 
@@ -416,32 +421,53 @@ Implemented by `SurveyConfigServlet` (`com.etendoerp.go.schemaforge`), registere
 as `/sws/neo/*` — returns 401 without a valid session. Read-only; there is no write endpoint —
 config is only edited through the backoffice window's native grid.
 
+### `POST /sws/survey-config/response`
+
+Added in ETP-4352 (GDPR remediation, see [GDPR / Data Privacy Note](#gdpr--data-privacy-note-etp-4352)
+below) as the server-side destination for the free-text feedback that used to be sent to Mixpanel
+verbatim. Same servlet (`SurveyConfigServlet`), same JWT auth as the `GET` above. Called
+fire-and-forget from `useSurveyEngine.handleRespond` via `submitSurveyResponse()`
+(`tools/app-shell/src/lib/surveys/survey-config.js`) right alongside the (now PII-free) Mixpanel
+`survey_responded` track call — a failed POST never blocks or breaks the survey UI.
+
+Request body:
+
+```jsonc
+{ "surveyKey": "nps", "score": 9, "feedback": "free text, optional", "tags": ["fast", "easy"] }
+```
+
+`surveyKey` is required (400 if missing/blank); `score`, `feedback` and `tags` are all optional.
+Response: `{ "status": "ok" }` (201). Persists to `ETGO_Survey_Response` (module
+`com.etendoerp.go`, tenant-scoped via the same JWT client/org/user claims every other `/sws/*`
+endpoint uses): `survey_key`, `ad_user_id`, `score`, `feedback_text`, `tags` (stored as a
+comma-joined string, same shape it used to travel to Mixpanel as), `response_date`. Mirrors the
+architecture `SupportConversationsServlet#handleSubmitRating` already uses for support-chat CSAT
+(persist server-side, send only a boolean signal to Mixpanel) — see that class's `rating` endpoint
+for the sibling pattern.
+
 ---
 
 ## GDPR / Data Privacy Note (ETP-4352)
 
-Findings from the ETP-4352 "Requerimientos Adicionales" review of what the survey events send to
-Mixpanel today. Scope: `survey_shown`, `survey_score_selected`, `survey_responded`, `survey_dismissed`.
+The `docs/ops/mixpanel-gdpr-privacy-audit.md` review (in the `schema_forge` main checkout) found
+that survey events sent real user identity and free-text feedback to Mixpanel. Both gaps have been
+remediated as of this change; scope was `survey_shown`, `survey_score_selected`,
+`survey_responded`, `survey_dismissed`.
 
-**Identifiers (`userId`, `accountId`):** these are internal opaque identifiers (username, org id),
-not directly identifying values like name or email on their own. Under GDPR this is **pseudonymous
-data** — it still counts as personal data (Mixpanel or anyone with access to the source system could
-re-identify the user), but pseudonymization is a recognized and accepted risk-reduction measure, not
-a reason to block on further anonymization work. No code change is proposed here.
+**Identity: fixed by removal, not pseudonymization.** The survey flow no longer calls `identify()`
+at all (`useSurveyEngine.js`), and no event carries `userId`/`username` — the product decision was
+to stop identifying individual users to Mixpanel outright, not to hash or otherwise pseudonymize the
+login. `accountId` (the selected `AD_Org`) was renamed to **`orgId`** in the same change, to
+disambiguate it from the unrelated Client-level `account_id` Mixpanel Group (`group('account_id', …)`
+in `health-events.js`, which is untouched and stays exactly as it was — it identifies the tenant,
+not an individual, and was explicitly out of scope). IP-based geolocation
+(`providers/mixpanel.js`), consent gating, and the `identify`/`group`/`groupSet` sanitizer bypass
+remain separate, lower-priority findings from the same audit — still open, tracked there.
 
-**Recommendation:** confirm a Data Processing Agreement (DPA) is in place with Mixpanel covering EU
-data — standard practice for any SaaS analytics vendor processing EU personal data, and Etendo GO
-already uses the `api-eu.mixpanel.com` host (see `docs/ops/app-shell-observability.md`) for EU data
-residency. This is an ops/legal follow-up, not a code fix.
-
-**The actual gap:** the CSAT free-text `feedback` field (sent by `survey_responded`) is
-**unconstrained user input**. A user can type anything into it, including their own name, email, or
-other PII, and it is forwarded to Mixpanel verbatim today — this predates ETP-4352 and is unaffected
-by the canned-response feature (picking a canned phrase just prefills the same editable field).
-
-**Recommendation for the free-text risk:** do not implement speculative scrubbing (e.g. regex-based
-email/PII stripping) without a product/compliance decision — pattern-based scrubbing is unreliable
-(false negatives on PII, false positives mangling legitimate feedback) and the right mitigation
-depends on Etendo GO's actual compliance posture (DPA terms, data retention policy, whether Mixpanel
-is told to treat the field as sensitive). Flagging this explicitly for whoever owns compliance
-sign-off is the deliverable of this note — this repo proceeds as-is for Phase 1.
+**Free-text feedback: moved server-side, never sent to Mixpanel.** `survey_responded` used to
+forward the CSAT/NPS textarea verbatim as a `feedback` property — unconstrained user input that
+could contain names, emails, or other PII. It now sends only `hasComment` (a boolean), the same
+pattern `SUPPORT_CSAT_SUBMITTED`/`SupportChatContext.jsx` already used for support-chat ratings. The
+actual text is persisted through the new [`POST /sws/survey-config/response`](#post-swssurvey-configresponse)
+endpoint into `ETGO_Survey_Response`, so product can still read it — just not through an analytics
+vendor.

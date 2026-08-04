@@ -95,3 +95,38 @@ export async function loadRemoteSurveyConfig({ apiBaseUrl, token, fetchImpl = fe
     logger.warn('[surveys] Failed to load remote survey config, using local defaults', e);
   }
 }
+
+/**
+ * Persists a submitted NPS/CSAT survey response — score, free-text feedback and tags — server
+ * side, via POST /sws/survey-config/response (backend: SurveyConfigServlet, table
+ * ETGO_Survey_Response). This is the GDPR remediation (ETP-4352) counterpart to Mixpanel no
+ * longer receiving the raw feedback text (see useSurveyEngine.js's handleRespond, which now
+ * sends Mixpanel only a `hasComment` boolean). Fire-and-forget from the caller's perspective —
+ * silently no-ops on any failure so a flaky network never blocks or breaks the survey UI. Never
+ * throws.
+ */
+export async function submitSurveyResponse({
+  apiBaseUrl, token, surveyKey, score, feedback, tags, fetchImpl = fetch, logger = console,
+} = {}) {
+  if (apiBaseUrl == null || !token || !surveyKey) return;
+  try {
+    const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/response`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        surveyKey,
+        ...(score != null ? { score } : {}),
+        ...(feedback?.trim() ? { feedback: feedback.trim() } : {}),
+        ...(tags?.length ? { tags } : {}),
+      }),
+    });
+    if (!response.ok) {
+      logger.warn('[surveys] Failed to persist survey response', response.status);
+    }
+  } catch (e) {
+    logger.warn('[surveys] Failed to persist survey response', e);
+  }
+}
