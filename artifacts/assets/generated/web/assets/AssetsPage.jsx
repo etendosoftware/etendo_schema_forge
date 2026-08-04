@@ -258,7 +258,7 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
           { key: 'accountingSchema', column: 'C_AcctSchema_ID', type: 'selector', required: true, label: 'General Ledger', reference: 'AcctSchema', inputMode: 'selector' },
           { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', required: true, label: 'Accumulated Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', required: true, label: 'Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 1000 },
         ]}
         formFooter={AssetsDetailPanel}
         hidePrint
