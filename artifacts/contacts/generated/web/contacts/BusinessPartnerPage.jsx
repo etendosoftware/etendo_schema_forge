@@ -687,7 +687,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           { key: 'bankAccount', label: 'Bank Account', Table: BankAccountTable, Form: BankAccountForm, addLineFields: { entry: [
           { key: 'bankName', column: 'Bank_Name', type: 'text', label: 'Bank Name' },
           { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country', reference: 'Country', inputMode: 'selector', defaultValue: '@COUNTRYDEF@' },
-          { key: 'bankFormat', column: 'BankFormat', type: 'select', required: true, label: 'Bank Account Format', labels: {"en_US":"Format","es_ES":"Formato"}, defaultValue: 'GENERIC', options: [{ value: 'GENERIC', label: 'Use Generic Account No.' }, { value: 'IBAN', label: 'Use IBAN' }, { value: 'SWIFT', label: 'Use SWIFT + Generic Account No.' }, { value: 'SPANISH', label: 'Use Spanish' }] },
+          { key: 'bankFormat', column: 'BankFormat', type: 'select', required: true, label: 'Bank Account Format', labels: {"en_US":"Format","es_ES":"Formato"}, defaultValue: 'GENERIC', options: [{ value: 'GENERIC', label: 'Use Generic Account No.', labels: {"es_ES":"Utilizar Número Genérico de Cuenta"} }, { value: 'IBAN', label: 'Use IBAN', labels: {"es_ES":"Utilizar IBAN"} }, { value: 'SWIFT', label: 'Use SWIFT + Generic Account No.', labels: {"es_ES":"Usar código SWIFT + Número Genérico de Cuenta"} }, { value: 'SPANISH', label: 'Use Spanish', labels: {"es_ES":"Utilizar Español"} }] },
           { key: 'accountNo', column: 'AccountNo', type: 'text', label: 'Generic Account No.' },
           { key: 'iBAN', column: 'Iban', type: 'text', label: 'IBAN' },
           { key: 'swiftCode', column: 'SwiftCode', type: 'text', label: 'SWIFT Code' },
