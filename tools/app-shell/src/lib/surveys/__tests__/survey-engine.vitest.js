@@ -5,6 +5,7 @@ import {
   isDismissedCooldownActive,
   selectNextSurvey,
 } from '../survey-engine.js';
+import { setRemoteSurveyConfig } from '../survey-config.js';
 
 const MS_DAY = 86_400_000;
 const NOW = new Date('2026-06-26T12:00:00.000Z').getTime();
@@ -129,6 +130,7 @@ describe('selectNextSurvey', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    setRemoteSurveyConfig(null);
   });
 
   it('returns null when no survey is due', () => {
@@ -340,5 +342,46 @@ describe('selectNextSurvey', () => {
       env: { VITE_SURVEY_CSAT_MIN_DOCS: '2' },
     });
     expect(survey?.id).toBe('csat_invoicing');
+  });
+
+  // -------------------------------------------------------------------------
+  // Backend-side kill switch (ETGO_Survey_Type.isactive) always wins over
+  // local isEligible() — checked before any per-survey eligibility logic runs.
+  // -------------------------------------------------------------------------
+
+  describe('backend-side survey disable (isSurveyTypeEnabled)', () => {
+    it('skips a survey whose isSurveyTypeEnabled() is false even when its own isEligible() would be true', () => {
+      // Both nps and csat_invoicing are locally eligible; disabling nps via the
+      // remote config must skip it and fall through to the next eligible survey.
+      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+        firstLoginAt: new Date(NOW - 61 * MS_DAY).toISOString(),
+        counters: { invoicing: 5, order: 0 },
+      }));
+      setRemoteSurveyConfig({ perSurvey: { nps: { enabled: false } } });
+
+      const survey = selectNextSurvey({ isAdmin: false, now: NOW });
+      expect(survey?.id).toBe('csat_invoicing');
+    });
+
+    it('returns null when the only otherwise-eligible survey is backend-disabled', () => {
+      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+        firstLoginAt: new Date(NOW - 61 * MS_DAY).toISOString(),
+        counters: { invoicing: 0, order: 0 },
+      }));
+      setRemoteSurveyConfig({ perSurvey: { nps: { enabled: false } } });
+
+      expect(selectNextSurvey({ isAdmin: false, now: NOW })).toBeNull();
+    });
+
+    it('regression guard: an enabled survey with isEligible() === true is still selected', () => {
+      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+        firstLoginAt: new Date(NOW - 61 * MS_DAY).toISOString(),
+        counters: { invoicing: 0, order: 0 },
+      }));
+      setRemoteSurveyConfig({ perSurvey: { nps: { enabled: true } } });
+
+      const survey = selectNextSurvey({ isAdmin: false, now: NOW });
+      expect(survey?.id).toBe('nps');
+    });
   });
 });

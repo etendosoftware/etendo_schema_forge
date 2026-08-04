@@ -2,7 +2,9 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   resolvePositiveInt,
   getSurveyConfig,
+  getSurveyTypeConfig,
   setRemoteSurveyConfig,
+  isSurveyTypeEnabled,
   getRemoteCannedResponses,
   loadRemoteSurveyConfig,
   DEFAULT_SURVEY_GLOBAL_COOLDOWN_DAYS,
@@ -60,11 +62,6 @@ describe('getSurveyConfig', () => {
       globalCooldownMs: DEFAULT_SURVEY_GLOBAL_COOLDOWN_DAYS * MS_DAY,
       dismissedCooldownMs: DEFAULT_SURVEY_DISMISSED_COOLDOWN_DAYS * MS_DAY,
       maxPerMonth: DEFAULT_SURVEY_MAX_PER_MONTH,
-      npsMinAgeMs: DEFAULT_SURVEY_NPS_MIN_AGE_DAYS * MS_DAY,
-      npsInactivityMs: DEFAULT_SURVEY_NPS_INACTIVITY_DAYS * MS_DAY,
-      responseCooldownMs: DEFAULT_SURVEY_RESPONSE_COOLDOWN_DAYS * MS_DAY,
-      csatMinDocs: DEFAULT_SURVEY_CSAT_MIN_DOCS,
-      csatDocGap: DEFAULT_SURVEY_CSAT_DOC_GAP,
     });
   });
 
@@ -87,24 +84,9 @@ describe('getSurveyConfig', () => {
     const config = getSurveyConfig({
       VITE_SURVEY_GLOBAL_COOLDOWN_DAYS: '10',
       VITE_SURVEY_DISMISSED_COOLDOWN_DAYS: '3',
-      VITE_SURVEY_NPS_MIN_AGE_DAYS: '20',
-      VITE_SURVEY_NPS_INACTIVITY_DAYS: '7',
-      VITE_SURVEY_RESPONSE_COOLDOWN_DAYS: '45',
     });
     expect(config.globalCooldownMs).toBe(10 * MS_DAY);
     expect(config.dismissedCooldownMs).toBe(3 * MS_DAY);
-    expect(config.npsMinAgeMs).toBe(20 * MS_DAY);
-    expect(config.npsInactivityMs).toBe(7 * MS_DAY);
-    expect(config.responseCooldownMs).toBe(45 * MS_DAY);
-  });
-
-  it('overrides csatMinDocs and csatDocGap as plain counts (not milliseconds)', () => {
-    const config = getSurveyConfig({
-      VITE_SURVEY_CSAT_MIN_DOCS: '3',
-      VITE_SURVEY_CSAT_DOC_GAP: '15',
-    });
-    expect(config.csatMinDocs).toBe(3);
-    expect(config.csatDocGap).toBe(15);
   });
 
   describe('remote config precedence (backoffice window > env var > default)', () => {
@@ -121,17 +103,112 @@ describe('getSurveyConfig', () => {
     });
 
     it('falls back to the default when both remote and env values are invalid', () => {
-      setRemoteSurveyConfig({ csatMinDocs: 0 });
-      const config = getSurveyConfig({ VITE_SURVEY_CSAT_MIN_DOCS: 'not-a-number' });
-      expect(config.csatMinDocs).toBe(DEFAULT_SURVEY_CSAT_MIN_DOCS);
+      setRemoteSurveyConfig({ maxPerMonth: 0 });
+      const config = getSurveyConfig({ VITE_SURVEY_MAX_PER_MONTH: 'not-a-number' });
+      expect(config.maxPerMonth).toBe(DEFAULT_SURVEY_MAX_PER_MONTH);
     });
 
     it('converts remote day counts to milliseconds like the env/default path', () => {
-      setRemoteSurveyConfig({ globalCooldownDays: 12, npsMinAgeDays: 40 });
+      setRemoteSurveyConfig({ globalCooldownDays: 12 });
       const config = getSurveyConfig({});
       expect(config.globalCooldownMs).toBe(12 * MS_DAY);
-      expect(config.npsMinAgeMs).toBe(40 * MS_DAY);
     });
+  });
+});
+
+describe('getSurveyTypeConfig', () => {
+  it('returns all defaults for an unconfigured survey key', () => {
+    const config = getSurveyTypeConfig('nps', {});
+    expect(config).toEqual({
+      minAccountAgeMs: DEFAULT_SURVEY_NPS_MIN_AGE_DAYS * MS_DAY,
+      inactivityGuardMs: DEFAULT_SURVEY_NPS_INACTIVITY_DAYS * MS_DAY,
+      responseCooldownMs: DEFAULT_SURVEY_RESPONSE_COOLDOWN_DAYS * MS_DAY,
+      minDocuments: DEFAULT_SURVEY_CSAT_MIN_DOCS,
+      documentGap: DEFAULT_SURVEY_CSAT_DOC_GAP,
+    });
+  });
+
+  it('overrides every day-based field from VITE_SURVEY_* env vars', () => {
+    const config = getSurveyTypeConfig('nps', {
+      VITE_SURVEY_NPS_MIN_AGE_DAYS: '20',
+      VITE_SURVEY_NPS_INACTIVITY_DAYS: '7',
+      VITE_SURVEY_RESPONSE_COOLDOWN_DAYS: '45',
+    });
+    expect(config.minAccountAgeMs).toBe(20 * MS_DAY);
+    expect(config.inactivityGuardMs).toBe(7 * MS_DAY);
+    expect(config.responseCooldownMs).toBe(45 * MS_DAY);
+  });
+
+  it('overrides minDocuments/documentGap as plain counts (not milliseconds)', () => {
+    const config = getSurveyTypeConfig('csat_invoicing', {
+      VITE_SURVEY_CSAT_MIN_DOCS: '3',
+      VITE_SURVEY_CSAT_DOC_GAP: '15',
+    });
+    expect(config.minDocuments).toBe(3);
+    expect(config.documentGap).toBe(15);
+  });
+
+  describe('remote config precedence (backoffice "Surveys" row > env var > default)', () => {
+    it('prefers the remote per-survey value over an env var override', () => {
+      setRemoteSurveyConfig({ perSurvey: { nps: { minAccountAgeDays: 90 } } });
+      const config = getSurveyTypeConfig('nps', { VITE_SURVEY_NPS_MIN_AGE_DAYS: '20' });
+      expect(config.minAccountAgeMs).toBe(90 * MS_DAY);
+    });
+
+    it('keeps two survey keys independent — csat_invoicing and csat_order can differ', () => {
+      setRemoteSurveyConfig({
+        perSurvey: {
+          csat_invoicing: { minDocuments: 3 },
+          csat_order: { minDocuments: 8 },
+        },
+      });
+      expect(getSurveyTypeConfig('csat_invoicing', {}).minDocuments).toBe(3);
+      expect(getSurveyTypeConfig('csat_order', {}).minDocuments).toBe(8);
+    });
+
+    it('falls back to the env var when the remote survey key is missing', () => {
+      setRemoteSurveyConfig({ perSurvey: { nps: {} } });
+      const config = getSurveyTypeConfig('nps', { VITE_SURVEY_NPS_INACTIVITY_DAYS: '7' });
+      expect(config.inactivityGuardMs).toBe(7 * MS_DAY);
+    });
+
+    it('falls back to the default when the remote config has no perSurvey at all', () => {
+      setRemoteSurveyConfig({});
+      const config = getSurveyTypeConfig('csat_invoicing', {});
+      expect(config.minDocuments).toBe(DEFAULT_SURVEY_CSAT_MIN_DOCS);
+    });
+  });
+});
+
+describe('isSurveyTypeEnabled', () => {
+  it('fails open (true) when no remote config has been loaded', () => {
+    expect(isSurveyTypeEnabled('nps')).toBe(true);
+  });
+
+  it('fails open (true) when the survey key is absent from the reported perSurvey config', () => {
+    setRemoteSurveyConfig({ perSurvey: { csat_invoicing: { enabled: false } } });
+    expect(isSurveyTypeEnabled('nps')).toBe(true);
+  });
+
+  it('fails open (true) when the remote config has no perSurvey block at all', () => {
+    setRemoteSurveyConfig({ maxPerMonth: 5 });
+    expect(isSurveyTypeEnabled('nps')).toBe(true);
+  });
+
+  it('returns false only when the backend explicitly reports enabled: false for that key', () => {
+    setRemoteSurveyConfig({ perSurvey: { nps: { enabled: false } } });
+    expect(isSurveyTypeEnabled('nps')).toBe(false);
+  });
+
+  it('returns true when the backend explicitly reports enabled: true for that key', () => {
+    setRemoteSurveyConfig({ perSurvey: { nps: { enabled: true } } });
+    expect(isSurveyTypeEnabled('nps')).toBe(true);
+  });
+
+  it('keeps two survey keys independent — disabling one does not affect the other', () => {
+    setRemoteSurveyConfig({ perSurvey: { nps: { enabled: false }, csat_invoicing: { enabled: true } } });
+    expect(isSurveyTypeEnabled('nps')).toBe(false);
+    expect(isSurveyTypeEnabled('csat_invoicing')).toBe(true);
   });
 });
 

@@ -1,6 +1,6 @@
 import { readSurveyState } from './survey-state.js';
 import { SURVEYS } from './surveys.js';
-import { getSurveyConfig } from './survey-config.js';
+import { getSurveyConfig, isSurveyTypeEnabled } from './survey-config.js';
 
 export function isGlobalCooldownActive(state, now, env = import.meta.env) {
   if (!state.lastShownAt) return false;
@@ -29,6 +29,9 @@ export function selectNextSurvey({ isAdmin, now = Date.now(), source, env = impo
 
   for (const survey of SURVEYS) {
     if (source != null && survey.sources && !survey.sources.includes(source)) continue;
+    // Backend-side disable (ETGO_Survey_Type.isactive='N') always wins over the survey's own
+    // isEligible() — a data-driven kill switch, checked before any local eligibility logic runs.
+    if (!isSurveyTypeEnabled(survey.id)) continue;
     if (!survey.isEligible({ state, isAdmin, now, env })) continue;
     if (isDismissedCooldownActive(state, survey.id, now, env)) continue;
     return survey;

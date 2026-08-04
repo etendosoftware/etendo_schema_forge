@@ -1,4 +1,4 @@
-import { getSurveyConfig } from './survey-config.js';
+import { getSurveyTypeConfig } from './survey-config.js';
 
 const INVOICE_SPEC_NAMES = new Set(['sales-invoice', 'purchase-invoice']);
 const ORDER_SPEC_NAMES = new Set(['purchase-order', 'sales-order']);
@@ -13,10 +13,10 @@ export function isOrderSpec(specName) {
 
 function npsIsEligible({ state, now, env = import.meta.env }) {
   if (!state.firstLoginAt) return false;
-  const { npsMinAgeMs, npsInactivityMs, responseCooldownMs } = getSurveyConfig(env);
+  const { minAccountAgeMs, inactivityGuardMs, responseCooldownMs } = getSurveyTypeConfig('nps', env);
   const msSinceFirst = now - new Date(state.firstLoginAt).getTime();
-  if (msSinceFirst < npsMinAgeMs) return false;
-  if (state.lastLoginAt && now - new Date(state.lastLoginAt).getTime() > npsInactivityMs) return false;
+  if (msSinceFirst < minAccountAgeMs) return false;
+  if (state.lastLoginAt && now - new Date(state.lastLoginAt).getTime() > inactivityGuardMs) return false;
   const respondedCount = state.respondedCounts['nps'] ?? 0;
   if (respondedCount === 0) return true;
   const lastRespondedAt = state.respondedAt['nps'];
@@ -28,15 +28,16 @@ function csatOnboardingIsEligible() {
   return false; // onboarding survey disabled until fully implemented
 }
 
-// Shared by csat_invoicing/csat_order — previously duplicated verbatim per survey.
+// Shared logic by csat_invoicing/csat_order — each survey now reads its own independent
+// min-docs/gap/cooldown from getSurveyTypeConfig(surveyId), instead of one shared value.
 function csatDocumentIsEligible(counterKey, surveyId, { state, now, env = import.meta.env }) {
-  const { csatMinDocs, csatDocGap, responseCooldownMs } = getSurveyConfig(env);
+  const { minDocuments, documentGap, responseCooldownMs } = getSurveyTypeConfig(surveyId, env);
   const count = state.counters[counterKey] ?? 0;
-  if (count < csatMinDocs) return false;
+  if (count < minDocuments) return false;
   const respondedCount = state.respondedCounts[surveyId] ?? 0;
   if (respondedCount === 0) return true;
   const lastRespondedCountAt = state.respondedCountAt?.[surveyId] ?? 0;
-  if (count - lastRespondedCountAt < csatDocGap) return false;
+  if (count - lastRespondedCountAt < documentGap) return false;
   const lastRespondedAt = state.respondedAt[surveyId];
   if (!lastRespondedAt) return true;
   return now - new Date(lastRespondedAt).getTime() >= responseCooldownMs;

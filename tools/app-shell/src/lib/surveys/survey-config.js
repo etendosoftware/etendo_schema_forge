@@ -35,6 +35,7 @@ export function setRemoteSurveyConfig(config) {
   remoteConfig = config ?? null;
 }
 
+/** Truly-global tunables (cooldown/monthly cap) — shared by every survey. */
 export function getSurveyConfig(env = import.meta.env) {
   const resolvedEnv = env ?? {};
   const remote = remoteConfig ?? {};
@@ -51,24 +52,62 @@ export function getSurveyConfig(env = import.meta.env) {
       resolveDays('dismissedCooldownDays', 'VITE_SURVEY_DISMISSED_COOLDOWN_DAYS', DEFAULT_SURVEY_DISMISSED_COOLDOWN_DAYS) * MS_DAY,
     maxPerMonth:
       resolveDays('maxPerMonth', 'VITE_SURVEY_MAX_PER_MONTH', DEFAULT_SURVEY_MAX_PER_MONTH),
-    npsMinAgeMs:
-      resolveDays('npsMinAgeDays', 'VITE_SURVEY_NPS_MIN_AGE_DAYS', DEFAULT_SURVEY_NPS_MIN_AGE_DAYS) * MS_DAY,
-    npsInactivityMs:
-      resolveDays('npsInactivityDays', 'VITE_SURVEY_NPS_INACTIVITY_DAYS', DEFAULT_SURVEY_NPS_INACTIVITY_DAYS) * MS_DAY,
-    responseCooldownMs:
-      resolveDays('responseCooldownDays', 'VITE_SURVEY_RESPONSE_COOLDOWN_DAYS', DEFAULT_SURVEY_RESPONSE_COOLDOWN_DAYS) * MS_DAY,
-    csatMinDocs:
-      resolveDays('csatMinDocs', 'VITE_SURVEY_CSAT_MIN_DOCS', DEFAULT_SURVEY_CSAT_MIN_DOCS),
-    csatDocGap:
-      resolveDays('csatDocGap', 'VITE_SURVEY_CSAT_DOC_GAP', DEFAULT_SURVEY_CSAT_DOC_GAP),
   };
 }
 
 /**
+ * Per-survey eligibility tunables (one backoffice row per survey key — see
+ * ETGO_Survey_Type / "Surveys" tab). A survey not yet configured there (or an
+ * unreachable backend) falls back field-by-field to the same VITE_SURVEY_* /
+ * DEFAULT_SURVEY_* knobs used before this became per-survey — these stay
+ * global fallback defaults, not per-survey, since they're only the
+ * offline-degradation path.
+ */
+export function getSurveyTypeConfig(surveyKey, env = import.meta.env) {
+  const resolvedEnv = env ?? {};
+  const perSurvey = remoteConfig?.perSurvey?.[surveyKey] ?? {};
+
+  function resolveDays(remoteField, envVar, fallback) {
+    const envDefault = resolvePositiveInt(resolvedEnv[envVar], fallback);
+    return resolvePositiveInt(perSurvey[remoteField], envDefault);
+  }
+
+  return {
+    minAccountAgeMs:
+      resolveDays('minAccountAgeDays', 'VITE_SURVEY_NPS_MIN_AGE_DAYS', DEFAULT_SURVEY_NPS_MIN_AGE_DAYS) * MS_DAY,
+    inactivityGuardMs:
+      resolveDays('inactivityGuardDays', 'VITE_SURVEY_NPS_INACTIVITY_DAYS', DEFAULT_SURVEY_NPS_INACTIVITY_DAYS) * MS_DAY,
+    responseCooldownMs:
+      resolveDays('responseCooldownDays', 'VITE_SURVEY_RESPONSE_COOLDOWN_DAYS', DEFAULT_SURVEY_RESPONSE_COOLDOWN_DAYS) * MS_DAY,
+    minDocuments:
+      resolveDays('minDocuments', 'VITE_SURVEY_CSAT_MIN_DOCS', DEFAULT_SURVEY_CSAT_MIN_DOCS),
+    documentGap:
+      resolveDays('documentGap', 'VITE_SURVEY_CSAT_DOC_GAP', DEFAULT_SURVEY_CSAT_DOC_GAP),
+  };
+}
+
+/**
+ * Whether a survey type is enabled per the backoffice "Surveys" tab (ETGO_Survey_Type.isactive).
+ *
+ * This is a hard kill switch, NOT a tuning fallback: unlike the day/count fields in
+ * getSurveyTypeConfig(), there is no "fall back to default and stay eligible" behavior here.
+ * Returns `false` only when the backend explicitly reported that survey key with
+ * `enabled: false` (i.e. isactive='N' in ETGO_Survey_Type) — every other case (survey not
+ * configured yet, config unreachable, config not loaded yet) fails OPEN (`true`), since "not
+ * configured" must not be confused with "explicitly turned off". Callers (selectNextSurvey) must
+ * check this before running the survey's own isEligible() and skip the survey entirely when it
+ * returns false — a backend-side disable always wins over local eligibility logic.
+ */
+export function isSurveyTypeEnabled(surveyKey) {
+  return remoteConfig?.perSurvey?.[surveyKey]?.enabled !== false;
+}
+
+/**
  * Predefined CSAT responses for a survey/language, sourced from the backoffice window via
- * loadRemoteSurveyConfig(). Returns null (not an empty array) when unavailable so callers can
- * tell "not loaded yet / unreachable" apart from "loaded, zero rows configured" and fall back
- * to the hardcoded survey.canned list in surveys.js.
+ * loadRemoteSurveyConfig(). Each item is { icon, text, minScore, maxScore } — callers filter by
+ * the current score against that range. Returns null (not an empty array) when unavailable so
+ * callers can tell "not loaded yet / unreachable" apart from "loaded, zero rows configured" and
+ * fall back to the hardcoded survey.canned list in surveys.js (which has no ranges).
  */
 export function getRemoteCannedResponses(surveyId, language) {
   return remoteConfig?.canned?.[surveyId]?.[language] ?? null;
