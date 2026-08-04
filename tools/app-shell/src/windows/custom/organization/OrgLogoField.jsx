@@ -113,20 +113,25 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
   const openFilePicker = () => inputRef.current?.click();
   const handleRemove = () => onChange?.('');
 
+  let previewContent;
+  if (uploading) {
+    previewContent = <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" data-testid="Loader2__orglogo" />;
+  } else if (blobUrl) {
+    previewContent = <img src={blobUrl} alt={orgName || 'Logo'} className="h-full w-full object-contain" />;
+  } else {
+    previewContent = (
+      <span className="text-lg font-semibold text-muted-foreground" data-testid="OrgLogoField__initials">
+        {getInitials(orgName)}
+      </span>
+    );
+  }
+
   return (
     <div className="flex items-center gap-4" data-testid="OrgLogoField__root">
       <div
         className="h-[72px] w-[72px] shrink-0 rounded-lg border border-border bg-muted flex items-center justify-center overflow-hidden"
         data-testid="OrgLogoField__preview">
-        {uploading ? (
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" data-testid="Loader2__orglogo" />
-        ) : blobUrl ? (
-          <img src={blobUrl} alt={orgName || 'Logo'} className="h-full w-full object-contain" />
-        ) : (
-          <span className="text-lg font-semibold text-muted-foreground" data-testid="OrgLogoField__initials">
-            {getInitials(orgName)}
-          </span>
-        )}
+        {previewContent}
       </div>
       {!readOnly && (
         <div className="flex flex-col gap-2">
