@@ -270,7 +270,7 @@ generated `<Page>` component, sorted by `tabOrder`.
 
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
-| `tabOrder` | number | `99` | Sort order among secondary tabs (ascending). |
+| `tabOrder` | number | `99` | Global sort weight across the ENTIRE tab strip (ETP-4415) — not just among secondary tabs. Lower sorts first. Also settable on `customPanelTabs[]`/`extraTabs[]` items and `attachments` (default `999`, i.e. after secondaryTabs); the lines tab uses `window.detailTabOrder` (or the legacy `window.detailTabIndex`, see below) instead, since it isn't declared per-entry. A window declaring no `tabOrder` anywhere renders in exactly the pre-ETP-4415 order. |
 | `label` | string | `toLabel(key)` | Tab label (menu-translatable via `tMenu`). |
 | `tabMode` | string | `null` | `"form-only"` renders `isFormTab: true` (a plain form bound to the header's own state, not a child table) — see `SecondaryFormTab`'s prop contract in `docs/ui-customization.md` §17. Any other value (or `"table-form"`) is a genuine child-entity table + detail form. |
 | `addLineFields` | array | `[]` | Field keys shown in the tab's inline add-row. Resolved against the entity's own contract fields (labels, lookups, defaults, etc. carried over automatically). |
@@ -281,6 +281,14 @@ generated `<Page>` component, sorted by `tabOrder`.
 | `maxDetailLines` | number | `null` | **(ETP-4565)** Caps this tab's own child count, mirroring the top-level `window.maxDetailLines` semantics for the `detailEntity` pattern but scoped per secondary tab — a window can declare several `secondaryTabs`, each needing an independent cap (e.g. `contacts`' `customerAccounting` vs. `vendorAccounting`). `N > 0` hides the add-line button, the empty-state add trigger, and the inline add-row once the tab's child count reaches `N` (e.g. `1` for a "registro único" accounting-schema row). `0` disables manual add entirely for that tab. Undeclared (default) stays uncapped. Implemented by `resolveCanAddSecondaryLines(st, childrenCount)` in `tools/app-shell/src/components/contract-ui/DetailView.jsx`, fed by the `maxDetailLines` prop the generator emits on the tab's entry in `buildSecondaryTabPropEntry` (`generate-frontend.js`, `schema_forge_core`). |
 
 **Real examples:** `product`/`asset-group` (`secondaryTabs.accounting.maxDetailLines: 1`), `contacts` (`secondaryTabs.customerAccounting.maxDetailLines: 1` and `secondaryTabs.vendorAccounting.maxDetailLines: 1`) — all four cap their accounting-schema row at exactly one record, the `secondaryTabs`-pattern equivalent of `window.maxDetailLines: 1` on `product-category`/`business-partner-category`/`tax`'s `detailEntity`. Full extension-point reference (Panel/Form prop contracts, custom-window wiring): `docs/ui-customization.md` §17.
+
+**Cross-group ordering (ETP-4415).** `tabOrder` used to only sort within `secondaryTabs`; it now sorts the whole tab strip (`secondaryTabs` + lines + `customPanelTabs`/`extraTabs`/`attachments`) together, computed at runtime in `buildInitialTabs()` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`). This lets a classic tab (e.g. Contabilidad) render after a custom tab (e.g. Precio) — previously impossible since classic tabs were always emitted before custom ones. `relatedDocuments` does not participate (it renders via a separate footer path, not this tab strip, regardless of this feature).
+
+**The lines tab** is positioned by `window.detailTabOrder` (number, new, preferred) or the legacy `window.detailTabIndex` (a splice index among `secondaryTabs`, kept working for backward compatibility but not recommended for new windows — it's a position, not a weight, and interacts less predictably with custom tabs). Neither declared → the lines tab renders first, matching pre-ETP-4415 behavior.
+
+**Side effect:** the detail view opens on whichever tab ends up first after sorting (`activeTab` starts at index 0). Reordering a window's tabs can change its default-open tab — this is expected, not a bug to work around with a separate "default tab" key.
+
+**Incompatible with `customTabsAfterBottom: true`.** That flag renders custom tabs in a separate strip below `bottomSection`, entirely outside this sort — any `tabOrder` on a custom tab in that mode is a silent no-op, flagged by pipeline-validator rule F21 (see `docs/pipeline-validator-reference.md`).
 
 ### Subset Filters (`window.subsetFilters`)
 

@@ -924,6 +924,10 @@ Customer/Vendor Accounting, etc.).
    (`tabOrder`, `label`, `addLineFields`, `requireSavedRecord`, `customPanel`/`customTable`/
    `customForm`, `customAddModal`, `readOnlyLogic`, and the per-tab `maxDetailLines` cap added in
    ETP-4565): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
+   (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
+   every other entry, not just within its own group — see `docs/decisions-reference.md`'s
+   `secondaryTabs` section for the full reference and the `customTabsAfterBottom` incompatibility.
 2. **Runtime prop, hand-written `windows/custom/{window}/index.jsx`** (documented below) — a
    `Panel`-backed tab with freeform fetch-and-render content that doesn't map to any generated
    entity at all, passed to the generated `<Page>` component from a hand-written wrapper. Requires
