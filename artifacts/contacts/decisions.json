@@ -1,6 +1,7 @@
 {
   "$schema": "decisions-v2",
   "window": {
+    "agentPrompt": "#REF#agent-prompts/contacts/spec.md",
     "category": "contact",
     "name": "Contacts",
     "entityLabel": "Contact",
@@ -567,6 +568,7 @@
       }
     },
     "bankAccount": {
+      "agentPrompt": "#REF#agent-prompts/contacts/bank-account.md",
       "fields": {
         "bankName": {
           "visibility": "editable",
@@ -589,18 +591,21 @@
           "visibility": "editable",
           "grid": true,
           "section": "principal",
-          "columnWidth": 360
+          "columnWidth": 360,
+          "agentPrompt": "#REF#agent-prompts/contacts/bank-account.account-no.md"
         },
         "iBAN": {
           "visibility": "editable",
           "grid": true,
           "section": "principal",
-          "columnWidth": 400
+          "columnWidth": 400,
+          "agentPrompt": "#REF#agent-prompts/contacts/bank-account.iban.md"
         },
         "swiftCode": {
           "visibility": "editable",
           "grid": true,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "#REF#agent-prompts/contacts/bank-account.swift-code.md"
         },
         "displayedAccount": {
           "visibility": "readOnly",
