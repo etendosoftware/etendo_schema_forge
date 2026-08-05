@@ -152,9 +152,9 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           onClick={() => setShowInvoiceConfirm(true)}
           disabled={creatingInvoice}
           className="inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors"
-          style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid var(--status-info-border)', background: 'var(--status-info-bg)', color: 'var(--status-info-fg)', opacity: creatingInvoice ? 0.6 : 1, cursor: creatingInvoice ? 'not-allowed' : 'pointer' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-background-info-hover, var(--status-info-bg))'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--status-info-bg)'; }}
+          style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid var(--status-info-border)', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', opacity: creatingInvoice ? 0.6 : 1, cursor: creatingInvoice ? 'not-allowed' : 'pointer' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
@@ -409,8 +409,8 @@ function ConfirmShipmentInvoicedModal({ data, base, headers, recordId, onConfirm
 
           {firstInvoice && (
             <div style={{ border: '1px solid hsl(var(--foreground))', borderRadius: 11, padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 9, background: 'hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--status-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-info-fg)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                   <polyline points="14 2 14 8 20 8"/>
                   <line x1="16" y1="13" x2="8" y2="13"/>
@@ -420,7 +420,7 @@ function ConfirmShipmentInvoicedModal({ data, base, headers, recordId, onConfirm
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{ui('goodsShipment.confirmModal.invoiceRef')} {firstInvoice.documentNo}</span>
-                  <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 9px', borderRadius: 6, background: 'hsl(var(--card))', color: 'var(--status-success-bg)', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 9px', borderRadius: 6, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)', whiteSpace: 'nowrap' }}>
                     {statusLabel[firstInvoice.documentStatus] || firstInvoice.documentStatus}
                   </span>
                 </div>
@@ -474,9 +474,9 @@ function ConfirmShipmentInvoicedModal({ data, base, headers, recordId, onConfirm
             type="button"
             onClick={handleConfirm}
             disabled={loading}
-            style={{ height: 40, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: loading ? 'var(--status-info-bg)' : 'var(--status-info-bg)', color: 'hsl(var(--card))', cursor: loading ? 'not-allowed' : 'pointer' }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-bg)'; }}
-            onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-bg)'; }}
+            style={{ height: 40, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: loading ? 'var(--status-info-fg)' : 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: loading ? 'not-allowed' : 'pointer' }}
+            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
+            onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12"/>

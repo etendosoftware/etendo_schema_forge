@@ -251,7 +251,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       return (
         <span
           className="inline-flex items-center gap-1.5 text-[13px] font-medium h-9"
-          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'hsl(var(--card))', color: 'var(--status-success-bg)' }}
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
         >
           {ui('cpCreditFullyApplied')}
         </span>
@@ -264,7 +264,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           data-testid="payment-status-badge"
           onClick={() => setShowPaymentsModal(true)}
           className="inline-flex items-center gap-1.5 text-[13px] font-semibold hover:opacity-80 cursor-pointer h-9"
-          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'hsl(var(--card))', border: '1px solid var(--status-info-bg)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
           {ui('cpFavorBadge')} · {fmt(outstandingAbs, currency)}
@@ -411,7 +411,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
                 type="button"
                 disabled={shipmentCreating}
                 onClick={() => setShowShipmentDialog(false)}
-                style={{ padding: '8px 16px', borderRadius: 8, border: '0.5px solid hsl(var(--card))', background: 'transparent', fontSize: 13, fontWeight: 500, color: 'var(--status-info-bg)', cursor: 'pointer' }}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '0.5px solid hsl(var(--border-subtle))', background: 'transparent', fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', cursor: 'pointer' }}
               >
                 {ui('skipShipment')}
               </button>

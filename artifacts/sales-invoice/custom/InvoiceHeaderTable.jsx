@@ -149,7 +149,7 @@ export default function InvoiceHeaderTable(props) {
             const outstandingAbs = Math.abs(outstanding);
             if (outstandingAbs < 0.001) {
               return (
-                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'hsl(var(--card))',color:'var(--status-success-bg)'}}>
+                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                   <Check size={12}/>Aplicada
                 </span>
               );
@@ -162,7 +162,7 @@ export default function InvoiceHeaderTable(props) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
-                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'hsl(var(--card))',border:'1px solid var(--status-info-bg)',color:'hsl(var(--primary))',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'hsl(var(--primary))',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
                 <span style={{width:8,height:8,borderRadius:'50%',background:'hsl(var(--primary))',flexShrink:0,display:'inline-block'}}/>
                 Saldo a favor · {fmtAmt(outstandingAbs, currency)}
@@ -171,7 +171,7 @@ export default function InvoiceHeaderTable(props) {
           }
           if (outstanding <= 0) {
             return (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'hsl(var(--card))',color:'var(--status-success-bg)'}}>
+              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                 <Check size={12}/>{t('cobrada')}
               </span>
             );
@@ -181,9 +181,9 @@ export default function InvoiceHeaderTable(props) {
               type="button"
               onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
               aria-label={t('addCobro')}
-              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'hsl(var(--card))',border:'1px solid var(--status-warning-bg)',color:'var(--status-warning-bg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-warning-bg)',border:'1px solid var(--status-warning-border)',color:'var(--status-warning-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
             >
-              <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-bg)',flexShrink:0,display:'inline-block'}}/>
+              <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
               {fmtAmt(outstanding, currency)}
               <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13}/></span>
             </button>
