@@ -198,6 +198,34 @@ describe('GoodsShipmentPreview', () => {
     expect(downloadBtn).toBeDisabled();
   });
 
+  // ── ETP-4717 Pair 3 regression: preview drawer Send gating ────────────────
+  // GoodsShipmentPreview never gated its Send action by documentStatus — the
+  // primary action-bar Button (Mail icon) is a raw always-rendered button,
+  // and EmailsCard's onSend is always openEmailModal. The fix will only wire
+  // these up when shipment.documentStatus === 'CO'. These DR cases must FAIL
+  // against the current (unfixed) source.
+  describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
+    it('does NOT render the action-bar Send (mail) button when shipment.documentStatus is DR (draft)', () => {
+      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
+      expect(screen.queryByTestId('icon-mail')).not.toBeInTheDocument();
+    });
+
+    it('renders the action-bar Send (mail) button when shipment.documentStatus is CO (completed)', () => {
+      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
+      expect(screen.getByTestId('icon-mail')).toBeInTheDocument();
+    });
+
+    it('does NOT render the EMAILS-section send link when shipment.documentStatus is DR (draft)', () => {
+      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
+      expect(screen.queryByText('previewCardSendEmail')).not.toBeInTheDocument();
+    });
+
+    it('renders the EMAILS-section send link when shipment.documentStatus is CO (completed)', () => {
+      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
+      expect(screen.getByText('previewCardSendEmail')).toBeInTheDocument();
+    });
+  });
+
   it('download button is not disabled when pdfBlob is set', () => {
     useShipmentPdf.mockReturnValue({
       pdfUrl: 'blob:test',

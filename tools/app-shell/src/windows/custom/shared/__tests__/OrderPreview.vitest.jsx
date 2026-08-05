@@ -35,11 +35,15 @@ vi.mock('../GenericPreviewModal.jsx', () => ({
 }));
 
 vi.mock('../PreviewActionButtons.jsx', () => ({
+  // Mirrors the real component's {onEmail && (...)} gate (PreviewActionButtons.jsx)
+  // so tests can assert whether OrderPreview passed a truthy onEmail or not.
   default: ({ onEmail, onDownloadPdf, hasPdf, sendLabel, downloadLabel, editLabel }) => (
     <div data-testid="action-buttons">
-      <button data-testid="email-btn" onClick={onEmail}>
-        {sendLabel}
-      </button>
+      {onEmail && (
+        <button data-testid="email-btn" onClick={onEmail}>
+          {sendLabel}
+        </button>
+      )}
       <button data-testid="download-btn" onClick={onDownloadPdf} disabled={!hasPdf}>
         {downloadLabel}
       </button>
@@ -85,7 +89,9 @@ vi.mock('../preview-cards/SummaryCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/EmailsCard.jsx', () => ({
-  default: () => <div data-testid="emails-card" />,
+  // vi.fn (not a plain arrow) so tests can inspect the onSend prop OrderPreview passes in,
+  // mirroring the SummaryCard prop-inspection pattern already used below.
+  default: vi.fn(() => <div data-testid="emails-card" />),
 }));
 
 vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
@@ -108,6 +114,7 @@ import { useOrderPdf } from '../useOrderPdf.js';
 import { usePurchaseOrderPdf } from '../usePurchaseOrderPdf.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
 import SummaryCard from '../preview-cards/SummaryCard.jsx';
+import EmailsCard from '../preview-cards/EmailsCard.jsx';
 
 const defaultOrder = {
   id: 'order-1',
@@ -265,6 +272,42 @@ describe('OrderPreview', () => {
       // SummaryCard decides whether to show dual-display based on orgCurrencyCode != currencyCode
       // The orgCurrencyCode is still passed through; SummaryCard handles the condition internally
       expect(lastCall.exchangeRate).toBeNull();
+    });
+  });
+
+  // ── ETP-4717 Pair 3 regression: preview drawer Send gating ────────────────
+  // OrderPreview never gated its Send action by documentStatus (unlike the
+  // Form-view topbar and Grid hover RowQuickActions fixed in Pair 1/Pair 2).
+  // The fix will only pass a truthy onEmail/onSend when order.documentStatus
+  // === 'CO'. These cases must FAIL against the current (unfixed) source.
+  describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
+    it('does NOT render the top action-bar email button when order.documentStatus is DR (draft)', () => {
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'DR' } });
+      expect(screen.queryByTestId('email-btn')).not.toBeInTheDocument();
+    });
+
+    it('renders the top action-bar email button when order.documentStatus is CO (completed)', () => {
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } });
+      expect(screen.getByTestId('email-btn')).toBeInTheDocument();
+    });
+
+    it('passes onSend: undefined to EmailsCard when order.documentStatus is DR (draft)', () => {
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'DR' } });
+      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+      expect(lastCall).toBeDefined();
+      expect(lastCall.onSend).toBeUndefined();
+    });
+
+    it('passes a truthy onSend function to EmailsCard when order.documentStatus is CO (completed)', () => {
+      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } });
+      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+      expect(lastCall).toBeDefined();
+      expect(typeof lastCall.onSend).toBe('function');
+    });
+
+    it('applies the same DR gating for purchase-order (no per-spec status difference for this rule)', () => {
+      renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'DR' } });
+      expect(screen.queryByTestId('email-btn')).not.toBeInTheDocument();
     });
   });
 });

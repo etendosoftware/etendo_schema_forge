@@ -94,7 +94,9 @@ vi.mock('../preview-cards/PaymentsCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/EmailsCard.jsx', () => ({
-  default: () => <div data-testid="emails-card" />,
+  // vi.fn (not a plain arrow) so tests can inspect the onSend prop InvoicePreview
+  // passes in, mirroring the SummaryCard prop-inspection pattern used above.
+  default: vi.fn(() => <div data-testid="emails-card" />),
 }));
 
 vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
@@ -115,6 +117,7 @@ import InvoicePreview from '../InvoicePreview.jsx';
 import { useInvoicePreview } from '../useInvoicePreview.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
 import SummaryCard from '../preview-cards/SummaryCard.jsx';
+import EmailsCard from '../preview-cards/EmailsCard.jsx';
 
 const defaultInvoice = {
   id: 'inv-1',
@@ -320,6 +323,69 @@ describe('InvoicePreview', () => {
 
       const lastCall = vi.mocked(SummaryCard).mock.calls.at(-1)?.[0];
       expect(lastCall.exchangeRate).toBeCloseTo(2.5);
+    });
+  });
+
+  // ── ETP-4717 Pair 3 regression: preview drawer Send gating ────────────────
+  // InvoicePreview gates onEmail only by `specName !== 'purchase-invoice'`, never
+  // by documentStatus. The fix will additionally require invoice.documentStatus
+  // === 'CO'. These DR cases must FAIL against the current (unfixed) source; the
+  // purchase-invoice exclusion case is expected to already pass (no regression there).
+  describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
+    it('does NOT render the action-bar Send button for a sales-invoice in DR (draft) status', () => {
+      const draftInvoice = { ...defaultInvoice, documentStatus: 'DR' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: draftInvoice,
+        isSalesInvoice: true,
+        isDraft: true,
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: draftInvoice });
+      expect(screen.queryByText('invoicePreviewSend')).not.toBeInTheDocument();
+    });
+
+    it('renders the action-bar Send button for a sales-invoice in CO (completed) status', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: defaultInvoice, // documentStatus: 'CO'
+        isSalesInvoice: true,
+        isDraft: false,
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: defaultInvoice });
+      expect(screen.getByText('invoicePreviewSend')).toBeInTheDocument();
+    });
+
+    it('still hides the action-bar Send button for purchase-invoice regardless of status (existing exclusion holds)', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: defaultInvoice, // documentStatus: 'CO'
+        isSalesInvoice: false,
+        isDraft: false,
+      }));
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: defaultInvoice });
+      expect(screen.queryByText('invoicePreviewSend')).not.toBeInTheDocument();
+    });
+
+    it('passes onSend: undefined to EmailsCard when invoice.documentStatus is DR (draft) for sales-invoice', () => {
+      const draftInvoice = { ...defaultInvoice, documentStatus: 'DR' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: draftInvoice,
+        isSalesInvoice: true,
+        isDraft: true,
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: draftInvoice });
+      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+      expect(lastCall).toBeDefined();
+      expect(lastCall.onSend).toBeUndefined();
+    });
+
+    it('passes a truthy onSend function to EmailsCard when invoice.documentStatus is CO (completed) for sales-invoice', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: defaultInvoice, // documentStatus: 'CO'
+        isSalesInvoice: true,
+        isDraft: false,
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: defaultInvoice });
+      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+      expect(lastCall).toBeDefined();
+      expect(typeof lastCall.onSend).toBe('function');
     });
   });
 });

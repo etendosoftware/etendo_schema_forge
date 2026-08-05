@@ -35,11 +35,15 @@ vi.mock('../GenericPreviewModal.jsx', () => ({
 }));
 
 vi.mock('../PreviewActionButtons.jsx', () => ({
+  // Mirrors the real component's {onEmail && (...)} gate (PreviewActionButtons.jsx)
+  // so tests can assert whether QuotationPreview passed a truthy onEmail or not.
   default: ({ onEmail, onDownloadPdf, hasPdf, sendLabel, downloadLabel, editLabel }) => (
     <div data-testid="action-buttons">
-      <button data-testid="email-btn" onClick={onEmail}>
-        {sendLabel}
-      </button>
+      {onEmail && (
+        <button data-testid="email-btn" onClick={onEmail}>
+          {sendLabel}
+        </button>
+      )}
       <button data-testid="download-btn" onClick={onDownloadPdf} disabled={!hasPdf}>
         {downloadLabel}
       </button>
@@ -71,7 +75,9 @@ vi.mock('../preview-cards/SummaryCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/EmailsCard.jsx', () => ({
-  default: () => <div data-testid="emails-card" />,
+  // vi.fn (not a plain arrow) so tests can inspect the onSend prop QuotationPreview
+  // passes in, matching the prop-inspection convention used across the sibling files.
+  default: vi.fn(() => <div data-testid="emails-card" />),
 }));
 
 vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
@@ -89,6 +95,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
 import { render, screen, fireEvent } from '@testing-library/react';
 import QuotationPreview from '../QuotationPreview.jsx';
 import { useQuotationPdf } from '../useQuotationPdf.js';
+import EmailsCard from '../preview-cards/EmailsCard.jsx';
 
 const defaultQuotation = {
   id: 'q-1',
@@ -180,5 +187,36 @@ describe('QuotationPreview', () => {
     useQuotationPdf.mockReturnValue({ pdfUrl: 'blob:q-test', pdfBlob: new Blob(), loading: false, error: null });
     renderQuotationPreview();
     expect(screen.getByTestId('download-btn')).not.toBeDisabled();
+  });
+
+  // ── ETP-4717 Pair 3 regression: preview drawer Send gating ────────────────
+  // QuotationPreview never gated its Send action by documentStatus. The fix
+  // matches the "Bajo evaluación+" rule already shipped for the Grid/Form
+  // gate on sales-quotation: quotation?.documentStatus !== 'DR'. These DR
+  // cases must FAIL against the current (unfixed) source.
+  describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
+    it('does NOT render the top action-bar email button when quotation.documentStatus is DR (draft)', () => {
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'DR' } });
+      expect(screen.queryByTestId('email-btn')).not.toBeInTheDocument();
+    });
+
+    it('renders the top action-bar email button when quotation.documentStatus is UE (under evaluation)', () => {
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'UE' } });
+      expect(screen.getByTestId('email-btn')).toBeInTheDocument();
+    });
+
+    it('passes onSend: undefined to EmailsCard when quotation.documentStatus is DR (draft)', () => {
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'DR' } });
+      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+      expect(lastCall).toBeDefined();
+      expect(lastCall.onSend).toBeUndefined();
+    });
+
+    it('passes a truthy onSend function to EmailsCard when quotation.documentStatus is UE (under evaluation)', () => {
+      renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'UE' } });
+      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+      expect(lastCall).toBeDefined();
+      expect(typeof lastCall.onSend).toBe('function');
+    });
   });
 });
