@@ -1,7 +1,7 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "generatedAt": "2026-07-06T16:17:20.534Z",
-  "contractChecksum": "f7c136a66a421516",
+  "contractChecksum": "eed628b2edf5cbce",
   "apiPrediction": {
     "specName": "return-to-vendor-shipment",
     "baseUrl": "/sws/neo/return-to-vendor-shipment",
@@ -194,44 +194,6 @@
         ],
         "processId": "109",
         "processType": "classic"
-      },
-      {
-        "name": "posted",
-        "actionType": "documentAction",
-        "entity": "returnToVendorShipment",
-        "column": "Posted",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/posted",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ]
       },
       {
         "name": "calculateFreight",
@@ -490,6 +452,11 @@
             "required": true,
             "defaultValue": "DR"
           },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
           "etblkpBulkposting": {
             "readOnly": true,
             "required": true,
@@ -579,7 +546,6 @@
       "createLinesFrom",
       "generateTo",
       "documentAction",
-      "posted",
       "etblkpBulkposting",
       "receiveMaterials"
     ],
@@ -629,5 +595,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "1ee2a33d8641c12c"
+  "checksum": "a9bf582fb7f6f902"
 }
