@@ -1052,6 +1052,35 @@ function StatusItem({ label, children }) {
 }
 
 /**
+ * Status pill shown beside the auto-sync subtitle, in the same three states as the section that
+ * owns it. Extracted so the label picks its wording through a plain if-chain: inline it was a
+ * ternary nested inside another ternary inside the JSX, which is both a Sonar finding (S3358) and
+ * most of what pushed `BankConnectionSection` over the cognitive-complexity limit (S3776).
+ */
+function BankConnectionStatusBadge({ ui, connected, deactivated }) {
+  let label;
+  if (connected) {
+    label = `✓ ${ui('financeAccountsBankConnectionStatusConnected')}`;
+  } else if (deactivated) {
+    label = ui('financeAccountsBankConnectionStatusDeactivated');
+  } else {
+    label = ui('financeAccountsBankConnectionStatusDisconnected');
+  }
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-normal ${
+        connected
+          ? 'bg-[var(--status-success-bg)] text-[var(--status-success-fg)]'
+          : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
+      }`}
+      data-testid="edit-account-connection-status-badge"
+    >
+      {label}
+    </span>
+  );
+}
+
+/**
  * Bank connection block, in one of three states (ETP-4764):
  *
  * - **connected** — the live panel with sync, import settings and the re-auth banner.
@@ -1076,15 +1105,11 @@ function BankConnectionSection({
           <div className="mt-1 flex items-center gap-2">
             <span className="text-xs text-[hsl(var(--foreground))]">{ui('financeAccountsBankConnectionAutoSyncSubtitle')}</span>
             {hasBankLink ? (
-              <span className={`rounded-full px-2 py-0.5 text-xs font-normal ${
-                bankConnection.connected ? 'bg-[var(--status-success-bg)] text-[var(--status-success-fg)]' : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
-              }`}>
-                {bankConnection.connected
-                  ? `✓ ${ui('financeAccountsBankConnectionStatusConnected')}`
-                  : ui(deactivated
-                    ? 'financeAccountsBankConnectionStatusDeactivated'
-                    : 'financeAccountsBankConnectionStatusDisconnected')}
-              </span>
+              <BankConnectionStatusBadge
+                ui={ui}
+                connected={connected}
+                deactivated={deactivated}
+                data-testid="BankConnectionStatusBadge__73027d" />
             ) : null}
           </div>
         </div>
