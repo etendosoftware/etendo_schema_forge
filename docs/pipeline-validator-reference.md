@@ -9,32 +9,41 @@ Phased delivery: `docs/plans/2026-04-16-pipeline-validator-implementation.md`.
 
 ## Quick Start
 
+The validator source lives in `schema_forge_core`; this repo consumes the published
+`sf-validate-pipeline` bin (or the `LOCAL_CORE=1` dispatcher). Always drive it through
+`make`, which exports `SF_ROOT` — see the warning below.
+
 ```bash
 # Validate every artifact in the repo (CI mode)
 make validate-pipeline
 
-# Equivalently
-node cli/src/validate-pipeline.js
+# Validate a single window
+SF_ROOT=$PWD npx sf-validate-pipeline --scope=product
 
-# Validate only staged files (pre-commit mode)
-node cli/src/validate-pipeline.js --staged
+# Validate only staged files (what the pre-commit hook runs)
+SF_ROOT=$PWD npx sf-validate-pipeline --staged
 
-# Promote warnings to blocking errors
-node cli/src/validate-pipeline.js --strict
-
-# Machine-readable output (for CI annotations)
-node cli/src/validate-pipeline.js --format=json
+# Promote warnings to blocking errors / machine-readable output
+SF_ROOT=$PWD npx sf-validate-pipeline --strict
+SF_ROOT=$PWD npx sf-validate-pipeline --format=json
 
 # Skip specific rules — escape hatch, must be justified in the commit body
-node cli/src/validate-pipeline.js --skip=F4,F7
+SF_ROOT=$PWD npx sf-validate-pipeline --skip=F4,F7
 ```
 
-The tool is also exported as a module for testing:
+> **`SF_ROOT` is mandatory when invoking the bin directly.** The validator resolves
+> `ROOT = process.env.SF_ROOT || join(__dirname, '..', '..')`, and `__dirname` is the
+> *installed package's* `src/`, so without `SF_ROOT` the root points inside
+> `node_modules`, no artifacts are found, and the run prints
+> `Pipeline validation: OK` **having validated nothing** — a silent false pass.
+> `make` sets it (`export SF_ROOT := $(CURDIR)`, Makefile line 3) and so does
+> `.githooks/pre-commit`; a bare `npx sf-validate-pipeline` does not.
 
-```js
-import { validatePipeline } from 'cli/src/validate-pipeline.js';
-const { violations, summary } = await validatePipeline({ scope: 'all', strict: false, skip: [] });
-```
+Accepted CLI flags are `--scope=`, `--staged`, `--strict`, `--format=`, `--skip=` and
+`--changed-since=`. Note there is **no** flag for the F19/F20 allowlist paths: those
+resolve to the files shipped **inside the published package**, so allowlist entries must
+be added in `schema_forge_core` and released. A copy of the file in this repo's
+`cli/src/` is never read.
 
 ---
 
