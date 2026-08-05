@@ -5,6 +5,13 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 
+// Radix Select has no empty-string value, so the picker uses '__empty__' as its
+// placeholder sentinel — translate it back to '' before it reaches priceListId,
+// and back to the sentinel when feeding the current value into the Select.
+const resolvePriceListValue = (val) => (val === '__empty__' ? '' : val);
+const toPriceListSelectValue = (id) => id || '__empty__';
+const priceListPlaceholder = (ui, isLoading) => (isLoading ? ui('loading') : ui('noPriceListsAvailable'));
+
 /**
  * Generic "Create Invoice" confirmation modal — used by both goods-shipment and
  * goods-receipt. Shows a summary card and a checkbox before executing the action.
@@ -133,13 +140,13 @@ export default function CreateInvoiceConfirmModal({
               {ui('salesPriceListField')}
             </label>
             <Select
-              value={priceListId || '__empty__'}
-              onValueChange={val => setPriceListId(val === '__empty__' ? '' : val)}
+              value={toPriceListSelectValue(priceListId)}
+              onValueChange={val => setPriceListId(resolvePriceListValue(val))}
               disabled={loadingPriceLists || priceLists.length === 0}
               data-testid="Select__invoice-confirm-price-list"
             >
               <SelectTrigger id="invoice-confirm-price-list" data-testid="invoice-confirm-price-list-select">
-                <SelectValue placeholder={loadingPriceLists ? ui('loading') : ui('noPriceListsAvailable')} data-testid="SelectValue__invoice-confirm-price-list" />
+                <SelectValue placeholder={priceListPlaceholder(ui, loadingPriceLists)} data-testid="SelectValue__invoice-confirm-price-list" />
               </SelectTrigger>
               <SelectContent data-testid="SelectContent__invoice-confirm-price-list">
                 {loadingPriceLists && <SelectItem value="__empty__" data-testid="SelectItem__invoice-confirm-price-list-loading">{ui('loading')}</SelectItem>}
