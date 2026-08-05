@@ -130,6 +130,45 @@ function detailContentPadding(linesLayout, hasSidebar, variant, compact = false,
   return isInline ? '' : (paddingXOverride ?? 'px-6');
 }
 
+const BLEED_AXIS = { px: 'mx', pr: 'mr', pl: 'ml' };
+
+/**
+ * Horizontal bleed for the secondary tab strip, so its bottom border reaches both
+ * edges of the panel instead of starting a few pixels in.
+ *
+ * The strip is a sibling of the form card inside the padded content column (the only
+ * thing between them is `getLinesTabsSectionClassName`'s `mt-2`), so it inherits that
+ * column's horizontal padding. Each padding token is cancelled with a matching negative
+ * margin and then re-applied inside, which moves the border out to the edges while
+ * leaving the tab buttons exactly where they were. Derived from the SAME
+ * `detailContentPadding()` inputs as the column itself so the two cannot drift.
+ */
+export function getTabStripBleedClassName({
+  linesLayout,
+  sidePanel,
+  sidebarContent,
+  sidebarAboveTabsOnly,
+  compactSidebarPadding,
+  formScrollPaddingX = null,
+} = {}) {
+  const padding = detailContentPadding(
+    linesLayout,
+    !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)),
+    'content',
+    compactSidebarPadding,
+    formScrollPaddingX,
+  );
+  return padding
+      .split(/\s+/)
+      .filter(Boolean)
+      .flatMap((token) => {
+        const match = /^(px|pr|pl)-(.+)$/.exec(token);
+        if (!match) return [];
+        return [`-${BLEED_AXIS[match[1]]}-${match[2]}`, token];
+      })
+      .join(' ');
+}
+
 /**
  * Resolve the `onRowClick` handler for a secondary-tab table.
  *
@@ -3399,6 +3438,7 @@ export function DetailView({
                             )}
                             <Form
                               entity={entity}
+                              windowName={windowName}
                               data={data}
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
@@ -3423,6 +3463,7 @@ export function DetailView({
                               <div className={`px-6 pb-6${embedded ? ' pointer-events-none' : ''}`}>
                                 <Form
                                   entity={entity}
+                                  windowName={windowName}
                                   data={data}
                                   onChange={handleChangeWithCallout}
                                   catalogs={catalogs}
@@ -3470,7 +3511,7 @@ export function DetailView({
                       className={getLinesTabsSectionClassName(linesLayout)}
                       onMouseDown={autoSaveOnBlur && linesLayout === 'inlineEditable' ? () => handleFieldBlurRef.current?.() : undefined}
                     >
-                      <div className={`flex items-center justify-between border-b border-border/50 ${(getInlineEditableShrinkClassName(linesLayout))}`}>
+                      <div className={`flex items-center justify-between border-b border-border/50 ${getTabStripBleedClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, formScrollPaddingX })} ${(getInlineEditableShrinkClassName(linesLayout))}`}>
                         <div className="flex items-center gap-0">
                           {tabs.map((tab, idx) => {
                             const tabIndicatorCls = linesLayout === 'inlineEditable'
@@ -4175,6 +4216,7 @@ export function DetailView({
                           <div className={getOthersTabClassName(embedded)}>
                             <Form
                               entity={entity}
+                              windowName={windowName}
                               data={data}
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
@@ -4208,6 +4250,7 @@ export function DetailView({
                     <div ref={othersRef} className="hidden">
                       <Form
                         entity={entity}
+                        windowName={windowName}
                         data={data}
                         onChange={() => { }}
                         catalogs={catalogs}

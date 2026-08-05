@@ -57,9 +57,8 @@ describe('Sales InvoiceHeaderTable — columns', () => {
   });
 
   it('renders doc-type badge on transactionDocument column via getArSubtype', () => {
-    assert.match(src, /getArSubtype\(row\)/, 'transactionDocument column must call getArSubtype to detect NC/DEV subtypes');
-    assert.match(src, /creditNotesTab/, 'NC badge must use the creditNotesTab i18n key');
-    assert.match(src, /returnsTab/, 'DEV badge must use the returnsTab i18n key');
+    assert.match(src, /getArSubtype\(row\)/, 'transactionDocument column must call getArSubtype to detect the RECTIFICATIVA subtype');
+    assert.match(src, /rectificativeInvoicesTab/, 'RECTIFICATIVA badge must use the rectificativeInvoicesTab i18n key (ETP-4737: replaces the former creditNotesTab/returnsTab split)');
   });
 });
 
