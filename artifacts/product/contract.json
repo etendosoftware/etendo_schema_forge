@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-04T15:44:28.206Z",
-  "checksum": "78840590c41381b4",
+  "updatedAt": "2026-08-05T02:33:56.657Z",
+  "checksum": "c5aa960de3723932",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -619,7 +619,7 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "section": "other",
             "computed": {
               "mode": "stored",
@@ -639,7 +639,7 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "section": "other",
             "computed": {
               "mode": "stored",
@@ -659,7 +659,7 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "section": "other",
             "computed": {
               "mode": "stored",
