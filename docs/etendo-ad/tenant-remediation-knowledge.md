@@ -789,3 +789,101 @@
   control (here `OnboardingDatasetNormalizer`, the runtime side, since `com.etendoerp.go` owns it
   and ddlutils is core/third-party and out of reach) rather than trying to find a single literal
   that satisfies both — none may exist, and here empirically none does.
+
+---
+
+## ETP-4720 — C_BP_Group_Acct's other 11 `*_acct` columns (R21, 2026-08-05)
+
+- **2026-08-05 — `c_bp_group_trg()` (core, unmodified Postgres trigger, `C_BP_Group_Trg.sql`)
+  structurally OMITS 5 of `C_BP_Group_Acct`'s 33 columns from its own INSERT, confirmed via
+  `pg_get_functiondef(oid)` for `proname='c_bp_group_trg'`.** Its column list copies
+  `C_AcctSchema_Default` onto a new group row for: `C_Receivable_Acct`, `C_PrePayment_Acct`,
+  `V_Liability_Acct`, `V_Liability_Services_Acct`, `V_PrePayment_Acct`, `PayDiscount_Exp_Acct`,
+  `PayDiscount_Rev_Acct`, `WriteOff_Acct`, `UnRealizedGain/Loss_Acct`, `RealizedGain/Loss_Acct`,
+  `NotInvoicedReceipts_Acct`, `UnEarnedRevenue_Acct`, `NotInvoicedRevenue_Acct`,
+  `NotInvoicedReceivables_Acct` — but never mentions `WriteOff_Rev_Acct`, `DoubtfulDebt_Acct`,
+  `BadDebtExpense_Acct`, `BadDebtRevenue_Acct`, or `AllowanceForDoubtful_Acct`. This is core
+  Compiere/Openbravo code, out of reach to patch. **Apply:** never assume the trigger populates
+  every `*_acct` column just because it exists and fires reliably (per the earlier 2026-07-01 note)
+  — always diff its actual column list against the target table's full column list before trusting
+  it as a complete defaulting mechanism.
+- **2026-08-05 — `OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` (the Java fallback INSERT,
+  guarded by `NOT EXISTS` at the row level) is missing the SAME 4 columns as the trigger**
+  (`DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct`) —
+  it DOES include `WriteOff_Rev_Acct` (one more than the trigger). Because `C_BP_Group` is always
+  inserted (and the trigger fires) BEFORE this Java statement runs, the Java statement's own
+  `NOT EXISTS` finds the row already present and never executes — so in practice its column list is
+  moot; whichever path "wins," the resulting row is missing the same 4 columns, for every tenant,
+  every group, always.
+- **2026-08-05 — LIVE, ONGOING preventive gap confirmed on a 6-day-old tenant, not just legacy
+  drift.** Swept all 12 tenants on the dev DB: `DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/
+  `BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct` are NULL on **every** `C_BP_Group_Acct` row of
+  every tenant whose `C_AcctSchema_Default` already has them populated (via R11) — including
+  "Empresa E2E d5be89a8" (client `2D54A79B1B2649218C5FED9307B84DC9`), onboarded 2026-07-29 through
+  the CURRENT onboarding code, just 6 days before this was diagnosed. This directly contradicts an
+  assumption in the ETP-4720 ticket text that "onboarding already wires these correctly, this is
+  corrective-only" — it does NOT, for these 4 columns specifically. **Flagged to the
+  coordinator/user rather than silently fixed**, per the tenant-fixer rule that a found preventive
+  gap outside a ticket's stated scope needs a scope call before a Java fix ships. R21's corrective
+  `.sql` (`20260805T120000Z__R21-bp-group-acct-remaining-columns.sql`) ships covering ALL 12 tenants
+  either way; `ONBOARDING_PROVISIONED_THROUGH` was deliberately NOT bumped since no preventive fix
+  shipped alongside it.
+- **2026-08-05 — 6 of the ticket's 11 target columns are NULL on `C_AcctSchema_Default` ITSELF,
+  fleet-wide, on every tenant on this DB — an R11-adjacent gap, not this ticket's to fix. The 7th,
+  `WriteOff_Rev_Acct`, has ONE pre-existing exception — DOCS UPDATE (2026-08-05, verified live by
+  Sage during DOCS review): re-querying `c_acctschema_default` found `WriteOff_Rev_Acct` NOT NULL on
+  1 of the 14 schemas — F&B International Group's schema `732913485BB040FFA4643FF06D1AA095`
+  (`updated` 2026-07-08, `updatedby='0'`, predates R21's authoring) — the other 13 schemas are NULL
+  for it, matching the original claim.** `NotInvoicedRevenue_Acct`, `NotInvoicedReceivables_Acct`,
+  `UnEarnedRevenue_Acct`, `PayDiscount_Exp_Acct`, `PayDiscount_Rev_Acct`, `V_Liability_Services_Acct`
+  are all NULL on `C_AcctSchema_Default` for all 14 schemas checked — R11
+  (`R11-acctschema-default-completion.sql`) only ever populated 6 *different* Defaults-tab columns
+  (`DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct`/
+  `P_Def_Expense_Acct`/`P_Def_Revenue_Acct`). **Practical consequence:** because that one schema
+  already has a source value, R21's `@check` does NOT no-op for F&B today — of the 8
+  `C_BP_Group_Acct` rows tied to that schema, 2 still have `writeoff_rev_acct` NULL and WILL be
+  backfilled the first time R21 runs for F&B's client id (confirmed live, 2026-08-05). **Apply:**
+  R21's `@check` correctly excludes the other 6 columns today (nothing to source from anywhere), and
+  will self-heal them automatically per-tenant the
+  moment a future fix populates `C_AcctSchema_Default` for them — no change needed in R21 when that
+  happens. Do not confuse "R11 completed the Defaults tab" with "every Defaults-tab column is now
+  populated" — R11's own scope was 6 specific columns, not all of them.
+- **2026-08-05 — Per-partner override-column audit for the 11 target columns (queried
+  `information_schema.columns`, not assumed): only `V_Liability_Services_Acct` has a matching
+  per-partner override column, on `C_BP_Vendor_Acct` (14 columns total: `v_liability_acct`,
+  `v_liability_services_acct`, `v_prepayment_acct`, plus PK/audit). `C_BP_Customer_Acct` (13 columns)
+  has NEITHER of the 11 — only `c_receivable_acct`/`c_prepayment_acct`. Conclusion: a per-partner
+  override's existence is irrelevant to whether the GROUP-level column should be backfilled — R21
+  only ever writes `C_BP_GROUP_ACCT`, never the per-partner tables, and
+  `OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` itself fills the group-level row
+  unconditionally at row-creation time with no per-partner check — so R21 needs no extra guard
+  beyond "column still NULL, default now available," identical to every other column in the fix and
+  to R17. (Separately noted, NOT part of R21: `BP_VENDOR_ACCT_SQL` only ever inserts
+  `v_liability_acct`/`v_prepayment_acct` for a new vendor — it never seeds
+  `v_liability_services_acct` at the per-partner level at all, for any vendor, ever. That is a
+  distinct, unexplored potential gap on a different table, out of this ticket's scope.)
+- **2026-08-05 — UPDATE: preventive front landed, gap CLOSED on both fronts.** Per an explicit
+  coordinator decision, the open preventive gap above (the 4 columns actually missing live today —
+  `DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct`; the
+  Java patch also covers `WriteOff_Rev_Acct` since the core trigger omits it too — see the "DOCS
+  UPDATE" bullet above for the corrected, DB-verified state of that column's own schema default
+  [F&B International Group's schema is the one exception, populated since 2026-07-08 — NOT NULL
+  fleet-wide]) was folded into ETP-4720 rather than a separate ticket. Implemented as `OnboardingAccountingWiringService#patchBpGroupAcctMissingColumns` — a THIRD
+  entry point on that class (after `wire` and `wireBusinessPartnerAccounts`), a `COALESCE`-guarded
+  `UPDATE` mirroring R21's own SQL shape column-for-column, wired as the new LAST provisioning step in
+  `EtendoGoJwtServlet.ensureOnboardingDataset` (right before `registerBaseline`). Needed neither a
+  resolved `Client`/`AcctSchema` entity nor a specific schema id — unlike `wire()`/
+  `wireBusinessPartnerAccounts()`, it patches every schema a tenant has via one client-scoped
+  statement, exactly like its corrective twin (confirmed via a dedicated unit test that leaves
+  `clientMissing`/`ledgerMissing` seams set and shows the patch still runs regardless).
+  `ONBOARDING_PROVISIONED_THROUGH` bumped to R21's own timestamp, `2026-08-05T12:00:00Z`. Verified:
+  `OnboardingAccountingWiringServiceTest` (+4 tests) and `EtendoGoJwtServletOnboardingDatasetTest`
+  (+2 tests, wiring order + failure-short-circuits-the-chain) — 60/60 total pass via `./gradlew test
+  --tests com.etendoerp.go.onboarding.OnboardingAccountingWiringServiceTest --tests
+  com.etendoerp.go.rest.EtendoGoJwtServletOnboardingDatasetTest` (the ROOT `:test` task; the
+  per-module `:modules:com.etendoerp.go:test` task reports `NO-SOURCE` in this build — this module's
+  `src-test` is wired into the root project's `test` sourceSet by the Etendo Gradle plugin, not into a
+  per-module one — use the root task, not `:modules:com.etendoerp.go:test`, to run these tests).
+  Corrective side: `cli/test/data-fixes-r21-bp-group-acct-remaining-columns.test.js` added (59 tests,
+  static parse validation per the R17/R20 precedent — no live-DB test harness exists for data-fixes
+  in this codebase, by established convention).
