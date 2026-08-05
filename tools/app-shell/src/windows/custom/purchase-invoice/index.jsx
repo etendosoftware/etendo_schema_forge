@@ -27,11 +27,20 @@ const DOC_TYPE_LABELS = {
   'Reversed Purchase Invoice': 'Factura de Devolución',
 };
 
-// i18n-allowlist: ["all", "invoicesTab", "creditNotesTab"]
+// i18n-allowlist: ["allTab", "invoicesTab", "rectificativeInvoicesTab"]
+// ETP-4737: server-side criteria, mirrored 1:1 from
+// artifacts/purchase-invoice/decisions.json → window.subsetFilters. Discriminates
+// on etsgIsRectificative / documentCategory (the same fields the AD data uses),
+// NOT on the raw doc-type identifier string — a name match silently misses any
+// new document type sharing the same category (this is exactly how "Factura
+// Rectificativa (compras)" fell through to "Todos" until this fix, since it was
+// never rendered by the generated HeaderPage this window bypasses). Keep this
+// array's filter criteria in sync with decisions.json whenever that
+// discriminator changes.
 const INVOICE_SUBSET_FILTERS = [
-  { label: 'all' },
-  { label: 'invoicesTab',    rowFilter: (r) => r['transactionDocument$_identifier'] === 'AP Invoice' },
-  { label: 'creditNotesTab', rowFilter: (r) => r['transactionDocument$_identifier'] === 'AP CreditMemo' },
+  { label: 'allTab' },
+  { label: 'invoicesTab', filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D' },
+  { label: 'rectificativeInvoicesTab', filter: 'criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D%7D%5D' },
 ];
 
 function applyDocTypeLabels(record) {

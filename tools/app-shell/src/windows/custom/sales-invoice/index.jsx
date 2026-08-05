@@ -49,11 +49,22 @@ const LABEL_OVERRIDES = {
 // Mirrors InvoiceHeaderTable columns (key + column + type only) so that
 // buildAdvancedFilterCriteria can resolve filter modes on the first render,
 // before DataTable fires onColumnsReady.
+// ETP-4737: kept in sync by hand with artifacts/sales-invoice/decisions.json's
+// window.subsetFilters (rectificativeInvoicesTab block) — this hand-rolled
+// SalesInvoiceWindow component bypasses the generated HeaderPage.jsx, so the
+// generator's decisions.json → contract.json → HeaderPage.jsx flow does not
+// reach this array. Any future change to the subsetFilters discriminator in
+// decisions.json MUST be mirrored here too.
 const SUBSET_FILTERS = [
   { label: 'allTab' },
-  { label: 'invoicesTab',    filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D' },
-  { label: 'creditNotesTab', filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D' },
-  { label: 'returnsTab',     filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D' },
+  {
+    label: 'invoicesTab',
+    filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D',
+  },
+  {
+    label: 'rectificativeInvoicesTab',
+    filter: 'criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D',
+  },
 ];
 
 const OVERDUE_INITIAL_COLUMNS = [

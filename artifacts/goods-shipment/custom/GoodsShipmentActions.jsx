@@ -116,13 +116,13 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     return () => { cancelled = true; };
   }, [wizardOpen, recordId, base, headers]);
 
-  const handleCreateInvoice = async () => {
+  const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
     try {
       const res = await fetch(
         `${base}/goods-shipment/goodsShipment/${recordId}/action/createDraftInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({}) },
+        { method: 'POST', headers, body: JSON.stringify({ priceListId }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -274,7 +274,11 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           data={data}
           loading={creatingInvoice}
           pendingQtyUrl={`${base}/goods-shipment/goodsShipment/${recordId}/action/pendingInvoiceLines`}
-          onConfirm={() => { setShowInvoiceConfirm(false); handleCreateInvoice(); }}
+          showPriceListPicker
+          isSOTrx
+          apiBaseUrl={apiBaseUrl}
+          token={token}
+          onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}
           onClose={() => setShowInvoiceConfirm(false)}
         />
       )}

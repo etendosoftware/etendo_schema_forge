@@ -32,6 +32,7 @@ const LABEL_OVERRIDES = {
     DocStatus: 'Estado doc.',
     M_Warehouse_ID: 'Almacén',
     InvoiceStatus: 'Estado de facturación',
+    EM_ETGO_Currency_ID: 'Moneda',
   },
   en_US: {
     MovementDate: 'Movement Date',
@@ -40,6 +41,7 @@ const LABEL_OVERRIDES = {
     DocStatus: 'Document Status',
     M_Warehouse_ID: 'Warehouse',
     InvoiceStatus: 'Invoice Status',
+    EM_ETGO_Currency_ID: 'Currency',
   },
 };
 

@@ -118,4 +118,19 @@ describe('ConfirmWithCreditButton (return-to-vendor)', () => {
     );
     expect(screen.queryByTestId('action-clone')).not.toBeInTheDocument();
   });
+
+  // ETP-4737: postConfirmButtonLabel={ui('returnToVendor.createCreditNote')} is
+  // hardcoded on this wrapper — verify it actually reaches the rendered button
+  // text through ConfirmWithCreditButtonBase, instead of the base's own
+  // ui('createReturnInvoice') fallback.
+  it('forwards ui("returnToVendor.createCreditNote") as the create-return-invoice button label', () => {
+    render(
+      <ConfirmWithCreditButton
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', returnInvoices: [] }}
+      />,
+    );
+    const btn = screen.getByTestId('action-create-return-invoice');
+    expect(btn).toHaveTextContent('returnToVendor.createCreditNote');
+  });
 });
