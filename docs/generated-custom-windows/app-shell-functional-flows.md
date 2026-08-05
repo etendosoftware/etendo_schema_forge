@@ -370,3 +370,34 @@ The Dashboard period filter (the range selector: "Último año", "Últimos 90 d�
 - `tools/app-shell/src/auth/useLogout.js` — the single logout choke point that calls `clearStoredDateRange()` before the core `logout()`.
 
 Full auth/session design and the "route every logout through `useLogout()`" convention: [`../architecture/07-auth-and-security.md`](../architecture/07-auth-and-security.md#logout-choke-point-uselogout).
+
+## Secondary tab strip — full-bleed divider — ETP-4605
+
+**Applies to every window with secondary tabs.** The strip that holds the child-entity /
+custom tabs (e.g. `Accounting` · `Price` · `Attachments` in Producto) carries a
+`border-b border-border/50`. It is a sibling of the form card inside the detail *content
+column*, and the only thing between them is `getLinesTabsSectionClassName`'s `mt-2`, so it
+inherited that column's horizontal padding — which made the divider start (and end) a few
+pixels inside the panel instead of spanning it.
+
+`getTabStripBleedClassName()` (exported from `DetailView.jsx`, next to
+`detailContentPadding`) now resolves the column's padding from the **same**
+`detailContentPadding()` inputs and, for each horizontal token, emits a matching negative
+margin plus the token itself:
+
+| Content column padding | Window shape | Bleed emitted |
+|---|---|---|
+| `px-2 pb-2` | sidebar + `compactSidebarPadding` (Producto) | `-mx-2 px-2` |
+| `pr-2` | sidebar, non-compact | `-mr-2 pr-2` |
+| `px-6` | no sidebar (default) | `-mx-6 px-6` |
+| `` (empty) | `inlineEditable`, no sidebar | `` (nothing to cancel) |
+
+The negative margin pulls the bordered box out to the panel edges; re-applying the padding
+inside keeps the tab buttons exactly where they were, so only the line moves. Vertical
+tokens (`pb-2`) are ignored. Deriving the value from `detailContentPadding()` instead of
+hardcoding `-mx-2` is what keeps it correct for every window shape and prevents drift if
+the padding rules change.
+
+Covered by `getTabStripBleedClassName` cases in
+`src/components/contract-ui/__tests__/DetailView.helpers.vitest.jsx` (one per row of the
+table above, plus a `formScrollPaddingX` override).
