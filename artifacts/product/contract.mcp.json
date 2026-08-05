@@ -1,8 +1,8 @@
 {
-  "version": "0.24.0",
-  "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-28T11:44:49.773Z",
-  "contractChecksum": "59b72223ca681e3e",
+  "version": "0.26.1",
+  "generatedAt": "2026-07-30T22:44:13.503Z",
+  "updatedAt": "2026-08-04T00:31:37.014Z",
+  "contractChecksum": "1dacf0ff6275a2be",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -52,7 +52,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/product/accounting",
         "detailUrl": "/sws/neo/product/accounting/{id}",
         "supportedFilters": []
@@ -662,7 +662,16 @@
             "required": true,
             "defaultValue": "Y"
           },
-          "mProductStatusID": {}
+          "mProductStatusID": {},
+          "eTGOPurchasePrice": {
+            "readOnly": true
+          },
+          "eTGOSalePrice": {
+            "readOnly": true
+          },
+          "eTGOStock": {
+            "readOnly": true
+          }
         }
       },
       "price": {
@@ -1065,5 +1074,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "0bb8b9d474af1e4f"
+  "checksum": "ef6d3b34680e4841"
 }

@@ -1,8 +1,8 @@
 {
-  "version": "0.64.0",
+  "version": "0.67.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-23T18:17:10.225Z",
-  "checksum": "18b27a7548841c85",
+  "updatedAt": "2026-08-04T16:33:36.607Z",
+  "checksum": "210294a3c27703e7",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -70,15 +70,13 @@
         },
         {
           "label": "invoicesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D",
+          "_note": "ETP-4737: plain invoices only. Excludes the new unified 'Factura Rectificativa' doc type, which shares the ARI category with plain invoices but is distinguished via the etsgIsRectificative flag on C_DocType (see rectificativeInvoicesTab below for the full discriminator rationale)."
         },
         {
-          "label": "creditNotesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D"
-        },
-        {
-          "label": "returnsTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D"
+          "label": "rectificativeInvoicesTab",
+          "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D",
+          "_note": "ETP-4737: merges the former separate creditNotesTab (ARC) and returnsTab (ARI_RM) into one 'Facturas rectificativas' tab, OR'd with the new unified rectificative doc type. The new 'Factura Rectificativa' doc type (EM_Etsg_Isrectificative='Y' on C_DocType) shares the plain-invoice ARI category, so documentCategory alone cannot discriminate it — confirmed empirically against the dev DB (GOClient tenant): 3 active ARI-category doc types exist there ('AR Invoice', 'Reversed Sales Invoice', 'Factura Rectificativa'), only the last has etsgIsRectificative='Y'. etsgIsRectificative is a real Hibernate-mapped boolean property on DocumentType (confirmed via C_DocType.EM_Etsg_Isrectificative / DocumentType#isEtsgIsRectificative() in com.etendoerp.go), reached here via the same 'transactionDocument$<property>' nested-criteria mechanism already proven for documentCategory in this exact subsetFilters block — this is a plain backend list-query filter, not the GET-by-ID-only 'arInvoiceSubtype' enrichment, so it is expected to work at list-query time. No live invoice yet carries the new doc type in the dev DB to smoke-test end-to-end through the running app; recommend a manual list-view check once an invoice uses it."
         }
       ],
       "dateFilterKey": "invoiceDate",
@@ -665,6 +663,76 @@
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "search",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
+            "validationRule": {
+              "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+              "contextParams": [],
+              "cascadeParams": [
+                "C_BPartner_ID",
+                "IsSOTrx",
+                "c_project_id"
+              ]
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Project"
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -1812,6 +1880,64 @@
             "validation": {
               "maxLength": 12
             }
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "search",
+            "dimensionsPanel": true,
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "dimensionsPanel": true,
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
           }
         ],
         "searchableFields": [
@@ -2538,15 +2664,13 @@
         },
         {
           "label": "invoicesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D",
+          "_note": "ETP-4737: plain invoices only. Excludes the new unified 'Factura Rectificativa' doc type, which shares the ARI category with plain invoices but is distinguished via the etsgIsRectificative flag on C_DocType (see rectificativeInvoicesTab below for the full discriminator rationale)."
         },
         {
-          "label": "creditNotesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D"
-        },
-        {
-          "label": "returnsTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D"
+          "label": "rectificativeInvoicesTab",
+          "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D",
+          "_note": "ETP-4737: merges the former separate creditNotesTab (ARC) and returnsTab (ARI_RM) into one 'Facturas rectificativas' tab, OR'd with the new unified rectificative doc type. The new 'Factura Rectificativa' doc type (EM_Etsg_Isrectificative='Y' on C_DocType) shares the plain-invoice ARI category, so documentCategory alone cannot discriminate it — confirmed empirically against the dev DB (GOClient tenant): 3 active ARI-category doc types exist there ('AR Invoice', 'Reversed Sales Invoice', 'Factura Rectificativa'), only the last has etsgIsRectificative='Y'. etsgIsRectificative is a real Hibernate-mapped boolean property on DocumentType (confirmed via C_DocType.EM_Etsg_Isrectificative / DocumentType#isEtsgIsRectificative() in com.etendoerp.go), reached here via the same 'transactionDocument$<property>' nested-criteria mechanism already proven for documentCategory in this exact subsetFilters block — this is a plain backend list-query filter, not the GET-by-ID-only 'arInvoiceSubtype' enrichment, so it is expected to work at list-query time. No live invoice yet carries the new doc type in the dev DB to smoke-test end-to-end through the running app; recommend a manual list-view check once an invoice uses it."
         }
       ],
       "dateFilterKey": "invoiceDate",
@@ -2929,19 +3053,11 @@
             "required": true
           },
           {
-            "name": "externalBusinessPartnerReference",
-            "apiKey": "externalBusinessPartnerReference",
-            "column": "BPartner_ExtRef",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "project",
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -2949,6 +3065,14 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "externalBusinessPartnerReference",
+            "apiKey": "externalBusinessPartnerReference",
+            "column": "BPartner_ExtRef",
+            "type": "string",
             "visibility": "discarded",
             "required": false
           },
@@ -4163,7 +4287,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4171,7 +4295,7 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4372,6 +4496,14 @@
             "column": "C_OrderLine_ID",
             "type": "foreignKey",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOSourceInvoiceLine",
+            "apiKey": "eTGOSourceInvoiceLine",
+            "column": "EM_Etgo_Source_Invoiceline_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
             "required": false
           }
         ],
@@ -5194,6 +5326,35 @@
       },
       {
         "entity": "header",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/header/selectors/project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
+      },
+      {
+        "entity": "header",
         "field": "aeatsiiDescription",
         "column": "EM_Aeatsii_Description_ID",
         "reference": "aeatsii_description",
@@ -5258,6 +5419,22 @@
             }
           ]
         }
+      },
+      {
+        "entity": "lines",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/lines/selectors/project"
+      },
+      {
+        "entity": "lines",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/lines/selectors/costcenter"
       },
       {
         "entity": "paymentPlan",
@@ -6082,6 +6259,14 @@
         "description": "Display logic for 'aeatsiiPeriodo' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-etsgDateOperation",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -6162,6 +6347,22 @@
         "description": "Display logic for 'posted' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-project",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-lines-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-lines-grossUnitPrice",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -6176,6 +6377,14 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-lines-project",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in lines should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-reversedInvoices-aEAT349BPBaseAmount",
@@ -6290,6 +6499,14 @@
         "description": "Display logic for 'aeatsiiPeriodo' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-etsgDateOperation",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -6370,6 +6587,22 @@
         "description": "Display logic for 'posted' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-project",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-lines-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-lines-grossUnitPrice",
         "category": "displaylogic-valid",
         "entity": "lines",
@@ -6384,6 +6617,14 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-lines-project",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in lines should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-reversedInvoices-aEAT349BPBaseAmount",
@@ -6536,6 +6777,14 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Field 'businessPartner' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-costcenter",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should be present in header"
       },
       {
         "id": "t-field-presence-header-currency",
@@ -6738,6 +6987,14 @@
         "description": "Field 'processed' should be present in header"
       },
       {
+        "id": "t-field-presence-header-project",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-summedLineAmount",
         "category": "field-presence",
         "entity": "header",
@@ -6752,6 +7009,14 @@
         "field": "transactionDocument",
         "runner": "node",
         "description": "Field 'transactionDocument' should be present in header"
+      },
+      {
+        "id": "t-field-presence-lines-costcenter",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should be present in lines"
       },
       {
         "id": "t-field-presence-lines-description",
@@ -6808,6 +7073,14 @@
         "field": "product",
         "runner": "node",
         "description": "Field 'product' should be present in lines"
+      },
+      {
+        "id": "t-field-presence-lines-project",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in lines"
       },
       {
         "id": "t-field-presence-lines-tax",
@@ -7090,6 +7363,14 @@
         "description": "Field 'businessPartner' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-costcenter",
+        "category": "field-type",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-currency",
         "category": "field-type",
         "entity": "header",
@@ -7290,6 +7571,14 @@
         "description": "Field 'processed' should have type 'boolean' in header"
       },
       {
+        "id": "t-field-type-header-project",
+        "category": "field-type",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-summedLineAmount",
         "category": "field-type",
         "entity": "header",
@@ -7304,6 +7593,14 @@
         "field": "transactionDocument",
         "runner": "node",
         "description": "Field 'transactionDocument' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-lines-costcenter",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should have type 'string' in lines"
       },
       {
         "id": "t-field-type-lines-description",
@@ -7360,6 +7657,14 @@
         "field": "product",
         "runner": "node",
         "description": "Field 'product' should have type 'string' in lines"
+      },
+      {
+        "id": "t-field-type-lines-project",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in lines"
       },
       {
         "id": "t-field-type-lines-tax",
@@ -7626,6 +7931,14 @@
         "description": "Read-only logic for 'businessPartner' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-costcenter",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-currency",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -7738,12 +8051,28 @@
         "description": "Read-only logic for 'priceList' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-project",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-transactionDocument",
         "category": "readonlylogic-evaluable",
         "entity": "header",
         "field": "transactionDocument",
         "runner": "node",
         "description": "Read-only logic for 'transactionDocument' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-lines-costcenter",
+        "category": "readonlylogic-evaluable",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in lines should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-lines-etgoDiscount",
@@ -7784,6 +8113,14 @@
         "field": "product",
         "runner": "node",
         "description": "Read-only logic for 'product' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-lines-project",
+        "category": "readonlylogic-evaluable",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in lines should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-lines-tax",
@@ -7954,6 +8291,14 @@
         "description": "Read-only logic for 'businessPartner' in header should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-header-costcenter",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in header should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-header-currency",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -8066,12 +8411,28 @@
         "description": "Read-only logic for 'priceList' in header should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-header-project",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in header should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-header-transactionDocument",
         "category": "readonlylogic-valid",
         "entity": "header",
         "field": "transactionDocument",
         "runner": "node",
         "description": "Read-only logic for 'transactionDocument' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-lines-costcenter",
+        "category": "readonlylogic-valid",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in lines should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-lines-etgoDiscount",
@@ -8112,6 +8473,14 @@
         "field": "product",
         "runner": "node",
         "description": "Read-only logic for 'product' in lines should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-lines-project",
+        "category": "readonlylogic-valid",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in lines should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-lines-tax",
@@ -8344,6 +8713,14 @@
         "description": "Selector endpoint for 'businessPartner' in header should exist"
       },
       {
+        "id": "t-selector-endpoint-header-costcenter",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costcenter' in header should exist"
+      },
+      {
         "id": "t-selector-endpoint-header-currency",
         "category": "selector-endpoint",
         "entity": "header",
@@ -8384,6 +8761,14 @@
         "description": "Selector endpoint for 'priceList' in header should exist"
       },
       {
+        "id": "t-selector-endpoint-header-project",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in header should exist"
+      },
+      {
         "id": "t-selector-endpoint-header-transactionDocument",
         "category": "selector-endpoint",
         "entity": "header",
@@ -8392,12 +8777,28 @@
         "description": "Selector endpoint for 'transactionDocument' in header should exist"
       },
       {
+        "id": "t-selector-endpoint-lines-costcenter",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costcenter' in lines should exist"
+      },
+      {
         "id": "t-selector-endpoint-lines-product",
         "category": "selector-endpoint",
         "entity": "lines",
         "field": "product",
         "runner": "node",
         "description": "Selector endpoint for 'product' in lines should exist"
+      },
+      {
+        "id": "t-selector-endpoint-lines-project",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in lines should exist"
       },
       {
         "id": "t-selector-endpoint-lines-tax",
@@ -8822,14 +9223,6 @@
         "field": "copyFrom",
         "runner": "node",
         "description": "System field 'copyFrom' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-costcenter",
-        "category": "system-field",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "System field 'costcenter' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-created",
@@ -9312,14 +9705,6 @@
         "description": "System field 'processNow' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-project",
-        "category": "system-field",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "System field 'project' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-psd2GenerateBankPayment",
         "category": "system-field",
         "entity": "header",
@@ -9656,14 +10041,6 @@
         "description": "System field 'cInvoiceId' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-costcenter",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "System field 'costcenter' should exist in backend but not frontend for lines"
-      },
-      {
         "id": "t-system-field-lines-createdBy",
         "category": "system-field",
         "entity": "lines",
@@ -9710,6 +10087,14 @@
         "field": "editLineAmount",
         "runner": "node",
         "description": "System field 'editLineAmount' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-eTGOSourceInvoiceLine",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "eTGOSourceInvoiceLine",
+        "runner": "node",
+        "description": "System field 'eTGOSourceInvoiceLine' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-excludeforwithholding",
@@ -9862,14 +10247,6 @@
         "field": "priceLimit",
         "runner": "node",
         "description": "System field 'priceLimit' should exist in backend but not frontend for lines"
-      },
-      {
-        "id": "t-system-field-lines-project",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "project",
-        "runner": "node",
-        "description": "System field 'project' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-projectLine",
@@ -10180,25 +10557,25 @@
       }
     ],
     "summary": {
-      "total": 581,
+      "total": 606,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
         "default-value-type": 26,
-        "displaylogic-evaluable": 26,
-        "displaylogic-valid": 26,
-        "field-presence": 69,
-        "field-type": 69,
-        "readonlylogic-evaluable": 41,
-        "readonlylogic-valid": 41,
+        "displaylogic-evaluable": 30,
+        "displaylogic-valid": 30,
+        "field-presence": 73,
+        "field-type": 73,
+        "readonlylogic-evaluable": 45,
+        "readonlylogic-valid": 45,
         "rule-declared": 10,
         "searchable-filters": 6,
-        "selector-endpoint": 18,
-        "system-field": 213,
+        "selector-endpoint": 22,
+        "system-field": 210,
         "visibility": 5
       },
       "byRunner": {
-        "node": 581,
+        "node": 606,
         "junit": 0
       }
     }

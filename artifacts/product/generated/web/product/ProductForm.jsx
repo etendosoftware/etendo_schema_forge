@@ -6,7 +6,7 @@ const fields = [
   { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
   { key: 'productType', column: 'ProductType', type: 'select', label: 'Product Type', required: true, section: 'principal', options: [{ value: 'E', label: 'Expense type', labels: {"es_ES":"Gasto"} }, { value: 'I', label: 'Item', labels: {"es_ES":"Artículo"} }, { value: 'R', label: 'Resource', labels: {"es_ES":"Recurso"} }, { value: 'S', label: 'Service', labels: {"es_ES":"Servicio"} }], defaultValue: 'I' },
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true, section: 'principal', reference: 'ProductCategory', inputMode: 'selector', defaultValue: '@SQL=SELECT MAX(M_PRODUCT_CATEGORY_ID) FROM M_PRODUCT_CATEGORY WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = \'Y\' AND AD_CLIENT_ID = @#AD_CLIENT_ID@ AND ISSUMMARY=\'N\'' },
-  { key: 'uOM', column: 'C_UOM_ID', type: 'search', label: 'UOM', required: true, section: 'principal', reference: 'UOM', inputMode: 'search', clearable: false },
+  { key: 'uOM', column: 'C_UOM_ID', type: 'search', label: 'UOM', required: true, section: 'principal', reference: 'UOM', inputMode: 'search' },
   { key: 'active', column: 'IsActive', type: 'checkbox', label: 'Active', required: true, section: 'principal', defaultValue: 'Y' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal', span: 3 },
   { key: 'image', column: 'AD_Image_ID', type: 'image', label: 'Image', section: 'principal' },

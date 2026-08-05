@@ -1,8 +1,8 @@
 {
   "version": "0.18.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-07-27T13:53:30.208Z",
-  "checksum": "797d35c5245bd91d",
+  "updatedAt": "2026-07-30T02:11:32.597Z",
+  "checksum": "89f16e235abaf513",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -439,7 +439,8 @@
               "source": "@#Date@"
             }
           }
-        ]
+        ],
+        "javaQualifier": "user"
       },
       "userRoles": {
         "tableName": "AD_User_Roles",
@@ -1246,7 +1247,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "user"
       },
       "userRoles": {
         "tableName": "AD_User_Roles",

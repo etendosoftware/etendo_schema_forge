@@ -8,6 +8,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
 import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -80,13 +81,13 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
     return () => { cancelled = true; };
   }, [wizardOpen, recordId, base, headers, data?.businessPartner]);
 
-  const handleCreateInvoice = async () => {
+  const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
     try {
       const res = await fetch(
         `${base}/goods-receipt/goodsReceipt/${recordId}/action/createPurchaseInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({}) },
+        { method: 'POST', headers, body: JSON.stringify({ priceListId }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -183,7 +184,11 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}
-          onConfirm={() => { setShowInvoiceConfirm(false); handleCreateInvoice(); }}
+          showPriceListPicker
+          isSOTrx={false}
+          apiBaseUrl={apiBaseUrl}
+          token={token}
+          onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}
           onClose={() => setShowInvoiceConfirm(false)}
         />
       )}
@@ -286,7 +291,7 @@ function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirme
 
   const fmtAmount = (v, currency) => {
     if (v == null) return '';
-    return `${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`.trim();
+    return formatCurrency(currency, v);
   };
 
   const statusLabel = { CO: ui('orderStatusCompleted'), DR: ui('orderStatusDraft') };

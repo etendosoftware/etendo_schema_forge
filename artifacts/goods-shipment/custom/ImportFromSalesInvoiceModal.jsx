@@ -47,21 +47,30 @@ async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentI
 }
 
 const fetchDocuments = async ({ base, headers, bpId, invoiceId: shipmentId }) => {
-  const [invoicesRes, draftInfo] = await Promise.all([
+  const [invoicesRes, draftInfo, headerRes] = await Promise.all([
     fetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
     fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentId: shipmentId }),
+    fetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`, { headers }),
   ]);
 
+  let shipmentCurrency = null;
+  if (headerRes.ok) {
+    shipmentCurrency = (await headerRes.json())?.response?.data?.[0]?.etgoCurrency || null;
+  }
+
   let documents = [];
+  let excludedByCurrency = false;
   const ordersByInvoiceId = {};
   if (invoicesRes.ok) {
     const all = (await invoicesRes.json())?.response?.data || [];
-    documents = all.filter(o => o.documentStatus === 'CO' && o.businessPartner === bpId);
+    const candidates = all.filter(o => o.documentStatus === 'CO' && o.businessPartner === bpId);
+    documents = shipmentCurrency ? candidates.filter(o => o.currency === shipmentCurrency) : candidates;
+    excludedByCurrency = !!shipmentCurrency && documents.length === 0 && candidates.length > 0;
     documents.forEach(doc => {
       if (doc.salesOrder) ordersByInvoiceId[doc.id] = doc.salesOrder;
     });
   }
-  return { documents, sharedContext: { ordersByInvoiceId, draftInfo } };
+  return { documents, sharedContext: { ordersByInvoiceId, draftInfo }, excludedByCurrency };
 };
 
 const fetchLines = async ({ base, headers, docId, sharedContext }) => {
@@ -133,6 +142,7 @@ export default function ImportFromSalesInvoiceModal(props) {
       searchPlaceholderKey="searchSalesInvoice"
       emptyMessageKey="noCompletedSalesInvoicesForThisCustomer"
       noSearchResultsKey="noInvoicesMatchYourSearch"
+      noCurrencyMatchMessageKey="noSalesInvoicesMatchShipmentCurrency"
       allImportedMessageKey="allSalesInvoicesAlreadyImported"
       successMessageKey="linesImportedFromSalesInvoice"
       showPriceColumns={false}

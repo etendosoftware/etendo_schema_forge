@@ -5,15 +5,11 @@ import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/
 import SendToSifButton from './SendToSifButton';
 import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { getArSubtype } from './invoiceSubtype';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  if (curr) {
-    try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency: curr }).format(n);
-    } catch { /* fallback if currency code is invalid */ }
-  }
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatCurrency(curr, n);
 }
 
 /** Classify an installment into a status category */
@@ -231,12 +227,13 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     );
   }
 
-  // Credit instruments (NC / DEV) — mirror the grid's "Pendiente de pago" cell: green
-  // "Aplicada" once the note is fully consumed, else a purple "Saldo a favor · remaining"
-  // badge that opens the same payment history modal the grid opens (listing the payments
-  // that consumed the note).
+  // Credit instruments (ETP-4737: unified RECTIFICATIVA subtype, formerly separate
+  // NC / DEV) — mirror the grid's "Pendiente de pago" cell: green "Aplicada" once
+  // the note is fully consumed, else a purple "Saldo a favor · remaining" badge
+  // that opens the same payment history modal the grid opens (listing the
+  // payments that consumed the note).
   const arSubtype = getArSubtype(data);
-  const isCreditInstrument = arSubtype === 'NC' || arSubtype === 'DEV';
+  const isCreditInstrument = arSubtype === 'RECTIFICATIVA';
   if (isCompleted && isCreditInstrument) {
     // Credit notes carry negative amounts end to end — installments (when loaded) are the
     // fresh source, data.outstandingAmount the fallback snapshot; either way the remaining

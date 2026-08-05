@@ -1,11 +1,11 @@
 {
-  "version": "0.17.0",
-  "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-07-16T14:16:24.181Z",
-  "contractChecksum": "effb38fa7ad6cf67",
+  "version": "0.19.0",
+  "generatedAt": "2026-07-31T14:37:14.155Z",
+  "updatedAt": "2026-08-04T16:33:22.055Z",
+  "contractChecksum": "a9520b6d9bac12e3",
   "apiPrediction": {
-    "specName": "financial-account-detail",
-    "baseUrl": "/sws/neo/financial-account-detail",
+    "specName": "accounts",
+    "baseUrl": "/sws/neo/accounts",
     "crud": {
       "account": {
         "get": true,
@@ -14,8 +14,8 @@
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/financial-account-detail/account",
-        "detailUrl": "/sws/neo/financial-account-detail/account/{id}",
+        "listUrl": "/sws/neo/accounts/account",
+        "detailUrl": "/sws/neo/accounts/account/{id}",
         "supportedFilters": []
       },
       "transaction": {
@@ -25,8 +25,8 @@
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/financial-account-detail/transaction",
-        "detailUrl": "/sws/neo/financial-account-detail/transaction/{id}",
+        "listUrl": "/sws/neo/accounts/transaction",
+        "detailUrl": "/sws/neo/accounts/transaction/{id}",
         "supportedFilters": []
       },
       "accountingConfiguration": {
@@ -36,8 +36,8 @@
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/financial-account-detail/accountingConfiguration",
-        "detailUrl": "/sws/neo/financial-account-detail/accountingConfiguration/{id}",
+        "listUrl": "/sws/neo/accounts/accountingConfiguration",
+        "detailUrl": "/sws/neo/accounts/accountingConfiguration/{id}",
         "supportedFilters": []
       },
       "importedBankStatements": {
@@ -47,8 +47,8 @@
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/financial-account-detail/importedBankStatements",
-        "detailUrl": "/sws/neo/financial-account-detail/importedBankStatements/{id}",
+        "listUrl": "/sws/neo/accounts/importedBankStatements",
+        "detailUrl": "/sws/neo/accounts/importedBankStatements/{id}",
         "supportedFilters": []
       },
       "bankStatementLines": {
@@ -58,8 +58,8 @@
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/financial-account-detail/bankStatementLines",
-        "detailUrl": "/sws/neo/financial-account-detail/bankStatementLines/{id}",
+        "listUrl": "/sws/neo/accounts/bankStatementLines",
+        "detailUrl": "/sws/neo/accounts/bankStatementLines/{id}",
         "supportedFilters": []
       }
     },
@@ -70,7 +70,7 @@
         "column": "C_Currency_ID",
         "reference": "Currency",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/account/selectors/currency"
+        "url": "/sws/neo/accounts/account/selectors/currency"
       },
       {
         "entity": "account",
@@ -78,7 +78,7 @@
         "column": "EM_Psd2_Provider_ID",
         "reference": "PSD2_Provider",
         "inputMode": "search",
-        "url": "/sws/neo/financial-account-detail/account/selectors/psd2Provider"
+        "url": "/sws/neo/accounts/account/selectors/psd2Provider"
       },
       {
         "entity": "transaction",
@@ -86,7 +86,7 @@
         "column": "C_Glitem_ID",
         "reference": "Glitem",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/gLItem"
+        "url": "/sws/neo/accounts/transaction/selectors/gLItem"
       },
       {
         "entity": "transaction",
@@ -94,7 +94,7 @@
         "column": "AD_Org_ID",
         "reference": "Org",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/organization"
+        "url": "/sws/neo/accounts/transaction/selectors/organization"
       },
       {
         "entity": "transaction",
@@ -102,7 +102,7 @@
         "column": "C_Bpartner_ID",
         "reference": "BPartner",
         "inputMode": "search",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/businessPartner"
+        "url": "/sws/neo/accounts/transaction/selectors/businessPartner"
       },
       {
         "entity": "transaction",
@@ -110,7 +110,7 @@
         "column": "C_Project_ID",
         "reference": "Project",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/project"
+        "url": "/sws/neo/accounts/transaction/selectors/project"
       },
       {
         "entity": "transaction",
@@ -118,7 +118,7 @@
         "column": "C_Costcenter_ID",
         "reference": "Costcenter",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/costCenter"
+        "url": "/sws/neo/accounts/transaction/selectors/costCenter"
       },
       {
         "entity": "transaction",
@@ -126,7 +126,7 @@
         "column": "C_Campaign_ID",
         "reference": "Campaign",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/salesCampaign"
+        "url": "/sws/neo/accounts/transaction/selectors/salesCampaign"
       },
       {
         "entity": "transaction",
@@ -134,7 +134,7 @@
         "column": "C_Activity_ID",
         "reference": "Activity",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/activity"
+        "url": "/sws/neo/accounts/transaction/selectors/activity"
       },
       {
         "entity": "transaction",
@@ -142,7 +142,7 @@
         "column": "C_Salesregion_ID",
         "reference": "Salesregion",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/salesRegion"
+        "url": "/sws/neo/accounts/transaction/selectors/salesRegion"
       },
       {
         "entity": "transaction",
@@ -150,7 +150,7 @@
         "column": "User1_ID",
         "reference": "User1",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/stDimension"
+        "url": "/sws/neo/accounts/transaction/selectors/stDimension"
       },
       {
         "entity": "transaction",
@@ -158,7 +158,7 @@
         "column": "User2_ID",
         "reference": "User2",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/transaction/selectors/ndDimension"
+        "url": "/sws/neo/accounts/transaction/selectors/ndDimension"
       },
       {
         "entity": "accountingConfiguration",
@@ -166,7 +166,7 @@
         "column": "FIN_Asset_Acct",
         "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINAssetAcct"
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINAssetAcct"
       },
       {
         "entity": "accountingConfiguration",
@@ -174,7 +174,7 @@
         "column": "FIN_Transitory_Acct",
         "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/accountingConfiguration/selectors/fINTransitoryAcct"
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINTransitoryAcct"
       },
       {
         "entity": "bankStatementLines",
@@ -182,7 +182,7 @@
         "column": "C_Bpartner_ID",
         "reference": "BPartner",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/bankStatementLines/selectors/businessPartner"
+        "url": "/sws/neo/accounts/bankStatementLines/selectors/businessPartner"
       },
       {
         "entity": "bankStatementLines",
@@ -190,7 +190,7 @@
         "column": "C_Glitem_ID",
         "reference": "Glitem",
         "inputMode": "selector",
-        "url": "/sws/neo/financial-account-detail/bankStatementLines/selectors/gLItem"
+        "url": "/sws/neo/accounts/bankStatementLines/selectors/gLItem"
       }
     ],
     "actions": [
@@ -201,7 +201,7 @@
         "column": "EM_APRM_ImportBankFile",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMImportBankFile",
+        "url": "/sws/neo/accounts/account/{id}/action/aPRMImportBankFile",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -224,7 +224,7 @@
         "column": "EM_APRM_MatchTransactions",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactions",
+        "url": "/sws/neo/accounts/account/{id}/action/aPRMMatchTransactions",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -247,7 +247,7 @@
         "column": "EM_APRM_MatchTrans_Force",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactionsForce",
+        "url": "/sws/neo/accounts/account/{id}/action/aPRMMatchTransactionsForce",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -270,7 +270,7 @@
         "column": "EM_APRM_Reconcile",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMReconcile",
+        "url": "/sws/neo/accounts/account/{id}/action/aPRMReconcile",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -293,7 +293,7 @@
         "column": "EM_Aprm_AddMultiplePayments",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddMultiplePayments",
+        "url": "/sws/neo/accounts/account/{id}/action/aprmAddMultiplePayments",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -316,7 +316,7 @@
         "column": "EM_Aprm_Addtransactionpd",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddtransactionpd",
+        "url": "/sws/neo/accounts/account/{id}/action/aprmAddtransactionpd",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -339,7 +339,7 @@
         "column": "EM_Aprm_Findtransactionspd",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFindtransactionspd",
+        "url": "/sws/neo/accounts/account/{id}/action/aprmFindtransactionspd",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -362,7 +362,7 @@
         "column": "EM_Aprm_Funds_Trans",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFundsTrans",
+        "url": "/sws/neo/accounts/account/{id}/action/aprmFundsTrans",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -385,7 +385,7 @@
         "column": "EM_PSD2_Get_Consent",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetConsent",
+        "url": "/sws/neo/accounts/account/{id}/action/pSD2GetConsent",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -407,7 +407,7 @@
         "column": "EM_Psd2_Get_Connections",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2GetConnections",
+        "url": "/sws/neo/accounts/account/{id}/action/psd2GetConnections",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -429,7 +429,7 @@
         "column": "EM_PSD2_Get_Bankstatement",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetBankstatement",
+        "url": "/sws/neo/accounts/account/{id}/action/pSD2GetBankstatement",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -451,7 +451,7 @@
         "column": "EM_Psd2_Refresh_Connections",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2RefreshConnections",
+        "url": "/sws/neo/accounts/account/{id}/action/psd2RefreshConnections",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -473,7 +473,7 @@
         "column": "EM_Psd2_Reconnect_Fa",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2ReconnectFa",
+        "url": "/sws/neo/accounts/account/{id}/action/psd2ReconnectFa",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -489,76 +489,13 @@
         "processType": "obuiapp"
       },
       {
-        "name": "aprmProcessed",
-        "actionType": "paymentAction",
-        "entity": "transaction",
-        "column": "EM_Aprm_Processed",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/aprmProcessed",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
-        "processId": "F68F2890E96D4D85A1DEF0274D105BCE",
-        "processType": "classic"
-      },
-      {
-        "name": "etblkpBulkposting",
-        "actionType": "documentAction",
-        "entity": "transaction",
-        "column": "EM_Etblkp_Bulkposting",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etblkpBulkposting",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "57496FB9CF9E4E8F847224017941570E",
-        "processType": "obuiapp"
-      },
-      {
         "name": "etprReactivateTransaction",
         "actionType": "documentAction",
         "entity": "transaction",
         "column": "EM_Etpr_Reactivate_Transaction",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprReactivateTransaction",
+        "url": "/sws/neo/accounts/transaction/{id}/action/etprReactivateTransaction",
         "parameters": [
           {
             "name": "docAction",
@@ -592,13 +529,76 @@
         "processType": "obuiapp"
       },
       {
+        "name": "aprmProcessed",
+        "actionType": "paymentAction",
+        "entity": "transaction",
+        "column": "EM_Aprm_Processed",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/transaction/{id}/action/aprmProcessed",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "F68F2890E96D4D85A1DEF0274D105BCE",
+        "processType": "classic"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "transaction",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/transaction/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
         "name": "etprRemoveTransaction",
         "actionType": "utilityAction",
         "entity": "transaction",
         "column": "EM_Etpr_Remove_Transaction",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprRemoveTransaction",
+        "url": "/sws/neo/accounts/transaction/{id}/action/etprRemoveTransaction",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -620,7 +620,7 @@
         "column": "Posted",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/posted",
+        "url": "/sws/neo/accounts/importedBankStatements/{id}/action/posted",
         "parameters": [
           {
             "name": "docAction",
@@ -658,7 +658,7 @@
         "column": "EM_APRM_Process_BS_Force",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatementForce",
+        "url": "/sws/neo/accounts/importedBankStatements/{id}/action/aPRMProcessBankStatementForce",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -681,7 +681,7 @@
         "column": "EM_APRM_Process_BS",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatement",
+        "url": "/sws/neo/accounts/importedBankStatements/{id}/action/aPRMProcessBankStatement",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -704,7 +704,7 @@
         "column": "EM_Etblkp_Bulkposting",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/etblkpBulkposting",
+        "url": "/sws/neo/accounts/importedBankStatements/{id}/action/etblkpBulkposting",
         "parameters": [
           {
             "name": "docAction",
@@ -753,6 +753,14 @@
     },
     "window": {
       "category": "finance"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "pendingCount": "Pending"
+      },
+      "es_ES": {
+        "pendingCount": "Por conciliar"
+      }
     }
   },
   "formState": {
@@ -773,6 +781,11 @@
           "description": {},
           "active": {
             "defaultValue": "Y"
+          },
+          "default": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
           },
           "currentBalance": {
             "readOnly": true,
@@ -805,6 +818,7 @@
           },
           "pSD2GetConsent": {},
           "pSD2GetBankstatement": {},
+          "psd2ReconnectFa": {},
           "pSD2SaltEdgeAccountID": {
             "readOnly": true
           },
@@ -815,12 +829,14 @@
             "readOnly": true,
             "defaultValue": "DC"
           },
-          "psd2ReconnectFa": {},
           "eTGOAmountTolerance": {
             "defaultValue": "0"
           },
           "eTGODateTolerance": {
             "defaultValue": "3"
+          },
+          "pendingCount": {
+            "readOnly": true
           }
         }
       },
@@ -867,6 +883,10 @@
             "readOnlyLogic": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPD'",
             "defaultValue": "0"
           },
+          "etprReactivateTransaction": {
+            "required": true,
+            "defaultValue": "N"
+          },
           "posted": {
             "readOnly": true,
             "required": true,
@@ -910,17 +930,13 @@
             "readOnly": true,
             "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
           },
-          "etblkpAccountingstatus": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
-          },
           "etblkpBulkposting": {
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
           },
-          "etprReactivateTransaction": {
+          "etblkpAccountingstatus": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "N"
           },
@@ -970,12 +986,12 @@
             "readOnlyLogic": "@Processed@='Y'"
           },
           "notes": {},
-          "etblkpAccountingstatus": {
-            "readOnly": true,
+          "etblkpBulkposting": {
             "required": true,
             "defaultValue": "N"
           },
-          "etblkpBulkposting": {
+          "etblkpAccountingstatus": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "N"
           }
@@ -1022,9 +1038,9 @@
     "evaluationMode": "runtime"
   },
   "agentProfile": {
-    "purpose": "Manage financial account detail financial records.",
+    "purpose": "Manage accounts financial records.",
     "whenToUse": [
-      "Use for financial account detail management."
+      "Use for accounts management."
     ],
     "minimumCreate": {
       "headerFields": [
@@ -1049,8 +1065,8 @@
     },
     "selectorContexts": [],
     "actions": [
-      "etblkpBulkposting",
       "etprReactivateTransaction",
+      "etblkpBulkposting",
       "posted",
       "etblkpBulkposting"
     ],
@@ -1099,14 +1115,15 @@
       {
         "operation": "completeDocument",
         "description": "Validate form state and run the document lifecycle action when the draft is complete.",
-        "action": "etblkpBulkposting"
+        "action": "etprReactivateTransaction"
       }
     ],
     "warnings": [],
     "knownLimitations": [],
     "dangerousOperations": [
       "etprReactivateTransaction"
-    ]
+    ],
+    "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
   },
-  "checksum": "b8e07b667fffdbeb"
+  "checksum": "79e61071a93345db"
 }

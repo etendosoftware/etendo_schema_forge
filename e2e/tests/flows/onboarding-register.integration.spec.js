@@ -98,18 +98,21 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await slow(page);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 6: Company step — fill company name and click "Empezar"
-    // (core 0.3.8 / ETP-4445): freelancers/autónomos invoice under their
-    // personal tax id, so CompanyStep hides the company Tax ID field for them.
+    // STEP 6: Company step — click "Empezar"
+    // The Autónomo (freelancer) business type selected in STEP 4 leaves this
+    // step with only the optional Dirección / Sector fields: CompanyStep hides
+    // BOTH the company Tax ID (core 0.3.8 / ETP-4445) and the company name —
+    // a freelancer invoices under their own identity, so `clientName` is
+    // derived from the profile step's `fullName` instead of being asked again.
+    // Nothing needs filling here; "Empezar" is already enabled because
+    // isCompanyStepValid only requires clientName, which the derivation fills.
     // ═══════════════════════════════════════════════════════════════════════
 
-    await expect(page.locator('#clientName')).toBeVisible({ timeout: 10_000 });
-
-    await page.locator('#clientName').fill(`Empresa E2E ${suffix}`);
+    await expect(page.locator('#sector')).toBeVisible({ timeout: 10_000 });
+    // Guard the derivation: the company-name input must NOT be asked of a
+    // freelancer. If this ever renders again, the flow regressed.
+    await expect(page.locator('#clientName')).toHaveCount(0);
     await slow(page);
-    // No #fiscalIdValue fill: the Autónomo (freelancer) business type selected
-    // in STEP 4 hides the Tax ID field; the fiscal id is optional and does not
-    // gate the company step (isCompanyStepValid only requires clientName).
 
     // Start capturing console logs and network before clicking "Empezar"
     const consoleLogs = [];
@@ -235,21 +238,33 @@ test.describe('Onboarding — Register new user (integration)', () => {
   });
 
   // ═════════════════════════════════════════════════════════════════════════
-  // CORNER CASE 3: Invalid email format — browser validation prevents submit
+  // CORNER CASE 3: Invalid email format — submit stays disabled
   // ═════════════════════════════════════════════════════════════════════════
 
   test('does not advance with an invalid email format', async ({ page }) => {
     await goToRegister(page);
+
+    const submitBtn = page.getByTestId('action-register-submit');
 
     await page.locator('#reg-name').fill('Bad Email User');
     await page.locator('#reg-email').fill('not-an-email');
     await page.locator('#reg-password').fill('ValidPass!99');
     await slow(page);
 
-    await page.getByTestId('action-register-submit').click();
+    // ETP-4664: submit is gated on isValidEmailFormat(email) on top of password
+    // strength, so a malformed address keeps the button disabled outright — a
+    // stronger guarantee than the HTML5 validation this case used to rely on.
+    await expect(submitBtn).toBeDisabled();
+
+    // Completing the address is what unlocks it — proves the gate is the email
+    // and not some unrelated field left empty.
+    await page.locator('#reg-email').fill('bad-email-user@test-onboarding.com');
+    await expect(submitBtn).toBeEnabled();
+    await page.locator('#reg-email').fill('not-an-email');
+    await expect(submitBtn).toBeDisabled();
     await slow(page);
 
-    // Should NOT advance to profile step — HTML5 email validation blocks it
+    // Should NOT advance to profile step
     await expect(page.getByText(/vamos a dejar todo listo/i)).not.toBeVisible({ timeout: 3_000 });
     // Should still be on the register page
     await expect(page.getByRole('heading', { name: /crea tu cuenta gratis/i })).toBeVisible();
@@ -312,11 +327,11 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await expect(continueBtn).toBeEnabled();
     await continueBtn.click();
 
-    // Fill company step
-    await expect(page.locator('#clientName')).toBeVisible({ timeout: 10_000 });
-    await page.locator('#clientName').fill(`Empresa ProvFail ${suffix}`);
-    // No #fiscalIdValue fill: the Autónomo (freelancer) flow hides the Tax ID
-    // field (core 0.3.8 / ETP-4445); the fiscal id is optional.
+    // Reach the company step. Nothing to fill: the Autónomo (freelancer) flow
+    // hides both the Tax ID (core 0.3.8 / ETP-4445) and the company name field
+    // — clientName is derived from the profile step's fullName — so #sector is
+    // the stable anchor for "this step rendered".
+    await expect(page.locator('#sector')).toBeVisible({ timeout: 10_000 });
 
     // Intercept ONLY the onboarding POST to simulate a provisioning failure.
     // The user was registered with real backend — this tests error handling
@@ -354,7 +369,9 @@ test.describe('Onboarding — Register new user (integration)', () => {
     const errorVisible = await page.getByText(/error|fallo|failed|no se pudo/i).first()
       .isVisible({ timeout: 5_000 }).catch(() => false);
     const onOnboarding = url.includes('/onboarding');
-    const formVisible = await page.locator('#clientName')
+    // #sector, not #clientName: the freelancer company step never renders a
+    // company-name input, so that locator would always report false here.
+    const formVisible = await page.locator('#sector')
       .isVisible({ timeout: 3_000 }).catch(() => false);
 
     // Success: not on dashboard AND (error shown OR still on onboarding form)

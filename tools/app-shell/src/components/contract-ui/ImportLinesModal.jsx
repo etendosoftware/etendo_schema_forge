@@ -23,6 +23,7 @@ export default function ImportLinesModal({
   buildLineBody,
   afterImport,
   showPriceColumns = true,
+  negativeQuantity = false,
   linesEndpoint,
 }) {
   if (!linesEndpoint) throw new Error('ImportLinesModal: linesEndpoint prop is required');
@@ -184,7 +185,7 @@ export default function ImportLinesModal({
     const [year, month, day] = String(d).slice(0, 10).split('-').map(Number);
     return new Date(year, month - 1, day).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   };
-  const fmtNum = (v) => v != null ? Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+  const fmtNum = (v) => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }) : '-';
 
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
@@ -234,8 +235,9 @@ export default function ImportLinesModal({
               const checkState = getDocCheckState(doc.id);
               const hasAnySelected = checkState.checked || checkState.indeterminate;
               const display = getDocDisplay(doc);
+              const docTotalSign = negativeQuantity ? -1 : 1;
               const docTotal = lines.length > 0
-                ? lines.reduce((sum, l) => sum + (l._lineNetAmount || 0), 0)
+                ? lines.reduce((sum, l) => sum + (l._lineNetAmount || 0), 0) * docTotalSign
                 : null;
               return (
                 <div key={doc.id} style={{ borderLeft: (isExpanded || hasAnySelected) ? '3px solid hsl(var(--foreground))' : '3px solid transparent' }}>
@@ -287,7 +289,14 @@ export default function ImportLinesModal({
                               const currentQty = lineQuantities[line.id] ?? maxQty;
                               const qtyEdited = currentQty !== maxQty;
                               const unitPrice = line._unitPrice || null;
-                              const lineTotal = unitPrice != null ? unitPrice * currentQty : null;
+                              // negativeQuantity is display-only: the stepper's internal state
+                              // (currentQty) always stays a positive magnitude for validation/
+                              // clamping — only what's shown to the user (and the amount
+                              // preview derived from it) gets the sign flip. buildLineBody
+                              // still receives the plain positive qty and is responsible for
+                              // negating it before persisting (see ImportFromSourceInvoiceModal).
+                              const displayQty = negativeQuantity ? -currentQty : currentQty;
+                              const lineTotal = unitPrice != null ? unitPrice * displayQty : null;
                               return (
                                 <div
                                   key={line.id}
@@ -312,14 +321,16 @@ export default function ImportLinesModal({
                                   <span style={{ width: 70, flexShrink: 0, textAlign: 'right' }}>
                                     <input
                                       type="number"
-                                      min={1}
-                                      max={maxQty}
-                                      value={currentQty}
+                                      min={negativeQuantity ? -maxQty : 1}
+                                      max={negativeQuantity ? -1 : maxQty}
+                                      value={displayQty}
                                       onClick={e => e.stopPropagation()}
                                       onChange={e => {
-                                        const v = Math.max(1, Math.min(maxQty, Number(e.target.value) || 1));
+                                        const magnitude = Math.abs(Number(e.target.value) || 1);
+                                        const v = Math.max(1, Math.min(maxQty, magnitude));
                                         setLineQuantities(prev => ({ ...prev, [line.id]: v }));
                                       }}
+                                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                       style={{
                                         width: 60, fontSize: 12, padding: '3px 4px', borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums', outline: 'none',
                                         border: qtyEdited ? '1px solid var(--color-border-warning, var(--status-warning-fg))' : '0.5px solid var(--color-border-secondary, hsl(var(--text-disabled)))',

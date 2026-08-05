@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI, getStoredLocale } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, onClose }) {
   const ui = useUI();
@@ -48,10 +49,10 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
   const d = freshData || {};
   const name     = d.name || d.documentNo || '';
   const totalNum = linesTotal !== null ? linesTotal : (d.totalAmortization != null ? Number(d.totalAmortization) : null);
-  const total    = totalNum !== null
-    ? totalNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : '...';
   const currency = d['currency$_identifier'] || '';
+  const total    = totalNum !== null
+    ? (currency ? formatCurrency(currency, totalNum) : totalNum.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }))
+    : '...';
 
   const handleConfirm = async () => {
     if (loading) return;
@@ -103,7 +104,7 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
           <div style={blueCardStyle}>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>{name || '...'}</div>
             <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {total}{currency ? ` ${currency}` : ''}
+              {total}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
               {lineCount != null ? ui('amortizationLineCountLabel', { count: lineCount }) : '...'}

@@ -18,9 +18,11 @@ import { getArSubtype } from './invoiceSubtype';
 
 // ─── Invoice-specific status logic ───────────────────────────────
 
-function isCreditNote(row) { return getArSubtype(row) === 'NC'; }
-function isReturn(row)     { return getArSubtype(row) === 'DEV'; }
-function isCreditType(row) { return isCreditNote(row) || isReturn(row); }
+// ETP-4737: the former separate credit-note (NC) and return-invoice (DEV)
+// subtypes are unified into a single RECTIFICATIVA subtype (see
+// invoiceSubtype.js). Both used negative-total/"Saldo a favor" treatment
+// identically, so a single predicate now covers what isCreditType used to.
+function isRectificativa(row) { return getArSubtype(row) === 'RECTIFICATIVA'; }
 
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -74,20 +76,24 @@ export default function InvoiceHeaderTable(props) {
     }
 
     return [
-      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false },
+      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false, required: true },
       {
         key: 'transactionDocument',
         column: 'C_DocTypeTarget_ID',
         type: 'custom',
+        required: true,
+        // `type: 'custom'` drives the badge cell render, but that would make the
+        // advanced filter fall back to a free-text input. `filterMode` (honored
+        // first by resolveFilterMode, ignored by DataTable) restores the correct
+        // identifier picker for this FK column without touching the grid cell.
+        filterMode: 'identifier',
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
         render: (row) => {
           const sub = getArSubtype(row);
-          const cfg = sub === 'NC'
-            ? { color: 'hsl(var(--primary))', bg: 'hsl(var(--foreground))', label: t('creditNotesTab') }
-            : sub === 'DEV'
-              ? { color: 'hsl(var(--destructive))', bg: 'hsl(var(--foreground))', label: t('returnsTab') }
-              : { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: t('invoicesTab') };
+          const cfg = sub === 'RECTIFICATIVA'
+            ? { color: 'hsl(var(--primary))', bg: 'hsl(var(--foreground))', label: t('rectificativeInvoicesTab') }
+            : { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: t('invoicesTab') };
           return (
             <span
               className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
@@ -98,13 +104,17 @@ export default function InvoiceHeaderTable(props) {
           );
         },
       },
-      { key: 'documentNo', column: 'DocumentNo', type: 'string', label: gl['documentNo'] || 'Document No.' },
+      { key: 'documentNo', column: 'DocumentNo', type: 'string', label: gl['documentNo'] || 'Document No.', required: true },
       {
         key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        // The cell renders a coloured due-date dot, so it must stay `custom` —
+        // but the underlying column is a plain date. Without this the advanced
+        // filter would offer text operators instead of Before/After/Between.
+        filterMode: 'date',
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
-          if (isCreditType(row)) return <span className="text-muted-foreground">{formatCalendarDate(d, locale)}</span>;
+          if (isRectificativa(row)) return <span className="text-muted-foreground">{formatCalendarDate(d, locale)}</span>;
           const state = getDueDateState(d, row.outstandingAmount);
           return (
             <span className="inline-flex items-center gap-1.5" style={getDueDateTextStyle(state)}>
@@ -114,21 +124,28 @@ export default function InvoiceHeaderTable(props) {
           );
         },
       },
-      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
-      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn') },
-      { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string', required: true },
+      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn'), required: true },
+      { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
       ...fiscalCols,
-      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: t('impTotal') },
+      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: t('impTotal'), required: true },
       {
         key: 'outstandingAmount',
         column: 'OutstandingAmt',
         type: 'custom',
+        required: true,
         label: t('pendingPaymentColumn'),
+        // The cell renders status pills and a payment button, so it must stay
+        // `custom` — but the underlying column is an amount. Without this the
+        // `?filter=overdue` preload (outstandingAmount greaterThan 0) resolves
+        // to text mode, which has no `greaterThan`, and the operator select
+        // renders empty (ETP-4681).
+        filterMode: 'numeric',
         render: (row) => {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);
           const currency = row['currency$_identifier'] || 'EUR';
           if (row.documentStatus !== 'CO') return <span className="text-muted-foreground">—</span>;
-          if (isCreditType(row)) {
+          if (isRectificativa(row)) {
             const outstandingAbs = Math.abs(outstanding);
             if (outstandingAbs < 0.001) {
               return (

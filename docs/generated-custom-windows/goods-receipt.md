@@ -11,7 +11,7 @@ The current evidence shows a receipt header on `M_InOut` plus a child line datas
 A user should be able to:
 
 - create or continue a draft goods receipt for a vendor delivery
-- set the operational header context needed to receive stock, including warehouse, vendor, vendor address, movement date, and order reference
+- set the operational header context needed to receive stock, including warehouse, vendor, vendor address, movement date, currency, and order reference
 - add receipt lines manually when the delivery needs to be keyed in line by line
 - import pending lines from completed purchase orders for the same vendor into the current receipt
 - review received-line essentials such as product, received quantity, UOM, storage bin, and invoiced quantity
@@ -50,6 +50,9 @@ Observed reactive behavior:
 - Purchase-order import is vendor-scoped and receipt-aware. The modal loads completed purchase orders for the current vendor, loads existing receipt lines for the current receipt, computes what is still available per order line, preselects selectable lines, and prevents importing more than the modal-calculated available quantity.
 - Imported lines post directly into `goodsReceiptLine` with `parentId`, product, movement quantity, UOM, source purchase-order line, description, and the next line number.
 - Related-document behavior is custom rather than contract-declared: the window adds a **Related Documents** tab that links back to the purchase order from the header and forward to purchase invoices fetched by that order reference.
+- **Currency (ETP-4028)**: header field `etgoCurrency` (`M_InOut.EM_Etgo_Currency_ID`, mandatory). Defaults to the organization's currency (`defaultExpr: "@C_Currency_ID@"`), editable while the receipt is in draft, and becomes read-only once the receipt is processed (`readOnlyLogic: "@Processed@='Y'"`). Changing the currency after lines already exist does **not** recalculate those existing lines' prices — only new lines are affected. A receipt created from a purchase order inherits that order's currency; return receipts inherit the currency of the original receipt being returned. As with Goods Shipment, no total/amount conversion display was implemented — `M_InOutLine` has no monetary columns, so there is no reliable receipt "total" to convert (scoped out of ETP-4028, open question left on the ticket).
+- Currency filter on line import (ETP-4028): the receipt's own `etgoCurrency` value determines which source documents appear in **Import from Purchase Order** / **Import from Purchase Invoice**. Each modal self-fetches the current receipt header to read its currency and filters candidates to matching-currency documents only, showing a dedicated empty-state message (`noPurchaseOrdersMatchReceiptCurrency` / `noPurchaseInvoicesMatchReceiptCurrency`) when nothing matches.
+- Invoice creation from a completed receipt (via `ReceiptInvoicePreview`, action `createPurchaseInvoice`) now presents the same `CreateInvoiceConfirmModal` price-list picker used by Goods Shipment: Currency shown read-only (inherited from the receipt), Tarifa (price list) required and user-selectable. `CreatePurchaseInvoiceHandler.java` applies the chosen `priceListId` to the invoice (both the linked-PO path and the no-PO fallback path, which otherwise defaults to the vendor's purchase price list) before invoice lines are priced.
 
 No current evidence shows:
 
@@ -81,6 +84,11 @@ No current evidence shows:
 10. Select two or more draft goods receipts from the list and confirm the bulk action bar shows a `Confirmar (N)` button. Trigger it and verify all selected receipts move to completed status and a result toast appears.
 11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
 12. Confirm there is **no** document-email access anywhere in this window: no envelope action on a list row hover, no "Enviar" button in the preview panel header, and no email envelope in the form-view action bar. The send-document feature is disabled for this window (ETP-4372).
+13. Create a receipt from a purchase order confirmed in a non-org currency via the "Manage Receipt" action and confirm the new receipt's Currency field is pre-filled from the order, not the org default.
+14. On a draft receipt, confirm Currency defaults to the org's currency, is editable, and becomes read-only once the receipt is completed.
+15. On a draft receipt with existing lines, change Currency and add a new line; confirm existing lines are unaffected.
+16. On a receipt with a non-default Currency, open **Import from Purchase Order** / **Import from Purchase Invoice** and confirm only matching-currency source documents are listed, with a dedicated empty-state message when none match.
+17. From a completed receipt's preview, use **Create Invoice** and confirm the popup shows Currency read-only (inherited) and a required Tarifa selector; confirm the generated invoice's lines price off the selected price list.
 
 ## Automated evidence
 
@@ -107,6 +115,83 @@ No current evidence shows:
 - The generated `GoodsReceiptPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_InOut` AD table.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
 - **ETP-4032 — Receipt invoice preview modal**: `GoodsReceiptPreview.jsx` now exposes a "Create Invoice" action for completed receipts. `GoodsReceiptTopbar.jsx` shows an invoice-status pill. `ConfirmResultModal` was extracted to `tools/app-shell/src/components/contract-ui/` and is now shared across goods-receipt, goods-shipment, purchase-order, and sales-order.
+- **ETP-4028 — Currency field**: same `EM_ETGO_CURRENCY_ID` column on `M_InOut` as goods-shipment (shared table). `NeoCommercialDocumentFactory.java` and `CreatePurchaseReturnHandler.java` set `.setEtgoCurrency(...)` on every receipt-creation path. `artifacts/goods-receipt/decisions.json` declares `etgoCurrency` (editable, `defaultExpr: "@C_Currency_ID@"`, locked on `Processed='Y'`) plus `window.labelOverrides`.
+- **ETP-4028 — Currency-filtered imports**: `artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx` and `ImportFromPurchaseInvoiceModal.jsx` fetch the receipt header for `etgoCurrency` and filter candidate documents by matching currency, computing `statusAndBpCandidates` first and then narrowing by currency (so the "excluded by currency" empty state only fires when status/BP-eligible documents exist but none match the currency).
+- **ETP-4028 — Price-list picker at invoice time**: `GoodsReceiptActions.jsx` wires the shared `CreateInvoiceConfirmModal` (`showPriceListPicker`, `isSOTrx={false}`) and forwards `priceListId` to the `createPurchaseInvoice` endpoint. `CreatePurchaseInvoiceHandler.java` gained `applyPriceListOverride`/`resolvePriceListOverride` helpers, applied in the linked-PO path (before `createInvoiceLinesFromDocumentLines`) and threaded through the no-PO fallback (`createFromReceiptNoPo`, now 3-arg, with a backward-compatible 2-arg overload), where it takes precedence over the vendor's default purchase price list when provided.
+
+## Accounting dimension visibility per section — ETP-4529
+
+This window had the known `DISPLAY_Dimensions_WhenEnabled` gap referenced in ETP-4529: the rule
+catalog declared "Accounting dimensions shown only when accounting dimension display is enabled"
+(decision: Keep) but every dimension field actually carried `"form": false"` plus explicit
+`"readOnlyLogic": null, "displayLogic": null"` overrides — hidden unconditionally, with the raw AD
+display logic AND read-only logic both silenced. Fixed as part of ETP-4529:
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — the header's `businessPartner` is the receipt's core Vendor field (raw AD display logic is `None`, not a dimension), unaffected | **Nunca** — now explicit `visibility: "discarded"` (previously `form: false` with nulled logic; same effect, now unambiguous) |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` now passes through (`section: "other"`, `form: false`/nulled logic removed) | **Por config** — same fix (`grid: true` as of ETP-4543, `form: false`/nulled logic removed) |
+| `costcenter` | **Por config** — same fix as `project` | **Por config** — same fix as `project` |
+
+The `readOnlyLogic: null` overrides removed alongside `displayLogic: null` were also silencing the
+raw `@Posted@='Y'` rule — these dimension fields are now correctly locked once the receipt is
+posted, in addition to being visible again.
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).**
+Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
+runtime.
+
+**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
+`lines.costcenter` are correctly evaluated, but this window uses
+`window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all — so
+the two fields had no UI surface to render on (Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`). Fixed by flipping `lines.project.grid` and
+`lines.costcenter.grid` from `false` to `true` in `decisions.json` (this window's line table,
+`GoodsReceiptLineTable.jsx`, is pipeline-generated, so the pipeline-generated
+`@sf-generated-start columns` block now includes both fields once `grid: true`) and wiring
+dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
+`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
+dimension toggles OFF, the columns do not render as grid columns; with them ON, they do. See
+`sales-invoice.md` for the full write-up (including the verified list of which windows
+actually hit this gap).
+
+### Header section fix, and the plain grid columns above were reverted (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
+so they render in the main visible form area — same fix as `sales-invoice.md`.
+
+Separately: the `lines.project.grid`/`lines.costcenter.grid` flags flipped `false → true` just
+above (ETP-4543) were **flipped back to `false`**, for the same reason as `goods-shipment.md`:
+the user asked for the expand-row "Dimensiones contables" UX instead of plain columns (see
+`docs/ui-customization.md` §14b), but this window's `GoodsReceiptLineTable.jsx` is fully
+pipeline-generated with no override mechanism that fits the new `dimensionsPanel` column type
+— only the heavier, fully self-fetching `customLinesComponent`/`CustomLines` contract exists.
+Back to pre-ETP-4543 state pending a coordinator decision — see `docs/feedback.md`'s ETP-4543
+supersession note.
+
+**Resolved (ETP-4529 generator support):** `generate-frontend.js`'s `generateTableComponent`
+(`schema_forge_core`) now emits a synthetic `dimensionsPanel` column directly from
+`decisions.json` — no custom override needed. `lines.project.dimensionsPanel` and
+`lines.costcenter.dimensionsPanel` are now `true` (grid stays `false`); the pipeline-generated
+`GoodsReceiptLineTable.jsx` renders the expand-row "Dimensiones contables" panel for existing
+rows. See `docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customization.md` §14b.
+
+### Regen gap closed + "Añadir dimensiones" moved to a hover action (ETP-4610)
+
+While validating ETP-4610, `contract.json`/`GoodsReceiptLineTable.jsx` were found to have **never
+actually picked up** the `dimensionsPanel: true` flags above — likely lost across the
+`epic/ETP-3504` merges preceding this branch, despite the ETP-4529 note claiming this window was
+already regenerated. Re-ran `make regen ONLY=goods-receipt SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed
+clean (`sf-validate-pipeline`, 0 violations, additive version bump). Separately, `InlineLinesPanel`
+no longer renders the `dimensionsPanel` type as a grid column at all — "Añadir dimensiones" is now
+a hover action next to Edit/Delete, gated on at least one visible dimension field, with the
+expand-chevron column unchanged. The label/icon is adaptive: "Añadir dimensiones" while the line has
+no dimension values, "Editar dimensiones" once at least one is set. See `docs/ui-customization.md`
+§14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
 
 ## Theme roles
 

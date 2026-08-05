@@ -107,13 +107,16 @@ async function installReturnReceiptMocks(page) {
       return;
     }
 
-    // POST action/createReturnInvoice → synthetic invoice
+    // POST action/createReturnInvoice → synthetic rectificativa invoice.
+    // ETP-4737: the generated invoice carries a NEGATIVE total (return flow) — the
+    // response key must be `grandTotalAmount` (not `grandTotal`), matching the field
+    // useConfirmWithCredit.js / ConfirmInOutModal.jsx actually read from the API.
     if (method === 'POST' && url.includes('/action/createReturnInvoice')) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: { data: { id: 'inv-new', documentNo: 'FC/00100', grandTotal: 150 } },
+          response: { data: { id: 'inv-new', documentNo: 'FC/00100', grandTotalAmount: -150 } },
         }),
       });
       return;
@@ -198,8 +201,9 @@ test.describe('return-material-receipt — list and preview', () => {
     // Clone (duplicate) must be visible for CO rows
     await expect(coRow.getByTestId('row-quick-action-clone')).toBeVisible();
 
-    // Delete is hidden for CO rows because hideDeleteWhenComplete: true
-    await expect(coRow.getByTestId('row-quick-action-delete')).toHaveCount(0);
+    // Grid delete stays visible regardless of status (ETP-4656, commit 044edad45) —
+    // see e2e/tests/flows/delete-visibility.mocked.spec.js for the dedicated regression guard.
+    await expect(coRow.getByTestId('row-quick-action-delete')).toBeVisible();
 
     // --- Preview panel: click DR row ---
     // Move away from CO row first (unhover) then click DR row
@@ -251,6 +255,13 @@ test.describe('return-material-receipt — DR form actions', () => {
     const modalInvoiceToggle = page.getByTestId('confirm-modal-invoice-toggle');
     await expect(modalInvoiceToggle).toBeVisible({ timeout: 8_000 });
 
+    // ETP-4737: the toggle card must show the current "Crear Factura Rectificativa"
+    // wording (returnReceipt.createRectificativeInvoice) — regression guard for the
+    // Factura de Devolución → Factura Rectificativa rename.
+    await expect(
+      page.getByTestId('confirm-inout-modal').getByText('Crear Factura Rectificativa', { exact: true }),
+    ).toBeVisible();
+
     // Cancel button via data-testid
     const cancelBtn = page.getByTestId('confirm-modal-cancel-btn');
     await expect(cancelBtn).toBeVisible();
@@ -278,6 +289,11 @@ test.describe('return-material-receipt — DR form actions', () => {
     // Wait for the result card or at minimum the modal to disappear and something to update
     // The ConfirmResultModal shows rmrInvoiceCreatedTitle or the invoice card
     await expect(page.getByText(/FC\/00100/).or(page.getByTestId('confirm-result-modal'))).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: the rectificativa invoice is created with a negative total (return
+    // flow) — the result card must render the negative amount as returned by the
+    // backend (fmtAmount uses Number.toLocaleString, which keeps the minus sign).
+    await expect(page.getByText(/-150,00/)).toBeVisible();
   });
 });
 
@@ -293,13 +309,21 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
 
   test('CO detail: create invoice button, print button, invoice modal confirm — full flow', async ({ page }) => {
     test.setTimeout(120_000); // 3 navigations + modal flow can exceed 60s under full-suite load
-    // ret-003 is CO with hasReturnInvoice=false — "Crear factura de devolución" must be visible
+    // ret-003 is CO with hasReturnInvoice=false — "Crear Factura Rectificativa" must be visible
     await page.goto('/return-material-receipt/ret-003');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // --- "Crear factura de devolución" button is visible ---
+    // --- "Crear Factura Rectificativa" button is visible ---
     const createInvoiceBtn = page.getByTestId('action-create-return-invoice');
     await expect(createInvoiceBtn).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: the post-confirm button's label was ALSO fixed today — it used to fall
+    // back to the hardcoded, stale `createReturnInvoice` i18n key ("Crear Factura de
+    // Devolución") with no per-window override; ConfirmWithCreditButtonBase now accepts
+    // a `postConfirmButtonLabel` prop and this window wires it to
+    // returnReceipt.createRectificativeInvoice. Regression guard: same wording as the
+    // confirm-modal's toggle card (asserted above in the DR flow test).
+    await expect(createInvoiceBtn).toHaveText('Crear Factura Rectificativa');
 
     // --- Print button is visible ---
     const printBtn = page.getByRole('button', { name: /imprimir|print/i });
@@ -339,5 +363,9 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
 
     // createReturnInvoice POST returns FC/00100 → ConfirmResultModal shows it
     await expect(page.getByText(/FC\/00100/).or(page.getByTestId('confirm-result-modal'))).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: same negative-total contract applies from the CO (already confirmed)
+    // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.
+    await expect(page.getByText(/-150,00/)).toBeVisible();
   });
 });

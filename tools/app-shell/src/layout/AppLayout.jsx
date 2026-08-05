@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
+import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
@@ -17,6 +19,7 @@ import { SupportChatWidget } from '@/components/support/SupportChatWidget.jsx';
 import { Button } from '@/components/ui/button';
 import { useLogout } from '@/auth/useLogout.js';
 import { useUI } from '@/i18n';
+import { fetchCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
@@ -120,6 +123,15 @@ export default function AppLayout({ menuGroups }) {
   // the note in App.jsx. That's why role-filtering is applied here rather than
   // where menuGroups is originally built.
   const allowedIds = useRoleMenu();
+  // Same reason: this is the first component inside AuthProvider that has the
+  // token, and flag targeting needs the account identity behind it.
+  useAccountIdentity();
+  // ETP-4314 — fetch the instance-wide currency separator config once per session
+  // (fire-and-forget, fails soft to the current `.`/`,` defaults on error) so
+  // formatCurrency() picks up the real configured value instead of a hardcoded one.
+  useEffect(() => {
+    fetchCurrencyFormatConfig();
+  }, []);
   // ETP-4513 — the `SFWindowAccessMap` capabilities map (e.g.
   // `isAdminOrClientAdmin`), used to gate menu.json entries that declare
   // `"capability": "<key>"` (no backing AD_Window/AD_Process to check via

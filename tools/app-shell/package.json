@@ -15,9 +15,13 @@
     "test:all": "npm run test && npm run test:vitest"
   },
   "dependencies": {
-    "@etendosoftware/app-shell-core": "0.3.19",
-    "@etendosoftware/etendo-go-core": "0.3.19",
+    "@configcat/sdk": "^1.1.0",
+    "@etendosoftware/app-shell-core": "0.3.25",
+    "@etendosoftware/etendo-go-core": "0.3.25",
     "@iconicapp/iconic-react": "^1.1.4",
+    "@openfeature/config-cat-web-provider": "^0.2.0",
+    "@openfeature/core": "^1.11.0",
+    "@openfeature/web-sdk": "^1.9.0",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -39,6 +43,7 @@
     "lucide-react": "^0.400.0",
     "mixpanel-browser": "^2.79.0",
     "next-themes": "^0.4.6",
+    "qrcode": "^1.5.4",
     "react": "^18.3.0",
     "react-day-picker": "^9.14.0",
     "react-dom": "^18.3.0",

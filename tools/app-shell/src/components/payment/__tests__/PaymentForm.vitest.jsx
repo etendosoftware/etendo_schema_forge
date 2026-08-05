@@ -306,3 +306,25 @@ describe('PaymentForm — empty state & commissions toggle', () => {
     expect(screen.getByTestId('ctx-note')).toBeInTheDocument();
   });
 });
+
+describe('PaymentForm — payment amount currency symbol (ETP-4314)', () => {
+  // Regression: the "Importe del pago" AmountInput used to always show '€'
+  // regardless of the actual account/document currency. fields.jsx is NOT
+  // mocked in this file, so this exercises the real AmountInput + the real
+  // getCurrencySymbol() resolution end-to-end.
+  // `invoices: []` avoids the invoice-row MoneyInputs, which share the same
+  // fallback data-testid ("field-number") as the payment AmountInput when no
+  // `name` prop is given, and would otherwise make the lookup ambiguous.
+  it('shows the literal € by default (no currency prop)', () => {
+    renderForm({ invoices: [] });
+    const amountInput = screen.getByTestId('field-number');
+    expect(amountInput.parentElement).toHaveTextContent('€');
+  });
+
+  it('shows the real currency symbol ($) when currency="USD" is passed', () => {
+    renderForm({ invoices: [], currency: 'USD' });
+    const amountInput = screen.getByTestId('field-number');
+    expect(amountInput.parentElement).toHaveTextContent('$');
+    expect(amountInput.parentElement).not.toHaveTextContent('€');
+  });
+});

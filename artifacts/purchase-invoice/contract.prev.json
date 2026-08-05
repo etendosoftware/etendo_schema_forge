@@ -1,8 +1,8 @@
 {
-  "version": "0.77.0",
+  "version": "0.80.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-23T18:17:09.851Z",
-  "checksum": "9fa2e7433dfbc95a",
+  "updatedAt": "2026-08-04T16:33:31.194Z",
+  "checksum": "ea8d8e381ae784eb",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -69,11 +69,11 @@
         },
         {
           "label": "invoicesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D"
         },
         {
-          "label": "creditNotesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D"
+          "label": "rectificativeInvoicesTab",
+          "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D%7D%5D"
         }
       ],
       "dateFilterKey": "invoiceDate",
@@ -850,10 +850,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
-            "section": "other",
+            "section": "principal",
             "validation": {
               "maxLength": 60
             },
@@ -868,6 +868,41 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Project"
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "CostCenter",
+            "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -2076,11 +2111,18 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "dimensionsPanel": true,
             "validation": {
               "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -2098,11 +2140,18 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "dimensionsPanel": true,
             "validation": {
               "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
             },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
@@ -5126,11 +5175,11 @@
         },
         {
           "label": "invoicesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D"
         },
         {
-          "label": "creditNotesTab",
-          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D"
+          "label": "rectificativeInvoicesTab",
+          "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D%7D%5D"
         }
       ],
       "dateFilterKey": "invoiceDate",
@@ -5576,7 +5625,7 @@
             "apiKey": "costcenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -6960,6 +7009,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOSourceInvoiceLine",
+            "apiKey": "eTGOSourceInvoiceLine",
+            "column": "EM_Etgo_Source_Invoiceline_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
           }
         ],
         "javaQualifier": "invoiceLineHandler"
@@ -9840,6 +9897,14 @@
       },
       {
         "entity": "header",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "CostCenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/purchase-invoice/header/selectors/costcenter"
+      },
+      {
+        "entity": "header",
         "field": "aeatsiiPurDescription",
         "column": "EM_Aeatsii_Pur_Description_ID",
         "reference": "aeatsii_description",
@@ -11089,6 +11154,14 @@
         "description": "Display logic for 'aeatsiiPurDescription' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-etsgDateOperation",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -11111,6 +11184,14 @@
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-project",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-intrastat-conversionRate",
@@ -11137,6 +11218,14 @@
         "description": "Display logic for 'supplementaryUOM' in intrastat should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-lines-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-lines-grossUnitPrice",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -11151,6 +11240,14 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-lines-project",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in lines should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-paymentDetails-invoicePaid",
@@ -11257,6 +11354,14 @@
         "description": "Display logic for 'aeatsiiPurDescription' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-etsgDateOperation",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -11279,6 +11384,14 @@
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-project",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-intrastat-conversionRate",
@@ -11305,6 +11418,14 @@
         "description": "Display logic for 'supplementaryUOM' in intrastat should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-lines-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-lines-grossUnitPrice",
         "category": "displaylogic-valid",
         "entity": "lines",
@@ -11319,6 +11440,14 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-lines-project",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in lines should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-paymentDetails-invoicePaid",
@@ -11751,6 +11880,14 @@
         "field": "chargeAmount",
         "runner": "node",
         "description": "Field 'chargeAmount' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-costcenter",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should be present in header"
       },
       {
         "id": "t-field-presence-header-currency",
@@ -12977,6 +13114,14 @@
         "description": "Field 'chargeAmount' should have type 'number' in header"
       },
       {
+        "id": "t-field-type-header-costcenter",
+        "category": "field-type",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-currency",
         "category": "field-type",
         "entity": "header",
@@ -13945,6 +14090,14 @@
         "description": "Read-only logic for 'chargeAmount' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-costcenter",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-currency",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -14495,6 +14648,14 @@
         "field": "chargeAmount",
         "runner": "node",
         "description": "Read-only logic for 'chargeAmount' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-costcenter",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costcenter' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-currency",
@@ -15280,6 +15441,14 @@
         "field": "charge",
         "runner": "node",
         "description": "Selector endpoint for 'charge' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-costcenter",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costcenter' in header should exist"
       },
       {
         "id": "t-selector-endpoint-header-currency",
@@ -16474,14 +16643,6 @@
         "description": "System field 'copyFrom' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-costcenter",
-        "category": "system-field",
-        "entity": "header",
-        "field": "costcenter",
-        "runner": "node",
-        "description": "System field 'costcenter' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-createdBy",
         "category": "system-field",
         "entity": "header",
@@ -17320,6 +17481,14 @@
         "field": "editLineAmount",
         "runner": "node",
         "description": "System field 'editLineAmount' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-eTGOSourceInvoiceLine",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "eTGOSourceInvoiceLine",
+        "runner": "node",
+        "description": "System field 'eTGOSourceInvoiceLine' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-excludeforwithholding",
@@ -18246,25 +18415,25 @@
       }
     ],
     "summary": {
-      "total": 983,
+      "total": 996,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
         "default-value-type": 37,
-        "displaylogic-evaluable": 21,
-        "displaylogic-valid": 21,
-        "field-presence": 153,
-        "field-type": 153,
-        "readonlylogic-evaluable": 69,
-        "readonlylogic-valid": 69,
+        "displaylogic-evaluable": 25,
+        "displaylogic-valid": 25,
+        "field-presence": 154,
+        "field-type": 154,
+        "readonlylogic-evaluable": 70,
+        "readonlylogic-valid": 70,
         "rule-declared": 23,
         "searchable-filters": 6,
-        "selector-endpoint": 52,
+        "selector-endpoint": 53,
         "system-field": 327,
         "visibility": 13
       },
       "byRunner": {
-        "node": 983,
+        "node": 996,
         "junit": 0
       }
     }

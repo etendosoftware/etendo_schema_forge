@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { ListView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
 import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
@@ -26,11 +26,20 @@ const DOC_TYPE_LABELS = {
   'Reversed Purchase Invoice': 'Factura de Devolución',
 };
 
-// i18n-allowlist: ["all", "invoicesTab", "creditNotesTab"]
+// i18n-allowlist: ["allTab", "invoicesTab", "rectificativeInvoicesTab"]
+// ETP-4737: server-side criteria, mirrored 1:1 from
+// artifacts/purchase-invoice/decisions.json → window.subsetFilters. Discriminates
+// on etsgIsRectificative / documentCategory (the same fields the AD data uses),
+// NOT on the raw doc-type identifier string — a name match silently misses any
+// new document type sharing the same category (this is exactly how "Factura
+// Rectificativa (compras)" fell through to "Todos" until this fix, since it was
+// never rendered by the generated HeaderPage this window bypasses). Keep this
+// array's filter criteria in sync with decisions.json whenever that
+// discriminator changes.
 const INVOICE_SUBSET_FILTERS = [
-  { label: 'all' },
-  { label: 'invoicesTab',    rowFilter: (r) => r['transactionDocument$_identifier'] === 'AP Invoice' },
-  { label: 'creditNotesTab', rowFilter: (r) => r['transactionDocument$_identifier'] === 'AP CreditMemo' },
+  { label: 'allTab' },
+  { label: 'invoicesTab', filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D' },
+  { label: 'rectificativeInvoicesTab', filter: 'criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D%7D%5D' },
 ];
 
 function applyDocTypeLabels(record) {
@@ -41,21 +50,21 @@ function applyDocTypeLabels(record) {
 
 const LIST_COLUMNS = [
   { key: 'orderReference', column: 'POReference', type: 'string', label: 'Document No.' },
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount' },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
 ];
 // Mirrors PurchaseInvoiceHeaderTable columns (key + column + type only) so that
 // buildAdvancedFilterCriteria can resolve filter modes on the first render,
 // before DataTable fires onColumnsReady.
 const OVERDUE_INITIAL_COLUMNS = [
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', required: true },
+  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', required: true },
   { key: 'eTGODueDate', column: 'em_etgo_due_date', type: 'date' },
 ];
 
@@ -124,10 +133,10 @@ export default function PurchaseInvoiceWindow(props) {
   );
 
   const summary = [
-    { key: 'summedLineAmount', column: 'TotalLines', type: 'amount', label: ui('totalNetAmount') },
-    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: ui('totalGrossAmount') },
-    { key: 'totalPaid', column: 'Totalpaid', type: 'amount', label: ui('paidAmount') },
-    { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', label: ui('outstandingAmount') },
+    { key: 'summedLineAmount', column: 'TotalLines', type: 'amount', label: ui('totalNetAmount'), required: true },
+    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: ui('totalGrossAmount'), required: true },
+    { key: 'totalPaid', column: 'Totalpaid', type: 'amount', label: ui('paidAmount'), required: true },
+    { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', label: ui('outstandingAmount'), required: true },
   ];
 
   // Pick up the saved record from navigation state when arriving at the list view

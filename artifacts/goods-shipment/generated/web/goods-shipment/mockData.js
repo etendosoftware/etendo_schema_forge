@@ -12,10 +12,13 @@ export const goodsShipment = [
     "documentStatus": "DR",
     "posted": "Sample posted",
     "invoiceStatus": "DR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "DR",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsShipment-002",
@@ -28,10 +31,13 @@ export const goodsShipment = [
     "documentStatus": "CO",
     "posted": "Sample posted",
     "invoiceStatus": "CO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "CO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsShipment-003",
@@ -44,10 +50,13 @@ export const goodsShipment = [
     "documentStatus": "VO",
     "posted": "Sample posted",
     "invoiceStatus": "VO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "VO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsShipment-004",
@@ -60,10 +69,13 @@ export const goodsShipment = [
     "documentStatus": "IP",
     "posted": "Sample posted",
     "invoiceStatus": "IP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "IP",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsShipment-005",
@@ -76,10 +88,13 @@ export const goodsShipment = [
     "documentStatus": "DR",
     "posted": "Sample posted",
     "invoiceStatus": "DR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "DR",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsShipment-006",
@@ -92,10 +107,13 @@ export const goodsShipment = [
     "documentStatus": "CO",
     "posted": "Sample posted",
     "invoiceStatus": "CO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "CO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsShipment-007",
@@ -108,10 +126,13 @@ export const goodsShipment = [
     "documentStatus": "VO",
     "posted": "Sample posted",
     "invoiceStatus": "VO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "VO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsShipment-008",
@@ -124,10 +145,13 @@ export const goodsShipment = [
     "documentStatus": "IP",
     "posted": "Sample posted",
     "invoiceStatus": "IP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "IP",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsShipment-009",
@@ -140,10 +164,13 @@ export const goodsShipment = [
     "documentStatus": "DR",
     "posted": "Sample posted",
     "invoiceStatus": "DR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "DR",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsShipment-010",
@@ -156,10 +183,13 @@ export const goodsShipment = [
     "documentStatus": "CO",
     "posted": "Sample posted",
     "invoiceStatus": "CO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "CO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsShipment-011",
@@ -172,10 +202,13 @@ export const goodsShipment = [
     "documentStatus": "VO",
     "posted": "Sample posted",
     "invoiceStatus": "VO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "VO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsShipment-012",
@@ -188,10 +221,13 @@ export const goodsShipment = [
     "documentStatus": "IP",
     "posted": "Sample posted",
     "invoiceStatus": "IP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed",
     "etblkpAccountingstatus": "IP",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   }
 ];
 
@@ -202,6 +238,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 402,
     "description": "Standard order for Q1 delivery",
     "orderQuantity": 402,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-001"
   },
   {
@@ -210,6 +248,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 54,
     "description": "Rush order - priority shipping required",
     "orderQuantity": 54,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-002"
   },
   {
@@ -218,6 +258,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 150,
     "description": "Bulk purchase for warehouse restocking",
     "orderQuantity": 150,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-003"
   },
   {
@@ -226,6 +268,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 97,
     "description": "Sample order for client evaluation",
     "orderQuantity": 97,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-004"
   },
   {
@@ -234,6 +278,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 311,
     "description": "Recurring monthly supply order",
     "orderQuantity": 311,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-005"
   },
   {
@@ -242,6 +288,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 451,
     "description": "Special pricing agreement applies",
     "orderQuantity": 451,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-006"
   },
   {
@@ -250,6 +298,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 496,
     "description": "Consolidated order from multiple requests",
     "orderQuantity": 496,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-007"
   },
   {
@@ -258,6 +308,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 284,
     "description": "Trial order for new product line",
     "orderQuantity": 284,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-008"
   },
   {
@@ -266,6 +318,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 225,
     "description": "Replacement for damaged goods",
     "orderQuantity": 225,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-009"
   },
   {
@@ -274,6 +328,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 479,
     "description": "Pre-season inventory build-up",
     "orderQuantity": 479,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-010"
   },
   {
@@ -282,6 +338,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 123,
     "description": "Customer-specific configuration",
     "orderQuantity": 123,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-011"
   },
   {
@@ -290,6 +348,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 337,
     "description": "Government contract fulfillment",
     "orderQuantity": 337,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-012"
   }
 ];

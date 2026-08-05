@@ -19,7 +19,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "DR",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-002",
@@ -39,7 +40,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "CO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-003",
@@ -59,7 +61,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "VO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsReceipt-004",
@@ -79,7 +82,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "IP",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-005",
@@ -99,7 +103,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "DR",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-006",
@@ -119,7 +124,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "CO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsReceipt-007",
@@ -139,7 +145,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "VO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-008",
@@ -159,7 +166,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "IP",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-009",
@@ -179,7 +187,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "DR",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsReceipt-010",
@@ -199,7 +208,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "CO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-011",
@@ -219,7 +229,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "VO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-012",
@@ -239,7 +250,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "IP",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   }
 ];
 
@@ -257,7 +269,6 @@ export const goodsReceiptLine = [
     "description": "Standard order for Q1 delivery",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 402,
-    "businessPartner": "Acme Corp",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -279,7 +290,6 @@ export const goodsReceiptLine = [
     "description": "Rush order - priority shipping required",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 54,
-    "businessPartner": "TechFlow Inc",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -301,7 +311,6 @@ export const goodsReceiptLine = [
     "description": "Bulk purchase for warehouse restocking",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 150,
-    "businessPartner": "Global Trade Ltd",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -323,7 +332,6 @@ export const goodsReceiptLine = [
     "description": "Sample order for client evaluation",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 97,
-    "businessPartner": "Summit Industries",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -345,7 +353,6 @@ export const goodsReceiptLine = [
     "description": "Recurring monthly supply order",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 311,
-    "businessPartner": "Pacific Partners",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -367,7 +374,6 @@ export const goodsReceiptLine = [
     "description": "Special pricing agreement applies",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 451,
-    "businessPartner": "Alpine Solutions",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -389,7 +395,6 @@ export const goodsReceiptLine = [
     "description": "Consolidated order from multiple requests",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 496,
-    "businessPartner": "Meridian Group",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -411,7 +416,6 @@ export const goodsReceiptLine = [
     "description": "Trial order for new product line",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 284,
-    "businessPartner": "Vertex Systems",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -433,7 +437,6 @@ export const goodsReceiptLine = [
     "description": "Replacement for damaged goods",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 225,
-    "businessPartner": "Atlas Manufacturing",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -455,7 +458,6 @@ export const goodsReceiptLine = [
     "description": "Pre-season inventory build-up",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 479,
-    "businessPartner": "Nova Enterprises",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -477,7 +479,6 @@ export const goodsReceiptLine = [
     "description": "Customer-specific configuration",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 123,
-    "businessPartner": "Pinnacle Services",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -499,7 +500,6 @@ export const goodsReceiptLine = [
     "description": "Government contract fulfillment",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 337,
-    "businessPartner": "Horizon Labs",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
