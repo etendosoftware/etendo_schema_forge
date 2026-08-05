@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 
 /**
  * Format a byte size into a human readable string.
@@ -98,8 +99,18 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     ? apiBaseUrl.split('/sws/neo/')[0]
     : '';
 
+  // ETP-4564: `undefined` isActive → treat as always-active (eager), preserving
+  // the prior behavior for consumers that don't pass it; consumers that do pass
+  // isActive get true lazy loading (list fires only once the tab is activated).
+  const active = isActive === undefined ? true : isActive;
+
+  // Shared client-side cache (app-shell-core). Null when no DataProvider is
+  // mounted → the list falls back to a direct fetch, preserving prior behavior.
+  const dataCache = useOptionalDataCache();
+  const cacheScope = dataCache?.scope;
+
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(!!(tableName && recordId));
+  const [loading, setLoading] = useState(!!(tableName && recordId) && active);
   const [error, setError] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
 
@@ -127,16 +138,32 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     return ctrl;
   }, []);
 
+  // The attachment list for a record is identified by table + record, isolated
+  // by session/org/role via the cache scope.
+  const listKey = useCallback(() => (
+    cacheScope
+      ? createQueryKey({ ...cacheScope, apiBase: attachmentsBase, entity: 'attachments', spec: tableName, recordId })
+      : null
+  ), [cacheScope, attachmentsBase, tableName, recordId]);
+
+  // Mark the cached attachment list stale so the next read revalidates. Called
+  // after any mutation (upload / remove / update) so a reopened tab is fresh.
+  const invalidateList = useCallback(() => {
+    if (dataCache?.cache && cacheScope) {
+      dataCache.cache.invalidate({ entity: 'attachments', spec: tableName, recordId });
+    }
+  }, [dataCache, cacheScope, tableName, recordId]);
+
   // ── list ────────────────────────────────────────────────────────────────
-  const list = useCallback(async () => {
+  const list = useCallback(async ({ force = false } = {}) => {
     if (!tableName || !recordId) return;
     const ctrl = resetAbortController();
     setLoading(true);
     setError(null);
-    try {
+    const fetcher = async (signal) => {
       const res = await fetch(
         `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}`,
-        { headers: authHeaders(), signal: ctrl.signal },
+        { headers: authHeaders(), signal },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -144,7 +171,22 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       }
       const json = await res.json();
       const data = json?.items ?? json?.response?.data ?? json?.data ?? json;
-      setItems(Array.isArray(data) ? data : []);
+      return Array.isArray(data) ? data : [];
+    };
+    try {
+      let data;
+      if (dataCache?.cache && cacheScope) {
+        data = await dataCache.cache.fetchQuery({
+          key: listKey(),
+          fetcher: ({ signal }) => fetcher(signal),
+          force,
+          staleTime: dataCache.recordStaleTime,
+          signal: ctrl.signal,
+        });
+      } else {
+        data = await fetcher(ctrl.signal);
+      }
+      setItems(data);
     } catch (err) {
       if (err.name === 'AbortError') return;
       setError(err);
@@ -152,22 +194,24 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl, tableName, recordId, authHeaders, resetAbortController, ui]);
+  }, [attachmentsBase, tableName, recordId, authHeaders, resetAbortController, ui, dataCache, cacheScope, listKey]);
 
   // Cancel inflight when record/table changes or component unmounts.
   useEffect(() => () => {
     if (abortRef.current) abortRef.current.abort();
   }, []);
 
-  // Eager load when record is available (same pattern as secondary tabs).
+  // Lazy load: fetch only once the tab is active (ETP-4564). `active` defaults to
+  // true when isActive is not provided, preserving eager behavior for callers
+  // that don't pass it. Reopening a fresh tab reuses the cache (no new request).
   useEffect(() => {
-    if (tableName && recordId) {
+    if (tableName && recordId && active) {
       list();
     }
     // Intentionally not depending on `list` to avoid extra re-runs when
     // its identity changes due to unrelated deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableName, recordId]);
+  }, [tableName, recordId, active]);
 
   // ── upload ──────────────────────────────────────────────────────────────
   const upload = useCallback(async (file) => {
@@ -194,9 +238,10 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       const created = json?.response?.data ?? json?.data ?? json;
       if (created && created.id) {
         setItems((prev) => [created, ...prev]);
+        invalidateList(); // cached list is now stale for other/future readers
       } else {
-        // Fallback: reload list when the server did not return the new item.
-        await list();
+        // Fallback: force a fresh reload when the server did not return the item.
+        await list({ force: true });
       }
       toast.success(ui('attachmentsUploadSuccess'));
     } catch (err) {
@@ -208,7 +253,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         return next;
       });
     }
-  }, [apiBaseUrl, tableName, recordId, authHeaders, list, ui]);
+  }, [apiBaseUrl, tableName, recordId, authHeaders, list, ui, invalidateList]);
 
   // ── download (single) ───────────────────────────────────────────────────
   const download = useCallback(async (attachment) => {
@@ -262,12 +307,13 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         const msg = await extractErrorMessage(res);
         throw new Error(msg || `HTTP ${res.status}`);
       }
+      invalidateList();
       toast.success(ui('attachmentsDeleteSuccess'));
     } catch (err) {
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteError'));
     }
-  }, [apiBaseUrl, authHeaders, ui]);
+  }, [apiBaseUrl, authHeaders, ui, invalidateList]);
 
   // ── removeAll (optimistic) ──────────────────────────────────────────────
   const removeAll = useCallback(async () => {
@@ -285,12 +331,13 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
           })
         )
       );
+      invalidateList();
       toast.success(ui('attachmentsDeleteAllSuccess'));
     } catch (err) {
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteAllError'));
     }
-  }, [apiBaseUrl, authHeaders, ui]);
+  }, [apiBaseUrl, authHeaders, ui, invalidateList]);
 
   // ── update description (optimistic) ─────────────────────────────────────
   const updateDescription = useCallback(async (attachmentId, description) => {
@@ -310,12 +357,13 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         const msg = await extractErrorMessage(res);
         throw new Error(msg || `HTTP ${res.status}`);
       }
+      invalidateList();
       toast.success(ui('attachmentsUpdateSuccess'));
     } catch (err) {
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsUpdateError'));
     }
-  }, [apiBaseUrl, authHeaders, ui]);
+  }, [apiBaseUrl, authHeaders, ui, invalidateList]);
 
   return {
     items,
