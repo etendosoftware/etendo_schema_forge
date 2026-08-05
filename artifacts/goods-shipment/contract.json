@@ -1,8 +1,8 @@
 {
-  "version": "0.34.0",
+  "version": "0.35.0",
   "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-30T04:12:10.235Z",
-  "checksum": "e7d163e989c97f04",
+  "updatedAt": "2026-08-04T19:42:34.683Z",
+  "checksum": "8ef7742e22a0f434",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -17,7 +17,8 @@
         "topbarRight": "GoodsShipmentActions",
         "topbarExtra": "GoodsShipmentBillingBadge",
         "bulkActions": "BulkInvoiceFromShipment",
-        "bottomSection": "GoodsShipmentBottomPanel"
+        "bottomSection": "GoodsShipmentBottomPanel",
+        "moreMenuContent": "GoodsShipmentMoreMenu"
       },
       "menuActions": [
         {
@@ -943,7 +944,8 @@
         "topbarRight": "GoodsShipmentActions",
         "topbarExtra": "GoodsShipmentBillingBadge",
         "bulkActions": "BulkInvoiceFromShipment",
-        "bottomSection": "GoodsShipmentBottomPanel"
+        "bottomSection": "GoodsShipmentBottomPanel",
+        "moreMenuContent": "GoodsShipmentMoreMenu"
       },
       "menuActions": [
         {
@@ -1547,6 +1549,14 @@
             "column": "EM_Etblkp_Bulkposting",
             "type": "button",
             "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": true
           }
         ],
@@ -3241,6 +3251,14 @@
         "description": "System field 'documentType' should exist in backend but not frontend for goodsShipment"
       },
       {
+        "id": "t-system-field-goodsShipment-etgoCurrency",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "System field 'etgoCurrency' should exist in backend but not frontend for goodsShipment"
+      },
+      {
         "id": "t-system-field-goodsShipment-externalBusinessPartnerReference",
         "category": "system-field",
         "entity": "goodsShipment",
@@ -3792,7 +3810,7 @@
       }
     ],
     "summary": {
-      "total": 206,
+      "total": 207,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
@@ -3806,11 +3824,11 @@
         "rule-declared": 5,
         "searchable-filters": 6,
         "selector-endpoint": 8,
-        "system-field": 84,
+        "system-field": 85,
         "visibility": 2
       },
       "byRunner": {
-        "node": 206,
+        "node": 207,
         "junit": 0
       }
     }

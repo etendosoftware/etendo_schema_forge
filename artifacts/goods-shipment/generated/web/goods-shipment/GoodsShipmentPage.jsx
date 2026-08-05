@@ -13,6 +13,7 @@ import GoodsShipmentBottomPanel from '../../../custom/GoodsShipmentBottomPanel';
 import GoodsShipmentActions from '../../../custom/GoodsShipmentActions';
 import GoodsShipmentBillingBadge from '../../../custom/GoodsShipmentBillingBadge';
 import BulkInvoiceFromShipment from '../../../custom/BulkInvoiceFromShipment';
+import GoodsShipmentMoreMenu from '../../../custom/GoodsShipmentMoreMenu';
 import catalogs from './mockCatalogs';
 
 
@@ -344,6 +345,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         bottomSection={GoodsShipmentBottomPanel}
         topbarRight={GoodsShipmentActions}
         topbarExtra={GoodsShipmentBillingBadge}
+        customMenuContent={GoodsShipmentMoreMenu}
         menuActions={({ data, status }) => [
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
           { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
