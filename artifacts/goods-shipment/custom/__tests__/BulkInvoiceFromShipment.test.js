@@ -63,4 +63,39 @@ describe('BulkInvoiceFromShipment', () => {
     assert.match(src, /toggleCollapse/);
     assert.match(src, /collapsed/);
   });
+
+  describe('ETP-4028 — currencyCheck (mixed-currency selections block bulk invoicing)', () => {
+    it('computes currencyCheck as a useMemo mirroring the bpCheck shape', () => {
+      assert.match(src, /const currencyCheck = useMemo\(\(\) => \{/);
+    });
+
+    it('returns { same: false } when there are no invoiceable rows', () => {
+      assert.match(
+        src,
+        /const currencyCheck = useMemo\(\(\) => \{\s*\n\s*if \(invoiceableRows\.length === 0\) return \{ same: false \};/,
+      );
+    });
+
+    it('derives allSame by comparing every row.etgoCurrency to the first row', () => {
+      assert.match(src, /const firstCurrency = invoiceableRows\[0\]\.etgoCurrency;/);
+      assert.match(
+        src,
+        /const allSame = invoiceableRows\.every\(r => r\.etgoCurrency === firstCurrency\);/,
+      );
+    });
+
+    it('requires currencyCheck.same (in addition to bpCheck.same) for canCreate', () => {
+      assert.match(
+        src,
+        /const canCreate = invoiceableCount > 0 && bpCheck\.same && currencyCheck\.same;/,
+      );
+    });
+
+    it('shows the selectShipmentsSameCurrency tooltip only when the BP check passes but currency differs', () => {
+      assert.match(
+        src,
+        /!bpCheck\.same\s*\n\s*\?\s*ui\('selectShipmentsSameCustomer'\)\s*\n\s*:\s*!currencyCheck\.same\s*\n\s*\?\s*ui\('selectShipmentsSameCurrency'\)/,
+      );
+    });
+  });
 });

@@ -12,6 +12,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -28,15 +29,33 @@ const LOCKSTEP_PACKAGES = [
 // package.json files that may declare any of the lockstep packages.
 const MANIFESTS = ['package.json', 'tools/app-shell/package.json'];
 
-const version = process.argv[2];
 // Accept plain releases (0.3.1) and prereleases, incl. preview builds whose
 // prerelease carries the sanitized branch id (e.g.
 // 0.3.9-preview.feature-ETP-4394.<ts>.<sha>). SemVer prerelease identifiers are
 // [0-9A-Za-z-] dot-separated, so the class must include '-'.
-if (!version || !/^\d+\.\d+\.\d+(-[\w.-]+)?$/.test(version)) {
-  console.error('Usage: node scripts/bump-core-version.mjs <version>  (e.g. 0.3.1)');
-  process.exit(1);
+const VERSION_RE = /^\d+\.\d+\.\d+(-[\w.-]+)?$/;
+
+// Resolve the target version: prefer the CLI argument; when omitted and we have
+// an interactive TTY, prompt for it (so `make bump-core-version` with no
+// VERSION= asks instead of failing). Falls back to the usage error otherwise.
+async function resolveVersion() {
+  let version = process.argv[2];
+  if (!version && process.stdin.isTTY) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      version = (await rl.question('Core version to bump to (e.g. 0.3.1): ')).trim();
+    } finally {
+      rl.close();
+    }
+  }
+  if (!version || !VERSION_RE.test(version)) {
+    console.error('Usage: node scripts/bump-core-version.mjs <version>  (e.g. 0.3.1)');
+    process.exit(1);
+  }
+  return version;
 }
+
+const version = await resolveVersion();
 
 const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
 

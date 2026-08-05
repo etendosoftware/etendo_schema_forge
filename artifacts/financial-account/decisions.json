@@ -1,6 +1,7 @@
 {
   "$schema": "decisions-v2",
   "window": {
+    "agentPrompt": "#REF#agent-prompts/financial-account/spec.md",
     "category": "finance",
     "name": "Accounts",
     "detailEntity": null,
@@ -20,6 +21,7 @@
   "entities": {
     "account": {
       "javaQualifier": "financialAccountHeaderHandler",
+      "agentPrompt": "#REF#agent-prompts/financial-account/account.md",
       "virtualFields": [
         {
           "name": "pendingCount",
@@ -34,16 +36,16 @@
       ],
       "fields": {
         "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
-        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType" },
+        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType", "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
         "currency": { "visibility": "editable", "grid": false, "required": true },
         "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
         "description": { "visibility": "editable", "grid": false },
-        "iBAN": { "visibility": "editable", "grid": false },
-        "swiftCode": { "visibility": "editable", "grid": false },
+        "iBAN": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.iban.md" },
+        "swiftCode": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.swift-code.md" },
         "bankCode": { "visibility": "editable", "grid": false },
         "branchCode": { "visibility": "editable", "grid": false },
         "partialAccountNo": { "visibility": "editable", "grid": false },
-        "accountNo": { "visibility": "editable", "grid": false },
+        "accountNo": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.account-no.md" },
         "businessPartner": { "visibility": "system" },
         "matchingAlgorithm": { "visibility": "system" },
         "initialBalance": { "visibility": "system" },

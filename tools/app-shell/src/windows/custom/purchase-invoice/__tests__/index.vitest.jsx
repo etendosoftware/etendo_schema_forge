@@ -137,7 +137,12 @@ let lastListViewProps;
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import PurchaseInvoiceWindow from '../index.jsx';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('PurchaseInvoiceWindow — render smoke tests', () => {
   beforeEach(() => {
@@ -289,17 +294,45 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
     render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastListViewProps.labelOverrides.en_US.POReference).toBe('Document No.');
-    expect(lastListViewProps.subsetFilters.map((f) => f.label)).toEqual(['all', 'invoicesTab', 'creditNotesTab']);
+    expect(lastListViewProps.subsetFilters.map((f) => f.label)).toEqual(['allTab', 'invoicesTab', 'rectificativeInvoicesTab']);
   });
 
-  it('evaluates the invoicesTab and creditNotesTab rowFilter predicates', () => {
+  // ETP-4737: the invoicesTab/rectificativeInvoicesTab tabs are server-side `filter` criteria
+  // (not client-side rowFilter) mirrored 1:1 from decisions.json's
+  // window.subsetFilters, discriminating on etsgIsRectificative/documentCategory
+  // rather than the raw doc-type identifier string — so any doc type sharing the
+  // same AD category (including "Factura Rectificativa (compras)") lands in the
+  // right tab without a name-string edit here.
+  it('mirrors decisions.json subsetFilters criteria exactly for invoicesTab/rectificativeInvoicesTab', () => {
     render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
 
-    const [, invoicesTab, creditNotesTab] = lastListViewProps.subsetFilters;
-    expect(invoicesTab.rowFilter({ 'transactionDocument$_identifier': 'AP Invoice' })).toBe(true);
-    expect(invoicesTab.rowFilter({ 'transactionDocument$_identifier': 'AP CreditMemo' })).toBe(false);
-    expect(creditNotesTab.rowFilter({ 'transactionDocument$_identifier': 'AP CreditMemo' })).toBe(true);
-    expect(creditNotesTab.rowFilter({ 'transactionDocument$_identifier': 'AP Invoice' })).toBe(false);
+    const [allTab, invoicesTab, rectificativeInvoicesTab] = lastListViewProps.subsetFilters;
+    expect(allTab.filter).toBeUndefined();
+    expect(allTab.rowFilter).toBeUndefined();
+
+    const decisions = JSON.parse(
+      readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'purchase-invoice', 'decisions.json'), 'utf8'),
+    );
+    const byLabel = Object.fromEntries(decisions.window.subsetFilters.map((f) => [f.label, f.filter]));
+
+    expect(invoicesTab.filter).toBe(byLabel.invoicesTab);
+    expect(rectificativeInvoicesTab.filter).toBe(byLabel.rectificativeInvoicesTab);
+
+    // Sanity-decode: invoicesTab = API AND NOT rectificative; rectificativeInvoicesTab = rectificative OR APC.
+    const invoicesCriteria = JSON.parse(decodeURIComponent(invoicesTab.filter.replace('criteria=', '')));
+    expect(invoicesCriteria).toEqual([
+      { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'API' },
+      { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
+    ]);
+    const rectificativeInvoicesCriteria = JSON.parse(decodeURIComponent(rectificativeInvoicesTab.filter.replace('criteria=', '')));
+    expect(rectificativeInvoicesCriteria).toEqual([{
+      _constructor: 'AdvancedCriteria',
+      operator: 'or',
+      criteria: [
+        { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'equals', value: true },
+        { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'APC' },
+      ],
+    }]);
   });
 
   it('bumps refreshKey when useRowDelete reports a successful delete', () => {

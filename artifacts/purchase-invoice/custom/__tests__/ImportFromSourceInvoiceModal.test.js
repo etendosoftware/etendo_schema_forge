@@ -1,0 +1,209 @@
+import { describe, it, afterEach, mock } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { getApSubtype } from '../purchaseInvoiceSubtype.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const src = readFileSync(join(__dirname, '..', 'ImportFromSourceInvoiceModal.jsx'), 'utf8');
+
+describe('ImportFromSourceInvoiceModal (purchase) — source shape', () => {
+  it('exports a default function component', () => {
+    assert.match(src, /export default function ImportFromSourceInvoiceModal/);
+  });
+
+  it('delegates to the shared ImportLinesModal and forwards parent props', () => {
+    assert.match(src, /from '@\/components\/contract-ui\/ImportLinesModal'/);
+    assert.match(src, /function ImportFromSourceInvoiceModal\(props\)/);
+    assert.match(src, /<ImportLinesModal[\s\S]*\{\.\.\.props\}/);
+  });
+
+  it('filters source invoices to apInvoiceSubtype === FAC via getApSubtype — ETP-4737 edge case 5', () => {
+    assert.match(src, /from '\.\/purchaseInvoiceSubtype'/);
+    assert.match(src, /getApSubtype\(inv\)\s*===\s*'FAC'/);
+  });
+
+  it('excludes the current invoice and matches business partner + CO status', () => {
+    assert.match(src, /inv\.id\s*!==\s*invoiceId/);
+    assert.match(src, /inv\.documentStatus\s*===\s*'CO'/);
+    assert.match(src, /inv\.businessPartner\s*===\s*bpId/);
+  });
+
+  it('always force-negates the imported quantity, mirroring ImportFromGoodsReturnModal', () => {
+    assert.match(src, /const negQty = -Math\.abs\(qty\);/);
+    assert.match(src, /invoicedQuantity:\s*negQty/);
+  });
+
+  it('best-effort PATCHes originInvoice after import to link back to the source', () => {
+    assert.match(src, /afterImport/);
+    assert.match(src, /originInvoice:\s*sourceInvoiceId/);
+    assert.match(src, /method:\s*'PATCH'/);
+  });
+
+  it('wires the source-invoice-specific i18n keys', () => {
+    assert.match(src, /titleKey="importFromSourceInvoice"/);
+    assert.match(src, /emptyMessageKey="noFacSourceInvoicesForSupplier"/);
+    assert.match(src, /successMessageKey="linesImportedFromSourceInvoice"/);
+  });
+
+  it('sends sourceInvoiceLineId and reads it back for duplicate detection — ETP-4737 follow-up', () => {
+    assert.match(src, /sourceInvoiceLineId:\s*line\.id/);
+    assert.match(src, /il\.sourceInvoiceLineId/);
+    assert.match(src, /alreadyImportedSourceLineIds/);
+  });
+});
+
+describe('ImportFromSourceInvoiceModal (purchase) — getApSubtype exclusion, real module', () => {
+  it('excludes a rectificativa invoice (new doc type) from being a valid FAC source', () => {
+    assert.notEqual(getApSubtype({ apInvoiceSubtype: 'RECTIFICATIVA' }), 'FAC');
+  });
+
+  it('excludes a historical AP CreditMemo invoice from being a valid FAC source (fallback path)', () => {
+    assert.notEqual(
+      getApSubtype({ 'transactionDocument$_identifier': 'AP CreditMemo' }),
+      'FAC',
+    );
+  });
+
+  it('accepts a plain AP Invoice as a valid FAC source', () => {
+    assert.equal(getApSubtype({ apInvoiceSubtype: 'FAC' }), 'FAC');
+  });
+});
+
+// ── Behavioral tests: fetchDocuments / buildLineBody (re-implemented per the
+// established repo pattern — see ImportFromGoodsReceiptModal.test.js). ──────
+
+async function fetchDocuments({ base, headers, bpId, invoiceId }) {
+  const [res, invLinesRes] = await Promise.all([
+    fetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
+    fetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
+  ]);
+  let documents = [];
+  if (res.ok) {
+    const all = (await res.json())?.response?.data || [];
+    documents = all.filter(inv =>
+      inv.id !== invoiceId
+      && inv.documentStatus === 'CO'
+      && inv.businessPartner === bpId
+      && getApSubtype(inv) === 'FAC',
+    );
+  }
+  const alreadyImportedSourceLineIds = new Set();
+  if (invLinesRes.ok) {
+    const invLines = (await invLinesRes.json())?.response?.data || [];
+    invLines.forEach(il => { if (il.sourceInvoiceLineId) alreadyImportedSourceLineIds.add(il.sourceInvoiceLineId); });
+  }
+  return { documents, sharedContext: { productAuxMap: {}, alreadyImportedSourceLineIds }, excludedByCurrency: false };
+}
+
+function fetchLinesAlreadyImported(lines, sharedContext) {
+  const { alreadyImportedSourceLineIds } = sharedContext;
+  return lines.map(l => ({ ...l, _alreadyImported: !!alreadyImportedSourceLineIds?.has(l.id) }));
+}
+
+function buildLineBody({ line, qty }) {
+  const unitPrice = Number(line._unitPrice) || Number(line.unitPrice) || 0;
+  const negQty = -Math.abs(qty);
+  const lineNetAmount = negQty * unitPrice;
+  return { invoicedQuantity: negQty, unitPrice, lineNetAmount, sourceInvoiceLineId: line.id };
+}
+
+function mockRes(ok, data) {
+  return { ok, json: async () => ({ response: { data } }) };
+}
+
+function installFetch(invoices, invLines = []) {
+  globalThis.fetch = mock.fn(async (url) => {
+    if (url.includes('/purchase-invoice/header?')) return mockRes(true, invoices);
+    if (url.includes('/purchase-invoice/lines?parentId=')) return mockRes(true, invLines);
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+}
+
+describe('ImportFromSourceInvoiceModal (purchase) — fetchDocuments (edge case 5)', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('includes a plain FAC invoice from the same supplier', async () => {
+    installFetch([{ id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' }]);
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.deepEqual(result.documents.map(d => d.id), ['inv2']);
+  });
+
+  it('excludes another rectificativa invoice from being selectable as a source', async () => {
+    installFetch([{ id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'RECTIFICATIVA' }]);
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.documents.length, 0);
+  });
+
+  it('excludes a historical AP CreditMemo invoice from being selectable as a source (legacy fallback)', async () => {
+    installFetch([{
+      id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1',
+      'transactionDocument$_identifier': 'AP CreditMemo',
+    }]);
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.documents.length, 0);
+  });
+
+  it('excludes the invoice being edited from its own candidates', async () => {
+    installFetch([{ id: 'inv1', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' }]);
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.documents.length, 0);
+  });
+
+  it('mixed candidate set: only the plain FAC invoice survives', async () => {
+    installFetch([
+      { id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' },
+      { id: 'inv3', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'RECTIFICATIVA' },
+      { id: 'inv4', documentStatus: 'DR', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' },
+      { id: 'inv5', documentStatus: 'CO', businessPartner: 'other-bp', apInvoiceSubtype: 'FAC' },
+    ]);
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.deepEqual(result.documents.map(d => d.id), ['inv2']);
+  });
+});
+
+describe('ImportFromSourceInvoiceModal (purchase) — buildLineBody force-negates (both directions)', () => {
+  it('negates an already-positive source unit price/qty combination', () => {
+    const body = buildLineBody({ line: { unitPrice: 10, id: 'l1' }, qty: 4 });
+    assert.equal(body.invoicedQuantity, -4);
+    assert.equal(body.lineNetAmount, -40);
+  });
+
+  it('keeps the result negative even if the caller passed a negative qty', () => {
+    const body = buildLineBody({ line: { unitPrice: 10, id: 'l1' }, qty: -4 });
+    assert.equal(body.invoicedQuantity, -4);
+  });
+
+  it('carries the source line id as sourceInvoiceLineId, ETP-4737 duplicate-detection follow-up', () => {
+    const body = buildLineBody({ line: { unitPrice: 10, id: 'source-line-1' }, qty: 4 });
+    assert.equal(body.sourceInvoiceLineId, 'source-line-1');
+  });
+});
+
+describe('ImportFromSourceInvoiceModal (purchase) — duplicate detection via sourceInvoiceLineId', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('builds the already-imported set from the current invoice lines sourceInvoiceLineId', async () => {
+    installFetch(
+      [{ id: 'inv2', documentStatus: 'CO', businessPartner: 'bp1', apInvoiceSubtype: 'FAC' }],
+      [{ id: 'il1', sourceInvoiceLineId: 'source-line-1' }],
+    );
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.ok(result.sharedContext.alreadyImportedSourceLineIds.has('source-line-1'));
+  });
+
+  it('marks a source line already imported into the current invoice as _alreadyImported', () => {
+    const sharedContext = { alreadyImportedSourceLineIds: new Set(['source-line-1']) };
+    const lines = fetchLinesAlreadyImported(
+      [{ id: 'source-line-1' }, { id: 'source-line-2' }],
+      sharedContext,
+    );
+    assert.equal(lines.find(l => l.id === 'source-line-1')._alreadyImported, true);
+    assert.equal(lines.find(l => l.id === 'source-line-2')._alreadyImported, false);
+  });
+});

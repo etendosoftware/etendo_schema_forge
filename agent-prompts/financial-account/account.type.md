@@ -1,0 +1,1 @@
+Financial account type — a selectable list field. `neo_defaults` returns a starting value for a new account; if that default is not the type you need, do not assume how many types the domain has from source or seed code (e.g. SeedReferenceDataStep). Query the `type` selector via `neo_selectors` to get the authoritative, current set of valid values, then pick the right one.

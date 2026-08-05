@@ -10,6 +10,7 @@ import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { buildRuntimeRoutes } from './runtime-routes.jsx';
 import { createMockFetch } from './lib/mockFetch.js';
 import { useLocaleState } from './i18n/useLocaleState.js';
+import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
@@ -229,22 +230,7 @@ export default function App() {
   const menuGroups = buildMenuGroups(installedApps, { appStoreUnlocked });
   const [windowMap] = useState(() => buildWindowMap());
   const [locale, setLocale] = useLocaleState();
-
-  // ETP-4300: lazy-load only the active locale's core dictionary. Until it
-  // resolves, `dictionaries` is {} and the i18n hooks echo their keys briefly.
-  const [dictionaries, setDictionaries] = useState({});
-  useEffect(() => {
-    let cancelled = false;
-    const loadCore = coreLoaders[`./locales/generated/core.${locale}.json`];
-    if (!loadCore) {
-      setDictionaries({});
-      return undefined;
-    }
-    loadCore().then((mod) => {
-      if (!cancelled) setDictionaries({ [locale]: mod.default ?? mod });
-    });
-    return () => { cancelled = true; };
-  }, [locale]);
+  const { dictionaries, renderedLocale } = useLocaleDictionaries(locale, coreLoaders);
 
   useEffect(() => {
     if (import.meta.env.VITE_MOCK === 'true') {
@@ -272,7 +258,7 @@ export default function App() {
         routes={routes}
         layout={AppLayout}
         auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />, fetchWindowAccess }}
-        locale={locale}
+        locale={renderedLocale}
         setLocale={setLocale}
         dictionaries={dictionaries}
         notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}

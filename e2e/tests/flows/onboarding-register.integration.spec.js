@@ -238,21 +238,33 @@ test.describe('Onboarding — Register new user (integration)', () => {
   });
 
   // ═════════════════════════════════════════════════════════════════════════
-  // CORNER CASE 3: Invalid email format — browser validation prevents submit
+  // CORNER CASE 3: Invalid email format — submit stays disabled
   // ═════════════════════════════════════════════════════════════════════════
 
   test('does not advance with an invalid email format', async ({ page }) => {
     await goToRegister(page);
+
+    const submitBtn = page.getByTestId('action-register-submit');
 
     await page.locator('#reg-name').fill('Bad Email User');
     await page.locator('#reg-email').fill('not-an-email');
     await page.locator('#reg-password').fill('ValidPass!99');
     await slow(page);
 
-    await page.getByTestId('action-register-submit').click();
+    // ETP-4664: submit is gated on isValidEmailFormat(email) on top of password
+    // strength, so a malformed address keeps the button disabled outright — a
+    // stronger guarantee than the HTML5 validation this case used to rely on.
+    await expect(submitBtn).toBeDisabled();
+
+    // Completing the address is what unlocks it — proves the gate is the email
+    // and not some unrelated field left empty.
+    await page.locator('#reg-email').fill('bad-email-user@test-onboarding.com');
+    await expect(submitBtn).toBeEnabled();
+    await page.locator('#reg-email').fill('not-an-email');
+    await expect(submitBtn).toBeDisabled();
     await slow(page);
 
-    // Should NOT advance to profile step — HTML5 email validation blocks it
+    // Should NOT advance to profile step
     await expect(page.getByText(/vamos a dejar todo listo/i)).not.toBeVisible({ timeout: 3_000 });
     // Should still be on the register page
     await expect(page.getByRole('heading', { name: /crea tu cuenta gratis/i })).toBeVisible();

@@ -27,7 +27,7 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
       return route.fulfill({
         status: 400,
         contentType: 'application/json',
-        body: JSON.stringify({ error: { message: 'Email already registered', userMessage: 'El correo electrónico ya está registrado' } }),
+        body: JSON.stringify({ error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'Email already registered', userMessage: 'El correo electrónico ya está registrado' } }),
       });
     }
     const body = route.request().postDataJSON();
@@ -57,7 +57,7 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
         return route.fulfill({
           status: 401,
           contentType: 'application/json',
-          body: JSON.stringify({ error: { message: 'Invalid credentials', userMessage: 'Credenciales incorrectas' } }),
+          body: JSON.stringify({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials', userMessage: 'Credenciales incorrectas' } }),
         });
       }
       return route.fulfill({

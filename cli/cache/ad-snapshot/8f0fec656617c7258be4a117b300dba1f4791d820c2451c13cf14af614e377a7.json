@@ -6976,7 +6976,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "3ed2d2cf5599c3d052dda2f640b8ed8dceae2d2adaed5f999636158f1d63fbf9",
+      "checksum": "24de5d37e92e16ef3d88c124f01dc9bda8cf8cecace327fef4be2ddb427c8085",
       "params": [
         "167"
       ],
@@ -8714,6 +8714,12 @@
           "ad_table_id": "333",
           "columnname": "EM_Etgo_Discount",
           "position": "58"
+        },
+        {
+          "ad_column_id": "2A62D8630504493E97A5932B16CCACAB",
+          "ad_table_id": "333",
+          "columnname": "EM_Etgo_Source_Invoiceline_ID",
+          "position": null
         },
         {
           "ad_column_id": "3850",
@@ -11366,7 +11372,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "9fb061595d7923f55f80258216d2ec7a6634f5b3eaa4cb28d700576eafc6f43f",
+      "checksum": "331fd87c9748cb13714049df1bc3e38ab053a7f6290f9d211f8496a8feeec748",
       "params": [
         "183"
       ],
@@ -13104,6 +13110,12 @@
           "ad_table_id": "333",
           "columnname": "EM_Etgo_Discount",
           "position": "58"
+        },
+        {
+          "ad_column_id": "2A62D8630504493E97A5932B16CCACAB",
+          "ad_table_id": "333",
+          "columnname": "EM_Etgo_Source_Invoiceline_ID",
+          "position": null
         },
         {
           "ad_column_id": "3850",
@@ -15388,7 +15400,7 @@
       ]
     },
     "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
-      "checksum": "7edcc6ae86857d38aca146669195b626ba5ad9bc132e40f20e2c28b6786d0799",
+      "checksum": "bb20a65d408c7235d83070a0b04b66535a4e21caf42932621fa600af13c6d0b4",
       "params": [
         "184"
       ],
@@ -16118,6 +16130,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
@@ -23146,7 +23164,7 @@
       ]
     },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
-      "checksum": "12ec7e2f05f32988b1ca4f26074a209f525459ee15b90e993b7ae541750a2016",
+      "checksum": "8e8857a5c7dcc6cd076a5b1cb4a61d1803b32c713ee47ecfc0da1a1c2c65211f",
       "params": [
         "273673D2ED914C399A6C51DB758BE0F9"
       ],
@@ -23564,6 +23582,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
@@ -30034,7 +30058,7 @@
       ]
     },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
-      "checksum": "933fda89a2b159e8d27354f4679a4193812efa84d7469a2a7de878ef2c7a8c32",
+      "checksum": "d89b7b61054390621da0530eb47d8d66b9976c43497bc200c87cfe124d2127e9",
       "params": [
         "123271B9AD60469BAE8A924841456B63"
       ],
@@ -30764,6 +30788,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
@@ -36226,7 +36256,7 @@
       ]
     },
     "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
-      "checksum": "96d9413a33fdcc94f6768fa4b3b2aa04bebd3fafbec91b334942e35313fe9e2a",
+      "checksum": "9e4453dcb4689ee44dbb1f1e18865c1c1c4b015d47f9b9a08bc14c5cfb31d2a1",
       "params": [
         "169"
       ],
@@ -36956,6 +36986,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",

@@ -26,6 +26,11 @@ async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }) {
       levelZ: '0',
       relativePriority: 50,
       default: true,
+      // Fixed system ID for M_InventoryStatus "Available" (OVERISSUE='N').
+      // Without this, the DB column default lands new locators on
+      // "Undefined" (7B3DC15A20234C418D26EECDC5D59003), which behaves
+      // identically but is semantically mislabeled. See ETP-4761.
+      inventoryStatus: '2',
     }),
   });
 

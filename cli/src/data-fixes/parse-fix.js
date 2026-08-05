@@ -19,13 +19,21 @@
  *   -- @apply
  *   INSERT INTO ... SELECT ... WHERE ad_client_id = :client_id AND NOT EXISTS (...);
  *
+ * An OPTIONAL third section, `-- @report`, may follow `@apply`. It is a plain read-only SELECT
+ * (bound to the same `:client_id`/`:org_id` as `@check`/`@apply`) that the runner executes right
+ * after a successful `@apply`, inside the same transaction. Its result rows are formatted into the
+ * ledger's `detail` column on the `APPLIED` row — the mechanism for a fix that must skip part of its
+ * own work (e.g. a guard that never touches rows in a bad state) to surface which rows still need a
+ * human's attention, without the runner needing any fix-specific knowledge. A fix with no `@report`
+ * section behaves exactly as before (`detail` stays `null` on success).
+ *
  * The `fix_id` is the file name without the `.sql` extension (the leading
  * `<YYYYMMDDThhmmssZ>` prefix makes lexical sort == chronological order).
  */
 
 import { randomUUID } from 'node:crypto';
 
-const SECTION_MARKER = /^--\s*@(check|apply)\s*$/i;
+const SECTION_MARKER = /^--\s*@(check|apply|report)\s*$/i;
 // No `\s*` after the colon on purpose: it would overlap `(.*)` (both match
 // spaces), which is the ambiguous adjacency that triggers super-linear
 // backtracking (S5852). The captured value is `.trim()`-ed below, so leading
@@ -49,7 +57,7 @@ function validations(type, check, fixId, apply, meta) {
  * @returns {{
  *   fixId: string, id: string, gap: string|null, risk: string|null,
  *   type: 'sql'|'webhook', description: string|null,
- *   webhook: string|null, check: string, apply: string
+ *   webhook: string|null, check: string, apply: string, report: string
  * }}
  */
 export function parseFix(text, fixId) {
@@ -58,7 +66,8 @@ export function parseFix(text, fixId) {
   const meta = {};
   const checkLines = [];
   const applyLines = [];
-  let section = 'header'; // 'header' | 'check' | 'apply'
+  const reportLines = [];
+  let section = 'header'; // 'header' | 'check' | 'apply' | 'report'
 
   for (const line of lines) {
     const marker = line.match(SECTION_MARKER);
@@ -76,6 +85,7 @@ export function parseFix(text, fixId) {
 
     if (section === 'check') checkLines.push(line);
     else if (section === 'apply') applyLines.push(line);
+    else if (section === 'report') reportLines.push(line);
   }
 
   const type = (meta.type || 'sql').toLowerCase();
@@ -85,6 +95,7 @@ export function parseFix(text, fixId) {
 
   const check = checkLines.join('\n').trim();
   const apply = applyLines.join('\n').trim();
+  const report = reportLines.join('\n').trim();
 
   validations(type, check, fixId, apply, meta);
 
@@ -100,6 +111,7 @@ export function parseFix(text, fixId) {
     webhook: meta.webhook || null,
     check,
     apply,
+    report,
   };
 }
 
