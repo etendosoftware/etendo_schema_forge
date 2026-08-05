@@ -117,6 +117,65 @@
   CUT untouched (still equal to R9's own filename timestamp) — no CUT bump needed since no new
   `.sql` file was added.
 
+## ETP-4743 — A2c: FIN_Financial_Account_Acct / M_Warehouse_Acct backfill (2026-08-05)
+
+- **2026-08-05 — In-flight branch discovered R21 already claimed on an UNMERGED sibling
+  branch — verify against the ACTUAL checked-out branch, not just what the task brief
+  claims.** The task brief said "latest fix is R21, CUT is `2026-08-05T12:00:00Z`" (from
+  `feature/ETP-4720`, ETP-4720), but `git merge-base feature/ETP-4743 feature/ETP-4720` showed
+  `feature/ETP-4720` is ONE commit ahead of `feature/ETP-4743`'s base (both repos) — i.e. ETP-4720
+  had NOT been merged into `epic/ETP-3504` yet when Clerk branched `feature/ETP-4743` off it. On
+  the actual `feature/ETP-4743` checkout, `cli/src/data-fixes/sql/` tops out at R20
+  (`20260803T180000Z`) and `OnboardingBaselineService.ONBOARDING_PROVISIONED_THROUGH` was still
+  `2026-08-03T18:00:00Z`, not `2026-08-05T12:00:00Z`. **Apply generally:** a task brief's "here's
+  the current state" section is a snapshot from whenever it was written, not a live fact for THIS
+  branch — always re-run the orientation checklist's own verification (`ls cli/src/data-fixes/sql/`,
+  `grep ONBOARDING_PROVISIONED_THROUGH`, `git rev-list --all` for the claimed label) against the
+  actually-checked-out branch before trusting a stated CUT/latest-fix value. Chose `R22` (skipping
+  the already-claimed `R21`) and timestamp `2026-08-05T14:00:00Z` — strictly after BOTH R20 (this
+  branch's actual latest) and R21's `2026-08-05T12:00:00Z` (the sibling branch's claim) — so no
+  collision occurs regardless of which branch merges into the epic first, per the established
+  "always resolve to the later timestamp" convention for these merge conflicts (R9/R10, R19/R20).
+- **2026-08-05 — Gap confirmed corrective-only for the CUT-bump timing, not for the preventive
+  front itself.** ETP-4565 already shipped the preventive Java fix (`FIN_FINANCIAL_ACCOUNT_ACCT_SQL`
+  / `WAREHOUSE_ACCT_SQL` in `OnboardingAccountingWiringService`, called from
+  `provisionEntityPostingAccounts`) — new tenants onboarded today are already born correct. What
+  was missing was (a) the corrective `.sql` for tenants onboarded BEFORE ETP-4565 shipped, and (b)
+  the CUT bump, which ETP-4565 deliberately deferred because bumping a CUT without its matching
+  `.sql` already in the repo would silently skip the gap for legacy tenants that still need it
+  (the framework's own "never bump CUT without matching .sql" rule). This ticket is the two-fronts
+  workflow's steps 2+4 only (corrective SQL + CUT bump) — a valid, explicitly-called-out deviation
+  from "ship all three deliverables together" when the preventive front already shipped separately.
+- **2026-08-05 — Live sweep: every tenant except GOClient itself has the gap.** Query joining
+  `fin_financial_account`/`m_warehouse` against `c_acctschema` with a `NOT EXISTS` on the matching
+  `*_acct` table (see the `.sql` file's own header for the exact query) found GOClient at 0 missing
+  pairs (already correct — its rows were wired at some point outside this framework) and every
+  other real tenant with at least one missing pair. F&B International Group has an unusually large
+  count (343 financial-account pairs, 96 warehouse pairs missing) simply because it owns **26**
+  separate `c_acctschema` rows (most tenants own 1-2) — the corrective fix's per-schema join
+  (`JOIN c_acctschema s ON s.ad_client_id = :client_id`, mirroring `R7-tax-accounts`'s
+  generalization of the single-schema Java constant) is what makes it correctly cover every ledger
+  a multi-schema tenant owns, rather than just one.
+- **2026-08-05 — `m_warehouse_acct.w_differences_acct` is the ONLY `NOT NULL` target column across
+  both tables.** Verified via `\d fin_financial_account_acct` / `\d m_warehouse_acct`: every other
+  `*_acct` column on both tables is nullable, but `w_differences_acct` has no default and is
+  `NOT NULL`. On this DB every tenant's `c_acctschema_default.w_differences_acct` is already
+  populated (confirmed via a `count(*) FILTER (WHERE ... IS NULL)` sweep across all schemas, all
+  zero), so the corrective fix's defensive `d.w_differences_acct IS NOT NULL` guard is currently a
+  no-op safety net, not something actively excluding any live tenant — kept anyway so a future
+  tenant with an incomplete schema default degrades to a safe skip instead of an INSERT failure.
+- **2026-08-05 — Live-validated end-to-end on a real tenant, not just a rolled-back transaction.**
+  Ran the actual fix through the runner (`node cli/src/data-fixes/run.js --fix
+  20260805T140000Z__R22-fin-account-warehouse-acct --client D94AED60C3E0494AAFD44B8A05BB5CFC`)
+  against `acreedortest`: dry-run → `WOULD_APPLY`; real run → `APPLIED (4 rows)` (2 financial
+  accounts + 2 warehouses, its only accounting schema); re-run → `SKIPPED_NOT_NEEDED — kept prior
+  success state`, confirming idempotency against the tables' own UNIQUE constraints
+  (`fin_finacc_acct_acctschema_un` / `m_warehouse_acct_warehouse__un`). This is a REAL, committed
+  change to the shared dev DB (not rolled back) — consistent with precedent (R7/R10/R11/R12 etc.
+  were similarly applied for real against GOClient during their own validation passes) since the
+  whole point of this fix is to actually repair legacy tenants; a rolled-back transaction alone
+  would not have proven the runner's ledger-write path end-to-end.
+
 ## c_elementvalue code structure (GOClient chart of accounts)
 
 - **2026-06-26 — Numeric codes are strictly hierarchical and 3/4/5 digits:** `issummary='Y'` rows carry 3-digit (584 rows) and 4-digit (1140 rows) group codes; `issummary='N'` rows carry 5-digit posting codes (1312 rows). Non-numeric codes (1088 rows: section labels like `A`, `PYG`, `A.B.II.1`, `P.G.D`) also exist in both element trees and must never be padded.

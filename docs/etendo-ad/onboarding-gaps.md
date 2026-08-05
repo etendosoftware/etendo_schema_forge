@@ -13,6 +13,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A3b | Accounting | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL (doubtful debt, bad-debt expense/revenue, allowance for doubtful debt, deferred product expense/revenue) | Onboarding sampledata XML (`C_ACCTSCHEMA_DEFAULT.xml`) — dataset-only, no new service | ETP-4245 |
 | A4 | Accounting | `A_Amortization` table (`AD_Table_id 800060`) inactive on `c_acctschema_table` — amortization documents cannot post | Onboarding sampledata XML (`C_ACCTSCHEMA_TABLE.xml`) — dataset-only, no new service | ETP-4452 |
 | A2b | Accounting | Posting a Goods Receipt fails with generic "Account could not be found." — `C_BP_Group_Acct.NotInvoicedReceipts_Acct` stuck NULL on one stale pre-existing row (GOClient "Cliente" group) | Corrective-only data-fix (`R17`) — CONFIRMED no preventive gap: current onboarding code already wires this column correctly for every group created today | ETP-4706 |
+| A2c | Accounting | `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely for already-onboarded tenants — both source tables are bulk-imported with triggers disabled, so their native `_trg` triggers never provisioned the posting-account rows | Preventive already shipped (ETP-4565, `OnboardingAccountingWiringService`); corrective data-fix (`R22`) backfills legacy tenants; CUT bumped to close the loop | ETP-4743 |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
@@ -387,6 +388,91 @@ entirely — a byte-for-byte mirror of the live NULL above. Fixed for hygiene on
 `OnboardingDatasetDefinition.INCLUDED_TABLES`, so this has no runtime/onboarding effect — it just
 prevents the stale value from resurfacing if the file is ever regenerated or the table is later
 added to the included set. If you independently find this XML stale, it's already handled.
+
+---
+
+### A2c — `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely (ETP-4743, follow-up to ETP-4565, 2026-08-05)
+
+**Symptom:** already-onboarded tenants have financial accounts (`FIN_FINANCIAL_ACCOUNT`, e.g.
+"Caja", "Cuenta de Banco") and warehouses (`M_WAREHOUSE`, e.g. "Almacen GO") with **zero**
+matching rows in `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` for one or more of the tenant's
+accounting schemas — not a NULL column on an existing row (as in A2b), the per-schema row itself
+is entirely absent.
+
+**Root cause:** `FIN_FINANCIAL_ACCOUNT` and `M_WAREHOUSE` are bulk-imported by the onboarding
+dataset importer with DB triggers disabled (`OnboardingDatasetDefinition.INCLUDED_TABLES`), so
+Classic's own `fin_financial_account_trg` / `m_warehouse_trg` AFTER-INSERT triggers — which
+otherwise auto-provision the matching `*_Acct` row for every LIVE creation of these entities —
+never fire for the bundled template rows. Unlike the sibling entities that
+`OnboardingAccountingWiringService#provisionEntityPostingAccounts` already backfills via
+`runEntityAcctInsert` (BP group, product category, BP customer/vendor, product, tax), nobody
+backfilled these two tables for tenants that were **already onboarded before ETP-4565 shipped its
+preventive fix** (`FIN_FINANCIAL_ACCOUNT_ACCT_SQL` / `WAREHOUSE_ACCT_SQL`, already merged into the
+live onboarding chain). ETP-4565 deliberately did NOT bump `ONBOARDING_PROVISIONED_THROUGH` at the
+time, since the corrective `.sql` twin did not exist yet.
+
+**Live-DB sweep (2026-08-05), pairs of (entity × schema) missing their `*_Acct` row:**
+
+| Client | FA missing pairs | WH missing pairs |
+|---|---|---|
+| acreedortest | 2 | 2 |
+| acreetest2 | 2 | 2 |
+| empresa | 3 | 2 |
+| Empresa E2E (×4) | 3 each | 2 each |
+| F&B International Group | 343 | 96 |
+| GOClient | 0 (already correct) | 0 (already correct) |
+| QA Testing | 3 | 2 |
+| RolesPresa | 3 | 2 |
+| TaxesOrg | 2 | 2 |
+
+Every real tenant on the dev DB except GOClient itself has at least one missing pair — F&B
+International Group runs 26 accounting schemas, which is why its pair counts are much larger.
+GOClient's own rows were already wired at some point, so its `@check` naturally returns 0 rows —
+no special-casing needed.
+
+**Both fronts closed (2026-08-05):**
+
+| Front | Deliverable |
+|---|---|
+| **Preventive** | Already shipped by ETP-4565 (`FIN_FINANCIAL_ACCOUNT_ACCT_SQL` / `WAREHOUSE_ACCT_SQL` in `OnboardingAccountingWiringService`, called from `provisionEntityPostingAccounts`). No new Java needed for ETP-4743. |
+| **Corrective** | `cli/src/data-fixes/sql/20260805T140000Z__R22-fin-account-warehouse-acct.sql` — two guarded `INSERT ... SELECT` statements (mirroring the two Java constants column-for-column), each joined against **every** `c_acctschema` row the tenant owns (a tenant may run more than one ledger; mirrors the same generalization `R7-tax-accounts` already applies). Live-validated on `acreedortest` (`D94AED60C3E0494AAFD44B8A05BB5CFC`): dry-run → `WOULD_APPLY` → real run → `APPLIED (4 rows)` → re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **CUT bump** | `ONBOARDING_PROVISIONED_THROUGH` bumped from R20's `2026-08-03T18:00:00Z` to R22's `2026-08-05T14:00:00Z` in `OnboardingBaselineService.java` — this closes the loop ETP-4565 deliberately left open (preventive shipped, CUT not bumped, because the corrective twin didn't exist yet). |
+
+**Branch-ordering note:** at the time this shipped, an unmerged sibling branch
+(`feature/ETP-4720`) independently claims `R21` at `2026-08-05T12:00:00Z` for an unrelated
+`C_BP_Group_Acct` fix. `R22`'s timestamp (`14:00:00Z`) is deliberately later, so no `Rn`/CUT
+collision occurs whichever branch merges first; expect (and resolve to the later timestamp on) a
+merge conflict on the single `ONBOARDING_PROVISIONED_THROUGH` line when the two branches converge,
+per the standing rule already documented for prior collisions (R9/R10, R19/R20).
+
+**SQL fix (corrective guard — idempotent, per-schema):**
+```sql
+-- @check
+SELECT 1
+FROM fin_financial_account f
+JOIN c_acctschema s ON s.ad_client_id = f.ad_client_id
+WHERE f.ad_client_id = :client_id
+  AND NOT EXISTS (
+    SELECT 1 FROM fin_financial_account_acct a
+    WHERE a.fin_financial_account_id = f.fin_financial_account_id
+      AND a.c_acctschema_id = s.c_acctschema_id
+  )
+UNION ALL
+SELECT 1
+FROM m_warehouse w
+JOIN c_acctschema s ON s.ad_client_id = w.ad_client_id
+JOIN c_acctschema_default d ON d.c_acctschema_id = s.c_acctschema_id
+WHERE w.ad_client_id = :client_id
+  AND d.w_differences_acct IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM m_warehouse_acct a
+    WHERE a.m_warehouse_id = w.m_warehouse_id
+      AND a.c_acctschema_id = s.c_acctschema_id
+  )
+LIMIT 1;
+```
+Full `@apply` (two `INSERT ... SELECT` statements) in the `.sql` file itself — see
+`docs/etendo-ad/onboarding-and-datafixes-map.md` §4 for the paired preventive/corrective summary.
 
 ---
 
