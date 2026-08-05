@@ -770,7 +770,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrint
         hideSaveStatuses={["CO","CL","VO"]}
         noHeaderBorder
         notesField="description"
@@ -800,7 +799,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="orderDate"
-      hidePrint
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument

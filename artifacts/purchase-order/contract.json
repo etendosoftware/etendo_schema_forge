@@ -1,8 +1,8 @@
 {
   "version": "0.44.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-30T10:37:21.763Z",
-  "checksum": "33db276aa6af6feb",
+  "updatedAt": "2026-08-04T18:33:31.526Z",
+  "checksum": "315ce006995e16e9",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -12,7 +12,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "hideSaveStatuses": [
         "CO",
         "CL",
@@ -2696,7 +2695,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "hideSaveStatuses": [
         "CO",
         "CL",

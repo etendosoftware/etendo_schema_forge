@@ -1,4 +1,3 @@
-import { generateReturnToVendorPdf, getReturnToVendorPdfLabels } from './useReturnToVendorPdf';
 import ConfirmWithCreditButtonBase from '../shared/ConfirmWithCreditButtonBase';
 import { useUI } from '@/i18n';
 
@@ -15,8 +14,6 @@ export default function ConfirmWithCreditButton({ data, recordId, token, apiBase
       invoiceRoute="/purchase-invoice/"
       invoiceType="facturaCompra"
       invoiceCreatedTitleKey="returnToVendor.invoiceCreatedTitle"
-      generatePdfFn={generateReturnToVendorPdf}
-      getPdfLabelsFn={getReturnToVendorPdfLabels}
       specName="return-to-vendor-shipment"
       entityName="returnToVendorShipment"
       confirmDrLabel={ui('confirmReturn')}

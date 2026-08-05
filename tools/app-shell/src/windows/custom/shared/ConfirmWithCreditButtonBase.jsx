@@ -5,12 +5,10 @@ import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal'
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
-import PrintButton from './PrintButton';
 
 export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
   entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
-  generatePdfFn, getPdfLabelsFn,
   specName, entityName,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
@@ -23,13 +21,12 @@ export default function ConfirmWithCreditButtonBase({
   const resultNavigatedRef = useRef(false);
   const {
     ui, status, currency, confirmDisabled, hasReturnInvoice,
-    headers, base, pdfLoading, showModal, setShowModal,
+    headers, base, showModal, setShowModal,
     creatingInvoice, result, setResult,
-    handlePrint, handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
+    handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
   } = useConfirmWithCredit({
     data, recordId, token, apiBaseUrl,
     entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
-    generatePdfFn, getPdfLabelsFn,
   });
 
   if (status !== 'DR' && status !== 'CO') return null;
@@ -51,10 +48,6 @@ export default function ConfirmWithCreditButtonBase({
         </button>
       )}
       {extraActions}
-      <PrintButton
-        onClick={handlePrint}
-        loading={pdfLoading}
-        data-testid="PrintButton__f9608e" />
       {extraPortals}
       {showModal && status === 'DR' && (
         <ConfirmInOutModal

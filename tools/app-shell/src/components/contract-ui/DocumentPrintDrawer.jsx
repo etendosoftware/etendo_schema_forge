@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Loader2, Send, Download } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Loader2, Send, Download, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
@@ -65,6 +65,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState(null);
 
   const reportId = `print-${windowName}`;
@@ -127,6 +128,21 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
     setDownloading(false);
   };
 
+  // ETP-4728 (Hallazgo 2) — the drawer previously offered only Download +
+  // a disabled "send by email" placeholder, with no actual print action.
+  // Reuses `printDocuments()` (below) for the single document currently
+  // open in the drawer instead of duplicating its PDF-generation/window.open
+  // logic — same error handling (toast) as Download already has.
+  const handlePrint = async () => {
+    if (!currentDocId || printing) return;
+    setPrinting(true);
+    try {
+      await printDocuments(windowName, [currentDocId], token, ui);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   if (!shouldRender || !reportId) return null;
 
   return (
@@ -153,6 +169,14 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
               data-testid="Loader2__8d2ae7" />}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              disabled={printing || !currentDocId}
+              className="h-8 px-3 flex items-center gap-1.5 rounded-md border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 bg-card text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {printing ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__8d2ae7" /> : <Printer className="h-3.5 w-3.5" data-testid="Printer__8d2ae7" />}
+              {printing ? ui('generating') : ui('print')}
+            </button>
             <button
               onClick={handleDownload}
               disabled={downloading || !currentDocId}
