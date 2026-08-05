@@ -14,22 +14,23 @@ import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.j
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
+import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoiceSubtype.js';
 
 /* eslint-disable react/prop-types */
 
 const filters = ['documentNo', 'invoiceDate', 'businessPartner', 'orderReference', 'documentStatus'];
 
-const NC_RETURN_TYPES = new Set(['AP CreditMemo', 'Return Material Purchase Invoice', 'Reversed Purchase Invoice']);
-
-const DOC_TYPE_BADGE = {
-  'AP Invoice':                         { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
-  'AP CreditMemo':                      { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'creditNotesTab' },
-  'Return Material Purchase Invoice':   { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
-  'Reversed Purchase Invoice':          { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
+// ETP-4737: badge config keyed by the unified subtype (FAC/RECTIFICATIVA) resolved via
+// getApSubtype — NOT by the raw AD doc-type name. A hardcoded name Set silently misses any
+// new document type sharing the same category (this is exactly how the previous version of
+// this file missed "Factura Rectificativa (compras)" until this fix).
+const SUBTYPE_BADGE = {
+  FAC:            { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
+  RECTIFICATIVA:  { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'rectificativeInvoicesTab' },
 };
 
 function isNcOrReturn(row) {
-  return NC_RETURN_TYPES.has(row?.['transactionDocument$_identifier']);
+  return getApSubtype(row) === 'RECTIFICATIVA';
 }
 
 export default function PurchaseInvoiceHeaderTable(props) {
@@ -78,8 +79,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
         render: (row) => {
-          const adName = row['transactionDocument$_identifier'];
-          const cfg = DOC_TYPE_BADGE[adName];
+          const cfg = SUBTYPE_BADGE[getApSubtype(row)];
           if (!cfg) return <span className="text-muted-foreground">—</span>;
           return (
             <span

@@ -56,6 +56,14 @@
           "visibleWhen": "@DocumentStatus@='CO'"
         }
       }
+    },
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
     }
   },
   "entities": {
@@ -97,6 +105,17 @@
           "section": "principal",
           "seq": 40,
           "defaultExpr": "@#M_Warehouse_ID@"
+        },
+        "etgoCurrency": {
+          "visibility": "editable",
+          "reference": "Currency",
+          "inputMode": "selector",
+          "grid": false,
+          "form": true,
+          "section": "principal",
+          "seq": 45,
+          "readOnlyLogic": "@Processed@='Y'",
+          "defaultExpr": "@C_Currency_ID@"
         },
         "documentStatus": {
           "visibility": "readOnly",

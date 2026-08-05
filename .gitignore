@@ -84,3 +84,6 @@ build/
 # Flag debt scorecard output (derived from flags-registry.json on demand)
 flag-debt.json
 flag-debt.html
+
+# push-to-neo --dump-delta diagnostic output (derived mirror, never committed)
+artifacts/*/neo-delta.json

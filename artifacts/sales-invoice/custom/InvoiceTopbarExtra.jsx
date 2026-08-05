@@ -212,12 +212,13 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     );
   }
 
-  // Credit instruments (NC / DEV) — mirror the grid's "Pendiente de pago" cell: green
-  // "Aplicada" once the note is fully consumed, else a purple "Saldo a favor · remaining"
-  // badge that opens the same payment history modal the grid opens (listing the payments
-  // that consumed the note).
+  // Credit instruments (ETP-4737: unified RECTIFICATIVA subtype, formerly separate
+  // NC / DEV) — mirror the grid's "Pendiente de pago" cell: green "Aplicada" once
+  // the note is fully consumed, else a purple "Saldo a favor · remaining" badge
+  // that opens the same payment history modal the grid opens (listing the
+  // payments that consumed the note).
   const arSubtype = getArSubtype(data);
-  const isCreditInstrument = arSubtype === 'NC' || arSubtype === 'DEV';
+  const isCreditInstrument = arSubtype === 'RECTIFICATIVA';
   if (isCompleted && isCreditInstrument) {
     // Credit notes carry negative amounts end to end — installments (when loaded) are the
     // fresh source, data.outstandingAmount the fallback snapshot; either way the remaining
