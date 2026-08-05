@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 import { getApiBase } from './useNeoResource';
 
 /**
@@ -42,10 +43,7 @@ export function useStatementPreview() {
         method: 'POST',
         // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
         // bearer token. Unsafe method, so the backend also requires the CSRF proof.
-        headers: {
-          'Content-Type': 'application/json',
-          ...(csrfToken ? { 'X-Go-CSRF': csrfToken } : {}),
-        },
+        headers: writeHeaders(csrfToken),
         credentials: 'include',
         body: JSON.stringify({
           FIN_Financial_Account_ID: accountId,

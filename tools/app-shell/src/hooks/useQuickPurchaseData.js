@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -10,10 +11,6 @@ function guessCategory(name) {
   if (/cable|router|switch|network|ups/i.test(n)) return 'Networking';
   if (/printer|scanner|hdd|external/i.test(n)) return 'Storage & Print';
   return 'Other';
-}
-
-function buildAuthHeaders() {
-  return { 'Content-Type': 'application/json' };
 }
 
 async function fetchJSON(url, headers) {
@@ -170,7 +167,7 @@ export function useQuickPurchaseData(apiBaseUrl) {
       return;
     }
 
-    const headers = buildAuthHeaders();
+    const headers = jsonHeaders();
     loadFromAPI(poBase, headers)
       .then(result => {
         if (cancelled) return;
