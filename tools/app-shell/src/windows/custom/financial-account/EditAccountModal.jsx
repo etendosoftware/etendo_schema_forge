@@ -1235,7 +1235,8 @@ function EditFooter({
             menuIcon={Trash2}
             menuLabel={ui('financeAccountsBankConnectionDeleteAction')}
             onMenuClick={onDeleteConnection}
-            testId="bank-connection-disconnect" />
+            testId="bank-connection-disconnect"
+            data-testid="FooterSplitButton__73027d" />
         ) : null}
         {/* Already deactivated: the soft disconnect no longer applies, but the user must still be
             able to release the surviving Salt Edge link without reconnecting first. */}
@@ -1246,7 +1247,8 @@ function EditFooter({
             onClick={onDeleteConnection}
             disabled={busy}
             danger
-            testId="bank-connection-delete-only" />
+            testId="bank-connection-delete-only"
+            data-testid="FooterButton__73027d" />
         ) : null}
       </div>
       <div className="flex items-center gap-3">
@@ -1367,7 +1369,7 @@ function FooterSplitButton({
         // button it belongs to. The item fills the panel edge to edge and the panel's
         // `overflow-hidden` clips the hover to the rounded shape — inset padding would leave a
         // white frame around the highlight instead of covering the whole button.
-        <div
+        (<div
           role="menu"
           className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-full border border-[hsl(var(--border-subtle))] bg-card shadow-lg"
         >
@@ -1390,7 +1392,7 @@ function FooterSplitButton({
             </span>
             {menuLabel}
           </button>
-        </div>
+        </div>)
       ) : null}
     </div>
   );

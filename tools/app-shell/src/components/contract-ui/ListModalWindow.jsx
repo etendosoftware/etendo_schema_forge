@@ -549,7 +549,7 @@ export function ListModalWindow({
       ) : (
         // `pb-2` keeps the last row's hover shadow off the scroll boundary — the grid cancels the
         // base Table's own overflow precisely so that shadow is not clipped (see ListModalGrid).
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        (<div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           <ListModalGrid
             columns={columns}
             data={data}
@@ -562,7 +562,7 @@ export function ListModalWindow({
             onToggle={handleToggle}
             savingToggles={savingToggles}
             data-testid="ListModalGrid__19eda5" />
-        </div>
+        </div>)
       )}
       {/* Create / edit modal — Figma "Nueva Regla de matcheo" layout:
           wide container, header (title + subtitle), multi-column body grouped by
