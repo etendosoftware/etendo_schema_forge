@@ -212,6 +212,25 @@ async function runBody(querier, body) {
 }
 
 /**
+ * Format the rows returned by an optional `@report` section into a human-readable
+ * `detail` string for the ledger. Pure/exported so it is unit-testable without a DB.
+ * Returns `null` for no rows (nothing to report — keeps `detail` unset, same as a
+ * fix with no `@report` section at all).
+ *
+ * @param {object[]} rows - result rows from running the fix's `@report` SELECT
+ * @param {{maxLen?: number}} [opts]
+ * @returns {string|null}
+ */
+export function formatReportDetail(rows, { maxLen = 4000 } = {}) {
+  if (!rows || rows.length === 0) return null;
+  const lines = rows.map(
+    r => Object.entries(r).map(([k, v]) => `${k}=${v}`).join(', '),
+  );
+  const text = `${rows.length} row(s) need manual attention:\n${lines.map(l => `- ${l}`).join('\n')}`;
+  return text.length > maxLen ? `${text.slice(0, maxLen - 3)}...` : text;
+}
+
+/**
  * Apply one fix to one tenant.
  * @returns {Promise<{status: string, rows: number, detail: string|null}>}
  */
@@ -227,7 +246,7 @@ async function applyFix(pool, fix, clientId, { dryRun }) {
   // :org_id means the tenant's onboarding (operative) org — the non-System org
   // created at onboarding. Resolved only when a fix actually uses the bind; the
   // System/client-level org is written as the literal '0' in SQL, never via :org_id.
-  if (`${fix.check}\n${fix.apply}`.includes(':org_id')) {
+  if (`${fix.check}\n${fix.apply}\n${fix.report}`.includes(':org_id')) {
     const orgRes = await pool.query(
       `SELECT ad_org_id FROM ad_org
         WHERE ad_client_id = $1 AND ad_org_id <> '0' AND isactive = 'Y'
@@ -275,11 +294,20 @@ async function applyFix(pool, fix, clientId, { dryRun }) {
   try {
     await client.query('BEGIN');
     const rows = await runBody(client, applySql);
+    // Optional @report: read-only, runs in the SAME transaction right after @apply, so it
+    // sees the post-apply state. Its rows become the ledger's `detail` on success — the
+    // mechanism a fix uses to surface rows it deliberately skipped (see parse-fix.js docs).
+    let detail = null;
+    if (fix.report) {
+      const reportSql = inlineParams(fix.report, binds);
+      const reportRes = await client.query(reportSql);
+      detail = formatReportDetail(reportRes.rows);
+    }
     await writeLedger(client, {
-      clientId, fixId: fix.fixId, status: STATUS.APPLIED, appliedUtc: new Date(), rowsAffected: rows,
+      clientId, fixId: fix.fixId, status: STATUS.APPLIED, appliedUtc: new Date(), rowsAffected: rows, detail,
     });
     await client.query('COMMIT');
-    return { status: STATUS.APPLIED, rows, detail: null };
+    return { status: STATUS.APPLIED, rows, detail };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     // Record FAILED in a SEPARATE transaction (the rollback undid everything else).

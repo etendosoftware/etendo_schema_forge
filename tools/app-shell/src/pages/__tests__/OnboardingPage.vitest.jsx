@@ -77,6 +77,24 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/api', async (importOriginal) 
   // expired alike) and is the default here, matching the login-view default the
   // suite is written against. Tests that need an active session override it.
   fetchSession: vi.fn().mockRejectedValue(new Error('no session')),
+  // ETP-4664: RegisterStep/LoginStep resolve the backend's stable error code through this
+  // table before rendering it. Mirrored from the real module — a factory mock replaces the
+  // whole module, so omitting it makes AUTH_ERROR_UI_KEYS[err.code] throw inside the catch
+  // and the error message is silently never rendered.
+  AUTH_ERROR_UI_KEYS: {
+    WEAK_PASSWORD: 'onboardingWeakPassword',
+    INVALID_REQUEST: 'onboardingInvalidRequest',
+    REGISTER_MISSING_FIELDS: 'onboardingRegisterMissingFields',
+    REGISTER_EMPTY_FIELDS: 'onboardingRegisterEmptyFields',
+    INVALID_EMAIL_FORMAT: 'onboardingInvalidEmailFormat',
+    EMAIL_ALREADY_REGISTERED: 'onboardingEmailAlreadyRegistered',
+    REGISTER_SERVER_ERROR: 'onboardingRegisterServerError',
+    LOGIN_MISSING_FIELDS: 'onboardingLoginMissingFields',
+    INVALID_CREDENTIALS: 'onboardingInvalidCredentials',
+    LOGIN_SERVER_ERROR: 'onboardingLoginServerError',
+    INTERNAL_ERROR: 'onboardingConnectionError',
+  },
+
   changePassword: vi.fn(),
   confirmPasswordReset: vi.fn(),
   fetchAccount: vi.fn(),
@@ -488,7 +506,8 @@ describe('OnboardingPage', () => {
   });
 
   it('tracks registration exceptions', async () => {
-    registerAccount.mockRejectedValue({ code: 'onboardingConnectionError' });
+    // An unrecognised code falls back to the generic connection message.
+    registerAccount.mockRejectedValue({ code: 'SOME_UNMAPPED_CODE' });
 
     localStorage.removeItem('sf_platform_token');
     await renderAtRegister();
@@ -505,6 +524,27 @@ describe('OnboardingPage', () => {
       });
     });
     expect(screen.getByText('onboardingConnectionError')).toBeInTheDocument();
+  });
+
+  // ETP-4664: the backend returns a stable machine-readable code; the UI must render the
+  // translated key it maps to, never the code itself nor the backend's raw English message.
+  it('translates a known registration error code instead of showing the raw message', async () => {
+    registerAccount.mockRejectedValue({
+      code: 'EMAIL_ALREADY_REGISTERED',
+      userMessage: 'Email already registered',
+    });
+
+    localStorage.removeItem('sf_platform_token');
+    await renderAtRegister();
+
+    fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
+
+    await waitFor(() => {
+      expect(screen.getByText('onboardingEmailAlreadyRegistered')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Email already registered')).not.toBeInTheDocument();
+    expect(screen.queryByText('EMAIL_ALREADY_REGISTERED')).not.toBeInTheDocument();
+    expect(screen.queryByText('onboardingConnectionError')).not.toBeInTheDocument();
   });
 
   it('tracks onboarding setup step navigation', async () => {
@@ -727,8 +767,9 @@ describe('OnboardingPage', () => {
   });
 
   it('tracks login exceptions', async () => {
-    // LoginStep's catch no longer surfaces err.userMessage for the plain login
-    // path (core 0.3.20) — it always renders ui(err.code || 'onboardingConnectionError').
+    // LoginStep's catch no longer surfaces err.userMessage for the plain login path
+    // (core 0.3.20) — it renders ui(AUTH_ERROR_UI_KEYS[err.code] || 'onboardingConnectionError')
+    // since ETP-4664.
     loginAccount.mockRejectedValue({});
 
     // The flow lands on the login view by default (core 0.3.4).
@@ -753,11 +794,38 @@ describe('OnboardingPage', () => {
         windowName: 'onboarding',
       });
     });
-    // core 0.3.20 (ETP-4676) no longer renders the raw backend userMessage; the
-    // error is always translated via ui(err.code), falling back to this key when
-    // the rejection carries no code. The mocked ui() is the identity function.
+    // core 0.3.20 (ETP-4676) no longer renders the raw backend userMessage; the error is
+    // always translated through AUTH_ERROR_UI_KEYS, falling back to this key when the
+    // rejection carries no code. The mocked ui() is the identity function.
     expect(screen.getByText('onboardingConnectionError')).toBeInTheDocument();
     expect(screen.queryByText('Readable login failure')).not.toBeInTheDocument();
+  });
+
+  // ETP-4664: same contract as the register path — translate the code, never leak the
+  // backend's raw English message.
+  it('translates a known login error code instead of showing the raw message', async () => {
+    loginAccount.mockRejectedValue({
+      code: 'LOGIN_SERVER_ERROR',
+      userMessage: 'Unexpected server error',
+    });
+
+    localStorage.removeItem('sf_platform_token');
+    await renderOnboarding();
+
+    fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
+      target: { value: 'exception@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/onboardingPasswordLabel/), {
+      target: { value: 'x' },
+    });
+    fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
+
+    await waitFor(() => {
+      expect(screen.getByText('onboardingLoginServerError')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Unexpected server error')).not.toBeInTheDocument();
+    expect(screen.queryByText('LOGIN_SERVER_ERROR')).not.toBeInTheDocument();
+    expect(screen.queryByText('onboardingConnectionError')).not.toBeInTheDocument();
   });
 
   it('submits forgot password requests with neutral success messaging', async () => {
@@ -1667,6 +1735,14 @@ describe('OnboardingPage', () => {
       return input;
     };
 
+    // ETP-4664 (core 0.3.25): submit is gated on isValidEmailFormat(email) as well as on
+    // password strength, so a strong password alone is no longer enough to enable it.
+    const typeEmail = (container, value) => {
+      const input = container.querySelector('#reg-email');
+      fireEvent.change(input, { target: { value } });
+      return input;
+    };
+
     it('disables the create account button while the password is empty', async () => {
       localStorage.removeItem('sf_platform_token');
       await renderAtRegister();
@@ -1688,10 +1764,30 @@ describe('OnboardingPage', () => {
     it('marks every rule met and enables submit for a strong password', async () => {
       localStorage.removeItem('sf_platform_token');
       const { container } = await renderAtRegister();
+      typeEmail(container, 'ada@example.com');
       typePassword(container, 'Str0ng!Pass');
       ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
         expect(screen.getByTestId(`register-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');
       });
+      expect(screen.getByTestId('action-register-submit')).not.toBeDisabled();
+    });
+
+    it('keeps submit disabled for a strong password when the email is malformed', async () => {
+      localStorage.removeItem('sf_platform_token');
+      const { container } = await renderAtRegister();
+      typePassword(container, 'Str0ng!Pass');
+      ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
+        expect(screen.getByTestId(`register-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');
+      });
+
+      // Empty, then progressively less wrong, but never valid.
+      expect(screen.getByTestId('action-register-submit')).toBeDisabled();
+      ['ada', 'ada@', 'ada@example'].forEach((value) => {
+        typeEmail(container, value);
+        expect(screen.getByTestId('action-register-submit')).toBeDisabled();
+      });
+
+      typeEmail(container, 'ada@example.com');
       expect(screen.getByTestId('action-register-submit')).not.toBeDisabled();
     });
   });

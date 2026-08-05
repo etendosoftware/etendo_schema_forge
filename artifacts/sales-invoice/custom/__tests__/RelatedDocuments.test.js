@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getArSubtype } from '../invoiceSubtype.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'RelatedDocuments.jsx'), 'utf8');
@@ -34,7 +35,6 @@ describe('sales-invoice RelatedDocuments', () => {
 
     it('does not gate linkedShipments behind an order-scoped goods-shipment fetch anymore', () => {
       assert.doesNotMatch(src, /fetchByCriteria\('goods-shipment'/);
-      assert.doesNotMatch(src, /getArSubtype/);
     });
 
     it('classifies each linked shipment via the server-provided isReturn flag, not movementType', () => {
@@ -55,6 +55,48 @@ describe('sales-invoice RelatedDocuments', () => {
 
     it('does not render the dropped sourceReturnReceipt chip branch', () => {
       assert.doesNotMatch(src, /sourceReturnReceipt/);
+    });
+  });
+
+  // ETP-4737: this used to be an obsolete regression guard asserting the
+  // source does NOT use getArSubtype at all. RelatedDocuments.jsx was
+  // correctly changed in this ticket to gate the original-invoices fetch on
+  // getArSubtype(data) === 'RECTIFICATIVA' (replacing a fragile
+  // `transactionDocument$_identifier.includes('credit')` string check that
+  // could never recognize the new unified "Factura Rectificativa" doc type).
+  // These tests verify the real gating behavior, not just its absence of the
+  // old check.
+  describe('original-invoices fetch gating via getArSubtype (ETP-4737)', () => {
+    it('declares the isRectificativa gate using getArSubtype(data)', () => {
+      assert.match(src, /const isRectificativa = getArSubtype\(data\) === 'RECTIFICATIVA'/);
+      assert.match(src, /if \(isRectificativa\) \{/);
+    });
+
+    it('gates the fetch open for a RECTIFICATIVA row (server-injected subtype)', () => {
+      const rectificativaRow = { arInvoiceSubtype: 'RECTIFICATIVA' };
+      assert.equal(getArSubtype(rectificativaRow) === 'RECTIFICATIVA', true);
+    });
+
+    it('keeps the fetch closed for a plain FAC row (server-injected subtype)', () => {
+      const facRow = { arInvoiceSubtype: 'FAC' };
+      assert.equal(getArSubtype(facRow) === 'RECTIFICATIVA', false);
+    });
+
+    it('gates open for a legacy invoice (no arInvoiceSubtype yet) via the identifier fallback', () => {
+      // The former ".includes('credit')"-only check recognized this legacy
+      // wording, but would have silently missed the new unified doc type below.
+      const legacyCreditNote = { 'transactionDocument$_identifier': 'Nota de Crédito' };
+      assert.equal(getArSubtype(legacyCreditNote) === 'RECTIFICATIVA', true);
+    });
+
+    it('gates open for the new unified "Factura Rectificativa" doc type, which a raw "credit" substring match would have missed', () => {
+      const newRectificativa = { 'transactionDocument$_identifier': 'Factura Rectificativa' };
+      assert.equal(getArSubtype(newRectificativa) === 'RECTIFICATIVA', true);
+    });
+
+    it('keeps the fetch closed for a plain "Standard Invoice" identifier', () => {
+      const plainInvoice = { 'transactionDocument$_identifier': 'Standard Invoice' };
+      assert.equal(getArSubtype(plainInvoice) === 'RECTIFICATIVA', false);
     });
   });
 
@@ -157,5 +199,103 @@ describe('sales-invoice RelatedDocuments — isReturn classification (behavioral
     ];
     const types = shipments.map(classify);
     assert.deepEqual(types, ['return-material-receipt', 'shipment', 'return-material-receipt']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-4737: data.originInvoice — set when this rectificativa was created via
+// the "Import from Source Invoice" popup (manual correction). Independent of
+// sourceInvoice above, which only covers the auto-generated-from-return case.
+// Server injects just the id (+ _identifier), not the full record, so the
+// component fetches it via fetchById inside the same effect.
+// ---------------------------------------------------------------------------
+
+describe('sales-invoice RelatedDocuments — originInvoice chip (ETP-4737)', () => {
+  it('declares an originInvoice state slot', () => {
+    assert.match(src, /const \[originInvoice, setOriginInvoice\] = useState\(null\)/);
+  });
+
+  it('fetches originInvoice via fetchById when data.originInvoice is present', () => {
+    assert.match(src, /if \(data\.originInvoice\) \{/);
+    assert.match(
+      src,
+      /fetchById\('sales-invoice', 'header', data\.originInvoice, token, apiBaseUrl\)/
+    );
+  });
+
+  it('resets originInvoice to null when data.originInvoice is absent (no stale chip on re-fetch)', () => {
+    assert.match(src, /\} else \{\s*setOriginInvoice\(null\);\s*\}/);
+  });
+
+  it('renders the origin-invoice chip with type "sales-invoice", gated on the fetched originInvoice state', () => {
+    assert.match(src, /if \(originInvoice\) \{/);
+    assert.match(
+      src,
+      /docChipProps\(\{\s*type:\s*'sales-invoice',\s*doc:\s*originInvoice,\s*ui,\s*navigate\s*\}\)/
+    );
+  });
+
+  it('keeps the sourceInvoice chip gate separate and independent from the originInvoice gate', () => {
+    // Both are their own top-level `if` blocks — not an if/else pair — so one
+    // being present never suppresses the other.
+    assert.match(src, /if \(data\?\.sourceInvoice\) \{/);
+    assert.doesNotMatch(src, /if \(data\?\.sourceInvoice\)[\s\S]{0,40}\belse\b/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavioral: chip-list composition mirrors the exact push order in the
+// source (order -> shipments -> originalInvoices -> sourceInvoice ->
+// originInvoice), verifying the new origin-invoice chip is additive and never
+// replaces or hides any pre-existing chip.
+// ---------------------------------------------------------------------------
+
+function buildChipKinds({ order, shipments = [], originalInvoices = [], sourceInvoice, originInvoice } = {}) {
+  const kinds = [];
+  if (order) kinds.push('order');
+  for (const s of shipments) kinds.push(s.isReturn === true ? 'return-material-receipt' : 'shipment');
+  for (const _inv of originalInvoices) kinds.push('invoice');
+  if (sourceInvoice) kinds.push('source-invoice');
+  if (originInvoice) kinds.push('origin-invoice');
+  return kinds;
+}
+
+describe('sales-invoice RelatedDocuments — chip composition with originInvoice (behavioral)', () => {
+  it('produces no chips when nothing is set', () => {
+    assert.deepEqual(buildChipKinds(), []);
+  });
+
+  it('renders only the origin-invoice chip when it is the sole related document', () => {
+    assert.deepEqual(buildChipKinds({ originInvoice: { id: 'o1' } }), ['origin-invoice']);
+  });
+
+  it('renders nothing when originInvoice is absent, even with other data present', () => {
+    assert.deepEqual(
+      buildChipKinds({ order: { id: 'ord' } }),
+      ['order']
+    );
+  });
+
+  it('is additive alongside the pre-existing sourceInvoice chip (both render, neither replaces the other)', () => {
+    const kinds = buildChipKinds({ sourceInvoice: { id: 's1' }, originInvoice: { id: 'o1' } });
+    assert.deepEqual(kinds, ['source-invoice', 'origin-invoice']);
+  });
+
+  it('is additive alongside order, shipment and original-invoice chips (full house)', () => {
+    const kinds = buildChipKinds({
+      order: { id: 'ord' },
+      shipments: [{ id: 'sh1', isReturn: true }, { id: 'sh2', isReturn: false }],
+      originalInvoices: [{ id: 'oi1' }],
+      sourceInvoice: { id: 's1' },
+      originInvoice: { id: 'o1' },
+    });
+    assert.deepEqual(kinds, [
+      'order',
+      'return-material-receipt',
+      'shipment',
+      'invoice',
+      'source-invoice',
+      'origin-invoice',
+    ]);
   });
 });
