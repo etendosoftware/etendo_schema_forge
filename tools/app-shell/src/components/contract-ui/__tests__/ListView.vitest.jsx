@@ -169,31 +169,25 @@ describe('ListView', () => {
     expect(screen.getByText('overdueFilter')).toBeInTheDocument();
   });
 
-  it('renders the selection toolbar (preview/print) when rows are selected — exercises iconSizeClass', () => {
+  it('renders the selection toolbar (print) when rows are selected — exercises iconSizeClass', () => {
     render(<ListView {...defaultProps} Table={SelectableMockTable} />);
 
     // Before selection, the selection-specific toolbar must not be present:
-    // the "preview" button and the "selected {count}" label belong only to the
-    // selection branch (the standalone report-print button is always present).
-    expect(screen.queryByText('preview')).not.toBeInTheDocument();
+    // the "selected {count}" label belongs only to the selection branch (the
+    // standalone report-print button is always present).
     expect(screen.queryByText('selected')).not.toBeInTheDocument();
 
     // Drive selectedRows to be non-empty by invoking the forwarded
     // onSelectionChange prop, which switches ListView into the selection branch.
     fireEvent.click(screen.getByTestId('trigger-select'));
 
-    // Preview + print buttons render — these contain the <Eye>/<Printer> icons
-    // whose className comes from iconSizeClass(selectionBarSize).
-    const previewBtn = screen.getByText('preview').closest('button');
-    expect(previewBtn).toBeInTheDocument();
+    // ETP-4644 — the "Vista Previa" (Eye) button was removed unconditionally from
+    // the selection bar; it must never render, selected or not.
+    expect(screen.queryByText('preview')).not.toBeInTheDocument();
 
-    // Default selectionBarSize is 'sm', so iconSizeClass returns 'h-3.5 w-3.5'
-    // for the <Eye> (preview) icon in the selection bar.
-    expect(previewBtn.querySelector('svg.lucide-eye')).toBeInTheDocument();
-    expect(previewBtn.querySelector('.h-3\\.5.w-3\\.5')).toBeInTheDocument();
-
-    // The selection-bar print button (<Printer> icon) is also present and sized
-    // by iconSizeClass.
+    // The selection-bar print button (<Printer> icon) renders and is sized by
+    // iconSizeClass(selectionBarSize). Default selectionBarSize is 'sm', so
+    // iconSizeClass returns 'h-3.5 w-3.5'.
     const printIcon = document.querySelector('button svg.lucide-printer.h-3\\.5.w-3\\.5');
     expect(printIcon).toBeInTheDocument();
   });
@@ -217,9 +211,9 @@ describe('ListView', () => {
     fireEvent.click(screen.getByTestId('trigger-select'));
 
     // selectionBarSize !== 'sm' → iconSizeClass returns 'h-4 w-4'.
-    const previewBtn = screen.getByText('preview').closest('button');
-    expect(previewBtn.querySelector('.h-4.w-4')).toBeInTheDocument();
-    expect(previewBtn.querySelector('.h-3\\.5.w-3\\.5')).not.toBeInTheDocument();
+    const printBtn = screen.getByText(/^print/).closest('button');
+    expect(printBtn.querySelector('.h-4.w-4')).toBeInTheDocument();
+    expect(printBtn.querySelector('.h-3\\.5.w-3\\.5')).not.toBeInTheDocument();
   });
 
   it('renders both view-toggle buttons when galleryRenderer is provided — exercises ViewToggle true branch', () => {

@@ -6,12 +6,12 @@ import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload, Trash2 } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import ReportDrawer from './ReportDrawer.jsx';
-import DocumentPrintDrawer, { printDocuments } from './DocumentPrintDrawer.jsx';
+import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
@@ -308,7 +308,6 @@ export function ListView({
   // Also settable through `listViewOptions.tableOwnsScroll`.
   tableOwnsScroll = false,
   hideLink = false,
-  hideEyeCount = false,
   headerContent = null,
   api = null,
   // ETP-4520 — the runtime per-tier window override (`useWindowAccess`'s 'read-only'
@@ -792,7 +791,6 @@ export function ListView({
   useRegisterWindowContext(windowContextInfo);
   const [showSortPopover, setShowSortPopover] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  const [showDocPrint, setShowDocPrint] = useState(false);
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem(`viewMode:${entity}`) || 'list'
   );
@@ -931,17 +929,6 @@ export function ListView({
                 <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
               </div>
               <div className="flex items-center gap-2 h-10">
-                {!(listViewOptions?.hideEye ?? hideEyeCount) && (
-                  <Button
-                    variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
-                    onClick={() => setShowDocPrint(true)}
-                    data-testid="Button__620cbc">
-                    <Eye className={iconSizeClass(selectionBarSize)} data-testid="Eye__620cbc" />
-                    {ui('preview')}
-                  </Button>
-                )}
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
                     size={selectionBarSize}
@@ -1239,13 +1226,6 @@ export function ListView({
           sortColumn={hook.sortColumn}
           sortDirection={hook.sortDirection}
           data-testid="ReportDrawer__620cbc" />
-        <DocumentPrintDrawer
-          open={showDocPrint}
-          onClose={() => setShowDocPrint(false)}
-          windowName={windowName}
-          documentIds={selectedRows.map(r => r.id || r)}
-          token={token}
-          data-testid="DocumentPrintDrawer__620cbc" />
         {quickActionsEnabled && !rowQuickActions?.onDelete && defaultDeleteDialog}
         {bulkDeleteDialog}
         {/* ETP-3914 — Generic Send/Download modal mount for any documental window
