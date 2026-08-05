@@ -81,5 +81,9 @@ tools/app-shell/src/locales/generated/
 # Stray build artifact directory (not produced by any tool in this repo)
 build/
 
+# Flag debt scorecard output (derived from flags-registry.json on demand)
+flag-debt.json
+flag-debt.html
+
 # push-to-neo --dump-delta diagnostic output (derived mirror, never committed)
 artifacts/*/neo-delta.json

@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
@@ -17,9 +18,7 @@ const breadcrumb = 'Inventory / Product';
 
 // @sf-generated-start summary:product
 const summary = [
-  { key: 'eTGOPurchasePrice', column: 'EM_ETGO_Purchase_Price', type: 'amount' },
-  { key: 'eTGOSalePrice', column: 'EM_ETGO_Sale_Price', type: 'amount' },
-  { key: 'eTGOStock', column: 'EM_ETGO_Stock', type: 'number' },
+
 ];
 
 const statusField = null;
@@ -96,7 +95,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/product/accounting",
       "detailUrl": "/sws/neo/product/accounting/{id}",
       "supportedFilters": []
@@ -543,7 +542,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1 },
         ]}
         primaryTabs={[
           { key: 'general', label: 'General' },

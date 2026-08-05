@@ -52,7 +52,8 @@
           "productRevenue",
           "productCOGS"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       }
     },
     "import": {
@@ -165,16 +166,19 @@
         "eTGOSalePrice": {
           "visibility": "readOnly",
           "grid": true,
+          "form": false,
           "section": "other"
         },
         "eTGOPurchasePrice": {
           "visibility": "readOnly",
           "grid": true,
+          "form": false,
           "section": "other"
         },
         "eTGOStock": {
           "visibility": "readOnly",
           "grid": true,
+          "form": false,
           "section": "other"
         },
         "stocked": {
@@ -444,6 +448,7 @@
     },
     "accounting": {
       "javaQualifier": "productAccountingHandler",
+      "hideDelete": true,
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "fixedAsset": {

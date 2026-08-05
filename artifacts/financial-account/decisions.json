@@ -36,7 +36,7 @@
       ],
       "fields": {
         "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
-        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md", "gridLabelKey": "financeAccountsColType", "cellType": "accountType" },
+        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType", "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
         "currency": { "visibility": "editable", "grid": false, "required": true },
         "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
         "description": { "visibility": "editable", "grid": false },

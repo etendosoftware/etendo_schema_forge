@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
-  "generatedAt": "2026-07-31T14:37:13.834Z",
-  "updatedAt": "2026-08-03T16:40:34.566Z",
-  "contractChecksum": "0f13a6b4723db60e",
+  "version": "0.46.0",
+  "generatedAt": "2026-07-31T19:26:59.736Z",
+  "updatedAt": "2026-08-04T16:33:19.885Z",
+  "contractChecksum": "88066a93bb4490da",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",
@@ -37,7 +37,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/customerAccounting",
         "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
         "supportedFilters": []
@@ -70,7 +70,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/vendorAccounting",
         "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
         "supportedFilters": []
@@ -1251,5 +1251,5 @@
     "dangerousOperations": [],
     "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead."
   },
-  "checksum": "e824d3d0339c49a9"
+  "checksum": "90debdaa28d4b368"
 }

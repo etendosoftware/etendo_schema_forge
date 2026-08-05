@@ -74,6 +74,8 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `layoutType` | string | `"default"` | `"default"`, `"kanban"`, `"calendar"`, `"list-modal"`, `"custom"` | Frontend rendering mode. See `docs/window-templates.md`. |
 | `templateConfig` | object | `null` | Layout-specific | Extra config for non-default layouts. `kanban`/`calendar`: `groupBy`, `dateField`, etc. `list-modal`: `titleKey`, `editTitleKey`, `bannerKey`, `searchPlaceholderKey`, `newLabelKey`, `autoPriorityField`, `autoPriorityStep`, `sections` (ordered `[{ key, label }]`), `backLabelKey` (toolbar back-button i18n key; default `cancel`), `backTo` (route to navigate to on back; defaults to history `-1`), `toolbarFilters` (declarative dropdown filters `[{ key, field, allLabelKey, options: [{ value, labelKey }] }]`, applied client-side over the loaded rows). All strings are i18n keys. See the `list-modal` section in `docs/window-templates.md`. |
 | `detailEntity` | string \| null | Auto-inferred | Entity name or `null` | Explicitly sets which entity is the detail/lines tab. When omitted, the generator picks the first non-primary entity automatically. Set to `null` to create a header-only page (no detail tab). Set to a specific entity name to override the auto-inference. |
+| `maxDetailLines` | number | `null` | `0`, `1`, `2`, … | Caps the `detailEntity`'s line count. `N > 0` hides the add-line affordances once the child count reaches `N` (e.g. `1` for a "registro único" accounting-schema row). `0` disables manual line creation entirely (import-only-lines pattern). Only applies to the `window.detailEntity` pattern — see `window.secondaryTabs.<key>.maxDetailLines` below for the equivalent on a `secondaryTabs` entry. Full reference: `docs/ui-customization.md` §11. |
+| `secondaryTabs` | object | `null` | See below | Declares one or more custom Panel/Form/Table tabs beside the lines tab (Accounting, Tax, Payment Plan, etc.). See the `secondaryTabs` subsection below. |
 | `relatedDocuments` | boolean | `false` | — | Enables the Related Documents footer in the detail view. Requires a hand-written `RelatedDocuments.jsx` in `artifacts/{window}/custom/`. The generator emits the import and `customTabs` prop automatically. |
 | `attachments` | boolean \| object | `true` | See below | Adds an "Attachments" tab to the detail view. Auto-enabled on every window with `layoutType: "default"`. Set to `false` to opt out; pass an object to tune client-side limits. See the Attachments subsection below. |
 | `notesField` | string | `null` | Any entity field name | Field to display as a notes/description panel in the detail view footer (e.g., `"description"`). Rendered as an expandable text input. |
@@ -86,7 +88,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `customListIcons` | boolean | `false` | — | Swaps the list toolbar sort/refresh icons for the shared `SortIcon` / `RefreshIcon` set (`@/components/ui/custom-icons`), matching Contacts/Warehouse. Emits `SortIconComponent` / `RefreshIconComponent` on `ListView`. |
 | `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `formCardPadding` | string | `null` | Any Tailwind padding class | Override the Tailwind padding class applied to the form card div in the detail view. When `null`, `DetailView` falls back to `p-6`. Use `"px-2 pb-2"` for tighter (8px horizontal) padding, for example on windows with dense form layouts. |
-| `hideDelete` | boolean | `false` | — | Disables the CRUD delete capability at the contract/API level — emits `apiPrediction.crud.<entity>.delete: false` in `contract.json` for the window's entities. This is an **API-level** declaration only; it does not by itself remove the delete button/icon from the UI (see `hideDeleteButton` below for that). Used for master-data windows whose records are provisioned/retired outside the app (e.g. `tax`, `tax-category`, `open-close-period-control`). |
+| `hideDelete` | boolean | `false` | — | Disables the CRUD delete capability at the contract/API level — emits `apiPrediction.crud.<entity>.delete: false` in `contract.json` for the window's entities. This is an **API-level** declaration; it does not remove the detail-view **toolbar** Delete button by itself (see `hideDeleteButton` below for that). It DOES, however, remove the row-level delete icon from every list/lines rendering path — both plain `DataTable` tabs (via the `{onDeleteRow && (...)}` gate) and `linesLayout: "inlineEditable"` tabs (via `InlineLinesPanel`'s `canDelete` gate, ETP-4565) — because both derive `onDeleteRow` as `undefined` once `crud.<entity>.delete` is `false`, and both components render the trash button conditionally on that handler being present. Used for master-data windows whose records are provisioned/retired outside the app (e.g. `tax`, `tax-category`, `open-close-period-control`). |
 | `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. Gates on `window.statusField`: string status codes (e.g. `DR`/`RPAP`/`N`, see `DELETABLE_DOC_STATUSES` in `tools/app-shell/src/utils/recordActions.js`) are treated as deletable, all other codes as not. When `statusField` points to a **boolean** field instead (e.g. `processed` on `physical-inventory`/`goods-movements`), `false` (not yet processed) is deletable and `true` (processed) is not — handled automatically by `isDeleteVisibleForRecord`, no extra config needed. |
 | `hideDeleteButton` | boolean | `false` | — | **Unconditionally** hides the Delete (trash) button/icon in **both** the detail view toolbar and the list-row hover quick actions, for every record regardless of status. Distinct from `hideDelete` (which only disables the CRUD delete capability declared in `contract.json`/the API) — use `hideDeleteButton` when you also need to remove the UI affordance. Use this instead of `hideDeleteWhenComplete` when Delete should never be available, not just once the document leaves Draft; when set, `hideDeleteWhenComplete` becomes redundant (the button is always hidden). When `false`/absent, delete visibility is unchanged. |
 | `customComponents` | object | `null` | See below | Override generated components with custom ones from `artifacts/{window}/custom/`. The generator emits the correct imports and props automatically. |
@@ -242,6 +244,43 @@ Use this when a window needs supplementary panels (e.g., a pricing breakdown, a 
 | `component` | string | Component name from `tools/app-shell/src/windows/custom/{window}/`. The generator imports it automatically. |
 
 **Note:** Use `customTabsAfterBottom: true` alongside this property to position the custom tabs after the standard bottom section (lines, notes, etc.) rather than interleaved with primary tabs.
+
+### Secondary Tabs (`window.secondaryTabs`)
+
+Declares one or more tabs rendered beside the header's detail/lines content —
+Accounting, Tax, Payment Plan, Customer/Vendor Accounting, Bank Account, etc.
+Each key is the backing entity name; `resolveSecondaryTabDefs` (in
+`generate-frontend.js`) reads this object and emits the corresponding
+`Table`/`Form`/`Panel` imports and the `secondaryTabs` prop array on the
+generated `<Page>` component, sorted by `tabOrder`.
+
+```json
+{
+  "secondaryTabs": {
+    "accounting": {
+      "tabOrder": 1,
+      "label": "Accounting",
+      "addLineFields": ["fixedAsset", "productExpense", "productRevenue", "productCOGS"],
+      "requireSavedRecord": true,
+      "maxDetailLines": 1
+    }
+  }
+}
+```
+
+| Property | Type | Default | Purpose |
+|----------|------|---------|---------|
+| `tabOrder` | number | `99` | Sort order among secondary tabs (ascending). |
+| `label` | string | `toLabel(key)` | Tab label (menu-translatable via `tMenu`). |
+| `tabMode` | string | `null` | `"form-only"` renders `isFormTab: true` (a plain form bound to the header's own state, not a child table) — see `SecondaryFormTab`'s prop contract in `docs/ui-customization.md` §17. Any other value (or `"table-form"`) is a genuine child-entity table + detail form. |
+| `addLineFields` | array | `[]` | Field keys shown in the tab's inline add-row. Resolved against the entity's own contract fields (labels, lookups, defaults, etc. carried over automatically). |
+| `requireSavedRecord` | boolean | `false` | Blocks opening/adding to this tab until the header record itself has been saved (no `id` yet). |
+| `customPanel` / `customTable` / `customForm` | string | `null` | Overrides the generated `Table`/`Form` with a hand-written component name, resolved via `resolveCustomImport()` (pipeline-window convention: `artifacts/{window}/custom/`, hand-built convention: `tools/app-shell/src/windows/custom/{window}/`). `customPanel` renders a freeform `Panel` instead of a table (see the `Panel` prop contract in `docs/ui-customization.md` §17). |
+| `customAddModal` | string | `null` | Opens a hand-written modal component instead of the inline add-row (e.g. `locationAddress`'s `LocationEditorModal`). |
+| `readOnlyLogic` | AD logic string | `null` | Compiled with the same translator as field-level `readOnlyLogic`; evaluated against the current header record, independent of the document's own draft/completed state. |
+| `maxDetailLines` | number | `null` | **(ETP-4565)** Caps this tab's own child count, mirroring the top-level `window.maxDetailLines` semantics for the `detailEntity` pattern but scoped per secondary tab — a window can declare several `secondaryTabs`, each needing an independent cap (e.g. `contacts`' `customerAccounting` vs. `vendorAccounting`). `N > 0` hides the add-line button, the empty-state add trigger, and the inline add-row once the tab's child count reaches `N` (e.g. `1` for a "registro único" accounting-schema row). `0` disables manual add entirely for that tab. Undeclared (default) stays uncapped. Implemented by `resolveCanAddSecondaryLines(st, childrenCount)` in `tools/app-shell/src/components/contract-ui/DetailView.jsx`, fed by the `maxDetailLines` prop the generator emits on the tab's entry in `buildSecondaryTabPropEntry` (`generate-frontend.js`, `schema_forge_core`). |
+
+**Real examples:** `product`/`asset-group` (`secondaryTabs.accounting.maxDetailLines: 1`), `contacts` (`secondaryTabs.customerAccounting.maxDetailLines: 1` and `secondaryTabs.vendorAccounting.maxDetailLines: 1`) — all four cap their accounting-schema row at exactly one record, the `secondaryTabs`-pattern equivalent of `window.maxDetailLines: 1` on `product-category`/`business-partner-category`/`tax`'s `detailEntity`. Full extension-point reference (Panel/Form prop contracts, custom-window wiring): `docs/ui-customization.md` §17.
 
 ### Subset Filters (`window.subsetFilters`)
 
@@ -537,7 +576,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `namedFilters` | array | `null` | **Hand-authored named HQL filters** the NEO Headless MCP exposes as `{ "status": "<name>" }` list filters. See below. |
 | `virtualFields` | array | `[]` | Columns with **no AD column behind them**, injected per row by the entity's NeoHandler in `afterHandle`. See below. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
-| `hideDelete` | boolean | `false` | Disables the CRUD delete capability for **this entity only** (`apiPrediction.crud.<entity>.delete: false`) — unlike `window.hideDelete`, which disables delete uniformly across every entity in the window. `DetailView`'s row-delete handler, bulk-delete bar, and delete-eligibility checks all gate directly on this same `crud.delete` flag, so setting it also removes the row-level delete icon/checkbox in the UI, not just the declared API capability. Use for a child/detail entity whose rows are exclusively managed as a side effect of the parent's own save (e.g. a NeoHandler syncing a join table from a parent field) — manual row deletion there would let a user bypass that invariant. Added ETP-4512 (`userRoles` on the `user` window). |
+| `hideDelete` | boolean | `false` | Disables the CRUD delete capability for **this entity only** (`apiPrediction.crud.<entity>.delete: false`) — unlike `window.hideDelete`, which disables delete uniformly across every entity in the window. `DetailView`'s row-delete handler, bulk-delete bar, and delete-eligibility checks all gate directly on this same `crud.delete` flag, so setting it also removes the row-level delete icon/checkbox in the UI, not just the declared API capability — for **both** plain `DataTable` list/lines tabs and `linesLayout: "inlineEditable"` tabs (`InlineLinesPanel`, see ETP-4565: before that fix the icon still rendered — and silently no-opped on click — on `inlineEditable` tabs, since only `DataTable` gated its trash button on `onDeleteRow`). Use for a child/detail entity whose rows are exclusively managed as a side effect of the parent's own save (e.g. a NeoHandler syncing a join table from a parent field) — manual row deletion there would let a user bypass that invariant. Added ETP-4512 (`userRoles` on the `user` window). |
 
 ### Virtual fields (`entities.{name}.virtualFields`)
 
@@ -802,6 +841,8 @@ Two field-level props control how the grid column renders raw values as labeled 
 2. `DistinctEnumPicker` (in `AdvancedFilterBuilder.jsx`) reads `enumLabels` to populate the advanced/conditional filter value dropdown — so the filter shows translated labels instead of raw values.
 3. `ListFilterBar.jsx` uses the same `enumLabels` to drive the status quick-filter pills above the list.
 
+**"All statuses" dropdown label resolution (ETP-4696):** `labelForStatus` in `ListFilterBar.jsx` — the function that renders each option text in the "All statuses" quick-filter dropdown — delegates 100% to `statusLabel(code, dictionary, ui, statusCol?.enumLabels)`, the exact same resolution function `DataTable.cellRenderers.jsx` uses for the grid cell badge (also used by `DocumentStatusPill.jsx`, `CloneOrderModal.jsx`, `ReportDrawer.jsx`, `useInvoicePreview.js`). It previously had its own local lookup that bypassed `statusLabel()`, so codes without a fortuitous translation (`PWNC`, `RDNC`, `ETGO_CI`, `RPVOID`) rendered in raw/English form in the dropdown while the grid cell for the same row translated correctly. There is no second translation mechanism to maintain: extending the catalog — a new `enumValues` entry in `decisions.json`, a `genericLabels` key in `{es_ES,en_US}.json`, or an `AD_Ref_List_Trl` row — is picked up by `statusLabel()` once, and both the grid cell and the dropdown reflect it automatically.
+
 **Key rules:**
 
 - This is a **Schema Forge display mapping only** — the Etendo AD column reference is never modified.
@@ -910,6 +951,19 @@ cell falls back to a plain value (with enum-label / FK identifier resolution).
 | `allowCreate` | boolean | `false` | Opt-in (future): on a selector/enum field, surface the inline "+ create" action in the combobox. Currently OFF for all windows — the flag flows through the pipeline so a field can wire `createLabel`/`onCreateRequest` later without a generator change. |
 | `clearable` | boolean | `true` (header) / `!required` (line grid) | Controls the chip's clear (`×`) button. On the header's unified `CreatableSearchSelect`, defaults to `true` (shown) for every selector/enum field, including required ones — the header form has an explicit Save step, so a required field cleared to empty is caught before it ever reaches the backend. On the **line grid**'s `InlineSearchCombo` (`artifacts/{w}/generated/.../DataTable.jsx`, `InlineLinesPanel.jsx`), every field edit auto-saves immediately with no review step, so the `×` defaults to **hidden** whenever `field.required === true` (e.g. Sales Order line's `tax`) — clearing it there always fails against a NOT NULL column and the grid can't turn the resulting generic backend error into a helpful field-level message. Set `"clearable": false` to force-hide it on a specific field regardless of `required`, or `"clearable": true` to force-show it (opt back into the risk) on a required field that has a safe fallback (e.g. a server-side default kicks in on save). |
 | `dependsOn` | object \| null | `null` | Parent field dependency for cascading selectors. |
+
+**`DocumentType` carve-out — saved-value translation is window-scoped (ETP-4737):** the `optionTranslator`
+built for `reference: 'DocumentType'` fields (renames/hides options — reversed/credit/return/rectificativa
+tabs) is generic to every window, but the extra step that also translates the already-saved/selected value
+through that same translator (so a saved record shows the same label the options list would show) is
+gated to `sales-invoice` and `purchase-invoice` ONLY, via a `windowName` prop threaded from each window's
+`index.jsx` → `HeaderPage` → `DetailView` → `EntityForm` (see `SAVED_VALUE_TRANSLATION_WINDOWS` in
+`EntityForm.jsx`). `payment-out` (`documentType`) and `purchase-order` (`transactionDocument`) keep showing
+the raw AD identifier for their saved value — their real doc-type vocabulary ("AP Payment", "Credit Order",
+etc.) doesn't match the translator's invoice-specific keywords and would otherwise mislabel the field (e.g.
+falling back to "Factura"). This is a hardcoded window-name gate inside a shared component — a deliberate,
+narrow exception (same class as the pre-existing `DocumentType` carve-out itself), not a decisions.json
+option; there is nothing to configure per-window here.
 
 **dependsOn format:**
 ```json
