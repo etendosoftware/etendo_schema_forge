@@ -62,6 +62,19 @@ const COLUMN_CHROME = {
   pendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
 };
 
+// DataTable right-aligns any column whose `type` is in its NUMERIC_FIELD_TYPES set
+// (header AND cell, independent of `render`). `pendingCount` is typed "integer" in
+// the contract because it IS a count, but it never displays that count as a number —
+// it always renders through `reconcilePill` (the "Conciliado" / "Conciliar (N)" pill),
+// so the numeric right-align only pushed the two pill variants to inconsistent left
+// edges instead of the plain left-aligned column every other status cell uses.
+// Overriding the type here is presentation-only: the column stays non-sortable and
+// non-form (`grid`-only), so nothing about validation, editing, or the underlying
+// contract type is affected — see DataTable.jsx's NUMERIC_FIELD_TYPES / `col.type`.
+const GRID_TYPE_OVERRIDE = {
+  pendingCount: 'string',
+};
+
 /**
  * The list's columns in DataTable's `columns` shape.
  *
@@ -88,7 +101,7 @@ function buildColumns(ui, locale, handlers) {
     return {
       key: col.name,
       column: col.column,
-      type: col.type,
+      type: GRID_TYPE_OVERRIDE[col.name] ?? col.type,
       // `labels[locale]` is resolveColumnLabel's top-priority branch, so a declared
       // gridLabelKey wins over the AD dictionary. Without one, `column` lets the
       // dictionary resolve it rather than falling through to the raw field name.
