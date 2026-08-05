@@ -119,10 +119,19 @@ export function SelectorInput({
     ? 'w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary'
     : 'focus:ring-2 focus:ring-primary';
 
-  // Radix shows the placeholder when value is undefined. Using undefined for
-  // empty values is mandatory for required fields too (where the '__empty__'
-  // SelectItem is not rendered, so Radix would otherwise show nothing).
-  const selectValue = value ? value : undefined;
+  // Radix shows the placeholder when the controlled value is EITHER '' or undefined
+  // (see @radix-ui/react-select shouldShowPlaceholder). We MUST use '' — never
+  // undefined — for the empty state: Radix derives `isControlled` from
+  // `prop !== undefined`, so flipping value between a string and `undefined`
+  // silently toggles the Select between controlled and uncontrolled. During that
+  // flip Radix's controllable-state hook swaps to a freshly-initialized internal
+  // store, which SWALLOWS the onValueChange of the very selection that triggered
+  // the flip — the "clearing an FK needs two clicks" bug (a selected FK cleared via
+  // the empty option: first pick was dropped by the controlled→uncontrolled swap,
+  // only the second pick landed). A constant-typed '' keeps the Select controlled
+  // for its whole lifetime while still rendering the placeholder for the empty case,
+  // including required fields (where the '__empty__' item is not offered).
+  const selectValue = value ? value : '';
   // Optional FK fields can label their empty/null choice (e.g. "All accounts")
   // instead of a blank entry. When set, the empty value also reads as that label
   // on the trigger rather than the "Select X..." placeholder.

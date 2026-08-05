@@ -786,7 +786,11 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
       // {response:{data:[...]}}.
       const updated = await res.json().catch(() => null);
       const serverRow = updated?.response?.data?.[0] ?? null;
-      if (serverRow) hook.handleUpdateChild?.(row.id, serverRow);
+      // ETP-4751 — pass the raw response ROOT (`updated`) as the exemption-cause signal source:
+      // InvoiceLineHandler stamps exemptionCauseWarning/exemptionCauseAutoFilled at the response
+      // root, not on the nested line row (`serverRow`), so a line EDIT that turns a line exempt
+      // still surfaces the SIF warning toast.
+      if (serverRow) hook.handleUpdateChild?.(row.id, serverRow, undefined, updated);
     } else {
       const msg = await extractErrorMessage(res);
       toast.error(msg || ui('networkError'));
@@ -1212,6 +1216,27 @@ export async function maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, han
   if (!saveBeforeProcesses || !isDirty) return true;
   const saved = await handleSave?.({ silent: true });
   return !!saved?.id;
+}
+
+// Builds the form-footer render pieces. A formFooter may opt into rendering INSIDE
+// the header card (single-field footers like TaxSifField set the static marker
+// `inlineInHeaderCard`), aligned in the same horizontal grid as the native header
+// fields, instead of the default detached block below the card (multi-section
+// panels like AssetsDetailPanel). Inline footers are spliced into the principal
+// Form's grid via its `trailing` slot (a bare grid cell, WITHOUT the pointer-events
+// wrapper, so it is a direct grid sibling of the native fields). Non-marked footers
+// keep the detached `footerElement` block and are completely unaffected.
+export function buildHeaderFooter({ formFooter, embedded, data, entity, handleChangeWithCallout, hook, catalogs, api, token, apiBaseUrl }) {
+  if (!formFooter) return { footerInline: false, footerElement: null, inlineTrailing: undefined };
+  const footerInline = !!formFooter.inlineInHeaderCard;
+  const footerNode = React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing, registerFields: hook.registerFields, fieldErrors: hook.fieldErrors });
+  const footerElement = (
+    <div className={embedded ? 'pointer-events-none' : ''}>
+      {footerNode}
+    </div>
+  );
+  const inlineTrailing = footerInline ? footerNode : undefined;
+  return { footerInline, footerElement, inlineTrailing };
 }
 
 export function DetailView({
@@ -3397,6 +3422,17 @@ export function DetailView({
 
                   {/* Form section — conditionally wrapped with sidebar when sidebarAboveTabsOnly */}
                   {(() => {
+                    // A formFooter component may opt into rendering INSIDE the header
+                    // card, aligned in the same horizontal grid as the native header
+                    // fields (single-field footers like TaxSifField), instead of the
+                    // default detached block below the card (multi-section panels like
+                    // AssetsDetailPanel). See buildHeaderFooter for the opt-in marker and
+                    // the inline `trailing`-slot wiring. Extracted to keep this render
+                    // branch's cognitive complexity within budget.
+                    const { footerInline, footerElement, inlineTrailing } = buildHeaderFooter({
+                      formFooter, embedded, data, entity, handleChangeWithCallout, hook,
+                      catalogs, api, token, apiBaseUrl,
+                    });
                     const formSection = (
                       <>
                         {/* Principal + collapsed fields wrapped in a card */}
@@ -3454,6 +3490,7 @@ export function DetailView({
                               registerFields={hook.registerFields}
                               fieldErrors={hook.fieldErrors}
                               onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}
+                              trailing={inlineTrailing}
                               data-testid="Form__fa3275" />
                           </div>
 
@@ -3486,12 +3523,11 @@ export function DetailView({
                           )}
                         </div>
 
-                        {/* Form footer: inline content below form, above tabs */}
-                        {formFooter && (
-                          <div className={embedded ? 'pointer-events-none' : ''}>
-                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing, registerFields: hook.registerFields, fieldErrors: hook.fieldErrors })}
-                          </div>
-                        )}
+                        {/* Form footer: detached block below the form card, above tabs
+                            (default). Single-field footers that opted into
+                            inlineInHeaderCard are rendered inside the card above and
+                            skipped here. */}
+                        {!footerInline && footerElement}
                       </>
                     );
                     if (sidebarAboveTabsOnly && sidebarContent) {
