@@ -145,6 +145,7 @@ export default function GoodsReceiptWindow(props) {
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}
         bulkActions={GoodsReceiptBulkAction}
+        hideEyeCount
         renderPreview={({ row, onClose, onEdit }) => (
           <GoodsReceiptPreview
             receipt={row}

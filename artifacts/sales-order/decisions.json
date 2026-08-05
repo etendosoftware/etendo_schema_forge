@@ -9,7 +9,6 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
     "menuActions": [
       {
         "key": "reactivate",

@@ -475,7 +475,6 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrint
         hideSaveStatuses={["CA","ETGO_CI","CL","VO","CJ"]}
         noHeaderBorder
         notesField="description"
@@ -508,7 +507,6 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="orderDate"
-      hidePrint
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument

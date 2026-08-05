@@ -133,7 +133,6 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
         rowQuickActions={rowQuickActions}
         token={token}
         apiBaseUrl={apiBaseUrl}
-        hidePrint
         bulkActions={(ctx) => (
           <>
             <BulkOrderMoreMenu {...ctx} data-testid="BulkOrderMoreMenu__6339e4" />

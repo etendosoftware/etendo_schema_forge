@@ -354,7 +354,6 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrint
         noHeaderBorder
         notesField="description"
         dimensionsPanelFieldKeys={["project","costcenter"]}
@@ -387,7 +386,6 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
       api={api}
       dateFilterKey="movementDate"
       bulkActions={(ctx) => <BulkInvoiceFromShipment {...ctx} />}
-      hidePrint
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument

@@ -47,6 +47,7 @@ Use this window to register and complete outbound customer shipments. The functi
 - Batch invoice creation is clearly implemented as a draft-invoice flow, but current evidence only proves source shape and endpoint usage, not a browser-tested logistics scenario. It should be treated as supported-by-code with limited automated proof.
 - The documented shipment-to-invoice relationship is order-centric: the related-documents tab resolves invoices through the linked sales order, not by directly querying invoices from the shipment id. If the business expects shipment-specific invoice traceability independent of the order link, that remains an open ambiguity.
 - The top-bar and list invoicing logic check a `completelyInvoiced` flag in custom components, while the contract and generated fields expose the frontend field as `invoiced` / `Iscompletelyinvoiced`. The runtime payload may normalize both names, but this is not explicit in current evidence, so the exact gating behavior for already invoiced shipments remains an implementation ambiguity.
+- **ETP-4729 — Print action unified, custom print button removed**: the generic print icon is now available on both the list grid and the detail view. The bespoke "Imprimir"/"Descargar PDF" entry that used to live in `GoodsShipmentActions.jsx`'s `⋮` menu was removed, since it duplicated the unified print flow with a client-side-generated PDF.
 
 ## Manual verification
 

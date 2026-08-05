@@ -1,8 +1,8 @@
 {
   "version": "0.23.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-07-30T10:37:22.403Z",
-  "checksum": "4e7169ecd227e775",
+  "updatedAt": "2026-08-05T12:39:14.392Z",
+  "checksum": "2f2b7038b738b880",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -12,7 +12,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "hideSaveStatuses": [
         "CA",
         "ETGO_CI",
@@ -1010,7 +1009,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "hideSaveStatuses": [
         "CA",
         "ETGO_CI",

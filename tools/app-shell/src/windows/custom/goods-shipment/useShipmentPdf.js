@@ -158,9 +158,3 @@ export function getShipmentPdfLabels(ui) {
     signatureDate:     ui('shipmentPdfSignatureDate'),
   };
 }
-
-export async function generateShipmentPdf(shipmentId, apiBaseUrl, token, labels) {
-  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-  const data = await buildShipmentData(shipmentId, base, token);
-  return renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
-}
