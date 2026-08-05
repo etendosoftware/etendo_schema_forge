@@ -7,7 +7,6 @@ import { AddLineButton } from '@/components/ui/add-line-button.jsx';
 import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
-import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
 
 const TAB_ICONS = {
