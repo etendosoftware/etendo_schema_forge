@@ -52,7 +52,6 @@ export default function ReturnWindowShell({
         recordId={recordId}
         apiBaseUrl={apiBaseUrl}
         token={token}
-        hidePrint={true}
         autoSaveOnBlur={true}
         {...pageProps}
         data-testid="PageComponent__3ea846" />

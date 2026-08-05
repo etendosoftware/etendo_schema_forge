@@ -73,10 +73,12 @@ describe('ReturnWindowShell', () => {
     expect(screen.getByTestId('page-component')).toHaveAttribute('data-record-id', 'ret-1');
     expect(lastPageProps).toMatchObject({
       recordId: 'ret-1',
-      hidePrint: true,
       autoSaveOnBlur: true,
       customProp: 'kept',
     });
+    // ETP-4729: hidePrint must no longer be hardcoded — the generic print
+    // icon in DetailView.jsx should render for return-* detail views.
+    expect(lastPageProps.hidePrint).toBeUndefined();
     expect(lastPageProps.rowQuickActions).toBeUndefined();
   });
 
