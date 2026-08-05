@@ -11,6 +11,7 @@ import { generateShipmentPdf, getShipmentPdfLabels, useShipmentPdf } from '@/win
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 
 export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl, api }) {
   const ui = useUI();
@@ -193,6 +194,8 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       </button>
 
       {isCompleted && <SendDocumentButton onClick={() => setShowSend(true)} />}
+
+      <CopyRecordLinkButton recordId={recordId} windowName="goods-shipment" />
 
       <button
         type="button"
