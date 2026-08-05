@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 
 /**
@@ -131,26 +132,25 @@ export default function CreateInvoiceConfirmModal({
             <label htmlFor="invoice-confirm-price-list" style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
               {ui('salesPriceListField')}
             </label>
-            <select
-              id="invoice-confirm-price-list"
-              data-testid="invoice-confirm-price-list-select"
-              value={priceListId}
-              onChange={e => setPriceListId(e.target.value)}
+            <Select
+              value={priceListId || '__empty__'}
+              onValueChange={val => setPriceListId(val === '__empty__' ? '' : val)}
               disabled={loadingPriceLists || priceLists.length === 0}
-              style={{
-                padding: '8px 10px', borderRadius: 8, fontSize: 13,
-                border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))',
-                color: 'hsl(var(--foreground))',
-              }}
+              data-testid="Select__invoice-confirm-price-list"
             >
-              {loadingPriceLists && <option value="">{ui('loading')}</option>}
-              {!loadingPriceLists && priceLists.length === 0 && (
-                <option value="">{ui('noPriceListsAvailable')}</option>
-              )}
-              {priceLists.map(p => (
-                <option key={p.id} value={p.id}>{p['name'] ?? p.id}</option>
-              ))}
-            </select>
+              <SelectTrigger id="invoice-confirm-price-list" data-testid="invoice-confirm-price-list-select">
+                <SelectValue placeholder={loadingPriceLists ? ui('loading') : ui('noPriceListsAvailable')} data-testid="SelectValue__invoice-confirm-price-list" />
+              </SelectTrigger>
+              <SelectContent data-testid="SelectContent__invoice-confirm-price-list">
+                {loadingPriceLists && <SelectItem value="__empty__" data-testid="SelectItem__invoice-confirm-price-list-loading">{ui('loading')}</SelectItem>}
+                {!loadingPriceLists && priceLists.length === 0 && (
+                  <SelectItem value="__empty__" data-testid="SelectItem__invoice-confirm-price-list-empty">{ui('noPriceListsAvailable')}</SelectItem>
+                )}
+                {priceLists.map(p => (
+                  <SelectItem key={p.id} value={p.id} data-testid={`option-invoice-confirm-price-list-${p.id}`}>{p['name'] ?? p.id}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
