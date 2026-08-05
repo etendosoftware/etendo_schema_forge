@@ -74,15 +74,19 @@ vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
   ),
 }));
 
-vi.mock('../useDocumentCurrency.js', () => ({
-  useDocumentCurrency: vi.fn(() => ({
-    orgCurrencyCode: null,
-    exchangeRate: null,
-    isSameCurrency: true,
-    loading: false,
-    convertAmount: (amount) => amount,
-  })),
-}));
+vi.mock('../useDocumentCurrency.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useDocumentCurrency: vi.fn(() => ({
+      orgCurrencyCode: null,
+      exchangeRate: null,
+      isSameCurrency: true,
+      loading: false,
+      convertAmount: (amount) => amount,
+    })),
+  };
+});
 
 vi.mock('../preview-cards/SummaryCard.jsx', () => ({
   default: vi.fn(() => <div data-testid="summary-card" />),

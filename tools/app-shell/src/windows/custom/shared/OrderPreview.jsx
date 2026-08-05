@@ -5,7 +5,7 @@ import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useOrderPdf } from './useOrderPdf.js';
 import { usePurchaseOrderPdf } from './usePurchaseOrderPdf.js';
-import { useDocumentCurrency } from './useDocumentCurrency.js';
+import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from './PreviewActionButtons.jsx';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
@@ -112,18 +112,11 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
     apiBaseUrl,
     token,
   });
-  const etgoRate = (!isSameCurrency && order?.eTGOCurrencyRate)
-    ? parseFloat(order.eTGOCurrencyRate)
-    : null;
-  // eTGOCurrencyRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
-  // Use it directly as exchangeRate so (1.20) is displayed, not the inverse (0.8333).
-  // orgGrandTotal = docTotal / eTGOCurrencyRate converts doc→org correctly.
-  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
-    ? etgoRate
-    : systemExchangeRate;
-  const orgGrandTotal = (!isSameCurrency && exchangeRate && order?.grandTotalAmount != null)
-    ? Number(order.grandTotalAmount) / exchangeRate
-    : null;
+  const { exchangeRate, orgGrandTotal } = resolveDualCurrencyDisplay({
+    record: order,
+    isSameCurrency,
+    systemExchangeRate,
+  });
   const currencyData = { orgCurrencyCode, exchangeRate };
 
   const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData);

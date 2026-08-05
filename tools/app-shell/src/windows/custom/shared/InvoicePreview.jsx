@@ -17,7 +17,7 @@ import PaymentsCard from './preview-cards/PaymentsCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { fetchByCriteria, fetchById } from '@/components/related-documents';
-import { useDocumentCurrency } from './useDocumentCurrency.js';
+import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
 function isCreditNote(invoice) {
@@ -216,18 +216,11 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     apiBaseUrl,
     token,
   });
-  const etgoRate = (!isSameCurrency && p.displayInvoice?.eTGOCurrencyRate)
-    ? parseFloat(p.displayInvoice.eTGOCurrencyRate)
-    : null;
-  // eTGOCurrencyRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
-  // Use it directly as exchangeRate so (1.20) is displayed, not the inverse (0.8333).
-  // orgGrandTotal = docTotal / eTGOCurrencyRate converts doc→org correctly.
-  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
-    ? etgoRate
-    : systemExchangeRate;
-  const orgGrandTotal = (!isSameCurrency && exchangeRate && p.displayInvoice?.grandTotalAmount != null)
-    ? Number(p.displayInvoice.grandTotalAmount) / exchangeRate
-    : null;
+  const { exchangeRate, orgGrandTotal } = resolveDualCurrencyDisplay({
+    record: p.displayInvoice,
+    isSameCurrency,
+    systemExchangeRate,
+  });
 
   if (!invoice) return null;
 
