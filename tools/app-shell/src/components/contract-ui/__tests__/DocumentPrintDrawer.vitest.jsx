@@ -205,6 +205,76 @@ describe('DocumentPrintDrawer', () => {
       expect(toast.error).not.toHaveBeenCalled();
     });
   });
+
+  // ETP-4728 (Hallazgo 2) — the drawer previously had no real print action,
+  // only Download + a disabled "send by email" placeholder. This adds a
+  // working Imprimir button that reuses printDocuments() for the doc
+  // currently open in the drawer.
+  describe('handlePrint — Imprimir button (ETP-4728 Hallazgo 2)', () => {
+    it('shows a print button', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve('<html>Doc</html>'),
+      });
+      render(
+        <DocumentPrintDrawer open={true} onClose={vi.fn()} windowName="order" documentIds={['d1']} token="tok" />,
+      );
+      expect(screen.getByText('print')).toBeInTheDocument();
+    });
+
+    it('opens a print window for the current document on click', async () => {
+      const user = userEvent.setup();
+      URL.createObjectURL = vi.fn(() => 'blob:generated');
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+      vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+        if (typeof url === 'string' && url.endsWith('/render')) {
+          return Promise.resolve({ ok: true, text: () => Promise.resolve('<html>Doc</html>') });
+        }
+        if (url === '/jsreport/api/report') {
+          return Promise.resolve({
+            ok: true,
+            headers: { get: (h) => (h === 'content-type' ? 'application/pdf' : null) },
+            blob: () => Promise.resolve(new Blob(['%PDF'])),
+          });
+        }
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('') });
+      });
+      render(
+        <DocumentPrintDrawer open={true} onClose={vi.fn()} windowName="order" documentIds={['d1']} token="tok" />,
+      );
+      await waitFor(() => expect(screen.getByText('print')).toBeInTheDocument());
+      await user.click(screen.getByText('print'));
+      await waitFor(() => expect(openSpy).toHaveBeenCalledWith('blob:generated', '_blank'));
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('toasts a service-unavailable message when jsreport is unreachable', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+        if (typeof url === 'string' && url.endsWith('/render')) {
+          return Promise.resolve({ ok: true, text: () => Promise.resolve('<html>Doc</html>') });
+        }
+        if (url === '/jsreport/api/report') return Promise.reject(new TypeError('Failed to fetch'));
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('') });
+      });
+      render(
+        <DocumentPrintDrawer open={true} onClose={vi.fn()} windowName="order" documentIds={['d1']} token="tok" />,
+      );
+      await waitFor(() => expect(screen.getByText('print')).toBeInTheDocument());
+      await user.click(screen.getByText('print'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('reportServiceUnavailable'));
+    });
+
+    it('does nothing when there is no current document', () => {
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+      render(
+        <DocumentPrintDrawer open={true} onClose={vi.fn()} windowName="order" documentIds={[]} token="tok" />,
+      );
+      const printBtn = screen.getByText('print').closest('button');
+      expect(printBtn).toBeDisabled();
+      expect(openSpy).not.toHaveBeenCalled();
+    });
+  });
 });
 
 // ETP-4728 — printDocuments is a fire-and-forget onClick handler in ListView
