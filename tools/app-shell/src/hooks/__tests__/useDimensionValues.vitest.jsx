@@ -12,31 +12,21 @@
  * a "once" override would fall back to the default mid-render.
  */
 
-let mockAuth = { isAuthenticated: true };
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+configureAuthMock({ isAuthenticated: true });
 
 vi.mock('../useNeoResource', () => ({
   getApiBase: () => '/base',
 }));
 
 import { renderHook, waitFor } from '@testing-library/react';
+import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { useDimensionValues } from '../useDimensionValues.js';
 
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
-
 beforeEach(() => {
-  mockAuth = { isAuthenticated: true };
   globalThis.fetch = vi.fn();
 });
 
@@ -53,7 +43,7 @@ describe('useDimensionValues', () => {
   });
 
   it('skips fetch when the user is not authenticated', async () => {
-    mockAuth = { isAuthenticated: false };
+    setAuthMock({ isAuthenticated: false });
     const { result } = renderHook(() => useDimensionValues(['organization']));
     await waitFor(() => expect(result.current.optionsByDim).toEqual({}));
     expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -61,7 +51,7 @@ describe('useDimensionValues', () => {
 
   it('still fetches when no client-side token exists (cookie session)', async () => {
     // The cookie-session shape: authenticated, but the browser holds no token.
-    mockAuth = { isAuthenticated: true, token: null };
+    setAuthMock({ isAuthenticated: true, token: null });
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ response: { data: { values: [{ id: 'o1', name: 'Org 1' }] } } }),

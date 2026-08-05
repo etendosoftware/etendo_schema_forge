@@ -16,12 +16,11 @@
  * a "once" override would decay to the default mid-render.
  */
 import { renderHook, act } from '@testing-library/react';
+import { setAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 import { useFinancialAccountAccounting } from '../useFinancialAccountAccounting.js';
 
@@ -46,16 +45,6 @@ function errorResponse(status, message) {
   };
 }
 
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
-
 /** Cookie-session request shape shared by every call: explicit credentials. */
 function expectSendsSessionCookie(init) {
   expect(init.credentials).toBe('include');
@@ -63,7 +52,6 @@ function expectSendsSessionCookie(init) {
 
 describe('useFinancialAccountAccounting', () => {
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     Object.defineProperty(window, 'location', {
       value: { pathname: '/etendo/web/app' },
       writable: true,
@@ -265,7 +253,7 @@ describe('useFinancialAccountAccounting', () => {
   it('saveAccountingConfiguration omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
     // A session can be authenticated before the CSRF proof lands; the header must
     // be added defensively, never sent as an empty/undefined value.
-    mockAuth = { isAuthenticated: true, csrfToken: null };
+    setAuthMock({ isAuthenticated: true, csrfToken: null });
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'row-1' }]));
 
     const { result } = renderHook(() => useFinancialAccountAccounting());

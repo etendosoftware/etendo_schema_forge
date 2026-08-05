@@ -10,19 +10,8 @@ vi.mock('sonner', () => ({
   toast: { success: (...a) => toastSuccess(...a), error: (...a) => toastError(...a) },
 }));
 
-// ETP-4576: the session is a server-side `__Host-go_session` cookie, so the
-// component holds no bearer token — the context only supplies `isAuthenticated`
-// and the `csrfToken` proof. Both actions here (post / unpost) are POSTs, i.e.
-// unsafe methods, so each must carry `credentials: 'include'` and `X-Go-CSRF`
-// and NO Authorization header.
-//
-// The mock is a plain mutable object rather than a vi.fn() with
-// mockReturnValueOnce: React can invoke the hook more than once per render, and
-// a "once" override would decay to the default mid-render.
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 vi.mock('@/hooks/useNeoResource', () => ({
   getApiBase: () => '',
@@ -68,6 +57,8 @@ vi.mock('@/components/ui/tooltip', () => ({
 }));
 
 import { render, screen, waitFor } from '@testing-library/react';
+import { setAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import userEvent from '@testing-library/user-event';
 import { MovementRowKebab } from '../MovementRowKebab.jsx';
 
@@ -81,19 +72,8 @@ function renderKebab(movement, overrides = {}) {
   return { onReload };
 }
 
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
-
 describe('MovementRowKebab — Post action', () => {
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     toastSuccess.mockClear();
     toastError.mockClear();
     globalThis.fetch = vi.fn();
@@ -150,7 +130,7 @@ describe('MovementRowKebab — Post action', () => {
   it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
     // A session can be authenticated before the CSRF proof lands; the header must
     // be added defensively, never sent as an empty/undefined value.
-    mockAuth = { isAuthenticated: true, csrfToken: null };
+    setAuthMock({ isAuthenticated: true, csrfToken: null });
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ response: { data: [] } }),
@@ -244,7 +224,6 @@ describe('MovementRowKebab — Post action', () => {
 
 describe('MovementRowKebab — Unpost action', () => {
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     toastSuccess.mockClear();
     toastError.mockClear();
     globalThis.fetch = vi.fn();

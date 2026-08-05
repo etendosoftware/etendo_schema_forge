@@ -28,6 +28,7 @@
  *     npx vitest run src/hooks/__tests__/useDistinctValues.vitest.jsx
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
 import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useDistinctValues } from '../useDistinctValues.js';
@@ -48,16 +49,6 @@ const anonWrapper = ({ children }) => (
     {children}
   </AuthProvider>
 );
-
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
 
 describe('useDistinctValues', () => {
   beforeEach(() => {

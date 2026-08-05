@@ -1,4 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
+import { setAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
 // --- Global stubs for browser APIs not available in jsdom -----------------
 
@@ -28,19 +30,10 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
-// ETP-4576: the session is a server-side `__Host-go_session` cookie, so the
-// component holds no bearer token — the context only supplies `isAuthenticated`
-// and the `csrfToken` proof. Every request must carry `credentials: 'include'`
-// and NO Authorization header; the selector/record GETs must NOT carry the CSRF
-// proof, while the create POST and edit PUT must.
-//
-// The mock is a plain mutable object rather than a vi.fn() with
-// mockReturnValueOnce: React can invoke the hook more than once per render, and
-// a "once" override would decay to the default mid-render.
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf', logout: () => {} };
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
+
+setAuthMock({ isAuthenticated: true, csrfToken: 'test-csrf', logout: () => {} });
 
 // --- Import under test ----------------------------------------------------
 
@@ -64,21 +57,11 @@ function renderModal(overrides = {}) {
   return { ...render(<LocationEditorModal {...defaults} {...overrides} />), props: { ...defaults, ...overrides } };
 }
 
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of global.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
-
 // --- Tests ----------------------------------------------------------------
 
 describe('LocationEditorModal', () => {
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf', logout: () => {} };
+    setAuthMock({ isAuthenticated: true, csrfToken: 'test-csrf', logout: () => {} });
     global.fetch = vi.fn(() =>
       Promise.resolve({
         ok: true,
@@ -830,7 +813,7 @@ describe('LocationEditorModal', () => {
     it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
       // A session can be authenticated before the CSRF proof lands; the header must
       // be added defensively, never sent as an empty/undefined value.
-      mockAuth = { isAuthenticated: true, csrfToken: null, logout: () => {} };
+      setAuthMock({ isAuthenticated: true, csrfToken: null, logout: () => {} });
       stubFetch();
       renderModal();
       await selectSpainAndSave();

@@ -8,6 +8,8 @@
 // own dedicated test files.
 
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { setAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // react-router-dom: capture the navigate mock so we can assert the back button.
@@ -25,19 +27,8 @@ vi.mock('@/i18n', () => ({
   useLabel: () => (column) => column,
 }));
 
-// Auth (ETP-4576): the session is a server-side `__Host-go_session` cookie, so
-// there is no client-held token — the context only supplies `isAuthenticated`
-// and the `csrfToken` proof. Every request must carry `credentials: 'include'`
-// and NO Authorization header; the four mutations here (POST / PUT / PATCH /
-// DELETE) are unsafe methods, so each must also carry `X-Go-CSRF`.
-//
-// The mock is a plain mutable object rather than a vi.fn() with
-// mockReturnValueOnce: React can invoke the hook more than once per render, and
-// a "once" override would decay to the default mid-render.
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 // Page meta is a no-op side effect in tests.
 vi.mock('@/components/layout/PageMetaContext', () => ({
@@ -165,18 +156,7 @@ function rowCount() {
   return screen.queryAllByTestId(/^list-modal-row-/).length;
 }
 
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of global.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
-
 beforeEach(() => {
-  mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
   neoState.data = [];
   neoState.loading = false;
   neoState.reload = vi.fn();
@@ -381,7 +361,7 @@ describe('ListModalWindow — save method selection', () => {
   it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
     // A session can be authenticated before the CSRF proof lands; the header must
     // be added defensively, never sent as an empty/undefined value.
-    mockAuth = { isAuthenticated: true, csrfToken: null };
+    setAuthMock({ isAuthenticated: true, csrfToken: null });
     renderWindow();
     fireEvent.click(screen.getByTestId('list-modal-new'));
 

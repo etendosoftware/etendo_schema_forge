@@ -10,12 +10,12 @@
  * a "once" override would decay to the default mid-render.
  */
 import { renderHook, waitFor } from '@testing-library/react';
+import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
 
-let mockAuth = { isAuthenticated: true };
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+configureAuthMock({ isAuthenticated: true });
 
 import { useAccountMovements } from '../useAccountMovements.js';
 
@@ -29,7 +29,7 @@ describe('useAccountMovements', () => {
       value: { pathname: '/etendo/web/app' },
       writable: true,
     });
-    mockAuth = { isAuthenticated: true };
+    setAuthMock({ isAuthenticated: true });
     globalThis.fetch = vi.fn();
   });
 
@@ -133,7 +133,7 @@ describe('useAccountMovements', () => {
   });
 
   it('does not fetch when the user is not authenticated', async () => {
-    mockAuth = { isAuthenticated: false };
+    setAuthMock({ isAuthenticated: false });
     globalThis.fetch.mockResolvedValue(
       okResponse({ transactions: [], totals: {} }),
     );

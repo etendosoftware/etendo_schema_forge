@@ -11,27 +11,18 @@
  * a "once" override would decay to the default mid-render.
  */
 import { renderHook, waitFor, act } from '@testing-library/react';
+import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
-let mockAuth = { isAuthenticated: true };
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+configureAuthMock({ isAuthenticated: true });
 
 import { useBankStatementLines } from '../useBankStatementLines.js';
 
 function okResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
-}
-
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
 }
 
 function setPathname(pathname) {
@@ -44,7 +35,7 @@ function setPathname(pathname) {
 describe('useBankStatementLines', () => {
   beforeEach(() => {
     setPathname('/etendo/web/app');
-    mockAuth = { isAuthenticated: true };
+    setAuthMock({ isAuthenticated: true });
     globalThis.fetch = vi.fn();
   });
 
@@ -63,7 +54,7 @@ describe('useBankStatementLines', () => {
   });
 
   it('does not fetch when the user is not authenticated', async () => {
-    mockAuth = { isAuthenticated: false };
+    setAuthMock({ isAuthenticated: false });
     globalThis.fetch.mockResolvedValue(okResponse({ lines: [] }));
 
     const { result } = renderHook(() => useBankStatementLines('stmt-1'));

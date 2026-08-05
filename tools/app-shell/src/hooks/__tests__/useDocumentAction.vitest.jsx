@@ -18,12 +18,11 @@
  * a "once" override would decay to the default mid-render.
  */
 import { renderHook, act } from '@testing-library/react';
+import { setAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 import { useDocumentAction } from '../useDocumentAction';
 
@@ -35,16 +34,6 @@ const MISSING_PROOFS = [
   ['null', null],
   ['an empty string', ''],
 ];
-
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
 
 /** The init object of the most recent fetch call. */
 function lastInit() {
@@ -59,7 +48,6 @@ describe('useDocumentAction', () => {
   };
 
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     globalThis.fetch = vi.fn();
   });
 
@@ -146,7 +134,7 @@ describe('useDocumentAction', () => {
     it(`omits ${CSRF_HEADER} entirely when csrfToken is ${label}`, async () => {
       // A session can be authenticated before the CSRF proof lands. The header
       // must be absent, never present with an empty/undefined value.
-      mockAuth = { isAuthenticated: true, csrfToken: value };
+      setAuthMock({ isAuthenticated: true, csrfToken: value });
       globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
       const { result } = renderHook(() => useDocumentAction(baseOpts));
       await act(async () => { await result.current.execute('rec-1', 'CO'); });

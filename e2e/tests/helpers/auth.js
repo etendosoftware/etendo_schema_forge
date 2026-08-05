@@ -301,6 +301,22 @@ async function expectAnyEnvironmentOrDashboard(page) {
   ]);
 }
 
+/** The organization the fiscal specs sign in against. */
+export const E2E_ORG = { id: 'ORG_E2E', name: 'E2E Test Org' };
+
+/**
+ * Signs in with an explicit organization.
+ *
+ * ETP-4576 — the org is part of the restored cookie session, so it is passed to
+ * `login()` (which cross-references it into `environment.orgId` and the role's
+ * `orgList`). It used to be seeded into the `sf_auth_*` localStorage keys, which
+ * are now dead: AuthProvider reads from memory storage and purges those keys on
+ * mount, so a seeded org never reached `selectedOrg` at all.
+ */
+export async function loginWithOrg(page) {
+  await login(page, { org: E2E_ORG });
+}
+
 /**
  * Navigate to a specific window by slug.
  * Uses path-based routing (not hash-based).

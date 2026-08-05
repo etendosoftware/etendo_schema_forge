@@ -1,33 +1,15 @@
 import { renderHook, waitFor } from '@testing-library/react';
+import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { useQuickSalesData, PAYMENT_METHODS } from '../useQuickSalesData';
 
-/**
- * ETP-4576 — the session is a server-side `__Host-` cookie, so this hook gates
- * on `isAuthenticated` and sends no Authorization header.
- *
- * The auth mock is a plain mutable object rather than a vi.fn() with
- * mockReturnValueOnce: React can invoke the hook more than once per render, and
- * a "once" override would decay to the default mid-render.
- */
-let mockAuth = { isAuthenticated: true };
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
-
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
+configureAuthMock({ isAuthenticated: true });
 
 describe('useQuickSalesData', () => {
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true };
     globalThis.fetch = vi.fn();
   });
 
@@ -192,7 +174,7 @@ describe('useQuickSalesData', () => {
 
   it('sets error and issues no request when unauthenticated', async () => {
     mockCatalogResponses();
-    mockAuth = { isAuthenticated: false };
+    setAuthMock({ isAuthenticated: false });
 
     const { result } = renderHook(() => useQuickSalesData('http://localhost/api'));
 
@@ -207,7 +189,7 @@ describe('useQuickSalesData', () => {
 
   it('loads the catalog when authenticated even though the client holds no token', async () => {
     // The cookie-session shape: authenticated, no client-held token.
-    mockAuth = { isAuthenticated: true, token: null };
+    setAuthMock({ isAuthenticated: true, token: null });
     mockCatalogResponses();
 
     const { result } = renderHook(() => useQuickSalesData('http://localhost/api'));

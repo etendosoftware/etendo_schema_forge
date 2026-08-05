@@ -17,12 +17,11 @@
  * a "once" override would decay to the default mid-render.
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { setAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 vi.mock('../useNeoResource', () => ({
   getApiBase: () => '',
@@ -39,16 +38,6 @@ function okResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
 }
 
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
-
 describe('useBankConnectionActions — constants', () => {
   it('exposes the SPA callback path and connection storage key', () => {
     expect(BANK_CONNECTION_CALLBACK_PATH).toBe('/financial-account/bank-connection-callback');
@@ -58,7 +47,6 @@ describe('useBankConnectionActions — constants', () => {
 
 describe('useBankConnectionActions — hook', () => {
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     globalThis.fetch = vi.fn();
   });
 
@@ -331,7 +319,7 @@ describe('useBankConnectionActions — hook', () => {
   it('omits X-Go-CSRF entirely on a POST action when no CSRF proof is available', async () => {
     // A session can be authenticated before the CSRF proof lands; the header must
     // be added defensively, never sent as an empty/undefined value.
-    mockAuth = { isAuthenticated: true, csrfToken: null };
+    setAuthMock({ isAuthenticated: true, csrfToken: null });
     globalThis.fetch.mockResolvedValue(okResponse({}));
     const { result } = renderHook(() => useBankConnectionActions());
 

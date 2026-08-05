@@ -10,12 +10,11 @@
  * a "once" override would decay to the default mid-render.
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { setAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 import {
   useCreateMovement,
@@ -31,19 +30,8 @@ function setPathname(pathname) {
   });
 }
 
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
-
 describe('useCreateMovement', () => {
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     setPathname('/etendo/web/app');
     globalThis.fetch = vi.fn();
   });
@@ -90,7 +78,7 @@ describe('useCreateMovement', () => {
   it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
     // A session can be authenticated before the CSRF proof lands; the header must
     // be added defensively, never sent as an empty/undefined value.
-    mockAuth = { isAuthenticated: true, csrfToken: null };
+    setAuthMock({ isAuthenticated: true, csrfToken: null });
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: {} } }) });
 
     const { result } = renderHook(() => useCreateMovement());
@@ -191,7 +179,6 @@ describe('useCreateMovement', () => {
 // { id } to ?action=<verb>. Parametrized to keep the coverage symmetric.
 describe('movement lifecycle hooks', () => {
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     setPathname('/etendo/web/app');
     globalThis.fetch = vi.fn();
   });
@@ -238,7 +225,7 @@ describe('movement lifecycle hooks', () => {
       });
 
       it('omits X-Go-CSRF entirely when no CSRF proof is available', async () => {
-        mockAuth = { isAuthenticated: true, csrfToken: null };
+        setAuthMock({ isAuthenticated: true, csrfToken: null });
         globalThis.fetch.mockResolvedValue({
           ok: true,
           json: async () => ({ response: { data: {} } }),

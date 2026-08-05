@@ -9,7 +9,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { login, navigateTo } from '../helpers/auth.js';
+import { login, loginWithOrg, navigateTo } from '../helpers/auth.js';
 import { t } from '../helpers/i18n.js';
 
 // ── API response helpers ──────────────────────────────────────────────────────
@@ -92,16 +92,6 @@ const TAX_ID_KEY_OPTIONS = [
 
 // ── Setup helpers ─────────────────────────────────────────────────────────────
 
-// ETP-4576 — the org is part of the restored cookie session, so it is passed to
-// login() (which cross-references it into `environment.orgId` + the role's
-// `orgList`). It used to be seeded into the `sf_auth_*` localStorage keys, which
-// are now dead: AuthProvider reads from memory storage and purges those keys on
-// mount, so a seeded org never reached `selectedOrg` at all.
-const E2E_ORG = { id: 'ORG_E2E', name: 'E2E Test Org' };
-
-async function loginWithOrg(page) {
-  await login(page, { org: E2E_ORG });
-}
 
 async function installVfMocksWithRows(page, rows) {
   await page.route('**/sws/neo/verifactu-config/**', async route => {

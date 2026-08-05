@@ -13,6 +13,7 @@
  * vi.fn() with mockReturnValueOnce, which would decay mid-render.
  */
 import { render, screen, within, act, waitFor } from '@testing-library/react';
+import { setAuthMock } from '@/test/authContextMock.js';
 import userEvent from '@testing-library/user-event';
 
 // i18n stub — return the key so we can assert on it.
@@ -20,11 +21,8 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 // useDocumentAction stub — exposes a controllable execute() + loading flag, and
 // records the options object the component hands it so we can assert the shape
@@ -86,7 +84,7 @@ describe('RowQuickActions', () => {
     docActionExecuteMock.mockClear();
     docActionOptions.length = 0;
     docActionLoadingFlag = false;
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+    setAuthMock({ isAuthenticated: true, csrfToken: 'test-csrf' });
   });
 
   it('renders Edit and Clone buttons by default (no menu, no email)', () => {

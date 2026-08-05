@@ -1,20 +1,9 @@
 // --- Mocks (before imports) ---
 
-/**
- * ETP-4576 — the session is a server-side `__Host-` cookie, so the provider gates
- * on `isAuthenticated` (never a client-held `token`) and sends no Authorization
- * header. Its server sync is a PUT — an unsafe method — so it must carry the
- * session-bound `X-Go-CSRF` proof or the backend answers 403.
- *
- * The auth mock is a plain mutable object rather than a vi.fn() with
- * mockReturnValueOnce: React can invoke the hook more than once per render, and
- * a "once" override would decay to the default mid-render.
- */
-let mockAuth = { username: 'testuser', isAuthenticated: true, csrfToken: 'csrf-abc' };
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+configureAuthMock({ username: 'testuser', isAuthenticated: true, csrfToken: 'csrf-abc' });
 
 // Mirrors the post-ETP-4576 core signature: buildHeaders() takes no argument and
 // never emits an Authorization header.
@@ -26,22 +15,14 @@ vi.mock('@/auth/api.js', () => ({
 // --- Imports ---
 
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { FavoritesProvider, useFavorites } from '../FavoritesContext.jsx';
 
 // --- Helpers ---
 
 function wrapper({ children }) {
   return <FavoritesProvider>{children}</FavoritesProvider>;
-}
-
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
 }
 
 function putCalls() {
@@ -52,7 +33,6 @@ function putCalls() {
 
 describe('FavoritesContext', () => {
   beforeEach(() => {
-    mockAuth = { username: 'testuser', isAuthenticated: true, csrfToken: 'csrf-abc' };
     localStorage.clear();
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -211,7 +191,7 @@ describe('FavoritesContext', () => {
 
   describe('cookie session (ETP-4576)', () => {
     it('does not hit the server on mount when unauthenticated', async () => {
-      mockAuth = { username: 'testuser', isAuthenticated: false, csrfToken: null };
+      setAuthMock({ username: 'testuser', isAuthenticated: false, csrfToken: null });
 
       renderHook(() => useFavorites(), { wrapper });
 
@@ -220,7 +200,7 @@ describe('FavoritesContext', () => {
     });
 
     it('does not sync to the server when unauthenticated', async () => {
-      mockAuth = { username: 'testuser', isAuthenticated: false, csrfToken: null };
+      setAuthMock({ username: 'testuser', isAuthenticated: false, csrfToken: null });
       const { result } = renderHook(() => useFavorites(), { wrapper });
 
       act(() => {
@@ -233,12 +213,12 @@ describe('FavoritesContext', () => {
     });
 
     it('fetches on mount when authenticated even though the client holds no token', async () => {
-      mockAuth = {
+      setAuthMock({
         username: 'testuser',
         isAuthenticated: true,
         csrfToken: 'csrf-abc',
         token: null,
-      };
+      });
       globalThis.fetch.mockResolvedValueOnce({
         ok: true,
         json: async () => [{ name: 'remote-fav', label: 'Remote Fav' }],
@@ -265,7 +245,7 @@ describe('FavoritesContext', () => {
     it('omits X-Go-CSRF (without throwing) when no CSRF proof is available', async () => {
       // A session can be authenticated before the CSRF proof lands; the header
       // must be added defensively, never read off a null.
-      mockAuth = { username: 'testuser', isAuthenticated: true, csrfToken: null };
+      setAuthMock({ username: 'testuser', isAuthenticated: true, csrfToken: null });
       const { result } = renderHook(() => useFavorites(), { wrapper });
 
       act(() => {

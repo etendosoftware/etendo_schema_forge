@@ -1,4 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react';
+import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { useDashboardData } from '../useDashboardData';
 
 // Mock external dependencies
@@ -10,22 +12,10 @@ vi.mock('@generated/dashboard/generated/config', () => ({
   actions: [{ id: 'a1', label: 'Action 1' }],
 }));
 
-/**
- * ETP-4576 — the session is a server-side `__Host-` cookie, so the hook gates on
- * `isAuthenticated` and sends no Authorization header. This gate is the one that
- * failed SILENTLY: with a cookie session `token` is always null, so the hook
- * short-circuited to buildEmptyFallback() and the dashboard rendered every
- * widget empty with no error at all.
- *
- * The auth mock is a plain mutable object rather than a vi.fn() with
- * mockReturnValueOnce: React can invoke the hook more than once per render, and
- * a "once" override would decay to the default mid-render.
- */
-let mockAuth = { isAuthenticated: true };
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
-vi.mock('@/auth/AuthContext', () => ({
-  useAuth: () => mockAuth,
-}));
+configureAuthMock({ isAuthenticated: true });
 
 vi.mock('@/lib/dashboardNavigation.js', () => ({
   createDashboardNavigation: (opts) => ({ ...opts }),
@@ -35,19 +25,8 @@ vi.mock('@/components/dashboard/DashboardDateRangeContext', () => ({
   useDashboardDateRange: () => ({ range: 'month' }),
 }));
 
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
-
 describe('useDashboardData', () => {
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true };
     // Mock window.location for getApiBase()
     Object.defineProperty(window, 'location', {
       value: { pathname: '/etendo/web/app' },
@@ -219,7 +198,7 @@ describe('useDashboardData', () => {
   });
 
   it('returns the empty fallback and issues no request when unauthenticated', async () => {
-    mockAuth = { isAuthenticated: false };
+    setAuthMock({ isAuthenticated: false });
     mockAllEndpointsOk();
 
     const { result } = renderHook(() => useDashboardData());
@@ -237,7 +216,7 @@ describe('useDashboardData', () => {
   it('loads every widget when authenticated even though the client holds no token', async () => {
     // The cookie-session shape: authenticated, no client-held token. This is the
     // regression: gating on `token` made the dashboard render empty in silence.
-    mockAuth = { isAuthenticated: true, token: null };
+    setAuthMock({ isAuthenticated: true, token: null });
     mockAllEndpointsOk();
 
     const { result } = renderHook(() => useDashboardData());

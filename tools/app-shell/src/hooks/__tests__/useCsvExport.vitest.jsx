@@ -10,11 +10,8 @@
  */
 import { renderHook } from '@testing-library/react';
 
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 import { useCsvExport } from '../useCsvExport';
 
@@ -24,7 +21,6 @@ describe('useCsvExport', () => {
   let lastAnchor;
 
   beforeEach(() => {
-    mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
     fetchMock = vi.fn(() =>
       Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(['csv'])) }),
     );

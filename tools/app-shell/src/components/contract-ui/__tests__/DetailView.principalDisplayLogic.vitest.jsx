@@ -24,19 +24,8 @@ const displayLogicState = vi.hoisted(() => ({
   current: { readOnly: {}, visibility: {} },
 }));
 
-// ETP-4576 — DetailView reads the CSRF proof from the auth context, so mounting it
-// requires that context. The mock is a plain mutable object rather than a vi.fn()
-// with mockReturnValueOnce: React can invoke the hook more than once per render and
-// a "once" override would decay to the default mid-render.
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
-
-beforeEach(() => {
-  mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-});
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),

@@ -13,11 +13,10 @@
  * a "once" override would decay to the default mid-render.
  */
 
-let mockAuth = { isAuthenticated: true, csrfToken: 'csrf-abc' };
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+configureAuthMock({ isAuthenticated: true, csrfToken: 'csrf-abc' });
 
 // Mirrors the post-ETP-4576 core signature: buildHeaders() takes no argument and
 // never emits an Authorization header.
@@ -27,24 +26,15 @@ vi.mock('@/auth/api.js', () => ({
 }));
 
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { setAuthMock, configureAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 import { useWindowFilterPresets } from '../useWindowFilterPresets.js';
-
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
 
 function callByMethod(method) {
   return globalThis.fetch.mock.calls.find((c) => c[1]?.method === method);
 }
 
 beforeEach(() => {
-  mockAuth = { isAuthenticated: true, csrfToken: 'csrf-abc' };
   globalThis.fetch = vi.fn();
 });
 
@@ -70,7 +60,7 @@ describe('useWindowFilterPresets', () => {
   });
 
   it('does not fetch when the user is not authenticated', async () => {
-    mockAuth = { isAuthenticated: false, csrfToken: null };
+    setAuthMock({ isAuthenticated: false, csrfToken: null });
     const { result } = renderHook(() => useWindowFilterPresets('w'));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -78,7 +68,7 @@ describe('useWindowFilterPresets', () => {
 
   it('loads presets when authenticated even though the client holds no token', async () => {
     // The cookie-session shape: authenticated, no client-held token.
-    mockAuth = { isAuthenticated: true, csrfToken: 'csrf-abc', token: null };
+    setAuthMock({ isAuthenticated: true, csrfToken: 'csrf-abc', token: null });
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ A: { x: 1 } }) });
 
     const { result } = renderHook(() => useWindowFilterPresets('w'));
@@ -131,7 +121,7 @@ describe('useWindowFilterPresets', () => {
   it('omits X-Go-CSRF (without throwing) when no CSRF proof is available', async () => {
     // A session can be authenticated before the CSRF proof lands; the header must
     // be added defensively, never read off a null.
-    mockAuth = { isAuthenticated: true, csrfToken: null };
+    setAuthMock({ isAuthenticated: true, csrfToken: null });
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
     const { result } = renderHook(() => useWindowFilterPresets('w'));
     await waitFor(() => expect(result.current.loading).toBe(false));

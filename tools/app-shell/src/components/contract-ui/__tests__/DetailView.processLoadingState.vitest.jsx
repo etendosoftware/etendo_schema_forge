@@ -74,23 +74,9 @@ vi.mock('@/hooks/useLineGrossAmount', () => ({
   useLineGrossAmount: () => ({ computeLineGrossAmount: vi.fn(), resolveTaxFactor: () => 1, prepareLineForPost: (l) => l }),
   ORDER_LINE_CONFIG: { qtyField: 'orderedQuantity', priceField: 'unitPrice', totalField: 'lineNetAmount' },
 }));
-// ETP-4576 — the session is a server-side `__Host-go_session` cookie, and
-// DetailView now reads the CSRF proof from the auth context. Rendering it
-// without a provider would throw 'useAuth must be used within AuthProvider'.
-// Mocked rather than wrapped in a real AuthProvider so these stay unit tests.
-//
-// A plain mutable object, not a vi.fn() with mockReturnValueOnce: React can
-// invoke the hook more than once per render and a "once" override would decay to
-// the default mid-render.
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
-
-beforeEach(() => {
-  mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-});
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 vi.mock('@/hooks/useDocumentAction', () => ({ useDocumentAction: () => ({ executeAction: vi.fn(), loading: false }) }));
 vi.mock('@/hooks/useNeoAction', () => ({ useNeoAction: () => ({ execute: vi.fn(), loading: false }) }));

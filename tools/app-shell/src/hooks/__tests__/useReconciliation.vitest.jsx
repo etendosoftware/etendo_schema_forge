@@ -13,12 +13,11 @@
  * a "once" override would decay to the default mid-render.
  */
 import { renderHook, waitFor, act } from '@testing-library/react';
+import { setAuthMock } from '@/test/authContextMock.js';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
-let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
-
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => mockAuth,
-}));
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
 
 import {
   usePendingStatementLines,
@@ -40,16 +39,6 @@ function postResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
 }
 
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
-}
-
 function setPathname(pathname) {
   Object.defineProperty(window, 'location', {
     value: { pathname },
@@ -59,7 +48,7 @@ function setPathname(pathname) {
 
 beforeEach(() => {
   setPathname('/etendo/web/app');
-  mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf' };
+  setAuthMock({ isAuthenticated: true, csrfToken: 'test-csrf' });
   globalThis.fetch = vi.fn();
 });
 
@@ -81,7 +70,7 @@ describe('usePendingStatementLines (GET)', () => {
   });
 
   it('stays idle (no fetch) when the user is not authenticated', async () => {
-    mockAuth = { isAuthenticated: false, csrfToken: null };
+    setAuthMock({ isAuthenticated: false, csrfToken: null });
     globalThis.fetch.mockResolvedValue(getResponse({ lines: [] }));
 
     const { result } = renderHook(() => usePendingStatementLines('acc-1'));
@@ -313,7 +302,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
   });
 
   it('omits X-Go-CSRF (without throwing) when no CSRF proof is available', async () => {
-    mockAuth = { isAuthenticated: true, csrfToken: null };
+    setAuthMock({ isAuthenticated: true, csrfToken: null });
     globalThis.fetch.mockResolvedValue(postResponse({ reconciledId: 'rec-1' }));
 
     const { result } = renderHook(() => useReconcileGroup());

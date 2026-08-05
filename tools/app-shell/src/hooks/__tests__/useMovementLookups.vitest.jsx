@@ -1,4 +1,5 @@
 import { renderHook, waitFor } from '@testing-library/react';
+import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
 /**
  * ETP-4576 — the session is a server-side `__Host-` cookie, so every hook in
@@ -35,16 +36,6 @@ const DEBOUNCE_WAIT = 4000;
 
 function okResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
-}
-
-/** Asserts no request carried a bearer token — the point of ETP-4576. */
-function expectNoAuthorizationHeader() {
-  for (const [, init] of globalThis.fetch.mock.calls) {
-    const headers = init?.headers ?? {};
-    const keys = Object.keys(headers).map((k) => k.toLowerCase());
-    expect(keys).not.toContain('authorization');
-    expect(JSON.stringify(headers)).not.toContain('Bearer');
-  }
 }
 
 describe('useMovementLookups — useBPartnerLookup', () => {
