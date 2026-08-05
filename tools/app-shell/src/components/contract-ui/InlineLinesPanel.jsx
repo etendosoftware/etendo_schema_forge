@@ -565,7 +565,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
             // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
             // display text; resolve through ui() like DistinctEnumPicker/ListFilterBar do,
             // or this shows the raw internal key instead of a translated label.
-            <SelectItem key={v} value={v} data-testid="SelectItem__3b7ec2">{ui(label) ?? label}</SelectItem>
+            (<SelectItem key={v} value={v} data-testid="SelectItem__3b7ec2">{ui(label) ?? label}</SelectItem>)
           ))}
         </SelectContent>
       </Select>

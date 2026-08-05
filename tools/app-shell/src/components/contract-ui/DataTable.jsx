@@ -526,7 +526,7 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
               // ETP-4685 — each option carries a per-locale `labels` map (same shape
               // the form view already resolves) alongside the raw AD `label`; prefer
               // it or this always shows the raw English name regardless of locale.
-              <SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__eb5261">{opt.labels?.[locale] ?? opt.label}</SelectItem>
+              (<SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__eb5261">{opt.labels?.[locale] ?? opt.label}</SelectItem>)
             ))}
           </SelectContent>
         </Select>
