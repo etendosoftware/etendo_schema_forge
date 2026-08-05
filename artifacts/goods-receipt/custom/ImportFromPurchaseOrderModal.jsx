@@ -47,20 +47,30 @@ async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentReceiptId
 }
 
 const fetchDocuments = async ({ base, headers, bpId, invoiceId: receiptId }) => {
-  const [ordersRes, draftInfo] = await Promise.all([
+  const [ordersRes, draftInfo, headerRes] = await Promise.all([
     fetch(`${base}/purchase-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
     fetchDraftInfoByOrderLine({ base, headers, bpId, currentReceiptId: receiptId }),
+    fetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`, { headers }),
   ]);
+
+  let receiptCurrency = null;
+  if (headerRes.ok) {
+    receiptCurrency = (await headerRes.json())?.response?.data?.[0]?.etgoCurrency || null;
+  }
+
   let documents = [];
+  let excludedByCurrency = false;
   if (ordersRes.ok) {
     const all = (await ordersRes.json())?.response?.data || [];
-    documents = all.filter(o =>
+    const candidates = all.filter(o =>
       o.documentStatus === 'CO'
       && o.businessPartner === bpId
       && Number(o.deliveryStatusPurchase ?? 0) < 100
     );
+    documents = receiptCurrency ? candidates.filter(o => o.currency === receiptCurrency) : candidates;
+    excludedByCurrency = !!receiptCurrency && documents.length === 0 && candidates.length > 0;
   }
-  return { documents, sharedContext: { draftInfo } };
+  return { documents, sharedContext: { draftInfo }, excludedByCurrency };
 };
 
 const fetchLines = async ({ base, headers, docId, sharedContext }) => {
@@ -126,6 +136,7 @@ export default function ImportFromPurchaseOrderModal(props) {
       searchPlaceholderKey="searchPurchaseOrder"
       emptyMessageKey="noCompletedPurchaseOrdersWithPendingQuantitiesForThisVendor"
       noSearchResultsKey="noOrdersMatchYourSearch"
+      noCurrencyMatchMessageKey="noPurchaseOrdersMatchReceiptCurrency"
       successMessageKey="linesImportedFromPurchaseOrder"
       showPriceColumns={false}
       fetchDocuments={fetchDocuments}
