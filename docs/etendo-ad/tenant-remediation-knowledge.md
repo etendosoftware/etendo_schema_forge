@@ -176,6 +176,48 @@
   whole point of this fix is to actually repair legacy tenants; a rolled-back transaction alone
   would not have proven the runner's ledger-write path end-to-end.
 
+## ETP-4743 — QA rejection cycle 1 (Sentinel): @check/@apply join asymmetry (2026-08-05)
+
+- **2026-08-05 — A "theoretical, negligible-risk" REVIEW note became a proven, live bug in QA —
+  never downgrade an asymmetry between `@check` and `@apply` without actually querying for it.**
+  Alex (REVIEW) flagged that R22's `@check` financial-account branch didn't join
+  `c_acctschema_default` while `@apply`'s INSERT did, but called it theoretical/negligible. Sentinel
+  (QA) ran the actual join against the live DB and found 24 of F&B International Group's 26
+  `c_acctschema` rows have NO `c_acctschema_default` row — so `@check` was counting 343
+  "needs fix" pairs for that tenant while `@apply`'s `INNER JOIN c_acctschema_default` could only
+  ever insert 7 of them. The other 336 pairs would show `APPLIED (rows_affected≈7)` on a real run
+  (looking like full success) yet `@check` would keep matching >0 rows forever on every future
+  run — a SILENT, NON-CONVERGENT fix (never reaches `SKIPPED_NOT_NEEDED`), the worst kind of
+  idempotency bug because it looks like it worked. **Apply generally:** any time `@check` and
+  `@apply` don't join the exact same tables, actually query the live DB for a case where the
+  extra/missing join changes the result set (don't reason from the schema alone) before deciding
+  the asymmetry is safe to leave — "@check must be able to deliver at least as much as @apply
+  claims, and @apply must be able to close everything @check flags" is the correct symmetry
+  invariant, and it is cheap to verify with one query per branch.
+- **2026-08-05 — Fix: add the missing `JOIN c_acctschema_default d ON d.c_acctschema_id =
+  s.c_acctschema_id` to `@check`'s financial-account branch**, mirroring the branch's own `@apply`
+  INSERT and the warehouse branch (which was already symmetric in both `@check` and `@apply`).
+  Verified: (a) a temporary revert of just this join reproduces a test failure in the new
+  regression tests (proves the tests actually catch the regression, not just pass trivially); (b)
+  post-fix, a direct SQL count against F&B International Group confirms exactly 7
+  genuinely-fixable financial-account pairs (2 of 26 schemas have a `c_acctschema_default` row);
+  (c) `--dry-run` only against F&B International Group (per QA's explicit instruction — no writes
+  to that tenant, to keep its untouched state available for any further investigation of the new
+  A2d gap); (d) re-ran the already-applied `acreedortest` fix — still `SKIPPED_NOT_NEEDED`, so the
+  join addition caused no regression on tenants where every schema already has a default row.
+- **2026-08-05 — New prerequisite gap discovered as a byproduct of the QA fix, NOT fixed, filed as
+  A2d.** F&B International Group's 24 defaultless schemas are a real, previously-undocumented gap
+  — any fix keyed on `c_acctschema_default` (A2, A2c, and now this one) silently cannot reach them.
+  Root cause not investigated (candidates: bulk/test-data creation path that skipped the
+  accounting-setup wiring; or these schemas were never meant to post at all — F&B is a QA/demo
+  tenant with an unusually high schema count, 26 vs. 1-2 for every other tenant on this DB).
+  **Apply generally:** when a QA/regression investigation surfaces a genuine NEW gap that is
+  upstream of / a prerequisite for the ticket's own fix, the correct move is to (1) fix the ticket's
+  own bug so it degrades safely (doesn't over-claim what it can deliver), (2) document the new gap
+  with its own ID (here A2d) so it doesn't silently disappear, and (3) explicitly NOT try to fix it
+  in the same PR unless it's trivial — scope creep here would have meant investigating why 24
+  schemas on a QA tenant have no default row, a genuinely separate research task.
+
 ## c_elementvalue code structure (GOClient chart of accounts)
 
 - **2026-06-26 — Numeric codes are strictly hierarchical and 3/4/5 digits:** `issummary='Y'` rows carry 3-digit (584 rows) and 4-digit (1140 rows) group codes; `issummary='N'` rows carry 5-digit posting codes (1312 rows). Non-numeric codes (1088 rows: section labels like `A`, `PYG`, `A.B.II.1`, `P.G.D`) also exist in both element trees and must never be padded.

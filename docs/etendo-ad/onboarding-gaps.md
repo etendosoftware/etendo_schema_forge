@@ -14,6 +14,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A4 | Accounting | `A_Amortization` table (`AD_Table_id 800060`) inactive on `c_acctschema_table` — amortization documents cannot post | Onboarding sampledata XML (`C_ACCTSCHEMA_TABLE.xml`) — dataset-only, no new service | ETP-4452 |
 | A2b | Accounting | Posting a Goods Receipt fails with generic "Account could not be found." — `C_BP_Group_Acct.NotInvoicedReceipts_Acct` stuck NULL on one stale pre-existing row (GOClient "Cliente" group) | Corrective-only data-fix (`R17`) — CONFIRMED no preventive gap: current onboarding code already wires this column correctly for every group created today | ETP-4706 |
 | A2c | Accounting | `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely for already-onboarded tenants — both source tables are bulk-imported with triggers disabled, so their native `_trg` triggers never provisioned the posting-account rows | Preventive already shipped (ETP-4565, `OnboardingAccountingWiringService`); corrective data-fix (`R22`) backfills legacy tenants; CUT bumped to close the loop | ETP-4743 |
+| A2d | Accounting | 24 of F&B International Group's 26 `c_acctschema` rows have NO `c_acctschema_default` row at all — a prerequisite gap that blocks R22 (and any other `*_acct` fix keyed on `c_acctschema_default`) from ever reaching those schemas | Not yet fixed — discovered as a side-effect of QA'ing R22; flagged for follow-up, not in scope for ETP-4743 | — (follow-up, found during ETP-4743 QA) |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
@@ -411,7 +412,9 @@ preventive fix** (`FIN_FINANCIAL_ACCOUNT_ACCT_SQL` / `WAREHOUSE_ACCT_SQL`, alrea
 live onboarding chain). ETP-4565 deliberately did NOT bump `ONBOARDING_PROVISIONED_THROUGH` at the
 time, since the corrective `.sql` twin did not exist yet.
 
-**Live-DB sweep (2026-08-05), pairs of (entity × schema) missing their `*_Acct` row:**
+**Live-DB sweep (2026-08-05), pairs of (entity × schema) missing their `*_Acct` row, GENUINELY
+FIXABLE (i.e. the schema also has a `c_acctschema_default` row — see the QA finding below for why
+this qualifier matters):**
 
 | Client | FA missing pairs | WH missing pairs |
 |---|---|---|
@@ -419,16 +422,15 @@ time, since the corrective `.sql` twin did not exist yet.
 | acreetest2 | 2 | 2 |
 | empresa | 3 | 2 |
 | Empresa E2E (×4) | 3 each | 2 each |
-| F&B International Group | 343 | 96 |
+| F&B International Group | 7 (of 14 financial accounts × 2 of its 26 schemas that have a `c_acctschema_default` row) | 96 |
 | GOClient | 0 (already correct) | 0 (already correct) |
 | QA Testing | 3 | 2 |
 | RolesPresa | 3 | 2 |
 | TaxesOrg | 2 | 2 |
 
-Every real tenant on the dev DB except GOClient itself has at least one missing pair — F&B
-International Group runs 26 accounting schemas, which is why its pair counts are much larger.
-GOClient's own rows were already wired at some point, so its `@check` naturally returns 0 rows —
-no special-casing needed.
+Every real tenant on the dev DB except GOClient itself has at least one missing pair. GOClient's
+own rows were already wired at some point, so its `@check` naturally returns 0 rows — no
+special-casing needed.
 
 **Both fronts closed (2026-08-05):**
 
@@ -437,6 +439,24 @@ no special-casing needed.
 | **Preventive** | Already shipped by ETP-4565 (`FIN_FINANCIAL_ACCOUNT_ACCT_SQL` / `WAREHOUSE_ACCT_SQL` in `OnboardingAccountingWiringService`, called from `provisionEntityPostingAccounts`). No new Java needed for ETP-4743. |
 | **Corrective** | `cli/src/data-fixes/sql/20260805T140000Z__R22-fin-account-warehouse-acct.sql` — two guarded `INSERT ... SELECT` statements (mirroring the two Java constants column-for-column), each joined against **every** `c_acctschema` row the tenant owns (a tenant may run more than one ledger; mirrors the same generalization `R7-tax-accounts` already applies). Live-validated on `acreedortest` (`D94AED60C3E0494AAFD44B8A05BB5CFC`): dry-run → `WOULD_APPLY` → real run → `APPLIED (4 rows)` → re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
 | **CUT bump** | `ONBOARDING_PROVISIONED_THROUGH` bumped from R20's `2026-08-03T18:00:00Z` to R22's `2026-08-05T14:00:00Z` in `OnboardingBaselineService.java` — this closes the loop ETP-4565 deliberately left open (preventive shipped, CUT not bumped, because the corrective twin didn't exist yet). |
+
+**QA fix (2026-08-05, Sentinel, rejection cycle 1 of ETP-4743, resolved same day):** the
+financial-account branch of `@check` was initially missing the `JOIN c_acctschema_default d ON
+d.c_acctschema_id = s.c_acctschema_id` that `@apply`'s own INSERT already had (an asymmetry Alex
+flagged as a non-blocking note in REVIEW, then Sentinel proved was live and reproducible). Without
+that join, `@check` counted ALL 343 (financial-account × schema) pairs on F&B International Group
+as "needing the fix", but `@apply`'s `INNER JOIN c_acctschema_default` could only ever insert the
+7 pairs whose schema actually HAS a `c_acctschema_default` row — the other 336 pairs belong to
+schemas with no default row at all (see gap **A2d** below) and can never be inserted by this fix.
+A real run would have written ledger status `APPLIED` (rows_affected≈7) — looking like success —
+while `@check` kept matching >0 rows forever (the 336 unreachable pairs), so the fix would never
+converge to `SKIPPED_NOT_NEEDED` on a re-run. Fixed by adding the missing join to `@check` so it
+now only counts pairs `@apply` can genuinely close; the warehouse branch never had this bug (it
+already joined `c_acctschema_default` symmetrically in both `@check` and `@apply`). Verified with
+a read-only `--dry-run` against F&B International Group (no writes) and a direct SQL count
+confirming exactly 7 genuinely-fixable financial-account pairs post-fix. Regression-guarded by two
+new tests in `cli/test/data-fixes-r22-fin-account-warehouse-acct.test.js` asserting `@check` and
+`@apply`'s financial-account branches join `c_acctschema_default` the same number of times.
 
 **Branch-ordering note:** at the time this shipped, an unmerged sibling branch
 (`feature/ETP-4720`) independently claims `R21` at `2026-08-05T12:00:00Z` for an unrelated
@@ -473,6 +493,34 @@ LIMIT 1;
 ```
 Full `@apply` (two `INSERT ... SELECT` statements) in the `.sql` file itself — see
 `docs/etendo-ad/onboarding-and-datafixes-map.md` §4 for the paired preventive/corrective summary.
+
+---
+
+### A2d — Accounting schemas with no `C_ACCTSCHEMA_DEFAULT` row at all (NOT YET FIXED, found 2026-08-05)
+
+**Symptom:** discovered as a side-effect of Sentinel's QA pass on R22 (A2c above) — 24 of F&B
+International Group's 26 `c_acctschema` rows (all `isactive='Y'`) have **zero** matching rows in
+`c_acctschema_default`. This isn't specific to R22: ANY fix or onboarding step that resolves a
+posting-account default via `c_acctschema_default` (A2, A2c, and R22's own financial-account
+branch) can never reach these 24 schemas — its `INNER JOIN c_acctschema_default` silently excludes
+them, so a naive `@check` that doesn't mirror the same join over-reports "needs fix" for pairs
+that can never actually be inserted (exactly the bug R22 shipped with in cycle 1, before the
+`@check` join was corrected to match `@apply`).
+
+**Root cause:** not yet investigated. Candidates (untested): (a) these 24 schemas were created via
+a path that never ran the equivalent of the A1/A2 accounting-setup wiring (e.g. a bulk/test-data
+script rather than the normal *Initial Organization Setup* flow); (b) a second-ledger/parallel-book
+pattern specific to this tenant's test data that was never meant to post at all. F&B International
+Group is a QA/demo tenant with an unusually high schema count (26, vs. 1-2 for every other tenant
+on this DB), so this may be an artifact of how that specific tenant's test data was built rather
+than a live-production onboarding gap — needs a real investigation before deciding whether this
+warrants a corrective fix, an onboarding-hardening step, or is simply out of scope (a test/demo
+tenant's non-posting schemas may not need `c_acctschema_default` at all).
+
+**Status:** **NOT FIXED.** Explicitly out of scope for ETP-4743 (which backfills `*_Acct` rows
+GIVEN a schema default exists, not schema-default completeness itself). Flagged here as a
+follow-up per the tenant-remediation workflow's "flag, don't silently skip" convention. See
+`docs/etendo-ad/tenant-remediation-knowledge.md`'s ETP-4743 section for the discovery details.
 
 ---
 

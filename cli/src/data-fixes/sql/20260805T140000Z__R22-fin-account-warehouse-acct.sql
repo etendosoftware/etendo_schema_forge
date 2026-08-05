@@ -36,11 +36,26 @@
 --
 -- Live-DB evidence (2026-08-05): every real tenant on this DB except GOClient itself has at
 -- least one (financial account x schema) or (warehouse x schema) pair missing its *_Acct
--- row -- e.g. acreedortest 2/2 financial accounts x 2/2 warehouses missing, F&B International
--- Group (14 financial accounts x 26 schemas) missing 343 financial-account-acct pairs and 96
--- warehouse-acct pairs. GOClient itself already has 0 missing pairs (its rows were wired
--- separately at some point), so its @check naturally returns 0 rows -- no special-casing
--- needed, the guard just self-excludes an already-correct tenant.
+-- row -- e.g. acreedortest 2/2 financial accounts x 2/2 warehouses missing. GOClient itself
+-- already has 0 missing pairs (its rows were wired separately at some point), so its @check
+-- naturally returns 0 rows -- no special-casing needed, the guard just self-excludes an
+-- already-correct tenant.
+--
+-- PREREQUISITE GAP DISCOVERED DURING QA (2026-08-05, Sentinel): F&B International Group
+-- (ad_client_id 23C59575B9CF467C9620760EB255B389) owns 26 c_acctschema rows, but 24 of them
+-- have NO c_acctschema_default row at all (all isactive='Y'). Before this fix's @check was
+-- corrected below to join c_acctschema_default (matching @apply's own INNER JOIN), it counted
+-- ALL 343 (financial-account x schema) pairs across all 26 schemas as "needing the fix", but
+-- @apply's INNER JOIN could only ever insert the 7 pairs whose schema actually has a
+-- c_acctschema_default row -- the other 336 pairs are blocked by a DIFFERENT, upstream gap
+-- (schemas provisioned without their C_ACCTSCHEMA_DEFAULT row) that this fix does not attempt
+-- to close. @check now only counts genuinely-fixable pairs, so a real run converges to
+-- SKIPPED_NOT_NEEDED once those are applied, instead of perpetually re-matching the 336
+-- pairs it can never fix. The 336 blocked pairs remain a real, undocumented prerequisite gap
+-- for F&B International Group -- flagged in docs/etendo-ad/onboarding-gaps.md as a follow-up,
+-- out of scope for ETP-4743 (which is about the *_Acct backfill, not schema-default
+-- completeness; A3/A3b already cover schema-default population for the GOClient-family charts,
+-- but never swept every tenant's every schema).
 --
 -- Idempotency: NOT EXISTS keyed on the same UNIQUE constraints the tables themselves
 -- enforce (fin_finacc_acct_acctschema_un on (fin_financial_account_id, c_acctschema_id);
@@ -55,9 +70,20 @@
 -- Needs the fix when the tenant has at least one financial account or warehouse missing its
 -- per-schema *_Acct row on ANY of its accounting schemas. 0 rows => SKIPPED_NOT_NEEDED,
 -- @apply never runs.
+--
+-- The financial-account branch below joins c_acctschema_default the same way @apply's INSERT
+-- does (INNER JOIN, no IS NOT NULL guard needed -- unlike warehouse, no target column on
+-- fin_financial_account_acct is NOT NULL). This join is NOT optional bookkeeping: a schema
+-- with no c_acctschema_default row at all cannot be fixed by @apply (its INNER JOIN drops that
+-- schema's pairs silently), so @check must not count them as "needing the fix" either -- doing
+-- so would report a phantom gap that @apply can never close, making the fix falsely appear
+-- non-convergent (re-run always shows @check > 0 rows) instead of applying and reporting
+-- SKIPPED_NOT_NEEDED once every genuinely-fixable pair is done. See the header note below for
+-- the live prerequisite-gap counts this surfaced on this DB.
 SELECT 1
 FROM fin_financial_account f
 JOIN c_acctschema s ON s.ad_client_id = f.ad_client_id
+JOIN c_acctschema_default d ON d.c_acctschema_id = s.c_acctschema_id
 WHERE f.ad_client_id = :client_id
   AND NOT EXISTS (
     SELECT 1 FROM fin_financial_account_acct a

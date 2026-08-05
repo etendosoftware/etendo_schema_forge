@@ -169,3 +169,32 @@ describe('R22 data-fix — two-layer idempotency (mandatory framework rule)', ()
     assert.equal(insertCount, 2, 'one get_uuid() per INSERT statement (financial-account + warehouse)');
   });
 });
+
+describe('R22 data-fix — BUG-1 regression (Sentinel, cycle 1): @check must join c_acctschema_default on the financial-account branch, matching @apply', () => {
+  // Isolate the financial-account branch of @check (everything before the warehouse branch's
+  // UNION ALL) so a false match on the warehouse branch's own (already-correct) join can't hide
+  // a regression on the financial-account branch specifically.
+  const [finAccountCheckBranch] = normCheck.split(/UNION ALL/i);
+
+  it('the @check financial-account branch INNER JOINs c_acctschema_default, not just c_acctschema', () => {
+    assert.match(
+      finAccountCheckBranch,
+      /JOIN c_acctschema_default d ON d\.c_acctschema_id = s\.c_acctschema_id/i,
+      'without this join, @check counts (financial account x schema) pairs that @apply\'s own'
+      + ' INNER JOIN c_acctschema_default can never insert -- a schema with no'
+      + ' c_acctschema_default row would be reported as "needs fix" forever, non-convergent',
+    );
+  });
+
+  it('the @check and @apply financial-account branches join c_acctschema_default the same number of times (symmetry)', () => {
+    const checkJoins = (finAccountCheckBranch.match(/JOIN c_acctschema_default d ON d\.c_acctschema_id = s\.c_acctschema_id/gi) || []).length;
+    // @apply has ONE fin-account INSERT (the warehouse INSERT is a separate statement, not part
+    // of "apply" as parsed here — parseFix's @apply section concatenates both statements, so we
+    // only assert the financial-account INSERT's own join count via the INSERT INTO anchor).
+    const finAccountApplyBranch = normApply.split(/INSERT INTO m_warehouse_acct/i)[0];
+    const applyJoins = (finAccountApplyBranch.match(/JOIN c_acctschema_default d ON d\.c_acctschema_id = s\.c_acctschema_id/gi) || []).length;
+    assert.equal(checkJoins, 1, '@check financial-account branch must join c_acctschema_default exactly once');
+    assert.equal(applyJoins, 1, '@apply financial-account INSERT must join c_acctschema_default exactly once');
+    assert.equal(checkJoins, applyJoins, '@check and @apply must agree on whether c_acctschema_default is required');
+  });
+});
