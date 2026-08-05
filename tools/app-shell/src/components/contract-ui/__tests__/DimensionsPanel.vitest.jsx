@@ -51,6 +51,28 @@ const fields = [
   { key: 'project', column: 'M_Project_ID', label: 'Project' },
 ];
 
+// DimensionGrid renders SelectorInput with a real selectorUrl (built from
+// apiBaseUrl), and the mocked SelectContent above (unlike real Radix) mounts
+// unconditionally on every render, so SelectorInput's fetchPage(0) effect
+// fires in every test. Without this mock, that hits the real global fetch
+// against a non-existent host: the rejection is normally fast enough to
+// settle before jsdom teardown under plain `vitest run`, but coverage
+// instrumentation's overhead pushes it past teardown, producing an unhandled
+// rejection ("window is not defined" from the .catch()'s setFetching(false)
+// running against a torn-down environment). Mocking fetch to resolve
+// immediately — same pattern as SelectorInput.vitest.jsx — keeps it settling
+// within the initial act() flush, well before the test (and jsdom) end.
+beforeEach(() => {
+  globalThis.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ items: [] }),
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 function renderGrid(props = {}) {
   return render(
     <DimensionGrid
