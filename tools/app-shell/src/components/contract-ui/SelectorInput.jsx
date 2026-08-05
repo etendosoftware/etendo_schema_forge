@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 
 const SELECTOR_PAGE = 50;
 
@@ -34,7 +35,6 @@ export function SelectorInput({
   resolvedLabel,
   selectorUrl,
   selectorContext,
-  token,
   compact = false,
   triggerClassName,
   optionTranslator,
@@ -55,7 +55,7 @@ export function SelectorInput({
   const contextKey = JSON.stringify(selectorContext ?? {});
 
   const fetchPage = useCallback((offset) => {
-    if (!selectorUrl || !token || loadingRef.current || !hasMoreRef.current) return;
+    if (!selectorUrl || loadingRef.current || !hasMoreRef.current) return;
     loadingRef.current = true;
     setFetching(true);
     const url = buildUrlWithParams(selectorUrl, {
@@ -63,8 +63,13 @@ export function SelectorInput({
       limit: SELECTOR_PAGE,
       offset,
     });
+    // ETP-4576 — the `__Host-` session cookie is the credential, so no header
+    // carries one and the gate on a client-held token is gone: that gate is what
+    // silently emptied every selector once the token stopped existing. A GET
+    // needs no CSRF proof.
     fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: jsonHeaders(),
+      credentials: 'include',
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -83,7 +88,7 @@ export function SelectorInput({
         setFetching(false);
       })
       .catch(() => { loadingRef.current = false; setFetching(false); });
-  }, [selectorUrl, contextKey, token]);
+  }, [selectorUrl, contextKey]);
 
   // Invalidate cached options when the URL or the selector context changes.
   // We do NOT eager-fetch here — the identifier (`<field>$_identifier`) usually
@@ -95,7 +100,7 @@ export function SelectorInput({
     hasMoreRef.current = true;
     setHasMore(true);
     setServerOptions(null);
-  }, [selectorUrl, token, contextKey]);
+  }, [selectorUrl, contextKey]);
 
   // Callback ref: fires when SelectContent mounts (dropdown opens).
   // Triggers the first page load if we don't have server options yet, then attaches

@@ -11,7 +11,7 @@ vi.mock('sonner', () => ({
 }));
 
 describe('useCallout', () => {
-  const opts = { token: 'test-token', apiBaseUrl: 'http://localhost/api' };
+  const opts = { csrfToken: 'test-csrf', apiBaseUrl: 'http://localhost/api' };
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -74,8 +74,9 @@ describe('useCallout', () => {
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
-          Authorization: 'Bearer test-token',
+          'X-Go-CSRF': 'test-csrf',
         }),
+        credentials: 'include',
       }),
     );
   });
@@ -216,9 +217,18 @@ describe('useCallout', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not call fetch when token is missing', () => {
+  // ETP-4576 — regression guard. This used to assert the opposite: that a missing
+  // client-held token suppressed the request. Under the cookie session there is no
+  // token to hold, so that gate made every callout a no-op. The request must go
+  // out; only the CSRF header is conditional on having a proof.
+  it('still calls the endpoint with no CSRF proof, omitting the header', () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ updates: {}, combos: {}, messages: [] }),
+    });
+
     const { result } = renderHook(() =>
-      useCallout('header', { token: '', apiBaseUrl: 'http://localhost' })
+      useCallout('header', { csrfToken: '', apiBaseUrl: 'http://localhost' })
     );
 
     act(() => {
@@ -229,7 +239,11 @@ describe('useCallout', () => {
       vi.advanceTimersByTime(300);
     });
 
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(init.credentials).toBe('include');
+    expect(Object.keys(init.headers)).not.toContain('X-Go-CSRF');
+    expect(JSON.stringify(init.headers)).not.toContain('Bearer');
   });
 
   it('handles non-ok response without crashing', async () => {
@@ -331,7 +345,7 @@ describe('useCallout', () => {
 
   it('does not call fetch when entity is missing', () => {
     const { result } = renderHook(() =>
-      useCallout('', { token: 'tok', apiBaseUrl: 'http://localhost' })
+      useCallout('', { csrfToken: 'tok', apiBaseUrl: 'http://localhost' })
     );
 
     act(() => {
@@ -347,7 +361,7 @@ describe('useCallout', () => {
 
   it('does not call fetch when apiBaseUrl is missing', () => {
     const { result } = renderHook(() =>
-      useCallout('header', { token: 'tok', apiBaseUrl: '' })
+      useCallout('header', { csrfToken: 'tok', apiBaseUrl: '' })
     );
 
     act(() => {

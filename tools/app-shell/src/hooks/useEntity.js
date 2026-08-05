@@ -22,11 +22,13 @@ import { getNumericFieldError, numericFieldToastId } from '@/lib/numericValidati
 // importing this heavy hook module.
 export { isEmailField };
 
-function buildHeaders(token) {
+// ETP-4576 — the `__Host-` session cookie is the credential, so no header carries
+// one. Kept local rather than delegating to lib/sessionHeaders.js because these
+// requests also need `Accept-Language`, which is specific to this hook.
+function buildHeaders() {
     let locale = 'es_ES';
     try { locale = localStorage.getItem('schema-forge-locale') || 'es_ES'; } catch { /* SSR/test */ }
     return {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
         // Propagate the UI locale so backend AD_Message translations match the
         // language the user selected in the frontend.
@@ -296,6 +298,17 @@ function resolveSortKey(sortColumn, sampleRow) {
     const identifierKey = `${sortColumn}$_identifier`;
     if (identifierKey in sampleRow) return identifierKey;
     return sortColumn;
+}
+
+/**
+ * Headers for the unsafe methods this hook issues (save, delete, add-child,
+ * process actions). Same as the read headers plus the CSRF proof, which the
+ * backend requires on POST/PATCH/DELETE and ignores on GET.
+ */
+function buildMutationHeaders(csrfToken) {
+    const headers = buildHeaders();
+    if (csrfToken) headers['X-Go-CSRF'] = csrfToken;
+    return headers;
 }
 
 function deriveRecordId(record, entityName) {
@@ -699,7 +712,7 @@ export async function resolveSavedRecordAfterSave(saved, {
         return saved;
     }
     try {
-        const refetchRes = await fetch(`${apiBaseUrl}/${entity}/${saved.id}`, { headers });
+        const refetchRes = await fetch(`${apiBaseUrl}/${entity}/${saved.id}`, { headers, credentials: 'include' });
         const refetchData = refetchRes.ok ? await refetchRes.json() : null;
         return normalizeRecord(refetchData?.response?.data?.[0] ?? refetchData ?? saved, entity);
     } catch {
@@ -735,7 +748,7 @@ function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {
 }
 
 export function useEntity(entity, childEntity, {
-    token,
+    csrfToken,
     apiBaseUrl,
     childSortBy,
     baseFilter,
@@ -801,7 +814,8 @@ export function useEntity(entity, childEntity, {
         );
     }, [editing, selected]);
 
-    const headers = buildHeaders(token);
+    const headers = buildHeaders();
+    const mutationHeaders = buildMutationHeaders(csrfToken);
 
     const refresh = useCallback(() => {
         startRowRef.current = 0;
@@ -818,7 +832,7 @@ export function useEntity(entity, childEntity, {
 
         applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
 
-        fetch(`${apiBaseUrl}/${entity}?${queryParams.toString()}`, { headers })
+        fetch(`${apiBaseUrl}/${entity}?${queryParams.toString()}`, { headers, credentials: 'include' })
             .then(res => {
                 if (res.status === 401) {
                     logout();
@@ -842,7 +856,7 @@ export function useEntity(entity, childEntity, {
                 setHasMore(false);
                 setLoading(false);
             });
-    }, [apiBaseUrl, entity, token, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
+    }, [apiBaseUrl, entity, csrfToken, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
 
     const loadMore = useCallback(() => {
         if (!hasMore || loadingMore || loading) return;
@@ -859,7 +873,7 @@ export function useEntity(entity, childEntity, {
 
         applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
 
-        fetch(`${apiBaseUrl}/${entity}?${queryParams.toString()}`, { headers })
+        fetch(`${apiBaseUrl}/${entity}?${queryParams.toString()}`, { headers, credentials: 'include' })
             .then(res => {
                 if (res.status === 401) {
                     logout();
@@ -884,7 +898,7 @@ export function useEntity(entity, childEntity, {
                 setLoadingMore(false);
                 setHasMore(false);
             });
-    }, [apiBaseUrl, entity, token, sortColumn, sortDirection, hasMore, loadingMore, loading, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
+    }, [apiBaseUrl, entity, csrfToken, sortColumn, sortDirection, hasMore, loadingMore, loading, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
 
     // List fetch is a mount-time decision. Flipping skipListFetch after mount
     // (e.g. a detail view whose recordId goes 'new' → ':id') must NOT retroactively
@@ -915,7 +929,7 @@ export function useEntity(entity, childEntity, {
         // return-to-vendor-shipment.mocked.spec.js.
         if (!silent) setChildrenLoading(true);
         // NEO Headless uses ?parentId= to filter child entity records
-        fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${childSortBy ? `&_sortBy=${childSortBy}` : ''}`, { headers })
+        fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${childSortBy ? `&_sortBy=${childSortBy}` : ''}`, { headers, credentials: 'include' })
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
@@ -928,7 +942,7 @@ export function useEntity(entity, childEntity, {
             // at just because one background request failed transiently.
             .catch(() => { if (!silent) setChildren([]); })
             .finally(() => { if (!silent) setChildrenLoading(false); });
-    }, [apiBaseUrl, childEntity, token, childSortBy]);
+    }, [apiBaseUrl, childEntity, csrfToken, childSortBy]);
 
     // HandleDefaults: fetch backend-resolved defaults for a NEW child line under the
     // given parent and normalize them (dates, booleans, enum ints) exactly as
@@ -940,7 +954,7 @@ export function useEntity(entity, childEntity, {
             return {};
         }
         try {
-            const res = await fetch(`${apiBaseUrl}/${childEntity}/defaults?parentId=${parentId}`, { headers });
+            const res = await fetch(`${apiBaseUrl}/${childEntity}/defaults?parentId=${parentId}`, { headers, credentials: 'include' });
             if (!res.ok) throw new Error(`${res.status}`);
             const data = await res.json();
             // Copy the resolved defaults and drop the backend id (never seeded into
@@ -956,17 +970,17 @@ export function useEntity(entity, childEntity, {
             setChildDefaults({});
             return {};
         }
-        // NOTE: `headers` is intentionally omitted — buildHeaders(token) returns a
+        // NOTE: `headers` is intentionally omitted — buildHeaders() returns a
         // fresh object every render, so depending on it would make this callback
         // unstable and re-fire DetailView's fetch effect every render (infinite
-        // loop / network never idles). token covers the only header that changes.
+        // loop / network never idles).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [apiBaseUrl, childEntity, token]);
+    }, [apiBaseUrl, childEntity, csrfToken]);
 
     const fetchById = useCallback((id) => {
         if (!id) return;
         setLoading(true);
-        fetch(`${apiBaseUrl}/${entity}/${id}`, { headers })
+        fetch(`${apiBaseUrl}/${entity}/${id}`, { headers, credentials: 'include' })
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
@@ -979,7 +993,7 @@ export function useEntity(entity, childEntity, {
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, [apiBaseUrl, entity, token, fetchChildren]);
+    }, [apiBaseUrl, entity, csrfToken, fetchChildren]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
@@ -987,7 +1001,7 @@ export function useEntity(entity, childEntity, {
     // Only server-computed fields (totals, sequence numbers) get updated in editing.
     const refreshHeaderTotals = useCallback((id) => {
         if (!id) return;
-        fetch(`${apiBaseUrl}/${entity}/${id}`, { headers })
+        fetch(`${apiBaseUrl}/${entity}/${id}`, { headers, credentials: 'include' })
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
@@ -1056,7 +1070,7 @@ export function useEntity(entity, childEntity, {
         setSelected(null);
         setEditing({}); // Start with empty so UI is responsive
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers });
+            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers, credentials: 'include' });
             if (res.ok) {
                 const data = await res.json();
                 if (data.defaults) {
@@ -1082,7 +1096,7 @@ export function useEntity(entity, childEntity, {
         } catch {
             // Defaults are best-effort; proceed with empty form if endpoint fails
         }
-    }, [apiBaseUrl, entity, token, headers]);
+    }, [apiBaseUrl, entity, csrfToken, headers]);
 
     const handleChange = useCallback((field, value) => {
         userChangedKeysRef.current.add(field);
@@ -1183,7 +1197,7 @@ export function useEntity(entity, childEntity, {
         // NEO Headless expects flat field values — NeoServlet handles wrapping for JsonDataService
         const body = JSON.stringify(payload);
         try {
-            const res = await fetch(url, { method, headers, body });
+            const res = await fetch(url, { method, headers: mutationHeaders, credentials: 'include', body });
             if (res.ok) {
                 const data = await res.json();
                 const saved = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
@@ -1222,7 +1236,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setIsSaving(false);
         }
-    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, token, ui, fetchChildren]);
+    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, csrfToken, ui, fetchChildren]);
 
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
@@ -1230,7 +1244,7 @@ export function useEntity(entity, childEntity, {
     const handleDelete = useCallback(async () => {
         if (!selected?.id) return false;
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/${selected.id}`, { method: 'DELETE', headers });
+            const res = await fetch(`${apiBaseUrl}/${entity}/${selected.id}`, { method: 'DELETE', headers: mutationHeaders, credentials: 'include' });
             if (res.ok) {
                 setSelected(null);
                 setEditing(null);
@@ -1247,10 +1261,10 @@ export function useEntity(entity, childEntity, {
             toast.error(err?.message || 'Network error');
             return false;
         }
-    }, [selected, apiBaseUrl, entity, token, refresh, ui]);
+    }, [selected, apiBaseUrl, entity, csrfToken, refresh, ui]);
 
     const handleAddChild = useCallback(async (childData) => {
-        if (!childEntity || !apiBaseUrl || !token || !selected?.id) return;
+        if (!childEntity || !apiBaseUrl || !selected?.id) return;
         try {
             const body = {};
             // Include all fields from childData, skipping internal/companion keys.
@@ -1271,7 +1285,8 @@ export function useEntity(entity, childEntity, {
             body.parentId = selected.id;
             const res = await fetch(`${apiBaseUrl}/${childEntity}`, {
                 method: 'POST',
-                headers,
+                headers: mutationHeaders,
+                credentials: 'include',
                 body: JSON.stringify(body),
             });
             if (!res.ok) {
@@ -1294,7 +1309,7 @@ export function useEntity(entity, childEntity, {
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren, ui]);
+    }, [childEntity, apiBaseUrl, csrfToken, selected, headers, fetchChildren, ui]);
 
     const handleUpdateChild = useCallback((childId, fieldOrObject, value) => {
         setChildren(prev => prev.map(c => {
@@ -1322,7 +1337,8 @@ export function useEntity(entity, childEntity, {
         // e.g. M_Internal_Consumption_Post requiring `action` — receive them.
         const res = await fetch(url, {
             method: 'POST',
-            headers,
+            headers: mutationHeaders,
+            credentials: 'include',
             body: JSON.stringify({ fieldValues: { [processField]: processValue }, ...(extraParams || {}) }),
         });
         if (!res.ok) {
@@ -1348,7 +1364,7 @@ export function useEntity(entity, childEntity, {
         refresh();
         // Fetch updated record and update selected state so the detail view reflects the new status
         try {
-            const updatedRes = await fetch(`${apiBaseUrl}/${entity}/${saved.id}`, { method: 'GET', headers });
+            const updatedRes = await fetch(`${apiBaseUrl}/${entity}/${saved.id}`, { method: 'GET', headers, credentials: 'include' });
             if (updatedRes.ok) {
                 const data = await updatedRes.json();
                 const updated = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
@@ -1358,7 +1374,7 @@ export function useEntity(entity, childEntity, {
         } catch { /* ignore, fall back to saved */
         }
         return saved;
-    }, [handleSave, apiBaseUrl, entity, specName, token, refresh, ui]);
+    }, [handleSave, apiBaseUrl, entity, specName, csrfToken, refresh, ui]);
 
     const handleProcess = useCallback(async (process, paramValues = {}) => {
         if (!selected?.id) return;
@@ -1378,7 +1394,8 @@ export function useEntity(entity, childEntity, {
         try {
             const res = await fetch(url, {
                 method: 'POST',
-                headers,
+                headers: mutationHeaders,
+                credentials: 'include',
                 body: JSON.stringify({ fieldValues }),
             });
             if (res.ok) {
@@ -1412,7 +1429,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setRunningProcess(null);
         }
-    }, [selected, entity, specName, apiBaseUrl, token, refresh, fetchById, ui]);
+    }, [selected, entity, specName, apiBaseUrl, csrfToken, refresh, fetchById, ui]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST

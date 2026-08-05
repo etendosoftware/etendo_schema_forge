@@ -20,6 +20,13 @@
  */
 import { render, screen, fireEvent, act } from '@testing-library/react';
 
+// ETP-4576 — ListView reads the CSRF proof from the auth context for the writes
+// useEntity issues, so mounting it needs that context. Shared mock; the default
+// value is restored before each test by src/test/setup.js.
+vi.mock('@/auth/AuthContext.jsx', async () =>
+  (await import('@/test/authContextMock.js')).authContextMock);
+
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
   useLocation: () => ({ pathname: '/test-entity', search: '' }),

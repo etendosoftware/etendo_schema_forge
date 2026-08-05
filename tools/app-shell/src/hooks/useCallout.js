@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
+import { writeHeaders } from '@/lib/sessionHeaders.js';
 
 function sanitizeCalloutMessage(raw) {
   return raw
@@ -20,7 +21,7 @@ function sanitizeCalloutMessage(raw) {
  * calloutResult: { updates, combos, messages } from the last callout response.
  * executeCallout(field, value, formState): triggers the callout (debounced 300ms).
  */
-export function useCallout(entity, { token, apiBaseUrl }) {
+export function useCallout(entity, { csrfToken, apiBaseUrl }) {
   const [calloutResult, setCalloutResult] = useState(null);
   const [calloutLoading, setCalloutLoading] = useState(false);
   // Per-field debounce timers and abort controllers so concurrent callouts don't cancel each other
@@ -28,7 +29,10 @@ export function useCallout(entity, { token, apiBaseUrl }) {
   const abortMapRef = useRef({});
 
   const executeCallout = useCallback((field, value, formState) => {
-    if (!field || !token || !apiBaseUrl || !entity) return;
+    // ETP-4576 — no gate on a client-held credential: the `__Host-` session
+    // cookie is the credential and the page cannot read it. Gating on the old
+    // token here stopped every callout from firing at all once it was gone.
+    if (!field || !apiBaseUrl || !entity) return;
 
     // Cancel any pending debounced call for THIS field only
     if (debounceMapRef.current[field]) clearTimeout(debounceMapRef.current[field]);
@@ -52,10 +56,9 @@ export function useCallout(entity, { token, apiBaseUrl }) {
         };
         const res = await fetch(`${apiBaseUrl}/${entity}/callout`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+          // Unsafe method, so it carries the CSRF proof.
+          headers: writeHeaders(csrfToken),
+          credentials: 'include',
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
@@ -89,7 +92,7 @@ export function useCallout(entity, { token, apiBaseUrl }) {
         setCalloutLoading(false);
       }
     }, 300);
-  }, [entity, token, apiBaseUrl]);
+  }, [entity, csrfToken, apiBaseUrl]);
 
   return { calloutResult, calloutLoading, executeCallout };
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
@@ -538,8 +539,13 @@ export function ListView({
 
   const { initialSortColumn, initialSortDirection } = parseListSortBy(listSortBy);
 
+  // ETP-4576 — the CSRF proof for the writes useEntity issues (delete, bulk
+  // delete, process actions). Read here rather than threaded as a prop: this is
+  // the component that owns the hook.
+  const { csrfToken } = useAuth();
+
   const hook = useEntity(entity, null, {
-    token,
+    csrfToken,
     apiBaseUrl,
     baseFilter: effectiveFilter,
     columnDefs,

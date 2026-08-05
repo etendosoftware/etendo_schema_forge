@@ -4,6 +4,7 @@ import { ChevronDown, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 
@@ -43,7 +44,6 @@ import { FIELD_HEIGHT } from '@/components/ui/formDensity';
  * @param {string}   resolvedLabel    - Translated field label shown in the placeholder.
  * @param {string}   selectorUrl      - Server endpoint for fetching options.
  * @param {object}   selectorContext  - Extra query params appended to every selector request.
- * @param {string}   token            - JWT bearer token.
  * @param {string}   [createLabel]    - Text for the create action, e.g. "+ Add address".
  *                                     When omitted the create option is not rendered.
  * @param {Function} [onCreateRequest] - `(query: string, onCreated: (id, name) => void) => void`
@@ -89,7 +89,6 @@ import { FIELD_HEIGHT } from '@/components/ui/formDensity';
  *   resolvedLabel={resolvedLabel}
  *   selectorUrl={selectorUrl}
  *   selectorContext={selectorContext}
- *   token={token}
  *   createLabel={ui('addAddress')}
  *   onCreateRequest={(query, onCreated) => {
  *     // open modal; on save call onCreated(newId, newName)
@@ -131,10 +130,18 @@ function buildServerSearchParams({ selectorContext, parentKey, parentValue, filt
 
 /** Fetches and maps selector options from the server for the server-search mode. Shared by
  * the debounced typing flow and the initial on-focus/on-open load (ETP-4600 Phase 2a). */
-function fetchServerOptions({ selectorUrl, selectorContext, token, parentKey, parentValue, filterKey, query }) {
+/**
+ * ETP-4576 — every fetch here is authenticated by the `__Host-` session cookie
+ * and carries no credential header. All three are GETs, so none needs the CSRF
+ * proof. The `!token` gates that used to guard them are gone: once the client
+ * stopped holding a token they were permanently false, which silently left this
+ * dropdown, its display-value lookup and its server search with no data at all.
+ */
+function fetchServerOptions({ selectorUrl, selectorContext, parentKey, parentValue, filterKey, query }) {
   const params = buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query });
   return fetch(buildUrlWithParams(selectorUrl, params), {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: jsonHeaders(),
+    credentials: 'include',
   })
     .then(res => (res.ok ? res.json() : null))
     .then(data => (data?.items ?? []).map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i })));
@@ -240,7 +247,6 @@ export function CreatableSearchSelect({
   resolvedLabel,
   selectorUrl,
   selectorContext,
-  token,
   createLabel,
   onCreateRequest,
   emptyOptionLabel,
@@ -357,7 +363,7 @@ export function CreatableSearchSelect({
       if (valueRef.current) onChangeRef.current('', '');
       return;
     }
-    if (!selectorUrl || !token) return;
+    if (!selectorUrl) return;
 
     const cacheKey = `${parentValue ?? ''}:${refreshKey}`;
     if (loadedForRef.current === cacheKey) return;
@@ -368,7 +374,8 @@ export function CreatableSearchSelect({
     if (parentKey && parentValue && filterKey) params[filterKey] = parentValue;
 
     fetch(buildUrlWithParams(selectorUrl, params), {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: jsonHeaders(),
+      credentials: 'include',
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -396,7 +403,7 @@ export function CreatableSearchSelect({
   // selectorContext intentionally omitted — it is memoized upstream and its reference
   // is stable across renders for all current callers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, parentValue, selectorUrl, token, filterKey, refreshKey]);
+  }, [serverSearch, parentValue, selectorUrl, filterKey, refreshKey]);
 
   // When options load and we still lack a display label for the current value, resolve
   // one locally so the chip is never blank while the caller catches up (ETP-4600 Gap B —
@@ -416,10 +423,11 @@ export function CreatableSearchSelect({
   useEffect(() => {
     if (!serverSearch) return;
     if (!value || displayValue) return;
-    if (!selectorUrl || !token) return;
+    if (!selectorUrl) return;
     let cancelled = false;
     fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: jsonHeaders(),
+      credentials: 'include',
     })
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
@@ -431,21 +439,21 @@ export function CreatableSearchSelect({
     return () => { cancelled = true; };
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, value, displayValue, selectorUrl, token]);
+  }, [serverSearch, value, displayValue, selectorUrl]);
 
   // serverSearch mode only: debounced fetch triggered by typing, and the initial page load
   // triggered on first focus/open (both call this). Cleared on unmount so no stale timer
   // fires a setState after the component is gone.
   const triggerServerSearch = useCallback((searchQuery) => {
-    if (!serverSearch || !selectorUrl || !token) return;
+    if (!serverSearch || !selectorUrl) return;
     setLoading(true);
-    fetchServerOptions({ selectorUrl, selectorContext, token, parentKey, parentValue, filterKey, query: searchQuery })
+    fetchServerOptions({ selectorUrl, selectorContext, parentKey, parentValue, filterKey, query: searchQuery })
       .then(items => setServerOptions(items))
       .catch(() => setServerOptions([]))
       .finally(() => setLoading(false));
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey]);
+  }, [serverSearch, selectorUrl, parentKey, parentValue, filterKey]);
 
   useEffect(() => {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
