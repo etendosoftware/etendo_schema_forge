@@ -25,6 +25,7 @@ export default function ConfirmWithCreditButton({ data, recordId, token, apiBase
       infoRowBold={ui('returnToVendor.confirmModal.infoRowBold')}
       infoRowPost={ui('returnToVendor.confirmModal.infoRowPost')}
       confirmWithInvoiceLabel={ui('returnToVendor.confirmModal.confirmWithInvoice')}
+      postConfirmButtonLabel={ui('returnToVendor.createCreditNote')}
       cardTitle={ui('returnToVendor.createCreditNote')}
       cardDesc={ui('returnToVendor.createCreditNoteDescription')}
       data-testid="ConfirmWithCreditButtonBase__218245" />

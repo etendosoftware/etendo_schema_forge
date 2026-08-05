@@ -14456,7 +14456,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "90ad40a8b083ebd1aaf49265debfcc477e7e80081dbf07b492c090db4c94479f",
+      "checksum": "e5fab3eb2657be6362f38b715aacc6089409ff598736e34d1ee8e631c6750d41",
       "params": [
         "123"
       ],
@@ -17518,7 +17518,7 @@
           "entity_javapackage": "org.openbravo.model.common.businesspartner",
           "field_group_name": "Contact Details",
           "field_isactive": "Y",
-          "field_name": "EM_Etgo_Web",
+          "field_name": "Web",
           "field_seq": "430",
           "fieldlength": "60",
           "filterclause": null,
