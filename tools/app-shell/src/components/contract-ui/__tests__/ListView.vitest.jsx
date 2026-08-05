@@ -343,6 +343,31 @@ describe('ListView', () => {
       expect(nameField.label).toBe('Name');
     });
 
+    // ETP-4609 regression — expandMultiFieldColumns previously copied only
+    // `{ key, type, label }` from each part, silently dropping `part.required`.
+    // A required multiField part (e.g. Product's Name/Identifier identity cell)
+    // then lost its `required` flag on the exploded pseudo-column, so the
+    // Advanced Filter offered "Está vacío"/"No está vacío" for a field that can
+    // never legitimately be empty. Fixed by also copying `required` per part.
+    it('propagates `required` from each part onto its own exploded pseudo-column', () => {
+      const cols = [
+        {
+          ...MF_COLUMNS[0],
+          parts: [
+            { key: 'searchKey', type: 'string', label: 'Identifier', required: true },
+            { key: 'name', type: 'string', label: 'Name' },
+          ],
+        },
+      ];
+      render(<ListView {...defaultProps} initialColumns={cols} />);
+      const searchKeyField = capturedFilterBarColumns.find((c) => c.key === 'searchKey');
+      const nameField = capturedFilterBarColumns.find((c) => c.key === 'name');
+      // Before the fix this was `undefined` — `required` was never copied.
+      expect(searchKeyField.required).toBe(true);
+      // The non-required sibling part must not pick up `required` either.
+      expect(nameField.required).not.toBe(true);
+    });
+
     it('omits parts marked filterable: false', () => {
       const cols = [
         {
