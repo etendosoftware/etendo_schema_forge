@@ -92,7 +92,7 @@ function resolveGridClass(cols, layout) {
 /**
  * Button that opens the ProductSearchDrawer popup for fields with popup: true.
  */
-function PopupSearchInput({ field, value, displayValue, onChange, label, selectorUrl, selectorContext, token }) {
+function PopupSearchInput({ field, value, displayValue, onChange, label, selectorUrl, selectorContext }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const displayText = displayValue || (value ? value : '');
@@ -119,7 +119,6 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         onSelect={(item) => { onChange(item.id, item.label || item.name); setOpen(false); }}
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
-        token={token}
         title={label}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
@@ -135,7 +134,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
  * `renderSearchField` itself is a plain function, not a component, so the hook can't be
  * called there directly.
  */
-function SearchSelectField({ f, value, displayValue, onChange, formData, resolvedLabel, selectorUrl, selectorContext, token }) {
+function SearchSelectField({ f, value, displayValue, onChange, formData, resolvedLabel, selectorUrl, selectorContext }) {
   const ui = useUI();
   // Optional "Create contact" capability injected by custom windows via context (ported
   // 1:1 from the old SearchInput): gates the create action to a single configured field,
@@ -152,7 +151,6 @@ function SearchSelectField({ f, value, displayValue, onChange, formData, resolve
       resolvedLabel={resolvedLabel}
       selectorUrl={selectorUrl}
       selectorContext={selectorContext}
-      token={token}
       serverSearch
       createLabel={canCreate ? `+ ${ui('createContact')}` : undefined}
       onCreateRequest={canCreate
@@ -172,7 +170,7 @@ function SearchSelectField({ f, value, displayValue, onChange, formData, resolve
  * Dependent Select for FK fields that require a parent context.
  * Re-fetches options whenever the parent value changes.
  */
-function DependentSelect({ field, value, displayValue, onChange, catalogs, formData, resolvedLabel, selectorUrl, selectorContext, token }) {
+function DependentSelect({ field, value, displayValue, onChange, catalogs, formData, resolvedLabel, selectorUrl, selectorContext }) {
   const ui = useUI();
   const [dynamicOptions, setDynamicOptions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -185,7 +183,10 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
   const contextKey = JSON.stringify(selectorContext ?? {});
 
   React.useEffect(() => {
-    if (!parentValue || !selectorUrl || !token) {
+    // ETP-4576 — no gate on a client-held token: the `__Host-` session cookie is
+    // the credential. buildHeaders() carries no credential either; it exists for
+    // Content-Type and Accept-Language.
+    if (!parentValue || !selectorUrl) {
       setDynamicOptions([]);
       return;
     }
@@ -196,7 +197,8 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
       [field.dependsOn?.filterKey]: parentValue,
     });
     fetch(url, {
-      headers: buildHeaders(token),
+      headers: buildHeaders(),
+      credentials: 'include',
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -222,7 +224,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
         setDynamicOptions([]);
       })
       .finally(() => setLoading(false));
-  }, [parentValue, selectorUrl, contextKey, token, field.dependsOn?.filterKey]);
+  }, [parentValue, selectorUrl, contextKey, field.dependsOn?.filterKey]);
 
   // If the current value isn't in options (real data from existing record), add it
   const hasValue = value && dynamicOptions.some(opt => opt.id === value);
@@ -272,7 +274,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
 /**
  * Form field that opens a ProductSearchDrawer for lookup-enabled search fields.
  */
-function LookupFormField({ field, value, displayValue, selectorUrl, selectorContext, token, resolvedLabel, onChange }) {
+function LookupFormField({ field, value, displayValue, selectorUrl, selectorContext, resolvedLabel, onChange }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const display = displayValue || value || '';
@@ -302,7 +304,6 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         }}
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
-        token={token}
         title={resolvedLabel}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
@@ -357,7 +358,6 @@ function PopupSearchField(props) {
         label={props.label}
         selectorUrl={props.selectorUrl}
         selectorContext={props.selectorContext}
-        token={props.token}
         data-testid="PopupSearchInput__a8d626" />
     </div>
   );
@@ -451,7 +451,6 @@ function DependentFkField(props) {
             resolvedLabel={props.label}
             selectorUrl={props.selectorUrl}
             selectorContext={props.selectorContext}
-            token={props.token}
             apiBaseUrl={props.apiBaseUrl}
             data-testid="PartnerAddressPicker__a8d626" />
       ) : (
@@ -465,7 +464,6 @@ function DependentFkField(props) {
             resolvedLabel={props.label}
             selectorUrl={props.selectorUrl}
             selectorContext={props.selectorContext}
-            token={props.token}
             data-testid="DependentSelect__a8d626" />
       )}
     </div>
@@ -630,7 +628,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *  - catalogs: Record<string, Array<{ id, name, ... }>> for FK reference data
  *  - displayLogic: { readOnly: { fieldName: bool }, visibility: { fieldName: bool } }
  */
-export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -767,7 +765,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       resolvedLabel: label,
       selectorUrl,
       selectorContext: effectiveSelectorContext,
-      token,
       emptyOptionLabel: resolveUiKey(ui, f.emptyOptionLabelKey),
       serverSearch: true,
     };
@@ -868,7 +865,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           resolvedLabel={label}
           selectorUrl={selectorUrl}
           selectorContext={effectiveSelectorContext}
-          token={token}
           optionTranslator={optionTranslator}
           data-testid="SelectorInput__a8d626" />
       </div>
@@ -900,7 +896,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           displayValue={data?.[f.key + '$_identifier']}
           onChange={searchOnChange}
           apiBaseUrl={apiBaseUrl}
-          token={token}
           resolvedLabel={label}
           required={!!(f.required || f.requiredVisual)}
           selectorContext={effectiveSelectorContext}
@@ -920,7 +915,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           }}
           selectorUrl={selectorUrl}
           selectorContext={effectiveSelectorContext}
-          token={token}
           data-testid="PopupSearchField__a8d626" />
       );
     }
@@ -939,7 +933,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             displayValue={data?.[f.key + '$_identifier']}
             selectorUrl={selectorUrl}
             selectorContext={effectiveSelectorContext}
-            token={token}
             resolvedLabel={label}
             onChange={searchOnChange}
             data-testid="LookupFormField__a8d626" />
@@ -963,7 +956,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           resolvedLabel={label}
           selectorUrl={selectorUrl}
           selectorContext={effectiveSelectorContext}
-          token={token}
           data-testid="SearchSelectField__a8d626" />
       </div>
     );
@@ -1174,7 +1166,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         onChange={fieldOnChange}
         selectorUrl={fieldSelectorUrl}
         selectorContext={effectiveSelectorContext}
-        token={token}
         apiBaseUrl={apiBaseUrl}
         catalogs={catalogs}
         data-testid="DependentFkField__a8d626" />
@@ -1340,7 +1331,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             onChange={onChange}
             formData={data}
             resolvedLabel={label}
-            token={token}
             apiBaseUrl={apiBaseUrl}
             entityPath={entity}
             isReadOnly={isRateReadOnly}
@@ -1383,7 +1373,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           <ImageField
             imageId={data?.[f.key] ?? ''}
             onChange={(newId) => onChange?.(f.key, newId, f.column)}
-            token={token}
             apiBaseUrl={apiBaseUrl}
             readOnly={isReadOnly}
             fieldKey={f.key}
@@ -1444,7 +1433,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           <ImageField
             imageId={data?.[imageField.key] ?? ''}
             onChange={(newId) => onChange?.(imageField.key, newId, imageField.column)}
-            token={token}
             apiBaseUrl={apiBaseUrl}
             readOnly={imgReadOnly}
             fieldKey={imageField.key}

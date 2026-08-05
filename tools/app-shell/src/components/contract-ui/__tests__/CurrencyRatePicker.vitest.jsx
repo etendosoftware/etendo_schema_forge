@@ -123,7 +123,7 @@ describe('CurrencyRatePicker', () => {
     });
     expect(globalThis.fetch).toHaveBeenCalledWith(
       `${BASE_URL}/header/rec-1/action/currencyOptions`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } },
+      { headers: { 'Content-Type': 'application/json' }, credentials: 'include' },
     );
   });
 
@@ -160,7 +160,7 @@ describe('CurrencyRatePicker', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         `${BASE_URL}/quotation/new/action/currencyOptions`,
-        { headers: { Authorization: `Bearer ${TOKEN}` } },
+        { headers: { 'Content-Type': 'application/json' }, credentials: 'include' },
       );
     });
     expect(await screen.findByText('Sin resultados')).toBeInTheDocument();
@@ -453,24 +453,26 @@ describe('CurrencyRatePicker', () => {
     expect(screen.queryByPlaceholderText('Buscar moneda...')).not.toBeInTheDocument();
   });
 
-  it('does not fetch options when the component token prop is missing', () => {
+  // ETP-4576 — regression guard, inverted on purpose. This used to assert that an
+  // empty `token` prop suppressed the currencyOptions fetch. Under the cookie
+  // session the component holds no token, so that gate made the dropdown
+  // permanently empty; the request must now fire and carry no credential.
+  it('fetches options with no token prop, sending the cookie and no credential header', () => {
     render(
       <CurrencyRatePicker
         field={FIELD}
         value=""
         formData={{ id: 'new' }}
         resolvedLabel="Currency"
-        token=""
         apiBaseUrl={BASE_URL}
         onChange={() => {}}
       />,
     );
     fireEvent.click(screen.getByTestId('currency-rate-trigger'));
-    // useCurrencyPrecision reads its own token from the (mocked) AuthContext, so a
-    // /sws/neo/session call still fires — only the component's own currencyOptions
-    // fetch must be gated on the token PROP.
-    const calledUrls = globalThis.fetch.mock.calls.map((c) => String(c[0]));
-    expect(calledUrls.some((u) => u.includes('currencyOptions'))).toBe(false);
+    const call = globalThis.fetch.mock.calls.find((c) => String(c[0]).includes('currencyOptions'));
+    expect(call).toBeDefined();
+    expect(call[1].credentials).toBe('include');
+    expect(JSON.stringify(call[1].headers)).not.toContain('Bearer');
   });
 
   it('shows a required marker when the field is required', () => {

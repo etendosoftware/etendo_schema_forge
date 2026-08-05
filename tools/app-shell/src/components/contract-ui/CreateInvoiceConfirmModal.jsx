@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -24,7 +25,6 @@ import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnSt
  *                      shown in the summary card above) — never chosen here.
  *   isSOTrx          — sales (true) vs purchase (false) price lists offered by the picker
  *   apiBaseUrl       — required when showPriceListPicker is true, to fetch price lists
- *   token            — auth bearer token, required for the pendingQtyUrl and price-list fetches
  */
 export default function CreateInvoiceConfirmModal({
   data,
@@ -35,7 +35,6 @@ export default function CreateInvoiceConfirmModal({
   showPriceListPicker = false,
   isSOTrx = true,
   apiBaseUrl,
-  token,
 }) {
   const ui = useUI();
   const [checked, setChecked] = useState(true);
@@ -67,7 +66,7 @@ export default function CreateInvoiceConfirmModal({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(pendingQtyUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(pendingQtyUrl, { headers: jsonHeaders(), credentials: 'include' });
         if (!res.ok || cancelled) return;
         const lines = (await res.json())?.response?.data || [];
         const total = lines.reduce((sum, l) => sum + Number(l.pendingQty || 0), 0);
@@ -75,7 +74,7 @@ export default function CreateInvoiceConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [pendingQtyUrl, token]);
+  }, [pendingQtyUrl]);
 
   useEffect(() => {
     if (!showPriceListPicker || !base) return;
@@ -84,7 +83,8 @@ export default function CreateInvoiceConfirmModal({
     (async () => {
       try {
         const res = await fetch(`${base}/price-list/priceList?_startRow=0&_endRow=200`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: jsonHeaders(),
+          credentials: 'include',
         });
         if (!res.ok || cancelled) return;
         const all = (await res.json())?.response?.data || [];
@@ -98,7 +98,7 @@ export default function CreateInvoiceConfirmModal({
       }
     })();
     return () => { cancelled = true; };
-  }, [showPriceListPicker, isSOTrx, base, token]);
+  }, [showPriceListPicker, isSOTrx, base]);
 
   const subtitle = pendingQty != null
     ? ui('soAmountPendingInvoice', { pending: `${fmtNum(pendingQty, 0)} ${ui('units')}` })

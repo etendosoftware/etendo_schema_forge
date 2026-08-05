@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 import { ChevronDown, Loader2, Pencil, Check, X } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
@@ -25,7 +26,6 @@ import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
  * @param {Function} onChange      - EntityForm's top-level `(fieldKey, value, column?) => void`
  * @param {object}   formData      - Full form data (reads: id, eTGOCurrencyRate)
  * @param {string}   resolvedLabel - Translated field label
- * @param {string}   token         - JWT bearer token
  * @param {string}   apiBaseUrl    - Window base URL, e.g. http://…/sws/neo/sales-order
  * @param {string}   [entityPath]  - Entity path segment for action URLs (default: 'header').
  *                                   Pass the actual entity name when the header entity is not
@@ -41,7 +41,6 @@ export function CurrencyRatePicker({
   onChange,
   formData,
   resolvedLabel,
-  token,
   apiBaseUrl,
   entityPath = 'header',
   isReadOnly,
@@ -70,7 +69,7 @@ export function CurrencyRatePicker({
   // Fetch options when the dropdown opens (lazy load)
   // For new records (no ID yet) we pass 'new' — the backend falls back to session context.
   useEffect(() => {
-    if (!open || !apiBaseUrl || !token) return;
+    if (!open || !apiBaseUrl) return;
     let cancelled = false;
     setLoading(true);
     const fetchId = hasRecord ? recordId : 'new';
@@ -78,7 +77,7 @@ export function CurrencyRatePicker({
       try {
         const res = await fetch(
           `${apiBaseUrl}/${entityPath}/${fetchId}/action/currencyOptions`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { headers: jsonHeaders(), credentials: 'include' },
         );
         if (cancelled) return;
         if (res.ok) {
@@ -93,19 +92,19 @@ export function CurrencyRatePicker({
       }
     })();
     return () => { cancelled = true; };
-  }, [open, hasRecord, recordId, apiBaseUrl, token]); // hasRecord kept so re-fetch fires when record gets saved
+  }, [open, hasRecord, recordId, apiBaseUrl]); // hasRecord kept so re-fetch fires when record gets saved
 
   // Eagerly fetch options when the record is first saved so the rate is visible in the
   // trigger and the pencil icon appears without requiring the user to open the dropdown.
   useEffect(() => {
-    if (!hasRecord || !apiBaseUrl || !token) return;
+    if (!hasRecord || !apiBaseUrl) return;
     let cancelled = false;
     const fetchId = recordId;
     (async () => {
       try {
         const res = await fetch(
           `${apiBaseUrl}/${entityPath}/${fetchId}/action/currencyOptions`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { headers: jsonHeaders(), credentials: 'include' },
         );
         if (cancelled || !res.ok) return;
         const json = await res.json();
@@ -114,7 +113,7 @@ export function CurrencyRatePicker({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [hasRecord, recordId, apiBaseUrl, token]);
+  }, [hasRecord, recordId, apiBaseUrl]);
 
   // Auto-focus the search input when dropdown opens
   useEffect(() => {

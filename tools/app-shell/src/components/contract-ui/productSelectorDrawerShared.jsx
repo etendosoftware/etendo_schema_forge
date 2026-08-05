@@ -5,6 +5,7 @@
  * useProductImages, useProductSelectorFetch.
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 
 const PAGE_SIZE = 30;
@@ -17,8 +18,7 @@ export const COLORS = [
   'bg-rose-100 text-rose-700',
   'bg-cyan-100 text-cyan-700',
   'bg-orange-100 text-orange-700',
-  'bg-indigo-100 text-indigo-700',
-];
+  'bg-indigo-100 text-indigo-700'];
 
 export function getColor(id) {
   let hash = 0;
@@ -48,15 +48,16 @@ export function formatQty(raw) {
  * is no image or while it is still loading. `sizeClass` lets each variant control the badge
  * size (flat rows use w-11 h-11, grouped headers use w-9 h-9) without duplicating the logic.
  */
-export function ProductAvatar({ name, id, imageUrl, imageId, neoBaseUrl, token, sizeClass = 'w-11 h-11' }) {
+export function ProductAvatar({ name, id, imageUrl, imageId, neoBaseUrl, sizeClass = 'w-11 h-11' }) {
   const [src, setSrc] = useState(imageUrl || null);
   const objectUrlRef = useRef(null);
 
   useEffect(() => {
-    if (src || !imageId || !neoBaseUrl || !token) return;
+    if (src || !imageId || !neoBaseUrl) return;
     let cancelled = false;
     fetch(`${neoBaseUrl}/image/${imageId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: jsonHeaders(),
+      credentials: 'include',
     })
       .then(r => r.ok ? r.blob() : null)
       .then(blob => {
@@ -68,7 +69,7 @@ export function ProductAvatar({ name, id, imageUrl, imageId, neoBaseUrl, token, 
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [imageId, neoBaseUrl, token, src]);
+  }, [imageId, neoBaseUrl, src]);
 
   // Revoke object URL only on unmount.
   useEffect(() => {
@@ -102,7 +103,7 @@ export function resolveImageId(row, imageMap = {}) {
  * Returns { imageMap, neoBaseUrl } — neoBaseUrl is reused by ProductAvatar for the per-image
  * blob fetch fallback.
  */
-export function useProductImages({ open, selectorUrl, token }) {
+export function useProductImages({ open, selectorUrl }) {
   const [imageMap, setImageMap] = useState({});
   const neoBaseUrl = selectorUrl ? selectorUrl.replace(/\/[^/]+\/[^/]+\/selectors\/.*$/, '') : '';
   const imageUrl = neoBaseUrl ? `${neoBaseUrl}/product/product` : null;
@@ -110,10 +111,11 @@ export function useProductImages({ open, selectorUrl, token }) {
   useEffect(() => {
     if (!open) return undefined;
     setImageMap({});
-    if (!imageUrl || !token) return undefined;
+    if (!imageUrl) return undefined;
     let cancelled = false;
     fetch(`${imageUrl}?_startRow=0&_endRow=500`, {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: jsonHeaders(),
+      credentials: 'include',
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
@@ -130,7 +132,7 @@ export function useProductImages({ open, selectorUrl, token }) {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [open, imageUrl, token]);
+  }, [open, imageUrl]);
 
   return { imageMap, neoBaseUrl };
 }
@@ -141,7 +143,6 @@ export function useProductImages({ open, selectorUrl, token }) {
  * @param {object}   options
  * @param {boolean}  options.open             - Whether the drawer is open.
  * @param {string}   options.selectorUrl      - URL for the selector endpoint.
- * @param {string}   options.token            - Auth token.
  * @param {function} options.transform        - (rawItems: array) => array. Post-processes the
  *                                             raw data.items on every fetch (fresh + append).
  * @param {function} [options.onFreshResults] - Called with the transformed items after a
@@ -179,7 +180,6 @@ export function useProductImages({ open, selectorUrl, token }) {
 export function useProductSelectorFetch({
   open,
   selectorUrl,
-  token,
   transform,
   onFreshResults,
   selectorContext = {},
@@ -224,7 +224,7 @@ export function useProductSelectorFetch({
       if (abortRef.current) abortRef.current.abort();
       rawOffsetRef.current = 0;
     }
-    if (!selectorUrl || !token) { setResults([]); setLoading(false); return; }
+    if (!selectorUrl) { setResults([]); setLoading(false); return; }
     if (append) setLoadingMore(true);
     else setLoading(true);
 
@@ -235,7 +235,8 @@ export function useProductSelectorFetch({
       const params = { ...selectorContextRef.current, limit: PAGE_SIZE, offset };
       if (q) params.q = q.trim();
       fetch(buildUrlWithParams(selectorUrl, params), {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: jsonHeaders(),
+        credentials: 'include',
         signal: controller.signal,
       })
         .then(r => r.ok ? r.json() : null)
@@ -271,7 +272,7 @@ export function useProductSelectorFetch({
           }
         });
     }, delay);
-  }, [selectorUrl, token, transform, autoWaterfallMin]);
+  }, [selectorUrl, transform, autoWaterfallMin]);
 
   // Reset all transient state and fire the initial fetch when the drawer opens.
   useEffect(() => {

@@ -79,9 +79,14 @@ describe('ProductStockSearchDrawer', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not fetch when token is missing', () => {
-    render(<ProductStockSearchDrawer {...defaultProps} token={null} />);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+  // ETP-4576 — inverted regression guard: the drawer no longer holds a token, so
+  // gating its search on one left it permanently empty. The request must fire.
+  it('still searches with no token, sending the cookie and no credential header', () => {
+    render(<ProductStockSearchDrawer {...defaultProps} />);
+    expect(globalThis.fetch).toHaveBeenCalled();
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(init.credentials).toBe('include');
+    expect(JSON.stringify(init.headers ?? {})).not.toContain('Bearer');
   });
 
   it('calls onClose when overlay is clicked', async () => {

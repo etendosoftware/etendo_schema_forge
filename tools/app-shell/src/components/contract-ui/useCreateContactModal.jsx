@@ -1,14 +1,14 @@
 import { useState, useMemo } from 'react';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 import { createPortal } from 'react-dom';
 import CreateContactModal from './CreateContactModal';
 
-export function useCreateContactModal({ apiBaseUrl, token, documentType = 'sale' }) {
+export function useCreateContactModal({ apiBaseUrl, documentType = 'sale' }) {
   const [createContactState, setCreateContactState] = useState(null);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 — no credential in the header; the `__Host-` session cookie carries
+  // the session and each fetch opts in with `credentials: 'include'`.
+  const headers = jsonHeaders();
 
   const bpApiBaseUrl = useMemo(
     () => (apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '/contacts') : null),

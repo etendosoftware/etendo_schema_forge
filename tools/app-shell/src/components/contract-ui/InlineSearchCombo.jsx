@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { jsonHeaders } from '@/lib/sessionHeaders.js';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
@@ -11,7 +12,7 @@ import { SelectorChip } from './SelectorChip.jsx';
  * Text input with filtered dropdown — lightweight alternative to full SearchInput.
  * Used by both DataTable's InlineAddRow and InlineLinesPanel's edit cells.
  */
-export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeholder, inputRef, selectorUrl, selectorContext, token, displayLabel, excludeId = null, clearOnType = true }) {
+export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeholder, inputRef, selectorUrl, selectorContext, displayLabel, excludeId = null, clearOnType = true }) {
   const ui = useUI();
   // `query` is PURE search text (ETP-4600 Gap B parity with CreatableSearchSelect) — it must
   // never be prefilled with the selected value's label. It always starts empty on open/focus so
@@ -64,13 +65,14 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // Server-side search with debounce
   const fetchTimer = useRef(null);
   const fetchServerResults = useCallback((q) => {
-    if (!selectorUrl || !token) { setServerResults(null); return; }
+    if (!selectorUrl) { setServerResults(null); return; }
     clearTimeout(fetchTimer.current);
     const trimmed = (q || '').trim();
     const queryParams = trimmed ? { ...selectorContext, q: trimmed } : { ...selectorContext };
     fetchTimer.current = setTimeout(() => {
       fetch(buildUrlWithParams(selectorUrl, queryParams), {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: jsonHeaders(),
+        credentials: 'include',
       })
         .then(r => r.ok ? r.json() : null)
         .then(data => {
@@ -78,7 +80,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         })
         .catch(() => {});
     }, 300);
-  }, [selectorUrl, selectorContext, token]);
+  }, [selectorUrl, selectorContext]);
 
   const filtered = useMemo(() => {
     let base;
