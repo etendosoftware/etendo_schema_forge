@@ -283,6 +283,29 @@ Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
 `pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
 `windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
 
+### Bank logo (ETP-4764 follow-up)
+
+The connected provider's logo image is persisted rather than fetched live per row. It lives on
+`PSD2_Provider.Logo_Url` (psd2 module — `com.etendoerp.psd2.bank.integration`, a separate
+Bitbucket repo), populated from Salt Edge's `logo_url` catalog field by whichever sync path runs
+first: the scheduled `SyncBankProviders` job, Classic's `AisConnectionCallback`, or the Go
+bridge's own `resolveProvider`/`fetchAndRegisterProvider` when an account connects (so a brand-new
+provider gets its logo immediately, without waiting for the next scheduled sync). All three paths
+go through `BankIntegrationUtils.upsertProvider(code, name, maxFetchInterval, logoUrl)` — a blank
+or missing `logoUrl` leaves a previously stored logo untouched, mirroring how `maxFetchInterval`
+already behaves, so a provider lookup that doesn't carry a fresh value never blanks one out.
+
+The list and single-record read expose it as **`providerLogoUrl`** via a `LEFT JOIN` on
+`psd2_provider` (`FinancialAccountsPageHandler.ACCOUNTS_SQL`) — no live Salt Edge call, unlike the
+connect-flow bank picker (`action=providers`) and account selector (`action=accounts`), which
+already showed the logo before this but by hitting Salt Edge on every request. Blank when the
+account has no bank provider, or the provider has no logo on record yet.
+
+`AccountLogoAvatar` renders it when present, falling back to the generic per-type icon (unchanged
+default) for cash/card accounts and for any bank account without a logo — including a logo URL
+that fails to load, caught via the `<img>`'s `onError`, so a dead or 403 URL degrades to the icon
+instead of showing a broken image.
+
 ## Archive Dialog
 
 `ArchiveAccountDialog.jsx` — rendered from the row kebab "Archive account" action.
