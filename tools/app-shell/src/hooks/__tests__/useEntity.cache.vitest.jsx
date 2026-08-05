@@ -1,15 +1,19 @@
 /**
- * ETP-4563 [SEC T01 2/3] — RED tests for integrating the app-shell-core shared
- * cache into useEntity.
+ * ETP-4563 [SEC T01 2/3] — cache behavior for the app-shell-core shared cache
+ * integration in useEntity: cross-mount reuse, dedup, and mutation-driven
+ * invalidation.
  *
- * These assert the target caching behavior and are expected to FAIL until the
- * GREEN integration lands: today useEntity fetches directly on every mount with
- * no shared cache, so cross-mount reuse, dedup, and mutation-driven invalidation
- * do not happen.
- *
- * Run under the LOCAL_CORE profile so @etendosoftware/app-shell-core resolves to
- * the sibling schema_forge_core source (feature/ETP-4562, which ships the cache):
+ * Runs under both dev profiles (default published-package and LOCAL_CORE=1):
+ *   cd tools/app-shell && npx vitest run src/hooks/__tests__/useEntity.cache.vitest.jsx
  *   cd tools/app-shell && LOCAL_CORE=1 npx vitest run src/hooks/__tests__/useEntity.cache.vitest.jsx
+ *
+ * The wrapper opts each AuthProvider out of the cookie-session restore flow
+ * (`restoreSession={null}`) — these tests exercise the query cache, not the
+ * auth restore, and leaving the default restoreSession active would let the
+ * async cookie-session fetch (routed through the same mocked fetch) resolve
+ * with a body lacking `token`, silently clobbering the token from
+ * `initialSession` and flipping DataProvider's identity scope, which clears
+ * the shared cache mid-test.
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { AuthProvider, createMemoryAuthStorage } from '@etendosoftware/app-shell-core/auth';
@@ -62,7 +66,7 @@ function makeFetch(overrides = {}) {
 function makeWrapper(cache) {
   return function Wrapper({ children }) {
     return (
-      <AuthProvider storage={createMemoryAuthStorage(SESSION)} initialSession={SESSION}>
+      <AuthProvider storage={createMemoryAuthStorage(SESSION)} initialSession={SESSION} restoreSession={null}>
         <DataProvider cache={cache}>{children}</DataProvider>
       </AuthProvider>
     );

@@ -1,9 +1,15 @@
 /**
  * ETP-4564 [SEC T01 3/3] — SelectorInput option caching by selector URL +
- * normalized dependency context (+ page offset). Run under LOCAL_CORE.
+ * normalized dependency context (+ page offset). Runs under both dev profiles.
  *
  * The mocked Radix SelectContent renders its children (and fires the ref
  * callback) on mount, so the first page load triggers on render — no click.
+ *
+ * AuthProvider opts out of the cookie-session restore (`restoreSession={null}`):
+ * these tests exercise the query cache, not the auth restore, and the default
+ * restore flow would otherwise clobber the `token` from `initialSession` via
+ * the mocked fetch, flipping DataProvider's identity scope and clearing the
+ * shared cache mid-test.
  */
 import React from 'react';
 import { render, waitFor, act } from '@testing-library/react';
@@ -35,7 +41,7 @@ function makeFetch() {
 function renderSel(cache, selectorContext) {
   const session = { token: 'tok', selectedOrg: { id: 'o1' } };
   return render(
-    <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session}>
+    <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
       <DataProvider cache={cache}>
         <SelectorInput
           entityName="header" field={field} value="" displayValue="" onChange={vi.fn()}

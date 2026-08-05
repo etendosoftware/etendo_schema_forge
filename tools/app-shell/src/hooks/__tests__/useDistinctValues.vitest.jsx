@@ -28,7 +28,7 @@ import { useDistinctValues } from '../useDistinctValues.js';
 // Real AuthProvider seeded with a token so the hook's useAuth() resolves — both
 // the hook and this provider reach the same core auth context through the shim.
 const wrapper = ({ children }) => (
-  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+  <AuthProvider initialSession={{ token: 'test-token' }} restoreSession={null}>{children}</AuthProvider>
 );
 
 describe('useDistinctValues', () => {

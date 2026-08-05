@@ -1,9 +1,14 @@
 /**
  * ETP-4564 [SEC T01 3/3] — attachments cache + true lazy-load behavior.
- * Counts requests per endpoint. Run under LOCAL_CORE so the shared cache resolves
- * from local source:
- *   cd tools/app-shell && LOCAL_CORE=1 npx vitest run \
- *     src/components/attachments/__tests__/useAttachments.cache.vitest.jsx
+ * Counts requests per endpoint. Runs under both dev profiles:
+ *   cd tools/app-shell && npx vitest run src/components/attachments/__tests__/useAttachments.cache.vitest.jsx
+ *   cd tools/app-shell && LOCAL_CORE=1 npx vitest run src/components/attachments/__tests__/useAttachments.cache.vitest.jsx
+ *
+ * AuthProvider opts out of the cookie-session restore (`restoreSession={null}`):
+ * these tests exercise the query cache, not the auth restore, and the default
+ * restore flow would otherwise clobber the `token` from `initialSession` via
+ * the mocked fetch, flipping DataProvider's identity scope and clearing the
+ * shared cache mid-test.
  */
 vi.mock('@/i18n', () => ({ useUI: () => (k) => k }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -37,7 +42,7 @@ const opts = (extra = {}) => ({ tableName: 'C_BPartner', recordId: 'BP1', token:
 function makeWrapper(cache, session = { token: 'tok', selectedOrg: { id: 'o1' } }) {
   return function Wrapper({ children }) {
     return (
-      <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session}>
+      <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
         <DataProvider cache={cache}>{children}</DataProvider>
       </AuthProvider>
     );

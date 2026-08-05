@@ -48,7 +48,7 @@ afterEach(() => {
 
 function renderAt(path, {
   windowMap = { 'sales-order': { slug: 'sales-order' } },
-  auth = { loginPath: '/login', initialSession: { token: 'test-token' } },
+  auth = { loginPath: '/login', initialSession: { token: 'test-token' }, restoreSession: null },
   // DashboardPage waits on `useCurrency()` resolving to a non-null value before leaving its
   // skeleton state. With a token set, CurrencyProvider's effect fetches `${apiBaseUrl}/session`
   // for real (no fetch mock here) and silently swallows the failure, leaving the currency code

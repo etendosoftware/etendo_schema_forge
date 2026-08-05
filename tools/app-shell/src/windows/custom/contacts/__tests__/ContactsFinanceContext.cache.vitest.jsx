@@ -1,10 +1,15 @@
 /**
  * ETP-4564 [SEC T01 3/3] — cache behavior for the Contacts finance KPIs
  * (bp-stats / bp-trend). Asserts request counts per endpoint so amplification is
- * measured directly. Run under LOCAL_CORE so @etendosoftware/app-shell-core
- * resolves the shared cache from local source:
- *   cd tools/app-shell && LOCAL_CORE=1 npx vitest run \
- *     src/windows/custom/contacts/__tests__/ContactsFinanceContext.cache.vitest.jsx
+ * measured directly. Runs under both dev profiles:
+ *   cd tools/app-shell && npx vitest run src/windows/custom/contacts/__tests__/ContactsFinanceContext.cache.vitest.jsx
+ *   cd tools/app-shell && LOCAL_CORE=1 npx vitest run src/windows/custom/contacts/__tests__/ContactsFinanceContext.cache.vitest.jsx
+ *
+ * Every AuthProvider opts out of the cookie-session restore (`restoreSession={null}`):
+ * these tests exercise the query cache, not the auth restore, and the default
+ * restore flow would otherwise clobber the `token` from `initialSession` via
+ * the mocked fetch, flipping DataProvider's identity scope and clearing the
+ * shared cache mid-test.
  */
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 
@@ -43,7 +48,7 @@ function FinanceProbe({ recordId }) {
 function renderFinance(recordId, cache) {
   const session = { token: 'tok', selectedRole: { id: 'r1' }, selectedOrg: { id: 'o1' } };
   return render(
-    <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session}>
+    <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
       <DataProvider cache={cache}>
         <ContactsFinanceProvider token="tok" apiBaseUrl={API}>
           <FinanceProbe recordId={recordId} />
@@ -119,7 +124,7 @@ describe('ContactsFinanceContext — shared cache (ETP-4564)', () => {
 
     // org o1
     const a = render(
-      <AuthProvider storage={createMemoryAuthStorage({ token: 'tok', selectedOrg: { id: 'o1' } })} initialSession={{ token: 'tok', selectedOrg: { id: 'o1' } }}>
+      <AuthProvider storage={createMemoryAuthStorage({ token: 'tok', selectedOrg: { id: 'o1' } })} initialSession={{ token: 'tok', selectedOrg: { id: 'o1' } }} restoreSession={null}>
         <DataProvider cache={cache}>
           <ContactsFinanceProvider token="tok" apiBaseUrl={API}><FinanceProbe recordId="BP1" /></ContactsFinanceProvider>
         </DataProvider>
@@ -130,7 +135,7 @@ describe('ContactsFinanceContext — shared cache (ETP-4564)', () => {
 
     // same contact, org o2 → distinct key → refetch (no leak)
     render(
-      <AuthProvider storage={createMemoryAuthStorage({ token: 'tok', selectedOrg: { id: 'o2' } })} initialSession={{ token: 'tok', selectedOrg: { id: 'o2' } }}>
+      <AuthProvider storage={createMemoryAuthStorage({ token: 'tok', selectedOrg: { id: 'o2' } })} initialSession={{ token: 'tok', selectedOrg: { id: 'o2' } }} restoreSession={null}>
         <DataProvider cache={cache}>
           <ContactsFinanceProvider token="tok" apiBaseUrl={API}><FinanceProbe recordId="BP1" /></ContactsFinanceProvider>
         </DataProvider>
