@@ -12,6 +12,21 @@ import userEvent from '@testing-library/user-event';
 
 const navigateMock = vi.fn();
 
+// ETP-4576 — UpgradePage mounts useEnvironmentSwitch, which now reads the CSRF
+// proof from the auth context, so this suite needs that context. The mock is a
+// plain mutable object rather than a vi.fn() with mockReturnValueOnce: React can
+// invoke the hook more than once per render and a "once" override would decay to
+// the default mid-render.
+let mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf', clientId: 'client-1' };
+
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => mockAuth,
+}));
+
+beforeEach(() => {
+  mockAuth = { isAuthenticated: true, csrfToken: 'test-csrf', clientId: 'client-1' };
+});
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
 }));

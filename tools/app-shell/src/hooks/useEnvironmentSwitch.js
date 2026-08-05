@@ -1,64 +1,67 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchEnvironments, loginEnvironment } from '@etendosoftware/etendo-go-core/onboarding/api';
-import { buildEnvironmentSessionStorage } from '@etendosoftware/etendo-go-core/onboarding/state';
+import { rememberEnvironment } from '@etendosoftware/etendo-go-core/onboarding/state';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
 
 /**
  * Lists the environments the signed-in account owns and switches between them.
  *
  * Switching tenants is a re-login, not a context change: each environment has
- * its own admin user, so it needs its own JWT. That is why this returns a hard
- * navigation rather than updating state — every cache keyed on the old tenant
- * has to go.
+ * its own admin user, so the backend rotates the session for it. That is why
+ * this returns a hard navigation rather than updating state — every cache keyed
+ * on the old tenant has to go.
  *
- * Requires the platform token, which is what proves the account owns the
- * environments. Sessions that never went through the account login do not have
- * it, so `environments` stays empty and callers should keep showing the current
- * company alone rather than an empty switcher.
+ * ETP-4576 — the account is proven by the `__Host-` session cookie, not by a
+ * token this hook can read, so `isAuthenticated` is the gate: a session that
+ * never went through the account login leaves `environments` empty, and callers
+ * should keep showing the current company alone rather than an empty switcher.
+ * Entering an environment is an unsafe method and carries the CSRF proof;
+ * listing them is a GET and carries none.
  */
 export function useEnvironmentSwitch({ enabled = true } = {}) {
+  const { isAuthenticated, csrfToken, clientId } = useAuth();
   const [environments, setEnvironments] = useState([]);
   const [switching, setSwitching] = useState(null);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !isAuthenticated) {
       setEnvironments([]);
       return;
     }
-    const token = localStorage.getItem('sf_platform_token');
-    if (!token) return;
     let cancelled = false;
     (async () => {
       try {
-        const envs = await fetchEnvironments(fetch, getApiBase(), token);
+        const envs = await fetchEnvironments(fetch, getApiBase());
         if (!cancelled) setEnvironments(Array.isArray(envs) ? envs : []);
       } catch {
         // A switcher that cannot list stays closed; the current company still shows.
       }
     })();
     return () => { cancelled = true; };
-  }, [enabled]);
+  }, [enabled, isAuthenticated]);
 
   const switchTo = useCallback(async (env) => {
-    const token = localStorage.getItem('sf_platform_token');
-    if (!token || !env?.adminUserId) return;
+    if (!isAuthenticated || !env?.adminUserId) return;
     setSwitching(env.clientId);
     try {
-      const data = await loginEnvironment(fetch, getApiBase(), token, env);
-      if (!data?.token) {
+      // The backend rotates the session cookie for the target environment and
+      // answers `{ status: 'success' }` — there is no token to store client-side.
+      const data = await loginEnvironment(fetch, getApiBase(), csrfToken, env);
+      if (data?.status !== 'success') {
         setSwitching(null);
         return;
       }
-      Object.entries(buildEnvironmentSessionStorage(env, data)).forEach(([key, value]) => {
-        localStorage.setItem(key, value);
-      });
+      // Remembering the environment is a UX preference, deliberately outside the
+      // session: logging out must not forget the last tenant entered.
+      rememberEnvironment(env.clientId);
       // The flag targeting identity belongs to the account, not the tenant, so it
       // survives — but anything cached per tenant must not, hence the full load.
       window.location.href = '/';
     } catch {
       setSwitching(null);
     }
-  }, []);
+  }, [isAuthenticated, csrfToken]);
 
   /**
    * Enters an environment identified by name, re-reading the list first.
@@ -69,12 +72,11 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
    * so the caller can keep offering its own fallback rather than appear to hang.
    */
   const enterByClientName = useCallback(async (clientName) => {
-    const token = localStorage.getItem('sf_platform_token');
     const wanted = String(clientName ?? '').trim().toLowerCase();
-    if (!token || !wanted) return false;
+    if (!isAuthenticated || !wanted) return false;
     setSwitching(wanted);
     try {
-      const envs = await fetchEnvironments(fetch, getApiBase(), token);
+      const envs = await fetchEnvironments(fetch, getApiBase());
       const match = (Array.isArray(envs) ? envs : []).find(
         (env) => String(env?.clientName ?? '').trim().toLowerCase() === wanted
       );
@@ -88,9 +90,13 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
       setSwitching(null);
       return false;
     }
-  }, [switchTo]);
+  }, [isAuthenticated, switchTo]);
 
-  const currentClientId = localStorage.getItem('sf_auth_client_id') || undefined;
-
-  return { environments, switchTo, enterByClientName, switching, currentClientId };
+  return {
+    environments,
+    switchTo,
+    enterByClientName,
+    switching,
+    currentClientId: clientId || undefined,
+  };
 }
