@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchEnvironments, loginEnvironment } from '@etendosoftware/etendo-go-core/onboarding/api';
-import { buildEnvironmentSessionStorage } from '@etendosoftware/etendo-go-core/onboarding/state';
 import { getApiBase } from './useNeoResource.js';
 
 /**
@@ -49,11 +48,14 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
         setSwitching(null);
         return;
       }
-      Object.entries(buildEnvironmentSessionStorage(env, data)).forEach(([key, value]) => {
-        localStorage.setItem(key, value);
-      });
-      // The flag targeting identity belongs to the account, not the tenant, so it
-      // survives — but anything cached per tenant must not, hence the full load.
+      // ETP-4576 — loginEnvironment's fetch carries credentials: 'include', so
+      // the server already set the __Host- session cookie for the new
+      // environment by the time this resolves. There is no localStorage
+      // handoff to build anymore; the hard navigation below boots cold and
+      // AuthContext's restore effect hydrates from GET /sws/go/session, which
+      // reads that cookie. The flag targeting identity belongs to the
+      // account, not the tenant, so it survives — but anything cached per
+      // tenant must not, hence the full load.
       window.location.href = '/';
     } catch {
       setSwitching(null);
