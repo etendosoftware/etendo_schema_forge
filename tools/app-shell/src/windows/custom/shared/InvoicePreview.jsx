@@ -255,6 +255,10 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   // ── Attachment config ──────────────────────────────────────────────────────
 
   const isDraft = invoice?.documentStatus === 'DR';
+  // ETP-4717 — Send is only available once the invoice is Confirmed (CO),
+  // matching the Grid row quick-action and Form-view topbar gates. The
+  // existing purchase-invoice exclusion stays: this window never sends email.
+  const isSendable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
   const attachmentConfig = p.isSalesInvoice ? {
     documentId: invoice.id,
     specName,
@@ -298,7 +302,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           orgId={p.orgId}
           profile={p.profile}
           onAddPayment={() => p.setShowPaymentModal(true)}
-          onSend={p.openEmailModal}
+          onSend={isSendable ? p.openEmailModal : undefined}
           orgCurrencyCode={orgCurrencyCode}
           exchangeRate={exchangeRate}
           orgGrandTotal={orgGrandTotal}
@@ -331,7 +335,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   const actionButtons = (
     <InvoiceActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={specName !== 'purchase-invoice' ? p.openEmailModal : undefined}
+      onEmail={isSendable ? p.openEmailModal : undefined}
       canSendToSif={p.canSendToSif}
       onOpenSif={() => p.setShowSifModal(true)}
       canAddPayment={p.canAddPayment}

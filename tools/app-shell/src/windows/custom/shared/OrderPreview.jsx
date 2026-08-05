@@ -95,6 +95,10 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
 
   const isSalesOrder = specName === 'sales-order';
   const isDraft = order?.documentStatus === 'DR';
+  // ETP-4717 — Send is only available once the order is Confirmed (CO),
+  // matching the Grid row quick-action and Form-view topbar gates. No
+  // per-spec difference: sales-order and purchase-order share this rule.
+  const isSendable = order?.documentStatus === 'CO';
   const ratePrecision = useCurrencyPrecision();
 
   // Dual-currency: fetch exchange rate when doc currency differs from org currency.
@@ -175,7 +179,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
-        onSend={openEmailModal}
+        onSend={isSendable ? openEmailModal : undefined}
         data-testid="OrderGeneralTab__90f59a" />,
     },
     {
@@ -211,7 +215,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const actionButtons = (
     <PreviewActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={openEmailModal}
+      onEmail={isSendable ? openEmailModal : undefined}
       onDownloadPdf={handleDownloadPdf}
       hasPdf={!!pdfUrl}
       sendLabel={ui('orderPreviewSend')}

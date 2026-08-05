@@ -76,6 +76,13 @@ export function useOrderWindow({
       edit: { show: true },
       duplicate: { show: true },
       delete: { show: true },
+      // ETP-4717 — this custom window builds rowQuickActions by hand and
+      // bypasses the generated contract's rowQuickActions block entirely, so
+      // decisions.json's `visibleWhen` never reaches RowQuickActions here.
+      // Mirrored by hand to match the Form-view topbar and preview-panel
+      // gates: Send only once the order is Confirmed (CO). No per-spec
+      // difference — shared by both sales-order and purchase-order.
+      email: { visibleWhen: "@DocumentStatus@='CO'" },
     },
     documentPreview: true,
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
