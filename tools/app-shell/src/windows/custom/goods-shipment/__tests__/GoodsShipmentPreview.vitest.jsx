@@ -94,6 +94,7 @@ vi.mock('@/components/related-documents/constants.jsx', () => ({
 import { render, screen, fireEvent } from '@testing-library/react';
 import GoodsShipmentPreview from '../GoodsShipmentPreview.jsx';
 import { useShipmentPdf } from '../useShipmentPdf.js';
+import { expectPresenceGatedByStatus } from '../../shared/__tests__/testUtils/sendActionGatingCases.js';
 
 const defaultShipment = {
   id: 'ship-1',
@@ -205,24 +206,20 @@ describe('GoodsShipmentPreview', () => {
   // these up when shipment.documentStatus === 'CO'. These DR cases must FAIL
   // against the current (unfixed) source.
   describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
-    it('does NOT render the action-bar Send (mail) button when shipment.documentStatus is DR (draft)', () => {
-      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
-      expect(screen.queryByTestId('icon-mail')).not.toBeInTheDocument();
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the action-bar Send (mail) button when shipment.documentStatus is DR (draft)',
+      shownIt: 'renders the action-bar Send (mail) button when shipment.documentStatus is CO (completed)',
+      renderHidden: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } }),
+      renderShown: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } }),
+      findElement: () => screen.queryByTestId('icon-mail'),
     });
 
-    it('renders the action-bar Send (mail) button when shipment.documentStatus is CO (completed)', () => {
-      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
-      expect(screen.getByTestId('icon-mail')).toBeInTheDocument();
-    });
-
-    it('does NOT render the EMAILS-section send link when shipment.documentStatus is DR (draft)', () => {
-      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
-      expect(screen.queryByText('previewCardSendEmail')).not.toBeInTheDocument();
-    });
-
-    it('renders the EMAILS-section send link when shipment.documentStatus is CO (completed)', () => {
-      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
-      expect(screen.getByText('previewCardSendEmail')).toBeInTheDocument();
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the EMAILS-section send link when shipment.documentStatus is DR (draft)',
+      shownIt: 'renders the EMAILS-section send link when shipment.documentStatus is CO (completed)',
+      renderHidden: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } }),
+      renderShown: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } }),
+      findElement: () => screen.queryByText('previewCardSendEmail'),
     });
   });
 

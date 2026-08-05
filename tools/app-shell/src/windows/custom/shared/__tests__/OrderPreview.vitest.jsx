@@ -110,6 +110,10 @@ import { usePurchaseOrderPdf } from '../usePurchaseOrderPdf.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
 import SummaryCard from '../preview-cards/SummaryCard.jsx';
 import EmailsCard from '../preview-cards/EmailsCard.jsx';
+import {
+  expectPresenceGatedByStatus,
+  expectEmailsCardOnSendGatedByStatus,
+} from './testUtils/sendActionGatingCases.js';
 
 const defaultOrder = {
   id: 'order-1',
@@ -276,28 +280,20 @@ describe('OrderPreview', () => {
   // The fix will only pass a truthy onEmail/onSend when order.documentStatus
   // === 'CO'. These cases must FAIL against the current (unfixed) source.
   describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
-    it('does NOT render the top action-bar email button when order.documentStatus is DR (draft)', () => {
-      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'DR' } });
-      expect(screen.queryByTestId('email-btn')).not.toBeInTheDocument();
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the top action-bar email button when order.documentStatus is DR (draft)',
+      shownIt: 'renders the top action-bar email button when order.documentStatus is CO (completed)',
+      renderHidden: () => renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'DR' } }),
+      renderShown: () => renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } }),
+      findElement: () => screen.queryByTestId('email-btn'),
     });
 
-    it('renders the top action-bar email button when order.documentStatus is CO (completed)', () => {
-      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } });
-      expect(screen.getByTestId('email-btn')).toBeInTheDocument();
-    });
-
-    it('passes onSend: undefined to EmailsCard when order.documentStatus is DR (draft)', () => {
-      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'DR' } });
-      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
-      expect(lastCall).toBeDefined();
-      expect(lastCall.onSend).toBeUndefined();
-    });
-
-    it('passes a truthy onSend function to EmailsCard when order.documentStatus is CO (completed)', () => {
-      renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } });
-      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
-      expect(lastCall).toBeDefined();
-      expect(typeof lastCall.onSend).toBe('function');
+    expectEmailsCardOnSendGatedByStatus({
+      hiddenIt: 'passes onSend: undefined to EmailsCard when order.documentStatus is DR (draft)',
+      shownIt: 'passes a truthy onSend function to EmailsCard when order.documentStatus is CO (completed)',
+      renderHidden: () => renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'DR' } }),
+      renderShown: () => renderOrderPreview({ order: { ...defaultOrder, documentStatus: 'CO' } }),
+      EmailsCardMock: vi.mocked(EmailsCard),
     });
 
     it('applies the same DR gating for purchase-order (no per-spec status difference for this rule)', () => {

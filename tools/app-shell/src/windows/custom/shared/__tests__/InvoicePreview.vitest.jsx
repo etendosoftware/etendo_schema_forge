@@ -113,6 +113,10 @@ import { useInvoicePreview } from '../useInvoicePreview.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
 import SummaryCard from '../preview-cards/SummaryCard.jsx';
 import EmailsCard from '../preview-cards/EmailsCard.jsx';
+import {
+  expectPresenceGatedByStatus,
+  expectEmailsCardOnSendGatedByStatus,
+} from './testUtils/sendActionGatingCases.js';
 
 const defaultInvoice = {
   id: 'inv-1',
@@ -327,25 +331,25 @@ describe('InvoicePreview', () => {
   // === 'CO'. These DR cases must FAIL against the current (unfixed) source; the
   // purchase-invoice exclusion case is expected to already pass (no regression there).
   describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
-    it('does NOT render the action-bar Send button for a sales-invoice in DR (draft) status', () => {
-      const draftInvoice = { ...defaultInvoice, documentStatus: 'DR' };
+    // Sets up useInvoicePreview's mocked hook for a sales-invoice at the given
+    // status and returns the matching invoice fixture, mirroring the isDraft/
+    // isSalesInvoice wiring the real hook would derive from documentStatus.
+    function setupSalesInvoice(status) {
+      const invoice = { ...defaultInvoice, documentStatus: status };
       useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
-        displayInvoice: draftInvoice,
+        displayInvoice: invoice,
         isSalesInvoice: true,
-        isDraft: true,
+        isDraft: status === 'DR',
       }));
-      renderInvoicePreview({ specName: 'sales-invoice', invoice: draftInvoice });
-      expect(screen.queryByText('invoicePreviewSend')).not.toBeInTheDocument();
-    });
+      return invoice;
+    }
 
-    it('renders the action-bar Send button for a sales-invoice in CO (completed) status', () => {
-      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
-        displayInvoice: defaultInvoice, // documentStatus: 'CO'
-        isSalesInvoice: true,
-        isDraft: false,
-      }));
-      renderInvoicePreview({ specName: 'sales-invoice', invoice: defaultInvoice });
-      expect(screen.getByText('invoicePreviewSend')).toBeInTheDocument();
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the action-bar Send button for a sales-invoice in DR (draft) status',
+      shownIt: 'renders the action-bar Send button for a sales-invoice in CO (completed) status',
+      renderHidden: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('DR') }),
+      renderShown: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('CO') }),
+      findElement: () => screen.queryByText('invoicePreviewSend'),
     });
 
     it('still hides the action-bar Send button for purchase-invoice regardless of status (existing exclusion holds)', () => {
@@ -358,29 +362,12 @@ describe('InvoicePreview', () => {
       expect(screen.queryByText('invoicePreviewSend')).not.toBeInTheDocument();
     });
 
-    it('passes onSend: undefined to EmailsCard when invoice.documentStatus is DR (draft) for sales-invoice', () => {
-      const draftInvoice = { ...defaultInvoice, documentStatus: 'DR' };
-      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
-        displayInvoice: draftInvoice,
-        isSalesInvoice: true,
-        isDraft: true,
-      }));
-      renderInvoicePreview({ specName: 'sales-invoice', invoice: draftInvoice });
-      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
-      expect(lastCall).toBeDefined();
-      expect(lastCall.onSend).toBeUndefined();
-    });
-
-    it('passes a truthy onSend function to EmailsCard when invoice.documentStatus is CO (completed) for sales-invoice', () => {
-      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
-        displayInvoice: defaultInvoice, // documentStatus: 'CO'
-        isSalesInvoice: true,
-        isDraft: false,
-      }));
-      renderInvoicePreview({ specName: 'sales-invoice', invoice: defaultInvoice });
-      const lastCall = vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
-      expect(lastCall).toBeDefined();
-      expect(typeof lastCall.onSend).toBe('function');
+    expectEmailsCardOnSendGatedByStatus({
+      hiddenIt: 'passes onSend: undefined to EmailsCard when invoice.documentStatus is DR (draft) for sales-invoice',
+      shownIt: 'passes a truthy onSend function to EmailsCard when invoice.documentStatus is CO (completed) for sales-invoice',
+      renderHidden: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('DR') }),
+      renderShown: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('CO') }),
+      EmailsCardMock: vi.mocked(EmailsCard),
     });
   });
 });
