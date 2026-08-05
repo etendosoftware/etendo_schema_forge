@@ -32,10 +32,11 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
   const totalPaid = grandTotal - outstanding;
   const isFullyPaid = data.paymentComplete === true || data.paymentComplete === 'Y' || outstanding <= 0;
   const isCompleted = docStatus === 'CO';
-  const docType = data['transactionDocument$_identifier'];
-  // ETP-4738: prefer apInvoiceSubtype (covers Facturas Rectificativas de Compra with a negative
-  // total); fall back to the legacy doc-type-name check.
-  const isCreditType = getApSubtype(data) === 'NC' || docType === 'Nota de Crédito' || docType === 'AP CreditMemo';
+  // ETP-4737/ETP-4738: resolved via getApSubtype — NOT a hardcoded doc-type-name check. A
+  // fixed name Set silently misses any new document type sharing the same
+  // category (this is exactly how this badge missed "Factura Rectificativa
+  // (compras)" until this fix; see PurchaseInvoiceHeaderTable.jsx for the same fix).
+  const isCreditType = getApSubtype(data) === 'RECTIFICATIVA';
 
   const handleBadgeClick = () => {
     if (isCompleted) setShowPaymentModal(true);

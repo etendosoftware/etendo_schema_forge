@@ -145,6 +145,28 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
   });
 
+  // ETP-4737: the new doc type didn't match any hardcoded name/category check
+  // before this fix, so it fell through to the regular (non-credit) badge logic.
+  it('shows the remaining "saldo a favor" badge for the new Factura Rectificativa (compras) doc type', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...defaultProps}
+        data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }}
+      />,
+    );
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+  });
+
+  it('prefers the server-injected apInvoiceSubtype over the identifier string', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...defaultProps}
+        data={{ ...BASE_DATA, apInvoiceSubtype: 'RECTIFICATIVA', 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }}
+      />,
+    );
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+  });
+
   it('shows the fully-applied badge when a credit note has no remaining balance', () => {
     render(
       <PurchaseInvoiceTopbar
@@ -310,10 +332,11 @@ describe('PurchaseInvoiceTopbar', () => {
 
 // ── ETP-4738: Factura Rectificativa de Compra recognized via apInvoiceSubtype ──
 // A Factura Rectificativa with a negative total is reclassified server-side to
-// apInvoiceSubtype: 'NC', but its doc-type identifier ("Factura Rectificativa")
-// is not one of the two hardcoded legacy doc-type-name checks
-// ('Nota de Crédito' / 'AP CreditMemo'). isCreditType must still recognize it
-// via the server-injected subtype field alone. This exercises the REAL
+// apInvoiceSubtype: 'RECTIFICATIVA' (unified with the legacy AP CreditMemo subtype
+// per ETP-4737), but its doc-type identifier ("Factura Rectificativa") is not one
+// of the two hardcoded legacy doc-type-name checks ('Nota de Crédito' / 'AP
+// CreditMemo'). isCreditType must still recognize it via the server-injected
+// subtype field alone. This exercises the REAL
 // artifacts/purchase-invoice/custom/purchaseInvoiceSubtype.js (not mocked here
 // — @generated resolves to artifacts/ in vitest.config.js).
 describe('PurchaseInvoiceTopbar — apInvoiceSubtype recognizes Factura Rectificativa (ETP-4738)', () => {
@@ -333,18 +356,18 @@ describe('PurchaseInvoiceTopbar — apInvoiceSubtype recognizes Factura Rectific
   const RECTIFICATIVA_DATA = {
     ...BASE_DATA,
     'transactionDocument$_identifier': 'Factura Rectificativa',
-    apInvoiceSubtype: 'NC',
+    apInvoiceSubtype: 'RECTIFICATIVA',
     grandTotalAmount: -15,
     outstandingAmount: -15,
   };
 
-  it('shows the "Saldo a favor" badge for a Factura Rectificativa with apInvoiceSubtype NC and a nonzero remaining balance', () => {
+  it('shows the "Saldo a favor" badge for a Factura Rectificativa with apInvoiceSubtype RECTIFICATIVA and a nonzero remaining balance', () => {
     render(<PurchaseInvoiceTopbar {...props} data={RECTIFICATIVA_DATA} />);
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
     expect(screen.queryByText('statusPending')).toBeNull();
   });
 
-  it('shows the "Aplicada" pill for a Factura Rectificativa with apInvoiceSubtype NC once fully consumed', () => {
+  it('shows the "Aplicada" pill for a Factura Rectificativa with apInvoiceSubtype RECTIFICATIVA once fully consumed', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}

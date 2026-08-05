@@ -20,22 +20,17 @@ import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoice
 
 const filters = ['documentNo', 'invoiceDate', 'businessPartner', 'orderReference', 'documentStatus'];
 
-// Legacy doc-type-name fallback for the two return-invoice names ETP-4738 doesn't cover via
-// apInvoiceSubtype (AP has no "DEV" subtype — a return generates an AP CreditMemo, same doc).
-const NC_RETURN_TYPES = new Set(['AP CreditMemo', 'Return Material Purchase Invoice', 'Reversed Purchase Invoice']);
-
-const DOC_TYPE_BADGE = {
-  'AP Invoice':                         { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
-  'AP CreditMemo':                      { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'creditNotesTab' },
-  'Return Material Purchase Invoice':   { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
-  'Reversed Purchase Invoice':          { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
+// ETP-4737/ETP-4738: badge config keyed by the unified subtype (FAC/RECTIFICATIVA) resolved
+// via getApSubtype — NOT by the raw AD doc-type name. A hardcoded name Set silently misses any
+// new document type sharing the same category (this is exactly how the previous version of
+// this file missed "Factura Rectificativa (compras)" until this fix).
+const SUBTYPE_BADGE = {
+  FAC:            { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
+  RECTIFICATIVA:  { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'rectificativeInvoicesTab' },
 };
 
 function isNcOrReturn(row) {
-  // ETP-4738: prefer the server-injected apInvoiceSubtype (covers Facturas Rectificativas de
-  // Compra with a negative total, in addition to the legacy AP CreditMemo type); fall back to
-  // doc-type-name matching for the two return-invoice names apInvoiceSubtype doesn't cover.
-  return getApSubtype(row) === 'NC' || NC_RETURN_TYPES.has(row?.['transactionDocument$_identifier']);
+  return getApSubtype(row) === 'RECTIFICATIVA';
 }
 
 export default function PurchaseInvoiceHeaderTable(props) {
@@ -84,8 +79,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
         render: (row) => {
-          const adName = row['transactionDocument$_identifier'];
-          const cfg = DOC_TYPE_BADGE[adName];
+          const cfg = SUBTYPE_BADGE[getApSubtype(row)];
           if (!cfg) return <span className="text-muted-foreground">—</span>;
           return (
             <span

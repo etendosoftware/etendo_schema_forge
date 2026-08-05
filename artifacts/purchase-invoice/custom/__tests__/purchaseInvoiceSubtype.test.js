@@ -12,7 +12,7 @@ describe('getApSubtype', () => {
   });
 
   it('returns apInvoiceSubtype directly when present', () => {
-    assert.equal(getApSubtype({ apInvoiceSubtype: 'NC' }), 'NC');
+    assert.equal(getApSubtype({ apInvoiceSubtype: 'RECTIFICATIVA' }), 'RECTIFICATIVA');
     assert.equal(getApSubtype({ apInvoiceSubtype: 'FAC' }), 'FAC');
   });
 
@@ -20,33 +20,31 @@ describe('getApSubtype', () => {
     assert.equal(getApSubtype({ apInvoiceSubtype: 'FAC', 'transactionDocument$_identifier': 'Credit Memo' }), 'FAC');
   });
 
-  // ETP-4738: Factura Rectificativa (unified credit-note doc type) has a name
-  // that does NOT contain "credit"/"memo"/"crédito" — the identifier fallback
-  // alone would misclassify it as FAC. The server-injected apInvoiceSubtype
-  // (set from grandTotalAmount < 0 reclassification) must be the deciding
-  // signal for this doc type.
-  it('resolves NC via apInvoiceSubtype for "Factura Rectificativa" — an identifier the fallback regex does not recognize', () => {
-    assert.equal(
-      getApSubtype({ apInvoiceSubtype: 'NC', 'transactionDocument$_identifier': 'Factura Rectificativa' }),
-      'NC',
-    );
+  // ETP-4737: purchases collapse credit-memo AND return/reversal doc types into a
+  // single RECTIFICATIVA subtype — there is no separate DEV/NC/return subtype on
+  // the purchase side (unlike sales, purchases never had one).
+  it('falls back to transactionDocument identifier: credit → RECTIFICATIVA', () => {
+    assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'AP CreditMemo' }), 'RECTIFICATIVA');
+    assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'Nota de Crédito de Proveedor' }), 'RECTIFICATIVA');
   });
 
-  it('without apInvoiceSubtype, "Factura Rectificativa" falls back to FAC (documents the gap the subtype field closes)', () => {
-    assert.equal(
-      getApSubtype({ 'transactionDocument$_identifier': 'Factura Rectificativa' }),
-      'FAC',
-    );
+  it('falls back to transactionDocument identifier: return/reversal → RECTIFICATIVA', () => {
+    assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'Return Material Purchase Invoice' }), 'RECTIFICATIVA');
+    assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'Reversed Purchase Invoice' }), 'RECTIFICATIVA');
+    assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'Factura de Devolución' }), 'RECTIFICATIVA');
   });
 
-  it('falls back to transactionDocument identifier: credit → NC', () => {
-    assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'AP Credit Memo' }), 'NC');
-    assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'Nota de Crédito de Proveedor' }), 'NC');
+  // The whole point of the fix: the new AD doc type "Factura Rectificativa
+  // (compras)" is recognized via the "rectificativ" keyword, without needing an
+  // exact-name entry for it — unlike the previous hardcoded name checks in
+  // index.jsx/PurchaseInvoiceTopbar.jsx/RelatedDocuments.jsx, which all missed it.
+  it('falls back to transactionDocument identifier: "Factura Rectificativa (compras)" → RECTIFICATIVA', () => {
+    assert.equal(getApSubtype({ 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }), 'RECTIFICATIVA');
   });
 
-  it('falls back to cDocTypeTargetId identifier: credit → NC', () => {
-    assert.equal(getApSubtype({ 'cDocTypeTargetId$_identifier': 'credit note' }), 'NC');
-    assert.equal(getApSubtype({ 'cDocTypeTargetId$_identifier': 'memo' }), 'NC');
+  it('falls back to cDocTypeTargetId identifier: credit → RECTIFICATIVA', () => {
+    assert.equal(getApSubtype({ 'cDocTypeTargetId$_identifier': 'credit note' }), 'RECTIFICATIVA');
+    assert.equal(getApSubtype({ 'cDocTypeTargetId$_identifier': 'memo' }), 'RECTIFICATIVA');
   });
 
   it('returns FAC when identifier does not match any known pattern', () => {

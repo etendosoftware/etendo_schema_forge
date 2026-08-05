@@ -13,7 +13,7 @@ const i18nMock = vi.hoisted(() => {
       pagada: 'pagada',
       addPago: 'addPago',
       invoicesTab: 'invoicesTab',
-      creditNotesTab: 'creditNotesTab',
+      rectificativeInvoicesTab: 'rectificativeInvoicesTab',
       returnInvoiceTab: 'returnInvoiceTab',
       'invoiceList.col.siiStatus': 'SII Status',
     },
@@ -303,7 +303,7 @@ describe('PurchaseInvoiceHeaderTable', () => {
   it('renders transactionDocument column with credit note badge for AP CreditMemo', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     // The column container renders multiple rows including the NC row (AP CreditMemo)
-    expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('creditNotesTab');
+    expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('rectificativeInvoicesTab');
   });
 
   it('renders transactionDocument column with dash for unknown doc type', () => {
@@ -312,7 +312,7 @@ describe('PurchaseInvoiceHeaderTable', () => {
     // The column container includes multiple rows so check via textContent
     const col = screen.getByTestId('col-render-transactionDocument');
     expect(col.textContent).toContain('invoicesTab');
-    expect(col.textContent).toContain('creditNotesTab');
+    expect(col.textContent).toContain('rectificativeInvoicesTab');
   });
 
   it('does not show SII column when showSii is false', () => {
@@ -510,8 +510,9 @@ describe('PurchaseInvoiceHeaderTable — outstandingAmount credit-note/return ba
 
 // ── ETP-4738: Factura Rectificativa de Compra recognized via apInvoiceSubtype ──
 // A rectificative invoice with a negative total is reclassified server-side to
-// apInvoiceSubtype: 'NC', but its doc-type identifier ("Factura Rectificativa")
-// never matches NC_RETURN_TYPES nor the legacy credit/memo keyword fallback in
+// apInvoiceSubtype: 'RECTIFICATIVA' (unified with the legacy AP CreditMemo subtype
+// per ETP-4737), but its doc-type identifier ("Factura Rectificativa") never
+// matches NC_RETURN_TYPES nor the legacy credit/memo keyword fallback in
 // getApSubtype. isNcOrReturn() must still treat it as a credit note via the
 // server-injected subtype field alone. This exercises the REAL
 // artifacts/purchase-invoice/custom/purchaseInvoiceSubtype.js (not mocked —
@@ -545,7 +546,7 @@ describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage
     documentStatus: 'CO',
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'Factura Rectificativa',
-    apInvoiceSubtype: 'NC',
+    apInvoiceSubtype: 'RECTIFICATIVA',
     aeatsiiEstado: null,
   };
 
@@ -565,7 +566,7 @@ describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage
     aeatsiiEstado: null,
   };
 
-  it('outstandingAmount — Factura Rectificativa (apInvoiceSubtype: NC, unrecognized doc-type name) shows the purple "Saldo a favor" badge', () => {
+  it('outstandingAmount — Factura Rectificativa (apInvoiceSubtype: RECTIFICATIVA, unrecognized doc-type name) shows the purple "Saldo a favor" badge', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     const renderFn = getColRender('outstandingAmount');
     if (!renderFn) return;
@@ -574,7 +575,7 @@ describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage
     expect(container.textContent).not.toMatch(/Pendiente/);
   });
 
-  it('outstandingAmount — fully-consumed Factura Rectificativa (apInvoiceSubtype: NC) shows the green "Aplicada" pill', () => {
+  it('outstandingAmount — fully-consumed Factura Rectificativa (apInvoiceSubtype: RECTIFICATIVA) shows the green "Aplicada" pill', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     const renderFn = getColRender('outstandingAmount');
     if (!renderFn) return;

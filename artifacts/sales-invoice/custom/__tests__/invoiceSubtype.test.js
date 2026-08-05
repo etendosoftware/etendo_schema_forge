@@ -11,48 +11,43 @@ describe('getArSubtype', () => {
     assert.equal(getArSubtype(undefined), 'FAC');
   });
 
+  // ETP-4737: the former separate 'NC' (credit note) and 'DEV' (return
+  // invoice) subtypes are unified into a single 'RECTIFICATIVA' subtype.
+  // The server-injected `arInvoiceSubtype` field is returned verbatim,
+  // whatever value it carries — the unification happens upstream, in the
+  // handler that populates this field.
   it('returns arInvoiceSubtype directly when present', () => {
-    assert.equal(getArSubtype({ arInvoiceSubtype: 'NC' }), 'NC');
-    assert.equal(getArSubtype({ arInvoiceSubtype: 'DEV' }), 'DEV');
+    assert.equal(getArSubtype({ arInvoiceSubtype: 'RECTIFICATIVA' }), 'RECTIFICATIVA');
     assert.equal(getArSubtype({ arInvoiceSubtype: 'FAC' }), 'FAC');
   });
 
   it('prefers arInvoiceSubtype over identifier fallback', () => {
-    assert.equal(getArSubtype({ arInvoiceSubtype: 'DEV', 'transactionDocument$_identifier': 'Credit Memo' }), 'DEV');
-  });
-
-  // ETP-4738: Factura Rectificativa (unified credit-note doc type) has a name
-  // that does NOT contain "credit"/"memo"/"crédito"/"return"/"devoluci" — the
-  // identifier fallback alone would misclassify it as FAC. The server-injected
-  // arInvoiceSubtype must be the deciding signal for this doc type.
-  it('resolves NC via arInvoiceSubtype for "Factura Rectificativa" — an identifier the fallback regex does not recognize', () => {
     assert.equal(
-      getArSubtype({ arInvoiceSubtype: 'NC', 'transactionDocument$_identifier': 'Factura Rectificativa' }),
-      'NC',
+      getArSubtype({ arInvoiceSubtype: 'RECTIFICATIVA', 'transactionDocument$_identifier': 'Standard Invoice' }),
+      'RECTIFICATIVA',
     );
-  });
-
-  it('without arInvoiceSubtype, "Factura Rectificativa" falls back to FAC (documents the gap the subtype field closes)', () => {
     assert.equal(
-      getArSubtype({ 'transactionDocument$_identifier': 'Factura Rectificativa' }),
+      getArSubtype({ arInvoiceSubtype: 'FAC', 'transactionDocument$_identifier': 'Credit Memo' }),
       'FAC',
     );
   });
 
-  it('falls back to transactionDocument identifier: credit → NC', () => {
-    assert.equal(getArSubtype({ 'transactionDocument$_identifier': 'Credit Memo' }), 'NC');
-    assert.equal(getArSubtype({ 'transactionDocument$_identifier': 'Nota de Crédito' }), 'NC');
+  it('falls back to identifier: legacy credit-memo (former NC) wording → RECTIFICATIVA', () => {
+    assert.equal(getArSubtype({ 'transactionDocument$_identifier': 'Credit Memo' }), 'RECTIFICATIVA');
+    assert.equal(getArSubtype({ 'transactionDocument$_identifier': 'Nota de Crédito' }), 'RECTIFICATIVA');
+    assert.equal(getArSubtype({ 'cDocTypeTargetId$_identifier': 'credit note' }), 'RECTIFICATIVA');
+    assert.equal(getArSubtype({ 'cDocTypeTargetId$_identifier': 'memo' }), 'RECTIFICATIVA');
   });
 
-  it('falls back to cDocTypeTargetId identifier: credit → NC', () => {
-    assert.equal(getArSubtype({ 'cDocTypeTargetId$_identifier': 'credit note' }), 'NC');
-    assert.equal(getArSubtype({ 'cDocTypeTargetId$_identifier': 'memo' }), 'NC');
+  it('falls back to identifier: legacy return-invoice (former DEV) wording → RECTIFICATIVA', () => {
+    assert.equal(getArSubtype({ 'transactionDocument$_identifier': 'Return Invoice' }), 'RECTIFICATIVA');
+    assert.equal(getArSubtype({ 'cDocTypeTargetId$_identifier': 'Factura de Devolución' }), 'RECTIFICATIVA');
+    assert.equal(getArSubtype({ 'transactionDocument$_identifier': 'devolucion de venta' }), 'RECTIFICATIVA');
   });
 
-  it('falls back to identifier: return/devolución → DEV', () => {
-    assert.equal(getArSubtype({ 'transactionDocument$_identifier': 'Return Invoice' }), 'DEV');
-    assert.equal(getArSubtype({ 'cDocTypeTargetId$_identifier': 'Factura de Devolución' }), 'DEV');
-    assert.equal(getArSubtype({ 'transactionDocument$_identifier': 'devolucion de venta' }), 'DEV');
+  it('falls back to identifier: new unified "Factura Rectificativa" wording → RECTIFICATIVA', () => {
+    assert.equal(getArSubtype({ 'transactionDocument$_identifier': 'Factura Rectificativa' }), 'RECTIFICATIVA');
+    assert.equal(getArSubtype({ 'cDocTypeTargetId$_identifier': 'FR - Factura Rectificativa' }), 'RECTIFICATIVA');
   });
 
   it('returns FAC when identifier does not match any known pattern', () => {
