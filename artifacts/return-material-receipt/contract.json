@@ -1,8 +1,8 @@
 {
-  "version": "0.20.1",
+  "version": "0.21.0",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "updatedAt": "2026-08-05T02:34:26.789Z",
-  "checksum": "383e82ce3b9d368f",
+  "updatedAt": "2026-08-05T03:15:28.243Z",
+  "checksum": "b4a039d37f7e2442",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -1348,6 +1348,14 @@
             "type": "string",
             "visibility": "readOnly",
             "required": false
+          },
+          {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
           }
         ],
         "javaQualifier": "returnMaterialReceiptHeaderHandler"
@@ -2922,6 +2930,14 @@
         "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
+        "id": "t-system-field-returnMaterialReceipt-etgoCurrency",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "System field 'etgoCurrency' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
         "id": "t-system-field-returnMaterialReceipt-externalBusinessPartnerReference",
         "category": "system-field",
         "entity": "returnMaterialReceipt",
@@ -3473,7 +3489,7 @@
       }
     ],
     "summary": {
-      "total": 192,
+      "total": 193,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
@@ -3489,11 +3505,11 @@
         "rule-declared": 4,
         "searchable-filters": 5,
         "selector-endpoint": 6,
-        "system-field": 87,
+        "system-field": 88,
         "visibility": 2
       },
       "byRunner": {
-        "node": 190,
+        "node": 191,
         "junit": 2
       }
     }
