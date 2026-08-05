@@ -638,6 +638,80 @@ describe('EditAccountModal', () => {
       expect(payload).toMatchObject({ dateTolerance: 7 });
     });
 
+    // ETP-4764 follow-up. The modal is fed by two endpoints that name these fields
+    // differently: the Cuentas LIST row comes from the generic W spec (contract keys
+    // `eTGODateTolerance` / `eTGOAmountTolerance`), the DETAIL record from the legacy
+    // `financial-accounts-page` R spec (flat `dateTolerance` / `amountTolerance`).
+    // Reading only the flat names left the list-opened modal permanently showing the
+    // 3/0 defaults — which also silently swallowed a save back to the stored value,
+    // since the dirty check compared against that wrong snapshot.
+    it('seeds the tolerances from the W spec contract keys (list-opened modal)', () => {
+      renderModal({
+        account: { ...BANK_ACCOUNT, eTGODateTolerance: 9, eTGOAmountTolerance: 2.5 },
+      });
+      expect(screen.getByTestId('recon-date-tolerance-input')).toHaveValue(9);
+      expect(screen.getByTestId('recon-amount-tolerance-input')).toHaveValue(2.5);
+    });
+
+    it('seeds the tolerances from the R spec flat keys (detail-opened modal)', () => {
+      renderModal({ account: { ...BANK_ACCOUNT, dateTolerance: 5, amountTolerance: 1.5 } });
+      expect(screen.getByTestId('recon-date-tolerance-input')).toHaveValue(5);
+      expect(screen.getByTestId('recon-amount-tolerance-input')).toHaveValue(1.5);
+    });
+
+    it('falls back to the 3/0 defaults when the record carries neither spelling', () => {
+      renderModal();
+      expect(screen.getByTestId('recon-date-tolerance-input')).toHaveValue(3);
+      expect(screen.getByTestId('recon-amount-tolerance-input')).toHaveValue(0);
+    });
+
+    // The regression this guards: with a wrong snapshot, typing the ALREADY-STORED value
+    // reads as "not dirty" and never reaches updateAccount at all.
+    it('sends a tolerance edited away from a W-spec-seeded value', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: { ...BANK_ACCOUNT, eTGODateTolerance: 9 } });
+      const dateTol = screen.getByTestId('recon-date-tolerance-input');
+      await user.clear(dateTol);
+      await user.type(dateTol, '4');
+      await user.click(screen.getByTestId('edit-account-save'));
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      const [, payload] = updateAccount.mock.calls[0];
+      expect(payload).toMatchObject({ dateTolerance: 4 });
+    });
+
+    // The tolerance inputs hold the raw typed string, not a number. Holding a number made the
+    // box impossible to clear — Number('') is 0, so deleting the last character re-rendered a
+    // "0" the caret sat behind and every entry came out as "0123".
+    it('lets the tolerance boxes be emptied while editing', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: { ...BANK_ACCOUNT, eTGODateTolerance: 3, eTGOAmountTolerance: 2 } });
+      const dateTol = screen.getByTestId('recon-date-tolerance-input');
+      const amountTol = screen.getByTestId('recon-amount-tolerance-input');
+      await user.clear(dateTol);
+      await user.clear(amountTol);
+      expect(dateTol).toHaveValue(null);
+      expect(amountTol).toHaveValue(null);
+    });
+
+    it('types cleanly over a cleared box instead of appending behind a forced 0', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: { ...BANK_ACCOUNT, eTGODateTolerance: 0 } });
+      const dateTol = screen.getByTestId('recon-date-tolerance-input');
+      await user.clear(dateTol);
+      await user.type(dateTol, '123');
+      expect(dateTol).toHaveValue(123);
+    });
+
+    it('persists an emptied tolerance as 0', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: { ...BANK_ACCOUNT, eTGODateTolerance: 5 } });
+      await user.clear(screen.getByTestId('recon-date-tolerance-input'));
+      await user.click(screen.getByTestId('edit-account-save'));
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      const [, payload] = updateAccount.mock.calls[0];
+      expect(payload).toMatchObject({ dateTolerance: 0 });
+    });
+
     it('does not render the reconciliation section for a cash account', () => {
       renderModal({ account: { id: 'acc-c', name: 'Caja', type: 'C', bankConnected: false } });
       expect(screen.queryByTestId('reconciliation-settings-section')).not.toBeInTheDocument();

@@ -99,8 +99,9 @@ async function persistAccountEdits({
   if (fields.typeDirty) updates.type = fields.type;
   if (fields.ibanDirty) updates.iban = normalizeIban(fields.iban);
   if (fields.currencyDirty) updates.currencyId = fields.currencyId;
-  if (reconciliation?.dateDirty) updates.dateTolerance = reconciliation.dateTolerance;
-  if (reconciliation?.amountDirty) updates.amountTolerance = reconciliation.amountTolerance;
+  // The `*Value` fields, never the raw strings the inputs hold — see useReconciliationSettings.
+  if (reconciliation?.dateDirty) updates.dateTolerance = reconciliation.dateToleranceValue;
+  if (reconciliation?.amountDirty) updates.amountTolerance = reconciliation.amountToleranceValue;
   if (Object.keys(updates).length > 0) {
     await updateAccount(account.id, updates);
   }
@@ -363,24 +364,70 @@ function useBankConnection(open, account, bankConnected, onSaved, onClose, bankR
 // Reconciliation settings hook + section
 // ---------------------------------------------------------------------------
 
+/**
+ * The two tolerances reach this modal under DIFFERENT key names depending on where it was
+ * opened from, so both spellings have to be accepted (ETP-4764 follow-up):
+ *   - from the Cuentas LIST, the row comes from the generic W spec, which names them by their
+ *     contract/DAL key — `eTGODateTolerance` / `eTGOAmountTolerance`;
+ *   - from the account DETAIL, the record comes from the older `financial-accounts-page` R spec
+ *     (`FinancialAccountsPageHandler`), which hand-builds its JSON with the flat `dateTolerance`
+ *     / `amountTolerance` names.
+ * Reading only the flat names made the list-opened modal always fall back to the 3/0 defaults:
+ * it never showed the stored values, and — because the dirty check compares against that wrong
+ * snapshot — re-entering the stored value looked like "nothing changed" and was never sent,
+ * while any other value saved fine but still redisplayed as 3/0 on reopen. Both read as "no se
+ * persiste". Contract key first: it is the canonical one, the R spec is the legacy path.
+ */
+function readTolerances(account) {
+  return {
+    dateTolerance: Number(account.eTGODateTolerance ?? account.dateTolerance ?? 3),
+    amountTolerance: Number(account.eTGOAmountTolerance ?? account.amountTolerance ?? 0),
+  };
+}
+
+/**
+ * The numeric value a raw tolerance input stands for. An empty box means "no tolerance" (0) —
+ * the same value the field would otherwise have to spell out — and a half-typed `-`/`.` is not a
+ * number yet, so both settle on 0 rather than propagating NaN into the payload.
+ */
+function toleranceValue(raw) {
+  if (String(raw).trim() === '') return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Both tolerances are held as the RAW STRING the user typed, not as a number, so the box can be
+ * emptied while editing. Storing `Number(e.target.value)` instead made the field impossible to
+ * clear: `Number('')` is 0, so deleting the last character immediately re-rendered a "0" the
+ * caret then sat behind, forcing every entry to read "0123" (ETP-4764 follow-up). Numbers are
+ * recovered through `toleranceValue` at exactly two points — the dirty check and the save payload
+ * — so an empty box still persists as 0 without ever forcing that 0 into the UI mid-edit.
+ */
 function useReconciliationSettings(open, account) {
-  const [dateTolerance, setDateTolerance] = useState(3);
-  const [amountTolerance, setAmountTolerance] = useState(0);
+  const [dateTolerance, setDateTolerance] = useState('3');
+  const [amountTolerance, setAmountTolerance] = useState('0');
   const [snapshot, setSnapshot] = useState({ dateTolerance: 3, amountTolerance: 0 });
 
   useEffect(() => {
     if (!open || !account) return;
-    const dt = account.dateTolerance ?? 3;
-    const at = Number(account.amountTolerance ?? 0);
-    setDateTolerance(dt);
-    setAmountTolerance(at);
+    const { dateTolerance: dt, amountTolerance: at } = readTolerances(account);
+    setDateTolerance(String(dt));
+    setAmountTolerance(String(at));
     setSnapshot({ dateTolerance: dt, amountTolerance: at });
   }, [open, account]);
 
-  const dateDirty = dateTolerance !== snapshot.dateTolerance;
-  const amountDirty = Number(amountTolerance) !== Number(snapshot.amountTolerance);
+  const dateToleranceValue = toleranceValue(dateTolerance);
+  const amountToleranceValue = toleranceValue(amountTolerance);
+  // Compared numerically, so re-typing the stored value in a different shape ("03", "3.0")
+  // correctly reads as unchanged rather than triggering a pointless write.
+  const dateDirty = dateToleranceValue !== snapshot.dateTolerance;
+  const amountDirty = amountToleranceValue !== snapshot.amountTolerance;
   const dirty = dateDirty || amountDirty;
-  return { dateTolerance, setDateTolerance, amountTolerance, setAmountTolerance, dateDirty, amountDirty, dirty };
+  return {
+    dateTolerance, setDateTolerance, amountTolerance, setAmountTolerance,
+    dateToleranceValue, amountToleranceValue, dateDirty, amountDirty, dirty,
+  };
 }
 
 function ReconciliationSettingsSection({ ui, recon }) {
@@ -398,7 +445,7 @@ function ReconciliationSettingsSection({ ui, recon }) {
             min={0}
             step={1}
             value={recon.dateTolerance}
-            onChange={(e) => recon.setDateTolerance(Number(e.target.value))}
+            onChange={(e) => recon.setDateTolerance(e.target.value)}
             className={FIELD_INPUT}
             data-testid="recon-date-tolerance-input"
           />
@@ -412,7 +459,7 @@ function ReconciliationSettingsSection({ ui, recon }) {
             max={100}
             step={0.1}
             value={recon.amountTolerance}
-            onChange={(e) => recon.setAmountTolerance(Number(e.target.value))}
+            onChange={(e) => recon.setAmountTolerance(e.target.value)}
             className={FIELD_INPUT}
             data-testid="recon-amount-tolerance-input"
           />

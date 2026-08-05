@@ -146,6 +146,51 @@ Field editability in the top section:
 - The consent-expiry date in the re-auth banner is formatted with the active locale (dd/MM/yyyy in
   Spanish).
 
+#### Reconciliation tolerances — two spellings, one field pair (ETP-4764 follow-up)
+
+**Tolerancia de fecha (días)** / **Tolerancia de importe (%)** map to the custom AD columns
+`EM_ETGO_Date_Tolerance` / `EM_ETGO_Amount_Tolerance` on `FIN_Financial_Account`. Etendo drops the
+`EM_` module prefix when deriving the DAL property, so the canonical names are **`eTGODateTolerance`
+/ `eTGOAmountTolerance`** (see the generated `FIN_FinancialAccount` entity) — *not* `eMETGO…`.
+Both are declared `editable` in `decisions.json` and reach `ETGO_SF_FIELD` with those names as their
+`java_qualifier`.
+
+The modal has to tolerate **two different key spellings** for the same pair, because the record it
+edits arrives from two different endpoints:
+
+| Opened from | Record source | Key names |
+|---|---|---|
+| Cuentas **list** (row kebab / pencil) | generic W spec `/sws/neo/financial-account/account` | `eTGODateTolerance` / `eTGOAmountTolerance` |
+| Account **detail** ("Editar" button) | legacy R spec `/sws/neo/financial-accounts-page` (`FinancialAccountsPageHandler` hand-builds the JSON) | `dateTolerance` / `amountTolerance` |
+
+`readTolerances()` in `EditAccountModal.jsx` reads the contract key first and falls back to the flat
+one. Two distinct bugs came out of ignoring this split, and both presented identically as *"no se
+persiste"*:
+
+1. **Write side** — `useAccountMutations.toDalBody()` sent `eMETGODateTolerance`/`eMETGOAmountTolerance`
+   (prefix folded in rather than dropped). The generic W spec ignores unrecognized body keys instead
+   of returning 400, so the `PUT` answered `200 OK` while silently discarding both values.
+2. **Read side** — the modal seeded its state from the flat names only, so a list-opened modal always
+   fell back to the 3/0 defaults instead of the stored values. Worse than a display bug: the dirty
+   check compares against that same wrong snapshot, so re-entering the actually-stored value counted
+   as "not dirty" and was never sent at all, while any other value did save but still redisplayed as
+   3/0 on reopen.
+
+Both inputs hold the **raw typed string**, not a number, so the box can be emptied mid-edit.
+Holding `Number(e.target.value)` made them impossible to clear: `Number('')` is `0`, so deleting the
+last character immediately re-rendered a `0` that the caret then sat behind, and every entry came
+out as `"0123"`. `toleranceValue()` recovers the number at exactly two points — the dirty check and
+the save payload (`dateToleranceValue` / `amountToleranceValue`, never the raw strings) — treating
+an empty box, and a half-typed `-`/`.`, as `0`. So an empty field still persists as 0 without that
+0 ever being forced back into the UI while typing. The dirty check compares numerically, so
+re-typing the stored value in another shape (`"03"`, `"3.0"`) correctly reads as unchanged.
+
+Regression cover: `useAccountMutations.vitest.jsx` pins the DAL property names on the write side;
+`EditAccountModal.vitest.jsx` pins seeding from either spelling, the 3/0 fallback, that a value
+edited away from a W-spec-seeded one still reaches `updateAccount`, that both boxes can be emptied,
+that typing over a cleared box does not append behind a forced `0`, and that an emptied box saves
+as `0`.
+
 ### Accounting configuration (Tab Contabilidad, ETP-4530)
 
 Backed by the `accountingConfiguration` entity of the `financial-account` spec, which maps to the
