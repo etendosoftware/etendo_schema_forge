@@ -19,7 +19,9 @@ Holded and Etendo GO expose two fundamentally different MCP philosophies:
 - The biggest Etendo GO wins are on **agent/developer experience of features it already has** — cleaner naming, leaner responses, richer query semantics, friendlier value resolution and clearer errors (§7). Broader operational domains (CRM pipeline, projects, HR) are a **roadmap item**, not a current gap (§8).
 - **Easiest wins for "simpler to use":** most of the friction is already solved by assets that just aren't surfaced — a `docs` recipe tool the agent doesn't know to call, a `neo_defaults` that pre-fills everything but drowns it in compliance noise, and small argument/entity-naming inconsistencies that cost a guaranteed first-try failure (§7.8–§7.9). None require ERP work.
 
-> **Delivery status (2026-08-03):** 7 of the 10 improvements in §12 shipped under **ETP-4601** — Wave 1 (IMP-1, IMP-5, IMP-8, IMP-10) and Wave 2 (IMP-2, IMP-3, IMP-7). Only **Wave 3** (IMP-4 FK-by-name, IMP-6 actions-only view, IMP-9 `primaryEntity`) remains. See §12 for per-item detail.
+> **Delivery status → [`mcp-improvements-registry.md`](mcp-improvements-registry.md).** That registry is the single source of truth for which IMP-* items are resolved, partial or open, and carries the M5 open-item metric plus a per-run changelog. The status marks below (§1, §10, §12 headings, `Done when:` strikethroughs, wave tables) are **historical** — as of 2026-08-05 several were over-credited, and the registry supersedes them. This document remains canonical for each item's *specification* (`BEFORE`/`AFTER`/`Done when:`) and for the architecture contrast, inventories and coverage matrix.
+>
+> Superseded line, kept for the record — *"Delivery status (2026-08-03): 7 of the 10 improvements in §12 shipped under ETP-4601 — Wave 1 (IMP-1, IMP-5, IMP-8, IMP-10) and Wave 2 (IMP-2, IMP-3, IMP-7). Only Wave 3 (IMP-4 FK-by-name, IMP-6 actions-only view, IMP-9 `primaryEntity`) remains."* Wave 3's code shipped in `bbfce9db`; five of the seven "shipped" items were later downgraded to ⚠️ partial.
 
 ---
 
@@ -400,6 +402,8 @@ neo_list({ spec: "product", entity: "product", filters: { name: "Widget" } })
 ## 12. Improvement Backlog for Etendo GO — Before / After
 
 Concrete, implementable improvements ordered by impact. Each item shows the **current** call + real response and the **proposed** call + target response, states explicitly whether the tool signature changes, **and names the repo(s) it touches.**
+
+> **Status lives in [`mcp-improvements-registry.md`](mcp-improvements-registry.md), not here.** This section is each item's *specification*; the `— ✅ DONE` marks in the headings below are historical and several are known to be over-credited. The registry also holds IMP-11…IMP-15, raised after this document was written. Never change a status here — change it there.
 
 > **Repo picture:** the MCP is the Java servlet in **`com.etendoerp.go`** (`src/com/etendoerp/go/mcp/`), which serves responses from the `ETGO_SF_*` tables. Because every improvement here is about how that servlet *shapes requests/responses*, **8 of 10 are servlet-only in `com.etendoerp.go`.** Two are not: **IMP-10** also touches the recipe corpus in **`etendo-go-docs`**, and **IMP-1** *may* also need **`schema_forge_core`** (`push-to-neo`) if the curated label/description is not already stored in `ETGO_SF_FIELD`. No change here touches this `schema_forge` repo.
  `BEFORE` blocks are verbatim from the live calls in §11; `AFTER` blocks are the target we are proposing. Tick them off as they land.

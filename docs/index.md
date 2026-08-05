@@ -54,6 +54,17 @@
 | [conventions.md](conventions.md) | Edge case conventions (13 rules for extraction, validation, DB access) |
 | [decisions-versioning.md](decisions-versioning.md) | Decisions.json versioning system: writing migrations, batch upgrades, FAQ |
 
+## MCP / Agentic Validation
+
+Benchmark of the Etendo GO MCP server against a reference vendor MCP (Holded), and the improvement
+backlog it produces. Refresh with the `/mcp-comparison` skill.
+
+| File | Description |
+|------|-------------|
+| [mcp-improvements-registry.md](mcp-improvements-registry.md) | **Single source of truth** for every IMP-* improvement: status, priority, class, repo, evidence · M5 open-item metric · per-run changelog. Includes the IMP-15 walk-through (Appendix A) |
+| [mcp-comparison-holded-vs-etendo-go.md](mcp-comparison-holded-vs-etendo-go.md) | Baseline benchmark: architecture contrast, tool/spec inventories, coverage matrix, and each item's `BEFORE`/`AFTER`/`Done when:` specification |
+| [mcp-comparison-post-audit-2026-08-05.md](mcp-comparison-post-audit-2026-08-05.md) | Run report (2026-08-05, `etendo-go-local`): live read + authorized write evidence, defects, IMP-11…IMP-15, M1–M4 |
+
 ## Etendo AD Reference
 
 General findings about how the Etendo Application Dictionary works. Not window-specific.
