@@ -1,21 +1,23 @@
 /**
- * Behavioral test for the DetailView "more" menu neoAction branch (ETP-4298).
+ * Behavioral test for the DetailView "more" menu `documentAction` branch and its
+ * post-action cache refresh (ETP-4563).
  *
- * The detail-view kebab menu has its OWN action handler (separate from
- * RowQuickActions). It already handled `documentAction`, but not `neoAction`,
- * so the document detail-view Post/Unpost button (a generic NEO action) never
- * fired. This mounts the full DetailView, opens the menu, clicks a
- * `neoAction:'post'` item, and asserts the shared `useNeoAction` hook is
- * invoked and the record is refreshed via `hook.fetchById` on success.
+ * The neoAction branch already has coverage (DetailView.neoActionMenu). This spec
+ * targets the SIBLING `runDocumentAction` path (DetailView.jsx ~3694-3710), which
+ * the ETP-4563 cache fix also touched: after a successful document action the
+ * record must be re-fetched with `{ force: true }` so the read cache is bypassed
+ * and the UI reflects the server-side state change. It also drives the
+ * `preUnpost` guard (unpost-before-action) and the failure/throw branches, and
+ * the `customMenuContent` onRefresh callback.
  *
- * Harness mirrors DetailView.render.vitest.jsx; the only addition is the
- * controllable `@/hooks/useNeoAction` mock.
+ * Harness mirrors DetailView.neoActionMenu.vitest.jsx; the only additions are a
+ * controllable `@/hooks/useDocumentAction` mock (execute + loading).
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'sonner';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { useEffect } from 'react';
 import { DetailView } from '../DetailView.jsx';
 
 vi.mock('react-router-dom', async () => {
@@ -71,11 +73,13 @@ vi.mock('@/hooks/useLineGrossAmount', () => ({
   useLineGrossAmount: () => ({ grossAmount: 0, calculate: vi.fn() }),
   ORDER_LINE_CONFIG: { qtyField: 'orderedQuantity', priceField: 'unitPrice', totalField: 'lineNetAmount' },
 }));
-vi.mock('@/hooks/useDocumentAction', () => ({
-  useDocumentAction: () => ({ execute: vi.fn().mockResolvedValue({}), loading: false }),
-}));
 
 // The hook under test — controllable execute + loading.
+const docExecuteMock = vi.fn().mockResolvedValue({});
+vi.mock('@/hooks/useDocumentAction', () => ({
+  useDocumentAction: () => ({ execute: docExecuteMock, loading: false }),
+}));
+
 const neoExecuteMock = vi.fn().mockResolvedValue({ success: true });
 vi.mock('@/hooks/useNeoAction', () => ({
   useNeoAction: () => ({ execute: neoExecuteMock, loading: false }),
@@ -98,9 +102,7 @@ vi.mock('@/lib/selectorCatalog.js', () => ({ getCatalogOptions: () => [] }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => (v != null ? String(v) : '—') }));
 vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: (data, f) => data?.[f] || data?._identifier || '' }));
 vi.mock('@/lib/documentTotals', () => ({ resolveTotalDiscountPct: () => 0 }));
-// Identity by default (existing behavior for these tests). Exported as a vi.fn so the
-// ETP-4706 test below can assert it's called and override its return value for one case.
-vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: vi.fn((m) => m) }));
+vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: (m) => m }));
 vi.mock('@/utils/recordActions.js', () => ({ isDeleteVisibleForRecord: () => true }));
 vi.mock('@/lib/utils.js', () => ({ cn: (...args) => args.filter(Boolean).join(' ') }));
 vi.mock('@/components/ui/dialog.jsx', () => ({
@@ -157,123 +159,111 @@ function setCurrentRecord(posted) {
   mockHook.editing = record;
 }
 
-const reactivatePreUnpostAction = {
-  key: 'reactivate',
-  label: 'Reactivate',
-  preUnpost: true,
-  columnName: 'Processed',
-};
-
-describe('DetailView — neoAction menu branch (ETP-4298)', () => {
+describe('DetailView — documentAction menu branch cache refresh (ETP-4563)', () => {
   beforeEach(() => {
+    docExecuteMock.mockClear();
+    docExecuteMock.mockResolvedValue({});
     neoExecuteMock.mockClear();
     neoExecuteMock.mockResolvedValue({ success: true });
     toast.success.mockClear();
     toast.error.mockClear();
     mockHook.fetchById.mockClear();
-    mockHook.handleProcess.mockClear();
-    translateBackendError.mockClear();
-    translateBackendError.mockImplementation((m) => m);
     setCurrentRecord(undefined);
   });
 
-  it('runs the failed post result.message through translateBackendError before showing the toast (ETP-4706)', async () => {
+  it('runs docAction.execute(id, action) and force-refreshes on success', async () => {
     const user = userEvent.setup();
-    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
-    const translated = 'No se pudo encontrar la cuenta. (Contacto: Acme Corp, Grupos de terceros: Suppliers)';
-    neoExecuteMock.mockResolvedValue({ success: false, message: raw });
-    translateBackendError.mockImplementation((m) => (m === raw ? translated : m));
-    renderDetailView({ menuActions: [{ key: 'post', label: 'Post', neoAction: 'post' }] });
+    renderDetailView({ menuActions: [{ key: 'complete', label: 'Complete', documentAction: 'CO' }] });
 
     await user.click(screen.getByTestId('action-more'));
-    await user.click(screen.getByTestId('menu-action-post'));
-
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(translated));
-    expect(translateBackendError).toHaveBeenCalledWith(raw, expect.any(Function));
-  });
-
-  it('calls neoAction.execute(id, "post") and refreshes via fetchById on success', async () => {
-    const user = userEvent.setup();
-    renderDetailView({ menuActions: [{ key: 'post', label: 'Post', neoAction: 'post' }] });
-
-    await user.click(screen.getByTestId('action-more'));
-    // Reset fetchById to isolate the refresh triggered by the click from any
-    // lifecycle/mount-driven fetches.
+    // Isolate the post-action refresh from any mount-driven fetchById.
     mockHook.fetchById.mockClear();
-    await user.click(screen.getByTestId('menu-action-post'));
+    await user.click(screen.getByTestId('menu-action-complete'));
 
-    expect(neoExecuteMock).toHaveBeenCalledWith('123', 'post');
-    // ETP-4563 cache fix: the post-neoAction refresh must bypass the read cache
-    // (force a network read), otherwise the record shows stale data after the action.
+    expect(docExecuteMock).toHaveBeenCalledWith('123', 'CO');
+    // ETP-4563: the read cache must be bypassed after the action mutates the record.
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
     expect(toast.success).toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it('shows toast.error and does NOT refresh when the action fails', async () => {
+  it('surfaces the successKey label as a success toast', async () => {
     const user = userEvent.setup();
-    neoExecuteMock.mockResolvedValue({ success: false, message: 'Cannot post' });
-    renderDetailView({ menuActions: [{ key: 'post', label: 'Post', neoAction: 'post' }] });
+    renderDetailView({
+      menuActions: [{ key: 'complete', label: 'Complete', documentAction: 'CO', successKey: 'documentCompleted' }],
+    });
 
     await user.click(screen.getByTestId('action-more'));
-    // Isolate from any mount-driven fetchById calls before the action click.
-    mockHook.fetchById.mockClear();
-    await user.click(screen.getByTestId('menu-action-post'));
+    await user.click(screen.getByTestId('menu-action-complete'));
 
-    expect(neoExecuteMock).toHaveBeenCalledWith('123', 'post');
-    expect(toast.error).toHaveBeenCalledWith('Cannot post');
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('documentCompleted'));
+  });
+
+  it('shows toast.error and does NOT refresh when docAction.execute throws', async () => {
+    const user = userEvent.setup();
+    docExecuteMock.mockRejectedValueOnce(new Error('Document is locked'));
+    renderDetailView({ menuActions: [{ key: 'complete', label: 'Complete', documentAction: 'CO' }] });
+
+    await user.click(screen.getByTestId('action-more'));
+    mockHook.fetchById.mockClear();
+    await user.click(screen.getByTestId('menu-action-complete'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Document is locked'));
     expect(mockHook.fetchById).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
   });
 
-  it('unposts first, then dispatches the columnName process when the current record is posted', async () => {
+  it('unposts first, then runs the documentAction and force-refreshes when the record is posted', async () => {
     const user = userEvent.setup();
     setCurrentRecord('Y');
-    renderDetailView({ menuActions: [reactivatePreUnpostAction] });
+    renderDetailView({
+      menuActions: [{ key: 'reopen', label: 'Reopen', documentAction: 'RE', preUnpost: true }],
+    });
 
     await user.click(screen.getByTestId('action-more'));
-    await user.click(screen.getByTestId('menu-action-reactivate'));
+    mockHook.fetchById.mockClear();
+    await user.click(screen.getByTestId('menu-action-reopen'));
 
-    await waitFor(() => {
-      expect(neoExecuteMock).toHaveBeenCalledWith('123', 'unpost');
-      expect(mockHook.handleProcess).toHaveBeenCalledWith({ columnName: 'Processed', name: 'reactivate' });
-    });
+    await waitFor(() => expect(docExecuteMock).toHaveBeenCalledWith('123', 'RE'));
+    expect(neoExecuteMock).toHaveBeenCalledWith('123', 'unpost');
+    // Unpost must precede the document action.
     expect(neoExecuteMock.mock.invocationCallOrder[0]).toBeLessThan(
-      mockHook.handleProcess.mock.invocationCallOrder[0],
+      docExecuteMock.mock.invocationCallOrder[0],
     );
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
   });
 
-  it('does not dispatch the columnName process when the pre-unpost step fails', async () => {
+  it('aborts the documentAction (no execute, no refresh) when the pre-unpost step fails', async () => {
     const user = userEvent.setup();
     setCurrentRecord('Y');
     neoExecuteMock.mockResolvedValue({ success: false, message: 'Cannot unpost' });
-    renderDetailView({ menuActions: [reactivatePreUnpostAction] });
+    renderDetailView({
+      menuActions: [{ key: 'reopen', label: 'Reopen', documentAction: 'RE', preUnpost: true }],
+    });
 
     await user.click(screen.getByTestId('action-more'));
-    await user.click(screen.getByTestId('menu-action-reactivate'));
+    mockHook.fetchById.mockClear();
+    await user.click(screen.getByTestId('menu-action-reopen'));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Cannot unpost'));
-    expect(neoExecuteMock).toHaveBeenCalledWith('123', 'unpost');
-    expect(mockHook.handleProcess).not.toHaveBeenCalled();
+    expect(docExecuteMock).not.toHaveBeenCalled();
+    expect(mockHook.fetchById).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['N'],
-    [false],
-    [undefined],
-  ])('skips pre-unpost and dispatches the columnName process directly when posted is %s', async (posted) => {
+  it('customMenuContent onRefresh force-refreshes the record', async () => {
+    // customMenuContent is rendered twice: once in a hidden probe (onRefresh is a
+    // no-op there) and once in the open menu (onRefresh -> force fetchById). Only
+    // the open-menu instance wires the real refresh, so we assert the force call
+    // rather than the DOM node (which would be duplicated by the probe).
     const user = userEvent.setup();
-    setCurrentRecord(posted);
-    renderDetailView({ menuActions: [reactivatePreUnpostAction] });
+    const CustomMenuContent = ({ onRefresh }) => {
+      useEffect(() => { onRefresh(); }, [onRefresh]);
+      return <div>custom</div>;
+    };
+    renderDetailView({ customMenuContent: CustomMenuContent });
 
     await user.click(screen.getByTestId('action-more'));
-    await user.click(screen.getByTestId('menu-action-reactivate'));
 
-    await waitFor(() => {
-      expect(mockHook.handleProcess).toHaveBeenCalledWith({ columnName: 'Processed', name: 'reactivate' });
-    });
-    expect(neoExecuteMock).not.toHaveBeenCalled();
-    expect(toast.error).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true }));
   });
 });

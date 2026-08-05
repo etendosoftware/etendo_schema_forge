@@ -40,7 +40,8 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
   });
 
   it('refreshes the record via hook.fetchById on success', () => {
-    assert.match(src, /result\.success[\s\S]{0,350}hook\.fetchById\?\.\(currentId\)/);
+    // ETP-4563 cache fix: the post-neoAction refresh forces a fresh network read.
+    assert.match(src, /result\.success[\s\S]{0,350}hook\.fetchById\?\.\(currentId, \{ force: true \}\)/);
   });
 
   it('shows toast.error with the (translated) result.message or ui(actionFailed) on failure (ETP-4706)', () => {
