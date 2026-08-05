@@ -45,6 +45,7 @@ import {
   shouldShowLinesEmptyState,
   getTabsBarStyle,
   getTabsBarClassName,
+  getTabStripBleedClassName,
   isDeleteButtonVisible,
   resolveHeaderContent,
   isBulkDeleteBarVisible,
@@ -731,6 +732,38 @@ describe('DetailView helper functions', () => {
   describe('getTabsBarStyle', () => {
     it('returns object with right spacing', () => {
       expect(getTabsBarStyle('120px', true)).toBeDefined();
+    });
+  });
+
+  describe('getTabStripBleedClassName', () => {
+    it('cancels and re-applies the compact sidebar padding so the border reaches both edges', () => {
+      const cls = getTabStripBleedClassName({ sidebarContent: () => null, compactSidebarPadding: true });
+      expect(cls).toContain('-mx-2');
+      expect(cls).toContain('px-2');
+      // pb-2 is vertical — it must not produce a bleed class.
+      expect(cls).not.toContain('-mb-2');
+    });
+
+    it('cancels the right-only padding when the sidebar is not compact', () => {
+      const cls = getTabStripBleedClassName({ sidebarContent: () => null });
+      expect(cls).toBe('-mr-2 pr-2');
+    });
+
+    it('cancels the default px-6 when there is no sidebar', () => {
+      expect(getTabStripBleedClassName({})).toBe('-mx-6 px-6');
+    });
+
+    it('honours a padding override', () => {
+      expect(getTabStripBleedClassName({ formScrollPaddingX: 'px-2.5' })).toBe('-mx-2.5 px-2.5');
+    });
+
+    it('returns nothing when the content column has no padding to cancel', () => {
+      expect(getTabStripBleedClassName({ linesLayout: 'inlineEditable' })).toBe('');
+    });
+
+    it('ignores a sidebar rendered above the tabs only', () => {
+      const cls = getTabStripBleedClassName({ sidebarContent: () => null, sidebarAboveTabsOnly: true });
+      expect(cls).toBe('-mx-6 px-6');
     });
   });
 

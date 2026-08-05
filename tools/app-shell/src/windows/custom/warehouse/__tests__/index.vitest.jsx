@@ -126,9 +126,23 @@ describe('WarehouseWindow', () => {
         levelZ: '0',
         relativePriority: 50,
         default: true,
+        inventoryStatus: '2',
       }),
     });
     expect(toastWarning).not.toHaveBeenCalled();
+  });
+
+  it('sets inventoryStatus to "2" (Available) on the default storage bin', async () => {
+    render(<WarehouseWindow token="tkn" apiBaseUrl="/api" />);
+
+    await lastWarehousePageProps.onAfterCreate(
+      { id: 'wh-1', organization: 'org-1', searchKey: 'MAIN' },
+      { token: 'ctx-token', apiBaseUrl: '/ctx-api' },
+    );
+
+    const [, requestInit] = fetch.mock.calls[0];
+    const body = JSON.parse(requestInit.body);
+    expect(body.inventoryStatus).toBe('2');
   });
 
   it('shows a warning when default storage bin creation fails', async () => {

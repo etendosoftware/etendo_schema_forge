@@ -251,6 +251,26 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
       }
     );
 
+    // Mock price-list lookup for CreateInvoiceConfirmModal's showPriceListPicker
+    // effect (ETP-4028): apiBaseUrl `/sws/neo/goods-shipment` has its last segment
+    // replaced → `/sws/neo/price-list/priceList`. Without a matching sales price
+    // list, priceListId stays '' and the "Crear →" button never enables (see
+    // product-pricing.mocked.spec.js for the same spec-swap URL pattern, POST case).
+    await page.route('**/sws/neo/price-list/priceList**', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: {
+            data: [
+              { id: 'pl-001', name: 'Tarifa venta', active: true, salesPriceList: true, default: true },
+            ],
+          },
+        }),
+      });
+    });
+
     // 2. Navigate to partially-invoiced shipment
     await page.goto('/goods-shipment/gs-partial-001');
     await page.getByTestId('action-cancel').waitFor({ state: 'visible', timeout: 15_000 });

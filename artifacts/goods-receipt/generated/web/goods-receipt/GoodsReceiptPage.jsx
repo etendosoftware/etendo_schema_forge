@@ -48,7 +48,7 @@ const draftMode = {
 // @sf-generated-end draftMode:goodsReceipt
 
 // @sf-generated-start requiredHeaderFields:goodsReceipt
-const requiredHeaderFields = ['warehouse', 'businessPartner', 'movementDate'];
+const requiredHeaderFields = ['warehouse', 'businessPartner', 'movementDate', 'etgoCurrency'];
 // @sf-generated-end requiredHeaderFields:goodsReceipt
 
 // @sf-generated-start addLineFields:goodsReceiptLine
@@ -198,6 +198,14 @@ export const api = {
       "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/ndDimension"
     },
     {
+      "entity": "goodsReceipt",
+      "field": "etgoCurrency",
+      "column": "EM_ETGO_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/etgoCurrency"
+    },
+    {
       "entity": "goodsReceiptLine",
       "field": "product",
       "column": "M_Product_ID",
@@ -341,10 +349,10 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
-      "field": "receiveMaterials",
-      "column": "RM_Receipt_PickEdit",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
-      "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -354,6 +362,14 @@ export const api = {
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/updateLines",
       "processId": "800010",
       "processType": "classic"
+    },
+    {
+      "entity": "goodsReceipt",
+      "field": "receiveMaterials",
+      "column": "RM_Receipt_PickEdit",
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
+      "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+      "processType": "obuiapp"
     },
     {
       "entity": "goodsReceipt",
@@ -369,14 +385,6 @@ export const api = {
       "column": "Invoicefromshipment",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/invoicefromshipment",
       "processId": "62250E8866EA4D96A66C309878DC039E",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "goodsReceipt",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -411,9 +419,19 @@ export const api = {
   },
   "window": {
     "category": "purchases"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "EM_ETGO_Currency_ID": "Currency"
+    },
+    "es_ES": {
+      "EM_ETGO_Currency_ID": "Moneda"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:GoodsReceiptPage
 export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
   const windowAccessTier = useWindowAccess('184');
@@ -458,6 +476,7 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
         {...props} window={effectiveWindow}
@@ -476,6 +495,7 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
       api={api}
       dateFilterKey="movementDate"
       hidePrint
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument={{"enabled":false}}
       {...props} window={effectiveWindow}

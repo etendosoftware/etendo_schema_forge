@@ -1,0 +1,1 @@
+The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount): the contact's IBAN, SWIFT/BIC and account number used to store their payment/bank details. These are NOT the company's own cash/bank/card accounts — for those (FIN_Financial_Account) use the `financial-account` spec (`account` entity) instead.

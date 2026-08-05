@@ -57,6 +57,10 @@ vi.mock('@generated/sales-invoice/custom/ImportFromReturnShipmentModal', () => (
   default: () => <div data-testid="import-return-modal" />,
 }));
 
+vi.mock('@generated/sales-invoice/custom/ImportFromSourceInvoiceModal', () => ({
+  default: () => <div data-testid="import-source-modal" />,
+}));
+
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -65,12 +69,14 @@ import InvoiceBottomPanel from '@generated/sales-invoice/custom/InvoiceBottomPan
 const LinesEmptyState = InvoiceBottomPanel.linesEmptyState;
 const DetailExtraActions = InvoiceBottomPanel.detailExtraActions;
 
-// Draft return invoice (subtype DEV) with a business partner — the shape a NEW
-// "factura de devolución" has right after the save-navigate remount.
-const DEV_DRAFT = {
+// Draft rectificative invoice (unified subtype RECTIFICATIVA — ETP-4737
+// merged the former separate NC/DEV subtypes) with a business partner — the
+// shape a NEW "factura rectificativa" has right after the save-navigate
+// remount.
+const RECTIFICATIVA_DRAFT = {
   documentStatus: 'DR',
   businessPartner: 'bp-1',
-  arInvoiceSubtype: 'DEV',
+  arInvoiceSubtype: 'RECTIFICATIVA',
 };
 
 // Draft regular invoice (subtype FAC).
@@ -86,7 +92,7 @@ const BASE_PROPS = {
   apiBaseUrl: '/api/sales-invoice',
 };
 
-const MODAL_IDS = ['import-shipment-modal', 'import-order-modal', 'import-return-modal'];
+const MODAL_IDS = ['import-shipment-modal', 'import-order-modal', 'import-return-modal', 'import-source-modal'];
 
 function expectOnlyModal(expectedId) {
   for (const id of MODAL_IDS) {
@@ -103,12 +109,12 @@ beforeEach(() => {
 });
 
 describe('InvoiceBottomPanel.linesEmptyState — import modal selection (ETP-4459)', () => {
-  it("forceOpen='return' on a DEV draft mounts the RETURN modal, not shipment (remount regression)", () => {
+  it("forceOpen='return' on a RECTIFICATIVA draft mounts the RETURN modal, not shipment (remount regression)", () => {
     const onForceOpenHandled = vi.fn();
     render(
       <LinesEmptyState
         {...BASE_PROPS}
-        data={DEV_DRAFT}
+        data={RECTIFICATIVA_DRAFT}
         forceOpen="return"
         onForceOpenHandled={onForceOpenHandled}
       />,
@@ -147,10 +153,29 @@ describe('InvoiceBottomPanel.linesEmptyState — import modal selection (ETP-445
     expect(onForceOpenHandled).toHaveBeenCalled();
   });
 
-  it("clicking the return-import button on a DEV draft calls onSave('return') and mounts the return modal when onSave resolves truthy", async () => {
+  // ETP-4737: the RECTIFICATIVA subtype offers BOTH import options together —
+  // "Import from Return Shipment" AND the new "Import from Source Invoice" —
+  // whereas a FAC draft only ever offers shipment/order.
+  it('renders BOTH the return-shipment and source-invoice import buttons together for a RECTIFICATIVA draft (dual-option UI)', () => {
+    render(<LinesEmptyState {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} />);
+    expect(screen.getByText('importFromReturnShipment')).toBeInTheDocument();
+    expect(screen.getByText('importFromSourceInvoice')).toBeInTheDocument();
+    expect(screen.queryByText('importFromShipment')).toBeNull();
+    expect(screen.queryByText('importFromSalesOrder')).toBeNull();
+  });
+
+  it('renders the shipment/order import buttons (not return/source) for a FAC draft', () => {
+    render(<LinesEmptyState {...BASE_PROPS} data={FAC_DRAFT} />);
+    expect(screen.getByText('importFromShipment')).toBeInTheDocument();
+    expect(screen.getByText('importFromSalesOrder')).toBeInTheDocument();
+    expect(screen.queryByText('importFromReturnShipment')).toBeNull();
+    expect(screen.queryByText('importFromSourceInvoice')).toBeNull();
+  });
+
+  it("clicking the return-import button on a RECTIFICATIVA draft calls onSave('return') and mounts the return modal when onSave resolves truthy", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(true);
-    render(<LinesEmptyState {...BASE_PROPS} data={DEV_DRAFT} onSave={onSave} />);
+    render(<LinesEmptyState {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
     // No modal before the click.
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
     // useUI mock returns the key, so the button is labelled with the i18n key.
@@ -159,10 +184,20 @@ describe('InvoiceBottomPanel.linesEmptyState — import modal selection (ETP-445
     expectOnlyModal('import-return-modal');
   });
 
+  it("clicking the source-invoice import button on a RECTIFICATIVA draft calls onSave('sourceInvoice') and mounts the source modal", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<LinesEmptyState {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
+    for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
+    await user.click(screen.getByText('importFromSourceInvoice'));
+    expect(onSave).toHaveBeenCalledWith('sourceInvoice');
+    expectOnlyModal('import-source-modal');
+  });
+
   it('does not mount any modal when onSave resolves falsy (save failed)', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(false);
-    render(<LinesEmptyState {...BASE_PROPS} data={DEV_DRAFT} onSave={onSave} />);
+    render(<LinesEmptyState {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
     await user.click(screen.getByText('importFromReturnShipment'));
     expect(onSave).toHaveBeenCalledWith('return');
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
@@ -179,12 +214,12 @@ describe('InvoiceBottomPanel.linesEmptyState — import modal selection (ETP-445
 });
 
 describe('InvoiceBottomPanel.detailExtraActions — import modal selection (ETP-4459)', () => {
-  it("forceOpen='return' on a DEV draft mounts the RETURN modal, not shipment (remount regression)", () => {
+  it("forceOpen='return' on a RECTIFICATIVA draft mounts the RETURN modal, not shipment (remount regression)", () => {
     const onForceOpenHandled = vi.fn();
     render(
       <DetailExtraActions
         {...BASE_PROPS}
-        data={DEV_DRAFT}
+        data={RECTIFICATIVA_DRAFT}
         forceOpen="return"
         onForceOpenHandled={onForceOpenHandled}
       />,
@@ -221,14 +256,33 @@ describe('InvoiceBottomPanel.detailExtraActions — import modal selection (ETP-
     expect(onForceOpenHandled).toHaveBeenCalled();
   });
 
-  it("clicking the return trigger on a DEV draft calls onSave('return') and mounts the return modal when onSave resolves truthy", async () => {
+  // ETP-4737: both trigger links (return-shipment + source-invoice) render
+  // together for a RECTIFICATIVA draft, mirroring linesEmptyState's dual UI.
+  it('renders BOTH the return-shipment and source-invoice trigger links together for a RECTIFICATIVA draft', () => {
+    render(<DetailExtraActions {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} />);
+    expect(screen.getByText('importFromReturnShipment')).toBeInTheDocument();
+    expect(screen.getByText('importFromSourceInvoice')).toBeInTheDocument();
+    expect(screen.queryByText('importFromShipment')).toBeNull();
+  });
+
+  it("clicking the return trigger on a RECTIFICATIVA draft calls onSave('return') and mounts the return modal when onSave resolves truthy", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(true);
-    render(<DetailExtraActions {...BASE_PROPS} data={DEV_DRAFT} onSave={onSave} />);
+    render(<DetailExtraActions {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
     await user.click(screen.getByText('importFromReturnShipment'));
     expect(onSave).toHaveBeenCalledWith('return');
     expectOnlyModal('import-return-modal');
+  });
+
+  it("clicking the source-invoice trigger on a RECTIFICATIVA draft calls onSave('sourceInvoice') and mounts the source modal", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<DetailExtraActions {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
+    for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
+    await user.click(screen.getByText('importFromSourceInvoice'));
+    expect(onSave).toHaveBeenCalledWith('sourceInvoice');
+    expectOnlyModal('import-source-modal');
   });
 
   it("clicking the shipment trigger on a FAC draft calls onSave('shipment')", async () => {
@@ -243,7 +297,7 @@ describe('InvoiceBottomPanel.detailExtraActions — import modal selection (ETP-
   it('does not mount any modal when onSave resolves falsy (save failed)', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(false);
-    render(<DetailExtraActions {...BASE_PROPS} data={DEV_DRAFT} onSave={onSave} />);
+    render(<DetailExtraActions {...BASE_PROPS} data={RECTIFICATIVA_DRAFT} onSave={onSave} />);
     await user.click(screen.getByText('importFromReturnShipment'));
     for (const id of MODAL_IDS) expect(screen.queryByTestId(id)).toBeNull();
   });

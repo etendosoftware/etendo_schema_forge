@@ -132,7 +132,7 @@ describe('ProductCustomTable — identity cell & Advanced Filter fields (ETP-460
   it('invokes the stored-computed sale/purchase/stock column render callbacks', () => {
     render(<ProductCustomTable data={[]} />);
     const row = { eTGOSalePrice: 12.5, eTGOPurchasePrice: 7, eTGOStock: 3, 'currency$_identifier': 'USD' };
-    for (const key of ['sale', 'purchase', 'stock']) {
+    for (const key of ['salePrice', 'purchasePrice', 'stock']) {
       const col = capturedProps.columns.find((c) => c.key === key);
       expect(typeof col.render).toBe('function');
       expect(col.render(row)).toBeTruthy();

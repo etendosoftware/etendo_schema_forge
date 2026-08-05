@@ -36,6 +36,27 @@ WHERE o.ad_client_id = :client_id
 For `@type: webhook`, add a `-- @webhook: <Name>` header instead of `@apply`;
 the webhook MUST be atomic on its own (the runner cannot wrap it in a SQL tx).
 
+### Optional `@report` section
+
+A third, optional section may follow `@apply`:
+
+```sql
+-- @report
+-- Read-only. Runs after a successful @apply, in the SAME transaction. Its
+-- result rows are formatted into the ledger's `detail` column on the APPLIED
+-- row. Use this when @apply must legitimately skip some rows (a guard that
+-- protects against an unsafe state) and an operator needs to know which rows
+-- still need manual attention.
+SELECT l.value AS locator, ...
+FROM ... WHERE ad_client_id = :client_id AND <still-needs-attention>;
+```
+
+A fix with no `@report` section behaves exactly as before — `detail` stays
+`null` on an `APPLIED` row. See `20260803T160000Z__R19-locator-inventory-status.sql`
+for a worked example (skips flipping a locator with negative on-hand stock,
+reports which product/attribute/UOM/locator combination needs a manual
+physical-inventory correction first).
+
 ## Mandatory rules
 
 1. **Tenant scope is `:client_id` — non-negotiable.** Every statement in both

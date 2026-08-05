@@ -32,8 +32,8 @@ function getColumns() {
 
 describe('ProductCustomTable — stored computed column config (ETP-4603)', () => {
   const cases = [
-    { key: 'sale', backendKey: 'eTGOSalePrice' },
-    { key: 'purchase', backendKey: 'eTGOPurchasePrice' },
+    { key: 'salePrice', backendKey: 'eTGOSalePrice' },
+    { key: 'purchasePrice', backendKey: 'eTGOPurchasePrice' },
     { key: 'stock', backendKey: 'eTGOStock' },
   ];
 
@@ -72,14 +72,14 @@ describe('ProductCustomTable — stored computed column config (ETP-4603)', () =
 
   it('the sale and purchase columns do NOT carry computed metadata', () => {
     const cols = getColumns();
-    expect(cols.find((c) => c.key === 'sale').computed).toBeUndefined();
-    expect(cols.find((c) => c.key === 'purchase').computed).toBeUndefined();
+    expect(cols.find((c) => c.key === 'salePrice').computed).toBeUndefined();
+    expect(cols.find((c) => c.key === 'purchasePrice').computed).toBeUndefined();
   });
 
   it('exposes per-locale labels for the numeric columns (filter picker localization)', () => {
     const cols = getColumns();
-    expect(cols.find((c) => c.key === 'sale').labels).toEqual({ en_US: 'Sales', es_ES: 'Venta' });
-    expect(cols.find((c) => c.key === 'purchase').labels).toEqual({ en_US: 'Purchase', es_ES: 'Compra' });
+    expect(cols.find((c) => c.key === 'salePrice').labels).toEqual({ en_US: 'Sales', es_ES: 'Venta' });
+    expect(cols.find((c) => c.key === 'purchasePrice').labels).toEqual({ en_US: 'Purchase', es_ES: 'Compra' });
     expect(cols.find((c) => c.key === 'stock').labels).toEqual({ en_US: 'Stock', es_ES: 'Stock' });
   });
 });

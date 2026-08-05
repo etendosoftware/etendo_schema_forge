@@ -1,4 +1,49 @@
 /**
+ * Canonical business-flow ordering for status codes, independent of
+ * data-source arrival order (in-memory rows vs. backend distinct-values
+ * fetch). Buckets follow: Draft -> In process -> Awaiting -> Completed ->
+ * Closed -> Voided. Codes not listed here are unknown to this catalog and
+ * are sorted alphabetically after all known codes (see compareStatusCodes).
+ */
+export const STATUS_ORDER = [
+  // Draft / not started
+  'DR', 'DRAFT', 'FALSE', 'N',
+  // In process
+  'IP', 'M', 'UE', 'RPAE',
+  // Awaiting
+  'RPAP',
+  // Completed
+  'CO', 'CA', 'ETGO_CI', 'TRUE', 'Y', 'YES', 'PROCESSED',
+  'RPR', 'RPPC', 'PPM', 'PWNC', 'RDNC',
+  // Closed
+  'CL', 'PA',
+  // Voided / rejected
+  'VO', 'CJ', 'RPVOID', 'P',
+];
+
+/**
+ * Deterministic comparator for status codes, used to keep the "All
+ * statuses" dropdown order fixed across re-renders — regardless of whether
+ * codes came first from in-memory rows or from the (uncached) backend
+ * distinct-values fetch resolving later. Known codes follow STATUS_ORDER;
+ * unknown codes are pushed to the end, sorted alphabetically so they are
+ * still stable relative to each other.
+ */
+export function compareStatusCodes(a, b) {
+  const normalize = (c) => String(c ?? '').toUpperCase();
+  const na = normalize(a);
+  const nb = normalize(b);
+  const ia = STATUS_ORDER.indexOf(na);
+  const ib = STATUS_ORDER.indexOf(nb);
+  if (ia !== -1 && ib !== -1) return ia - ib;
+  if (ia !== -1) return -1;
+  if (ib !== -1) return 1;
+  if (na < nb) return -1;
+  if (na > nb) return 1;
+  return 0;
+}
+
+/**
  * Map a status code to one of the 4 Figma semantic tones.
  * Used by StatusTag (grid). Does NOT affect DetailView.
  */

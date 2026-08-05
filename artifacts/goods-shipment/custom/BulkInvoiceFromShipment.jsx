@@ -21,9 +21,19 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
     return { same: allSame, name };
   }, [invoiceableRows]);
 
+  // ETP-4028: shipments now carry their own currency — a single invoice cannot mix
+  // lines from documents in different currencies, so block the batch the same way
+  // an inconsistent business partner already blocks it.
+  const currencyCheck = useMemo(() => {
+    if (invoiceableRows.length === 0) return { same: false };
+    const firstCurrency = invoiceableRows[0].etgoCurrency;
+    const allSame = invoiceableRows.every(r => r.etgoCurrency === firstCurrency);
+    return { same: allSame };
+  }, [invoiceableRows]);
+
   const invoiceableCount = invoiceableRows.length;
   const allInvoiced = invoiceableCount === 0;
-  const canCreate = invoiceableCount > 0 && bpCheck.same;
+  const canCreate = invoiceableCount > 0 && bpCheck.same && currencyCheck.same;
 
   if (selectedRows.length < 1) return null;
 
@@ -31,7 +41,9 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
     ? ui('allShipmentsAlreadyInvoiced')
     : !bpCheck.same
       ? ui('selectShipmentsSameCustomer')
-      : undefined;
+      : !currencyCheck.same
+        ? ui('selectShipmentsSameCurrency')
+        : undefined;
 
   return (
     <>

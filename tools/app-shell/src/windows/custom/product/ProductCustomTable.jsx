@@ -18,8 +18,8 @@ const columns = [
     subtitle: 'searchKey',
     media: { field: 'image', kind: 'neoImage', fallback: 'box' },
     parts: [
-      { key: 'searchKey', column: 'Value', type: 'string', labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
-      { key: 'name', column: 'Name', type: 'string', labels: { en_US: 'Name', es_ES: 'Nombre' } },
+      { key: 'searchKey', column: 'Value', type: 'string', required: true, labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
+      { key: 'name', column: 'Name', type: 'string', required: true, labels: { en_US: 'Name', es_ES: 'Nombre' } },
     ],
   },
   // NOTE: no split `name` / `searchKey` filter columns here. ETP-4609 needed them
@@ -45,11 +45,15 @@ const columns = [
   // row, sort and filter run server-side on the real entity property — hence:
   //   - `sortable: true`
   //   - `backendSortKey` / `backendFilterKey` map the display key to that property
-  //     (the column `key` stays 'sale'/'purchase'/'stock' for React + render)
+  //     (the column `key` is display-only, for React + render). The price keys are
+  //     'salePrice'/'purchasePrice', NOT 'sale'/'purchase': those names belong to the
+  //     contract's IsSold/IsPurchased booleans (see ProductAdditionalInfoPanel), and
+  //     reusing them here made one key mean two things in the same window — which
+  //     the F19 validator rule reports as a required-flag divergence.
   //   - `filterMode: 'numeric'` so the advanced filter offers numeric operators
   //     (greaterThan/between/…) and a number input instead of text `iContains`.
   {
-    key: 'sale',
+    key: 'salePrice',
     labels: { en_US: 'Sales', es_ES: 'Venta' },
     type: 'custom',
     sortable: true,
@@ -61,7 +65,7 @@ const columns = [
     ),
   },
   {
-    key: 'purchase',
+    key: 'purchasePrice',
     labels: { en_US: 'Purchase', es_ES: 'Compra' },
     type: 'custom',
     sortable: true,

@@ -70,6 +70,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `category` | string | Inferred | `"sales"`, `"purchases"`, `"inventory"`, `"finance"`, `"accounting"`, `"master"`, `"project"`, `"general"` | UI routing and navigation grouping. |
 | `name` | string | From AD | — | Display name for breadcrumbs and titles. |
 | `agentPrompt` | string | `null` | Free text | Spec-level guidance for AI agents that consume the NEO Headless MCP server. Surfaced in `agentProfile.agentPrompt` (contract) and persisted to `ETGO_SF_SPEC.AGENT_PROMPT`, from where `neo_discover` returns it per spec. Empty or whitespace-only values clear the persisted prompt and are omitted from the MCP response. |
+| `showInMcp` | boolean | `true` | `false` | **Opt-out** MCP visibility. Persisted to `ETGO_SF_SPEC.SHOWINMCP` by `push-to-neo`. Only an explicit `false` hides the spec from the NEO Headless **MCP** (both `neo_discover`/tools listing and resource reads) — absent or `true` keeps it visible, so the ~50 existing decisions files need no edit. **MCP-only**: `isactive` is untouched, so the spec keeps serving the REST/OpenAPI API and every other consumer. Backed by the `Show in MCP` checkbox on the *Schema Forge Configuration* window (Spec tab). Added ETP-4278. |
 | `layoutType` | string | `"default"` | `"default"`, `"kanban"`, `"calendar"`, `"list-modal"`, `"custom"` | Frontend rendering mode. See `docs/window-templates.md`. |
 | `templateConfig` | object | `null` | Layout-specific | Extra config for non-default layouts. `kanban`/`calendar`: `groupBy`, `dateField`, etc. `list-modal`: `titleKey`, `editTitleKey`, `bannerKey`, `searchPlaceholderKey`, `newLabelKey`, `autoPriorityField`, `autoPriorityStep`, `sections` (ordered `[{ key, label }]`), `backLabelKey` (toolbar back-button i18n key; default `cancel`), `backTo` (route to navigate to on back; defaults to history `-1`), `toolbarFilters` (declarative dropdown filters `[{ key, field, allLabelKey, options: [{ value, labelKey }] }]`, applied client-side over the loaded rows). All strings are i18n keys. See the `list-modal` section in `docs/window-templates.md`. |
 | `detailEntity` | string \| null | Auto-inferred | Entity name or `null` | Explicitly sets which entity is the detail/lines tab. When omitted, the generator picks the first non-primary entity automatically. Set to `null` to create a header-only page (no detail tab). Set to a specific entity name to override the auto-inference. |
@@ -793,6 +794,8 @@ Two field-level props control how the grid column renders raw values as labeled 
 2. `DistinctEnumPicker` (in `AdvancedFilterBuilder.jsx`) reads `enumLabels` to populate the advanced/conditional filter value dropdown — so the filter shows translated labels instead of raw values.
 3. `ListFilterBar.jsx` uses the same `enumLabels` to drive the status quick-filter pills above the list.
 
+**"All statuses" dropdown label resolution (ETP-4696):** `labelForStatus` in `ListFilterBar.jsx` — the function that renders each option text in the "All statuses" quick-filter dropdown — delegates 100% to `statusLabel(code, dictionary, ui, statusCol?.enumLabels)`, the exact same resolution function `DataTable.cellRenderers.jsx` uses for the grid cell badge (also used by `DocumentStatusPill.jsx`, `CloneOrderModal.jsx`, `ReportDrawer.jsx`, `useInvoicePreview.js`). It previously had its own local lookup that bypassed `statusLabel()`, so codes without a fortuitous translation (`PWNC`, `RDNC`, `ETGO_CI`, `RPVOID`) rendered in raw/English form in the dropdown while the grid cell for the same row translated correctly. There is no second translation mechanism to maintain: extending the catalog — a new `enumValues` entry in `decisions.json`, a `genericLabels` key in `{es_ES,en_US}.json`, or an `AD_Ref_List_Trl` row — is picked up by `statusLabel()` once, and both the grid cell and the dropdown reflect it automatically.
+
 **Key rules:**
 
 - This is a **Schema Forge display mapping only** — the Etendo AD column reference is never modified.
@@ -901,6 +904,19 @@ cell falls back to a plain value (with enum-label / FK identifier resolution).
 | `allowCreate` | boolean | `false` | Opt-in (future): on a selector/enum field, surface the inline "+ create" action in the combobox. Currently OFF for all windows — the flag flows through the pipeline so a field can wire `createLabel`/`onCreateRequest` later without a generator change. |
 | `clearable` | boolean | `true` (header) / `!required` (line grid) | Controls the chip's clear (`×`) button. On the header's unified `CreatableSearchSelect`, defaults to `true` (shown) for every selector/enum field, including required ones — the header form has an explicit Save step, so a required field cleared to empty is caught before it ever reaches the backend. On the **line grid**'s `InlineSearchCombo` (`artifacts/{w}/generated/.../DataTable.jsx`, `InlineLinesPanel.jsx`), every field edit auto-saves immediately with no review step, so the `×` defaults to **hidden** whenever `field.required === true` (e.g. Sales Order line's `tax`) — clearing it there always fails against a NOT NULL column and the grid can't turn the resulting generic backend error into a helpful field-level message. Set `"clearable": false` to force-hide it on a specific field regardless of `required`, or `"clearable": true` to force-show it (opt back into the risk) on a required field that has a safe fallback (e.g. a server-side default kicks in on save). |
 | `dependsOn` | object \| null | `null` | Parent field dependency for cascading selectors. |
+
+**`DocumentType` carve-out — saved-value translation is window-scoped (ETP-4737):** the `optionTranslator`
+built for `reference: 'DocumentType'` fields (renames/hides options — reversed/credit/return/rectificativa
+tabs) is generic to every window, but the extra step that also translates the already-saved/selected value
+through that same translator (so a saved record shows the same label the options list would show) is
+gated to `sales-invoice` and `purchase-invoice` ONLY, via a `windowName` prop threaded from each window's
+`index.jsx` → `HeaderPage` → `DetailView` → `EntityForm` (see `SAVED_VALUE_TRANSLATION_WINDOWS` in
+`EntityForm.jsx`). `payment-out` (`documentType`) and `purchase-order` (`transactionDocument`) keep showing
+the raw AD identifier for their saved value — their real doc-type vocabulary ("AP Payment", "Credit Order",
+etc.) doesn't match the translator's invoice-specific keywords and would otherwise mislabel the field (e.g.
+falling back to "Factura"). This is a hardcoded window-name gate inside a shared component — a deliberate,
+narrow exception (same class as the pre-existing `DocumentType` carve-out itself), not a decisions.json
+option; there is nothing to configure per-window here.
 
 **dependsOn format:**
 ```json

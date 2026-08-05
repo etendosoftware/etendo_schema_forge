@@ -5,6 +5,7 @@ import {
   tenantLabel,
   computeWatermark,
   toExitCode,
+  formatReportDetail,
 } from '../src/data-fixes/run.js';
 
 describe('parseArgs', () => {
@@ -132,5 +133,46 @@ describe('toExitCode', () => {
 
   it('maps zero to exit code 0', () => {
     assert.equal(toExitCode(0), 0);
+  });
+});
+
+describe('formatReportDetail', () => {
+  it('returns null for no rows (nothing to report)', () => {
+    assert.equal(formatReportDetail([]), null);
+  });
+
+  it('returns null for null/undefined input', () => {
+    assert.equal(formatReportDetail(null), null);
+    assert.equal(formatReportDetail(undefined), null);
+  });
+
+  it('formats a single row as key=value pairs prefixed with a count header', () => {
+    const out = formatReportDetail([{ locator: 'L03', qtyonhand: -2 }]);
+    assert.equal(out, '1 row(s) need manual attention:\n- locator=L03, qtyonhand=-2');
+  });
+
+  it('formats multiple rows, one bullet line each, in order', () => {
+    const out = formatReportDetail([
+      { locator: 'L03', product: 'A' },
+      { locator: 'T02', product: 'B' },
+    ]);
+    assert.equal(
+      out,
+      '2 row(s) need manual attention:\n- locator=L03, product=A\n- locator=T02, product=B',
+    );
+  });
+
+  it('caps the output length and appends an ellipsis when it exceeds maxLen', () => {
+    const rows = Array.from({ length: 500 }, (_, i) => ({ locator: `L${i}`, note: 'x'.repeat(20) }));
+    const out = formatReportDetail(rows, { maxLen: 200 });
+    assert.ok(out.length <= 200);
+    assert.ok(out.endsWith('...'));
+    // The count header (based on the FULL row count, not the truncated list) survives the cap.
+    assert.ok(out.startsWith('500 row(s) need manual attention:'));
+  });
+
+  it('does not truncate when the formatted text fits within the default maxLen', () => {
+    const out = formatReportDetail([{ a: 1 }]);
+    assert.ok(!out.endsWith('...'));
   });
 });

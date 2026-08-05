@@ -14,6 +14,7 @@ export default function ConfirmWithCreditButtonBase({
   specName, entityName,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
+  postConfirmButtonLabel,
   cardTitle: cardTitleProp,
   cardDesc: cardDescProp,
   extraActions,
@@ -47,7 +48,7 @@ export default function ConfirmWithCreditButtonBase({
       {status === 'CO' && !hasReturnInvoice && (
         <button type="button" data-testid="action-create-return-invoice" onClick={() => setShowModal(true)}
           style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          {ui('createReturnInvoice')}
+          {postConfirmButtonLabel ?? ui('createReturnInvoice')}
         </button>
       )}
       {extraActions}
