@@ -50,6 +50,20 @@ Follow `docs/branch-workflow.md` exactly:
 - PRs target the branch the coordinator specifies (normally the current epic branch, or a grouping/umbrella feature branch when working a batched sweep)
 - Regular merge only, never squash, never `--no-verify` unless explicitly told
 - Never push directly to `develop` or `main`
+
+**Upstream tracking (MANDATORY).** A new branch must NEVER inherit the base branch as its upstream.
+`git checkout -b feature/ETP-XXXX origin/epic/ETP-YYYY` silently sets the upstream to the *epic*, which
+then shows up as `feature/ETP-XXXX:epic/ETP-YYYY` in the statusline and makes ahead/behind counts read
+against the wrong ref. Correct sequence when creating a branch:
+
+```bash
+git checkout -b feature/ETP-XXXX --no-track origin/epic/ETP-YYYY
+```
+
+The end state of branch creation is: **no upstream at all**. The human pushes the branch himself with
+`git push -u origin feature/ETP-XXXX`, which is what sets the upstream to `origin/feature/ETP-XXXX`.
+Never push a branch to publish it just to fix its tracking, and never leave the base branch as upstream.
+Verify with `git rev-parse --abbrev-ref feature/ETP-XXXX@{upstream}` (expect "no upstream") and report it.
 </branch_conventions>
 
 <communication_style>
