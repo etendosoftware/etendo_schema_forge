@@ -78,7 +78,7 @@ vi.mock('@/lib/lineFieldChange.js', () => ({
 }));
 
 vi.mock('@/lib/selectorCatalog.js', () => ({
-  getCatalogOptions: () => [],
+  getCatalogOptions: vi.fn(() => []),
 }));
 
 vi.mock('@/lib/formatAmount.js', () => ({
@@ -93,6 +93,7 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
+import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import {
   normalizePatchFieldValues,
   applyCalloutFieldUpdates,
@@ -248,6 +249,57 @@ describe('applyCalloutFieldUpdates', () => {
     );
     expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
     expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+  });
+
+  // handleEntryIdentifierChange's `entry.value && api?.selectors` branch (ETP-4706):
+  // callout returned an id without _identifier — resolve the display label from an
+  // already-loaded catalog instead of leaving the field's identifier blank.
+  describe('resolving a missing identifier from loaded catalogs', () => {
+    afterEach(() => {
+      vi.mocked(getCatalogOptions).mockReset().mockReturnValue([]);
+    });
+
+    it('emits key$_identifier from a matching catalog option (label field)', () => {
+      vi.mocked(getCatalogOptions).mockReturnValue([{ id: 'WH1', label: 'Main Warehouse' }]);
+      const a = makeArgs({ api: { selectors: [{ field: 'warehouse', entity: 'lines' }] } });
+      applyCalloutFieldUpdates(
+        { warehouse: { value: 'WH1' } },
+        a,
+      );
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
+    });
+
+    it('falls back to name, then _identifier, when the option has no label', () => {
+      vi.mocked(getCatalogOptions).mockReturnValue([{ id: 'WH1', name: 'Main Warehouse (name)' }]);
+      const a = makeArgs({ api: { selectors: [{ field: 'warehouse', entity: 'lines' }] } });
+      applyCalloutFieldUpdates(
+        { warehouse: { value: 'WH1' } },
+        a,
+      );
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse (name)');
+    });
+
+    it('does not emit an identifier when no selector matches the field', () => {
+      vi.mocked(getCatalogOptions).mockReturnValue([{ id: 'WH1', label: 'Main Warehouse' }]);
+      const a = makeArgs({ api: { selectors: [{ field: 'otherField', entity: 'lines' }] } });
+      applyCalloutFieldUpdates(
+        { warehouse: { value: 'WH1' } },
+        a,
+      );
+      expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    });
+
+    it('does not emit an identifier when the selector matches but no catalog option has that id', () => {
+      vi.mocked(getCatalogOptions).mockReturnValue([{ id: 'OTHER_ID', label: 'Not This One' }]);
+      const a = makeArgs({ api: { selectors: [{ field: 'warehouse', entity: 'lines' }] } });
+      applyCalloutFieldUpdates(
+        { warehouse: { value: 'WH1' } },
+        a,
+      );
+      expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    });
   });
 });
 

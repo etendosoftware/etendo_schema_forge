@@ -109,7 +109,7 @@ vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
   ),
 }));
 
-vi.mock('@/components/contract-ui', () => ({
+vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   ListView: (props) => {
     lastListViewProps = props;
     return (
@@ -359,8 +359,10 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
     render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastListViewProps.labelOverrides.en_US.OutstandingAmt).toBe('Pending Payment');
+    // ETP-4737: the former separate creditNotesTab/returnsTab subset filters
+    // are unified into a single rectificativeInvoicesTab filter.
     expect(lastListViewProps.subsetFilters.map((f) => f.label)).toEqual([
-      'allTab', 'invoicesTab', 'creditNotesTab', 'returnsTab',
+      'allTab', 'invoicesTab', 'rectificativeInvoicesTab',
     ]);
   });
 

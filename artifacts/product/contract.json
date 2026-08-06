@@ -1,8 +1,8 @@
 {
-  "version": "0.25.0",
-  "generatedAt": "2026-07-07T21:53:26.027Z",
-  "updatedAt": "2026-07-29T15:55:50.605Z",
-  "checksum": "8af9b3b7c3d0e43e",
+  "version": "0.26.1",
+  "generatedAt": "2026-07-30T22:44:13.503Z",
+  "updatedAt": "2026-08-04T00:31:37.014Z",
+  "checksum": "1dacf0ff6275a2be",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -25,7 +25,8 @@
             "productRevenue",
             "productCOGS"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -174,6 +175,30 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 2,
+            "multiField": {
+              "subtitle": "searchKey",
+              "media": {
+                "field": "image",
+                "kind": "neoImage",
+                "fallback": "box"
+              },
+              "parts": [
+                {
+                  "field": "searchKey",
+                  "labels": {
+                    "en_US": "Identifier",
+                    "es_ES": "Identificador"
+                  }
+                },
+                {
+                  "field": "name",
+                  "labels": {
+                    "en_US": "Name",
+                    "es_ES": "Nombre"
+                  }
+                }
+              ]
+            },
             "validation": {
               "required": true,
               "maxLength": 60
@@ -583,6 +608,66 @@
             "validation": {
               "maxLength": 32
             }
+          },
+          {
+            "name": "eTGOPurchasePrice",
+            "apiKey": "eTGOPurchasePrice",
+            "column": "EM_ETGO_Purchase_Price",
+            "label": "EM_ETGO_Purchase_Price",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "section": "other",
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "eTGOSalePrice",
+            "apiKey": "eTGOSalePrice",
+            "column": "EM_ETGO_Sale_Price",
+            "label": "EM_ETGO_Sale_Price",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "section": "other",
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "eTGOStock",
+            "apiKey": "eTGOStock",
+            "column": "EM_ETGO_Stock",
+            "label": "EM_ETGO_Stock",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "section": "other",
+            "computed": {
+              "mode": "stored",
+              "refresh": "queued"
+            },
+            "validation": {
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [
@@ -912,6 +997,7 @@
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "productAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -2300,7 +2386,8 @@
             "productRevenue",
             "productCOGS"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -3376,6 +3463,30 @@
             "required": true
           },
           {
+            "name": "eTGOPurchasePrice",
+            "apiKey": "eTGOPurchasePrice",
+            "column": "EM_ETGO_Purchase_Price",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGOSalePrice",
+            "apiKey": "eTGOSalePrice",
+            "column": "EM_ETGO_Sale_Price",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGOStock",
+            "apiKey": "eTGOStock",
+            "column": "EM_ETGO_Stock",
+            "type": "decimal",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "updated",
             "apiKey": "updated",
             "column": "Updated",
@@ -3390,30 +3501,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTGOPurchasePrice",
-            "apiKey": "eTGOPurchasePrice",
-            "column": "EM_ETGO_Purchase_Price",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "eTGOSalePrice",
-            "apiKey": "eTGOSalePrice",
-            "column": "EM_ETGO_Sale_Price",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "eTGOStock",
-            "apiKey": "eTGOStock",
-            "column": "EM_ETGO_Stock",
-            "type": "decimal",
-            "visibility": "system",
-            "required": false
           }
         ],
         "javaQualifier": "productDefaultsHandler"
@@ -3624,17 +3711,17 @@
             "required": true
           },
           {
-            "name": "relatedProductCategory",
-            "apiKey": "relatedProductCategory",
-            "column": "M_Relatedproductcategory_ID",
+            "name": "relatedProduct",
+            "apiKey": "relatedProduct",
+            "column": "M_Relatedproduct_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "relatedProduct",
-            "apiKey": "relatedProduct",
-            "column": "M_Relatedproduct_ID",
+            "name": "relatedProductCategory",
+            "apiKey": "relatedProductCategory",
+            "column": "M_Relatedproductcategory_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -4516,6 +4603,14 @@
             "required": false
           },
           {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
             "name": "checkpricedifference",
             "apiKey": "checkpricedifference",
             "column": "Checkpricedifference",
@@ -4545,14 +4640,6 @@
             "column": "CreatedBy",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "uOM",
-            "apiKey": "uOM",
-            "column": "C_UOM_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
             "required": true
           },
           {
@@ -4890,6 +4977,14 @@
             "required": true
           },
           {
+            "name": "etgoCost",
+            "apiKey": "etgoCost",
+            "column": "EM_Etgo_Cost",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "etgoValuation",
             "apiKey": "etgoValuation",
             "column": "EM_Etgo_Valuation",
@@ -4920,14 +5015,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "etgoCost",
-            "apiKey": "etgoCost",
-            "column": "EM_Etgo_Cost",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
           }
         ],
         "javaQualifier": "productStockWarehouseHandler"
@@ -5590,7 +5677,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/product/accounting",
         "detailUrl": "/sws/neo/product/accounting/{id}",
         "supportedFilters": []
@@ -6754,6 +6841,30 @@
         "description": "Field 'description' should be present in product"
       },
       {
+        "id": "t-field-presence-product-eTGOPurchasePrice",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOPurchasePrice",
+        "runner": "node",
+        "description": "Field 'eTGOPurchasePrice' should be present in product"
+      },
+      {
+        "id": "t-field-presence-product-eTGOSalePrice",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOSalePrice",
+        "runner": "node",
+        "description": "Field 'eTGOSalePrice' should be present in product"
+      },
+      {
+        "id": "t-field-presence-product-eTGOStock",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOStock",
+        "runner": "node",
+        "description": "Field 'eTGOStock' should be present in product"
+      },
+      {
         "id": "t-field-presence-product-image",
         "category": "field-presence",
         "entity": "product",
@@ -7392,6 +7503,30 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOPurchasePrice",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOPurchasePrice",
+        "runner": "node",
+        "description": "Field 'eTGOPurchasePrice' should have type 'number' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOSalePrice",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOSalePrice",
+        "runner": "node",
+        "description": "Field 'eTGOSalePrice' should have type 'number' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOStock",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOStock",
+        "runner": "node",
+        "description": "Field 'eTGOStock' should have type 'number' in product"
       },
       {
         "id": "t-field-type-product-image",
@@ -10045,30 +10180,6 @@
         "description": "System field 'enforceAttribute' should exist in backend but not frontend for product"
       },
       {
-        "id": "t-system-field-product-eTGOPurchasePrice",
-        "category": "system-field",
-        "entity": "product",
-        "field": "eTGOPurchasePrice",
-        "runner": "node",
-        "description": "System field 'eTGOPurchasePrice' should exist in backend but not frontend for product"
-      },
-      {
-        "id": "t-system-field-product-eTGOSalePrice",
-        "category": "system-field",
-        "entity": "product",
-        "field": "eTGOSalePrice",
-        "runner": "node",
-        "description": "System field 'eTGOSalePrice' should exist in backend but not frontend for product"
-      },
-      {
-        "id": "t-system-field-product-eTGOStock",
-        "category": "system-field",
-        "entity": "product",
-        "field": "eTGOStock",
-        "runner": "node",
-        "description": "System field 'eTGOStock' should exist in backend but not frontend for product"
-      },
-      {
         "id": "t-system-field-product-expenseType",
         "category": "system-field",
         "entity": "product",
@@ -11130,25 +11241,25 @@
       }
     ],
     "summary": {
-      "total": 661,
+      "total": 664,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
         "default-value-type": 27,
         "displaylogic-evaluable": 5,
         "displaylogic-valid": 5,
-        "field-presence": 80,
-        "field-type": 80,
+        "field-presence": 83,
+        "field-type": 83,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 141,
         "searchable-filters": 5,
         "selector-endpoint": 27,
-        "system-field": 254,
+        "system-field": 251,
         "visibility": 12
       },
       "byRunner": {
-        "node": 661,
+        "node": 664,
         "junit": 0
       }
     }

@@ -137,6 +137,48 @@ describe('parseFix', () => {
     assert.equal(fix.check, '');
     assert.equal(fix.apply, '');
   });
+
+  it('defaults @report to an empty string when the section is absent', () => {
+    const text = ['-- @check', 'SELECT 1;', '-- @apply', 'UPDATE foo SET x = 1;'].join('\n');
+    const fix = parseFix(text, 'fix-no-report');
+    assert.equal(fix.report, '');
+  });
+
+  it('parses an optional @report section following @apply', () => {
+    const text = [
+      '-- @check',
+      'SELECT 1;',
+      '-- @apply',
+      'UPDATE foo SET x = 1;',
+      '-- @report',
+      'SELECT id FROM foo WHERE x <> 1;',
+    ].join('\n');
+    const fix = parseFix(text, 'fix-with-report');
+    assert.equal(fix.check, 'SELECT 1;');
+    assert.equal(fix.apply, 'UPDATE foo SET x = 1;');
+    assert.equal(fix.report, 'SELECT id FROM foo WHERE x <> 1;');
+  });
+
+  it('treats the @report marker case-insensitively', () => {
+    const text = ['-- @apply', 'UPDATE foo SET x = 1;', '-- @REPORT', 'SELECT 1;', '-- @check', 'SELECT 1;'].join('\n');
+    const fix = parseFix(text, 'fix-report-upper');
+    assert.equal(fix.report, 'SELECT 1;');
+  });
+
+  it('joins multi-line @report bodies and trims surrounding whitespace', () => {
+    const text = [
+      '-- @check', 'SELECT 1;',
+      '-- @apply', 'UPDATE foo SET x = 1;',
+      '-- @report', '', 'SELECT a', 'FROM foo;', '',
+    ].join('\n');
+    const fix = parseFix(text, 'fix-report-multiline');
+    assert.equal(fix.report, 'SELECT a\nFROM foo;');
+  });
+
+  it('does not require @report for a sql fix (optional section)', () => {
+    const text = ['-- @check', 'SELECT 1;', '-- @apply', 'UPDATE foo SET x = 1;'].join('\n');
+    assert.doesNotThrow(() => parseFix(text, 'fix-optional-report'));
+  });
 });
 
 describe('parseFixTimestamp', () => {

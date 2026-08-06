@@ -289,46 +289,11 @@ const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
     'vendorBlocking',
 ]);
 
-function derivePersonName(firstName, lastName) {
-    const first = String(firstName ?? '').trim();
-    const last = String(lastName ?? '').trim();
-    return [first, last].filter(Boolean).join(' ').slice(0, 60);
-}
-
-export function applyContactNameDefaults(payload, source) {
-    if (!payload.name) {
-        const derivedName = derivePersonName(
-            payload.firstName ?? source.firstName,
-            payload.lastName ?? source.lastName
-        );
-        if (derivedName) payload.name = derivedName;
-    }
-    if (!payload.username && payload.name) {
-        payload.username = String(payload.name).slice(0, 60);
-    }
-}
-
-export function applyContactsRequiredFields(entity, payload, source = {}) {
-    if (!payload || typeof payload !== 'object') return payload;
-
-    if (entity === 'contact' || entity === 'adUser' || entity === 'user') {
-        applyContactNameDefaults(payload, source);
-    }
-
-    if (entity === 'businessPartner' || entity === 'bpartner') {
-        if (!payload.name && source.name) payload.name = source.name;
-        if (!payload.searchKey) {
-            const fallback = source.searchKey || source.name || payload.name;
-            // C_BPartner.Value (searchKey) is AD-constrained to 40 chars — reproduced via a
-            // real create with a long commercial name ("Value too long. Length 48, maximum
-            // allowed 40"). Name itself has more headroom (60, same as derivePersonName
-            // above), so only this fallback needs truncating.
-            if (fallback) payload.searchKey = String(fallback).slice(0, 40);
-        }
-    }
-
-    return payload;
-}
+// ETP-4156: the per-entity `name` / `username` / `searchKey` derivations that used to live
+// here (applyContactsRequiredFields, branching on the hardcoded entity names contact /
+// adUser / user / businessPartner / bpartner) now run server-side, where they are not tied
+// to a window: BusinessPartnerHandler + ContactNameSyncHandler for C_BPartner, and
+// ContactHandler for AD_User. See docs/neo-headless-extensibility.md.
 
 /**
  * Resolve the backend sort key for a given column.
@@ -364,6 +329,25 @@ function normalizeRecord(record, entityName) {
 
 function normalizeRows(rows, entityName) {
     return Array.isArray(rows) ? rows.map(row => normalizeRecord(row, entityName)) : [];
+}
+
+/**
+ * Everything the list response carried alongside the rows.
+ *
+ * NEO writes a handler's response body verbatim (no output schema, no key
+ * whitelist), and `NeoFieldFilter` only ever rewrites `response.data[i]` — so a
+ * NeoHandler's `afterHandle` can legitimately attach collection-level aggregates
+ * (e.g. a `summary` with balance totals) next to `data`. Returns null when the
+ * payload is a bare array or has no siblings worth surfacing.
+ */
+function extractResponseMeta(data) {
+    const envelope = data?.response;
+    if (!envelope || typeof envelope !== 'object') return null;
+    // Copy-then-delete rather than destructuring `data` into a throwaway binding, which
+    // reads as an unused variable (Sonar S1481).
+    const rest = { ...envelope };
+    delete rest.data;
+    return Object.keys(rest).length > 0 ? rest : null;
 }
 
 const EMPTY_FILTERS = {};
@@ -654,13 +638,12 @@ export function getMethod(isNew) {
     return isNew ? 'POST' : 'PATCH';
 }
 
-export function buildPatchPayload(editing, selected, entity) {
+export function buildPatchPayload(editing, selected) {
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
         if (key === 'id') continue;
         if (value !== selected[key]) payload[key] = value;
     }
-    applyContactsRequiredFields(entity, payload, editing);
     return payload;
 }
 
@@ -675,7 +658,7 @@ export function buildSavePayload({
     formFieldsRef,
 }) {
     if (!isNew && selected) {
-        return buildPatchPayload(editing, selected, entity);
+        return buildPatchPayload(editing, selected);
     }
 
     const payload = {};
@@ -693,7 +676,6 @@ export function buildSavePayload({
         isContactsBusinessPartnerCreate,
         payload,
     );
-    applyContactsRequiredFields(entity, payload, editing);
     return payload;
 }
 
@@ -815,6 +797,12 @@ export function useEntity(entity, childEntity, {
     const logout = useLogout();
     const ui = useUI();
     const [items, setItems] = useState([]);
+    // The list response envelope minus the rows — i.e. any sibling of `response.data`
+    // the backend chose to send (`totalRows`, `hasMore`, and notably aggregates like
+    // `summary`). NEO serializes handler responses verbatim, so a NeoHandler can attach
+    // collection-level aggregates in its afterHandle; without this they were parsed and
+    // dropped. Consumers read it through ListView's `headerContent({ meta })`.
+    const [meta, setMeta] = useState(null);
     const [selected, setSelected] = useState(null);
     const [editing, setEditing] = useState(null);
     const [children, setChildren] = useState([]);
@@ -899,6 +887,7 @@ export function useEntity(entity, childEntity, {
             .then(data => {
                 const rows = normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity);
                 setItems(rows);
+                setMeta(extractResponseMeta(data));
                 startRowRef.current = rows.length;
                 if (rows.length < BATCH_SIZE) setHasMore(false);
                 setLoading(false);
@@ -906,6 +895,7 @@ export function useEntity(entity, childEntity, {
             .catch((e) => {
                 console.error('refresh error', e);
                 setItems([]);
+                setMeta(null);
                 setHasMore(false);
                 setLoading(false);
             });
@@ -938,6 +928,10 @@ export function useEntity(entity, childEntity, {
             .then(data => {
                 const rows = normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity);
                 setItems(prev => [...prev, ...rows]);
+                // Aggregates are computed over the whole collection server-side, so each
+                // page repeats the same values — refreshing keeps them in sync if the
+                // backend ever recomputes, and never mixes page-scoped with total-scoped.
+                setMeta(extractResponseMeta(data));
                 startRowRef.current = start + rows.length;
                 if (rows.length < BATCH_SIZE) setHasMore(false);
                 setLoadingMore(false);
@@ -1385,8 +1379,6 @@ export function useEntity(entity, childEntity, {
                 body[key] = val;
             }
 
-            applyContactsRequiredFields(childEntity, body, childData);
-
             // Include parentId in the body — the backend resolves it to the correct FK field name
             // and uses it to load parent record values for @FieldName@ defaults (generic, no hardcoding).
             body.parentId = selected.id;
@@ -1547,7 +1539,7 @@ export function useEntity(entity, childEntity, {
     }, []);
 
     return {
-        items, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, loadingMore, hasMore, saveError, isSaving,
+        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
         fieldErrors, registerFields,

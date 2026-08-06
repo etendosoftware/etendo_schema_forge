@@ -14,22 +14,23 @@ import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.j
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
+import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoiceSubtype.js';
 
 /* eslint-disable react/prop-types */
 
 const filters = ['documentNo', 'invoiceDate', 'businessPartner', 'orderReference', 'documentStatus'];
 
-const NC_RETURN_TYPES = new Set(['AP CreditMemo', 'Return Material Purchase Invoice', 'Reversed Purchase Invoice']);
-
-const DOC_TYPE_BADGE = {
-  'AP Invoice':                         { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
-  'AP CreditMemo':                      { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'creditNotesTab' },
-  'Return Material Purchase Invoice':   { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
-  'Reversed Purchase Invoice':          { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'returnInvoiceTab' },
+// ETP-4737: badge config keyed by the unified subtype (FAC/RECTIFICATIVA) resolved via
+// getApSubtype — NOT by the raw AD doc-type name. A hardcoded name Set silently misses any
+// new document type sharing the same category (this is exactly how the previous version of
+// this file missed "Factura Rectificativa (compras)" until this fix).
+const SUBTYPE_BADGE = {
+  FAC:            { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: 'invoicesTab' },
+  RECTIFICATIVA:  { color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', label: 'rectificativeInvoicesTab' },
 };
 
 function isNcOrReturn(row) {
-  return NC_RETURN_TYPES.has(row?.['transactionDocument$_identifier']);
+  return getApSubtype(row) === 'RECTIFICATIVA';
 }
 
 export default function PurchaseInvoiceHeaderTable(props) {
@@ -78,8 +79,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
         render: (row) => {
-          const adName = row['transactionDocument$_identifier'];
-          const cfg = DOC_TYPE_BADGE[adName];
+          const cfg = SUBTYPE_BADGE[getApSubtype(row)];
           if (!cfg) return <span className="text-muted-foreground">—</span>;
           return (
             <span
@@ -93,7 +93,11 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'orderReference', column: 'POReference', type: 'string' },
       {
-        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', filterMode: 'date', label: t('dueDate'),
+        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        // The cell renders a coloured due-date dot, so it must stay `custom` —
+        // but the underlying column is a plain date. Without this the advanced
+        // filter would offer text operators instead of Before/After/Between.
+        filterMode: 'date',
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
@@ -114,8 +118,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
       { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
       ...fiscalCols,
       {
-        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true, filterMode: 'numeric',
+        key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom', required: true,
         label: t('impTotal'),
+        // The cell sign-flips credit notes / returns, so it must stay `custom`
+        // — but the underlying column is an amount (sales-invoice declares the
+        // same column as `type: 'amount'`).
+        filterMode: 'numeric',
         render: (row) => {
           const raw = row.grandTotalAmount;
           const currency = row['currency$_identifier'];
@@ -128,8 +136,13 @@ export default function PurchaseInvoiceHeaderTable(props) {
         column: 'OutstandingAmt',
         type: 'custom',
         required: true,
-        filterMode: 'numeric',
         label: t('pendingPaymentColumn'),
+        // The cell renders status pills and a payment button, so it must stay
+        // `custom` — but the underlying column is an amount. Without this the
+        // `?filter=overdue` preload (outstandingAmount greaterThan 0) resolves
+        // to text mode, which has no `greaterThan`, and the operator select
+        // renders empty (ETP-4681).
+        filterMode: 'numeric',
         render: (row) => {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);
           const currency = row['currency$_identifier'] || 'EUR';
