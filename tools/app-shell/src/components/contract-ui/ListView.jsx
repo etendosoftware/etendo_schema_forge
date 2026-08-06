@@ -82,6 +82,7 @@ function expandMultiFieldColumns(columns, locale) {
           key: part.key,
           type: part.type,
           label: part.labels?.[locale] ?? part.labels?.en_US ?? part.label ?? part.key,
+          required: part.required,
         });
       }
       continue;
