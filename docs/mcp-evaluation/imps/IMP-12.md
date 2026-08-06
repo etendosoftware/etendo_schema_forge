@@ -534,3 +534,78 @@ shows `enum: ["create","actions"]` and the widened tool description.
 
 Three ⏳/❌ became one ❌ and one ⏳. **The item stays ⏳ open at 0 / 5** — the `required` group is still
 over-reporting 4 of 6 live, which is the defect that matters most here.
+
+## 14. Fourth live probe — the cross-check works, 2 / 22 as predicted
+
+`etendo-go-local` serving `fed3902a` after a user-run deploy. Read-only.
+
+### 14.1 The §12.4 prediction is confirmed, exactly
+
+| | Predicted (§12.4) | Live |
+|---|---|---|
+| `requiredCount` | 2 | **2** |
+| `optionalCount` | 22 | **22** |
+| `required` members | `businessPartner`, `partnerAddress` | **`businessPartner`, `partnerAddress`** |
+
+All four fields §11.2 caught over-reported — `transactionDocument`, `paymentMethod`, `paymentTerms`,
+`priceList` — are now under `optional` with `serverDefaulted: true`. `partnerAddress` correctly stayed
+`required`: `neo_defaults` returns `""` for it, and the blank-value guard is what kept it there. That
+guard was the one part of §12.1 with no live evidence behind it; it now has some.
+
+13 of the 22 optional fields carry `serverDefaulted`, 9 do not. The `required` group's hint — *"neither
+an AD default nor neo_defaults resolves a value for them"* — is now **true as measured**, which is what
+§11.2 said it had to become.
+
+### 14.2 Not overfitted: `purchase-invoice/header` gives 2 / 22 too
+
+Same shape, same `required` pair (`businessPartner`, `partnerAddress`), 12 of 22 optional flagged. The
+flagged set differs where the window differs — `salesRepresentative`, `chargeAmount`, `userContact` and
+`aeatsiiClaveTipoFc` are resolved here and absent or unresolved on sales — which is the right kind of
+difference: it tracks the tenant's actual configuration rather than a hardcoded list.
+
+### 14.3 The ♻️ guarantee survives, and that creates a divergence worth naming
+
+`fields:["paymentTerms","partnerAddress"]` on the default path returns `paymentTerms` with
+`userRequired: true` and **no** `serverDefaulted`. So the untouched-by-default contract holds: no
+defaults resolution is paid outside `view:"create"`.
+
+The honest consequence: **the two views now disagree about the same field.** The full dump says
+`paymentTerms` is `userRequired`; `view:"create"` says the server already has it. Both are internally
+consistent — the full dump only ever claimed to report `AD_Column.DefaultValue`, and §11.2 established
+that this is an incomplete proxy — but an agent that reads the full dump still gets the misleading
+answer, which is precisely the harm this item set out to remove.
+
+Three ways out, none of them free:
+
+| Option | Cost |
+|---|---|
+| Pay the defaults resolution on the default path too | Every `neo_schema` call gets slower, including the ones that never create anything. Breaks the ♻️ classification measured by `diff` in §11.1. |
+| Drop `userRequired` from the default dump and point at `view:"create"` | ⚙️ on the default response — the shape IMP-11 just backfilled. Removes the wrong answer instead of correcting it. |
+| Leave it, and treat the default dump's `userRequired` as documented-as-approximate | Free, and honest only if the tool description says so. It currently does say so, since `fed3902a` widened it. |
+
+**Not decided here.** This is a candidate for a new IMP rather than something to settle inside IMP-12,
+because it is a question about the *default* response's contract, and this item's scope is the
+projections. Flagged for the next `/mcp-comparison` run.
+
+### 14.4 §7 done-when, final state on `etendo-go-local`
+
+| Done-when | Verdict |
+|---|---|
+| Under the corrected 8 KB | ✅ 7,853 chars (§11.1) |
+| Every returned field is one the agent may supply | ✅ (§11.1) |
+| Server-defaulted fields absent, and agrees with `neo_defaults(view:"minimal")` | ✅ **§14.1** — 2 / 22, agrees field-for-field |
+| `fields:["businessPartner","invoiceDate"]` returns those two | ✅ §13.2, plus `unknownFields` |
+| Omitted `view`/`fields` returns the previous response byte-for-byte | ✅ `diff` (§11.1), re-confirmed §14.3 |
+| The `view` enum advertises `create` | ✅ §13.2 |
+| Re-verified on staging | ⏳ **not released** |
+
+Six of seven ✅ on `etendo-go-local`. **The status flip is not mine to make**: it belongs to a
+`/mcp-comparison` run, which also has to re-measure M1/M2 before the 5 points count. The one open
+row is a release, not a code gap.
+
+### 14.5 IMP-1 gap re-confirmed
+
+`purchase-invoice/header`'s `aeatsiiCauseExemption` still comes back with
+`label: "EM_Aeatsii_Cause_Exemption_ID"` and no `description`, while `sales-invoice/header` labels the
+same column *"SII - Cause Exemption"* (§11.4). Unchanged by this wave, as expected — it is an IMP-1
+missing-`AD_Field`-label gap and needs its own fix.
