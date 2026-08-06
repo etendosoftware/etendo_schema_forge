@@ -1,16 +1,15 @@
 /**
  * Extracted from DetailView.jsx via ast-refactor.
  */
-import React, { useState, useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/button.jsx';
+import React, {useEffect, useRef, useState} from 'react';
+import {Button} from '@/components/ui/button.jsx';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
-import { computeBalance } from '@/lib/balanceTotals';
-import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
-import { roundAmounts } from '@/lib/lineFieldChange.js';
-import { getCatalogOptions } from '@/lib/selectorCatalog.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import {computeBalance} from '@/lib/balanceTotals';
+import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
+import {roundAmounts} from '@/lib/lineFieldChange.js';
+import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
@@ -753,5 +752,15 @@ export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
         hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
       }
     }
+  }
+}
+
+export function applyProductCalloutPriceAdjustments(field, result, lineConfig) {
+  if (field !== 'product') return;
+  if (result.standardPrice != null && (result.listPrice == null || Number(result.listPrice) === 0)) {
+    result.listPrice = result.standardPrice;
+  }
+  if (lineConfig.discountField) {
+    result[lineConfig.discountField] = 0;
   }
 }

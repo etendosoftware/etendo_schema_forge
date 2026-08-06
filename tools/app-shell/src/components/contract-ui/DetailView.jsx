@@ -1,15 +1,137 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { ProcessParamDialog } from './ProcessParamDialog';
-import { DetailMoreActionsMenu } from './DetailMoreActionsMenu.jsx';
-import { DetailSidePanel } from './DetailSidePanel.jsx';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Button } from '@/components/ui/button.jsx';
-import { Badge } from '@/components/ui/badge.jsx';
-import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
-import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
-import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
-import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
+import React, {lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {ProcessParamDialog} from './ProcessParamDialog';
+import {DetailMoreActionsMenu} from './DetailMoreActionsMenu.jsx';
+import {DetailSidePanel} from './DetailSidePanel.jsx';
+import {LinesBulkActionBar} from './LinesBulkActionBar.jsx';
+import {useLocation, useNavigate, useSearchParams} from 'react-router-dom';
+import {Button} from '@/components/ui/button.jsx';
+import {Badge} from '@/components/ui/badge.jsx';
+import {AddLineButton} from '@/components/ui/add-line-button.jsx';
+import {Check, List, Loader2, Lock, Mail, Printer, Save, Shield, Trash2, Undo2, X} from 'lucide-react';
+import {AttachmentIcon} from '@/components/attachments/AttachmentIcon';
+import {PricingIcon, WarehouseProductsIcon} from '@/components/ui/custom-icons';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog.jsx';
+import {useEntity} from '@/hooks/useEntity';
+import {useCatalogs} from '@/hooks/useCatalogs';
+import {useDisplayLogic} from '@/hooks/useDisplayLogic';
+import {useCallout} from '@/hooks/useCallout';
+import {useCurrency} from '@/hooks/useCurrency';
+import {ORDER_LINE_CONFIG, useLineGrossAmount} from '@/hooks/useLineGrossAmount';
+import {useDocumentAction} from '@/hooks/useDocumentAction';
+import {useNeoAction} from '@/hooks/useNeoAction';
+import {useMenuLabel, useUI} from '@/i18n';
+import {translateBackendError} from '@/lib/backendErrors.js';
+import {useSetPageMeta} from '@/components/layout/PageMetaContext';
+import {useFavorites} from '@/components/layout/FavoritesContext';
+import {SummaryBar} from './SummaryBar.jsx';
+import {resolveTotalDiscountPct} from '@/lib/documentTotals';
+import LinesSelectionBar from './LinesSelectionBar.jsx';
+import {evalTabReadOnly} from './evalTabReadOnly.js';
+import {
+  applyQtyZeroGuard,
+  buildCalloutFormState,
+  extractAuxValues,
+  normalizeCalloutQty,
+  normalizeCalloutResponse,
+  resolveSnapshotIdentifiers,
+  roundAmounts,
+} from '@/lib/lineFieldChange.js';
+import {getCatalogOptions} from '@/lib/selectorCatalog.js';
+import {formatCurrency} from '@/lib/formatCurrency.js';
+import {useRegisterWindowContext} from '@/components/CurrentWindowContext';
+import {matchOcrDocType} from '@/components/copilot/ocr/ocrDocTypes';
+import {isDeleteVisibleForRecord} from '@/utils/recordActions.js';
+import {buildHeaderSelectorContext, buildLineSelectorContext} from '@/lib/selectorContext.js';
+import {isCapabilityVisible} from '@/lib/capabilityVisibility.js';
+import {useCapabilitiesSafe} from '@/hooks/useCapabilitiesSafe.js';
+import DocumentStatusPill from './DocumentStatusPill.jsx';
+import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
+import {toast} from 'sonner';
+import {runBatchDelete, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
+import {
+  applyCalloutFieldUpdates,
+  applyLocalChildRowUpdate,
+  applyOneComboEntry,
+  applyProductCalloutPriceAdjustments,
+  buildLineRowClickHandler,
+  canDeleteSelectedLine,
+  CollapsibleSection,
+  collectRowFieldValues,
+  computeBalanceGate,
+  customTabKey,
+  deriveTaxRateFromGross,
+  dispatchProcessAction,
+  evalDisplayLogicRaw,
+  getAddLineMenuActions,
+  getAddLineWrapperClassName,
+  getChildSaveButtonLabel,
+  getCustomLinesTabClassName,
+  getDetailContentClassName,
+  getDocsRowClassName,
+  getDocumentIds,
+  getDocumentReadOnly,
+  getFullBreadcrumb,
+  getInlineEditableShrinkClassName,
+  getLineMenuActionsRef,
+  getLinesContainerClassName,
+  getLinesToolbarClassName,
+  getNotesRowClassName,
+  getOnAddToFavorites,
+  getOthersTabClassName,
+  getRecordTitle,
+  getSaveBtnCls,
+  getSaveButtonLabel,
+  getSecondaryEditRowHandler,
+  getSecondaryLinesTableRef,
+  getSecondaryTabContentClassName,
+  getSecondaryTabEntityKey,
+  getSidebarSlideClassName,
+  getSqBtnSize,
+  getTabsBarClassName,
+  getTabsBarStyle,
+  getWindowTitle,
+  hasUnsavedEdits,
+  insertLinesTab,
+  isCustomPrimaryTabActive,
+  isDetailBulkBarVisible,
+  isInitialChildrenLoading,
+  makeCloseDialogHandler,
+  mergeLineEdits,
+  mergeSelectorAuxFields,
+  mergeSelectorContextFields,
+  normalizePatchFieldValues,
+  parseBackendErrorMessage,
+  pushOthers,
+  renderEmbeddedStatusPill,
+  renderExtraActionButtons,
+  renderNotesField,
+  renderPrimaryTabButtons,
+  renderProcessConfirmModal,
+  renderSidePanel,
+  renderTotalsBlock,
+  resolveCanAddLines,
+  resolveDetailRows,
+  resolveHeaderContent,
+  resolveProcessLabel,
+  resolveSidebarContent,
+  resolveStatusPrefix,
+  runAddLineAction,
+  SecondaryPanelTab,
+  secondaryTabEmptyState,
+  shouldShowDetailFormSidebar,
+  shouldShowInlineDeleteSelectionBar,
+  sidePanelWrapperCls,
+  WINDOW_DELETE_ACTIONS,
+  WINDOW_DELETE_CONFIRM_MODALS,
+} from './detailViewHelpers.jsx';
 
 const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
@@ -50,36 +172,6 @@ function TabStripButton({
     </button>
   );
 }
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
-} from '@/components/ui/dialog.jsx';
-import { useEntity } from '@/hooks/useEntity';
-import { useCatalogs } from '@/hooks/useCatalogs';
-import { useDisplayLogic } from '@/hooks/useDisplayLogic';
-import { useCallout } from '@/hooks/useCallout';
-import { useCurrency } from '@/hooks/useCurrency';
-import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
-import { useDocumentAction } from '@/hooks/useDocumentAction';
-import { useNeoAction } from '@/hooks/useNeoAction';
-import { useMenuLabel, useUI } from '@/i18n';
-import { translateBackendError } from '@/lib/backendErrors.js';
-import { useSetPageMeta } from '@/components/layout/PageMetaContext';
-import { useFavorites } from '@/components/layout/FavoritesContext';
-import { SummaryBar } from './SummaryBar.jsx';
-import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
-import BalanceFooterPanel from './BalanceFooterPanel.jsx';
-import { resolveTotalDiscountPct } from '@/lib/documentTotals';
-import { computeBalance } from '@/lib/balanceTotals';
-import LinesSelectionBar from './LinesSelectionBar.jsx';
-import { evalTabReadOnly } from './evalTabReadOnly.js';
-import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
-import {
-  buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
-  normalizeCalloutResponse, applyQtyZeroGuard, roundAmounts,
-  resolveSnapshotIdentifiers,
-} from '@/lib/lineFieldChange.js';
-import { getCatalogOptions } from '@/lib/selectorCatalog.js';
-import { formatCurrency } from '@/lib/formatCurrency.js';
 
 // DocumentTotalsPanel/BalanceFooterPanel call their `formatAmount` prop as
 // (value, currency) — keep that signature here, delegating to the shared
@@ -87,23 +179,8 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 function formatAmount(val, curr) {
   return formatCurrency(curr, val);
 }
-import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
-import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
-import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
-import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
-import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
-import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
-import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
-
-import { cn } from '@/lib/utils.js';
-import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
-import { toast } from 'sonner';
-import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
-import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderSidePanel, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
-} from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
 // Only the definition site moved (R1: no test was edited).
@@ -3436,73 +3513,29 @@ export function DetailView({
                               <div className="flex-1 min-w-0">
                                 {/* Bulk action bar: delete + detail processes (classic only) */}
                                 {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
-                                  <div
-                                    data-testid="detail-bulk-action-bar"
-                                    className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted border border-border/40 shadow-sm">
-                                    <span className="text-sm font-medium text-foreground">
-                                      {ui('selected', { count: selectedChildRows.length })}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                      {detailProcesses.map(p => (
-                                        <button
-                                          key={p.name}
-                                          disabled={executingDetailProcess}
-                                          onClick={() => {
-                                            if (p.params?.some(param => !param.hidden)) {
-                                              setDetailParamDialogProcess({ ...p, _rows: [...selectedChildRows] });
-                                            } else {
-                                              executeDetailProcessImpl(p, {}, undefined, detailProcessDeps);
-                                            }
-                                          }}
-                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-primary text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
-                                          data-testid="Button__detail-process"
-                                        >
-                                          {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
-                                        </button>
-                                      ))}
-                                      {isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) && (
-                                      <button
-                                        disabled={deletingChildren}
-                                        onClick={async () => {
-                                          if (!(await confirmDelete())) return;
-                                          setDeletingChildren(true);
-                                          try {
-                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
-                                            // batchDelete.js); replaces the old two-independent-if
-                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
-                                            // pattern this button predates.
-                                            const { succeeded, failed } = await runBatchDelete(selectedChildRows, (row) => {
-                                              const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                                                || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                                              return fetch(childUrl, {
-                                                method: 'DELETE',
-                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                              }).then(res => {
-                                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                                                return row;
-                                              });
-                                            });
-                                            for (const row of succeeded) {
-                                              hook.handleDeleteChild(row.id);
-                                              if (selectedLine?.id === row.id) setSelectedLine(null);
-                                            }
-                                            setSelectedChildRows([]);
-                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
-                                          } catch (err) {
-                                            toast.error(err.message || ui('networkError'));
-                                          } finally {
-                                            setDeletingChildren(false);
-                                          }
-                                        }}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
-                                        data-testid="detail-bulk-delete-button"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
-                                        {getDeleteChildButtonLabel(deletingChildren, ui)}
-                                      </button>
-                                      )}
-                                    </div>
-                                  </div>
+                                  <LinesBulkActionBar
+                                    linesLayout={linesLayout}
+                                    api={api}
+                                    detailEntity={detailEntity}
+                                    isDocumentReadOnly={isDocumentReadOnly}
+                                    selectedChildRows={selectedChildRows}
+                                    detailProcesses={detailProcesses}
+                                    ui={ui}
+                                    executingDetailProcess={executingDetailProcess}
+                                    setDetailParamDialogProcess={setDetailParamDialogProcess}
+                                    executeDetailProcessImpl={executeDetailProcessImpl}
+                                    detailProcessDeps={detailProcessDeps}
+                                    tMenu={tMenu}
+                                    deletingChildren={deletingChildren}
+                                    setDeletingChildren={setDeletingChildren}
+                                    confirmDelete={confirmDelete}
+                                    apiBaseUrl={apiBaseUrl}
+                                    token={token}
+                                    hook={hook}
+                                    selectedLine={selectedLine}
+                                    setSelectedLine={setSelectedLine}
+                                    setSelectedChildRows={setSelectedChildRows}
+                                  />
                                 )}
                                 <DetailTable
                                   ref={inlineLinesRef}
@@ -4432,16 +4465,6 @@ export function DetailView({
       })}
     </div>
   );
-}
-
-function applyProductCalloutPriceAdjustments(field, result, lineConfig) {
-  if (field !== 'product') return;
-  if (result.standardPrice != null && (result.listPrice == null || Number(result.listPrice) === 0)) {
-    result.listPrice = result.standardPrice;
-  }
-  if (lineConfig.discountField) {
-    result[lineConfig.discountField] = 0;
-  }
 }
 
 function applyProductCurrencyConversion(field, result, rowValues, lineConfig, activeCurrencyConversion, currencyIdentifier, computeLineGrossAmount) {

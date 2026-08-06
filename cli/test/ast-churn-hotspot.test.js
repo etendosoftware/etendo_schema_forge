@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -33,6 +33,13 @@ test('summary ranks recent AST churn and reports branch delta', () => {
 
     const unavailable = execFileSync('node', [script, '--repo', repo, '--file', 'sample.jsx', '--since', '2000-01-01', '--days', '15', '--base-ref', 'missing-ref', '--summary'], { encoding: 'utf8' });
     assert.match(unavailable, /unavailable for missing-ref/);
+
+    const htmlPath = path.join(repo, 'heatmap.html');
+    execFileSync('node', [script, '--repo', repo, '--file', 'sample.jsx', '--since', '2000-01-01', '--days', '15', '--base-ref', base, '--out-html', htmlPath], { encoding: 'utf8' });
+    const html = readFileSync(htmlPath, 'utf8');
+    assert.match(html, /<!doctype html>/i);
+    assert.match(html, /class="number"/);
+    assert.match(html, /AST churn heatmap/);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

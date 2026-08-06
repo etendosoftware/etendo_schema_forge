@@ -9,6 +9,7 @@
  * Usage:
  *   node cli/src/ast-churn-hotspot.js --file tools/app-shell/src/components/contract-ui/DetailView.jsx
  *   node cli/src/ast-churn-hotspot.js --file <path> --out-md docs/reports/x.md --out-json docs/reports/x.json
+ *   node cli/src/ast-churn-hotspot.js --file <path> --out-html docs/reports/x.html
  *   node cli/src/ast-churn-hotspot.js --file <path> --no-churn        # AST only, skip git (fast)
  *   node cli/src/ast-churn-hotspot.js --file <path> --since 2026-06-10 # recency column cutoff
  */
@@ -28,6 +29,7 @@ function parseArgs(argv) {
     else if (a === '--repo') args.repo = argv[++i];
     else if (a === '--out-md') args.outMd = argv[++i];
     else if (a === '--out-json') args.outJson = argv[++i];
+    else if (a === '--out-html') args.outHtml = argv[++i];
     else if (a === '--since') args.since = argv[++i];
     else if (a === '--days') args.days = Number(argv[++i]);
     else if (a === '--base-ref') args.baseRef = argv[++i];
@@ -190,7 +192,10 @@ function extractJsxMarkers(source, maxLabelLength = 160) {
 
 /** Raw `git log -L` for one range. Throws if git aborts (see rangeCommits). */
 function rawRangeCommits(repo, relFile, startLine, endLine) {
-  const out = git(repo, [
+  // Git 2.50.1 on macOS can abort in line-log.c for some ranges. The caller
+  // bisects and records those ranges as lower bounds, so keep the assertion
+  // noise off the ranking output while still propagating the non-zero exit.
+  const out = gitQuiet(repo, [
     'log',
     `-L${startLine},${endLine}:${relFile}`,
     '--format=C\t%H\t%ad\t%s',
@@ -378,13 +383,80 @@ function buildSummary(result, limit) {
   return `${lines.join('\n')}\n`;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function buildHeatHtml(result) {
+  const source = readFileSync(path.join(result.repo, result.file), 'utf8');
+  const sourceLines = source.split('\n');
+  const rankedUnits = result.units
+    .filter((unit) => unit.recentHeatScore !== null && unit.recentHeatScore !== undefined)
+    .slice()
+    .sort((a, b) => a.lineCount - b.lineCount || b.depth - a.depth);
+  const maxHeat = Math.max(...rankedUnits.map((unit) => unit.recentHeatScore || 0), 1);
+  const lineUnits = sourceLines.map((_, index) => {
+    const line = index + 1;
+    return rankedUnits.find((unit) => line >= unit.startLine && line <= unit.endLine) || null;
+  });
+  const heatColor = (heat) => {
+    if (!heat) return 'transparent';
+    const intensity = Math.max(0.08, Math.min(0.9, Math.sqrt(heat / maxHeat) * 0.9));
+    return `rgba(239, 68, 68, ${intensity.toFixed(3)})`;
+  };
+  const rows = sourceLines.map((lineText, index) => {
+    const unit = lineUnits[index];
+    const heat = unit?.recentHeatScore || 0;
+    const title = unit
+      ? `${unit.name} · ${unit.recentCommitCount ?? '—'} commits · heat ${heat} · lines ${unit.startLine}–${unit.endLine}`
+      : 'No AST unit';
+    return `<div class="line" title="${escapeHtml(title)}"><span class="number">${index + 1}</span><span class="heat" style="background:${heatColor(heat)}"></span><code>${escapeHtml(lineText) || ' '}</code></div>`;
+  }).join('\n');
+  const generated = escapeHtml(result.generatedAt);
+  const file = escapeHtml(result.file);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AST churn heatmap — ${file}</title>
+<style>
+:root { color-scheme: dark; --bg: #0f172a; --panel: #111827; --muted: #94a3b8; --text: #e2e8f0; --line: #1e293b; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+header { position: sticky; top: 0; z-index: 1; padding: 16px 20px; background: rgba(15, 23, 42, .96); border-bottom: 1px solid var(--line); }
+h1 { margin: 0 0 6px; font-size: 18px; }
+.meta { color: var(--muted); }
+.legend { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); }
+.swatch { width: 120px; height: 10px; border-radius: 999px; background: linear-gradient(90deg, transparent, rgba(239,68,68,.3), rgba(239,68,68,.9)); }
+.code { overflow: auto; padding: 14px 0 40px; background: var(--panel); font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.line { display: flex; min-width: max-content; border-bottom: 1px solid rgba(30,41,59,.25); }
+.line:hover { background: rgba(148,163,184,.08); }
+.number { width: 72px; padding-right: 14px; color: #64748b; text-align: right; user-select: none; }
+.heat { width: 5px; flex: 0 0 5px; }
+code { padding: 0 20px 0 14px; white-space: pre; color: #dbeafe; }
+</style>
+</head>
+<body>
+<header><h1>AST churn heatmap</h1><div class="meta">${file} · last ${escapeHtml(result.windowDays ?? 'custom')} days · generated ${generated}</div><div class="legend"><span>low</span><span class="swatch"></span><span>high recent heat</span></div></header>
+<main class="code">${rows}</main>
+</body>
+</html>
+`;
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || !args.file) {
     process.stdout.write(
         'Usage: node cli/src/ast-churn-hotspot.js --file <path> [--repo <dir>] [--since YYYY-MM-DD]\n' +
         '                                        [--days N] [--base-ref <ref>] [--limit N] [--summary]\n' +
-        '                                        [--out-md <path>] [--out-json <path>] [--no-churn]\n',
+        '                                        [--out-md <path>] [--out-json <path>] [--out-html <path>] [--no-churn]\n',
     );
     process.exit(args.help ? 0 : 1);
   }
@@ -478,6 +550,11 @@ function main() {
   if (args.outMd) {
     const p = path.isAbsolute(args.outMd) ? args.outMd : path.join(repo, args.outMd);
     writeFileSync(p, buildMarkdown(result));
+    process.stderr.write(`wrote ${p}\n`);
+  }
+  if (args.outHtml) {
+    const p = path.isAbsolute(args.outHtml) ? args.outHtml : path.join(repo, args.outHtml);
+    writeFileSync(p, buildHeatHtml(result));
     process.stderr.write(`wrote ${p}\n`);
   }
   if (args.summary) process.stdout.write(buildSummary(result, Number.isFinite(args.limit) ? args.limit : 10));
