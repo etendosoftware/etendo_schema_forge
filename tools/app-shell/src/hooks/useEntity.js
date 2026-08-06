@@ -305,7 +305,7 @@ function resolveSortKey(sortColumn, sampleRow) {
  * process actions). Same as the read headers plus the CSRF proof, which the
  * backend requires on POST/PATCH/DELETE and ignores on GET.
  */
-function buildMutationHeaders(csrfToken) {
+function buildMutationHeaders() {
     const headers = buildHeaders();
     if (csrfToken) headers['X-Go-CSRF'] = csrfToken;
     return headers;
@@ -815,7 +815,7 @@ export function useEntity(entity, childEntity, {
     }, [editing, selected]);
 
     const headers = buildHeaders();
-    const mutationHeaders = buildMutationHeaders(csrfToken);
+    const mutationHeaders = buildMutationHeaders();
 
     const refresh = useCallback(() => {
         startRowRef.current = 0;

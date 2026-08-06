@@ -57,7 +57,7 @@ export function useCallout(entity, { csrfToken, apiBaseUrl }) {
         const res = await fetch(`${apiBaseUrl}/${entity}/callout`, {
           method: 'POST',
           // Unsafe method, so it carries the CSRF proof.
-          headers: writeHeaders(csrfToken),
+          headers: writeHeaders(),
           credentials: 'include',
           body: JSON.stringify(payload),
           signal: controller.signal,

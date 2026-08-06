@@ -66,7 +66,7 @@ export function useAccountMutations() {
   const createAccount = useCallback(async (payload) => {
     const res = await fetch(`${getApiBase()}${ENTITY_PATH}`, {
       method: 'POST',
-      headers: writeHeaders(csrfToken),
+      headers: writeHeaders(),
       credentials: 'include',
       body: JSON.stringify(toDalBody(payload)),
     });
@@ -79,7 +79,7 @@ export function useAccountMutations() {
     const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
     const res = await fetch(url, {
       method: 'PUT',
-      headers: writeHeaders(csrfToken),
+      headers: writeHeaders(),
       credentials: 'include',
       body: JSON.stringify(toDalBody(payload)),
     });
@@ -92,7 +92,7 @@ export function useAccountMutations() {
     const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
     const res = await fetch(url, {
       method: 'DELETE',
-      headers: writeHeaders(csrfToken),
+      headers: writeHeaders(),
       credentials: 'include',
     });
     if (!res.ok) await throwHttpError(res);

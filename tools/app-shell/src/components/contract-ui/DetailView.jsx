@@ -236,7 +236,7 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
     try {
       res = await fetch(childUrl, {
         method: 'PATCH',
-        headers: writeHeaders(csrfToken),
+        headers: writeHeaders(),
         credentials: 'include',
         body: JSON.stringify({[fieldKey]: value}),
       });
@@ -354,7 +354,7 @@ export function buildSecondaryLineHandlers(deps) {
       }
       const res = await fetch(secUrl, {
         method: 'PATCH',
-        headers: writeHeaders(csrfToken),
+        headers: writeHeaders(),
         credentials: 'include',
         body: JSON.stringify(fieldValues),
       });
@@ -397,7 +397,7 @@ export function buildSecondaryLineHandlers(deps) {
             || `${apiBaseUrl}/${st.key}/${row.id}`;
         return fetch(childUrl, {
           method: 'DELETE',
-          headers: writeHeaders(csrfToken),
+          headers: writeHeaders(),
           credentials: 'include',
         }).then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -778,7 +778,7 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
 
     const res = await fetch(childUrl, {
       method: 'PATCH',
-      headers: writeHeaders(csrfToken),
+      headers: writeHeaders(),
       credentials: 'include',
       body: JSON.stringify(fieldValues),
     });
@@ -808,7 +808,7 @@ export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, c
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
       const res = await fetch(childUrl, {
         method: 'DELETE',
-        headers: writeHeaders(csrfToken),
+        headers: writeHeaders(),
         credentials: 'include',
       });
       if (res.ok) {
@@ -1172,7 +1172,7 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
         return fetch(`${url}/action/${process.columnName ?? process.name}`, {
           method: 'POST',
-          headers: writeHeaders(csrfToken),
+          headers: writeHeaders(),
           credentials: 'include',
           body: JSON.stringify({ fieldValues }),
         }).then(res => ({ res, row }));
@@ -2575,7 +2575,7 @@ export function DetailView({
       };
       const res = await fetch(`${apiBaseUrl}/${detailEntity}/callout`, {
         method: 'POST',
-        headers: writeHeaders(csrfToken),
+        headers: writeHeaders(),
         credentials: 'include',
         body: JSON.stringify(payload),
       });
@@ -2639,7 +2639,7 @@ export function DetailView({
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: writeHeaders(csrfToken),
+        headers: writeHeaders(),
         credentials: 'include',
         body: JSON.stringify({ etgoTotalDiscount: pct }),
       });
@@ -2660,7 +2660,7 @@ export function DetailView({
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: writeHeaders(csrfToken),
+        headers: writeHeaders(),
         credentials: 'include',
         body: JSON.stringify({ [notesField]: value }),
       });
@@ -3629,7 +3629,7 @@ export function DetailView({
                                                 || `${apiBaseUrl}/${detailEntity}/${row.id}`;
                                               return fetch(childUrl, {
                                                 method: 'DELETE',
-                                                headers: writeHeaders(csrfToken),
+                                                headers: writeHeaders(),
                                                 credentials: 'include',
                                               }).then(res => {
                                                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -3770,7 +3770,7 @@ export function DetailView({
                                             }
                                             const res = await fetch(childUrl, {
                                               method: 'PATCH',
-                                              headers: writeHeaders(csrfToken), credentials: 'include',
+                                              headers: writeHeaders(), credentials: 'include',
                                               body: JSON.stringify({ fieldValues }),
                                             });
                                             if (res.ok) {
@@ -3799,7 +3799,7 @@ export function DetailView({
                                               || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
                                             const res = await fetch(childUrl, {
                                               method: 'DELETE',
-                                              headers: writeHeaders(csrfToken), credentials: 'include',
+                                              headers: writeHeaders(), credentials: 'include',
                                             });
                                             if (res.ok) { hook.handleDeleteChild(editingChild.id); setEditingChild(null); }
                                           } finally { setSavingChild(false); }
@@ -3876,7 +3876,7 @@ export function DetailView({
                                                 || `${apiBaseUrl}/${detailEntity}/${row.id}`;
                                               return fetch(childUrl, {
                                                 method: 'DELETE',
-                                                headers: writeHeaders(csrfToken),
+                                                headers: writeHeaders(),
                                                 credentials: 'include',
                                               }).then(res => {
                                                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -3997,7 +3997,7 @@ export function DetailView({
                                                 normalizePatchFieldValues(patchEdits, fieldValues);
                                                 const res = await fetch(childUrl, {
                                                   method: 'PATCH',
-                                                  headers: writeHeaders(csrfToken), credentials: 'include',
+                                                  headers: writeHeaders(), credentials: 'include',
                                                   body: JSON.stringify(fieldValues),
                                                 });
                                                 if (res.ok) {
@@ -4055,7 +4055,7 @@ export function DetailView({
                                                 || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
                                               const res = await fetch(childUrl, {
                                                 method: 'DELETE',
-                                                headers: writeHeaders(csrfToken), credentials: 'include',
+                                                headers: writeHeaders(), credentials: 'include',
                                               });
                                               if (res.ok) {
                                                 hook.handleDeleteChild(selectedLine.id);
@@ -4492,7 +4492,7 @@ export function DetailView({
                   const secUrl = `${apiBaseUrl}/${secondaryDeleteConfirm.tabKey}/${secondaryDeleteConfirm.id}`;
                   const res = await fetch(secUrl, {
                     method: 'DELETE',
-                    headers: writeHeaders(csrfToken), credentials: 'include',
+                    headers: writeHeaders(), credentials: 'include',
                   });
                   if (res.ok) {
                     secondaryHooks[secondaryDeleteConfirm.tabIndex]?.handleDeleteChild(secondaryDeleteConfirm.id);

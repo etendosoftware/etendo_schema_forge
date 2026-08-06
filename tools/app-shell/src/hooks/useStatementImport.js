@@ -30,7 +30,7 @@ export function useStatementImport() {
         method: 'POST',
         // ETP-4576 — authenticates with the `__Host-` session cookie instead of a
         // bearer token. Unsafe method, so the backend also requires the CSRF proof.
-        headers: writeHeaders(csrfToken),
+        headers: writeHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           FIN_Financial_Account_ID: accountId,

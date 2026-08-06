@@ -44,7 +44,7 @@ export function useFinancialAccountAccounting() {
   const saveAccountingConfiguration = useCallback(async (accountId, { fINAssetAcct, fINTransitoryAcct }) => {
     const res = await fetch(`${getApiBase()}${ENTITY_PATH}`, {
       method: 'POST',
-      headers: writeHeaders(csrfToken),
+      headers: writeHeaders(),
       credentials: 'include',
       body: JSON.stringify({
         financialAccountId: accountId,
