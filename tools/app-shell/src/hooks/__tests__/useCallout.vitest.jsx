@@ -1,4 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { declareCookieSession } from '@/test/sessionContract.js';
 import { useCallout } from '../useCallout';
 
 // Mock sonner toast so it does not throw
@@ -9,6 +10,14 @@ vi.mock('sonner', () => ({
     warning: vi.fn(),
   },
 }));
+
+// ETP-4576 — these assertions describe the cookie-session contract, so the
+// request builders have to be in that mode. src/test/setup.js resets the scheme
+// before every test, hence a beforeEach rather than module scope.
+beforeEach(() => {
+  declareCookieSession();
+});
+
 
 describe('useCallout', () => {
   const opts = { csrfToken: 'test-csrf', apiBaseUrl: 'http://localhost/api' };

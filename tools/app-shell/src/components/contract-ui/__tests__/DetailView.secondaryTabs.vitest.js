@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { declareCookieSession } from '@/test/sessionContract.js';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { createElement as h } from 'react';
 
@@ -43,6 +44,14 @@ vi.mock('@/lib/selectorCatalog.js', () => ({ getCatalogOptions: () => [] }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (val) => (val != null ? String(val) : '') }));
 vi.mock('@/lib/utils.js', () => ({ cn: (...args) => args.filter(Boolean).join(' ') }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
+
+// ETP-4576 — these assertions describe the cookie-session contract, so the
+// request builders have to be in that mode. src/test/setup.js resets the scheme
+// before every test, hence a beforeEach rather than module scope.
+beforeEach(() => {
+  declareCookieSession();
+});
+
 
 import { getSecondaryRowUpdateHandler, SecondaryFormTab, SecondaryPanelTab, SecondaryTableTab } from '../DetailView.jsx';
 import { toast } from 'sonner';

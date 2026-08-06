@@ -16,10 +16,18 @@
  */
 import { renderHook, act } from '@testing-library/react';
 import { setAuthMock } from '@/test/authContextMock.js';
-import { expectNoAuthorizationHeader } from '@/test/sessionContract.js';
+import { declareCookieSession, expectNoAuthorizationHeader } from '@/test/sessionContract.js';
 
 vi.mock('@/auth/AuthContext.jsx', async () =>
   (await import('@/test/authContextMock.js')).authContextMock);
+
+// ETP-4576 — these assertions describe the cookie-session contract, so the
+// request builders have to be in that mode. src/test/setup.js resets the scheme
+// before every test, hence a beforeEach rather than module scope.
+beforeEach(() => {
+  declareCookieSession();
+});
+
 
 import { useAccountMutations } from '../useAccountMutations.js';
 

@@ -69,9 +69,19 @@ describe('ETP-4576 — cookie-session invariants across app-shell source', () =>
   });
 
   /**
-   * G1 — no request carries a credential in a header. The session is the
-   * `__Host-go_session` cookie; anything building an Authorization header is either
-   * unmigrated or reintroducing the token the whole task removes.
+   * G1 — no file in this app decides how a request authenticates.
+   *
+   * Two schemes coexist while the migration lands (bearer today, the cookie
+   * session behind a backend preference), and `app-shell-core`'s
+   * `sessionCredentials` is the single place that chooses between them. A file
+   * here that builds its own Authorization header has hard-coded one of the two,
+   * so it is correct under one setting of the preference and broken under the
+   * other — which is exactly the failure that took a day to find: turning the
+   * cookie session on left every such call site sending `Bearer undefined`.
+   *
+   * The rule is therefore about ownership, not about which header wins. When the
+   * bearer scheme is eventually removed this assertion does not change; it just
+   * stops having a second scheme to protect against.
    */
   it('G1: no production file builds an Authorization or Bearer header', () => {
     const offenders = FILES
@@ -81,9 +91,13 @@ describe('ETP-4576 — cookie-session invariants across app-shell source', () =>
   });
 
   /**
-   * G2 — the silent killer. Nothing may gate a request on a client-held token,
-   * because `useAuth()` never exposes one under the cookie session: the gate is
-   * permanently false and the request is simply never issued.
+   * G2 — the silent killer. Nothing may gate a request on a client-held token.
+   *
+   * Under the cookie session `useAuth()` exposes no token at all, so the gate is
+   * permanently false and the request is never issued — no error, no failed
+   * response, just a screen that stays empty. Under bearer the gate is redundant:
+   * the header builder already omits the credential when none is held. So the
+   * gate is wrong in one scheme and pointless in the other.
    */
   it('G2: no production file gates behaviour on a client-held token', () => {
     const GATE = /!\s*(?:token|authToken|accessToken|bearerToken)\b|\b(?:token|authToken)\s*\?\s*\{/;

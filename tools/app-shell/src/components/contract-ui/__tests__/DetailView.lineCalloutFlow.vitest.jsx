@@ -14,6 +14,7 @@
  * DetailView.render.vitest.jsx) so the callout result is normalized for real.
  */
 import { render, act, waitFor } from '@testing-library/react';
+import { declareCookieSession } from '@/test/sessionContract.js';
 import { MemoryRouter } from 'react-router-dom';
 import { DetailView } from '../DetailView.jsx';
 
@@ -179,6 +180,14 @@ vi.mock('../BalanceFooterPanel.jsx', () => ({ default: () => null }));
 vi.mock('../LinesSelectionBar.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentStatusPill.jsx', () => ({ default: ({ status }) => <span>{status}</span> }));
 vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>A</span> }));
+
+// ETP-4576 — these assertions describe the cookie-session contract, so the
+// request builders have to be in that mode. src/test/setup.js resets the scheme
+// before every test, hence a beforeEach rather than module scope.
+beforeEach(() => {
+  declareCookieSession();
+});
+
 
 // DetailTable mock that captures the callout-related props so the test can drive
 // the internal handleLineFieldChange / onUpdateRow flow directly.

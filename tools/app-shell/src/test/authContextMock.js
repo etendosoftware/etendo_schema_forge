@@ -1,3 +1,5 @@
+import { getCredentialMode, setSessionCredentials } from '@etendosoftware/app-shell-core/auth';
+
 /**
  * Shared `useAuth` mock for the cookie-session contract (ETP-4576).
  *
@@ -24,6 +26,25 @@
  * different baseline (`configureAuthMock`) or a one-test override
  * (`setAuthMock`).
  */
+
+/**
+ * ETP-4576 — mirrors what AuthProvider does in production: it publishes the
+ * session's credentials to app-shell-core's `sessionCredentials`, which is what
+ * every request builder reads. With the provider mocked away nothing would
+ * publish, so a suite that changed the mock's `csrfToken` would see the builders
+ * ignore it — the mock and the wire would disagree.
+ *
+ * The MODE is not this mock's business: a suite declares it (see
+ * `declareCookieSession` in ./sessionContract.js) and it is preserved here, so
+ * changing the proof never silently changes the scheme.
+ */
+function publishCredentials(value) {
+  setSessionCredentials({
+    mode: getCredentialMode(),
+    token: value.token,
+    csrfToken: value.csrfToken,
+  });
+}
 
 /** An authenticated session holding a usable CSRF proof. */
 const DEFAULT_AUTH = { isAuthenticated: true, csrfToken: 'test-csrf' };
@@ -54,6 +75,7 @@ export const authContextMock = {
  */
 export function setAuthMock(next = DEFAULT_AUTH) {
   authValue = { ...next };
+  publishCredentials(authValue);
   return authValue;
 }
 
@@ -80,5 +102,6 @@ export function configureAuthMock(next = DEFAULT_AUTH) {
  */
 export function resetAuthMock() {
   authValue = { ...fileDefault };
+  publishCredentials(authValue);
   return authValue;
 }

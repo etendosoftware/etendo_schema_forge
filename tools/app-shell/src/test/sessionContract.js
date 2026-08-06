@@ -7,6 +7,25 @@
  * credential-bearing header to forbid, say) has to land in one place, not 26.
  */
 import { expect } from 'vitest';
+import { CREDENTIAL_MODES, setSessionCredentials } from '@etendosoftware/app-shell-core/auth';
+
+/** The CSRF proof these suites assert on. Matches the shared useAuth mock. */
+export const TEST_CSRF_TOKEN = 'test-csrf';
+
+/**
+ * Puts the request builders into cookie-session mode for the current test.
+ *
+ * Needed because these suites mock `useAuth` instead of mounting AuthProvider,
+ * and the provider is what publishes the credentials in production — with it
+ * mocked away, nothing does, so the builders stay on the default (bearer) and a
+ * suite asserting the CSRF proof would see only a Content-Type.
+ *
+ * Call from a `beforeEach`: `src/test/setup.js` resets the scheme before every
+ * test, so declaring it once at module scope would not survive.
+ */
+export function declareCookieSession(csrfToken = TEST_CSRF_TOKEN) {
+  return setSessionCredentials({ mode: CREDENTIAL_MODES.cookie, csrfToken });
+}
 
 /**
  * Asserts that no request recorded by the fetch mock carried a bearer token —

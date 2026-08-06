@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { declareCookieSession } from '@/test/sessionContract.js';
 import userEvent from '@testing-library/user-event';
 
 const localStorageMock = (() => {
@@ -165,6 +166,14 @@ vi.mock('@etendosoftware/app-shell-core/components/ui/input', () => ({
 vi.mock('@etendosoftware/app-shell-core/components/ui/label', () => ({
   Label: ({ children, ...props }) => <label {...props}>{children}</label>,
 }));
+
+// ETP-4576 — these assertions describe the cookie-session contract, so the
+// request builders have to be in that mode. src/test/setup.js resets the scheme
+// before every test, hence a beforeEach rather than module scope.
+beforeEach(() => {
+  declareCookieSession();
+});
+
 
 import OnboardingPage from '../OnboardingPage.jsx';
 import {

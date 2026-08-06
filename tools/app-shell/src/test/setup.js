@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { installMemoryLocalStorage } from './localStorage.js';
 import { resetAuthMock } from './authContextMock.js';
+import { resetSessionCredentials } from '@etendosoftware/app-shell-core/auth';
 
 installMemoryLocalStorage();
 
@@ -9,7 +10,15 @@ installMemoryLocalStorage();
 // next one and no test file has to write the reset itself. A no-op for suites
 // that never mock auth: nothing reads the value.
 beforeEach(() => {
+  // Credentials first: resetAuthMock publishes through them, so it must land on a
+  // clean scheme rather than whatever the previous test left behind.
+  resetSessionCredentials();
   resetAuthMock();
+  // ETP-4576 — the credential scheme is module state in app-shell-core, so a
+  // suite that switches to the cookie session would otherwise leak it into every
+  // test that runs after it. Reset puts every test back on the default (bearer,
+  // no token); a suite that needs another scheme declares it with
+  // setSessionCredentials.
 });
 
 // jsdom doesn't implement scroll APIs — stub them so components that

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { declareCookieSession } from '@/test/sessionContract.js';
 
 // Importing DetailView.jsx pulls in the whole component tree (router, i18n,
 // hooks, sub-components, lib helpers). Mirror the mocks used by the sibling
@@ -93,6 +94,14 @@ vi.mock('@/lib/utils.js', () => ({
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
+
+// ETP-4576 — these assertions describe the cookie-session contract, so the
+// request builders have to be in that mode. src/test/setup.js resets the scheme
+// before every test, hence a beforeEach rather than module scope.
+beforeEach(() => {
+  declareCookieSession();
+});
+
 
 import { toast } from 'sonner';
 import { buildDeleteRowHandler } from '../DetailView.jsx';
