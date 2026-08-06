@@ -542,6 +542,15 @@ function buildRowCriteria(col, row) {
     return [{ fieldName, operator: 'equals', value: toBackendBoolean(val) }];
   }
 
+  // ETP-4770: "Antes de" (Before) on a date column must exclude the entered
+  // day itself. Backend stores datetime, so a raw `lessThan` on the entered
+  // date still matches records at 00:00:00 of that same day. Mirror the
+  // fix already applied to the simple-text date parser above (line ~354):
+  // shift back one day and use `lessOrEqual` instead.
+  if (mode === 'date' && op === 'lessThan') {
+    return [{ fieldName, operator: 'lessOrEqual', value: shiftDate(val, -1) }];
+  }
+
   return [{ fieldName, operator: op, value: val }];
 }
 
