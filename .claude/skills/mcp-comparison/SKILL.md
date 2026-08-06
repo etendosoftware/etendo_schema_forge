@@ -13,7 +13,8 @@ description: >
   Every run must end with NEW improvement proposals for the Etendo GO MCP (to match or beat
   Holded), an explicit verdict on why an agent would prefer one MCP over the other, the
   four hard scoreboard metrics M1–M4 (calls-to-outcome ratio, first-call success, payload
-  signal ratio, self-correctable errors), and a recomputed M5 (open IMP items) in the registry.
+  signal ratio, self-correctable errors), and a recomputed **MARI** — the 0–100 composite
+  readiness index that is the headline progress number and the one a KR is set against.
   Probing is read-only by default; write/edit probes are allowed only under explicit per-run
   human authorization on disposable environments (see Step 0.1). Enforces: every claim backed
   by a cited live call, status written only to the registry, and reports stating deltas
@@ -21,7 +22,8 @@ description: >
   Triggers on: "MCP comparison", "Holded vs Etendo", "comparativa MCP", "rehacer el
   reporte MCP", "repetir el reporte", "re-run the benchmark", "validate IMP-", "IMP-4",
   "IMP-6", "IMP-9", "IMP-15", "Wave 3", "agentic validation", "validacion agentica",
-  "registro de mejoras", "improvements registry", "mejoras pendientes",
+  "registro de mejoras", "improvements registry", "mejoras pendientes", "MARI",
+  "puntaje de avance", "readiness index", "que metrica del MCP",
   "did the improvements land?", "post-mejoras".
 ---
 
@@ -32,7 +34,7 @@ skill is writing a status into the wrong one.
 
 | Document | Role | May a status be changed here? |
 |---|---|---|
-| **[`docs/mcp-improvements-registry.md`](../../../docs/mcp-improvements-registry.md)** | **The registry.** Every IMP-* item, its priority, class, repo, **status**, and evidence pointer. Plus the M5 metrics and the changelog. | **Yes — only here.** |
+| **[`docs/mcp-improvements-registry.md`](../../../docs/mcp-improvements-registry.md)** | **The registry.** Every IMP-* item, its priority, class, repo, **status**, and evidence pointer. Plus **MARI** (§2.1–2.3), the M5 diagnostics (§2.4), the probe-surface list (§2.5) and the changelog. | **Yes — only here.** |
 | [`docs/mcp-comparison-holded-vs-etendo-go.md`](../../../docs/mcp-comparison-holded-vs-etendo-go.md) | **The baseline benchmark.** Architecture contrast, inventories, coverage matrix, and the full `BEFORE`/`AFTER` specification of each item. Reference material. | No |
 | `docs/mcp-comparison-post-audit-<date>.md` | **One run report per execution.** Live evidence, defects, new proposals, preference verdict, M1–M4 — and a **delta** against the registry. | No |
 
@@ -45,8 +47,14 @@ the registry. A run report states only what **changed**, in these three sentence
 * Resolved IMP-6 — actions-only view shipped (McpActionsView, commit bbfce9db).
 ```
 
-Then it updates the registry's master table + changelog, and recomputes **M5 (open items)**. A run
-that flips marks without moving M5 has not improved the product.
+Then it updates the registry's master table + changelog, and recomputes **MARI** (registry §2.1). A
+run that flips marks without moving MARI has not improved the product.
+
+**Why MARI and not "% of IMPs resolved":** every count-based metric here shares one defect —
+discovering a new IMP makes it look worse, and discovery *is* the work. MARI weights outcome (60 %:
+first-call success + calls-to-outcome ratio) over activity (40 %: weighted points against a frozen
+quota + probe coverage), so finding a new defect never drags the number down. Baseline 2026-08-05:
+**MARI = 28**; scope-closed ceiling **88**.
 
 The reports are **evidence-driven, not opinion-driven**: every finding in §7/§8 traces to a
 numbered live call in §11, and every proposed change shows a verbatim `BEFORE`
@@ -390,27 +398,40 @@ so state it as a delta ("this run moved X from their column to ours; Y remains t
 
 ---
 
-## Step 3c — The scoreboard: five hard numbers (MANDATORY)
+## Step 3c — The scoreboard: MARI plus the four hard numbers (MANDATORY)
 
 Prose verdicts drift; numbers don't. Every run records the same metrics, **measured from the
 probe set you just ran** (no extra calls), into the run report's scorecard — one column
 per run, appended, never overwritten. Progress is the **delta between columns**.
 
-The primary metric is **M1**. M2–M4 are the levers that move it, and they exist so a run
-can show progress even when M1 hasn't moved yet. **M5 — open items** is the backlog counterpart and
-lives in the registry (§2 there), recomputed on every run:
+### The headline: MARI
 
-| # | Metric | Definition | Where |
-|---|---|---|---|
-| **M5** | open items = count(⚠️ partial) + count(⏳ open) | registry §3 master table | registry §2 |
-| **M5a** | the same, restricted to P1 | | registry §2 |
-| **M5b** | resolved = count(✅) | | registry §2 |
-| **M5c** | items added this run | | registry §2 |
+**MARI (MCP Agent Readiness Index)**, 0–100, defined in registry **§2.1–2.3**. It is the number a KR
+is set against, and the only one you quote as "progress". Recompute it every run:
 
-M5 counts **partials as open**, deliberately: a mechanism that ships and reaches 1% of the surface
-has not delivered its outcome. This is why M5b can *fall* between runs without any code regressing —
-when it does, say so explicitly, name which statuses were corrected and why, so nobody reads it as a
-broken build.
+```
+MARI = 0.30 × M2                       # first-call success rate, as a percentage
+     + 0.30 × (100 / M1)               # calls-to-outcome ratio; 1.0× → 100
+     + 0.25 × (earned / quota × 100)   # weighted points, registry §3 `Pts` column
+     + 0.15 × (probed / 6 × 100)       # probe surfaces, registry §2.5
+```
+
+Baseline to carry forward: **2026-08-05 → MARI = 28** (M2 0 % · M1 2.4× · 29.5/73 · 2/6).
+Projections on record: next wave **66**, scope closed **88**. The ceiling is 88, not 100 — see §2.3.
+
+Two rules that keep MARI honest:
+
+- **Never re-derive the quota from today's row count.** It was frozen when the OKR period opened
+  (61 known points × 1.20 = 73). Registering a new IMP spends reserve; it must not move the
+  denominator. If you overrun the quota, **stop and tell the user** — re-basing it is their call.
+- **If M2 or M1 is not measurable this run, report MARI as a range**, with the unmeasured component
+  at 0 and at its last known value. Never fill a component with an estimate and present the sum as
+  a single number.
+
+### The components, and where each is measured
+
+M1 and M2 are the outcome half (60 % of MARI) — they cannot be moved by moving paperwork. Delivery
+and Coverage are the activity half (40 %). If they ever disagree, **lead with M1/M2**.
 
 | # | Metric | Definition | Source | Direction |
 |---|---|---|---|---|
@@ -418,6 +439,28 @@ broken build.
 | **M2** | **First-call success rate** | Of the suite's calls, the fraction where the *natural* first call shape succeeds (no retry, no arg guessing) | Count retries during your own probing | ↑ toward 100% |
 | **M3** | **Payload signal ratio** | Useful fields ÷ total fields returned, on the three canonical shapes: `neo_list` row, `neo_defaults`, `neo_schema` | Count keys in the responses | ↑ |
 | **M4** | **Self-correctable error rate** | Of the error probes, the fraction whose response alone lets an agent fix the call (structured status + names the offending field/arg + `seeAlso`) | The error-path probes | ↑ toward 100% |
+| **Delivery** | `earned / quota` | Sum the registry's `Pts` column: weight P1 5 · P2 3 · P3 1, credit ✅ 1.0 · ⚠️ 0.5 · ⏳/❌ 0 | registry §3 | ↑ |
+| **Coverage** | `probed / 6` | A surface counts as probed only if this or a past run recorded a verbatim response from it | registry §2.5 | ↑ toward 6/6 |
+
+M3 and M4 are **not** MARI components — they are diagnostics that explain M1 and M2. Keep recording
+them; a run where M3 jumps but M1 does not tells you the payload got leaner without removing a
+round-trip.
+
+### The diagnostics: the M5 family
+
+M5, M5a, M5b, M5c and M5d live in registry **§2.4**, recomputed every run. They are **not KR
+material** — M5's denominator grows every time you find something, so it punishes discovery. That is
+the whole reason MARI exists. Use them to read *what changed*, never as the progress headline.
+
+M5 counts **partials as open**, deliberately: a mechanism that ships and reaches 1% of the surface
+has not delivered its outcome. This is why M5b can *fall* between runs without any code regressing.
+When it does, apply the registry's correction-vs-regression rule (§2.4): a **correction** re-bases
+the past column with a footnote; a **regression** breaks the series and is escalated to a human as
+an incident. Never let the two look like the same fall.
+
+**M5d — cohort closure** is the one count-based number that is dilution-proof: its denominator
+freezes at the run that registered the items, so newly found IMPs open a new cohort at 0 % instead of
+diluting the old one. Assign every new IMP-n to the current cohort in the registry's `C` column.
 
 ### The frozen task suite (M1/M2 denominator)
 
@@ -453,12 +496,14 @@ Carry this column forward as the origin; do not recompute it:
   previous staging column is meaningless.
 - **Report M1 as a ratio, not as raw calls.** Raw counts drift with tenant data; the ratio against
   Holded on the same task is the honest signal.
-- **Never let backlog burn stand in for progress.** M5 can go to zero while M1 is still 2×. Items
-  shipped is an *activity* number; M1–M4 are the *outcome* numbers. Report both, and if
-  they disagree, lead with M1–M4 and say so.
-- If a metric is not measurable this run (e.g. Holded not re-probed), write `n/m` — not an estimate.
-- Each new IMP-n from Step 3b.1 must state **which metric it moves**. An improvement that moves none
-  of the four is probably not worth a wave slot — say so.
+- **Never let backlog burn stand in for progress.** M5 can go to zero while M1 is still 2×. That is
+  why Delivery is only 25 % of MARI. Report both, and if they disagree, lead with M1/M2 and say so.
+- If a metric is not measurable this run (e.g. Holded not re-probed), write `n/m` — not an estimate —
+  and report MARI as a range per the rule above.
+- Each new IMP-n from Step 3b.1 must state **which MARI component it moves**, and by roughly how
+  much. An improvement that moves none of them is probably not worth a wave slot — say so.
+- **Projections are labelled as projections.** A forward MARI row (registry §2.3) states the reasoning
+  ("IMP-15 removes the FK retry loop") and never gets promoted to a measured column.
 
 ---
 
@@ -468,12 +513,17 @@ Status goes in **one** place. Write it there first, and derive everything else f
 
 ### 4a. The registry — `docs/mcp-improvements-registry.md`
 
-1. **Master table (§3)** — for every item you probed: the status mark, the evidence pointer (the run
-   report row id), and the one-line reason a ⚠️ is not a ✅. Add a row for each new IMP-n.
+1. **Master table (§3)** — for every item you probed: the status mark, the `Pts` cell (weight ×
+   credit), the cohort `C`, the evidence pointer (the run report row id), and the one-line reason a
+   ⚠️ is not a ✅. Add a row for each new IMP-n, in the current cohort. Re-sum the totals line under
+   the table — a `Pts` cell that disagrees with its status mark makes MARI unauditable.
 2. **Changelog (§4)** — a new dated entry with the run's environment and build, then one
    `* Added / * Advanced / * Resolved IMP-n — …` bullet per change. Append; never edit a past entry.
-3. **Metrics (§2)** — a new column: M5, M5a, M5b, M5c. If M5b fell, add the sentence explaining
-   which statuses were corrected and that no behavior regressed.
+   Close the entry with `MARI <before> → <after>`.
+3. **Metrics (§2)** — a new MARI column in §2.1 with all four components shown, and a new column in
+   the §2.4 diagnostics table (M5, M5a, M5b, M5c, M5d). Update §2.5 if a surface was newly probed.
+   Do **not** touch the quota in §2.2. If M5b fell, add the sentence explaining which statuses were
+   corrected and that no behavior regressed.
 4. **Environment line** — the master table header states which environment all its marks hold on.
 5. If an item needs a long explanation to be actionable (IMP-15 is the precedent), add an
    **appendix** rather than inflating the table row.
@@ -483,8 +533,10 @@ Status goes in **one** place. Write it there first, and derive everything else f
 One file per run. It holds the evidence and the argument, and a **delta** section, not a status
 table. Sections: headline · verification matrix (evidence per item, with the registry as the status
 authority) · live evidence rows · write-path evidence if authorized · defects · new backlog items
-with full `BEFORE`/`AFTER`/`Done when:` · preference verdict · M1–M4 scorecard · what was **not**
-tested · next actions. Every ✅ or ⚠️ it cites must name the live-call row behind it.
+with full `BEFORE`/`AFTER`/`Done when:` · preference verdict · **the MARI computation with all four
+components and the before → after** · M1–M4 scorecard · what was **not** tested (this is where the
+unprobed surfaces of registry §2.5 get named) · next actions. Every ✅ or ⚠️ it cites must name the
+live-call row behind it.
 
 ### 4c. The base report — `docs/mcp-comparison-holded-vs-etendo-go.md`
 
@@ -511,8 +563,9 @@ grep -c '^| \*\*IMP-' $R                              # row count == highest IMP
 grep -o 'IMP-[0-9]*' docs/mcp-comparison-post-audit-*.md | sort -u   # no item cited but unregistered
 ```
 
-Every IMP-n mentioned in any run report must have a row in the registry, and the registry's M5 must
-equal the number of ⚠️ plus ⏳ rows you can count by hand.
+Every IMP-n mentioned in any run report must have a row in the registry; the registry's M5 must equal
+the number of ⚠️ plus ⏳ rows you can count by hand; and the `Pts` column must sum to the `earned`
+figure the MARI computation used. If the sums disagree, the metric is wrong, not the table.
 
 ---
 
@@ -523,9 +576,12 @@ Give the user, in Spanish (conversation language):
 - **which Etendo GO environment(s)** were probed (and whether Holded was re-probed), on which
   build/commit each, and which calls were **not** run and why;
 - if several environments were probed: where they disagree, i.e. what is shipped but not released;
+- **MARI before → after, first**, broken into its four components so it is clear *which* moved. This
+  is the headline of the whole run. If a component was not measurable, say so and give the range;
 - **the registry delta** — the `Added / Advanced / Resolved IMP-n` bullets, each with the one call
-  that decided it, plus **M5 before → after**. If M5b (resolved) fell, explain why in the same
-  breath, so it is not read as a broken build;
+  that decided it, plus **M5 before → after** as a diagnostic. If M5b (resolved) fell, or if M5 rose
+  because you found things, explain it in the same breath — and point at MARI, which is the number
+  that did not lie;
 - **the new proposals** (IMP-11+) with their priority and wave — at least the strongest one, and why
   it is next;
 - **the preference verdict as a delta**: what moved from Holded's column to ours this run, what
@@ -535,5 +591,5 @@ Give the user, in Spanish (conversation language):
 - any regression found (highest priority — call it out first);
 - the diff summary of the report, and the remaining backlog.
 
-Commit only if the user asks. Convention: `Feature ETP-4601: Refresh MCP comparison report`
+Commit only if the user asks. Convention: `Feature ETP-4793: Refresh MCP comparison report`
 (first line ≤80 chars, no `Co-Authored-By`, never `--no-verify` on an epic-feeding branch).

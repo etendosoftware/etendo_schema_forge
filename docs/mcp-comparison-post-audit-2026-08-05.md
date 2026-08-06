@@ -81,8 +81,32 @@ authoritative account of what this run changed.
 * **Resolved IMP-6** — `view:"actions"` shipped, `McpActionsView`, `bbfce9db` (A12).
 * **Resolved IMP-9** — `primaryEntity` shipped in `neo_discover`, `bbfce9db` (A1).
 
+### MARI — the headline number for this run
+
+This run **opened the OKR period**, so it has no `before` column; it establishes the baseline.
+
+| Component | Weight | Value | Normalized | Contribution |
+|---|---:|---|---:|---:|
+| M2 — first-call success | 30 | 0 % (2 write attempts, 2 FK failures — §5, Appendix A.5) | 0 | 0.0 |
+| M1 — calls-to-outcome vs Holded | 30 | 2.4× | 42 | 12.5 |
+| Delivery — weighted points | 25 | 29.5 / 73 (quota frozen this run) | 40 | 10.1 |
+| Coverage — probe surfaces | 15 | 2 / 6 (read + Etendo write) | 33 | 5.0 |
+| | | | | **MARI = 28** |
+
+M2 is the weakest input: it was measured on the write suite only. Re-measure it against the frozen
+task suite before quoting MARI outside this repo. Full definition, quota rule and the reachable-value
+projections (next wave **66**, scope closed **88**): registry §2.1–2.3.
+
+### Diagnostics
+
 **M5 (open items): 3 of 10 → 10 of 15.** M5a (open P1) = 4. M5b (resolved) fell 7 → 5 because five
-statuses were over-credited, **not** because anything regressed — see registry §2.
+statuses were over-credited, **not** because anything regressed — see registry §2.4. M5d (cohort
+closure) = C1 74 % · C2 0 %.
+
+The M5 family is why MARI exists: this run found five real defects and root-caused a critical one,
+and every count-based number got *worse*. MARI, which weights outcome over backlog size and scores
+Delivery against a frozen quota, records the same run as a 28-point baseline rather than a
+regression.
 
 ---
 
