@@ -1,8 +1,8 @@
 {
   "version": "0.43.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-08-04T11:59:29.579Z",
-  "checksum": "164b53c906e6770b",
+  "updatedAt": "2026-08-04T15:44:28.027Z",
+  "checksum": "090d63b9c0dd21ca",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -15,6 +15,7 @@
       "hideMoreDetails": true,
       "contentBg": "bg-card",
       "hideLink": true,
+      "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
       "processOverrides": {
         "processAsset": {
@@ -40,7 +41,7 @@
       },
       "secondaryTabs": {
         "assetAcct": {
-          "tabOrder": 1,
+          "tabOrder": 1000,
           "label": "Accounting",
           "addLineFields": [
             "accountingSchema",
@@ -1049,6 +1050,7 @@
       "hideMoreDetails": true,
       "contentBg": "bg-card",
       "hideLink": true,
+      "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
       "processOverrides": {
         "processAsset": {
@@ -1074,7 +1076,7 @@
       },
       "secondaryTabs": {
         "assetAcct": {
-          "tabOrder": 1,
+          "tabOrder": 1000,
           "label": "Accounting",
           "addLineFields": [
             "accountingSchema",

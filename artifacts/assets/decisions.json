@@ -73,7 +73,7 @@
     },
     "secondaryTabs": {
       "assetAcct": {
-        "tabOrder": 1,
+        "tabOrder": 1000,
         "label": "Accounting",
         "addLineFields": [
           "accountingSchema",
