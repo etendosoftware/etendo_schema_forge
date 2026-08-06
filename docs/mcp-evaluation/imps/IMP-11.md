@@ -154,6 +154,59 @@ ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby, agent
 
 So: 6340 rows, 6340 NULLs, every push. That is the whole mechanism.
 
+## 2.1 Blast radius — who else reads the column
+
+**Exactly one consumer, in the whole Java codebase:**
+
+```
+grep -rn 'PROPERTY_VISIBILITY|get("visibility")|getVisibility()' src/
+→ src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java:158
+```
+
+Nothing in `NeoServlet`, the CRUD handlers, the selectors, the defaults service or the frontend reads
+it. So populating the column **cannot change runtime API behaviour** — it changes the `neo_schema`
+response and nothing else. That is what makes this a safe first item: maximum unblocking, no blast
+radius.
+
+The persistence layer is complete end-to-end and has been all along. The generated entity class
+(`{etendo_root}/src-gen/com/etendoerp/go/schemaforge/data/SFField.java`) already declares
+`PROPERTY_VISIBILITY` (`:108`), `getVisibility()` (`:332`) and `setVisibility(String)` (`:339`); the
+column is registered in `AD_COLUMN`, `AD_ELEMENT` and `AD_FIELD`; and
+`McpSchemaFieldBuilderTest.java:474-512` already tests `addVisibility`, including
+`nullVisibilityOmitsKeys` — the current behaviour is deliberate and pinned. **Only the value was ever
+missing.**
+
+*Nit worth fixing while we are here:* line 158 reads `sfField.get("visibility")` — a magic string —
+two lines above `sfField.isBusinessCritical()`, which uses the generated typed getter. `getVisibility()`
+exists; use it. Functionally identical, but the dynamic form fails at runtime instead of compile time.
+
+## 2.2 What actually gets written
+
+No DDL, no migration, no model change: `ETGO_SF_FIELD.VISIBILITY VARCHAR(20)`, `required="false"`,
+is already in `src-db/database/model/tables/ETGO_SF_FIELD.xml:68`. The rows already exist too. The
+change is NULL → one of four string values on rows that are already there.
+
+Distribution the pusher would write, counted from the 68 local `backendContract`s (179 entities,
+5851 field rows):
+
+| visibility | rows | share |
+|---|---:|---:|
+| `system` | 2982 | 51 % |
+| `editable` | 1261 | 22 % |
+| `discarded` | 1071 | 18 % |
+| `readOnly` | 537 | 9 % |
+
+**69 % of all fields are `system` or `discarded`** — precisely the set the `hint` tells the agent to
+omit, and precisely what it cannot currently identify.
+
+On `sales-invoice/header` (164 fields in the backend contract): 95 `discarded`, 29 `system`,
+24 `editable`, 16 `readOnly`. `required: true` on 59 — but **`editable` AND `required` on 11**. That
+11-vs-59 gap is the fix, in one number: the agent goes from a 50-plus-field required set full of
+buttons and localisation columns to eleven fields it can actually send.
+
+*(The 59 here and the 52 counted in B6 are different measurements — the local contract includes
+`discarded` fields that never reach `neo_schema`. Not a discrepancy; do not merge them.)*
+
 ## 3. Why the data is not the hard part
 
 The value is not missing from the system — it is missing only from the *runtime tables*.
