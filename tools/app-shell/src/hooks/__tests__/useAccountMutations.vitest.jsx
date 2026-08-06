@@ -251,6 +251,40 @@ describe('useAccountMutations', () => {
     });
   });
 
+  // ── unarchiveAccount ────────────────────────────────────────────────────────
+
+  it('unarchiveAccount PATCHes /account/{id} with { active: true }', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+    const { result } = renderHook(() => useAccountMutations());
+
+    let res;
+    await act(async () => {
+      res = await result.current.unarchiveAccount('acc-1');
+    });
+
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(`${ENTITY_URL}/acc-1`);
+    // PATCH rather than a dedicated endpoint: `active` is hardcoded writable in NeoFieldFilter,
+    // so the generic CRUD persists it with no backend change.
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body)).toEqual({ active: true });
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(res).toBe(true);
+  });
+
+  it('unarchiveAccount throws with .status when the backend rejects', async () => {
+    globalThis.fetch.mockResolvedValue(errorResponse(400, 'nope'));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await expect(result.current.unarchiveAccount('acc-1')).rejects.toMatchObject({
+        message: 'nope',
+        status: 400,
+      });
+    });
+  });
+
   // ── fetchDefaults ───────────────────────────────────────────────────────────
 
   const SELECTORS_URL = `${ENTITY_URL}/selectors/C_Currency_ID?limit=200`;

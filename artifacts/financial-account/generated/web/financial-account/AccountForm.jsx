@@ -9,6 +9,7 @@ const fields = [
   { key: 'active', column: 'Isactive', type: 'checkbox', label: 'Active', section: 'other', defaultValue: 'Y' },
   { key: 'default', column: 'Isdefault', type: 'checkbox', label: 'Default', required: true, readOnly: true, section: 'other' },
   { key: 'currentBalance', column: 'Currentbalance', type: 'number', label: 'Current Balance', required: true, readOnly: true, section: 'other', defaultValue: '0' },
+  { key: 'aprmGlitemDiff', column: 'EM_Aprm_Glitem_Diff', type: 'selector', label: 'GL Item Difference', section: 'other', reference: 'Glitem', inputMode: 'selector' },
   { key: 'iBAN', column: 'Iban', type: 'text', label: 'IBAN', section: 'other' },
   { key: 'swiftCode', column: 'Swiftcode', type: 'text', label: 'SWIFT Code', section: 'other' },
   { key: 'bankCode', column: 'Codebank', type: 'text', label: 'Bank Code', section: 'other' },

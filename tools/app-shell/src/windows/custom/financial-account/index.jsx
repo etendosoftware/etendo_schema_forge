@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Sparkles, Upload, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,10 +10,13 @@ import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFinancialAccount } from '@/hooks/useFinancialAccount';
 import { useAccountMovements } from '@/hooks/useAccountMovements';
 import { useBankStatements } from '@/hooks/useBankStatements';
+import { useReconciliations } from '@/hooks/useReconciliationList';
 import { useCsvExport } from '@/hooks/useCsvExport';
-import { DetailTabs } from './DetailTabs';
+import { DetailTabs, getVisibleTabs } from './DetailTabs';
 import { MovementsTab } from './MovementsTab';
 import { ReconciliationTab } from './ReconciliationTab';
+import { CashCloseTab } from './CashClose/index.jsx';
+import { ReconciliationListTab } from './ReconciliationList/index.jsx';
 import { ImportedStatementsTab } from './ImportedStatementsTab';
 import { EditAccountModal } from './EditAccountModal.jsx';
 import { ArchiveAccountDialog } from './ArchiveAccountDialog.jsx';
@@ -22,6 +25,10 @@ import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
 import { SyncStatusInline } from '@/components/financial-accounts/SyncStatusInline';
+import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
+
+/** Tabs whose content `handleExport` knows how to stream as CSV. */
+const EXPORTABLE_TABS = new Set(['movements', 'statements']);
 
 const STATEMENTS_API_PATH = '/sws/neo/bank-statements';
 const TRANSACTIONS_API_PATH = '/sws/neo/financial-account-transactions';
@@ -134,11 +141,36 @@ export function FinancialAccountDetail({ recordId }) {
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
   const { account, reload: reloadAccount } = useFinancialAccount(recordId);
+  // ETP-4795: cash accounts close their drawer instead of matching bank-statement lines, so both
+  // the Reconciliation tab body and the automatch engine branch on this.
+  const isCashAccount = account?.type === ACCOUNT_TYPE.CASH;
+  // Tab visibility takes the type as THREE states — `undefined` until the account loads — so a
+  // type-dependent tab never renders for a frame and then disappears (see DetailTabs.TAB_DEFS).
+  const visibleTabs = useMemo(
+    () => getVisibleTabs(account ? isCashAccount : undefined),
+    [account, isCashAccount],
+  );
+
+  // Guard: keep `activeTab` pointing at a tab that is actually rendered. Without it, a hidden tab
+  // (a `?tab=statements` deep link on a cash account, or the type being switched to Cash in the
+  // Edit modal) leaves the content area blank AND no trigger highlighted, because every
+  // `activeTab === …` branch below is false and TabsTrigger finds no match.
+  //
+  // Deliberately waits for `account`: while it is loading the type-dependent tabs are hidden, and
+  // coercing then would throw away a legitimate `?tab=statements` deep link on a bank account.
+  useEffect(() => {
+    if (!account) return;
+    if (!visibleTabs.some((tab) => tab.key === activeTab)) {
+      setActiveTab(visibleTabs[0].key);
+    }
+  }, [account, visibleTabs, activeTab]);
   // ETP-4530: powers the Edit modal's "Connect bank" button from this entry point too — same
   // flow/UI as the accounts list (FinancialAccountsPage.jsx), just reloading the account instead.
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reloadAccount });
+  // Automatch matches bank-statement lines against movements — a cash account has no statements,
+  // so the engine is never queried and its modal never opens for one (ETP-4795).
   const { groups: autoMatchGroups, kpis: autoMatchKpis, reload: reloadAutoMatch } = useAutoMatch(
-    autoMatchOpen ? recordId : null,
+    autoMatchOpen && !isCashAccount ? recordId : null,
   );
   const { movements, totals, enabledDimensions, headerDimensions, trxTypes, accountOrgId, paymentMethods, loading: movementsLoading, reload: reloadMovements } = useAccountMovements(recordId);
   // Bumped after an automatch apply so the reconciliation panel remounts and re-runs the matching
@@ -151,6 +183,12 @@ export function FinancialAccountDetail({ recordId }) {
     setReconciliationRefreshKey((k) => k + 1);
   }, [reloadAccount, reloadAutoMatch, reloadMovements]);
   const { statements } = useBankStatements(recordId);
+  // Lifted out of ReconciliationListTab so the tab badge can show the count without the tab being
+  // mounted — and without a second fetch of the same endpoint. Idle (`null`) on non-cash accounts,
+  // which never render that tab.
+  const {
+    reconciliations, loading: reconciliationsLoading,
+  } = useReconciliations(isCashAccount ? recordId : null);
   const movementsTabRef = useRef(null);
   const statementsTabRef = useRef(null);
   const runCsvExport = useCsvExport();
@@ -265,9 +303,14 @@ export function FinancialAccountDetail({ recordId }) {
           <DetailTabs
             value={activeTab}
             onValueChange={handleTabChange}
-            movementsCount={movements.length}
-            reconciliationCount={account?.pendingCount ?? 0}
-            statementsCount={statements.length}
+            isCash={account ? isCashAccount : undefined}
+            badges={{
+              movements: movements.length,
+              reconciliation: account?.pendingCount ?? 0,
+              // No `statements` entry on purpose: the Imported statements tab has never carried a
+              // count badge, and a tab list where every trigger has a number reads as noise.
+              reconciliationList: reconciliations.length,
+            }}
             data-testid="DetailTabs__f7dbb3" />
           <div className="flex items-center gap-2">
             <button
@@ -279,7 +322,9 @@ export function FinancialAccountDetail({ recordId }) {
               <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__f7dbb3" />
               <span className="px-1">{ui('financeAccountsMenuEdit')}</span>
             </button>
-            {activeTab === 'reconciliation' ? (
+            {/* Automatch is bank-only (ETP-4795): a cash account's Reconciliation tab is the
+                cash-close screen, which has nothing to automatch against. */}
+            {activeTab === 'reconciliation' && !isCashAccount ? (
               <button
                 type="button"
                 data-testid="financial-account-automatch"
@@ -289,7 +334,12 @@ export function FinancialAccountDetail({ recordId }) {
                 <Sparkles className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Sparkles__f7dbb3" />
                 <span className="px-1">{ui('financeReconcileActionAutomatch')}</span>
               </button>
-            ) : (
+            ) : null}
+            {/* Export only exists for the two tabs that implement it — Movements (transactions CSV)
+                and Imported statements (statements / their lines). It used to be the fallback for
+                every other tab, so it also rendered on the cash close and the reconciliation list,
+                where `handleExport` matches no branch and does nothing. */}
+            {EXPORTABLE_TABS.has(activeTab) ? (
               <button
                 type="button"
                 data-testid="financial-account-export"
@@ -299,7 +349,7 @@ export function FinancialAccountDetail({ recordId }) {
                 <Upload className="h-6 w-6 text-[hsl(var(--text-disabled))]" data-testid="Upload__f7dbb3" />
                 <span className="px-1">{ui('financeAccountDetailExport')}</span>
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -322,19 +372,34 @@ export function FinancialAccountDetail({ recordId }) {
               autoOpenNewMovement={autoOpenNewMovement}
               data-testid="MovementsTab__f7dbb3" />
           )}
-          {activeTab === 'reconciliation' && (
+          {/* ETP-4795: a cash drawer is closed, not reconciled against a bank statement, so
+              cash accounts get the cash-close screen in this tab instead of the split panel. */}
+          {activeTab === 'reconciliation' && (isCashAccount ? (
+            <CashCloseTab
+              key={reconciliationRefreshKey}
+              account={account}
+              onCloseSuccess={() => { reloadAccount(); reloadMovements(); }}
+              data-testid="CashCloseTab__f7dbb3" />
+          ) : (
             <ReconciliationTab
               key={reconciliationRefreshKey}
               account={account}
               paymentMethods={paymentMethods}
               onReconcileSuccess={() => { reloadAccount(); reloadMovements(); reloadAutoMatch(); }}
               data-testid="ReconciliationTab__f7dbb3" />
-          )}
+          ))}
           {activeTab === 'statements' && (
             <ImportedStatementsTab
               ref={statementsTabRef}
               account={account}
               data-testid="ImportedStatementsTab__f7dbb3" />
+          )}
+          {activeTab === 'reconciliationList' && (
+            <ReconciliationListTab
+              account={account}
+              reconciliations={reconciliations}
+              loading={reconciliationsLoading}
+              data-testid="ReconciliationListTab__f7dbb3" />
           )}
         </div>
       </div>
@@ -344,7 +409,7 @@ export function FinancialAccountDetail({ recordId }) {
         groups={autoMatchGroups}
         kpis={autoMatchKpis}
         currency={account?.currencyIso ?? 'EUR'}
-        open={autoMatchOpen}
+        open={autoMatchOpen && !isCashAccount}
         onClose={() => setAutoMatchOpen(false)}
         onSuccess={handleAutoMatchSuccess}
         data-testid="AutoMatchSuggestionModal__f7dbb3" />
@@ -360,7 +425,14 @@ export function FinancialAccountDetail({ recordId }) {
         open={!!archiveTarget}
         account={archiveTarget}
         onClose={() => setArchiveTarget(null)}
-        onArchived={() => { setArchiveTarget(null); navigate('/financial-account'); }}
+        // Archiving takes the account out of the list, so there is nothing left to look at here —
+        // go back. Restoring leaves you on a perfectly valid account, so stay and just refresh.
+        onArchived={() => {
+          const wasUnarchive = archiveTarget?.active === false;
+          setArchiveTarget(null);
+          if (wasUnarchive) reloadAccount();
+          else navigate('/financial-account');
+        }}
         data-testid="ArchiveAccountDialog__f7dbb3" />
       <BankConnectionFlowUI flow={bankConnectionFlow} data-testid="BankConnectionFlowUI__f7dbb3" />
     </TooltipProvider>

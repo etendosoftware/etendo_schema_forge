@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Plug, Settings2, Calculator } from 'lucide-react';
+import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Plug, Settings2, Calculator, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -22,8 +22,9 @@ import { useHasCapability } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions';
 import { useFinancialAccountAccounting } from '@/hooks/useFinancialAccountAccounting.js';
-import { DateInput, Field } from '@/components/forms/fields';
+import { DateInput, Field, ChipSelect } from '@/components/forms/fields';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
+import { useGLItemLookup } from '@/hooks/useMovementLookups.js';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
@@ -38,7 +39,11 @@ const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 // Pure helpers (kept top-level so the component/hooks stay simple)
 // ---------------------------------------------------------------------------
 
-/** The tab a cash account (no General tab trigger/content) must open on. */
+/**
+ * The tab a cash account must open on. Unchanged by ETP-4795: even though the General tab now
+ * shows the GL Item Difference selector for cash too, Accounting stays the more relevant default
+ * landing tab for that account type — General remains one click away.
+ */
 export function initialEditTab(isCash) {
   return isCash ? EDIT_TAB_ACCOUNTING : EDIT_TAB_GENERAL;
 }
@@ -89,8 +94,8 @@ async function copyIbanToClipboard(account, ui) {
  * the Accounting tab's accounting configuration (ETP-4530) in one go.
  */
 async function persistAccountEdits({
-  account, fields, settings, reconciliation, accounting, updateAccount, saveImportSettings,
-  saveAccountingConfiguration,
+  account, fields, settings, reconciliation, glItemDifference, accounting, updateAccount,
+  saveImportSettings, saveAccountingConfiguration,
 }) {
   const updates = {};
   if (fields.nameDirty) updates.name = fields.name.trim();
@@ -99,6 +104,7 @@ async function persistAccountEdits({
   if (fields.currencyDirty) updates.currencyId = fields.currencyId;
   if (reconciliation?.dateDirty) updates.dateTolerance = reconciliation.dateTolerance;
   if (reconciliation?.amountDirty) updates.amountTolerance = reconciliation.amountTolerance;
+  if (glItemDifference?.dirty) updates.glItemDifferenceId = glItemDifference.value?.id || '';
   if (Object.keys(updates).length > 0) {
     await updateAccount(account.id, updates);
   }
@@ -357,6 +363,54 @@ function ReconciliationSettingsSection({ ui, recon }) {
 }
 
 // ---------------------------------------------------------------------------
+// GL Item Difference hook + section (ETP-4795) — the accounting concept the
+// cash-close / reconciliation-difference flows post the residual against.
+// Unlike the tolerance fields above, this applies to every account type
+// (bank, card AND cash), so it renders unconditionally on the General tab.
+// ---------------------------------------------------------------------------
+
+function useGlItemDifference(open, account) {
+  const [value, setValue] = useState(null);
+  const [snapshot, setSnapshot] = useState(null);
+
+  useEffect(() => {
+    if (!open || !account) return;
+    const initial = account.glItemDifferenceId
+      ? { id: account.glItemDifferenceId, name: account.glItemDifferenceName || '' }
+      : null;
+    setValue(initial);
+    setSnapshot(initial);
+  }, [open, account]);
+
+  const dirty = (value?.id || '') !== (snapshot?.id || '');
+  return { value, setValue, dirty };
+}
+
+function GlItemDifferenceSection({ ui, glItemDifference }) {
+  return (
+    <div className="mt-6 border-b border-[hsl(var(--border-subtle))] pb-4" data-testid="gl-item-difference-section">
+      <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
+        {ui('financeAccountsGlItemDifferenceSection')}
+      </p>
+      <Field
+        label={ui('financeAccountsGlItemDifferenceLabel')}
+        data-testid="Field__gid73027d">
+        <ChipSelect
+          value={glItemDifference.value}
+          onChange={glItemDifference.setValue}
+          useLookup={useGLItemLookup}
+          placeholder={ui('financeAccountsGlItemDifferencePlaceholder')}
+          testId="gl-item-difference"
+          data-testid="ChipSelect__73027d" />
+      </Field>
+      <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+        {ui('financeAccountsGlItemDifferenceHint')}
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Accounting configuration hook + section (ETP-4530 — Accounting tab)
 // ---------------------------------------------------------------------------
 
@@ -506,11 +560,13 @@ function AccountingConfigurationSection({ ui, accounting }) {
  * every state. The top section (Name | Type, IBAN | Currency) sits OUTSIDE both tabs, followed by
  * two tabs:
  *
- * - **General**: bank connection configuration, then reconciliation configuration. The tab itself
- *   is not rendered for cash accounts (`isCash`), which have no bank connection and no statement
- *   reconciliation — rendering an empty, blank-content tab for cash accounts was a QA regression
- *   fixed post-ETP-4530; the modal now defaults straight to Accounting when opened for a cash
- *   account.
+ * - **General**: bank connection configuration, then reconciliation configuration, then the GL
+ *   Item Difference selector (ETP-4795). The first two blocks are skipped for cash accounts
+ *   (`isCash`), which have no bank connection and no per-account amount/date tolerances to
+ *   configure, but the GL Item Difference selector renders for every account type — it backs
+ *   both the cash-close residual (ETP-4795) and the bank/card reconciliation-difference flow
+ *   (ETP-4796). The modal still defaults straight to Accounting when opened for a cash account
+ *   (see {@link initialEditTab}); General is one click away.
  * - **Accounting**: the accounting accounts used when generating transaction journal entries —
  *   asset account (required) and transitory account (optional). Backed by the
  *   `accountingConfiguration` entity / `FinancialAccountAccountingHandler` (ETP-4530). Gated by
@@ -555,25 +611,22 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const isCash = fields.isCash;
   const bankConnection = useBankConnection(open, account, bankConnected, onSaved, onClose);
   const recon = useReconciliationSettings(open, account);
+  const glItemDifference = useGlItemDifference(open, account);
   const accounting = useAccountingConfiguration(open, account);
   // ETP-4530 — the Accounting tab is only reachable for roles granted this capability (resolved
   // server-side, admin roles always pass). Fails closed to `false` until the capabilities map
   // loads, so it can flip false → true shortly after the modal mounts, or true → false mid-session
   // on a role switch — both handled by the reset effect below.
   const canSeeAccounting = useHasCapability('showAccountingFields');
-  // Initialize from account?.type (not a fixed EDIT_TAB_GENERAL default) so the very first
-  // render is already consistent for cash accounts — the General tab's trigger/content are
-  // not rendered for them, so an unconditional EDIT_TAB_GENERAL default would leave the first
-  // paint with no active trigger and no visible content until the effect below corrects it.
+  // Initialize from account?.type (not a fixed EDIT_TAB_GENERAL default) — cash still opens on
+  // Accounting by product decision (see initialEditTab), independent of General now always
+  // having content to show.
   const [editTab, setEditTab] = useState(() => initialEditTab(isCash));
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Reset to the first AVAILABLE tab whenever the modal (re)opens for an account. Cash accounts
-  // have no bank connection and no statement reconciliation, so the General tab itself is not
-  // rendered for them — defaulting to it would leave the modal on a tab whose trigger doesn't
-  // exist, with no visible content and no tab shown as active.
+  // Reset to the default tab whenever the modal (re)opens for an account (see initialEditTab).
   useEffect(() => {
     if (open) setEditTab(initialEditTab(isCash));
   }, [open, account?.id, isCash]);
@@ -596,7 +649,8 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const typeLabel = formatTypeLabel(account.type, ui);
   const reauthMessage = buildReauthMessage(bankConnection.status, locale, ui);
   const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
-    || bankConnection.settingsDirty || (!isCash && recon.dirty) || accounting.dirty;
+    || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
+    || accounting.dirty;
   const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
     && !accounting.assetAcctMissing;
   const busy = saving || bankConnection.busy;
@@ -610,6 +664,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
         fields,
         settings: { dirty: bankConnection.settingsDirty, form: bankConnection.form },
         reconciliation: isCash ? null : recon,
+        glItemDifference,
         accounting,
         updateAccount,
         saveImportSettings,
@@ -664,14 +719,12 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
 
         <Tabs value={editTab} onValueChange={setEditTab} className="-mt-3" data-testid="EditAccountTabs__73027d">
           <TabsList className="w-full border-b border-border-subtle" data-testid="EditAccountTabsList__73027d">
-            {/* Cash accounts have no bank connection and no statement reconciliation, so the
-                General tab (bank connection + reconciliation config) has nothing to show for them — hide the
-                tab itself rather than rendering it with empty content. */}
-            {!isCash ? (
-              <TabsTrigger value={EDIT_TAB_GENERAL} icon={Settings2} data-testid="edit-account-tab-general">
-                {ui('financeAccountsEditTabGeneral')}
-              </TabsTrigger>
-            ) : null}
+            {/* ETP-4795: the General tab always renders now — a cash account has no bank
+                connection and no amount/date tolerances (see below), but it DOES have the GL
+                Item Difference concept used to close the difference of a cash-close. */}
+            <TabsTrigger value={EDIT_TAB_GENERAL} icon={Settings2} data-testid="edit-account-tab-general">
+              {ui('financeAccountsEditTabGeneral')}
+            </TabsTrigger>
             {/* ETP-4530 — the Accounting tab trigger itself must not render at all for a role
                 without the showAccountingFields capability (not just disabled/hidden via CSS). */}
             {canSeeAccounting ? (
@@ -681,23 +734,30 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
             ) : null}
           </TabsList>
 
-          {!isCash ? (
-            <TabsContent value={EDIT_TAB_GENERAL} className="pt-4" data-testid="edit-account-tabpanel-general">
-              <BankConnectionSection
-                ui={ui}
-                bankConnected={bankConnected}
-                bankConnection={bankConnection}
-                busy={busy}
-                reauthMessage={reauthMessage}
-                onConnect={handleConnectClick}
-                data-testid="BankConnectionSection__73027d" />
+          <TabsContent value={EDIT_TAB_GENERAL} className="pt-4" data-testid="edit-account-tabpanel-general">
+            {!isCash ? (
+              <>
+                <BankConnectionSection
+                  ui={ui}
+                  bankConnected={bankConnected}
+                  bankConnection={bankConnection}
+                  busy={busy}
+                  reauthMessage={reauthMessage}
+                  onConnect={handleConnectClick}
+                  data-testid="BankConnectionSection__73027d" />
 
-              <ReconciliationSettingsSection
-                ui={ui}
-                recon={recon}
-                data-testid="ReconciliationSettingsSection__73027d" />
-            </TabsContent>
-          ) : null}
+                <ReconciliationSettingsSection
+                  ui={ui}
+                  recon={recon}
+                  data-testid="ReconciliationSettingsSection__73027d" />
+              </>
+            ) : null}
+
+            <GlItemDifferenceSection
+              ui={ui}
+              glItemDifference={glItemDifference}
+              data-testid="GlItemDifferenceSection__73027d" />
+          </TabsContent>
 
           {/* ETP-4530 — panel is gated the same as its trigger, so it's never mounted for a
               role without the showAccountingFields capability. */}
@@ -1014,12 +1074,16 @@ function EditFooter({ ui, account, bankConnected, connected, busy, canSave, onAr
   return (
     <div className="mt-2 flex items-center justify-between gap-2">
       <div className="flex items-center gap-3">
+        {/* Mirrors the row kebab: on an already-archived account the only useful action is the
+            inverse one, so the button flips to "restore" and drops the destructive treatment. */}
         <FooterButton
-          icon={Archive}
-          label={ui('financeAccountsBankConnectionEditArchive')}
+          icon={account?.active === false ? RotateCcw : Archive}
+          label={account?.active === false
+            ? ui('financeAccountsMenuUnarchive')
+            : ui('financeAccountsBankConnectionEditArchive')}
           onClick={() => onArchive?.(account)}
           disabled={busy}
-          danger
+          danger={account?.active !== false}
           data-testid="FooterButton__73027d" />
         {bankConnected ? (
           <FooterButton

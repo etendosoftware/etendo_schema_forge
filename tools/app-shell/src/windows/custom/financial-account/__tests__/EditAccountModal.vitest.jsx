@@ -67,6 +67,13 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useHasCapability: (key) => hasCapability(key),
 }));
 
+// ETP-4795: the GL Item Difference selector (General tab, every account type) is a ChipSelect
+// backed by useGLItemLookup, which itself needs an AuthContext token — mocked out here so this
+// suite doesn't need a real AuthProvider just to mount the modal.
+vi.mock('@/hooks/useMovementLookups.js', () => ({
+  useGLItemLookup: () => ({ results: [], loading: false }),
+}));
+
 import { EditAccountModal, initialEditTab } from '../EditAccountModal.jsx';
 
 const BANK_ACCOUNT = {
@@ -589,16 +596,28 @@ describe('EditAccountModal', () => {
     });
   });
 
-  // ── Manual-QA regression: General tab must not render for cash accounts ───
-  // The General tab (bank connection + reconciliation config) has nothing to show for a Caja
-  // account — before this fix the tab trigger still rendered (with blank content once selected).
-  describe('General tab hidden for cash accounts (manual QA regression)', () => {
+  // ── General tab: bank connection + tolerances are non-cash-only, GL Item Difference is not ──
+  // (ETP-4795). Before ETP-4795 the General tab was hidden entirely for cash accounts because it
+  // had nothing to show them; it now always renders because the GL Item Difference selector
+  // (used by the cash-close flow) applies to every account type.
+  describe('General tab: cash accounts see only the GL Item Difference section (ETP-4795)', () => {
     const CASH_ACCOUNT = { id: 'acc-cash', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false };
 
-    it('does not render the General tab trigger for a cash account', () => {
+    it('still renders the General tab trigger for a cash account, defaulting to Accounting', () => {
       renderModal({ account: CASH_ACCOUNT });
-      expect(screen.queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      expect(getTab('financeAccountsEditTabGeneral')).toBeInTheDocument();
       expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('shows the GL Item Difference section but not bank connection/tolerances for cash', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: CASH_ACCOUNT });
+
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+
+      expect(screen.getByTestId('gl-item-difference-section')).toBeInTheDocument();
+      expect(screen.queryByText('financeAccountsEditConnectionSection')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('reconciliation-settings-section')).not.toBeInTheDocument();
     });
 
     it('still renders the General tab trigger for a bank account', () => {
@@ -633,7 +652,9 @@ describe('EditAccountModal', () => {
         />,
       );
 
-      expect(screen.queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      // ETP-4795: General still renders for cash (it carries the GL Item Difference selector),
+      // but Accounting remains the tab a cash account lands on.
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'false');
       expect(getTab('financeAccountsEditTabAccounting')).toHaveAttribute('aria-selected', 'true');
     });
   });
@@ -910,19 +931,20 @@ describe('EditAccountModal', () => {
       expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
     });
 
-    it('does not crash for a cash account when the capability is denied (both tabs unavailable)', () => {
-      // Edge case: a cash account has no General tab (no bank connection/reconciliation) and,
-      // here, no Accounting tab either (capability denied) — there is genuinely nothing to
-      // show, but the modal itself must still render cleanly and editTab must settle on
-      // General internally rather than staying stuck pointing at the hidden Accounting tab.
+    it('falls back to General for a cash account when the Accounting capability is denied', () => {
+      // Edge case: a cash account defaults to Accounting, but here the capability is denied so
+      // that tab does not render. Since ETP-4795 the General tab always exists (it carries the
+      // GL Item Difference selector), so editTab must settle there and its content must show —
+      // before ETP-4795 this combination left the modal with no tab at all.
       hasCapability.mockReturnValue(false);
       renderModal({
         account: { id: 'acc-cash-nocap', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false },
       });
 
       expect(screen.getByTestId('edit-account-modal')).toBeInTheDocument();
-      expect(screen.queryByTestId('edit-account-tab-general')).not.toBeInTheDocument();
       expect(screen.queryByTestId('edit-account-tab-accounting')).not.toBeInTheDocument();
+      expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByTestId('gl-item-difference-section')).toBeInTheDocument();
     });
   });
 });
