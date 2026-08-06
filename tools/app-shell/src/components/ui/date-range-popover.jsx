@@ -1,9 +1,14 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
+// Shared month/year-picker chrome (ETP-4771) — the same HeaderRow/PickerTabs/
+// PickerGrid used by the conditional-filter date picker (DateField), so both
+// pickers render identical UI instead of two independently drifting
+// reimplementations.
+import { HeaderRow, PickerTabs, PickerGrid } from '@etendosoftware/app-shell-core/components/ui/date-picker-chrome.jsx';
 
 /**
  * value shape used by both DateRangePopover and DateRangePopoverContent:
@@ -238,20 +243,15 @@ export function computeTriggerLabel(value, placeholder, ui, bcpLocale) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CalendarWithPicker (extracted verbatim from ListFilterBar)
+// CalendarWithPicker — day-grid calendar with a month/year picker overlay.
+//
+// The header (month/year label + prev/next nav) and the picker overlay
+// (Mes/Año tabs + 3-column grid) are the shared date-picker-chrome pieces
+// (ETP-4771) — the exact same HeaderRow/PickerTabs/PickerGrid the
+// conditional-filter date picker (DateField) uses, so both calendars render
+// identical chrome. Only the day-grid `Calendar` itself (dual-month range
+// selection with an `inRange` modifier) is specific to this component.
 // ─────────────────────────────────────────────────────────────────────────────
-
-function FilterNavBtn({ onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border-control bg-card shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-muted"
-    >
-      {children}
-    </button>
-  );
-}
 
 function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifiers, modifiersClassNames }) {
   const ui = useUI();
@@ -274,6 +274,11 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
       return raw.charAt(0).toUpperCase() + raw.slice(1);
     });
   }, [localeStr]);
+
+  const monthItems = useMemo(
+    () => monthNames.map((label, i) => ({ value: i, label })),
+    [monthNames],
+  );
 
   const yearItems = useMemo(() => {
     const anchor = yearAnchor - 4;
@@ -327,33 +332,13 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
 
   return (
     <div className="w-[244px]">
-      <div className="flex h-8 items-center justify-between px-2">
-        <button
-          type="button"
-          onClick={view === 'calendar' ? openPicker : () => setView('calendar')}
-          className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium capitalize text-foreground hover:bg-muted"
-        >
-          <span>{headerLabel}</span>
-          <ChevronDown
-            className="h-3.5 w-3.5 text-muted-foreground"
-            aria-hidden="true"
-            data-testid="ChevronDown__482ed1" />
-        </button>
-        <div className="flex items-center gap-2">
-          <FilterNavBtn onClick={navPrev} data-testid="FilterNavBtn__482ed1">
-            <ChevronLeft
-              className="h-4 w-4 text-disabled"
-              aria-hidden="true"
-              data-testid="ChevronLeft__482ed1" />
-          </FilterNavBtn>
-          <FilterNavBtn onClick={navNext} data-testid="FilterNavBtn__482ed1">
-            <ChevronRight
-              className="h-4 w-4 text-disabled"
-              aria-hidden="true"
-              data-testid="ChevronRight__482ed1" />
-          </FilterNavBtn>
-        </div>
-      </div>
+      <HeaderRow
+        label={headerLabel}
+        onLabelClick={view === 'calendar' ? openPicker : () => setView('calendar')}
+        onPrev={navPrev}
+        onNext={navNext}
+        showLabelChevron={view === 'calendar'}
+        data-testid="HeaderRow__482ed1" />
       <div className="min-h-[244px]">
         {view === 'calendar' ? (
           <Calendar
@@ -374,59 +359,26 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
             }}
             data-testid="Calendar__482ed1" />
         ) : (
-          <div className="space-y-2 px-2 pt-1">
-            <div className="flex h-10 gap-1 rounded-xl bg-muted p-1">
-              {[
-                { key: 'month', label: ui('datePickerMonth') },
-                { key: 'year',  label: ui('datePickerYear') },
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setPickerTab(tab.key)}
-                  className={cn(
-                    'h-8 flex-1 rounded-lg px-2 text-sm font-medium transition-colors',
-                    pickerTab === tab.key
-                      ? 'bg-card text-foreground shadow-[0px_1px_3px_hsl(var(--foreground) / 0.1),0px_1px_2px_hsl(var(--foreground) / 0.06)]'
-                      : 'text-foreground hover:bg-muted',
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 pt-2">
-              {(pickerTab === 'month'
-                ? monthNames.map((label, i) => ({ value: i, label }))
-                : yearItems
-              ).map((item) => {
-                const isSelected = pickerTab === 'month'
-                  ? item.value === month.getMonth()
-                  : item.value === month.getFullYear();
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() =>
-                      pickerTab === 'month'
-                        ? handleMonthSelect(item.value)
-                        : handleYearSelect(item.value)
-                    }
-                    className={cn(
-                      'h-8 rounded-lg px-2 text-sm font-medium transition-colors',
-                      isSelected
-                        ? 'bg-foreground text-primary-foreground hover:bg-primary hover:text-foreground'
-                        : 'text-foreground hover:bg-muted',
-                    )}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="pb-2" />
+          <div className="pt-1 space-y-2 px-2">
+            <PickerTabs
+              active={pickerTab}
+              onChange={setPickerTab}
+              monthLabel={ui('datePickerMonth')}
+              yearLabel={ui('datePickerYear')}
+              data-testid="PickerTabs__482ed1" />
+            {pickerTab === 'month' ? (
+              <PickerGrid
+                items={monthItems}
+                selectedValue={month.getMonth()}
+                onSelect={handleMonthSelect}
+                data-testid="PickerGrid__482ed1" />
+            ) : (
+              <PickerGrid
+                items={yearItems}
+                selectedValue={month.getFullYear()}
+                onSelect={handleYearSelect}
+                data-testid="PickerGrid__482ed1" />
+            )}
           </div>
         )}
       </div>
