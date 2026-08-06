@@ -727,7 +727,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      listViewOptions={{"hidePrint":true,"hideEye":true,"hideCounter":true,"hideLink":true}}
+      listViewOptions={{"hidePrint":true,"hideCounter":true,"hideLink":true}}
       baseFilter="criteria=%7B%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22customer%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D%7D"
       subsetFilters={[{"label":"all"},{"label":"customers","filter":"criteria=%5B%7B%22fieldName%22%3A%22customer%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"},{"label":"vendors","filter":"criteria=%5B%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"}]}
       hidePrint
