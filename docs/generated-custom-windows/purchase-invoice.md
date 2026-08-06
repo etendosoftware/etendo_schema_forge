@@ -574,6 +574,15 @@ submitted `conversionRate`.
 - i18n keys `cpConversionRate` / `cpAmountInAccount` / `cpConversionRateRequired` /
   `cpConversionRateInvalid` present in `en_US.json`, `es_ES.json`, and `es_AR.json`.
 
+## Editable SII exemption cause in the SIF tab — ETP-4751
+
+The SII **Causa de Exención** in the SIF tab is now an **editable selector** against `AEATSII_CAUSE_EXEMPTION`, restoring Etendo Classic parity (previously always read-only, deferred by ETP-3778). This is implemented once in the shared `tools/app-shell/src/windows/custom/shared/SifTab.jsx` (`ExemptionCauseField`) and therefore applies to both purchase-invoice and sales-invoice; the selector endpoint (`/sws/neo/purchase-invoice/header/selectors/aeatsiiCauseExemption`) and the field's `editable/foreignKey/inputMode:selector` classification already existed.
+
+- **Gating (mirrors the SII module's `ExemptTaxes` handler):** editable only when the invoice carries an exempt tax, is a draft, and has not been sent to SII (`siiFieldReadOnly`); otherwise visible-but-read-only. The SII exemption cause is optional (`ISMANDATORY=N`) — this is a parity/completeness improvement, not a submission fix.
+- **`hasExemptTaxes` (backend-served):** `AbstractInvoiceHeaderHandler#enrichHasExemptTaxes` injects it on the purchase- and sales-invoice header, detecting exempt taxes over **active invoice LINES only** (`c_invoiceline → c_tax.istaxexempt='Y'`), deliberately **not** `c_invoicetax` (stale rows linger there in Go drafts and would keep the field editable after the exempt line is removed). `refreshHeaderTotals` keeps it fresh after line add/edit/delete so the field re-locks correctly. Do not re-add the `c_invoicetax` branch (rationale comment in the code).
+- **Line-save signals (`InvoiceLineHandler`):** on a line save that leaves the invoice with exempt taxes and no header cause, the handler stamps `exemptionCauseAutoFilled` (if a default cause exists → auto-fill + info toast) or `exemptionCauseWarning` (no default → one-shot warning toast "Debería indicarse una causa de exención… solapa SIF"); mutually exclusive, raw-SQL/fail-safe. Auto-fill is dormant in Go (no default seeded) so the warning path is what fires.
+- **Onboarding / data provisioning:** exemption causes E1–E6 (IVA, all `isdefault=N`) are seeded for new tenants via `modules/com.etendoerp.go/referencedata/sampledata/GOClient/AEATSII_CAUSE_EXEMPTION.xml` and for existing tenants via `cli/src/data-fixes/sql/20260803T120000Z__R17-sii-cause-exemption.sql`. Seeded with **no default cause** by design (correct cause is per-operation; Go has no cause-exemption maintenance window). See `docs/etendo-ad/tenant-remediation-knowledge.md`.
+- Tests: `SifTab.vitest.jsx`, `useEntity.coverage.vitest.jsx`, backend `AbstractInvoiceHeaderHandlerTest`/`InvoiceLineHandlerTest`, and the mocked E2E `e2e/tests/flows/sif-exemption-cause.mocked.spec.js` (covers both invoice types). Also fixed: `SelectorInput.jsx` keeps a controlled `''` when empty so clearing takes effect on the first pick.
 ## Factura Rectificativa — ETP-4737
 
 Epic ETP-3504 unifies the former separate "Nota de Crédito" (`AP CreditMemo` / `APC`) and
