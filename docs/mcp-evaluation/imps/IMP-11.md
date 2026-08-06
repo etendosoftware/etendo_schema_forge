@@ -1,7 +1,8 @@
 # IMP-11 — Close the `visibility` / `userRequired` contract
 
 **Priority:** P1 · **Points:** 5 · **Cohort:** C2 · **Class:** ⚙️ signature change
-**Repos:** `schema_forge_core` + `com.etendoerp.go`
+**Repos:** `schema_forge_core` **only** — the registry row still says `+ com.etendoerp.go`; that is
+wrong, see §4
 **Status:** see [the registry](../mcp-improvements-registry.md) §3 — never here
 **Evidence:** A10, A13, B6 · run reports
 [2026-08-05](../mcp-comparison-post-audit-2026-08-05.md),
@@ -47,6 +48,8 @@ Three candidates:
 | H1 | The Java serializer never emits the keys | ❌ **Refuted** — it emits both, correctly |
 | H2 | `ETGO_SF_FIELD.visibility` is never populated | ✅ **Confirmed** — 6340 / 6340 rows NULL |
 | H3 | The rows are not linked to `AD_Column`, so the map keys never match | ❌ Refuted — 6235 / 6340 linked |
+| H4 | The webhook that writes the rows accepts no such param | ❌ Refuted — that webhook is `@deprecated` and off this path |
+| H5 | The writer omits the column, and the value is collapsed before it gets there | ✅ **Confirmed** — two defects, both in `schema_forge_core` |
 
 ### H1 — the serializer is already correct
 
@@ -99,24 +102,57 @@ select count(*) total, count(ad_column_id) with_ad_column,
 The 105 rows without `ad_column_id` are a separate, smaller question (computed/virtual fields) and
 are **not** the cause here — even the 6235 linked rows carry no visibility.
 
-### The writer-side gap
+### The writer-side gap — located exactly
 
-`ETGO_SF_FIELD` is written by the `SFUpsertField` webhook
-(`com.etendoerp.go/src/com/etendoerp/go/schemaforge/webhooks/SFUpsertField.java`), whose own
-contract is declared in its javadoc:
+**Correction (same day, before any code was written).** My first write-up of this section blamed the
+`SFUpsertField` webhook
+(`com.etendoerp.go/src/com/etendoerp/go/schemaforge/webhooks/SFUpsertField.java`) for not accepting a
+`Visibility` param. That is true of the class but **irrelevant to this bug**: `buildWebhookUrl` in the
+pusher is marked `@deprecated Use direct DB writes via neo-writer.js instead`
+(`schema_forge_core/cli/src/push-to-neo.js:72`). The webhook is not on this path anymore. Kept
+visible because it is the kind of near-miss that survives a careless review — the guilty-looking
+class was one hop off the real one.
+
+The real writer is `schema_forge_core/cli/src/neo-writer.js`, and there are **two** independent
+defects, both in the core repo. Neither is in Java.
+
+**Defect 1 — the value is destroyed before it is ever sent.** `push-to-neo.js:55-68`:
+
+```js
+export function mapVisibility(visibility) {
+  switch (visibility) {
+    case 'editable':  return { isIncluded: 'Y', isReadOnly: 'N' };
+    case 'readOnly':  return { isIncluded: 'Y', isReadOnly: 'Y' };
+    case 'system':    return { isIncluded: 'Y', isReadOnly: 'Y' };   // ← identical to readOnly
+    case 'discarded': return { isIncluded: 'N', isReadOnly: 'N' };
+    default:          return { isIncluded: 'N', isReadOnly: 'N' };   // ← identical to discarded
+  }
+}
+```
+
+Four domain values are collapsed into two booleans, **lossily**: `readOnly` and `system` produce the
+exact same pair, as do `discarded` and an unrecognised value. `buildFieldUpdateParams`
+(`push-to-neo.js:433-444`) forwards only that pair — the original `f.visibility` string is read on
+line 434 and then discarded.
+
+The collapsed distinction is precisely the one the `hint` asks the agent to act on: *"`visibility=system`
+are auto-derived by Etendo callouts — **omit them**"* versus *"`readOnly=true` are auto-generated"*.
+Even if the column were populated from `isReadOnly`, `system` and `readOnly` would be indistinguishable.
+
+**Defect 2 — the column is not in the statement.** `neo-writer.js:319-330` inserts 18 columns:
 
 ```
-Required params: EntityID, ColumnID, ModuleID
-Optional params: IsIncluded, IsReadOnly, DefaultValue, AgentPrompt, JavaQualifier,
-                 FieldID (for update), SeqNo
+etgo_sf_field_id, etgo_sf_entity_id, ad_column_id, ad_module_id,
+isincluded, isreadonly, isbusinesscritical, defaultvalue, java_qualifier, seqno,
+ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby, agent_prompt
 ```
 
-**`Visibility` is not in that list, and the class never reads such a parameter.** The only optional
-params it handles are the ones above. So even a pusher that wanted to send visibility has no
-parameter to send it in.
+**`visibility` is absent.** The partial `UPDATE` path (`:264-296`) never sets it either — its
+`setClauses` cover `isincluded`, `isreadonly`, and optionally `ad_column_id`, `defaultvalue`,
+`agent_prompt`, `java_qualifier`, `seqno`, `isbusinesscritical`. `upsertField`'s own javadoc
+(`:229-245`) documents no `visibility` param.
 
-This is the root cause, and it explains the shape of the bug precisely: the reader was built for a
-contract the writer never implemented.
+So: 6340 rows, 6340 NULLs, every push. That is the whole mechanism.
 
 ## 3. Why the data is not the hard part
 
@@ -135,17 +171,30 @@ keeping the two apart when sequencing: IMP-11 is cheap, IMP-13 is not.
 
 ## 4. What a fix has to touch
 
-Three pieces, in dependency order. **Not implemented — this section is the proposal.**
+Three pieces, in dependency order, **all three in `schema_forge_core`**. **Not implemented — this
+section is the proposal.**
 
-1. **`com.etendoerp.go` — accept the parameter.** Add `Visibility` to `SFUpsertField`'s optional
-   params (mirroring how `AgentPrompt` is handled at `:133-135`), with validation against the four
-   legal values so a typo fails loudly instead of storing garbage that the reader would then serve
-   as truth.
-2. **`schema_forge_core` — send it.** `push-to-neo.js` must pass each field's resolved visibility.
-   This is the piece that is **not clonable locally right now** (see §6).
+`com.etendoerp.go` needs **no change at all**: the reader is already correct and the webhook is off
+this path. That is a second correction to my first write-up, which listed the repo as
+`schema_forge_core` + `com.etendoerp.go` (as does the registry row — worth fixing there too).
+
+1. **`neo-writer.js` — persist the column.** Add `visibility` to `upsertField`: the `INSERT` column
+   list (`:319-330`) and the partial `UPDATE` (`:264-296`, as an `if ('visibility' in params)`
+   clause, matching how `agentPrompt` is handled). Validate against the four legal values so a typo
+   fails loudly instead of storing garbage the reader would then serve as truth.
+2. **`push-to-neo.js` — stop discarding it.** `buildFieldUpdateParams` (`:433-444`) already has
+   `f.visibility` in hand; pass it through **alongside** the `mapVisibility` pair, not instead of it.
+   `isIncluded`/`isReadOnly` stay exactly as they are — they drive NEO's runtime behaviour and are not
+   ours to redefine here. Mirror it into `reportDryRunPlan` (`:462-474`) so `--dry-run` does not lie
+   about what a real push would write.
 3. **Backfill.** New pushes fix themselves; the 6340 existing rows do not. Either re-push every spec
    or write a data-fix. A re-push is preferable — it exercises the new path instead of working around
    it.
+
+Tests belong with step 1 and 2 (Tester's job per the delegation rule): `mapVisibility` is already an
+exported pure function, and `buildFieldUpdateParams` is exported too, so both are unit-testable
+without a DB. The regression worth pinning is that `system` and `readOnly` produce **different**
+stored visibility while still producing the **same** `isIncluded`/`isReadOnly` pair.
 
 **Deliberately out of scope:** changing the Java `addVisibility` guard. Emitting
 `visibility: "unknown"` or defaulting `userRequired` when nothing is stored would make the response
@@ -171,11 +220,21 @@ write. Either order works — but doing them in the same wave avoids specifying 
 - [ ] Verified on `etendo-go-local` after a user-run deploy, then re-verified on staging before the
       registry status moves to ✅.
 
-## 6. Blocker
+## 6. Blockers — none
 
-`schema_forge_core` is **not cloned locally**, and step 2 lives there. Nothing in steps 1 or 3 is
-blocked, but shipping half of this is worse than shipping none: a `Visibility` param that no pusher
-sends leaves the DB NULL and the response unchanged, while looking done in the diff.
+My first write-up recorded this as blocked on `schema_forge_core` not being cloned. **It is cloned**,
+at `/Users/futit/Workspace/etendo_develop/schema_forge_core`, already on branch `feature/ETP-4793`
+(`87a8afecd`). Commands opt into the local core with `LOCAL_CORE=1` (e.g. `make regen ONLY=… LOCAL_CORE=1`),
+or `./cli/sf-local` for the CLI bins — see [`repo-topology.md`](../../repo-topology.md).
 
-Needed before starting: the core repo cloned, and a `feature/ETP-4793` branch created in it (Clerk's
-job, per the branch workflow).
+The earlier claim was wrong, not merely stale: I had not looked. Recorded because the cost of a
+fabricated blocker is a wave that never starts.
+
+The half-shipping hazard from that note still stands on its own terms, just relocated: steps 1 and 2
+are both in the same repo now, but persisting the column without passing the value (or the reverse)
+leaves the DB NULL and the response unchanged while looking done in the diff. They land together or
+not at all.
+
+**Real prerequisites:** the user builds and deploys (never `gradlew` / `update.database` /
+`export.database` / Tomcat from here), and step 3's re-push must be followed by
+`./gradlew export.database` so the config survives a rebuild.
