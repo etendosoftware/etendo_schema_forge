@@ -182,3 +182,66 @@ every existing caller and hide the size problem instead of giving the agent a wa
 - **The 105 uncurated entities from [IMP-11 §4.2](IMP-11.md#42) have no `visibility` at all**, so
   the §5 predicate has nothing to filter on and `view:"create"` would return either everything or
   nothing for them. Whichever is chosen must be explicit rather than incidental.
+  **Answered in §9:** they return *nothing*, deliberately.
+
+## 9. What landed (2026-08-06, uncompiled)
+
+Written in `com.etendoerp.go` on `feature/ETP-4793`; **not yet compiled or deployed** — the user
+builds. Nothing has been probed against `etendo-go-local`, so every §7 checkbox stays unticked.
+
+### 9.1 The four files
+
+| File | Change |
+|---|---|
+| `mcp/McpSchemaCreateView.java` *(new)* | `isCreateView`, `buildResponse`, `applyFieldWhitelist`, `unknownFields`. DAL-free, package-private, private constructor — mirrors `McpActionsView`. |
+| `mcp/McpSchemaFieldBuilder.java` | `userRequired` is now default-aware (§9.2); new `hasSuppliedDefault` + `isAgentSuppliable`; the `defaultExpression`/`defaultSource`/`userRequired`/`editable` literals promoted to constants so the view can reference them. |
+| `mcp/McpToolRouter.java` | Both projections wired at the single dispatch point (`:805-823`), `unknownFields` added to the envelope, and the full-response `hint` now opens by pointing at `view:"create"`. |
+| `mcp/ToolRegistry.java` | `view` enum extended to `["create","actions"]`, new `fields` param via the existing `stringArrayProp` helper, tool description rewritten around the corrected `userRequired` semantics. |
+
+### 9.2 Reclassified ♻️ → ⚙️
+
+The item was specified as ♻️ (same call, additive). It shipped as **⚙️**: `userRequired` changed
+meaning in the **default** response too, not only inside the new view. A mandatory column that
+carries an AD default now reports `userRequired: false`. On `sales-invoice/header` that moves 5 of
+the 11 mandatory editable fields (`invoiceDate`, `accountingDate`, `paymentTerms`, `currency`,
+`priceList`), leaving the 6 the agent genuinely must decide — which is what §5 measured and what the
+original spec's "~7 fields" was reaching for.
+
+This is a contract change only in the MCP response. `userRequired` is derived at response time; it
+has no `ETGO_SF_FIELD` column, nothing in `decisions.json` or `contract.json`, and no frontend
+consumer. Agents are the only readers, so nothing in the product can break — but a shipped field
+changed value, hence ⚙️, and hence [IMP-11](IMP-11.md)'s re-verification must cover it.
+
+`applyPreconditionRequirement` was left untouched: an explicit business precondition outranks a
+column default, and it runs as an overlay after `addVisibility`.
+
+### 9.3 Envelope divergence from §6.1
+
+§6 called for `{spec, entity, fields, fieldCount, hint}`. It shipped as
+`{spec, entity, required[], optional[], requiredCount, optionalCount, hint}`. A flat `fields` array
+would have made the agent re-derive the split from the `userRequired` flag it was just handed —
+the whole point is to remove that step. `optional` is kept rather than dropped so an agent can still
+enrich a record without falling back to the 62 kB dump.
+
+`businessCritical` is **intersected, not unioned** — the correction §4 records. It survives as a flag
+on the emitted fields and gates nothing.
+
+### 9.4 `unknownFields`, not silent dropping
+
+A `fields:[…]` name that matches no descriptor comes back under `unknownFields`. This pre-empts the
+defect IMP-18 tracks on `neo_list`'s projection, where a typo makes the field vanish and
+the agent concludes it does not exist.
+
+### 9.5 Uncurated entities return nothing
+
+`isAgentSuppliable` requires `visibility == "editable"`, so the 105 entities with no `visibility`
+yield empty `required`/`optional` groups. Deliberate: absent curation we cannot claim a field is safe
+to send, and a wrong required-list is worse than an empty one. The cost is that `view:"create"` is
+useless on those entities until they are curated — which is the same gap
+[IMP-11 §4.2](IMP-11.md#42) flags as the candidate for a new IMP.
+
+### 9.6 Tests
+
+`McpSchemaCreateViewTest` (new, 15 cases across the four methods) and two nested classes added to
+`McpSchemaFieldBuilderTest` (`addVisibility` default-aware cases, `isAgentSuppliable`). Pure JSON
+transforms, no DAL. **Not run** — they compile with the module.

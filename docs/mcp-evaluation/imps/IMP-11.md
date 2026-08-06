@@ -336,8 +336,13 @@ deferred with the `:158` typed-getter nit for the same reason: it costs a compil
 
 ## 5. Done when
 
+> **Semantics moved after this was written.** [IMP-12](IMP-12.md) §9.2 narrowed
+> `userRequired` to *editable AND mandatory AND no AD default*. The re-verification below must
+> therefore assert the **new** rule, not the one this item shipped: on `sales-invoice/header` the
+> expected `userRequired: true` set is 6 fields, not 11.
+
 - [ ] `neo_schema` on `sales-invoice/header` returns `visibility` on all 157 fields and
-      `userRequired` on the editable-and-mandatory subset.
+      `userRequired` on the editable-and-mandatory-and-undefaulted subset.
 - [ ] The `userRequired: true` set is small and *sendable* — no buttons, no `id`/`documentNo`, no
       computed totals, no foreign-module compliance fields.
 - [ ] An agent following the `hint` verbatim can build a valid `neo_create` payload for

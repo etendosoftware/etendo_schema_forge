@@ -53,4 +53,4 @@ rather than quietly replaced.
 | Item | File | State of investigation |
 |---|---|---|
 | IMP-11 | [`imps/IMP-11.md`](imps/IMP-11.md) | Writer fixed (core `0c3f13d2b`) and backfill verified live on `etendo-go-local`; registry row stays ⏳ until the M2 measurement + staging re-verification |
-| IMP-12 | [`imps/IMP-12.md`](imps/IMP-12.md) | Root-caused, not yet implemented. Insertion point is the existing `view:"actions"` branch; the specified filter rule was measured **wrong** (drags in 3 `readOnly` fields) and corrected to `editable ∧ mandatory ∧ no-default` — 6 fields, not 18 |
+| IMP-12 | [`imps/IMP-12.md`](imps/IMP-12.md) | Root-caused **and implemented** (§9) — uncompiled, unprobed. The specified filter rule was measured **wrong** (drags in 3 `readOnly` fields) and corrected to `editable ∧ mandatory ∧ no-default` — 6 fields, not 18. Reclassified ♻️ → ⚙️: `userRequired` narrowed in the default response too |
