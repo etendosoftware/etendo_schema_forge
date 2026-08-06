@@ -53,4 +53,4 @@ rather than quietly replaced.
 | Item | File | State of investigation |
 |---|---|---|
 | IMP-11 | [`imps/IMP-11.md`](imps/IMP-11.md) | Writer fixed (core `0c3f13d2b`) and backfill verified live on `etendo-go-local`; registry row stays ⏳ until the M2 measurement + staging re-verification |
-| IMP-12 | [`imps/IMP-12.md`](imps/IMP-12.md) | Root-caused **and implemented** (§9) — uncompiled, unprobed. The specified filter rule was measured **wrong** (drags in 3 `readOnly` fields) and corrected to `editable ∧ mandatory ∧ no-default` — 6 fields, not 18. Reclassified ♻️ → ⚙️: `userRequired` narrowed in the default response too |
+| IMP-12 | [`imps/IMP-12.md`](imps/IMP-12.md) | Implemented and probed live twice (§9–§11): −89.1 % on `sales-invoice/header`, and the "omitting `view` changes nothing" half proved by `diff`. The specified filter rule was measured **wrong** (drags in 3 `readOnly` fields) and corrected to `editable ∧ mandatory ∧ no-default`. The probe then found `required` over-reporting 4 of 6 — `AD_Column.DefaultValue` is an incomplete proxy — so the view now cross-checks against `neo_defaults` (§12, committed, unprobed). Registry row stays ⏳ |

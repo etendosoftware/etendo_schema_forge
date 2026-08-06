@@ -398,3 +398,72 @@ Two ❌/⏳ that need a decision and one that needs a reconnect. **The item stay
 `AD_Field` label for that column on that tab. The same field on `sales-invoice/header` is labelled
 *"SII - Cause Exemption"*. An IMP-1 gap, not an IMP-12 one; recorded here because this is where it
 surfaced.
+
+## 12. The `neo_defaults` cross-check (2026-08-06, committed `977daf85`, unprobed)
+
+The fix the user authorized for §11.2, from three candidates. The two rejected ones are recorded
+because the reason they lost is the reason this one is right:
+
+| Option | Why not |
+|---|---|
+| Reword the `hint` to stop claiming `required` is exhaustive | Makes the doc honest and the data still wrong. The agent's problem is not the sentence, it is that it will ask the user for `paymentTerms`. |
+| Drop `required`/`optional` and emit one flat list | Throws away the only thing that made the view worth 7.8 kB. The grouping *is* the answer to "what do I have to decide". |
+| **Cross-check against `neo_defaults` inside the view** | Chosen. `required` becomes true by construction rather than by assertion. |
+
+### 12.1 The rule
+
+`view:"create"` now asks the authoritative source instead of a proxy. A field whose name
+`neo_defaults` resolves a **usable** value for is routed to `optional` and flagged
+`serverDefaulted: true` — however mandatory AD says it is.
+
+Three keys are excluded from "resolved", each for a distinct reason:
+
+- `metadata` — `neo_defaults`' own envelope, not a field.
+- `*$_identifier` — the display name of a FK, not something the agent could send.
+- `""` / blank / `null` — **the server knows the field and could not resolve it.** `partnerAddress`
+  returns `""`, which is exactly the case where the agent must still supply a value. Treating an
+  empty string as resolved would have silently demoted a genuinely required field, i.e. re-created
+  §11.2 in the opposite direction.
+
+`serverDefaulted` exists so the agent can distinguish *"optional because nobody needs it"* from
+*"optional because the server already has it"*. Only the second means **do not ask the user**;
+collapsing them into a bare `optional` would lose the actionable half.
+
+### 12.2 Cost, and why it is acceptable
+
+One `NeoDefaultsService.resolveDefaults` call, paid **only** when `view:"create"` is requested. The
+default response and `view:"actions"` do no extra work at all, so the ♻️ guarantee proved by `diff`
+in §11.1 is untouched.
+
+That cost buys back more than it spends: the agent was going to call `neo_defaults` anyway before
+creating a record. This is the same resolution, moved earlier, in exchange for not interrogating the
+user four times.
+
+Resolution is **best-effort**: a throw, a `null` response, or `httpStatus >= 400` falls back to the
+static `AD_Column.DefaultValue` rule and logs a warning. An over-reported `required` field is a worse
+answer, not a broken one — a `neo_schema` call must never fail because the cross-check failed.
+
+### 12.3 What landed
+
+| File | Change |
+|---|---|
+| `McpSchemaCreateView.java` | `resolvedDefaultNames(JSONObject)`; `buildResponse` takes the resolved-name set and routes/flags on it; `CREATE_HINT` rewritten so the `required` claim is true and `serverDefaulted` is explained |
+| `McpToolRouter.java` | `serverDefaultedNames(...)` — builds a `NeoContext` per the `handleDefaults` pattern, calls `resolveDefaults(ctx, null)`, swallows any failure into an empty set. Called only inside the `isCreateView` branch |
+| `ToolRegistry.java` | The tool description said only *"mandatory but carries a default"*. Widened to name the four real sources (AD default, session preference, business-partner configuration, callout) and to document `serverDefaulted` |
+| `McpSchemaCreateViewTest.java` | 4 `resolvedDefaultNames` cases (including that `""` does not count and that `metadata`/`$_identifier` are skipped) + 3 `buildResponse` routing cases, one of which pins the fallback when the set is `null` |
+
+### 12.4 Expected shape, to be confirmed after the next deploy
+
+Predicted for `sales-invoice/header` — recorded **before** the probe so a wrong prediction stays
+visible, as in §10.1:
+
+```
+required: [ businessPartner, partnerAddress ]      requiredCount: 2
+optional: [ 22 fields, 4 of them serverDefaulted ] optionalCount: 22
+```
+
+`partnerAddress` stays required because `neo_defaults` returns `""` for it. If the live run shows
+anything other than 2 / 22, the `resolvedDefaultNames` predicate is what to re-examine first.
+
+**The item stays ⏳ open at 0 / 5** — nothing here has been compiled or probed, and the §11.3 verdict
+row that reads ❌ is not re-ticked until a live `view:"create"` shows `requiredCount: 2`.
