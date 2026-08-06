@@ -59,6 +59,23 @@ Feeding `"06-08-2026"` to a lenient `yyyy-MM-dd` parser yields **year 6, month 8
 2026**. Lenient rollover normalises that to **`0012-02-16`**. No exception, so the
 `catch (ParseException e) { throw new Error(e); }` at line 187 never fires and nothing is logged.
 
+Executed against a JDK rather than reasoned about, with the exact parser configuration
+(`SimpleDateFormat("yyyy-MM-dd")`, `setLenient(true)`):
+
+| Input | Result |
+|---|---|
+| `24-06-2026` | **`0029-12-17`** |
+| `06-08-2026` | **`0012-02-16`** |
+| `2026-08-06` | `2026-08-06` — the canonical form, unaffected |
+| `2026-08-06 18:55:31.567837+00` | `2026-08-06` — trailing text ignored, no error |
+| `06/08/2026` | `ParseException` |
+| `` (empty) | `ParseException` |
+
+So the damage is specific: **only the `dd-MM-yyyy` shape corrupts silently.** A different separator
+fails loudly (`ParseException` → `throw new Error` → HTTP 500), which is why this went unnoticed —
+the one format NEO actually emits is the one format that produces a plausible-looking `Date` object
+instead of an error.
+
 ### 2.2 Neither coercer covers dates
 
 The codebase already contains the *shape* of the fix twice, for other types, with a comment that
@@ -169,11 +186,15 @@ field or the window.
 
 `aeatsiiFechaRegCont` resolves through an `@SQL=SELECT CASE WHEN …` default, whose result reaches
 the response as the JDBC driver rendered it: `2026-08-06 18:55:31.567837+00` — space separator,
-microseconds, `+00` offset. That string matches **none** of the `JsonUtils` formats
-(`yyyy-MM-dd`, `yyyy-MM-dd'T'HH:mm:ssZZZZZ`, `HH:mm:ssZZZZZ`, `HH:mm:ss`,
-`yyyy-MM-dd'T'HH:mm:ss`), so echoing it back on a write is a genuine `ParseException` → `Error`.
-On `purchase-invoice` the field is `readOnly` (`discarded` on `sales-invoice`), which is the only
-reason no probe has hit it yet.
+microseconds, `+00` offset.
+
+**Correction to an earlier claim in this file.** The first version of §3.4 asserted that this string
+matches none of the `JsonUtils` formats and therefore raises a genuine `ParseException` → `Error` on
+write. **That is wrong**, and the probe in §2.1 is what killed it: a lenient `SimpleDateFormat`
+parses the leading `yyyy-MM-dd` and **silently ignores the trailing text**, so the value round-trips
+to `2026-08-06` without error. It is a cosmetic defect of the response (three formats where there
+should be one), not a second corruption vector. On `purchase-invoice` the field is `readOnly`
+(`discarded` on `sales-invoice`), so no agent sends it back anyway.
 
 ### 3.5 `combos` are not normalized at all
 
@@ -182,6 +203,111 @@ reason no probe has hit it yet.
 `mergeCalloutUpdates` (351-353) does the same for values that arrive outside the normalized path.
 There is no date handling anywhere in that file. A date delivered through a combo is therefore
 `dd-MM-yyyy` even on a window where the equivalent `updates` field is ISO.
+
+## 3.6 The corruption is not hypothetical — it is already in the database
+
+The registry framed IMP-16 as an agent-ergonomics defect. It is not. A read-only sweep of
+**all 311 date/timestamp columns** of every populated table on `etendo-go-local`, looking for values
+before 1900, found **14 rows across 5 columns**:
+
+| Table.column | Rows | Range |
+|---|---|---|
+| `c_order.datepromised` | **10** | `0011-02-16` … `0029-12-17` |
+| `c_order.dateacct` | 1 | `0029-12-17` |
+| `ad_user.lastpasswordupdate` | 1 | `0022-01-16` |
+| `tbai_config.tbaisystemdate` | 1 | `0036-01-16` |
+| `aeatsii_config.monitordate` | 1 | `0006-07-10` |
+
+### Attribution
+
+Inverting the lenient parse over every `dd-MM-yyyy` string in 2023–2028 gives a unique preimage for
+4 of the 5 values, and each preimage is a real recent date:
+
+| Stored value | Only `dd-MM-yyyy` input that produces it |
+|---|---|
+| `0027-12-17` | `22-06-2026` |
+| `0028-12-16` | `23-06-2026` |
+| `0029-12-17` | `24-06-2026` |
+| `0011-02-16` | `05-08-2026` |
+| `0022-01-16` | `16-07-2026` |
+| `0036-01-16` | `30-07-2026` |
+| `0006-07-10` | none in 2023–2028 — a different cause, not this bug |
+
+### The 1:1 match that settles it
+
+Every corrupt `c_order` row's value decodes to **that row's own creation date**:
+
+| documentno | created | `datepromised` | decodes to | `dateordered` |
+|---|---|---|---|---|
+| 1000011 | 2026-06-22 19:25 | `0027-12-17` | `22-06-2026` | `2026-06-22` ✅ |
+| 1000011 | 2026-06-23 23:25 | `0028-12-16` | `23-06-2026` | `2026-06-23` ✅ |
+| 1000012 | 2026-06-23 23:30 | `0028-12-16` | `23-06-2026` | `2026-06-23` ✅ |
+| 1000013 | 2026-06-23 23:31 | `0028-12-16` | `23-06-2026` | `2026-06-23` ✅ |
+| 1000014 | 2026-06-23 23:33 | `0028-12-16` | `23-06-2026` | `2026-06-23` ✅ |
+| 1000011 | 2026-06-23 23:36 | `0028-12-16` | `23-06-2026` | `2026-06-23` ✅ |
+| 1000012 | 2026-06-23 23:40 | `0028-12-16` | `23-06-2026` | `2026-06-23` ✅ |
+| 1000013 | 2026-06-24 13:20 | `0029-12-17` | `24-06-2026` | `2026-06-24` ✅ |
+| 1000014 | 2026-06-24 19:15 | `0029-12-17` | `24-06-2026` | `0029-12-17` ❌ |
+| 1000017 | 2026-08-05 18:26 | `0011-02-16` | `05-08-2026` | `2026-08-05` ✅ |
+
+Not one exception. `@#Date@` resolved to the creation date in `dd-MM-yyyy`, the lenient parser turned
+it into a first-century date, and it was persisted.
+
+### Two things this table proves that reading the code could not
+
+1. **Every order created through NEO in 2026 has a corrupt `datepromised`.** Creation volume by day:
+   1 order on 2026-08-05 (1 corrupt), 2 on 2026-06-24 (2 corrupt), 6 on 2026-06-23 (4 corrupt),
+   1 on 2026-06-22 (1 corrupt). The 2020–2021 sample-data orders and the 2026-04-16 batch are clean —
+   they were not created through NEO. This is not an edge case; it is the default outcome.
+2. **§3.2's rule is confirmed by persisted data.** `dateordered` and `dateacct` are correct on 9 of
+   10 rows while `datepromised` is corrupt on all 10 — because the order callouts rewrite the first
+   two during the create cascade (so ETP-4244's normalizer returns them as ISO, which parses
+   correctly) and nothing touches `datepromised`. The single row where `dateacct` is *also* corrupt
+   (1000014, 19:15) is the case where that callout did not fire. **Whether a date survives depends
+   on whether a callout happened to touch it** — exactly the read-side rule, now visible in the
+   stored data.
+
+### Consequence for the fix
+
+This moves IMP-16 out of MCP ergonomics and into backend data integrity. `datepromised` drives
+delivery scheduling and MRP; a `dateacct` in year 29 would post to a nonexistent accounting period.
+Two things follow:
+
+- The fix is a **backend** fix that the MCP happens to also benefit from, not the reverse.
+- **Existing rows need a corrective data-fix**, which is out of this item's scope: the inverse map is
+  unique per value inside a plausible year range (§ above), so a `cli/src/data-fixes/` migration
+  scoped by `ad_client_id` can restore them deterministically. That belongs to Remedy and should be
+  registered separately — a code fix alone leaves 14 wrong rows in place.
+
+## 3.7 The React form already expects ISO — so canonicalizing is not a breaking change
+
+`neo_defaults` is not an MCP-only surface: the React form bootstraps from
+`GET /sws/neo/{spec}/{entity}/defaults`. Changing its date format therefore has to be checked against
+the frontend contract, and that contract is **already ISO in both directions**:
+
+| Direction | Code | Behaviour |
+|---|---|---|
+| backend → form | `app-shell-core/src/lib/dateOnly.js:1` — `/^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/` | 4-digit year first: matches ISO and the Postgres-timestamp shape. Anything else falls through to `new Date(str)`, which reads `06-08-2026` as **June 8** (`MM-DD-YYYY`) and yields `Invalid Date` for a day > 12 |
+| form → backend | `components/ui/date-field.jsx:21` `toIsoDate()`, used at `:268` and `:315` | the date field **emits ISO** |
+
+So today's `dd-MM-yyyy` is a latent frontend defect too — day and month silently swapped for the
+first 12 days of a month, an em-dash for the rest — and the fact that the React form creates
+documents correctly proves `JsonToDataConverter` handles ISO natively, because ISO is what the form
+sends.
+
+The callout boundary is likewise safe, and demonstrably a no-op:
+
+| | Today | After canonicalization |
+|---|---|---|
+| resolved default | `06-08-2026` | `2026-08-06` |
+| `CalloutRequestBuilder.isoToEtendoDate` | returns `null` (not ISO) → value left as-is | converts to the UI pattern |
+| **value the legacy callout receives** | `06-08-2026` | `06-08-2026` |
+
+`reformatDateParams` (137-141, gated to `AD_Reference` `"15"`) exists for exactly this and is
+currently a no-op for these fields because ISO never reaches it. Feeding it ISO activates it rather
+than duplicating it — which is also why the normalization must be **gated to reference `15`**, the
+same gate the two ETP-4244 normalizers use: it keeps the set of values that change format identical
+to the set the existing bridge already handles.
 
 ## 4. Hypotheses that were wrong
 
@@ -243,8 +369,23 @@ has no way to know which format a given field will hand it.
 
 ## 6. What is not claimed here
 
-No status is changed. No code was written. The root cause of the silent corruption (§2) is
-**confirmed by reading the parser**, not by observing a stored year-12 record — the arithmetic is
-unambiguous, but the write probe that would show `dateinvoiced = 0012-02-16` in the database has not
-been run. That probe belongs to the next `/mcp-comparison` run (W1–W4, authorized, `etendo-go-local`)
-and would be the direct evidence for the registry cell.
+No status is changed and no code was written.
+
+What **is** established, and how:
+
+| Claim | Evidence |
+|---|---|
+| the lenient parser turns `dd-MM-yyyy` into a first-century date | executed against a JDK (§2.1) |
+| NEO emits `dd-MM-yyyy` for every `@#Date@` default | code path read end to end (§3.1) |
+| the corruption reached the database | 14 rows found by a read-only sweep of all 311 date columns, 4 of 5 values attributed by inverting the parse, every `c_order` row matching its own creation date 1:1 (§3.6) |
+| canonicalizing to ISO does not break the React form | the frontend already parses ISO-only and emits ISO (§3.7) |
+| canonicalizing does not change what legacy callouts receive | `isoToEtendoDate` is idempotent by construction and currently a no-op for these fields (§3.7) |
+
+**No write probe was needed** — the earlier version of this section said one was. The stored evidence
+in §3.6 is stronger than a probe would have been: it shows the bug affecting real records created
+over two months, not a record this investigation created.
+
+What is **not** established: nothing here has been compiled, and the two safety arguments in §3.7 are
+read from source rather than observed. They must be confirmed after a build by (a) diffing
+`neo_defaults` across ~8 windows before/after, accepting only reference-`15` fields changing from
+`dd-MM-yyyy` to ISO, and (b) an E2E create through the React form.
