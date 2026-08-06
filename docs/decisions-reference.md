@@ -611,6 +611,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
 | `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
+| `namedFilters` | array | `null` | **Hand-authored named HQL filters** the NEO Headless MCP exposes as `{ "status": "<name>" }` list filters. See below. |
 | `virtualFields` | array | `[]` | Columns with **no AD column behind them**, injected per row by the entity's NeoHandler in `afterHandle`. See below. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
 | `hideDelete` | boolean | `false` | Disables the CRUD delete capability for **this entity only** (`apiPrediction.crud.<entity>.delete: false`) — unlike `window.hideDelete`, which disables delete uniformly across every entity in the window. `DetailView`'s row-delete handler, bulk-delete bar, and delete-eligibility checks all gate directly on this same `crud.delete` flag, so setting it also removes the row-level delete icon/checkbox in the UI, not just the declared API capability — for **both** plain `DataTable` list/lines tabs and `linesLayout: "inlineEditable"` tabs (`InlineLinesPanel`, see ETP-4565: before that fix the icon still rendered — and silently no-opped on click — on `inlineEditable` tabs, since only `DataTable` gated its trash button on `onDeleteRow`). Use for a child/detail entity whose rows are exclusively managed as a side effect of the parent's own save (e.g. a NeoHandler syncing a join table from a parent field) — manual row deletion there would let a user bypass that invariant. Added ETP-4512 (`userRoles` on the `user` window). |
@@ -676,6 +677,52 @@ Enables a two-button save workflow: "Save Draft" (save only) + "Save & {label}" 
 
 **When disabled** (default): single "Save" button.
 **When enabled**: "Save draft" + "Save & {label}" buttons, plus process buttons from `processEndpoints`.
+
+### Named Filters (`entities.{name}.namedFilters`)
+
+Hand-authored named business filters the NEO Headless **MCP** exposes to AI agents as a
+`{ "status": "<name>" }` filter on `neo_list`. Each entry pairs a stable `name` with an **HQL `where`
+fragment** over the entity alias `e`. This is the canonical way to give an agent document-status
+semantics (paid / unpaid / partial) that plain `key=value` or range filters cannot express — the
+fragment can compare field-to-field and use HQL functions (`abs`, `now`, …).
+
+```json
+"entities": {
+  "header": {
+    "namedFilters": [
+      { "name": "completed", "label": "Paid", "description": "Fully paid invoices.",
+        "where": "e.paymentComplete = true" },
+      { "name": "pending", "label": "Unpaid", "description": "Nothing collected yet.",
+        "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)" },
+      { "name": "partial", "label": "Partially paid", "description": "Some collected, balance remains.",
+        "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)" }
+    ]
+  }
+}
+```
+
+| Property | Type | Required | Purpose |
+|----------|------|----------|---------|
+| `name` | string | ✅ | Stable filter key the agent passes as `{ "status": name }`. First entry wins on duplicate names. |
+| `where` | string | ✅ | HQL boolean fragment over alias `e` (the entity). Spliced verbatim into the fetch `WHERE`. |
+| `label` | string | — | Short human label surfaced in `neo_schema` docs. |
+| `description` | string | — | One-line explanation surfaced in `neo_schema` docs. |
+
+**Flow:** `decisions.json` → `resolve-curated` (normalize, trim, drop entries missing `name`/`where`,
+dedupe by `name`) → `contract.json` (`backendContract.entities[e].namedFilters`) → `push-to-neo`
+(`ETGO_SF_ENTITY.NAMED_FILTERS`, a `text`/CLOB column) → MCP. `neo_schema` returns each filter's
+`name`/`label`/`description` (**never the `where`**) so the agent can discover the available statuses;
+an unknown name returns the valid list as a clean handled error, not a 500.
+
+**Authoring rules (MANDATORY):**
+- Author the `where` **only over persisted, queryable columns.** Never reference a computed/transient
+  column (e.g. an invoice's `eTGODueDate`) — Hibernate cannot put it in a `WHERE` and the query throws
+  at creation. This is exactly why `overdue` (overdue-by-date) is intentionally **not** authored on the
+  invoice header: `C_Invoice` has no persisted due-date column.
+- The fragment is spliced verbatim and runs with the same trust as the rest of the spec — treat it as
+  trusted code, never interpolate user input into it.
+- An entity with no `namedFilters` falls back to a plain column match on `status`, so this is
+  backward-compatible.
 
 ## Field Properties (`entities.{name}.fields.{fieldName}.*`)
 
