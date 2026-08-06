@@ -1,7 +1,7 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
 import { isBulkDeleteBarVisible, getDeleteChildButtonLabel } from './detailViewHelpers.jsx';
-import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { deleteSelectedChildRows, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import { toast } from 'sonner';
 
 export function LinesBulkActionBar({
@@ -62,16 +62,8 @@ export function LinesBulkActionBar({
                 // ETP-4656 — shared triage + single-toast-per-outcome (see
                 // batchDelete.js); replaces the old two-independent-if
                 // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast pattern.
-                const { succeeded, failed } = await runBatchDelete(selectedChildRows, (row) => {
-                  const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                    || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                  return fetch(childUrl, {
-                    method: 'DELETE',
-                    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                  }).then(res => {
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    return row;
-                  });
+                const { succeeded, failed } = await deleteSelectedChildRows({
+                  selectedChildRows, api, detailEntity, apiBaseUrl, token,
                 });
                 for (const row of succeeded) {
                   hook.handleDeleteChild(row.id);
