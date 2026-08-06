@@ -73,7 +73,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId: receiptId }) => 
   return { documents, sharedContext: { draftInfo }, excludedByCurrency };
 };
 
-const fetchLines = async ({ base, headers, docId, sharedContext }) => {
+export const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   const res = await fetch(
     `${base}/purchase-order/lines?parentId=${docId}&_startRow=0&_endRow=200`,
     { headers },
