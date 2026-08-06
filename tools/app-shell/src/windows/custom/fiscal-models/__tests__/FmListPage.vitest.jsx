@@ -374,17 +374,89 @@ describe('FmListPage — no active models', () => {
     expect(container.querySelector('table') || container.querySelector('.fm-empty-state')).toBeTruthy();
   });
 
-  it('clicking the CTA inside the no-active-models empty state reopens the catalog drawer', () => {
-    const { container, getByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
+  it('does not render a CTA inside the no-active-models empty state — the toolbar button already opens the catalog', () => {
+    const { container, getByText, queryByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
     deactivateAllModels(container, getByText);
 
     // Catalog drawer auto-closes after onSave — confirm it's actually closed first.
     expect(container.querySelector('.fm-catalog-drawer')).toBeFalsy();
 
-    const cta = getByText(/fm\.list\.empty_no_active_models_cta/);
-    fireEvent.click(cta);
+    // The old dedicated CTA button is gone; only the title renders in the empty state.
+    expect(queryByText(/fm\.list\.empty_no_active_models_cta/)).toBeFalsy();
+    const empty = container.querySelector('.fm-empty-state');
+    expect(empty.textContent).toContain('fm.list.empty_no_active_models');
 
+    // The always-visible toolbar catalog button still reopens the drawer.
+    fireEvent.click(getByText(/fm\.catalog\.title/));
     expect(container.querySelector('.fm-catalog-drawer')).toBeTruthy();
+  });
+});
+
+// ── Active-models filtering (regression) ────────────────────────────────────
+// Before the fix, deactivating a model in the catalog did NOT hide its
+// declarations from the list/filters — activeModels was ignored by
+// modelYearFiltered/filtered and by the "Todos los modelos" dropdown options.
+
+describe('FmListPage — active-models filtering (regression)', () => {
+  it('hides declarations for a model deactivated in the catalog, keeps the still-active model\'s rows', () => {
+    const decls = [
+      makeDecl({ id: '303-a', model: '303' }),
+      makeDecl({ id: '349-a', model: '349' }),
+      makeDecl({ id: '349-b', model: '349' }),
+    ];
+    const { container, getByText } = render(<FmListPage declarations={decls} {...defaultProps} />);
+
+    // All 3 rows visible while both models are active (default).
+    expect(container.querySelectorAll('tbody tr').length).toBe(3);
+
+    // Deactivate 349 via the catalog drawer (activate 303 only).
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
+
+    const rows = container.querySelectorAll('tbody tr');
+    expect(rows.length).toBe(1);
+    const badges = Array.from(container.querySelectorAll('.fm-model-badge')).map(b => b.textContent);
+    expect(badges).toContain('303');
+    expect(badges).not.toContain('349');
+  });
+
+  it('excludes the deactivated model from the "Todos los modelos" filter dropdown options', () => {
+    const decls = [
+      makeDecl({ id: '303-a', model: '303' }),
+      makeDecl({ id: '349-a', model: '349' }),
+    ];
+    const { container, getByText } = render(<FmListPage declarations={decls} {...defaultProps} />);
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
+
+    // Open the "Todos los modelos" dropdown (2nd filter pill).
+    const pills = container.querySelectorAll('.fm-toolbar__pill');
+    fireEvent.click(pills[1]);
+    const options = container.querySelectorAll('[role="option"]');
+    const optionTexts = Array.from(options).map(o => o.textContent);
+
+    expect(optionTexts.some(t => t.includes('303'))).toBe(true);
+    expect(optionTexts.some(t => t.includes('349'))).toBe(false);
+  });
+
+  it('drives the KPI row from the same activeModels-filtered set (not the raw declarations)', () => {
+    const decls = [
+      makeDecl({ id: '303-a', model: '303', status: 'pending' }),
+      makeDecl({ id: '349-a', model: '349', status: 'pending' }),
+    ];
+    const { container, getByText } = render(<FmListPage declarations={decls} {...defaultProps} />);
+
+    // Both pending → KPI "pending" count is 2 while both models are active.
+    let kpis = container.querySelectorAll('.test-kpi');
+    expect(kpis[1].textContent).toBe('2');
+
+    // Deactivate 349 → only the 303 declaration should count.
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
+
+    kpis = container.querySelectorAll('.test-kpi');
+    expect(kpis[1].textContent).toBe('1');
   });
 });
 
