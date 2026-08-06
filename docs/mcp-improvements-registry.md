@@ -3,7 +3,7 @@
 **Jira:** ETP-4793 (Epic ETP-3504) · continues ETP-4601 · **Labels:** `plataforma`, `validacion-agentica`
 **Scope:** every improvement item ever raised against the **Etendo GO MCP server**
 (`com.etendoerp.go/src/com/etendoerp/go/mcp/`) by the Holded-vs-Etendo-GO agentic benchmark.
-**Last updated:** 2026-08-05
+**Last updated:** 2026-08-06 · **MARI 49** (§2.1)
 
 ---
 
@@ -67,17 +67,25 @@ the work. A percentage whose denominator you are still finding cannot be a targe
 
 MARI has four components, each normalized to 0–100 before weighting:
 
-| Component | Weight | Normalization | 2026-08-05 | Contribution |
-|---|---:|---|---|---:|
-| **M2** — first-call success rate | 30 | the percentage itself | 0 % ¹ | 0.0 |
-| **M1** — calls-to-outcome ratio vs Holded | 30 | `100 / M1` (1.0× → 100) | 2.4× → 42 | 12.5 |
-| **Delivery** — weighted points earned | 25 | `earned / quota` | 29.5 / 73 → 40 | 10.1 |
-| **Coverage** — probe surfaces exercised (§2.5) | 15 | `probed / 6` | 2 / 6 → 33 | 5.0 |
-| | | | | **MARI = 28** |
+| Component | Weight | Normalization | 2026-08-05 | 2026-08-06 | Contribution |
+|---|---:|---|---|---|---:|
+| **M2** — first-call success rate | 30 | the percentage itself | 0 % ¹ | **40 %** ² | 12.0 |
+| **M1** — calls-to-outcome ratio vs Holded | 30 | `100 / M1` (1.0× → 100) | 2.4× → 42 | **2.1× → 48** | 14.3 |
+| **Delivery** — weighted points earned | 25 | `earned / quota` | 29.5 / 73 → 40 | **29.5 / 97 → 30** ³ | 7.6 |
+| **Coverage** — probe surfaces exercised (§2.5) | 15 | `probed / 6` | 2 / 6 → 33 | **6 / 6 → 100** | 15.0 |
+| | | | **MARI = 28** | | **MARI = 49** |
 
 ¹ Measured on the write suite only (2 attempts, 2 FK failures — see Appendix A.5). The read suite
-was not scored per call. This is the least solid of the four inputs and must be re-measured against
-the frozen task suite before MARI is quoted outside this repo.
+was not scored per call. Flagged at the time as the least solid of the four inputs.
+
+² Re-measured 2026-08-06 across the full frozen 5-task suite, as that flag required: tasks 1 and 3
+fail on the first call, tasks 2, 4 and 5 succeed → 2/5. This supersedes the 0 % figure, which was
+measured on the product's single worst path. **This is a correction, not an improvement** — no code
+changed between the two columns (§2.4).
+
+³ Delivery *fell* while MARI rose. The run registered IMP-16…IMP-21 and the quota was re-based
+73 → 97 (§2.2), so the same 29.5 earned points now sit against a larger denominator. Intended
+behaviour: registering debt costs Delivery honestly, but at 25 % weight it cannot sink the index.
 
 **Weighting rationale — 60 % outcome / 40 % process.** M1 and M2 measure what happens to the agent
 and cannot be moved by moving paperwork. Delivery and coverage are activity: they matter, but if
@@ -86,8 +94,10 @@ that hurt the agent most (IMP-15 breaks the first call on the documented happy p
 on their own.
 
 Coverage carries its own weight on purpose: **writing new probes is work**, and it is the component
-that prevents self-deception. With 2 of 6 surfaces probed, a high score on the other three would be
-measured over a third of the product.
+that prevents self-deception. At 2 of 6 surfaces, a high score on the other three would have been
+measured over a third of the product. The 2026-08-06 run closed it to 6 of 6 and immediately
+justified the weighting: the four newly-probed surfaces yielded 20 points of previously invisible
+debt.
 
 ### 2.2 The quota rule — why discovery does not dilute MARI
 
@@ -102,11 +112,20 @@ known scope   = Σ weight over all live rows
 quota         = known scope at period open × 1.20   (20 % discovery reserve)
 ```
 
-Period opened 2026-08-05: known scope = 61 (8 × P1 + 7 × P2), **quota = 73**.
+Period opened 2026-08-05: known scope = 61 (8 × P1 + 7 × P2), quota = 73.
 
-Registering IMP-11…IMP-15 spends reserve; it does not dilute the index. Only overrunning the quota
-forces a re-base — and that conversation ("we found more debt than budgeted") is a healthy one, not
-a number that silently sinks.
+**Re-based 2026-08-06** (first re-base of the period, human-authorised): the 6-of-6 coverage run
+registered IMP-16…IMP-21 (+20 points), taking known scope to **81** — an overrun of 8 points past the
+73 quota. Quota re-based to **81 × 1.20 = 97**. Because the 1.20 ratio is preserved, the re-base does
+**not** move the scope-closed ceiling: it stays at 88 (§2.3). Delivery fell from 40 to 30 on the same
+29.5 earned — that drop is the honest price of registering debt, and it is why Delivery is only 25 %
+of the index.
+
+Registering IMP-11…IMP-15 spent reserve without diluting the index. IMP-16…IMP-21 exhausted it. The
+lesson for the next period: a 20 % reserve is too small for a run that probes a surface for the first
+time — the first exhaustive pass on a surface finds more than a 20 % allowance anticipates. Only
+overrunning the quota forces a re-base, and that conversation ("we found more debt than budgeted") is
+a healthy one, not a number that silently sinks.
 
 A ⚠️ earns **half credit**, deliberately: IMP-4 did ship name resolution on `neo_create`. Scoring it
 zero is exactly what made the old count-based metrics feel punitive.
@@ -115,34 +134,52 @@ zero is exactly what made the old count-based metrics feel punitive.
 
 | Horizon | M2 | M1 | Delivery | Coverage | **MARI** |
 |---|---|---|---|---|---:|
-| **Today** (2026-08-05) | 0 % | 2.4× | 29.5 / 73 | 2 / 6 | **28** |
-| **Next wave** — IMP-15 + IMP-12 + IMP-11 resolved, IMP-5 lifted to ✅ (the `neo_batch` envelope ships with IMP-15); `neo_update` and Holded writes probed | ~70 % | ~1.6× | 47 / 73 | 4 / 6 | **66** |
-| **Registry closed** — all 15 ✅, full probe surface, M1 at its target | 90 % | 1.2× | 61 / 73 | 6 / 6 | **88** |
+| Period open (2026-08-05) | 0 % | 2.4× | 29.5 / 73 | 2 / 6 | **28** |
+| **Today** (2026-08-06) | 40 % | 2.1× | 29.5 / 97 | 6 / 6 | **49** |
+| **Next wave** — IMP-11 + IMP-12 + IMP-15 + IMP-16 resolved, IMP-5 lifted to ✅ (the `neo_batch` envelope ships with IMP-15) | ~75 % | ~1.5× | 52 / 97 | 6 / 6 | **68** |
+| **Registry closed** — all 21 ✅, full probe surface, M1 at its target | 90 % | 1.2× | 81 / 97 | 6 / 6 | **88** |
 
-**88 is the practical ceiling of the current scope**, not 100. Delivery caps at 61/73 = 84 because
+The 2026-08-06 jump from 28 to 49 is **measurement, not shipped product**: no code changed. Coverage
+went 2/6 → 6/6 (+10) and M1/M2 were re-measured across the full frozen suite instead of two write
+calls (+15), while Delivery *fell* 40 → 30 because the run registered 20 points of new debt. Read it
+as "we now know where we stand", not as "the product improved" — the two are different claims and
+MARI deliberately lets the second one stay flat.
+
+**88 is the practical ceiling of the current scope**, not 100. Delivery caps at 81/97 = 84 because
 unspent discovery reserve is not credit — reaching 100 would require discovering *and* closing
-another 12 points of improvements. That asymmetry is intentional: MARI should not read as "finished"
+another 16 points of improvements. That asymmetry is intentional: MARI should not read as "finished"
 while the reserve is untouched.
 
 The M1/M2 figures in the two forward rows are **projections, not commitments** — they follow from
 what each item removes (IMP-15 removes the FK retry loop, IMP-12 removes the 62 kB schema read), but
 only a measured run can confirm them.
 
-**As a KR:** `MARI 28 → 66` over the period, with 85 as the stretch. Do not set 85 as the commitment
-— it requires closing all fifteen items *and* probing every surface.
+**As a KR:** `MARI 28 → 68` over the period, with 85 as the stretch. Do not set 85 as the commitment
+— it requires closing all twenty-one items *and* holding every surface probed.
+
+> The KR target moved 66 → 68 when the quota was re-based. This is a **correction, not a goalpost
+> shift**: the target is defined as "next wave shipped", and the same wave now sits against a larger
+> denominator. The 28 baseline is unchanged.
 
 ### 2.4 M5 family — diagnostics, not targets
 
 These remain useful for reading *what changed*, and are the inputs to Delivery. They are **not**
 KR material, precisely because of the denominator problem MARI solves.
 
-| Metric | Definition | 2026-08-03 | 2026-08-05 |
-|---|---|---|---|
-| **M5 — open items** | count(⚠️) + count(⏳) | 3 of 10 | **10 of 15** |
-| **M5a — open P1** | the same, restricted to P1 | 0 | **4** (IMP-11, IMP-12, IMP-15, IMP-1) |
-| **M5b — resolved** | count(✅) | 7 | **5** |
-| **M5c — added this run** | new IDs registered | — | **5** (IMP-11…IMP-15) |
-| **M5d — cohort closure** | `earned / weight`, denominator frozen per cohort | — | **C1 74 %** (29.5/40) · **C2 0 %** (0/21) |
+| Metric | Definition | 2026-08-03 | 2026-08-05 | 2026-08-06 |
+|---|---|---|---|---|
+| **M5 — open items** | count(⚠️) + count(⏳) | 3 of 10 | 10 of 15 | **16 of 21** |
+| **M5a — open P1** | the same, restricted to P1 | 0 | 4 | **5** (IMP-1, IMP-11, IMP-12, IMP-15, IMP-16) |
+| **M5b — resolved** | count(✅) | 7 | 5 | **5** |
+| **M5c — added this run** | new IDs registered | — | 5 (IMP-11…IMP-15) | **6** (IMP-16…IMP-21) |
+| **M5d — cohort closure** | `earned / weight`, denominator frozen per cohort | — | C1 74 % · C2 0 % | **C1 74 %** (29.5/40) · **C2 0 %** (0/21) · **C3 0 %** (0/20) |
+
+> **2026-08-06 reads as a pure regression on every count-based line** — open items 10 → 16, added 6,
+> resolved flat at 5, a brand-new cohort at 0 %. Yet the run probed four surfaces for the first time,
+> re-confirmed the three worst P1 items with live evidence, and raised the honest readiness measure
+> from 28 to 49. This is the clearest demonstration so far of **why the M5 family cannot carry a KR**:
+> it scores an exhaustive audit as a failure. M5d's frozen cohorts contain the damage (C1 stays at
+> 74 % rather than being diluted to 36 %) but cannot fix the direction of travel.
 
 > The apparent regression from 7 resolved to 5 is **not** a code regression. It is the correction of
 > two over-credited statuses (IMP-1, IMP-7) and three items whose `Done when:` clause was never
@@ -165,18 +202,20 @@ Six surfaces, fixed. A surface counts as probed when a run recorded a verbatim r
 its evidence table. **The list only grows by explicit amendment** — adding a surface is a decision,
 not a side effect of a run.
 
-| Surface | 2026-08-05 | Note |
-|---|---|---|
-| Read verbs (`neo_list`/`get`/`schema`/`defaults`/`selectors`/`discover`/`docs`) | ✅ | A1–A13 |
-| Write, Etendo (`neo_create`, `neo_batch`) | ✅ | W1–W8, first probed this run |
-| Write, Holded (`create_*` / `delete_*`) | ❌ | Blocked by the session permission classifier — Holded's M1/M2 stay `n/m` until it runs |
-| `neo_update` | ❌ | Never probed on either side |
-| `neo_action` | ❌ | Scored on **read-only** verification of the action catalog + its error contract. Firing a completion/posting action is forbidden (Step 0) — the surface is still scoreable without it |
-| `neo_widget` + the 8 report generators | ❌ | Never probed |
+| Surface | 2026-08-05 | 2026-08-06 | Note |
+|---|---|---|---|
+| Read verbs (`neo_list`/`get`/`schema`/`defaults`/`selectors`/`discover`/`docs`) | ✅ | ✅ | A1–A13; re-run as B1–B9 |
+| Write, Etendo (`neo_create`, `neo_batch`) | ✅ | ✅ | W1–W8; `neo_create` re-run as B10–B14. **`neo_batch` not re-probed on 2026-08-06** — not authorised for that run, so IMP-4/IMP-15's `neo_batch` clauses rest on 2026-08-05 evidence |
+| Write, Holded (`create_*` / `delete_*`) | ❌ | ✅ | B17–B20 — demo tenant, human-authorised. `create_contact` + `create_sales_order` both succeeded first call |
+| `neo_update` | ❌ | ✅ | B15–B16 |
+| `neo_action` | ❌ | ✅ | B7 — read-only verification of the 19-action catalog + its `agentPrompt`/`actionValues` contract. Firing a completion/posting action remains forbidden (Step 0); the surface is scoreable without it |
+| `neo_widget` + the 8 report generators | ❌ | ✅ | B1–B2 (`neo_widget`), B3–B5 (report generators) |
 
-A low discovery count is only evidence of maturity **at full coverage**. At 2 of 6 it means the
-other four surfaces have not been looked at — which is precisely how IMP-15 survived two runs
-undetected.
+A low discovery count is only evidence of maturity **at full coverage**. At 2 of 6 it meant four
+surfaces had not been looked at — which is precisely how IMP-15 survived two runs undetected. Now at
+6 of 6, the corollary applies: **Coverage cannot rise again**, so it is the one component that from
+here on can only be lost (by a surface regressing or a new surface being added by amendment). Future
+MARI movement has to come from M1, M2 and Delivery — that is, from shipping.
 
 ---
 
@@ -199,15 +238,30 @@ Environment for all 2026-08-05 statuses: **`etendo-go-local`**, build `c597c7c2`
 | **IMP-8** | `neo_selectors` argument alias + self-correcting error | P2 | C1 | 3 / 3 | ⚙️ additive | `com.etendoerp.go` | ✅ resolved | A8 · `field` alias, `McpToolRouter` | base §12 |
 | **IMP-9** | Expose `primaryEntity` in `neo_discover` | P2 | C1 | 3 / 3 | ⚙️ additive | `com.etendoerp.go` | ✅ resolved | A1 · commit `bbfce9db` | base §12 |
 | **IMP-10** | Make `docs` first-class + fix tool-name drift | P1 | C1 | 2.5 / 5 | ♻️ | `com.etendoerp.go` + `etendo-go-docs` | ⚠️ partial | A9 · server side done; every corpus snippet still says `etendo_neo_*` | base §12 |
-| **IMP-11** | Close the `visibility` / `userRequired` contract | P1 | C2 | 0 / 5 | ⚙️ | `schema_forge_core` + `com.etendoerp.go` | ⏳ open | A10, A13 · 0/6,340 fields carry `visibility` | audit §5 |
-| **IMP-12** | Projection for `neo_schema` (`view:"create"`, `fields:[…]`) | P1 | C2 | 0 / 5 | ♻️ | `com.etendoerp.go` | ⏳ open | A10 · 61,963 chars / 157 fields exceeds the agent's budget | audit §5 |
+| **IMP-11** | Close the `visibility` / `userRequired` contract | P1 | C2 | 0 / 5 | ⚙️ | `schema_forge_core` + `com.etendoerp.go` | ⏳ open | A10, A13, **B6** · 0/6,340 fields carry `visibility`; 0/157 on `sales-invoice/header` carry either key, while the response `hint` *and* the `neo_schema` tool description both instruct agents to filter on them | audit §5 |
+| **IMP-12** | Projection for `neo_schema` (`view:"create"`, `fields:[…]`) | P1 | C2 | 0 / 5 | ♻️ | `com.etendoerp.go` | ⏳ open | A10, **B6** · 61,963 chars / 157 fields exceeds the agent's budget — reproduced byte-for-byte on 2026-08-06, where the call **failed outright** against the client token limit rather than merely being wasteful | audit §5 |
 | **IMP-13** | Backfill `businessCritical` + `namedFilters` authoring (+ validator rule F11) | P2 | C2 | 0 / 3 | ♻️ | `schema_forge` | ⏳ open | 3/246 and 2/246 entities authored | audit §5 |
-| **IMP-14** | Realign `etendo-go-docs` with the real tool names | P2 | C2 | 0 / 3 | ♻️ | `etendo-go-docs` | ⏳ open | A9 · closing this also closes IMP-10 | audit §5 |
-| **IMP-15** | Unify the FK contract across write verbs | P1 | C2 | 0 / 5 | ⚙️ | `com.etendoerp.go` | ⏳ open | W3, W8 · see **Appendix A** | audit §5 |
+| **IMP-14** | Realign `etendo-go-docs` with the real tool names | P2 | C2 | 0 / 3 | ♻️ | `etendo-go-docs` | ⏳ open | A9, **B9** · closing this also closes IMP-10. `docs(topic:"creating records")` still returns `etendo_neo_create`/`_list`/`_batch`/`_action`/`_selectors`/`_defaults` throughout, and its argument lists omit the shipped `fields` and `view` params | audit §5 |
+| **IMP-15** | Unify the FK contract across write verbs | P1 | C2 | 0 / 5 | ⚙️ | `com.etendoerp.go` | ⏳ open | W3, W8, **B11, B15** · see **Appendix A** | audit §5 |
+| **IMP-16** | One date format across `neo_defaults` and the write verbs | P1 | C3 | 0 / 5 | ⚙️ | `com.etendoerp.go` | ⏳ open | B9, B13 · `invoiceDate` emitted `DD-MM-YYYY`, `accountingDate` ISO, same payload; `neo_create` misparses the former silently | audit §5 |
+| **IMP-17** | Wrap callout + routing errors in the IMP-5 envelope | P2 | C3 | 0 / 3 | ♻️ | `com.etendoerp.go` | ⏳ open | B13, B6 · raw untranslated `"La fecha de operación…"` and `"Entity not found: header"` bypass the envelope entirely | audit §5 |
+| **IMP-18** | Report unknown names in a `fields` projection | P2 | C3 | 0 / 3 | ⚙️ additive | `com.etendoerp.go` | ⏳ open | B8 · `salePrice`/`purchasePrice`/`stock` dropped in silence, no `warnings` array | audit §5 |
+| **IMP-19** | Type the report-generator contract | P2 | C3 | 0 / 3 | ⚙️ | `com.etendoerp.go` | ⏳ open | B3–B5 · `parameters` is an untyped object (first call always fails); `format` documents `pdf/xlsx/csv` but JSON is always returned; flat error envelope | audit §5 |
+| **IMP-20** | Projection on write-verb responses | P2 | C3 | 0 / 3 | ⚙️ additive | `com.etendoerp.go` | ⏳ open | B14, B16 · `neo_create`/`neo_update` return ~80 fields incl. `_computedColumns`, `recordTime`; IMP-2 covers only `neo_list`/`neo_get` | audit §5 |
+| **IMP-21** | Curate the actions catalog | P2 | C3 | 0 / 3 | ♻️ | `com.etendoerp.go` + `schema_forge` | ⏳ open | B7 · 13 of 19 labels are raw column names (`RM_ReceiveMaterials`); 10 buttons flagged `required:true`; `businessCritical:false` on `documentAction` and `posted` | audit §5 |
 
-**Totals (2026-08-05):** earned **29.5** of a known scope of **61** (C1 29.5/40 · C2 0/21) against a
-quota of **73** → the Delivery component of MARI = **40** (§2.1). Verify the column sums before
-publishing; a `Pts` cell that disagrees with its `Status` mark makes MARI unauditable.
+**Totals (2026-08-06):** earned **29.5** of a known scope of **81** (C1 29.5/40 · C2 0/21 · C3 0/20)
+against a re-based quota of **97** (§2.2) → the Delivery component of MARI = **30** (§2.1). Verify the
+column sums before publishing; a `Pts` cell that disagrees with its `Status` mark makes MARI
+unauditable.
+
+> **No status changed on 2026-08-06.** The run re-confirmed IMP-11, IMP-12, IMP-14 and IMP-15 with
+> live evidence and re-confirmed IMP-7's ⚠️ (the 7 compliance keys and the `partnerAddress:""`
+> contradiction are both still present), but shipped nothing, so `earned` is unmoved at 29.5. Four
+> findings that first looked new turned out to be already registered — the 62 kB schema is IMP-12
+> (the run reproduced the identical 61,963-char figure), the missing `userRequired`/`visibility` is
+> IMP-11, the `etendo_neo_*` corpus drift is IMP-14, and the FK round-trip is IMP-4/IMP-15. Only the
+> six above are genuinely new.
 
 **Unnumbered candidates** (raised, not yet specified — promote to an IMP before implementing):
 PDF/print + attachment tools · find-by-document-number lookups · per-verb permission/role in the
@@ -219,6 +273,39 @@ subquery).
 ## 4. Changelog
 
 One entry per benchmark run. Append; never rewrite a past entry.
+
+### 2026-08-06 — full-coverage measurement run (`etendo-go-local`, build `c597c7c2`)
+
+First run at **6 of 6 probe surfaces**. Human-authorised writes on `etendo-go-local` (create → update
+→ delete) and on the Holded **demo** tenant. No code shipped: this run measures, it does not deliver.
+
+* **Added IMP-16** — `neo_defaults` emits `invoiceDate` as `DD-MM-YYYY` and `accountingDate` as ISO in
+  the same payload; `neo_create` silently misparses the former and surfaces an unrelated callout
+  error. P1, ⚙️.
+* **Added IMP-17** — raw untranslated callout strings and routing errors bypass the IMP-5 envelope.
+  P2, ♻️.
+* **Added IMP-18** — a `fields` projection drops unknown names in silence, with no `warnings` array.
+  P2, ⚙️ additive.
+* **Added IMP-19** — the 8 report generators take an untyped `parameters` object and ignore `format`.
+  P2, ⚙️.
+* **Added IMP-20** — write-verb responses carry no projection (~80 fields). P2, ⚙️ additive.
+* **Added IMP-21** — the actions catalog is uncurated: raw column labels, buttons flagged
+  `required:true`, and `businessCritical:false` on `documentAction`/`posted`. P2, ♻️.
+* **Re-confirmed IMP-11, IMP-12, IMP-14, IMP-15** with live evidence; **re-confirmed IMP-7's ⚠️**.
+  No mark moved. Four findings that looked new on first reading were already registered as these
+  items — recorded in §3 so a future run does not re-discover them a third time.
+* **Coverage closed 2/6 → 6/6** (§2.5): Holded writes, `neo_update`, the `neo_action` catalog
+  (read-only), `neo_widget` and the report generators all probed for the first time. Coverage can no
+  longer rise; future MARI movement must come from shipping.
+* **M2 re-measured 0 % → 40 %** across the full frozen 5-task suite, discharging the ¹ caveat on the
+  2026-08-05 baseline; **M1 2.4× → 2.1×**. Both are corrections to an under-sampled baseline, not
+  product improvements.
+* **Quota re-based 73 → 97** (§2.2, first re-base of the period, human-authorised) after the 20 new
+  points overran the discovery reserve by 8. Delivery consequently fell 40 → 30 on unchanged earned
+  points. Scope-closed ceiling unchanged at 88; KR target corrected 66 → 68.
+* **MARI 28 → 49.**
+
+Run report: [`mcp-comparison-post-audit-2026-08-06.md`](mcp-comparison-post-audit-2026-08-06.md)
 
 ### 2026-08-05 — post-audit run (`etendo-go-local`, build `c597c7c2`)
 
