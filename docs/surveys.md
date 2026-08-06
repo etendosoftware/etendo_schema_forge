@@ -573,6 +573,47 @@ not an individual, and was explicitly out of scope). IP-based geolocation
 (`providers/mixpanel.js`), consent gating, and the `identify`/`group`/`groupSet` sanitizer bypass
 remain separate, lower-priority findings from the same audit — still open, tracked there.
 
+**Follow-up gap: stopping `identify()` did not clear already-identified browsers.**
+`mixpanel-browser` persists `distinct_id` in a cookie (e.g. named `mp_<TOKEN>_mixpanel`) and
+keeps reusing it across page loads/sessions. For any browser/device that had already been
+`identify()`'d with a real username/email *before* the fix above shipped, simply no longer calling
+`identify()` did nothing to that already-persisted identity — the SDK kept sending the old,
+real-identity `distinct_id` on every subsequent `track()` call regardless, confirmed live in
+production (a fresh `survey_responded` event still showed the real email as `Distinct ID` /
+`User ID`, with Mixpanel's own `Identity Failure Reason: errAnonDistinctIdAssignedAlready`
+diagnostic). QA's earlier validation missed this because it used a brand-new, never-identified test
+account, which is exactly the unaffected case.
+
+The fix is a one-time, per-browser `reset()` — made **intrinsic to the Mixpanel provider's own
+client-acquisition path**, not orchestrated by an external call sequence:
+
+- An earlier version of this fix called the reset from `browser.js`'s
+  `initBrowserObservability()`, right after `initObservability()` resolved and before the first
+  `track()` call. That ordering assumption was **not actually safe**: `core.js`'s shared
+  `initialized` flag is set synchronously, long before providers finish initializing, so any other
+  call site sharing that gate — e.g. `ObservabilityRouteTracker`'s route-change `page()` call, which
+  fires on mount independently of `main.jsx`'s (unawaited) `initBrowserObservability()` call — could
+  reach the Mixpanel provider and fire a `track()` before `browser.js`'s reset step had run. Several
+  other call sites (`useSurveyEngine.js`, `health-events.js`, `SupportChatContext.jsx`,
+  `productUsageTelemetry.js`, `mcpConnectTelemetry.js`, `OnboardingPage.jsx`) shared the same
+  exposure, since none of them go through `browser.js`'s sequencing either.
+- The fix now lives entirely inside `providers/mixpanel.js`'s internal `getClient()` — the single
+  gate every provider method (`init`, `track`, `page`, `identify`, `group`, `groupSet`, `flush`)
+  already funnels through before it gets a usable SDK client. `getClient()` loads the SDK, calls the
+  SDK's own `client.init(token, options)` (required first — `reset()` reads persistence/session
+  state that `init()` sets up), then performs the one-time reset — `client.reset()`, gated behind a
+  `localStorage` flag (`sf_mixpanel_identity_reset_v1`) so legitimate anonymous ids are not churned
+  on every page load — and only then returns the client to its caller. Because `clientPromise` is
+  cached synchronously on the first call, every caller (regardless of which provider method reaches
+  `getClient()` first, present or future) awaits the exact same load-init-reset chain: the reset is
+  guaranteed to have completed before ANY of them can call a real SDK method, independent of
+  `core.js`'s `initialized` timing or any app-level call ordering. This is what makes the guarantee
+  airtight this time — it no longer depends on one file calling things in the right order relative
+  to another. The provider still exposes an explicit `reset()` method (an unconditional passthrough
+  to `client.reset()`, unrelated to the automatic gate) as a building block for any future on-demand
+  need (e.g. logout), but nothing in the app currently calls it. The gate — and the flag — remain
+  intentionally Mixpanel-specific (not a general observability concern): Sentry/RUM are untouched.
+
 **Free-text feedback: moved server-side, never sent to Mixpanel.** `survey_responded` used to
 forward the CSAT/NPS textarea verbatim as a `feedback` property — unconstrained user input that
 could contain names, emails, or other PII. It now sends only `hasComment` (a boolean), the same
