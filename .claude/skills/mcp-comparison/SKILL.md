@@ -2,7 +2,7 @@
 name: mcp-comparison
 description: >
   Re-run the Holded vs Etendo GO MCP benchmark with live evidence, and update the IMP-*
-  improvement registry (`docs/mcp-improvements-registry.md`) — the single source of truth for
+  improvement registry (`docs/mcp-evaluation/mcp-improvements-registry.md`) — the single source of truth for
   which improvements are resolved, partial or open. Use when asked to repeat / redo / refresh
   the MCP comparison, to re-validate the improvement backlog after a wave ships, to verify that
   a shipped IMP-* actually behaves as claimed, to ask "how many improvements are still open?",
@@ -34,9 +34,9 @@ skill is writing a status into the wrong one.
 
 | Document | Role | May a status be changed here? |
 |---|---|---|
-| **[`docs/mcp-improvements-registry.md`](../../../docs/mcp-improvements-registry.md)** | **The registry.** Every IMP-* item, its priority, class, repo, **status**, and evidence pointer. Plus **MARI** (§2.1–2.3), the M5 diagnostics (§2.4), the probe-surface list (§2.5) and the changelog. | **Yes — only here.** |
-| [`docs/mcp-comparison-holded-vs-etendo-go.md`](../../../docs/mcp-comparison-holded-vs-etendo-go.md) | **The baseline benchmark.** Architecture contrast, inventories, coverage matrix, and the full `BEFORE`/`AFTER` specification of each item. Reference material. | No |
-| `docs/mcp-comparison-post-audit-<date>.md` | **One run report per execution.** Live evidence, defects, new proposals, preference verdict, M1–M4 — and a **delta** against the registry. | No |
+| **[`docs/mcp-evaluation/mcp-improvements-registry.md`](../../../docs/mcp-evaluation/mcp-improvements-registry.md)** | **The registry.** Every IMP-* item, its priority, class, repo, **status**, and evidence pointer. Plus **MARI** (§2.1–2.3), the M5 diagnostics (§2.4), the probe-surface list (§2.5) and the changelog. | **Yes — only here.** |
+| [`docs/mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md`](../../../docs/mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md) | **The baseline benchmark.** Architecture contrast, inventories, coverage matrix, and the full `BEFORE`/`AFTER` specification of each item. Reference material. | No |
+| `docs/mcp-evaluation/mcp-comparison-post-audit-<date>.md` | **One run report per execution.** Live evidence, defects, new proposals, preference verdict, M1–M4 — and a **delta** against the registry. | No |
 
 Status used to live in five places inside the base report and drifted every time. It now lives in
 the registry. A run report states only what **changed**, in these three sentence shapes:
@@ -288,7 +288,7 @@ itself; do not carry the old number forward.
 
 ## Step 3 — Verify each shipped IMP-* against its stated "Done when"
 
-**Read the current status from the registry** — `docs/mcp-improvements-registry.md` §3, never from
+**Read the current status from the registry** — `docs/mcp-evaluation/mcp-improvements-registry.md` §3, never from
 the base report's wave tables (they are historical narrative and have drifted before). The item's
 own `Done when:` clause, in the base report §12, is the check; re-read it literally.
 
@@ -331,7 +331,7 @@ A run that only flips ✅ marks has failed.
 
 Closing a wave does not close the gap; it moves the frontier. After re-probing, hunt for the
 **next** gap and write it up as a new `IMP-n` item, numbered onward from the highest number in the
-**registry** (`docs/mcp-improvements-registry.md` §3) — never by recycling a retired or withdrawn
+**registry** (`docs/mcp-evaluation/mcp-improvements-registry.md` §3) — never by recycling a retired or withdrawn
 number. The item's full specification goes in the run report; its **row goes in the registry**, and
 the registry's number is the one that counts.
 
@@ -511,7 +511,7 @@ Carry this column forward as the origin; do not recompute it:
 
 Status goes in **one** place. Write it there first, and derive everything else from it.
 
-### 4a. The registry — `docs/mcp-improvements-registry.md`
+### 4a. The registry — `docs/mcp-evaluation/mcp-improvements-registry.md`
 
 1. **Master table (§3)** — for every item you probed: the status mark, the `Pts` cell (weight ×
    credit), the cohort `C`, the evidence pointer (the run report row id), and the one-line reason a
@@ -528,7 +528,7 @@ Status goes in **one** place. Write it there first, and derive everything else f
 5. If an item needs a long explanation to be actionable (IMP-15 is the precedent), add an
    **appendix** rather than inflating the table row.
 
-### 4b. The run report — `docs/mcp-comparison-post-audit-<date>.md`
+### 4b. The run report — `docs/mcp-evaluation/mcp-comparison-post-audit-<date>.md`
 
 One file per run. It holds the evidence and the argument, and a **delta** section, not a status
 table. Sections: headline · verification matrix (evidence per item, with the registry as the status
@@ -538,7 +538,7 @@ components and the before → after** · M1–M4 scorecard · what was **not** t
 unprobed surfaces of registry §2.5 get named) · next actions. Every ✅ or ⚠️ it cites must name the
 live-call row behind it.
 
-### 4c. The base report — `docs/mcp-comparison-holded-vs-etendo-go.md`
+### 4c. The base report — `docs/mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md`
 
 Touch it **only** when reference material changed, and only with human authorization (it is the
 published document):
@@ -557,10 +557,10 @@ Sanity check before finishing:
 
 ```bash
 cd /Users/futit/Workspace/etendo_develop/schema_forge
-R=docs/mcp-improvements-registry.md
+R=docs/mcp-evaluation/mcp-improvements-registry.md
 grep -o 'IMP-[0-9]*' $R | sort -uV                    # every number present, no gaps, no reuse
 grep -c '^| \*\*IMP-' $R                              # row count == highest IMP number
-grep -o 'IMP-[0-9]*' docs/mcp-comparison-post-audit-*.md | sort -u   # no item cited but unregistered
+grep -o 'IMP-[0-9]*' docs/mcp-evaluation/mcp-comparison-post-audit-*.md | sort -u   # no item cited but unregistered
 ```
 
 Every IMP-n mentioned in any run report must have a row in the registry; the registry's M5 must equal
