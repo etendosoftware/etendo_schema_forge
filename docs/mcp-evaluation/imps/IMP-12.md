@@ -384,12 +384,13 @@ resolved ones. The genuinely agent-supplied set on this entity is closer to **1�
 | Under the corrected 8 KB | ✅ 7,853 chars |
 | Every returned field is one the agent may supply | ✅ no `readOnly`, no `DocumentNo`, no `GrandTotal`/`OutstandingAmt` |
 | Server-defaulted fields absent, and agrees with `neo_defaults(view:"minimal")` | ❌ **§11.2** — 4 of 6 `required` are resolved by `neo_defaults` |
-| `fields:["businessPartner","invoiceDate"]` returns those two | ⏳ unverifiable this session (§10.4) |
+| `fields:["businessPartner","invoiceDate"]` returns those two | ⏳ unverifiable at the time — resolved ✅ in §13.2 after an `/mcp` reconnect |
 | Omitted `view`/`fields` returns the previous response byte-for-byte | ✅ verified by `diff` |
-| The `view` enum advertises `create` | ⏳ correct in `ToolRegistry`, unverifiable through the cached client |
+| The `view` enum advertises `create` | ⏳ correct in `ToolRegistry`, unverifiable through the cached client — resolved ✅ in §13.2 |
 | Re-verified on staging | ⏳ not released |
 
 Two ❌/⏳ that need a decision and one that needs a reconnect. **The item stays ⏳ open at 0 / 5.**
+(The reconnect happened — see §13.2. Revised verdict table: §13.3.)
 
 ### 11.4 Unrelated observation for IMP-1
 
@@ -467,3 +468,69 @@ anything other than 2 / 22, the `resolvedDefaultNames` predicate is what to re-e
 
 **The item stays ⏳ open at 0 / 5** — nothing here has been compiled or probed, and the §11.3 verdict
 row that reads ❌ is not re-ticked until a live `view:"create"` shows `requiredCount: 2`.
+
+## 13. Third live probe — the prediction was wrong, and `fields:[…]` finally ran
+
+`etendo-go-local` serving `977daf85` after a user-run deploy **and a `/mcp` reconnect**, which is what
+unblocked §10.4: the reconnect refreshed the cached tool list, so `fields` is now a declared property
+and reaches the servlet.
+
+### 13.1 The §12.4 prediction failed: 6 / 18, not 2 / 22
+
+`view:"create"` came back with `requiredCount: 6` — the exact pre-cross-check numbers — and **no field
+carried `serverDefaulted`**. The cross-check ran and had no effect.
+
+**Root cause: I read the wrong shape.** `NeoDefaultsService.resolveDefaults` builds its body as
+
+```java
+response.put("defaults", defaults);
+response.put("metadata", metadata);
+```
+
+so the body is `{defaults:{…}, metadata:{…}}`. The flat map I had been looking at all along is what
+`neoResponseToMcpResult` / `McpDefaultsView` produce **downstream**, for the agent. `resolvedDefaultNames`
+iterated the top level, skipped `metadata`, and collected the single literal key `"defaults"` — which
+matches no field name, so every field kept its static classification.
+
+I predicted the shape of the service's body from the shape of the MCP response instead of reading
+`resolveDefaults`' own return. §11.2's diagnosis stands unchanged; only my access path was wrong.
+
+**Why the tests said nothing.** All 7 tests added with the cross-check were green, and every one of
+them built a **flat** body — none used the shape the router actually passes. A test suite that only
+exercises the shape the author imagined will confirm the author's imagination. The fix (`fed3902a`)
+adds the nested-body case, which fails against `977daf85`.
+
+Fixed in `fed3902a`: read `defaults` when present, fall back to the body itself so an `afterHandle`
+hook that returns a flat map still works. **Not yet re-probed** — §12.4's prediction stands as written
+and is still unconfirmed.
+
+### 13.2 `fields:[…]` works, and echoes the typo
+
+`fields:["businessPartner","invoiceDate","buisnessPartner"]` on `sales-invoice/header`:
+
+- `fieldCount: 2`, exactly the two requested descriptors, in the array's original order.
+- `unknownFields: ["buisnessPartner"]` — the deliberate typo comes back instead of vanishing, which is
+  the IMP-18 defect pre-empted at birth on this projection.
+- `table`, `methods`, `namedFilters` and the default `hint` are all still present, i.e. `fields` is a
+  filter on the full envelope rather than a separate view. That is the intended split: `view:"create"`
+  reshapes, `fields:[…]` narrows.
+- The descriptors keep `visibility` / `readOnly` / `userRequired` / `defaultExpression`. Correct — the
+  point of asking for a named field is to see its full descriptor; only `view:"create"` slims.
+
+The `view` enum advertising `create` is also confirmed now: the reconnected client's loaded schema
+shows `enum: ["create","actions"]` and the widened tool description.
+
+### 13.3 §11.3 verdicts, revised
+
+| Done-when | Verdict |
+|---|---|
+| Under the corrected 8 KB | ✅ 7,853 chars (§11.1) |
+| Every returned field is one the agent may supply | ✅ (§11.1) |
+| Server-defaulted fields absent, and agrees with `neo_defaults(view:"minimal")` | ❌ still — cross-check written twice, effective zero times so far (§13.1) |
+| `fields:["businessPartner","invoiceDate"]` returns those two | ✅ **§13.2**, plus `unknownFields` |
+| Omitted `view`/`fields` returns the previous response byte-for-byte | ✅ verified by `diff` (§11.1) |
+| The `view` enum advertises `create` | ✅ **§13.2**, confirmed through the reconnected client |
+| Re-verified on staging | ⏳ not released |
+
+Three ⏳/❌ became one ❌ and one ⏳. **The item stays ⏳ open at 0 / 5** — the `required` group is still
+over-reporting 4 of 6 live, which is the defect that matters most here.
