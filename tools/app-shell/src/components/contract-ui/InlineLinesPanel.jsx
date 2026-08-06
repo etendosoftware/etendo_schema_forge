@@ -679,6 +679,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       const editingRowEl = panelRef.current?.querySelector(`[data-testid="line-row-${editingRowId}"]`);
       if (!editingRowEl) return;
       if (editingRowEl.contains(e.target)) return;
+      // Radix primitives with disableOutsidePointerEvents (e.g. <Select>) set
+      // document.body.style.pointerEvents = 'none' while open, so a click on
+      // an underlying field never reaches it — the event target resolves to
+      // <html>, matching none of the selectors below. Treat any click while
+      // such a layer is active as belonging to it, not to "outside the row".
+      if (document.body.style.pointerEvents === 'none') return;
       const portalSelectors = [
         '[data-radix-popper-content-wrapper]',
         '[role="dialog"]',
