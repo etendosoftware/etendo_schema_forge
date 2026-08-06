@@ -12,6 +12,7 @@ import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoic
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import { useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
+import { SEND_VISIBLE_WHEN_CONFIRMED } from '../shared/sendActionVisibility.js';
 import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
 
@@ -89,10 +90,8 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
       edit: { show: true },
       duplicate: { show: true },
       delete: { show: true },
-      // ETP-4717 — hand-wired rowQuickActions bypass the generated contract
-      // here too (see useOrderWindow.jsx's actions.email comment for the
-      // full why). Send only once the shipment is Confirmed (CO).
-      email: { visibleWhen: "@DocumentStatus@='CO'" },
+      // ETP-4717 — see sendActionVisibility.js
+      email: { visibleWhen: SEND_VISIBLE_WHEN_CONFIRMED },
     },
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onClone: (row) => setCloneTargets([row]),

@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 
 export function getInvoiceDraftMode(ui, options = {}) {
   const { showVerifactuProcessingModal = false } = options;
@@ -28,12 +29,8 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     actions: {
       edit: { show: true },
       duplicate: { show: true },
-      // ETP-4717 — same hand-wired bypass of the generated contract's
-      // rowQuickActions (full rationale in useOrderWindow.jsx's actions.email
-      // comment). Send only once the invoice is Confirmed (CO); scoped to
-      // callers with showEmail (sales-invoice) — purchase-invoice passes
-      // showEmail: false and is unaffected.
-      email: { show: showEmail, ...(showEmail ? { visibleWhen: "@DocumentStatus@='CO'" } : {}) },
+      // ETP-4717 — see sendActionVisibility.js
+      email: { show: showEmail, ...(showEmail ? { visibleWhen: SEND_VISIBLE_WHEN_CONFIRMED } : {}) },
       delete: { show: true },
     },
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),

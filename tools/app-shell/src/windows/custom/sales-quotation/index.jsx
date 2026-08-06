@@ -14,6 +14,7 @@ import { useCreateContactModal } from '@/components/contract-ui/useCreateContact
 import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
 import QuotationPreview from '../shared/QuotationPreview.jsx';
 import { useSavedPreviewRecord } from '../shared/useSavedPreviewRecord.js';
+import { SEND_VISIBLE_WHEN_NOT_DRAFT } from '../shared/sendActionVisibility.js';
 
 const draftModeWithModal = {
   enabled: true,
@@ -133,11 +134,8 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
       edit:      { show: true },
       duplicate: { show: true },
       delete:    { show: true },
-      // ETP-4717 — hand-wired: this window's rowQuickActions bypass the
-      // generated contract, so decisions.json's visibleWhen never reaches it
-      // (full rationale: useOrderWindow.jsx, actions.email comment). Here,
-      // Send is available from "Bajo evaluación" (UE) onward, not in Draft (DR).
-      email:     { visibleWhen: "@DocumentStatus@!='DR'" },
+      // ETP-4717 — see sendActionVisibility.js
+      email:     { visibleWhen: SEND_VISIBLE_WHEN_NOT_DRAFT },
     },
     documentPreview: true,
     onEdit:   (row) => navigate(`/${windowName}/${row.id}`),

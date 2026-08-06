@@ -9,6 +9,7 @@ import { fetchOptionalJson } from './pdfUtils.js';
 import { useSavedPreviewRecord } from './useSavedPreviewRecord.js';
 import { useRowEmailModal } from './useRowEmailModal.jsx';
 import OrderPreview from './OrderPreview.jsx';
+import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 
 export function useOrderWindow({
   windowName,
@@ -76,13 +77,8 @@ export function useOrderWindow({
       edit: { show: true },
       duplicate: { show: true },
       delete: { show: true },
-      // ETP-4717 — this custom window builds rowQuickActions by hand and
-      // bypasses the generated contract's rowQuickActions block entirely, so
-      // decisions.json's `visibleWhen` never reaches RowQuickActions here.
-      // Mirrored by hand to match the Form-view topbar and preview-panel
-      // gates: Send only once the order is Confirmed (CO). No per-spec
-      // difference — shared by both sales-order and purchase-order.
-      email: { visibleWhen: "@DocumentStatus@='CO'" },
+      // ETP-4717 — see sendActionVisibility.js
+      email: { visibleWhen: SEND_VISIBLE_WHEN_CONFIRMED },
     },
     documentPreview: true,
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
