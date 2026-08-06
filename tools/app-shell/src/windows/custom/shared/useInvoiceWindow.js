@@ -28,13 +28,11 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     actions: {
       edit: { show: true },
       duplicate: { show: true },
-      // ETP-4717 — this custom window builds rowQuickActions by hand and
-      // bypasses the generated contract's rowQuickActions block entirely, so
-      // decisions.json's `visibleWhen` never reaches RowQuickActions here.
-      // Mirrored by hand to match the Form-view topbar and preview-panel
-      // gates: Send only once the invoice is Confirmed (CO). Scoped to
-      // callers that actually enable email (sales-invoice) — purchase-invoice
-      // passes showEmail: false and stays unaffected.
+      // ETP-4717 — same hand-wired bypass of the generated contract's
+      // rowQuickActions (full rationale in useOrderWindow.jsx's actions.email
+      // comment). Send only once the invoice is Confirmed (CO); scoped to
+      // callers with showEmail (sales-invoice) — purchase-invoice passes
+      // showEmail: false and is unaffected.
       email: { show: showEmail, ...(showEmail ? { visibleWhen: "@DocumentStatus@='CO'" } : {}) },
       delete: { show: true },
     },

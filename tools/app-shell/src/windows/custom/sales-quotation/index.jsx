@@ -133,12 +133,10 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
       edit:      { show: true },
       duplicate: { show: true },
       delete:    { show: true },
-      // ETP-4717 — this custom window builds rowQuickActions by hand and
-      // bypasses the generated contract's rowQuickActions block entirely, so
-      // decisions.json's `visibleWhen` never reaches RowQuickActions here.
-      // Mirrored by hand to match the Form-view topbar and preview-panel
-      // gates: Send is available from "Bajo evaluación" (UE) onward, not
-      // while still Draft (DR).
+      // ETP-4717 — hand-wired: this window's rowQuickActions bypass the
+      // generated contract, so decisions.json's visibleWhen never reaches it
+      // (full rationale: useOrderWindow.jsx, actions.email comment). Here,
+      // Send is available from "Bajo evaluación" (UE) onward, not in Draft (DR).
       email:     { visibleWhen: "@DocumentStatus@!='DR'" },
     },
     documentPreview: true,
