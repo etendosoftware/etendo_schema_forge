@@ -204,7 +204,7 @@ should be one), not a second corruption vector. On `purchase-invoice` the field 
 There is no date handling anywhere in that file. A date delivered through a combo is therefore
 `dd-MM-yyyy` even on a window where the equivalent `updates` field is ISO.
 
-## 3.6 The corruption is not hypothetical — it is already in the database
+### 3.6 The corruption is not hypothetical — it is already in the database
 
 The registry framed IMP-16 as an agent-ergonomics defect. It is not. A read-only sweep of
 **all 311 date/timestamp columns** of every populated table on `etendo-go-local`, looking for values
@@ -279,7 +279,7 @@ Two things follow:
   scoped by `ad_client_id` can restore them deterministically. That belongs to Remedy and should be
   registered separately — a code fix alone leaves 14 wrong rows in place.
 
-## 3.7 The React form already expects ISO — so canonicalizing is not a breaking change
+### 3.7 The React form already expects ISO — so canonicalizing is not a breaking change
 
 `neo_defaults` is not an MCP-only surface: the React form bootstraps from
 `GET /sws/neo/{spec}/{entity}/defaults`. Changing its date format therefore has to be checked against
@@ -367,9 +367,81 @@ in, with anything unparseable rejected as a structured validation error naming t
 W-c gets there. The `neo_defaults` and `neo_schema` descriptions should say so — an agent currently
 has no way to know which format a given field will hand it.
 
-## 6. What is not claimed here
+## 6. What landed
 
-No status is changed and no code was written.
+Implemented on `feature/ETP-4793` in `com.etendoerp.go`. **Not compiled and not probed** — the human
+builds and deploys; §7 is the verification that must run afterwards.
+
+| File | Change |
+|---|---|
+| `schemaforge/util/NeoDateFormat.java` | **new.** The single definition of the canonical wire format and the only list of accepted input shapes. `toCanonical(String, boolean datetime)` → ISO, or `null` for anything it does not recognise; `isCanonical` for the cheap already-ISO path; `getUiDatePattern()` reads `dateFormat.java` |
+| `schemaforge/NeoDefaultsService.java` | `canonicalizeDateDefaults(defaults, dalEntity)` post-pass over the response; the dead `#Date` session seed and its `DATE_FORMAT` constant deleted, with a comment pointing at `Utility.getContext:410` so the next reader does not re-add it |
+| `schemaforge/util/NeoTypeCoercionHelper.java` | date branch in `coerceField` (REST write path) |
+| `mcp/McpToolRouterSupport.java` | date branch in `coercePrimitiveFieldValue` (MCP write path) |
+| `schemaforge/CalloutRequestBuilder.java` | `getCalloutDatePattern()` now delegates to `NeoDateFormat.getUiDatePattern()`; the duplicated property lookup and its cache removed |
+| `mcp/ToolRegistry.java` | `neo_create` / `neo_update` state the required input format; `neo_defaults` states that its date values come back ISO and can be passed straight back |
+| `docs/neo-headless.md` §4.3.1 | the date contract, the three producers of non-ISO values, and the three application points |
+| `src-test/…/util/NeoDateFormatTest.java` | **new.** 20 cases, including `"06-08-2026"` and `"24-06-2026"` as named regressions — the two values found in real rows (§3.6) |
+| `src-test/…/util/NeoTypeCoercionHelperTest.java`, `src-test/…/mcp/McpToolRouterSupportTest.java` | the same four date cases on both coercers, deliberately duplicated so the two implementations cannot drift silently |
+
+### 6.1 Three decisions worth recording
+
+**The read-path normalization is a single post-pass, not per-field.** The plan called for a hook in
+`applyDefaultWithComboFallback` beside `coerceBooleanDefault`. It landed as one pass after all three
+resolution passes *and* the callout cascade instead, because `defaults` is the cascade's **input**:
+normalizing before it would change what legacy callouts receive. Normalizing after leaves that
+boundary byte-for-byte as it is today, and still catches the cascade's own output, the sequence pass
+and the hidden-mandatory pass — which a per-field hook would have missed.
+
+**The gate is the DAL property type, not `AD_Reference` `"15"`.** The plan said reference 15. The
+implementation keys off `java.util.Date.class.isAssignableFrom(prop.getPrimitiveObjectType())` plus
+`prop.isDatetime()`, which is what the DAL parser itself branches on — so the normalization cannot
+disagree with the consumer it exists to satisfy, and it covers DateTime columns that reference 15
+excludes. The narrowing that actually protects existing behaviour is elsewhere: **an input shape the
+canonicalizer does not recognise is left verbatim**, so the set of values whose bytes change is
+exactly the set that is provably wrong today.
+
+**The 422 is not in this change.** Phase 1 normalizes and logs `WARN` on an unparseable value.
+Promoting that to an IMP-5-style structured 422 is phase 2, once the logs show the `WARN` never
+fires on real traffic — shipping both at once would mean turning an unknown number of currently
+working (if lenient) calls into hard errors on the same deploy.
+
+### 6.2 Verified before the build, empirically
+
+`NeoDateFormat`'s logic was extracted to a standalone single-file program and run on a JDK
+(openjdk-11), with the `OBPropertiesProvider` lookup stubbed to the `dd-MM-yyyy` fallback and the
+parsing code otherwise untouched. All 20 cases pass, including the two that matter most:
+
+| Input | `datetime` | Output |
+|---|---|---|
+| `06-08-2026` | false | `2026-08-06` (was persisting as year 0012) |
+| `24-06-2026` | false | `2026-06-24` (was persisting as `0029-12-17`) |
+| `2026-08-06` | false | `2026-08-06` — unchanged; ISO is tried before the UI pattern |
+| `2026-08-06 18:55:31.567837+00` | true | `2026-08-06T18:55:31` |
+| `2026-08-06 18:55:31.567837+00` | false | `2026-08-06` |
+| `06/08/2026`, `2026-02-30`, `30-02-2026`, `2026-13-40`, `2026-08`, `2026-08-06+02:00` | — | `null` → caller keeps the original |
+
+`2026-02-30 → null` is deliberate: the formatter uses `ResolverStyle.STRICT`, so an impossible day is
+an error rather than being slid to February 28th. Smart resolution would have reproduced, in the fix,
+the same silent-reinterpretation behaviour the fix exists to remove.
+
+This is compile-adjacent, not a compile: it proves the algorithm, not that the class links against
+the Etendo classpath.
+
+## 7. Verification owed after the build
+
+| # | Check | Accepts |
+|---|---|---|
+| 1 | `neo_defaults` on ~8 windows, before/after `diff` | **only** date-typed fields changing `dd-MM-yyyy` → ISO. Any other diff — a missing key, a changed FK, a changed `$_identifier` — aborts and reverts |
+| 2 | Create a document through the React form end to end | saves, and the date fields display the right day (today they are day/month-swapped for days 1–12 and blank for 13+) |
+| 3 | `neo_create` on `sales-order/header` sending no date | stored `datepromised` is the real date, not a first-century one |
+| 4 | Server log during 1–3 | `canonicalizeDateDefaults` INFO lines name only date fields; **zero** `Unrecognized date format` WARNs |
+
+Only after 1–4 does a `/mcp-comparison` run get to touch the registry row.
+
+## 8. What is not claimed here
+
+No status is changed. The code in §6 is written but **not compiled, not deployed and not probed**.
 
 What **is** established, and how:
 
@@ -385,7 +457,6 @@ What **is** established, and how:
 in §3.6 is stronger than a probe would have been: it shows the bug affecting real records created
 over two months, not a record this investigation created.
 
-What is **not** established: nothing here has been compiled, and the two safety arguments in §3.7 are
-read from source rather than observed. They must be confirmed after a build by (a) diffing
-`neo_defaults` across ~8 windows before/after, accepting only reference-`15` fields changing from
-`dd-MM-yyyy` to ISO, and (b) an E2E create through the React form.
+What is **not** established: nothing has been compiled against the Etendo classpath, and the two
+safety arguments in §3.7 are read from source rather than observed. §7 is the list of checks that
+must run after the build before any of this is credited.
