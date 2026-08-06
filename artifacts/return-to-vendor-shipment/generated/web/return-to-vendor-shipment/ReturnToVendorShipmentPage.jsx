@@ -321,7 +321,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        sendDocument={{"enabled":false}}
+        sendDocument
         {...props} window={effectiveWindow}
       />
       </>
@@ -339,7 +339,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
       dateFilterKey="movementDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument={{"enabled":false}}
+      sendDocument
       {...props} window={effectiveWindow}
     />
   );

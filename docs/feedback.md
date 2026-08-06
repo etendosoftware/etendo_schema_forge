@@ -544,3 +544,21 @@ second line of defense in case it doesn't.
 **Fix applied:** accepted `make regen-check ONLY=contacts FROM_CACHE=1`'s output wholesale (this is what CI's offline check itself computes, so it is the authoritative "correct" checksum for the currently-committed content) — committed the checksum/`updatedAt` bump on `contract.json` and `contract.mcp.json`. `npx sf-validate-pipeline --scope=contacts`: OK. A subsequent `make regen-check ONLY=contacts FROM_CACHE=1` run produces zero diff, confirming the branch is drift-free.
 
 **Lesson:** a pre-push/CI drift failure that touches ONLY `checksum`/`updatedAt` (no other content) on a window that was recently hand-patched for the es_ES label bug is most likely this checksum-recompute artifact, not a real content regression — verify with a full `git diff` (not a sampled one) before assuming it's the label-stripping bug again, and prefer `make regen-check ONLY=<window> FROM_CACHE=1` (the CI-equivalent, cache-backed command) over a live-DB `make regen` when investigating this specific class of drift, since the live DB reintroduces the unrelated es_ES gap and makes the two issues harder to tell apart.
+
+---
+
+## [2026-08-04] ETP-4718 — `SendDocumentModal`'s "Mensaje" field is hardcoded read-only, platform-wide (known gap, not fixed in this ticket)
+
+**Component:** `tools/app-shell/src/components/contract-ui/SendDocumentModal.jsx` (`EmailFormPanel`)
+
+**Affected windows:** every window that uses the document-send action (`SendDocumentModal`/`EmailFormPanel`) — not specific to any one window. Confirmed present on `return-to-vendor-shipment` while implementing ETP-4718, but the field's `readOnly` flag and its `value` (sourced from a hardcoded empty string) are set unconditionally inside the shared component, so this applies equally to every other document-send window (`sales-invoice`, `sales-order`, `sales-quotation`, `goods-shipment`, `purchase-order`, etc.).
+
+**Symptom:** in the Send Document dialog, the "Mensaje" (Message) field is rendered but not editable — the user cannot type a custom message body before sending.
+
+**Root cause:** `EmailFormPanel` hardcodes the Message field as `readOnly`, with its displayed `value` sourced from a hardcoded empty string, rather than wiring it to editable component state.
+
+**Why it wasn't fixed under ETP-4718:** ETP-4718's Jira acceptance criteria explicitly required the Message field to be "enabled and editable," so this is a known, currently-unresolved gap against that ticket's literal text. It was not fixed here because the fix lives in the shared `SendDocumentModal` component, not in anything scoped to a single window — changing it affects every window that uses document-send (sales-invoice, sales-order, sales-quotation, goods-shipment, return-to-vendor-shipment, purchase-order, etc.), which is out of scope for a single-window ticket. Confirmed independently by three parties: the coordinator (live browser test), Window Agent, and QA (Sentinel).
+
+**Recommendation:** file this as its own ticket. Scope: make the subject/message fields editable in `EmailFormPanel`, then wire the edited body into the send command per the contract command shape documented in `docs/document-email-contract-implementation.md` (note: the current command schema only allows `recipientEdits` as a recipient-related field — sending a free-text message body would need its own allowlisted command field and backend contract support, following the same "browser sends a minimal command, backend resolves/validates" model described there).
+
+**Reference:** `docs/generated-custom-windows/return-to-vendor-shipment.md` — Gap assessment section, ETP-4718 bullet — documents the same limitation from the window's perspective; this entry is the platform-wide, cross-window record of it.
