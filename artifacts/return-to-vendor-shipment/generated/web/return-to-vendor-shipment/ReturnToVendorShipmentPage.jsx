@@ -2,6 +2,7 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
+import { toast } from 'sonner';
 import ReturnToVendorShipmentTable from './ReturnToVendorShipmentTable';
 import ReturnToVendorShipmentForm from './ReturnToVendorShipmentForm';
 import ReturnToVendorShipmentLineTable from './ReturnToVendorShipmentLineTable';
@@ -28,14 +29,13 @@ const statusField = 'documentStatus';
 
 // @sf-generated-start extraBadges:returnToVendorShipment
 const extraBadges = [
-
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:returnToVendorShipment
 
 // @sf-generated-start processes:returnToVendorShipment
 const processes = [
-  { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
-    displayLogicRaw: "@Processed@='Y' & @#ShowAcct@='Y'" },
+
 ];
 // @sf-generated-end processes:returnToVendorShipment
 
@@ -180,12 +180,6 @@ export const api = {
     },
     {
       "entity": "returnToVendorShipment",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/posted"
-    },
-    {
-      "entity": "returnToVendorShipment",
       "field": "calculateFreight",
       "column": "Calculate_Freight",
       "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/calculateFreight",
@@ -317,6 +311,9 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={ReturnToVendorShipmentBottomPanel}
         topbarRight={ConfirmWithCreditButton}
+        menuActions={({ data, status }) => [
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+        ]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}
