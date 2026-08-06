@@ -23,7 +23,6 @@ vi.mock('../fiscalModelsUtils.js', async (importOriginal) => {
   };
 });
 vi.mock('../FmOverlays.jsx', () => ({
-  ConfigDrawer: () => null,
   NewDeclModal: (props) =>
     React.createElement('div', {
       'data-testid': 'new-decl-modal',
@@ -280,26 +279,17 @@ describe('FmListPage — model catalog moved to toolbar', () => {
     expect(container.querySelector('.fm-catalog-drawer')).toBeTruthy();
   });
 
-  it('does not list "Catálogo de modelos" inside the row kebab menu anymore', () => {
+  it('no longer renders the row-level "Más opciones" kebab button — it was removed entirely', () => {
     const { container } = render(<FmListPage declarations={[]} {...defaultProps} />);
-    const kebabBtn = container.querySelector('[aria-label="Más opciones"]');
-    fireEvent.click(kebabBtn);
-    const menu = container.querySelector('[role="menu"]');
-    expect(menu).toBeTruthy();
-    expect(menu.textContent).not.toContain('fm.catalog.title');
+    expect(container.querySelector('[aria-label="Más opciones"]')).toBeFalsy();
+    // Not just hidden — there is no menu to open at all.
+    expect(container.querySelector('[role="menu"]')).toBeFalsy();
   });
 
-  it('the row kebab only exposes Demo and Configuración — no catalog trace at all', () => {
-    const { container } = render(<FmListPage declarations={[]} {...defaultProps} />);
-    const kebabBtn = container.querySelector('[aria-label="Más opciones"]');
-    fireEvent.click(kebabBtn);
-    const items = container.querySelectorAll('[role="menu"] [role="menuitem"]');
-    expect(items.length).toBe(2);
-    const labels = Array.from(items).map(i => i.textContent);
-    expect(labels.some(l => l.includes('Demo'))).toBe(true);
-    expect(labels.some(l => l.includes('fm.config.title'))).toBe(true);
-    // Explicit negative: no menu item references the catalog, hidden or not.
-    expect(labels.some(l => l.includes('fm.catalog.title') || l.toLowerCase().includes('catálogo'))).toBe(false);
+  it('renders no trace of the removed "Demo" / "Configuración" row actions anywhere on the page', () => {
+    const { queryByText } = render(<FmListPage declarations={[]} {...defaultProps} />);
+    expect(queryByText('Demo')).toBeFalsy();
+    expect(queryByText(/fm\.config\.title/)).toBeFalsy();
   });
 });
 
