@@ -3018,7 +3018,7 @@ export function DetailView({
               }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-destructive text-destructive hover:bg-destructive hover:text-destructive transition-colors`}
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors`}
                   title={ui('delete')}
                   data-testid="action-delete"
                 >
@@ -3131,7 +3131,7 @@ export function DetailView({
                               }
                             }}
                             className={`w-full text-left px-2 py-1 text-sm leading-6 transition-colors flex items-center gap-2 ${action.destructive
-                              ? 'text-destructive hover:bg-destructive'
+                              ? 'text-destructive hover:bg-destructive hover:text-destructive-foreground'
                               : 'text-foreground hover:bg-secondary'
                               } ${docAction.loading || neoAction.loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                             style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400 }}

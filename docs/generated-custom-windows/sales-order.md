@@ -272,3 +272,9 @@ This runs `SalesOrderHeaderHandler` exactly as the UI does — including the pre
 line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
 this window's workflow rules, update the `agentPrompt` in the same change: it is the only thing
 telling the agent what is legal.
+
+## Semantic visual states
+
+The confirmation modal uses information roles for its selected document options,
+warning roles for its irreversible-action notice, and success roles for completed
+optional documents. Each state pairs its background, border, and foreground token.

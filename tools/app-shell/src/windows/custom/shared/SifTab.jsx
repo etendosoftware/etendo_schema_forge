@@ -68,7 +68,7 @@ const PILL_CLS = {
   pending: 'bg-status-warning text-status-warning-foreground',
   success: 'bg-status-success text-status-success-foreground',
   neutral: 'bg-[hsl(var(--muted))] text-foreground',
-  danger: 'bg-destructive text-destructive',
+  danger: 'bg-destructive text-destructive-foreground',
 };
 
 const SII_STATUS = {

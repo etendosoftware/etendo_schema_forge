@@ -753,3 +753,9 @@ This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `
 routing on completion — because `neo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
+
+## Semantic visual states
+
+The pending-payment control uses the warning background, border, and foreground
+roles; settled invoices use the corresponding success roles. Delivery progress is
+rendered by the shared percent cell renderer and remains neutral at zero progress.

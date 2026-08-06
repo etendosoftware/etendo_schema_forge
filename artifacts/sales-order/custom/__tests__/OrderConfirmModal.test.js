@@ -28,4 +28,15 @@ describe('OrderConfirmModal', () => {
       assert.match(src, /\{ui\('soViewInvoice'\)\}\s*→/);
     });
   });
+
+  describe('semantic color roles (ETP-4767)', () => {
+    it('keeps the selected option and primary action readable', () => {
+      assert.match(src, /background: checked \? 'var\(--status-info-bg\)' : 'hsl\(var\(--card\)\)'/);
+      assert.match(src, /background: 'var\(--status-info-fg\)', color: 'hsl\(var\(--card\)\)'/);
+    });
+
+    it('uses the warning foreground for document-status text', () => {
+      assert.match(src, /background: 'var\(--status-warning-bg\)', color: 'var\(--status-warning-fg\)'/);
+    });
+  });
 });

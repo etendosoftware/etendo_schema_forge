@@ -25,9 +25,9 @@ const btnCloneStyle = {
   justifyContent: 'center',
   padding: '7px',
   borderRadius: 6,
-  border: '1px solid hsl(var(--card))',
+  border: '1px solid hsl(var(--border-subtle))',
   background: 'hsl(var(--card))',
-  color: 'var(--status-info-bg)',
+  color: 'hsl(var(--foreground))',
   cursor: 'pointer',
   boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
