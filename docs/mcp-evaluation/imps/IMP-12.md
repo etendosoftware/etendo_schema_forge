@@ -322,3 +322,79 @@ because the client passes enum values as opaque strings rather than validating t
 Not a defect in the implementation, and not verifiable without reconnecting the MCP server (`/mcp`)
 or starting a fresh session. Recorded as unverified rather than assumed working — the §7 checkbox for
 `fields:["businessPartner","invoiceDate"]` stays unticked, and `unknownFields` with it.
+
+## 11. Second live probe — the slim landed, and it exposed a deeper defect
+
+Read-only, `etendo-go-local` serving `3954b29c` after a user-run deploy.
+
+### 11.1 The slim works and the default response is provably untouched
+
+`view:"create"` on `sales-invoice/header`: **7,853 chars / 7,869 UTF-8 bytes**, against 71,742 for the
+full dump — **−89.1 %**, inside the corrected 8 KB target with 339 chars of headroom. The `hint` is
+944 of those chars (12 %); nothing else in the envelope is compressible without losing meaning.
+
+No emitted descriptor carries `visibility`, `readOnly`, `userRequired`, `required`,
+`defaultExpression` or `defaultSource`. The two AEAT `@SQL=…` blobs (806 + 604 chars) are gone.
+
+The ♻️ half of the contract is **verified, not assumed**: the full dump captured before the slim and
+the one captured after are **byte-for-byte identical** (`diff`, 71,742 chars both). `slim` copies
+rather than mutates.
+
+`purchase-invoice/header` returns the same 6 / 18 shape and the same six required FKs, so the
+predicate is not overfitted to one window.
+
+### 11.2 `neo_defaults` contradicts `required` — 4 of the 6
+
+This is the finding that matters, and it invalidates one of §7's checkboxes rather than ticking it.
+
+`neo_defaults("sales-invoice","header",view:"minimal")` resolves live values for **four of the six
+fields `view:"create"` reports as `required`**:
+
+| Field | `view:"create"` says | `neo_defaults` returns |
+|---|---|---|
+| `transactionDocument` | **required** | `40EE9B1C…` — *AR Invoice* |
+| `paymentMethod` | **required** | `EA002232…` — *Efectivo* |
+| `paymentTerms` | **required** | `2113A017…` — *30 Días* |
+| `priceList` | **782B468D…** — *Lista de venta (sin impuestos)* | |
+| `partnerAddress` | **required** | `""` — present but unresolved |
+| `businessPartner` | **required** | absent |
+
+So the `required` group's own hint — *"they are mandatory and nothing else supplies them"* — is false
+for four of its six entries. That is the **same class of defect as [IMP-11](IMP-11.md)**: a hint
+asserting something the implementation does not deliver. Shipping it would replace one aspirational
+promise with another, which is worse than the verbose response it fixes, because an agent that trusts
+it will interrogate the user for four values the server already knows.
+
+**Root cause.** `hasSuppliedDefault` tests `defaultExpression` / `defaultSource` on the schema
+descriptor, and those come from `AD_Column.DefaultValue`. But these four columns have no
+`AD_Column.DefaultValue` — their values are resolved at runtime by `NeoDefaultsService` from session
+preferences, the business partner's own configuration and AD callouts. **`AD_Column.DefaultValue` is
+an incomplete proxy for "the server will supply this."** The authoritative answer is whatever
+`neo_defaults` returns, and only `neo_defaults` computes it.
+
+The default-aware narrowing in §9.2 was therefore *directionally* right and *quantitatively* short: it
+caught the 2 statically-defaulted fields (`invoiceDate`, `currency`) and missed the 4 dynamically
+resolved ones. The genuinely agent-supplied set on this entity is closer to **1–2 fields**
+(`businessPartner`, and `partnerAddress` as its callout consequence) than to 6.
+
+### 11.3 Status of the §7 checkboxes after this probe
+
+| Done-when | Verdict |
+|---|---|
+| Under the corrected 8 KB | ✅ 7,853 chars |
+| Every returned field is one the agent may supply | ✅ no `readOnly`, no `DocumentNo`, no `GrandTotal`/`OutstandingAmt` |
+| Server-defaulted fields absent, and agrees with `neo_defaults(view:"minimal")` | ❌ **§11.2** — 4 of 6 `required` are resolved by `neo_defaults` |
+| `fields:["businessPartner","invoiceDate"]` returns those two | ⏳ unverifiable this session (§10.4) |
+| Omitted `view`/`fields` returns the previous response byte-for-byte | ✅ verified by `diff` |
+| The `view` enum advertises `create` | ⏳ correct in `ToolRegistry`, unverifiable through the cached client |
+| Re-verified on staging | ⏳ not released |
+
+Two ❌/⏳ that need a decision and one that needs a reconnect. **The item stays ⏳ open at 0 / 5.**
+
+### 11.4 Unrelated observation for IMP-1
+
+`purchase-invoice/header`'s `aeatsiiCauseExemption` comes back with
+`label: "EM_Aeatsii_Cause_Exemption_ID"` and no `description` — the raw column name, i.e. no curated
+`AD_Field` label for that column on that tab. The same field on `sales-invoice/header` is labelled
+*"SII - Cause Exemption"*. An IMP-1 gap, not an IMP-12 one; recorded here because this is where it
+surfaced.
