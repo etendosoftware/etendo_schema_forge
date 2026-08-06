@@ -87,6 +87,57 @@ values a compliance flag legitimately carries.
 | `mcp/ToolRegistry.java` | `neo_defaults` `view` description states that blanks appear in `metadata.unresolvedFields` |
 | `src-test/…/McpDefaultsViewTest.java` | `BlankValues` — blanks reported, `systemManaged` blanks left alone, FK base property, metadata merge + non-mutation, predicate |
 
+### 2.4 Live probe (2026-08-06, `etendo-go-local`, commit `5c0d4a4c`)
+
+`neo_defaults(spec:"sales-invoice", entity:"header", view:"minimal")`:
+
+```
+"confirm": { … 18 keys, partnerAddress absent … }
+"metadata": { "sequenceFields": ["documentNo"],
+              "unresolvedFields": ["partnerAddress"] }
+```
+
+Three things confirmed at once:
+
+| Claim | Verdict |
+|---|---|
+| `partnerAddress` leaves `confirm` and is reported as unresolved | ✅ — was `""` in `confirm` with `unresolvedFields: []` |
+| Sibling metadata keys survive the merge | ✅ — `sequenceFields: ["documentNo"]` intact, so `withUnresolved` copies rather than replaces |
+| The default (no `view`) response is untouched | ✅ — still `partnerAddress: ""`, still `unresolvedFields: []` |
+| No regression in IMP-12's view after the shared-predicate refactor | ✅ — `view:"create"` still 2 / 22, 13 flagged `serverDefaulted` |
+
+**The "only `confirm` is filtered" decision validated itself.** The full dump carries two further blanks —
+`paymentrule: ""` and `aeatsiiAuthorizationno: ""` — both non-`editable`, both correctly left in
+`systemManaged` and not reported. Had the filter been applied to the whole body, `unresolvedFields`
+would have three entries of which two are noise, on the very response whose point is to be short.
+
+### 2.5 What the probe exposed: `unresolvedFields` is not "what you must supply"
+
+Cross-reading the two views on the same entity:
+
+| Field | `view:"create"` | `neo_defaults(view:"minimal")` |
+|---|---|---|
+| `partnerAddress` | `required` | `metadata.unresolvedFields` |
+| `businessPartner` | `required` | **absent entirely** |
+
+`NeoDefaultsService` never emits a key for `businessPartner` — not in `defaults`, so not in `confirm`,
+`systemManaged` or `unresolvedFields`. The array can only ever report fields the service *attempted*:
+`partnerAddress` is listed because something tried and produced `""`; `businessPartner` is missing
+because nothing tried at all (ETP-3894 deliberately disabled FK preselection for Search-type
+references, which is why).
+
+So `unresolvedFields` means **"the server tried to fill this and could not"**, not "these are the fields
+you owe". An agent using `view:"minimal"` as its to-do list on this window concludes that only the
+address is missing and forgets the customer — the single most important field on an invoice.
+
+This is not a defect introduced by §2.2; it is a pre-existing property of `neo_defaults` that §2.2 made
+visible by giving the array its first non-empty value. It is also an argument for IMP-12's conclusion
+rather than against it: **`neo_schema(view:"create")` is the only response that answers "what must I
+supply" completely**, because it enumerates from the field metadata rather than from what defaults
+resolution happened to touch. Candidate follow-up, deliberately not decided here: either state that
+constraint in the `neo_defaults` description, or have the grouped views also list mandatory fields the
+defaults body omitted — the second overlaps `view:"create"` and probably should not exist twice.
+
 ## 3. Half B — the 7 compliance keys are not a quick win
 
 `view:"minimal"` on `sales-invoice/header` still returns these in `confirm`:
@@ -120,6 +171,6 @@ row stays ⚠️ indefinitely because of the half nobody can cheaply finish.
 
 ## 4. What is not claimed here
 
-No status is changed by this file. Half A is implemented and unprobed at the time of writing; whether
-`partnerAddress` actually moves out of `confirm` on a live call, and whether IMP-7's points move, is a
-`/mcp-comparison` run's measurement to make.
+No status is changed by this file. Half A is implemented and **probed live on `etendo-go-local`** (§2.4)
+— but a probe is not a measurement: whether IMP-7's 1.5 / 3 moves, and whether half B is split into its
+own item, is a `/mcp-comparison` run's call. Half B is untouched, and staging has not been verified.
