@@ -456,7 +456,7 @@ function renderDerivedAddCell(col, values) {
 // on its type (lookup, search, static select, selector, boolean, or plain input).
 function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
   values, firstInputRef, selectorContext, token, apiBaseUrl, entity, catalogs,
-  handleChange, handleFieldChange, handleKeyDown, touchedFieldsRef, invalidFields,
+  handleChange, handleFieldChange, handleKeyDown, touchedFieldsRef, invalidFields, locale,
 }) {
   if (isLookupSearchField(field)) {
     const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
@@ -533,7 +533,10 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
           <SelectContent data-testid="SelectContent__eb5261">
             {!field.required && <SelectItem value="__empty__" data-testid="SelectItem__eb5261">&nbsp;</SelectItem>}
             {field.options.map(opt => (
-              <SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__eb5261">{opt.label}</SelectItem>
+              // ETP-4685 — each option carries a per-locale `labels` map (same shape
+              // the form view already resolves) alongside the raw AD `label`; prefer
+              // it or this always shows the raw English name regardless of locale.
+              (<SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__eb5261">{opt.labels?.[locale] ?? opt.label}</SelectItem>)
             ))}
           </SelectContent>
         </Select>
