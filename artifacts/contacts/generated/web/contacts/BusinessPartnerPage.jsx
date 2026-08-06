@@ -683,7 +683,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           { key: 'email', column: 'Email', type: 'text', label: 'Email' },
           { key: 'phone', column: 'Phone', type: 'text', label: 'Phone' },
           { key: 'position', column: 'Title', type: 'text', label: 'Position' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 1 },
           { key: 'bankAccount', label: 'Bank Account', Table: BankAccountTable, Form: BankAccountForm, addLineFields: { entry: [
           { key: 'bankName', column: 'Bank_Name', type: 'text', label: 'Bank Name' },
           { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country', reference: 'Country', inputMode: 'selector', defaultValue: '@COUNTRYDEF@' },
@@ -691,16 +691,16 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           { key: 'accountNo', column: 'AccountNo', type: 'text', label: 'Generic Account No.' },
           { key: 'iBAN', column: 'Iban', type: 'text', label: 'IBAN' },
           { key: 'swiftCode', column: 'SwiftCode', type: 'text', label: 'SWIFT Code' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true },
-          { key: 'locationAddress', label: 'Location', Table: LocationAddressTable, customAddModal: LocationEditorModal, requireSavedRecord: true },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 2 },
+          { key: 'locationAddress', label: 'Location', Table: LocationAddressTable, customAddModal: LocationEditorModal, requireSavedRecord: true, tabOrder: 3 },
           { key: 'customerAccounting', label: 'Customer Accounting', Table: CustomerAccountingTable, Form: CustomerAccountingForm, addLineFields: { entry: [
           { key: 'customerReceivablesNo', column: 'C_Receivable_Acct', type: 'selector', required: true, label: 'Customer Receivables No.', labels: {"en_US":"Receivables Account","es_ES":"Cuenta a Cobrar"}, reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'customerPrepayment', column: 'C_Prepayment_Acct', type: 'selector', label: 'Customer Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1 },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 4 },
           { key: 'vendorAccounting', label: 'Vendor Accounting', Table: VendorAccountingTable, Form: VendorAccountingForm, addLineFields: { entry: [
           { key: 'vendorLiability', column: 'V_Liability_Acct', type: 'selector', required: true, label: 'Vendor Liability', labels: {"en_US":"Liability Account","es_ES":"Cuenta a Pagar"}, reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'vendorPrepayment', column: 'V_Prepayment_Acct', type: 'selector', label: 'Vendor Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1 },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 5 },
         ]}
         primaryTabs={[
           { key: 'general', label: 'General' },
