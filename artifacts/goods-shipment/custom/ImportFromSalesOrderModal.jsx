@@ -83,12 +83,13 @@ export const fetchLines = async ({ base, headers, docId, sharedContext }) => {
     const draftEntry = sharedContext.draftInfo?.[l.id];
     const inOtherDrafts = draftEntry?.qty || 0;
     const pending = Math.max(0, ordered - delivered - inOtherDrafts);
+    const unitPrice = Number(l.unitPrice) || 0;
     return {
       ...l,
       _productName: l['product$_identifier'] || l.id,
       _maxQty: pending,
-      _unitPrice: 0,
-      _lineNetAmount: 0,
+      _unitPrice: unitPrice,
+      _lineNetAmount: unitPrice * pending,
       _alreadyImported: pending === 0,
       _inDraftShipments: draftEntry?.docNos?.size ? [...draftEntry.docNos] : undefined,
     };
