@@ -583,9 +583,99 @@ Three ways out, none of them free:
 | Drop `userRequired` from the default dump and point at `view:"create"` | ⚙️ on the default response — the shape IMP-11 just backfilled. Removes the wrong answer instead of correcting it. |
 | Leave it, and treat the default dump's `userRequired` as documented-as-approximate | Free, and honest only if the tool description says so. It currently does say so, since `fed3902a` widened it. |
 
-**Not decided here.** This is a candidate for a new IMP rather than something to settle inside IMP-12,
-because it is a question about the *default* response's contract, and this item's scope is the
-projections. Flagged for the next `/mcp-comparison` run.
+**Decided 2026-08-06: option 3.** The user chose to leave the default path alone and make the
+approximation explicit. Reasons, in the order they mattered:
+
+- Paying the resolution on the default path turns a `♻️` call into one that runs three passes over the
+  tenant's configuration — and it would pay that cost on the response we are actively trying to steer
+  agents *away* from. It makes the 60 kB dump slower without making it useful.
+- Dropping `userRequired` from the dump is `⚙️` on the field shape IMP-11 had just backfilled, and it
+  deletes information that is still correct for its own stated question ("does this column carry a
+  default?") rather than correcting the misleading one.
+- Option 3 costs one sentence, and that sentence does double duty: it tells the agent which answer is
+  authoritative *and* pushes it toward `view:"create"`, which is the outcome IMP-12 wants anyway.
+
+What landed (`ToolRegistry.buildSchemaTool`): *"In the full dump `userRequired` is a static
+approximation — it reads the column's own default only, so it over-reports fields the server resolves
+from elsewhere; `view:"create"` cross-checks against the real defaults and is the authoritative answer
+to 'must I ask the user for this?'."*
+
+**No new IMP is registered for this.** The divergence is now a documented property of the default
+response, not an open defect. If a future run measures an agent still being misled by the full dump,
+that measurement — not this note — is what should open an item.
+
+## 15. `view:"create"` on an uncurated entity returns an empty view **and tells the agent to stop looking**
+
+Found while sizing the uncurated-entity gap (2026-08-06, `etendo-go-local`). This is a defect of the
+projection IMP-12 built, which is why it is recorded here rather than against the curation backlog.
+
+### 15.1 The response
+
+```
+neo_schema(spec:"bp-location", entity:"bpLocation", view:"create")
+→ { "required": [], "optional": [], "requiredCount": 0, "optionalCount": 0,
+    "hint": "…Anything omitted from this view is either auto-derived, read-only or excluded —
+             do not send it, and do not call neo_schema again to look for it. …" }
+```
+
+`isAgentSuppliable` filters on `visibility`, and every `ETGO_SF_FIELD` row of this entity has
+`visibility = NULL`, so nothing survives the filter. The empty arrays are the honest output of the
+rule. **The `hint` is not**: it is written for the case "these are all the fields, the rest are
+excluded on purpose", and on an uncurated entity it asserts, confidently and falsely, that there is
+nothing to send — then instructs the agent not to check. An agent trying to create a business-partner
+location concludes the entity takes no input.
+
+### 15.2 How much of the model is in this state
+
+Counted over what the MCP actually exposes (`ETGO_SF_SPEC.showinmcp = 'Y'`, `ETGO_SF_ENTITY.isincluded
+= 'Y' AND ispost = 'Y'`, active rows only):
+
+| Cut | Entities | Fields |
+|---|---|---|
+| All active POST-able entities | 105 / 246 | 1,892 |
+| …restricted to MCP-exposed specs | **89 / 230** | **1,422** |
+| …of those, `AD_Tab.tablevel = 0` (root) | **4** | 29 |
+| …`tablevel ≥ 1` (sub-tabs) | 85 | ~1,393 |
+
+`return-from-customer` and `return-to-vendor` carry `showinmcp = 'N'`; the 328-field difference between
+the first two rows is theirs, and no agent can reach it. An earlier note in this session put the gap at
+"105 entities / 1,892 fields" — that figure is real but not agent-visible, and should not be quoted as
+the MCP's gap.
+
+The 85 sub-tabs are dominated by auxiliary and system tabs: `accounting` ×12, `translation` ×6,
+`intrastat` ×6, `tax`/`lineTax` ×8, `exchangeRates` ×4, `basicDiscounts` ×4. **These are not
+curation debt — they are write surfaces that should not exist.** An agent has no business POSTing to
+an invoice's accounting-entry tab. The four uncurated roots are small and all configuration windows:
+`bp-location/bpLocation` (10), `chart-of-accounts/element` (10), `end-year-close/endYearClose` (5),
+`fiscal-calendar/calendar` (4).
+
+### 15.3 Where the switches are
+
+There is **no MCP-specific visibility flag below spec level**, which constrains the fix:
+
+| Level | Flag | Scope |
+|---|---|---|
+| `ETGO_SF_SPEC` | `showinmcp` (Y/N) | the only explicitly MCP-facing gate |
+| `ETGO_SF_ENTITY` | `isincluded`, plus per-verb `isget` / `isgetbyid` / `ispost` / `isput` / `ispatch` / `isdelete` | shared with the React SPA |
+| `ETGO_SF_FIELD` | `isincluded`, `visibility`, `isreadonly`, `isbusinesscritical` | shared with the React SPA |
+
+So an auxiliary sub-tab can be removed from the write path with `ispost = 'N'` while staying readable —
+but because the entity-level flags are **not** MCP-specific, doing so also removes it from the SPA's
+write path. For the `accounting` tabs that is arguably correct on both surfaces; it is still a
+consequence to accept deliberately, not a side effect. Adding an entity-level `showinmcp` would isolate
+the change, at the cost of a new column and a second axis duplicating one that already exists — not
+recommended yet.
+
+### 15.4 Proposed shape — candidate IMP, not registered here
+
+1. **Java, small:** when the create view emits zero fields, replace the closing "do not call
+   `neo_schema` again" clause with one that says the entity is not curated for agent input and points
+   at the full dump. A false statement is worse than a verbose one.
+2. **Schema Forge data, larger:** set `ispost = 'N'` on the auxiliary sub-tabs, closing ~85 write
+   surfaces that should never have been offered.
+
+Curating the four roots is functional work outside this epic's scope. As with §14.3, registration is
+the next `/mcp-comparison` run's call — this section is the investigation, not the decision.
 
 ### 14.4 §7 done-when, final state on `etendo-go-local`
 
