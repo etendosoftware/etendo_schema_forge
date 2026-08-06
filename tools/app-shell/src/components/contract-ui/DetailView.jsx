@@ -2650,6 +2650,10 @@ export function DetailView({
   const handleNotesSave = useCallback(async (value) => {
     const currentId = data?.id || recordId;
     if (!currentId || isNew || !notesField) return;
+    if (value !== undefined && value.length > 255) {
+      toast.error(ui('notesMaxLengthExceeded'));
+      return;
+    }
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',

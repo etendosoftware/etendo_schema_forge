@@ -17054,6 +17054,7 @@
     "addLinesManuallyOrImportFromOrderOrInvoice": "Add lines manually or import from an order or invoice",
     "totalDiscountSaved": "Total discount saved",
     "noteSaved": "Note saved",
+    "notesMaxLengthExceeded": "The Notes field cannot exceed 255 characters.",
     "noPendingGoodsReceiptsForSupplier": "No pending goods receipts for this supplier.",
     "noGoodsReceiptsMatchYourSearch": "No goods receipts match your search.",
     "noGoodsReceiptsMatchCurrency": "No pending goods receipts for this supplier in the invoice's currency.",
