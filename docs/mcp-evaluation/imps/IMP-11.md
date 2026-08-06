@@ -295,6 +295,45 @@ suite: **2825 / 2825 passing**.
 `ETGO_SF_FIELD.xml` sourcedata diff will gain ~6340 `<VISIBILITY>` lines on the next
 `export.database` — the largest part of the change by line count, and not code.
 
+## 4.2 Backfill done — verified live on `etendo-go-local` (2026-08-06)
+
+The user ran `make regen … PUSH_TO_NEO=1` on the 0.3.28 preview, then `export.database`. Verified
+read-only (SELECT probes + `neo_schema` calls), no records mutated.
+
+- **The column is populated.** 4343 rows classified: `system` 1881, `discarded` 1027, `editable` 1016,
+  `readOnly` 419. The sourcedata diff is exactly 4343 `<VISIBILITY>` additions, `0` deletions, no
+  other column touched (committed in `com.etendoerp.go` as `356e77c5`).
+- **The collapse is confirmed, and now recoverable.** 2300 rows share the same `Y/Y`
+  `isIncluded`/`isReadOnly` pair while splitting `system` (1881) from `readOnly` (419) — the exact
+  distinction the `hint` asks agents to act on, and the reason the two booleans were never enough.
+- **The response carries it.** `neo_schema(purchase-invoice)` now returns `"visibility": "system"`
+  and `"userRequired": true` per field, with no Java rebuild — the reader was always correct.
+- **`sales-invoice/header`: 157/157 fields classified**, 24 `editable` of which 11 mandatory, versus
+  59 `required: true` before. That is the §5 target reached for curated entities.
+
+Two residual gaps, split by whether the MCP can see them:
+
+- **105 orphan `ETGO_SF_FIELD` rows — no MCP impact, left alone.** They have `ad_column_id`,
+  `java_qualifier` and `seqno` all NULL, and `updated` still `2026-06-23` where classified siblings
+  show `2026-08-06`; `upsertSingleField` matches by `columnname`, so they are unaddressable. They
+  never reach an agent: `McpToolRouterSupport.editablePropertyNames` drops any row whose column is
+  null. Measured — `neo_schema(purchase-invoice, basicDiscounts)` reports `fieldCount: 5` where the
+  DB holds 9 rows. This also explains all 5 "mixed" entities, so e.g. `sales-order/header` still
+  serves 97 fully-classified fields.
+- **1892 fields across 105 *uncurated* entities — real impact, out of IMP-11's scope.** No contract
+  covers them, and the writer loop iterates `extractFieldsFromContract`, so a regen has nothing to
+  refresh them from. `neo_schema(sales-invoice, ticketbai)` returns 4 fields with **no**
+  `visibility`/`userRequired` while carrying the same `hint` that tells agents to filter on them. The
+  hazard is new: absence used to be uniform, so it carried no signal; it is now non-uniform, which
+  invites the inference "no visibility ⇒ editable". Two cheap remedies — stop exposing uncurated
+  entities, or make the `hint` conditional on the keys actually being present. Neither belongs here;
+  worth its own registry item.
+
+**A stale javadoc this created.** `McpToolRouterSupport.java:585-589` still asserts the column "is
+never stored on `ETGO_SF_FIELD` as a literal string". Its *logic* is unchanged and still correct
+(deriving editability from the two booleans is right), but the comment is now false. Cosmetic, and
+deferred with the `:158` typed-getter nit for the same reason: it costs a compile for zero behaviour.
+
 ## 5. Done when
 
 - [ ] `neo_schema` on `sales-invoice/header` returns `visibility` on all 157 fields and
@@ -309,7 +348,9 @@ suite: **2825 / 2825 passing**.
 - [ ] Verified on `etendo-go-local` after a user-run deploy, then re-verified on staging before the
       registry status moves to ✅.
 
-Writer side (§4.1) is done; everything above still depends on the backfill and a deploy.
+Writer side (§4.1) and backfill (§4.2) are both done and verified on `etendo-go-local`. What remains
+before the registry row moves off ⏳ is the M2 first-call measurement via `/mcp-comparison`, and
+re-verification on staging once the wave is released.
 
 ## 6. Blockers — none
 

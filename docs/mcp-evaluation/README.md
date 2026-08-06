@@ -52,4 +52,4 @@ rather than quietly replaced.
 
 | Item | File | State of investigation |
 |---|---|---|
-| IMP-11 | [`imps/IMP-11.md`](imps/IMP-11.md) | Root cause found and writer fixed in core `0c3f13d2b`; backfill + deploy pending, so the registry row is still ⏳ |
+| IMP-11 | [`imps/IMP-11.md`](imps/IMP-11.md) | Writer fixed (core `0c3f13d2b`) and backfill verified live on `etendo-go-local`; registry row stays ⏳ until the M2 measurement + staging re-verification |
