@@ -509,17 +509,7 @@ function buildRowCriteria(col, row) {
   const val = row.value;
 
   if (op === 'between') {
-    if (!Array.isArray(val)) return null;
-    const [from, to] = val;
-    if (from === '' || from == null || to === '' || to == null) return null;
-    const toVal = (raw) => (mode === 'numeric' ? coerceNumeric(raw) : raw);
-    const fromV = toVal(from);
-    const toV = toVal(to);
-    if (fromV === null || toV === null) return null;
-    return [
-      { fieldName, operator: 'greaterOrEqual', value: fromV },
-      { fieldName, operator: 'lessOrEqual', value: toV },
-    ];
+    return buildBetweenCriteria(val, fieldName, mode);
   }
 
   if (op === 'inSet') {
@@ -556,6 +546,22 @@ function buildRowCriteria(col, row) {
 
 function createNullCriteria(fieldName, op) {
   return [{ fieldName, operator: op === 'isNull' ? 'isNull' : 'notNull' }];
+}
+
+// Extracted from buildRowCriteria (S3776 cognitive-complexity split, ETP-4770):
+// same logic, just out of the parent function's branch count.
+function buildBetweenCriteria(val, fieldName, mode) {
+  if (!Array.isArray(val)) return null;
+  const [from, to] = val;
+  if (from === '' || from == null || to === '' || to == null) return null;
+  const toVal = (raw) => (mode === 'numeric' ? coerceNumeric(raw) : raw);
+  const fromV = toVal(from);
+  const toV = toVal(to);
+  if (fromV === null || toV === null) return null;
+  return [
+    { fieldName, operator: 'greaterOrEqual', value: fromV },
+    { fieldName, operator: 'lessOrEqual', value: toV },
+  ];
 }
 
 function generateInSetCriteria(val, fieldName) {
