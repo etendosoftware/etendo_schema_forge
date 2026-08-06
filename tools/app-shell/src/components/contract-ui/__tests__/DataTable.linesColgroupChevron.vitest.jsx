@@ -14,7 +14,8 @@
  *     ahead of it, compounding the chevron gap.
  */
 import React from 'react';
-import { renderLinesColgroup } from '../DataTable.jsx';
+import { render, screen } from '@testing-library/react';
+import { DataTable, renderLinesColgroup } from '../DataTable.jsx';
 import { CHEVRON_COLUMN_WIDTH } from '../InlineLinesPanel.jsx';
 
 // Mock the heavy dependencies — same set DataTable.helpers.vitest.jsx already
@@ -88,5 +89,72 @@ describe('renderLinesColgroup — ETP-4735 dimensions-panel chevron alignment', 
     expect(widths).not.toContain(CHEVRON_COLUMN_WIDTH);
     // First rendered col should be the 40px selectable checkbox directly.
     expect(widths[0]).toBe(40);
+  });
+});
+
+// A <colgroup><col> entry with no matching cell in any actual <tr> does NOT
+// reserve visual space — column count/width in a real <table> is driven by
+// the cells present in its rows, not by unmatched <col> hints. The suite
+// above only asserted on renderLinesColgroup()'s returned markup and missed
+// exactly this: it stayed green while the add-row was still visibly
+// misaligned in the real app, because DataTable's row-rendering paths
+// (InlineAddRow, TableDataRow, the header row, the footer row) never grew a
+// matching leading cell to go with the new <col>. This suite renders the
+// real DataTable component and inspects the actual DOM to catch that class
+// of gap — a passing renderLinesColgroup() test alone is not sufficient
+// evidence the fix works.
+describe('DataTable (real render) — ETP-4735 add-row leading chevron cell', () => {
+  function renderAddRowWithDimensionsPanel() {
+    const columns = [
+      { key: 'product', label: 'Product', type: 'string' },
+      {
+        key: 'dimensions', type: 'dimensionsPanel', label: 'Dimensions',
+        dimensionFields: [{ key: 'project', label: 'Project', type: 'string' }],
+      },
+    ];
+    const fields = [{ key: 'product', label: 'Product', type: 'string' }];
+    return render(
+      <DataTable
+        columns={columns}
+        data={[]}
+        addRow={{ active: true, fields, onAdd: vi.fn(), onCancel: vi.fn(), catalogs: {} }}
+        selectable
+        hideHeader
+        hideDataRows
+        linesLayout="inlineEditable"
+      />,
+    );
+  }
+
+  it('renders an actual leading <td> reserving CHEVRON_COLUMN_WIDTH in the add-row — not just a <col> hint', () => {
+    renderAddRowWithDimensionsPanel();
+    const row = screen.getByTestId('inline-add-row');
+    const cells = row.querySelectorAll('td');
+    expect(cells.length).toBeGreaterThan(0);
+    // First real cell must be the aria-hidden chevron placeholder, sized
+    // CHEVRON_COLUMN_WIDTH — everything after it (the checkbox spinner cell,
+    // then product) must land in its own correct column, not shifted left.
+    expect(cells[0]).toHaveAttribute('aria-hidden', 'true');
+    expect(cells[0].style.width).toBe(`${CHEVRON_COLUMN_WIDTH}px`);
+  });
+
+  it('does NOT render a leading chevron <td> when there is no dimensionsPanel column', () => {
+    const columns = [{ key: 'product', label: 'Product', type: 'string' }];
+    const fields = [{ key: 'product', label: 'Product', type: 'string' }];
+    render(
+      <DataTable
+        columns={columns}
+        data={[]}
+        addRow={{ active: true, fields, onAdd: vi.fn(), onCancel: vi.fn(), catalogs: {} }}
+        selectable
+        hideHeader
+        hideDataRows
+        linesLayout="inlineEditable"
+      />,
+    );
+    const row = screen.getByTestId('inline-add-row');
+    const cells = row.querySelectorAll('td');
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells[0].style.width).not.toBe(`${CHEVRON_COLUMN_WIDTH}px`);
   });
 });
