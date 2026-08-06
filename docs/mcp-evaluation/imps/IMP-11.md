@@ -224,8 +224,9 @@ keeping the two apart when sequencing: IMP-11 is cheap, IMP-13 is not.
 
 ## 4. What a fix has to touch
 
-Three pieces, in dependency order, **all three in `schema_forge_core`**. **Not implemented — this
-section is the proposal.**
+Three pieces, in dependency order, **all three in `schema_forge_core`**. Steps 1 and 2 are
+**implemented** (core commit `0c3f13d2b`) — see §4.1 for what landed and how it differs from this
+proposal. Step 3 (backfill) is not done, and until it is, the response is unchanged.
 
 `com.etendoerp.go` needs **no change at all**: the reader is already correct and the webhook is off
 this path. That is a second correction to my first write-up, which listed the repo as
@@ -254,10 +255,45 @@ stored visibility while still producing the **same** `isIncluded`/`isReadOnly` p
 *look* compliant while carrying no information — worse than the current honest omission, because an
 agent cannot tell the difference. The guard is right; feed it.
 
-**Open question worth settling before coding:** whether `readOnly` visibility should also suppress
+**Open question, still open:** whether `readOnly` visibility should also suppress
 the field from the create-oriented view, which overlaps IMP-12's `view:"create"` projection. If
 IMP-12 lands first the two fixes compose; if IMP-11 lands first, IMP-12 gets a cheaper filter to
 write. Either order works — but doing them in the same wave avoids specifying the interaction twice.
+
+## 4.1 What landed — core `0c3f13d2b`
+
+Steps 1 and 2 shipped together, deliberately: persisting the column without passing the value (or
+the reverse) leaves the DB NULL and the response unchanged while looking done in the diff.
+
+| File | Change |
+|---|---|
+| `cli/src/neo-writer.js` | `visibility` added to `upsertField`'s `INSERT` column list (18 → 19 columns) and to the partial `UPDATE` as an `if ('visibility' in params)` clause. New exported `FIELD_VISIBILITIES` + `normalizeVisibility()` |
+| `cli/src/push-to-neo.js` | `buildFieldUpdateParams` forwards `f.visibility ?? null` alongside the `mapVisibility` pair; `reportDryRunPlan` mirrors it |
+| `cli/test/neo-writer-upsert-field.test.js` | 8 new cases + 2 rewritten (see below) |
+| `cli/test/push-to-neo-helpers.test.js` | 4 new cases on the passthrough |
+
+Two decisions worth recording, both narrower than the proposal:
+
+- **NULL stays legal and means "not classified".** The obvious reading of "validate against the four
+  legal values" is to reject everything else including NULL — which would break `populateSpec`, since
+  it creates one row per AD column *before* any contract is applied. So `normalizeVisibility` maps
+  `null`/`undefined`/`''` → `null` and throws only on a non-empty value outside the vocabulary. It is
+  case-sensitive: `'readonly'` is a typo, not an alias.
+- **The Java typed-getter nit was dropped from this wave.** `McpSchemaFieldBuilder.java:158` still
+  reads `sfField.get("visibility")` by magic string where `sfField.getVisibility()` exists. Correct
+  but purely cosmetic, and touching Java costs the user a compile + deploy for zero behaviour change.
+  Keeping the wave inside one repo is worth more than the nit; it is now a standalone cleanup.
+
+**One pre-existing test was wrong and is rewritten, not deleted.** Two `agent_prompt` cases asserted
+`params[params.length - 1]` — "the last INSERT param". That passed only because `agent_prompt`
+happened to be last, and appending `visibility` moved it silently onto the wrong column. They now
+resolve the index from the SQL column list, so the next appended column cannot break them. Full core
+suite: **2825 / 2825 passing**.
+
+**Still required before any status moves:** the backfill (step 3). 6340 rows are NULL today, so
+`neo_schema` output is byte-identical to B6 until every spec is re-pushed. This also means the
+`ETGO_SF_FIELD.xml` sourcedata diff will gain ~6340 `<VISIBILITY>` lines on the next
+`export.database` — the largest part of the change by line count, and not code.
 
 ## 5. Done when
 
@@ -272,6 +308,8 @@ write. Either order works — but doing them in the same wave avoids specifying 
       exists.
 - [ ] Verified on `etendo-go-local` after a user-run deploy, then re-verified on staging before the
       registry status moves to ✅.
+
+Writer side (§4.1) is done; everything above still depends on the backfill and a deploy.
 
 ## 6. Blockers — none
 
