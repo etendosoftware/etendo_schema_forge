@@ -1,141 +1,12 @@
-import React, {lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {ProcessParamDialog} from './ProcessParamDialog';
-import {DetailMoreActionsMenu} from './DetailMoreActionsMenu.jsx';
-import {DetailSidePanel} from './DetailSidePanel.jsx';
-import {LinesBulkActionBar} from './LinesBulkActionBar.jsx';
-import {useLocation, useNavigate, useSearchParams} from 'react-router-dom';
-import {Button} from '@/components/ui/button.jsx';
-import {Badge} from '@/components/ui/badge.jsx';
-import {AddLineButton} from '@/components/ui/add-line-button.jsx';
-import {Check, List, Loader2, Lock, Mail, Printer, Save, Shield, Trash2, Undo2, X} from 'lucide-react';
-import {AttachmentIcon} from '@/components/attachments/AttachmentIcon';
-import {PricingIcon, WarehouseProductsIcon} from '@/components/ui/custom-icons';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog.jsx';
-import {useEntity} from '@/hooks/useEntity';
-import {useCatalogs} from '@/hooks/useCatalogs';
-import {useDisplayLogic} from '@/hooks/useDisplayLogic';
-import {useCallout} from '@/hooks/useCallout';
-import {useCurrency} from '@/hooks/useCurrency';
-import {ORDER_LINE_CONFIG, useLineGrossAmount} from '@/hooks/useLineGrossAmount';
-import {useDocumentAction} from '@/hooks/useDocumentAction';
-import {useNeoAction} from '@/hooks/useNeoAction';
-import {useMenuLabel, useUI} from '@/i18n';
-import {translateBackendError} from '@/lib/backendErrors.js';
-import {useSetPageMeta} from '@/components/layout/PageMetaContext';
-import {useFavorites} from '@/components/layout/FavoritesContext';
-import {SummaryBar} from './SummaryBar.jsx';
-import {resolveTotalDiscountPct} from '@/lib/documentTotals';
-import LinesSelectionBar from './LinesSelectionBar.jsx';
-import {evalTabReadOnly} from './evalTabReadOnly.js';
-import {
-  applyQtyZeroGuard,
-  buildCalloutFormState,
-  extractAuxValues,
-  normalizeCalloutQty,
-  normalizeCalloutResponse,
-  resolveSnapshotIdentifiers,
-  roundAmounts,
-} from '@/lib/lineFieldChange.js';
-import {getCatalogOptions} from '@/lib/selectorCatalog.js';
-import {formatCurrency} from '@/lib/formatCurrency.js';
-import {useRegisterWindowContext} from '@/components/CurrentWindowContext';
-import {matchOcrDocType} from '@/components/copilot/ocr/ocrDocTypes';
-import {isDeleteVisibleForRecord} from '@/utils/recordActions.js';
-import {buildHeaderSelectorContext, buildLineSelectorContext} from '@/lib/selectorContext.js';
-import {isCapabilityVisible} from '@/lib/capabilityVisibility.js';
-import {useCapabilitiesSafe} from '@/hooks/useCapabilitiesSafe.js';
-import DocumentStatusPill from './DocumentStatusPill.jsx';
-import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
-import {toast} from 'sonner';
-import {runBatchDelete, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
-import {
-  applyCalloutFieldUpdates,
-  applyLocalChildRowUpdate,
-  applyOneComboEntry,
-  applyProductCalloutPriceAdjustments,
-  applyProductCurrencyConversion,
-  buildLineRowClickHandler,
-  calculateLineNetAmount,
-  calculateNetUnitPrice,
-  canDeleteSelectedLine,
-  CollapsibleSection,
-  collectRowFieldValues,
-  computeBalanceGate,
-  customTabKey,
-  deriveTaxRateFromGross,
-  dispatchProcessAction,
-  evalDisplayLogicRaw,
-  getAddLineMenuActions,
-  getAddLineWrapperClassName,
-  getChildSaveButtonLabel,
-  getCustomLinesTabClassName,
-  getDetailContentClassName,
-  getDocsRowClassName,
-  getDocumentIds,
-  getDocumentReadOnly,
-  getFullBreadcrumb,
-  getInlineEditableShrinkClassName,
-  getLineMenuActionsRef,
-  getLinesContainerClassName,
-  getLinesToolbarClassName,
-  getNotesRowClassName,
-  getOnAddToFavorites,
-  getOthersTabClassName,
-  getRecordTitle,
-  getSaveBtnCls,
-  getSaveButtonLabel,
-  getSecondaryEditRowHandler,
-  getSecondaryLinesTableRef,
-  getSecondaryTabContentClassName,
-  getSecondaryTabEntityKey,
-  getSidebarSlideClassName,
-  getSqBtnSize,
-  getTabsBarClassName,
-  getTabsBarStyle,
-  getWindowTitle,
-  hasUnsavedEdits,
-  insertLinesTab,
-  isCustomPrimaryTabActive,
-  isDetailBulkBarVisible,
-  isInitialChildrenLoading,
-  makeCloseDialogHandler,
-  mergeLineEdits,
-  mergeSelectorAuxFields,
-  mergeSelectorContextFields,
-  normalizePatchFieldValues,
-  parseBackendErrorMessage,
-  pushOthers,
-  renderEmbeddedStatusPill,
-  renderExtraActionButtons,
-  renderNotesField,
-  renderPrimaryTabButtons,
-  renderProcessConfirmModal,
-  renderSidePanel,
-  renderTotalsBlock,
-  resolveCanAddLines,
-  resolveDetailRows,
-  resolveHeaderContent,
-  resolveProcessLabel,
-  resolveSidebarContent,
-  resolveStatusPrefix,
-  resolveTaxIdentifier,
-  runAddLineAction,
-  SecondaryPanelTab,
-  secondaryTabEmptyState,
-  shouldShowDetailFormSidebar,
-  shouldShowInlineDeleteSelectionBar,
-  sidePanelWrapperCls,
-  WINDOW_DELETE_ACTIONS,
-  WINDOW_DELETE_CONFIRM_MODALS,
-} from './detailViewHelpers.jsx';
+import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { ProcessParamDialog } from './ProcessParamDialog';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { Button } from '@/components/ui/button.jsx';
+import { Badge } from '@/components/ui/badge.jsx';
+import { AddLineButton } from '@/components/ui/add-line-button.jsx';
+import { X, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
+import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
+import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
 
 const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
@@ -176,6 +47,32 @@ function TabStripButton({
     </button>
   );
 }
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
+} from '@/components/ui/dialog.jsx';
+import { useEntity } from '@/hooks/useEntity';
+import { useCatalogs } from '@/hooks/useCatalogs';
+import { useDisplayLogic } from '@/hooks/useDisplayLogic';
+import { useCallout } from '@/hooks/useCallout';
+import { useCurrency } from '@/hooks/useCurrency';
+import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
+import { useDocumentAction } from '@/hooks/useDocumentAction';
+import { useNeoAction } from '@/hooks/useNeoAction';
+import { useMenuLabel, useUI } from '@/i18n';
+import { translateBackendError } from '@/lib/backendErrors.js';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { useFavorites } from '@/components/layout/FavoritesContext';
+import { SummaryBar } from './SummaryBar.jsx';
+import { resolveTotalDiscountPct } from '@/lib/documentTotals';
+import LinesSelectionBar from './LinesSelectionBar.jsx';
+import { evalTabReadOnly } from './evalTabReadOnly.js';
+import {
+  buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
+  normalizeCalloutResponse, applyQtyZeroGuard, roundAmounts,
+  resolveSnapshotIdentifiers,
+} from '@/lib/lineFieldChange.js';
+import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 // DocumentTotalsPanel/BalanceFooterPanel call their `formatAmount` prop as
 // (value, currency) — keep that signature here, delegating to the shared
@@ -183,8 +80,22 @@ function TabStripButton({
 function formatAmount(val, curr) {
   return formatCurrency(curr, val);
 }
+import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
+import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
+import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
+import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
+
+import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
+import { toast } from 'sonner';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import {
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderSidePanel, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
+} from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
 // Only the definition site moved (R1: no test was edited).
@@ -3539,6 +3450,7 @@ export function DetailView({
                                     selectedLine={selectedLine}
                                     setSelectedLine={setSelectedLine}
                                     setSelectedChildRows={setSelectedChildRows}
+                                    data-testid="LinesBulkActionBar__7c75ad"
                                   />
                                 )}
                                 <DetailTable
@@ -4282,7 +4194,7 @@ export function DetailView({
                     )}
                   </div>
                 </div>
-                {sidePanel && <DetailSidePanel {...{ sidePanel, sidePanelStyle, data, recordId, token, apiBaseUrl, api, isNew }} />}
+                {sidePanel && <DetailSidePanel {...{ sidePanel, sidePanelStyle, data, recordId, token, apiBaseUrl, api, isNew }} data-testid="DetailSidePanel__7c75ad" />}
               </div>
             </div>
           </div>{/* end content column wrapper */}
