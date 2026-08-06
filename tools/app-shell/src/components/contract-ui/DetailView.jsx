@@ -1666,6 +1666,11 @@ export function DetailView({
   const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
   const [showPrint, setShowPrint] = useState(false);
   const [confirmProcess, setConfirmProcess] = useState(null);
+  // ETP-4779: bumped whenever a menu action generates a derived document
+  // (runDocumentAction / runNeoMenuAction below) so the sibling "Documentos"
+  // related-docs section refetches — hook.fetchById only refreshes the
+  // header `data` prop, it does not know about the related-docs list.
+  const [docsRefreshSignal, setDocsRefreshSignal] = useState(0);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Shared by both the generic delete Dialog and the rich per-window cartel
@@ -3044,6 +3049,7 @@ export function DetailView({
                       const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
                       toast.success(msg);
                       hook.fetchById?.(currentId);
+                      setDocsRefreshSignal(v => v + 1);
                     } catch (err) {
                       toast.error(err.message);
                     }
@@ -3055,6 +3061,7 @@ export function DetailView({
                     if (result.success) {
                       toast.success(msg);
                       hook.fetchById?.(currentId);
+                      setDocsRefreshSignal(v => v + 1);
                     } else {
                       toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
                     }
@@ -4298,6 +4305,7 @@ export function DetailView({
                           totalDiscountPct={Number(data?.etgoTotalDiscount ?? 0)}
                           onTotalDiscountChange={handleTotalDiscountChange}
                           onNotesSave={handleNotesSave}
+                          docsRefreshSignal={docsRefreshSignal}
                           data-testid="BottomComponent__fa3275" />
                       );
                     })() : (
@@ -4349,6 +4357,7 @@ export function DetailView({
                                         apiBaseUrl={apiBaseUrl}
                                         api={api}
                                         layout="chips"
+                                        docsRefreshSignal={docsRefreshSignal}
                                         {...(ct.props || {})}
                                         data-testid="TabComponent__fa3275" />
                                     );

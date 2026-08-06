@@ -45,6 +45,7 @@ export default function LinesBottomSection({
   totalDiscountPct,
   onTotalDiscountChange,
   onNotesSave,
+  docsRefreshSignal,
   relatedDocuments: RelatedDocumentsComponent,
   totalsField = 'etgoTotalDiscount',
   // Inventory / shipment-style windows (albaranes, recepciones, movimientos)
@@ -81,6 +82,7 @@ export default function LinesBottomSection({
                   apiBaseUrl={apiBaseUrl}
                   api={api}
                   layout="chips"
+                  docsRefreshSignal={docsRefreshSignal}
                   data-testid="RelatedDocumentsComponent__751847" />
               </div>
             </div>
