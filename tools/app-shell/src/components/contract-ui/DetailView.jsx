@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { ProcessParamDialog } from './ProcessParamDialog';
 import { DetailMoreActionsMenu } from './DetailMoreActionsMenu.jsx';
+import { DetailSidePanel } from './DetailSidePanel.jsx';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -4244,14 +4245,7 @@ export function DetailView({
                     )}
                   </div>
                 </div>
-                {sidePanel && (
-                  <div
-                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[292px] lg:border-l border-border-subtle pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
-                    style={sidePanelStyle}
-                  >
-                    {renderSidePanel(sidePanel, data, recordId, token, apiBaseUrl, api, isNew)}
-                  </div>
-                )}
+                {sidePanel && <DetailSidePanel {...{ sidePanel, sidePanelStyle, data, recordId, token, apiBaseUrl, api, isNew }} />}
               </div>
             </div>
           </div>{/* end content column wrapper */}
