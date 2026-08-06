@@ -20,6 +20,21 @@ import path from 'node:path';
 import { parse } from '@babel/parser';
 
 const TICKET_RE = /\bETP-\d+\b/g;
+const GIT_CONTEXT_VARS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_PREFIX',
+  'GIT_COMMON_DIR',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+];
+
+function isolatedGitEnv() {
+  const env = { ...process.env };
+  for (const key of GIT_CONTEXT_VARS) delete env[key];
+  return env;
+}
 
 function parseArgs(argv) {
   const args = { since: null, noChurn: false, summary: false, limit: 10, days: null };
@@ -67,6 +82,7 @@ function git(repo, gitArgs) {
   return execFileSync('git', ['-C', repo, ...gitArgs], {
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
+    env: isolatedGitEnv(),
   });
 }
 
@@ -75,6 +91,7 @@ function gitQuiet(repo, gitArgs) {
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'ignore'],
+    env: isolatedGitEnv(),
   });
 }
 
