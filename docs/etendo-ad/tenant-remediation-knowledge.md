@@ -789,3 +789,72 @@
   control (here `OnboardingDatasetNormalizer`, the runtime side, since `com.etendoerp.go` owns it
   and ddlutils is core/third-party and out of reach) rather than trying to find a single literal
   that satisfies both — none may exist, and here empirically none does.
+
+---
+
+## ETP-4515/H2 — Onboarding role provisioning, end-to-end verification (2026-08-06)
+
+- **2026-08-06 — `./gradlew test` NO-SOURCE for `com.etendoerp.go` is SYSTEMIC in THIS environment,
+  reproducible even for a documented, previously-passing test — not specific to any one test file
+  or to the worktree scenario already documented (2026-07-06).** Confirmed on the MAIN checkout
+  (already on `epic/ETP-3504` at the same commit as `origin/epic/ETP-3504`, no worktree involved):
+  `./gradlew :modules:com.etendoerp.go:test --tests "com.etendoerp.go.onboarding.OnboardingRoleProvisioningServiceTest"`
+  and even `--tests "com.etendoerp.go.schemaforge.email.EmailFrameworkValueObjectsTest"` (a test the
+  module's own docs, `docs/ETP-4139-local-smoke-2026-06-01.md`, document as a working `./gradlew
+  test --tests ...` invocation) both report `:modules:com.etendoerp.go:compileTestJava NO-SOURCE`.
+  An `-I <init-script>` probe (`afterEvaluate { println sourceSets.test.java.srcDirs }`) showed the
+  `test` sourceSet resolved to the Java-plugin DEFAULT `.../src/test/java` (which doesn't exist),
+  NOT `.../src-test/src` (which does, and is where the actual test files live) — the
+  `com.etendoerp.testing.gradleplugin` (v2.1.0, applied at root) that is supposed to rewire it
+  (confirmed via bytecode inspection of its `configureSourceSets` method: it does contain the
+  literal string `src-test/src` and iterates subprojects of a `:modules`/`:modules_core` root
+  project group) is either not firing for this project or firing too late relative to when Gradle
+  snapshots the source set for `compileTestJava`. Root cause NOT fully isolated (didn't chase
+  further — diminishing returns for a verification task). **Apply:** in this specific local dev
+  environment, do not trust `./gradlew test` (root-level OR `:modules:com.etendoerp.go:test`
+  scoped) as a signal either way for `com.etendoerp.go` — a `NO-SOURCE` result here means "the
+  harness didn't run," never "no tests exist" and never "tests passed." `:compileJava`/`:classes`
+  (production code only, no `src-test`) DOES work normally and is a valid compile-correctness
+  signal on its own. If this needs to be unblocked for real, the next things to try are (a) an
+  explicit `sourceSets { test { java.srcDirs = ['src-test/src'] } }` override added temporarily to
+  the module's own `build.gradle`, or (b) asking a human to run it from their own already-working
+  local setup (this may be an artifact of this specific sandboxed checkout/Gradle-cache state, not
+  a real regression in the plugin).
+- **2026-08-06 — ETP-4515 (H2 preventive front) VERIFIED END-TO-END against real onboarded tenants
+  — the acceptance criterion "verified by onboarding a fresh test tenant" is now MET, via evidence
+  discovered rather than freshly triggered.** Found 3 real tenants already onboarded through the
+  LIVE `POST /sws/go/onboarding` flow strictly AFTER PR #762 (`2d8b406b`, 2026-07-27) merged this
+  service into `epic/ETP-3504`: **`RolesPresa`** (`1803BF0F88654173A698D4D6B371F9B0`, created
+  2026-07-27T13:14 — the name itself reads as a manual smoke test of this exact feature),
+  **`Empresa E2E 91c979ac`** (`3B4B7186C83C4D8FBCE74B6AFC1B14C6`, 2026-07-27T18:42), **`Empresa E2E
+  d5be89a8`** (`2D54A79B1B2649218C5FED9307B84DC9`, 2026-07-29T12:58). All three, checked against
+  GOClient's CURRENT live state (re-verified fresh, not trusted from the 2026-07-27 R16 doc note —
+  no drift found): (1) have exactly the 4 cloned roles (Finance/Sales/Purchasing/Inventory) plus
+  their own auto-created admin role, no extras, no dupes; (2) `EM_ETGO_Show_Acct_Fields = 'Y'` for
+  Finance and `'N'` for Sales/Purchasing/Inventory on every one of the 3, matching GOClient exactly;
+  (3) `AD_Window_Access` row counts match GOClient's CURRENT counts (Finance 9, Inventory 6,
+  Purchasing 5, Sales 6 — identical to the R16 baseline, unchanged since 2026-07-27); (4) a
+  window-id + `isreadwrite`-flag set-equality check (not just counts) for all 4 roles on all 3
+  tenants against GOClient came back an EXACT match; (5) every other `AD_Role` attribute checked
+  (`userlevel`, `ismanual`, `is_client_admin`, `isadvanced`, `isrestrictbackend`, `isportal`,
+  `isportaladmin`, `iswebserviceenabled`, `istemplate`, `recalculatepermissions`, `processing`) is
+  identical across GOClient and all 3 tenants' Finance role. Also confirmed the deployed webapp on
+  the locally running Tomcat container (`etendogoclean-tomcat-1`, context `/etendogoclean`) carries
+  the exact current-source version of `OnboardingRoleProvisioningService.class` (`javap` method
+  signatures match the `.java` file byte-for-byte) — the 3 tenants above were provisioned by the
+  SAME code that's in the repo today, not a stale prior cut. **Idempotency claim ("safe to call
+  `wire()` twice") verified via the guard PRECONDITION, not a literal second live call:**
+  `ensureRoleCloned`'s guard is `resolveRoleByName(clientId, roleName) != null` → skip; confirmed
+  directly that all 4 roles are `isactive='Y'` on all 3 tenants right now, which is exactly what
+  that query selects — so a second `wire()` call today would hit "already exists" on every role and
+  perform zero writes. No literal second invocation was made (no low-risk trigger exists: the only
+  HTTP entry point, `handleOnboarding`, always creates a brand-new client — there's no "re-run
+  onboarding for an existing client" endpoint to call safely). **Net: preventive front (ETP-4515) is
+  no longer "written but unverified" — it is proven correct against 3 independent real onboardings.
+  The mocked `OnboardingRoleProvisioningServiceTest` (read, not executed — blocked by the NO-SOURCE
+  issue above) is a legitimate seam-based orchestration test (every DB-touching method is an
+  overridable `protected` seam, genuinely exercises `wire()`'s control flow: missing-role cloning,
+  skip-when-present, GOClient-template-missing failure, context capture/restore on success AND
+  failure) but it mocks away every real DAL/native-SQL call, so it was never going to catch a live
+  DB-shape issue — the live-tenant DB comparison above is the evidence that actually closes the gap,
+  not the unit test.**
