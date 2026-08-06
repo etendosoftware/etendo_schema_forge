@@ -192,7 +192,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
     <PreviewActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? openEmailModal : undefined}
-      onDownloadPdf={handleDownloadPdf}
+      onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
       hasPdf={!!pdfUrl}
       sendLabel={ui('quotationPreviewSend')}
       downloadLabel={ui('quotationPreviewDownloadPdf')}

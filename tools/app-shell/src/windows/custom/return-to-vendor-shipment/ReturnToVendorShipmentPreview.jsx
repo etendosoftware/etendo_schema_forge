@@ -21,6 +21,12 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
 
   if (!shipment) return null;
 
+  // ETP-4789 — this window has no Send action (no pre-existing isSendable to
+  // reuse), so Download PDF gets its own status gate: only downloadable once
+  // the return shipment is Confirmed (CO), matching the rule applied to the
+  // other 5 preview panels in this bug.
+  const isDownloadable = shipment.documentStatus === 'CO';
+
   const partnerName = shipment['businessPartner$_identifier'] || '—';
   const movementDate = shipment.movementDate ? formatCalendarDate(shipment.movementDate, locale) : '—';
   const windowLabel = tMenu('Return to Vendor Shipment');
@@ -48,6 +54,7 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   const { actionButtons, tabs } = buildReturnPreviewContent({
     doc: shipment, pdfBlob, handleDownload, modalRef,
     specs, partnerName, movementDate, token, apiBaseUrl, ui,
+    canDownload: isDownloadable,
   });
 
   return (

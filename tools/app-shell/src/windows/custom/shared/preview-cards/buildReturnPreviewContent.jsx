@@ -4,10 +4,11 @@ import ReturnDocStatsPanel from './ReturnDocStatsPanel.jsx';
 export function buildReturnPreviewContent({
   doc, pdfBlob, handleDownload, modalRef,
   specs, partnerName, movementDate, token, apiBaseUrl, ui,
+  canDownload = true,
 }) {
   const actionButtons = (
     <PreviewActionButtons
-      onDownloadPdf={handleDownload}
+      onDownloadPdf={canDownload ? handleDownload : undefined}
       hasPdf={!!pdfBlob}
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       sendLabel={ui('invoicePreviewSend')}

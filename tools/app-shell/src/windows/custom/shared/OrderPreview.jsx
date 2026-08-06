@@ -209,7 +209,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
     <PreviewActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? openEmailModal : undefined}
-      onDownloadPdf={handleDownloadPdf}
+      onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
       hasPdf={!!pdfUrl}
       sendLabel={ui('orderPreviewSend')}
       downloadLabel={ui('orderPreviewDownloadPdf')}

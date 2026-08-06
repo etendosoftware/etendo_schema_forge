@@ -75,9 +75,9 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         <Button
           size="sm"
           variant="outline"
-          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground [&_svg]:size-5"
-          onClick={onDownloadPdf}
-          disabled={!hasPdf}
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
+          onClick={hasPdf && onDownloadPdf ? onDownloadPdf : undefined}
+          disabled={!hasPdf || !onDownloadPdf}
           data-testid="Button__cf88e6">
           <Download className="text-muted-foreground" data-testid="Download__cf88e6" />
           {ui('invoicePreviewDownloadPdf')}
@@ -334,7 +334,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       canAddPayment={p.canAddPayment}
       onAddPayment={() => p.setShowPaymentModal(true)}
       isSalesInvoice={p.isSalesInvoice}
-      onDownloadPdf={p.handleDownloadPdf}
+      onDownloadPdf={isSendable ? p.handleDownloadPdf : undefined}
       hasPdf={!!p.pdfUrl}
       data-testid="InvoiceActionButtons__cf88e6" />
   );
