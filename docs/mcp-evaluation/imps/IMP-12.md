@@ -158,7 +158,10 @@ every existing caller and hide the size problem instead of giving the agent a wa
 
 ## 7. Done when
 
-- [ ] `neo_schema("sales-invoice","header",view:"create")` returns **under 4 KB**.
+- [ ] ~~`neo_schema("sales-invoice","header",view:"create")` returns **under 4 KB**.~~
+      **Target corrected to under 8 KB** — see §10.2. 4 KB was authored before anything was measured
+      and is only reachable by degrading `optional` to a bare name list, which costs the agent a
+      second call and so works against the very metric (M1) this item serves.
 - [ ] Every field it returns is one the agent may actually supply — no `readOnly`, no
       sequence-generated `DocumentNo`, no computed `GrandTotal`/`OutstandingAmt`.
 - [ ] Fields the server will default (`C_Currency_ID`, `DateInvoiced`, the `EM_*` compliance
@@ -245,3 +248,77 @@ useless on those entities until they are curated — which is the same gap
 `McpSchemaCreateViewTest` (new, 15 cases across the four methods) and two nested classes added to
 `McpSchemaFieldBuilderTest` (`addVisibility` default-aware cases, `isAgentSuppliable`). Pure JSON
 transforms, no DAL. **Not run** — they compile with the module.
+
+## 10. First live probe on `etendo-go-local` (2026-08-06, after a user-run deploy)
+
+Read-only. Environment: `etendo-go-local` (`http://localhost:3100/mcp`), serving `feature/ETP-4793`
+at `6cc522f5`.
+
+### 10.1 `view:"create"` works, and the required set is exactly the 6 §5 predicted
+
+`neo_schema("sales-invoice","header",view:"create")` returned `requiredCount: 6`,
+`optionalCount: 18` — 24 suppliable fields out of 157, matching the `editable` count exactly.
+
+The 6 required: `transactionDocument`, `businessPartner`, `paymentMethod`, `partnerAddress`,
+`paymentTerms`, `priceList`. All 6 are FKs with selectors; `businessPartner` is the only
+`businessCritical` one.
+
+**The count was right but the composition was not.** §5 predicted the default-aware rule would drop
+`invoiceDate`, `accountingDate`, `paymentTerms`, `currency`, `priceList`. Live, it dropped only
+`invoiceDate` (`@#Date@`) and `currency` (`@C_Currency_ID@`): `paymentTerms` and `priceList` carry no
+AD default on this instance and stayed required, while `accountingDate` never reaches the view at all
+(it is `system`). Two errors cancelling out. The predicate is behaving as specified — the §5
+*enumeration* of which fields it would hit was wrong, and is corrected here rather than in place, so
+the mistake stays visible.
+
+### 10.2 The size measurement, and why the 4 KB target was wrong
+
+Reference sizes, computed from the verbatim full dump (`fieldCount: 157`):
+
+| Response | Chars | vs. full |
+|---|---|---|
+| Full dump (no `view`) | **71,742** | — |
+| `view:"create"`, as first committed | 12,746 | −82 % |
+| …dropping only `defaultExpression` | 10,282 | −86 % |
+| **…dropping every key the grouping already encodes** *(shipped)* | **7,767** | **−89 %** |
+| …`optional` degraded to compact objects | 5,781 | −92 % |
+| …`optional` degraded to a bare name list | 3,970 | −94 % |
+| `required` only, `optional` dropped | 3,467 | −95 % |
+
+Note the full dump **grew** from the 61,963 chars recorded in B6 to 71,742. That is
+[IMP-11](IMP-11.md)'s backfill: two new keys on each of 157 fields, plus the longer `hint`. Fixing the
+missing-`visibility` defect made the size defect measurably worse — which is the argument for the two
+items shipping in the same wave.
+
+`under 4 KB` (§7, authored before any measurement) is only reachable by the last two rows, both of
+which strip `type`, `label` and `hasSelector` off the optional group. An agent that then wants to set
+one optional field must call `neo_schema` a second time — spending an M1 call to save bytes, in an
+item whose whole purpose is fewer calls. **Target corrected to under 8 KB**, met at 7,767.
+
+What ships instead is a rule with no arbitrary cutoff: *no key in this view is redundant with the
+group it sits in.* `visibility` is always `editable`, `readOnly` always `false`, `userRequired` is the
+group itself, and `required` is the raw AD flag that `userRequired` supersedes — leaving it in would
+actively contradict the grouping, since an AD-mandatory field with a default sits under `optional`
+while carrying `required: true`.
+
+`defaultExpression`/`defaultSource` go with them, for a second reason: on this entity two AEAT
+compliance columns carry 806 and 604 characters of raw `@SQL=…` that no agent can evaluate.
+`neo_defaults` resolves them server-side, and the hint now says so. Slimming copies rather than
+mutates, so the default response stays byte-for-byte unchanged.
+
+### 10.3 The ♻️ guarantee holds; the ⚙️ part is visible
+
+The full dump still reports `fieldCount: 157`, omits `unknownFields`, and is otherwise unchanged
+except for the rewritten `hint` — which is exactly the ⚙️ surface §9.2 declared.
+
+### 10.4 `fields:[…]` could not be probed — client-side blocker
+
+Both attempts returned the full 71,742-char dump. The parameter is declared correctly server-side,
+but **this Claude Code session cached the tool list at connect time**, before the deploy: the loaded
+`neo_schema` schema still advertises `view` as `enum: ["actions"]` with no `fields` property, so the
+client strips the unknown argument before it reaches the servlet. `view:"create"` got through only
+because the client passes enum values as opaque strings rather than validating them.
+
+Not a defect in the implementation, and not verifiable without reconnecting the MCP server (`/mcp`)
+or starting a fresh session. Recorded as unverified rather than assumed working — the §7 checkbox for
+`fields:["businessPartner","invoiceDate"]` stays unticked, and `unknownFields` with it.
