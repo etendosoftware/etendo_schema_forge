@@ -35,8 +35,10 @@ vi.mock('../GenericPreviewModal.jsx', () => ({
 }));
 
 vi.mock('../PreviewActionButtons.jsx', () => ({
-  // Mirrors the real component's {onEmail && (...)} gate (PreviewActionButtons.jsx)
-  // so tests can assert whether QuotationPreview passed a truthy onEmail or not.
+  // Mirrors the real component's {onEmail && (...)} gate and its
+  // disabled={!hasPdf || !onDownloadPdf} download gate (PreviewActionButtons.jsx,
+  // ETP-4789) so tests can assert whether QuotationPreview passed a truthy
+  // onEmail/onDownloadPdf or not.
   default: ({ onEmail, onDownloadPdf, hasPdf, sendLabel, downloadLabel, editLabel }) => (
     <div data-testid="action-buttons">
       {onEmail && (
@@ -44,7 +46,7 @@ vi.mock('../PreviewActionButtons.jsx', () => ({
           {sendLabel}
         </button>
       )}
-      <button data-testid="download-btn" onClick={onDownloadPdf} disabled={!hasPdf}>
+      <button data-testid="download-btn" onClick={onDownloadPdf} disabled={!hasPdf || !onDownloadPdf}>
         {downloadLabel}
       </button>
       <button data-testid="edit-btn">{editLabel}</button>
@@ -99,6 +101,7 @@ import EmailsCard from '../preview-cards/EmailsCard.jsx';
 import {
   expectPresenceGatedByStatus,
   expectEmailsCardOnSendGatedByStatus,
+  expectDisabledGatedByStatus,
 } from './testUtils/sendActionGatingCases.js';
 
 const defaultQuotation = {
@@ -213,6 +216,26 @@ describe('QuotationPreview', () => {
       renderHidden: () => renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'DR' } }),
       renderShown: () => renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'UE' } }),
       EmailsCardMock: vi.mocked(EmailsCard),
+    });
+  });
+
+  // ── ETP-4789: Download PDF gating by documentStatus ───────────────────────
+  // QuotationPreview always passed onDownloadPdf=handleDownloadPdf regardless
+  // of documentStatus — only hasPdf gated it. The fix reuses the same
+  // isSendable variable already computed for Send (documentStatus !== 'DR').
+  // These cases must FAIL against the current (unfixed) source.
+  describe('Download PDF gating by documentStatus (ETP-4789)', () => {
+    function renderWithPdf(quotation) {
+      useQuotationPdf.mockReturnValue({ pdfUrl: 'blob:q-test', pdfBlob: new Blob(), loading: false, error: null });
+      return renderQuotationPreview({ quotation });
+    }
+
+    expectDisabledGatedByStatus({
+      hiddenIt: 'disables the download button when quotation.documentStatus is DR (draft), even with a PDF available',
+      shownIt: 'enables the download button when quotation.documentStatus is UE (under evaluation)',
+      renderHidden: () => renderWithPdf({ ...defaultQuotation, documentStatus: 'DR' }),
+      renderShown: () => renderWithPdf({ ...defaultQuotation, documentStatus: 'UE' }),
+      findElement: () => screen.getByTestId('download-btn'),
     });
   });
 });
