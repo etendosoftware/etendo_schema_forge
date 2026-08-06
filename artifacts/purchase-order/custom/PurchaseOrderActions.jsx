@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
@@ -144,7 +145,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
   if (isCompleted && !fetched) {
-    return <>{confirmedPanel}<span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
+    return <>{confirmedPanel}<CopyRecordLinkButton recordId={recordId} windowName="purchase-order" /><span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
   // ── COMPLETED — compute derived values ─────────────────────────────────────
@@ -195,6 +196,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
       {(isDraft || isCompleted) && <SendDocumentButton
         onClick={() => setShowSend(true)}
         data-testid="SendDocumentButton__8b5323" />}
+      <CopyRecordLinkButton recordId={recordId} windowName="purchase-order" />
       {clonePortal}
       {isDraft && showConfirm && createPortal(
         <ConfirmModal

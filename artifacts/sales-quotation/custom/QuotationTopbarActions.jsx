@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import QuotationConfirmModal from './QuotationConfirmModal';
 import SendToEvaluationModal from './SendToEvaluationModal';
 import RejectQuotationModal from './RejectQuotationModal';
@@ -84,6 +85,8 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
       </button>
 
       <SendDocumentButton onClick={() => setShowSend(true)} />
+
+      <CopyRecordLinkButton recordId={recordId} windowName="sales-quotation" />
 
       {showClone && createPortal(
         <CloneOrderModal
