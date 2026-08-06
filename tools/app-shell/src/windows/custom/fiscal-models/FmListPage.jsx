@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import {
-  LayoutGrid, Settings, ArrowUpDown,
-  ChevronDown, MoreVertical, Calendar, Clock, TriangleAlert, OctagonAlert, ArrowUpRight, Search, Play, Check,
+  LayoutGrid, ArrowUpDown,
+  ChevronDown, MoreVertical, Calendar, Clock, TriangleAlert, OctagonAlert, ArrowUpRight, Search, Check,
 } from 'lucide-react';
 import { EmptyState, KpiWidget } from './FmCommon.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ConfigDrawer, NewDeclModal } from './FmOverlays.jsx';
+import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
 import { formatAmount, STATUS_COLOR, computeUpcomingDeadlines, checkModified303, checkModified349, compute349Operators } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
@@ -97,48 +97,6 @@ function FilterDropdown({ label, value, options, onChange }) {
               </button>
             );
           })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Row-level kebab menu — Demo, Configuración
-function RowKebab({ onDemo, onConfig, t }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        className="fm-section-header__icon-btn"
-        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
-        aria-label="Más opciones"
-      >
-        <MoreVertical size={16} strokeWidth={1.75} data-testid="MoreVertical__cb728e" />
-      </button>
-      {open && (
-        <div className="fm-status-select__menu" role="menu" style={{ right: 0, left: 'auto', minWidth: 220 }}>
-          <button className="fm-status-select__item" role="menuitem" onClick={(e) => { e.stopPropagation(); onDemo(); setOpen(false); }}>
-            <Play
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="Play__cb728e" />
-            Demo
-          </button>
-          <button className="fm-status-select__item" role="menuitem" onClick={(e) => { e.stopPropagation(); onConfig(); setOpen(false); }}>
-            <Settings
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="Settings__cb728e" />
-            {t('fm.config.title') ?? 'Configuración'}
-          </button>
         </div>
       )}
     </div>
@@ -270,54 +228,6 @@ function KpiCardsRow({ decls, t }) {
 }
 
 const DEFAULT_ACTIVE = { '303': true, '349': true };
-
-const DEMO_DECLARATIONS = [
-  {
-    id: 'demo-303-2026-T2', model: '303', year: 2026, period: 'T2',
-    type: 'ord', status: 'draft', nif: 'B12345678',
-    result: { kind: 'C', amount: 35479.08 },
-    incidents: { blocking: 0, warning: 1, items: [] },
-    summary: { accrued: 1309.98, deductible: 36789.06, result: -35479.08 },
-    boxes: { 7: 6162.60, 9: 1294.15, 27: 1309.98, 28: 175186, 29: 36789.06, 45: 36789.06, 46: -35479.08 },
-    file: null, sources: [], history: [],
-    updatedAt: '2026-06-01',
-  },
-  {
-    id: 'demo-303-2026-T1', model: '303', year: 2026, period: 'T1',
-    type: 'ord', status: 'ready', nif: 'B12345678',
-    result: { kind: 'C', amount: 2816.31 },
-    incidents: { blocking: 0, warning: 0, items: [] },
-    summary: { accrued: 682.08, deductible: 3498.39, result: -2816.31 },
-    boxes: { 7: 3248, 9: 682.08, 27: 682.08, 28: 16659, 29: 3498.39, 45: 3498.39, 46: -2816.31 },
-    file: '303_B12345678_2026_T1.303', sources: [], history: [],
-    updatedAt: '2026-04-20',
-  },
-  {
-    id: 'demo-303-2025-T4', model: '303', year: 2025, period: 'T4',
-    type: 'ord', status: 'submitted_ack', nif: 'B12345678',
-    result: { kind: 'I', amount: 12179.75 },
-    incidents: { blocking: 0, warning: 0, items: [] },
-    summary: { accrued: 45230.80, deductible: 33051.05, result: 12179.75 },
-    boxes: { 7: 215385, 9: 45230.85, 27: 45230.80, 28: 157386, 29: 33051.05, 45: 33051.05, 46: 12179.75 },
-    file: '303_B12345678_2025_T4.303', sources: [], history: [],
-    updatedAt: '2026-01-20',
-  },
-  {
-    id: 'demo-349-2026-T2', model: '349', year: 2026, period: 'T2',
-    type: 'ord', status: 'draft', nif: 'B12345678',
-    result: { kind: 'N', amount: 0 },
-    incidents: { blocking: 0, warning: 0, items: [] },
-    updatedAt: '2026-06-01',
-  },
-  {
-    id: 'demo-349-2026-T1', model: '349', year: 2026, period: 'T1',
-    type: 'ord', status: 'submitted_ack', nif: 'B12345678',
-    result: { kind: 'N', amount: 0 },
-    incidents: { blocking: 0, warning: 0, items: [] },
-    file: '349_B12345678_2026_T1.txt',
-    updatedAt: '2026-04-20',
-  },
-];
 
 function normDecl(d) {
   return {
@@ -468,7 +378,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeModels, setActiveModels] = useState(DEFAULT_ACTIVE);
   const [showCatalog,  setShowCatalog]  = useState(false);
-  const [showConfig,   setShowConfig]   = useState(false);
   const [showNewDecl,  setShowNewDecl]  = useState(false);
   const [selected,     setSelected]     = useState(new Set());
 
@@ -596,11 +505,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
         <button className="fm-section-header__icon-btn" title={t('fm.action.sort')} aria-label={t('fm.action.sort')}>
           <ArrowUpDown size={16} strokeWidth={1.75} data-testid="ArrowUpDown__cb728e" />
         </button>
-        <RowKebab
-          onDemo={() => setDecls(DEMO_DECLARATIONS.map(normDecl))}
-          onConfig={() => setShowConfig(true)}
-          t={t}
-          data-testid="RowKebab__cb728e" />
 
         <button
           className="fm-toolbar__btn"
@@ -725,11 +629,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
           )}
       </div>
       {/* ── Overlays ─────────────────────────────────────────────── */}
-      {showConfig  && <ConfigDrawer
-        onClose={() => setShowConfig(false)}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        data-testid="ConfigDrawer__cb728e" />}
       {showNewDecl && <NewDeclModal
         onConfirm={handleNewDecl}
         onClose={() => setShowNewDecl(false)}
