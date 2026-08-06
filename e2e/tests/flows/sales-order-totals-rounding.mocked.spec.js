@@ -235,10 +235,15 @@ test.describe('Sales Order — totals rounding (ETP-4017)', () => {
     await installSalesOrderMocks(page, { header: fixedHeader, line: BUG_LINE });
     await page.goto(`/sales-order/${ORDER_ID_BUG}`);
 
-    // Wait for OrderCreateInvoice (headerExtra) to mount — the send-email button
-    // is rendered by that component when isDraft=true, so its presence guarantees
-    // the `sales-order:open-confirm-modal` listener is already registered.
-    await expect(page.getByTestId('action-send-email')).toBeVisible({ timeout: 10_000 });
+    // Wait for OrderCreateInvoice (headerExtra) to mount before dispatching the
+    // confirm-modal event, so the `sales-order:open-confirm-modal` listener is
+    // already registered. Anchor on the totals panel instead of the send-email
+    // button: since ETP-4717, that button is gated to isCompleted-only (it no
+    // longer renders on Draft — see the ETP-4717 comment in OrderCreateInvoice.jsx),
+    // and this fixture's document is DR. The totals panel is a status-independent
+    // signal that the detail page (and thus OrderCreateInvoice) has mounted —
+    // the same anchor the sibling test below (line ~268) already relies on.
+    await pollAmount(page, 'totals-row-total-value');
 
     // The ConfirmModal opens via a window event dispatched by the draftMode
     // primary action. Trigger it directly — that's how the sales-order custom
