@@ -518,9 +518,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   const modelOptions = [
     { value: '303', label: 'Modelo 303', badge: '303' },
     { value: '349', label: 'Modelo 349', badge: '349' },
-  ];
+  ].filter(opt => activeModels[opt.value]);
 
-  const modelYearFiltered = decls.filter(d =>
+  const activeDecls = decls.filter(d => activeModels[d.model]);
+
+  const modelYearFiltered = activeDecls.filter(d =>
     (modelFilter === 'all' || d.model === modelFilter) &&
     (yearFilter  === 'all' || String(d.year) === yearFilter)
   );
@@ -627,12 +629,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
           ? (
             <EmptyState
               title={t('fm.list.empty_no_active_models') ?? 'No tienen modelos activos, configure desde el Catálogo de modelos.'}
-              cta={(
-                <button className="fm-toolbar__btn" onClick={() => setShowCatalog(true)}>
-                  <LayoutGrid size={14} strokeWidth={1.75} data-testid="LayoutGrid__cb728e" />
-                  {t('fm.list.empty_no_active_models_cta') ?? 'Ir al catálogo de modelos'}
-                </button>
-              )}
               data-testid="EmptyState__cb728e" />
           )
           : filtered.length === 0
