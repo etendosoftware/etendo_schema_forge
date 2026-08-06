@@ -1539,7 +1539,7 @@ export function useEntity(entity, childEntity, {
     }, []);
 
     return {
-        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
+        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
         fieldErrors, registerFields,

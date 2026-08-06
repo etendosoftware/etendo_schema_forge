@@ -68,6 +68,20 @@ function renderGrid(props = {}) {
 }
 
 describe('DimensionGrid density (ETP-4610)', () => {
+  beforeEach(() => {
+    // SelectorInput mounts with a selector URL and lazily fetches its first page
+    // through the mocked SelectContent ref. Keep that request deterministic so a
+    // real network rejection cannot fire after RTL has torn down jsdom in CI.
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [] }),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('renders the field label at the compact (text-xs) size, matching the grid row density', () => {
     renderGrid();
     const label = screen.getByText('M_Project_ID');
