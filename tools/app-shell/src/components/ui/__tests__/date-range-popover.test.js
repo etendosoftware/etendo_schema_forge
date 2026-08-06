@@ -57,3 +57,64 @@ describe('DateRangePopoverContent — Aplicar button hover contrast (ETP-4771)',
     );
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ETP-4771 Case 2 — CalendarWithPicker must reuse the shared month/year-picker
+// chrome (HeaderRow, PickerTabs, PickerGrid) from date-picker-chrome.jsx
+// instead of reimplementing the header/nav/tabs/grid markup locally.
+//
+// This is the "commit 1" of the two-commit bug-workflow pattern: these
+// assertions describe the POST-FIX state and are expected to FAIL against
+// the current (pre-fix) source, which still declares its own local
+// `FilterNavBtn` and its own inline header/tab/grid JSX. A second commit
+// will rewrite CalendarWithPicker to import and use the shared chrome,
+// making these pass.
+//
+// Deliberately source-reading only (no render/mount): the shared chrome
+// file lives in the sibling schema_forge_core repo and is not yet part of
+// the published @etendosoftware/app-shell-core version this repo installs
+// (pinned below the change) — a test that imports/renders it would only
+// resolve under the opt-in LOCAL_CORE=1 profile, not the default one CI
+// uses. See docs/repo-topology.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Import statement (if any) pulling names from the shared chrome file.
+const chromeImportMatch = src.match(
+  /import\s*\{([^}]*)\}\s*from\s*['"]@etendosoftware\/app-shell-core\/components\/ui\/date-picker-chrome\.jsx['"]/,
+);
+
+// The CalendarWithPicker function body, isolated so JSX assertions don't
+// accidentally match something in DateRangePopoverContent above it.
+const calendarWithPickerMatch = src.match(
+  /function CalendarWithPicker\([\s\S]*$/,
+);
+
+describe('CalendarWithPicker — reuses the shared date-picker-chrome (ETP-4771 Case 2)', () => {
+  it('does NOT declare its own local FilterNavBtn (must reuse the shared chrome\'s NavButton instead)', () => {
+    assert.doesNotMatch(
+      src,
+      /function FilterNavBtn\(/,
+      'CalendarWithPicker must not reimplement its own nav-button component — ' +
+        'it should use NavButton (via HeaderRow) from the shared date-picker-chrome.jsx.',
+    );
+  });
+
+  it('imports HeaderRow, PickerTabs and PickerGrid from the shared date-picker-chrome.jsx', () => {
+    assert.ok(
+      chromeImportMatch,
+      "Expected an import from '@etendosoftware/app-shell-core/components/ui/date-picker-chrome.jsx'",
+    );
+    const importedNames = chromeImportMatch[1];
+    assert.match(importedNames, /\bHeaderRow\b/);
+    assert.match(importedNames, /\bPickerTabs\b/);
+    assert.match(importedNames, /\bPickerGrid\b/);
+  });
+
+  it('renders the shared HeaderRow, PickerTabs and PickerGrid in its JSX (not inline reimplementations)', () => {
+    assert.ok(calendarWithPickerMatch, 'Expected to find the CalendarWithPicker function in the source');
+    const body = calendarWithPickerMatch[0];
+    assert.match(body, /<HeaderRow\b/);
+    assert.match(body, /<PickerTabs\b/);
+    assert.match(body, /<PickerGrid\b/);
+  });
+});
