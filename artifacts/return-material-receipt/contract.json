@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.20.0",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "updatedAt": "2026-07-21T12:35:22.212Z",
-  "checksum": "4062dd639dd4b6f2",
+  "updatedAt": "2026-08-04T16:33:35.489Z",
+  "checksum": "481e8e095cb76bb2",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -793,7 +793,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
@@ -1251,6 +1251,14 @@
             "type": "string",
             "visibility": "readOnly",
             "required": false
+          },
+          {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
           }
         ],
         "javaQualifier": "returnMaterialReceiptHeaderHandler"
@@ -2799,6 +2807,14 @@
         "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
+        "id": "t-system-field-returnMaterialReceipt-etgoCurrency",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "System field 'etgoCurrency' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
         "id": "t-system-field-returnMaterialReceipt-externalBusinessPartnerReference",
         "category": "system-field",
         "entity": "returnMaterialReceipt",
@@ -3358,7 +3374,7 @@
       }
     ],
     "summary": {
-      "total": 189,
+      "total": 190,
       "byCategory": {
         "action-endpoint": 13,
         "crud-flags": 2,
@@ -3374,11 +3390,11 @@
         "rule-declared": 4,
         "searchable-filters": 5,
         "selector-endpoint": 6,
-        "system-field": 88,
+        "system-field": 89,
         "visibility": 2
       },
       "byRunner": {
-        "node": 187,
+        "node": 188,
         "junit": 2
       }
     }

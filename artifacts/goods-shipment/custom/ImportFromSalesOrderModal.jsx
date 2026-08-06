@@ -47,21 +47,30 @@ async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentI
 }
 
 const fetchDocuments = async ({ base, headers, bpId, invoiceId: shipmentId }) => {
-  const [ordersRes, draftInfo] = await Promise.all([
+  const [ordersRes, draftInfo, headerRes] = await Promise.all([
     fetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=orderDate desc`, { headers }),
     fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentId: shipmentId }),
+    fetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`, { headers }),
   ]);
 
+  let shipmentCurrency = null;
+  if (headerRes.ok) {
+    shipmentCurrency = (await headerRes.json())?.response?.data?.[0]?.etgoCurrency || null;
+  }
+
   let documents = [];
+  let excludedByCurrency = false;
   if (ordersRes.ok) {
     const all = (await ordersRes.json())?.response?.data || [];
-    documents = all.filter(o =>
+    const candidates = all.filter(o =>
       o.documentStatus === 'CO'
       && o.businessPartner === bpId
       && Number(o.deliveryStatus ?? 100) < 100,
     );
+    documents = shipmentCurrency ? candidates.filter(o => o.currency === shipmentCurrency) : candidates;
+    excludedByCurrency = !!shipmentCurrency && documents.length === 0 && candidates.length > 0;
   }
-  return { documents, sharedContext: { draftInfo } };
+  return { documents, sharedContext: { draftInfo }, excludedByCurrency };
 };
 
 const fetchLines = async ({ base, headers, docId, sharedContext }) => {
@@ -106,6 +115,7 @@ export default function ImportFromSalesOrderModal(props) {
       searchPlaceholderKey="searchSalesOrder"
       emptyMessageKey="noCompletedSalesOrdersForThisCustomer"
       noSearchResultsKey="noOrdersMatchYourSearch"
+      noCurrencyMatchMessageKey="noSalesOrdersMatchShipmentCurrency"
       successMessageKey="linesImportedFromSalesOrder"
       showPriceColumns={false}
       fetchDocuments={fetchDocuments}
