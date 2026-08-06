@@ -151,9 +151,15 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 
 `FiscalModelsPage` keeps `FmListPage` mounted (hidden) while in a detail view so the auto-compute polling interval stays alive. When polling fires, `onComputeUpdate` propagates the updated `_precomputed` to `FmModel349Page` via a `useEffect` on `decl._precomputed`.
 
+## List page toolbar (`FmListPage`)
+
+`FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The toolbar's visible actions are, in order: the year/model/status `FilterDropdown` filters, the search and sort icon buttons, the **"Catálogo de modelos (N)"** button (`N = activeCount`), and — only when `activeCount > 0` — **"+ Nueva declaración"**.
+
+This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`) and remains in active use elsewhere: the Modelo-303 detail page's own separate 3-dot menu (Comparar / Configuración / Generar — see `models/303/FmModel303Page.jsx`) still opens it, and the model catalog described below is a full drawer of its own (`FmCatalogPage`), unrelated to `ConfigDrawer`. No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
+
 ## Model catalog (`FmCatalogPage`)
 
-The catalog drawer is opened from a dedicated toolbar button — **"Catálogo de modelos (N)"**, `N = activeCount` — placed immediately before "+ Nueva declaración" (after the row kebab). It is **not** an item inside the row kebab menu: the kebab (`RowKebab`) only holds Demo and Configuración now (the `onCatalog`/`activeCount` props and the "Catálogo de modelos" menu item were removed from `RowKebab` in this change). The toolbar button reuses `fm.catalog.title` for its label and calls `setShowCatalog(true)` inline on click — the same state setter the kebab item used before this UX change. It uses the `fm-toolbar__btn` (non-`--primary`) style so it reads as a secondary action next to "+ Nueva declaración".
+The catalog drawer is opened from the toolbar button described above — **"Catálogo de modelos (N)"**. It reuses `fm.catalog.title` for its label and calls `setShowCatalog(true)` inline on click. It uses the `fm-toolbar__btn` (non-`--primary`) style so it reads as a secondary action next to "+ Nueva declaración".
 
 The catalog drawer lists the tax forms the tenant can enable/disable. It currently exposes only the two supported forms — no locked/"coming soon" entries:
 
