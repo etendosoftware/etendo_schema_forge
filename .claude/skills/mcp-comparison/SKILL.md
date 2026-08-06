@@ -7,6 +7,10 @@ description: >
   the MCP comparison, to re-validate the improvement backlog after a wave ships, to verify that
   a shipped IMP-* actually behaves as claimed, to ask "how many improvements are still open?",
   or to benchmark the Etendo GO MCP against another vendor MCP.
+  Also covers job C — **working a single item** ("let's fix IMP-11", "arreglemos IMP por IMP"):
+  root-cause one improvement and write up the investigation in
+  `docs/mcp-evaluation/imps/IMP-<n>.md` (refuted hypotheses kept, not overwritten; file:line and
+  real query output required; no measurement, no status change).
   Requires the Holded MCP plus one or more Etendo GO MCPs — defaults to a single target and asks
   the user which environment(s) to probe (local / experimental / staging / ticket sandbox) when
   several are connected, because the answer changes what the report means.
@@ -23,20 +27,26 @@ description: >
   reporte MCP", "repetir el reporte", "re-run the benchmark", "validate IMP-", "IMP-4",
   "IMP-6", "IMP-9", "IMP-15", "Wave 3", "agentic validation", "validacion agentica",
   "registro de mejoras", "improvements registry", "mejoras pendientes", "MARI",
+  "arreglemos IMP", "fix IMP-", "imp por imp", "por que falla IMP-", "root cause IMP-",
   "puntaje de avance", "readiness index", "que metrica del MCP",
   "did the improvements land?", "post-mejoras".
 ---
 
 # /mcp-comparison — Reproduce the Holded vs Etendo GO MCP Benchmark
 
-Three documents, three distinct roles. **Do not confuse them** — the most common failure of this
-skill is writing a status into the wrong one.
+Everything lives under **[`docs/mcp-evaluation/`](../../../docs/mcp-evaluation/)** — start at its
+[`README.md`](../../../docs/mcp-evaluation/README.md), which is the canonical description of the
+folder layout.
+
+Four kinds of document, four distinct roles. **Do not confuse them** — the most common failure of
+this skill is writing a status into the wrong one.
 
 | Document | Role | May a status be changed here? |
 |---|---|---|
-| **[`docs/mcp-evaluation/mcp-improvements-registry.md`](../../../docs/mcp-evaluation/mcp-improvements-registry.md)** | **The registry.** Every IMP-* item, its priority, class, repo, **status**, and evidence pointer. Plus **MARI** (§2.1–2.3), the M5 diagnostics (§2.4), the probe-surface list (§2.5) and the changelog. | **Yes — only here.** |
-| [`docs/mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md`](../../../docs/mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md) | **The baseline benchmark.** Architecture contrast, inventories, coverage matrix, and the full `BEFORE`/`AFTER` specification of each item. Reference material. | No |
-| `docs/mcp-evaluation/mcp-comparison-post-audit-<date>.md` | **One run report per execution.** Live evidence, defects, new proposals, preference verdict, M1–M4 — and a **delta** against the registry. | No |
+| **[`mcp-evaluation/mcp-improvements-registry.md`](../../../docs/mcp-evaluation/mcp-improvements-registry.md)** | **The registry.** Every IMP-* item, its priority, class, repo, **status**, and evidence pointer. Plus **MARI** (§2.1–2.3), the M5 diagnostics (§2.4), the probe-surface list (§2.5) and the changelog. | **Yes — only here.** |
+| [`mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md`](../../../docs/mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md) | **The baseline benchmark.** Architecture contrast, inventories, coverage matrix, and the full `BEFORE`/`AFTER` specification of each item. Reference material. | No |
+| `mcp-evaluation/mcp-comparison-post-audit-<date>.md` | **One run report per execution.** Live evidence, defects, new proposals, preference verdict, M1–M4 — and a **delta** against the registry. | No |
+| [`mcp-evaluation/imps/IMP-<n>.md`](../../../docs/mcp-evaluation/imps/) | **One working file per improvement.** Root-cause investigation: where the responsible code actually lives, what the DB actually contains, which hypotheses were refuted, what a fix must touch. Written **while the item is worked** — absent for unopened items, which is expected. See "Working an item" below. | No |
 
 Status used to live in five places inside the base report and drifted every time. It now lives in
 the registry. A run report states only what **changed**, in these three sentence shapes:
@@ -61,15 +71,66 @@ numbered live call in §11, and every proposed change shows a verbatim `BEFORE`
 response next to the target `AFTER`. Refreshing them means **re-running the calls**, not
 re-reading the prose.
 
-Two distinct jobs this skill covers — decide which one you are doing before touching anything:
+Three distinct jobs this skill covers — decide which one you are doing before touching anything:
 
 | Job | Scope | Sections touched |
 |---|---|---|
 | **A. Verify a shipped wave** (the common case) | Re-run the calls that back the shipped IMP-* items; flip their status; **then Step 3b — propose the next gaps and restate the preference verdict** | §1 delivery status, §10 bullets, the IMP-* entries + new IMP-n, their §11 rows, the affected §3/§8 rows |
 | **B. Full re-benchmark** | Re-run the whole §11 call set against both MCPs; recount specs; re-score the matrix; **Step 3b applies equally** | All sections + `Date:` header |
+| **C. Work a single item** ("let's fix IMP-11") | Root-cause one improvement and write up the investigation. **No measurement, no status change** — see "Working an item" below | `imps/IMP-<n>.md` only |
 
-Step 3b (new proposals + preference verdict) is **not optional in either job** — it is the point of
-the exercise; the status flips are just its input.
+Step 3b (new proposals + preference verdict) is **not optional in job A or B** — it is the point of
+the exercise; the status flips are just its input. Job C is exempt: it produces no measurement, so it
+recomputes no MARI.
+
+---
+
+## Working an item (job C) — `imps/IMP-<n>.md`
+
+A registry row is one line. That is the right size for a scoreboard and the wrong size for fixing
+something. A run report records what was **observed**, which is not the same as what the code turns
+out to be. The `imps/` file is the third thing: **the investigation**.
+
+The distinction that matters, and the reason this file type exists: a run report may say *"0 of 157
+fields carry `visibility`"*. That is an observation, and it is compatible with several very different
+root causes — a serializer that never emits the key, a DB column nobody populates, a join that never
+matches. Those need three different fixes in two different repos. The IMP file is where the
+candidates get discriminated **with evidence**.
+
+**How to work one:**
+
+1. **Read the registry row and the cited evidence rows first.** They tell you what was observed and
+   on which environment. Do not re-derive them.
+2. **Enumerate the competing hypotheses before looking at code**, then knock them down one at a time.
+   Record every one in a table with its verdict, including the refuted ones.
+3. **Read the actual source and query the actual DB.** Cite file:line and paste the real query
+   output. An IMP file asserting a root cause without either is worth nothing — same rule as Step 0.2
+   for findings.
+4. **State what a fix must touch**, in dependency order, per repo — and what it must *not* touch.
+   Note anything that would make the response merely *look* compliant; that is a trap worth naming
+   explicitly, because it is the tempting cheap fix.
+5. **Write the `Done when:` as verifiable checkboxes**, ending with the re-measurement that closes
+   it (job A or B). The item's status moves **only** after that re-measurement, **only** in the
+   registry.
+
+**Non-negotiable for this job:**
+
+- **A wrong earlier diagnosis is kept, not overwritten.** When the investigation refutes something
+  this skill or a previous run asserted, say so explicitly and leave the superseded claim visible
+  next to the evidence that killed it. Silently replacing it is exactly how the old
+  status-in-five-places drift started, and the wrong guess is usually the informative part — if the
+  Java *looks* guilty and is not, the next reader needs to know that.
+- **Investigating is not fixing.** Job C ends at the write-up. Do not change code as part of it
+  unless the user asked for the fix too — and never run `gradlew`, `update.database`,
+  `export.database` or restart Tomcat (the user builds and deploys).
+- **Read-only probing still applies.** Diagnostic SQL must be `SELECT` only. Write probes need the
+  Step 0.1 authorization, same as any run.
+- **Say when you are blocked, in the file.** If part of the fix lives in a repo that is not cloned,
+  record it as a blocker and state whether shipping the reachable half is safe. Often it is not: a
+  parameter no caller sends leaves behaviour unchanged while looking done in the diff.
+- Numbers are permanent. Never renumber, never recycle — the registry, the run reports and the base
+  report all cross-reference them.
+- Add the item to the README's index table when you create its file.
 
 ---
 
@@ -553,7 +614,18 @@ published document):
   tables)** now say *"see the registry"* rather than carrying a mark of their own. Do not reintroduce
   a status there — that duplication is what this registry exists to end.
 
-Sanity check before finishing:
+### 4d. The item working files — `docs/mcp-evaluation/imps/IMP-<n>.md`
+
+Job C's output, and the only file job C writes. Full rules in "Working an item" above. From a run's
+point of view (job A/B) there are only two obligations:
+
+- When a run's evidence **refutes or sharpens** what an existing IMP file claims, update that file
+  too — keeping the superseded claim visible. A run report and an IMP file that disagree about the
+  root cause is a worse state than either being merely incomplete.
+- Never create one speculatively for an item nobody has opened. An empty or guessed IMP file is
+  indistinguishable from an investigated one at a glance, which defeats the purpose.
+
+### Sanity check before finishing
 
 ```bash
 cd /Users/futit/Workspace/etendo_develop/schema_forge
@@ -561,6 +633,7 @@ R=docs/mcp-evaluation/mcp-improvements-registry.md
 grep -o 'IMP-[0-9]*' $R | sort -uV                    # every number present, no gaps, no reuse
 grep -c '^| \*\*IMP-' $R                              # row count == highest IMP number
 grep -o 'IMP-[0-9]*' docs/mcp-evaluation/mcp-comparison-post-audit-*.md | sort -u   # no item cited but unregistered
+ls docs/mcp-evaluation/imps/                          # every file here is listed in the README index
 ```
 
 Every IMP-n mentioned in any run report must have a row in the registry; the registry's M5 must equal
