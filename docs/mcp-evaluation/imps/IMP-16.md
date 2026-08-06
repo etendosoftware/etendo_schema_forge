@@ -381,8 +381,8 @@ builds and deploys; §7 is the verification that must run afterwards.
 | `schemaforge/CalloutRequestBuilder.java` | `getCalloutDatePattern()` now delegates to `NeoDateFormat.getUiDatePattern()`; the duplicated property lookup and its cache removed |
 | `mcp/ToolRegistry.java` | `neo_create` / `neo_update` state the required input format; `neo_defaults` states that its date values come back ISO and can be passed straight back |
 | `docs/neo-headless.md` §4.3.1 | the date contract, the three producers of non-ISO values, and the three application points |
-| `src-test/…/util/NeoDateFormatTest.java` | **new.** 20 cases, including `"06-08-2026"` and `"24-06-2026"` as named regressions — the two values found in real rows (§3.6) |
-| `src-test/…/util/NeoTypeCoercionHelperTest.java`, `src-test/…/mcp/McpToolRouterSupportTest.java` | the same four date cases on both coercers, deliberately duplicated so the two implementations cannot drift silently |
+| `src-test/…/util/NeoDateFormatTest.java` | **new.** Includes `"06-08-2026"` and `"24-06-2026"` as named regressions — the two values found in real rows (§3.6) — plus the zone-offset boundary and one case per date-ish domain type |
+| `src-test/…/util/NeoTypeCoercionHelperTest.java`, `src-test/…/mcp/McpToolRouterSupportTest.java` | the same seven date cases on both coercers, deliberately duplicated so the two implementations cannot drift silently. Three of them assert a **non**-change: a Time property, an AbsoluteDateTime property, and a non-zero offset must all come out byte-identical |
 
 ### 6.1 Three decisions worth recording
 
@@ -393,13 +393,45 @@ normalizing before it would change what legacy callouts receive. Normalizing aft
 boundary byte-for-byte as it is today, and still catches the cascade's own output, the sequence pass
 and the hidden-mandatory pass — which a per-field hook would have missed.
 
-**The gate is the DAL property type, not `AD_Reference` `"15"`.** The plan said reference 15. The
-implementation keys off `java.util.Date.class.isAssignableFrom(prop.getPrimitiveObjectType())` plus
-`prop.isDatetime()`, which is what the DAL parser itself branches on — so the normalization cannot
-disagree with the consumer it exists to satisfy, and it covers DateTime columns that reference 15
-excludes. The narrowing that actually protects existing behaviour is elsewhere: **an input shape the
+**The gate is the DAL *domain* type, not `AD_Reference` `"15"` and not the Java type.** The plan said
+reference 15. The implementation keys off what the DAL parser itself branches on, so the
+normalization cannot disagree with the consumer it exists to satisfy — and it covers DateTime columns
+that reference 15 excludes.
+
+The first cut of this got it wrong, and the correction is the interesting part. It gated on
+`java.util.Date.class.isAssignableFrom(prop.getPrimitiveObjectType())` plus `prop.isDatetime()` — two
+cases. `Property.java:1107-1124` has **five** date-ish domain types, and `JsonToDataConverter`
+branches on all five:
+
+| Domain type | Predicate | Eligible? |
+|---|---|---|
+| `DateDomainType` | `isDate()` | ✅ → `yyyy-MM-dd` |
+| `DatetimeDomainType` | `isDatetime()` | ✅ → `yyyy-MM-dd'T'HH:mm:ss` |
+| `TimestampDomainType` | `isTimestamp()` | ❌ untouched |
+| `AbsoluteTimeDomainType` | `isAbsoluteTime()` | ❌ untouched |
+| `AbsoluteDateTimeDomainType` | `isAbsoluteDateTime()` | ❌ untouched |
+
+The two `Time` kinds are **time-of-day** values backed by `java.util.Date`: the converter keeps only
+the part after the `T`, appends `+0000` and supplies the calendar day itself. A gate on the Java type
+therefore captured them, and would have rewritten `2026-08-06T14:30:00` to `2026-08-06` — deleting
+the only half that column reads. `AbsoluteDateTime` would have lost its time for the same reason.
+The eligibility decision now lives in one place, `NeoDateFormat.canonicalShapeFor(Property)`, which
+returns `FALSE` / `TRUE` / `null` for the three outcomes.
+
+A read-only census of `etgo_sf_field` on `etendo-go-local` sizes what the first cut risked: **247
+curated fields across 88 entities on reference 15 (Date), 15 fields across 10 entities on reference
+16 (DateTime), and zero curated fields on reference 24 (Time)**. So no curated NEO field could have
+hit it — but the coercers run on any request body, and 230 MCP-exposed POST-able entities exist, so
+the gate was narrowed regardless. An exclusion nobody can currently reach is still the right shape
+for a change of this blast radius.
+
+The narrowing that protects existing behaviour on the *value* side is separate: **an input shape the
 canonicalizer does not recognise is left verbatim**, so the set of values whose bytes change is
-exactly the set that is provably wrong today.
+exactly the set that is provably wrong today. `2026-08-06T14:30:00+02:00` falls in that set on
+purpose — it already reaches the DAL correctly (`JsonUtils.convertFromXSDToJavaFormat` rewrites
+`+02:00` to `+0200`), and the canonical form has nowhere to put an offset, so normalizing it would
+shift the instant by two hours. A **zero** offset (`Z`, `+00`, `+00:00`) *is* dropped, because an
+offset-less canonical value is read as UTC by that same method — identity, not approximation.
 
 **The 422 is not in this change.** Phase 1 normalizes and logs `WARN` on an unparseable value.
 Promoting that to an IMP-5-style structured 422 is phase 2, once the logs show the `WARN` never
@@ -410,7 +442,7 @@ working (if lenient) calls into hard errors on the same deploy.
 
 `NeoDateFormat`'s logic was extracted to a standalone single-file program and run on a JDK
 (openjdk-11), with the `OBPropertiesProvider` lookup stubbed to the `dd-MM-yyyy` fallback and the
-parsing code otherwise untouched. All 20 cases pass, including the two that matter most:
+parsing code otherwise untouched. All **28** cases pass, including the two that matter most:
 
 | Input | `datetime` | Output |
 |---|---|---|
@@ -419,6 +451,10 @@ parsing code otherwise untouched. All 20 cases pass, including the two that matt
 | `2026-08-06` | false | `2026-08-06` — unchanged; ISO is tried before the UI pattern |
 | `2026-08-06 18:55:31.567837+00` | true | `2026-08-06T18:55:31` |
 | `2026-08-06 18:55:31.567837+00` | false | `2026-08-06` |
+| `2026-08-06T14:30:00Z`, `…+00:00` | true | `2026-08-06T14:30:00` — zero offset dropped |
+| `2026-08-06T14:30:00+02:00` | true | `null` → **refused**, so the correct instant survives |
+| `2026-08-06T14:30:00+02:00` | false | `2026-08-06` — for a date-only column an offset cannot move the day |
+| `2026-08-06T banana` | true | `null` — an unaccountable time half is refused, not silently midnight |
 | `06/08/2026`, `2026-02-30`, `30-02-2026`, `2026-13-40`, `2026-08`, `2026-08-06+02:00` | — | `null` → caller keeps the original |
 
 `2026-02-30 → null` is deliberate: the formatter uses `ResolverStyle.STRICT`, so an impossible day is
