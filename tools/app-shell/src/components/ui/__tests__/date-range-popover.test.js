@@ -118,3 +118,51 @@ describe('CalendarWithPicker — reuses the shared date-picker-chrome (ETP-4771 
     assert.match(body, /<PickerGrid\b/);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ETP-4771 Case 3 — CalendarWithPicker's header label must be computed with
+// the same formatMonthYearLabel(date, localeStr) helper the conditional-filter
+// date picker (DateField) uses, not a local combined Intl.DateTimeFormat call.
+//
+// Root cause: `new Intl.DateTimeFormat(localeStr, { month: 'long', year:
+// 'numeric' }).format(month)` produces "agosto de 2026" in es-ES — Spanish's
+// combined long-month+year format inserts the "de" preposition.
+// formatMonthYearLabel formats month and year with two SEPARATE
+// Intl.DateTimeFormat calls and joins them with a plain space
+// ("Agosto 2026", capitalized, no preposition), matching DateField's header.
+//
+// Source-reading only, consistent with the rest of this file: the helper
+// lives in the sibling schema_forge_core repo, imported via the
+// '@etendosoftware/app-shell-core/lib/dateMask.js' subpath.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CalendarWithPicker — header label uses formatMonthYearLabel (ETP-4771 Case 3)', () => {
+  it("imports formatMonthYearLabel from '@etendosoftware/app-shell-core/lib/dateMask.js'", () => {
+    assert.match(
+      src,
+      /import\s*\{\s*formatMonthYearLabel\s*\}\s*from\s*['"]@etendosoftware\/app-shell-core\/lib\/dateMask\.js['"]/,
+      "Expected an import of formatMonthYearLabel from '@etendosoftware/app-shell-core/lib/dateMask.js'",
+    );
+  });
+
+  it('computes headerLabel by calling formatMonthYearLabel(month, localeStr)', () => {
+    assert.ok(calendarWithPickerMatch, 'Expected to find the CalendarWithPicker function in the source');
+    const body = calendarWithPickerMatch[0];
+    assert.match(
+      body,
+      /const headerLabel\s*=\s*useMemo\(\s*\(\)\s*=>\s*formatMonthYearLabel\(\s*month\s*,\s*localeStr\s*\)/,
+      'headerLabel must be computed via formatMonthYearLabel(month, localeStr), not a local Intl.DateTimeFormat call.',
+    );
+  });
+
+  it('does NOT reintroduce a combined month+year Intl.DateTimeFormat call for the header label', () => {
+    assert.ok(calendarWithPickerMatch, 'Expected to find the CalendarWithPicker function in the source');
+    const body = calendarWithPickerMatch[0];
+    assert.doesNotMatch(
+      body,
+      /new Intl\.DateTimeFormat\([^)]*month:\s*['"]long['"][^)]*year:\s*['"]numeric['"]/s,
+      'A combined { month: "long", year: "numeric" } Intl.DateTimeFormat call inserts the "de" ' +
+        'preposition in es-ES ("agosto de 2026") — the header label must use formatMonthYearLabel instead.',
+    );
+  });
+});

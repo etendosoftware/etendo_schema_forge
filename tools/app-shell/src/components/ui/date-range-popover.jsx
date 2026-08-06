@@ -9,6 +9,12 @@ import { cn } from '@/lib/utils';
 // pickers render identical UI instead of two independently drifting
 // reimplementations.
 import { HeaderRow, PickerTabs, PickerGrid } from '@etendosoftware/app-shell-core/components/ui/date-picker-chrome.jsx';
+// Same header-label formatter DateField uses (ETP-4771) — Intl's combined
+// { month: 'long', year: 'numeric' } format inserts the "de" preposition in
+// es-ES ("agosto de 2026"). formatMonthYearLabel formats month/year
+// separately and joins with a plain space ("Agosto 2026"), so both pickers
+// show identical header text.
+import { formatMonthYearLabel } from '@etendosoftware/app-shell-core/lib/dateMask.js';
 
 /**
  * value shape used by both DateRangePopover and DateRangePopoverContent:
@@ -263,7 +269,7 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
   const localeStr = (appLocale || 'es_ES').replace('_', '-');
 
   const headerLabel = useMemo(
-    () => new Intl.DateTimeFormat(localeStr, { month: 'long', year: 'numeric' }).format(month),
+    () => formatMonthYearLabel(month, localeStr),
     [month, localeStr],
   );
 
