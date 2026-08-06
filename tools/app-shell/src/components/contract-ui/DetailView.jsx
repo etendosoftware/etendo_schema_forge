@@ -61,7 +61,10 @@ import {
   applyLocalChildRowUpdate,
   applyOneComboEntry,
   applyProductCalloutPriceAdjustments,
+  applyProductCurrencyConversion,
   buildLineRowClickHandler,
+  calculateLineNetAmount,
+  calculateNetUnitPrice,
   canDeleteSelectedLine,
   CollapsibleSection,
   collectRowFieldValues,
@@ -123,6 +126,7 @@ import {
   resolveProcessLabel,
   resolveSidebarContent,
   resolveStatusPrefix,
+  resolveTaxIdentifier,
   runAddLineAction,
   SecondaryPanelTab,
   secondaryTabEmptyState,
@@ -4465,87 +4469,6 @@ export function DetailView({
       })}
     </div>
   );
-}
-
-function applyProductCurrencyConversion(field, result, rowValues, lineConfig, activeCurrencyConversion, currencyIdentifier, computeLineGrossAmount) {
-  if (field !== 'product' || !activeCurrencyConversion) return;
-  const { rate, toCurrency } = activeCurrencyConversion;
-  result.currency = toCurrency;
-  if (currencyIdentifier) {
-    result['currency$_identifier'] = currencyIdentifier;
-  }
-  const rawPrice = parseFloat(String(result[lineConfig.priceField] ?? 0));
-  if (rawPrice > 0 && rate !== 1) {
-    const convertedPrice = parseFloat((rawPrice * rate).toFixed(2));
-    result[lineConfig.priceField] = convertedPrice;
-    if (result.standardPrice != null) result.standardPrice = convertedPrice;
-    if (result.unitPrice != null) result.unitPrice = convertedPrice;
-    if (result.listPrice != null) result.listPrice = convertedPrice;
-    // The earlier 'product' callout pass already latched result.lineNetAmount onto the
-    // UNCONVERTED price (see calculateLineNetAmount / deriveNetFromProductChange). Clear it
-    // here so computeLineGrossAmount's null-guard recomputes it from the converted price
-    // instead of silently skipping the sync (its guard only fires when lineNetAmount is
-    // null/0). Without this, lineNetAmount stays stale while grossAmount/grossField are
-    // correctly forced to the converted value — an inconsistent line that the backend
-    // persists using the stale net, producing a wrong (sometimes negative) tax total.
-    result.lineNetAmount = null;
-    computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
-      ...rowValues,
-      ...result,
-      [lineConfig.priceField]: convertedPrice,
-    });
-  }
-}
-
-function resolveTaxIdentifier(result, rowValues, hook) {
-  if (!result['tax$_identifier']) {
-    const effectiveTaxId = result.tax ?? rowValues.tax;
-    if (effectiveTaxId) {
-      const ref = (hook.children || []).find(l => l.tax === effectiveTaxId && l['tax$_identifier']);
-      if (ref) result['tax$_identifier'] = ref['tax$_identifier'];
-    }
-  }
-}
-
-function calculateLineNetAmount(result, field, lineConfig, value, rowValues) {
-  if (result.lineNetAmount == null && (field === lineConfig.qtyField || field === lineConfig.priceField || field === 'product')) {
-    const qty = field === lineConfig.qtyField ? (parseFloat(value) || 0)
-      : (parseFloat(String(rowValues[lineConfig.qtyField] ?? '')) || 0);
-    const price = field === lineConfig.priceField ? (parseFloat(value) || 0)
-      : (parseFloat(String(result[lineConfig.priceField] ?? rowValues[lineConfig.priceField] ?? '')) || 0);
-    if (qty > 0 && price > 0) result.lineNetAmount = String(qty * price);
-  }
-}
-
-function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
-  if (result.grossUnitPrice != null && result.netUnitPrice == null) {
-    const taxId = result.tax;
-    let taxFactor = null;
-    const calloutRate = parseFloat(String(result.taxRate ?? ''));
-    if (isPositiveNumeric(calloutRate)) taxFactor = 1 + calloutRate / 100;
-    if (canUseCachedTaxRate(taxFactor, taxId, taxRateCacheRef)) {
-      taxFactor = 1 + taxRateCacheRef.current[taxId] / 100;
-    }
-    if (taxFactor === null && taxId) {
-      const ref = (hook.children || []).find(l => l.tax === taxId &&
-        parseFloat(String(l.grossAmount ?? '')) > 0 &&
-        parseFloat(String(l.lineNetAmount ?? '')) > 0
-      );
-      if (ref) taxFactor = parseFloat(String(ref.grossAmount)) / parseFloat(String(ref.lineNetAmount));
-    }
-    const gross = Number(result.grossUnitPrice);
-    result.netUnitPrice = taxFactor != null && taxFactor > 1
-      ? parseFloat((gross / taxFactor).toFixed(6))
-      : gross;
-  }
-}
-
-function canUseCachedTaxRate(taxFactor, taxId, taxRateCacheRef) {
-  return taxFactor === null && taxId && taxRateCacheRef.current[taxId] != null;
-}
-
-function isPositiveNumeric(calloutRate) {
-  return !isNaN(calloutRate) && calloutRate > 0;
 }
 
 function populateIdentifierFields(api, result, detailEntity, catalogs) {
