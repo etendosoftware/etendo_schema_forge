@@ -6,8 +6,8 @@
 | **Specification** | registry **Appendix A** (A.6 fixes, A.7 done-when) |
 | **Evidence** | W3, W8, B11, B15 (2026-08-05 / 2026-08-06) |
 | **Repo** | `com.etendoerp.go` |
-| **Implemented** | 2026-08-07, commits `12dd847f` + `2df04cd1` + `b64af873` on `feature/ETP-4793` |
-| **Live probe** | 2026-08-07 on `etendo-go-local`, two rounds — §9. Three of four clauses pass; the `uOM` secondary failed twice and was finally root-caused in `b64af873` (uncompiled). |
+| **Implemented** | 2026-08-07, commits `12dd847f` + `2df04cd1` + `b64af873` + `845e9363` on `feature/ETP-4793` |
+| **Live probe** | 2026-08-07 on `etendo-go-local`, three rounds — §9. Three of four clauses pass; the `uOM` secondary failed all three rounds and was finally root-caused from the container log in `845e9363` (uncompiled). |
 
 This file records **what shipped**. It changes no status mark and no MARI figure — those move only
 through a `/mcp-comparison` run. `2df04cd1` has **not been compiled or deployed**; the credit for
@@ -126,56 +126,85 @@ bare `500 "Unit of Measure mismatch (product/transaction)"` — and the value wa
 from an undocumented key in the product selector's response. `handleCreate` now runs the same
 injection (the method was widened from package-private to `public static`).
 
-**This clause shipped broken in `12dd847f`, was mis-diagnosed in `2df04cd1`, and was actually fixed
-in `b64af873`.** Take the diagnosis history seriously — it cost two probe rounds.
+**This clause shipped broken in `12dd847f` and was mis-diagnosed three times — in `2df04cd1`, in
+`b64af873`, and in the sentinel theory `b64af873` was built on — before `845e9363` addressed the
+actual cause.** Take the diagnosis history seriously: it cost three probe rounds, and every one of
+those rounds was spent theorising because nobody had looked at the failing SQL.
 
-**The real cause (`b64af873`).** The injection's own early-return guard was skipping it:
+**The real cause (`845e9363`).** The body reaching the DAL carried a `uOM` that was real, valid and
+wrong. From the failing INSERT itself:
+
+```
+insert into C_OrderLine (…, M_Product_ID, …, C_UOM_ID, …)
+values (…, ('D627916D3A9141438A7B383364452E12'), …, ('ADF850C3E6E9413B9F9EEA5C87456073'), …)
+ERROR: @20111@   Where: PL/pgSQL function c_orderline_trg() line 168 at RAISE
+```
+
+`ADF850C3E6E9413B9F9EEA5C87456073` is **Centimeter**. The product's UOM is `100`, **Unit**.
+
+`C_UOM_ID` is mandatory on `C_OrderLine`, so `NeoDefaultsService#tryInjectFirstFromLookup`
+preselects the first combo option for it — alphabetically *Centimeter* — and does so **before** the
+product callout runs. The callout then answers correctly (the log shows
+`"uOM":{"value":"100","_identifier":"Unit"}`), but on the REST path that mandatory, already-populated
+field is in `protectedCalloutFields`, which is precisely what stops the correct answer from
+overwriting the guess. The injection was then a no-op because its guard asked the wrong question:
 
 ```java
 String existingUom = body.optString("uOM", "");
-if (!existingUom.isEmpty()) { return; }   // ← the bug
+if (!existingUom.isEmpty() && !"0".equals(existingUom) && !"null".equals(existingUom)) {
+  return;   // ← "Centimeter" is none of those, so it returns
+}
 ```
 
-The callout cascade runs immediately *before* the injection on every create path, and the AD callout
-behind it, `SL_Order_Product`, derives the UOM from the request parameter `inpmProductId_UOM`
-(`SL_Order_Product.java:53,99`) — a value the UI's product combo supplies and a NEO create never
-does. So the cascade writes an empty/null `uOM` back into the body, and **jettison's `optString`
-renders `JSONObject.NULL` as the string `"null"`**, which is not `isEmpty()`. The guard read the
-sentinel as a real value and returned; the sentinel then reached the DAL and the trigger compared
-`COALESCE(C_UOM_ID,'0')` against the product's own UOM. The guard now treats `""`, `"0"` and
-`"null"` as absent, while an explicit caller-supplied `uOM` still wins — the only case the guard was
-ever meant to protect.
+The fix inverts the question. "Is the body's `uOM` non-empty?" is not a usable proxy for "did the
+caller choose a `uOM`?" — the defaults pass guarantees it is always non-empty. So the policy now
+takes an explicit `userProvidedUom` flag, supplied from the pre-defaults snapshot each call site
+already keeps (`userProvided` in `handleCreate`, `userSubmittedFields` in `executePostCreate`, and
+the raw op body in the batch pre-pass). **The product is the authority: anything the defaults pass
+guessed loses to it; only a value the caller actually sent wins.**
 
-This single line explains every observation at once: why the injection looked dead on **all three**
-create paths (they all run it after the same cascade), and why passing `uOM: "100"` explicitly
-always worked.
+**Why the first three attempts all failed the same way.** Each one refined the guard's notion of
+"absent" — `""`, then `"0"`, then `"null"` — while the value sitting in the body was a legitimate
+UOM id that no widening of "absent" would ever match. The sentinel theory in particular was
+plausible and wrong: `SL_Order_Product` really does read the UOM from `inpmProductId_UOM`
+(`SL_Order_Product.java:53,99`), a parameter the UI's product combo supplies and a NEO create never
+does — but that path was never the one populating `uOM` here.
 
-**The two things `2df04cd1` changed were not the cause**, though both are worth keeping — and the
-second one is why the mis-diagnosis was reasonable rather than careless:
+**The two things `2df04cd1` changed were still not the cause**, though both are worth keeping:
 
-1. **The raw-JDBC read.** It read `C_UOM_ID` over `OBDal.getInstance().getConnection(false)` and
-   swallowed every exception at `log.debug`. That `debug` is genuinely why the cause stayed hidden —
-   a swallowed failure here surfaces much later as an opaque trigger error with nothing tying it
-   back — so the rewrite to `Product#getUOM` with a `warn` stays. But it was never firing at all,
-   so the JDBC was not what failed.
+1. **The raw-JDBC read**, rewritten to `Product#getUOM` with the swallow raised from `debug` to
+   `warn`. It was never firing at all, so the JDBC was not what failed — but the `debug` is
+   genuinely part of why this stayed hidden.
 2. **The batch pre-pass.** `12dd847f` wired only `handleCreate`, and the assumption was that
    `neo_batch` therefore never ran the injection. **That assumption was wrong**:
    `BatchService#createRecord` dispatches through `NeoCrudHandler#handleDefault`, which reaches
-   `executePostCreate` (`NeoCrudHandler.java:385`) and runs the injection natively. Batch failed for
-   the same guard reason as everything else. The pre-pass is kept anyway, because it puts `uOM` in
-   the body *before* the cascade, which lands it in `protectedCalloutFields` and stops the cascade
-   from clobbering it — belt and braces rather than a fix.
+   `executePostCreate` (`NeoCrudHandler.java:385`) and runs the injection natively. The pre-pass
+   earns its keep for a different reason than the one it was written for: it puts `uOM` in the body
+   *before* the defaults pass, so the product's value is the one that ends up protected.
 
 Both MCP call sites share `McpToolRouter#injectLineUomIfApplicable`, guarded on the entity actually
 declaring `uOM` and skipping `$ref:` placeholders so a batch sentinel is never mistaken for a
 product id.
 
-**Method note.** Round two was only conclusive because the deployed bytecode was verified rather
-than assumed: `grep -a "injectLineUomIfApplicable"` against
-`volumes/tomcat/webapps/etendo/WEB-INF/classes/…/McpToolRouter.class` proved the re-fix *was* live,
-which is what ruled out "stale deploy" and forced the search back into the guard. The class mtimes
-differ from local time by exactly 3 h with identical seconds — a timezone artifact of the container
-copy, not evidence of a stale file.
+**Method note — the one that actually mattered.** Rounds two and three were spent verifying deployed
+bytecode (`javap -c -p` on
+`volumes/tomcat/webapps/etendo/WEB-INF/classes/…/NeoCommercialLinePolicy.class` proved `b64af873`
+was live and the guard byte-for-byte correct) and still produced no answer, because bytecode
+verification only rules out a stale deploy — it cannot tell you what data flowed through. The
+question was settled in one command:
+
+```bash
+docker logs --since 3m etendo-tomcat-1 2>&1 | grep -iE 'NEO-LINE-POLICY|uom|20111'
+```
+
+Earlier sessions recorded that "log-based debugging is unavailable" because `$CATALINA_HOME/logs`
+and `volumes/tomcat/logs` are both empty. **That conclusion was wrong**: Tomcat runs in the
+`etendo-tomcat-1` container and logs to stdout, so `docker logs` has the full log — including the
+verbatim failing INSERT with its bound parameters, which is the single artifact that would have
+ended this on day one. *Check `docker logs` before theorising about a runtime failure.*
+
+Incidental: the class mtimes differ from local time by exactly 3 h with identical seconds — a
+timezone artifact of the container copy, not evidence of a stale file.
 
 **Root cause of the trigger error, for the record.** AD message `20111` is raised by the DB trigger
 `c_orderline_trg`: it reads `M_PRODUCT.C_UOM_ID` for the line's product and raises unless it equals
@@ -204,7 +233,7 @@ than a convenience.
 | regression test: display name | `McpFkResolverTest.displayNameResolvesViaSelector` |
 | …on each verb | the resolver is the single shared code path both verbs take; `skippedValueIsUntouched` covers the batch-only `$ref:` rule |
 | no raw `status: -4` on any batch error path | `McpToolRouterSupportTest.rewritesTheFailure` (asserts the serialized error contains no `-4`), `mapsStatusesToCodes`, `extractsDalMessages`, `passesThroughNonFailures` |
-| `uOM` never 500s on `sales-order/lines` | ❌ **failed live twice** — in `12dd847f` and again in `2df04cd1`; root cause found on the second failure and fixed in `b64af873`, **not yet re-verified** (needs a third rebuild) |
+| `uOM` never 500s on `sales-order/lines` | ❌ **failed live three times** — `12dd847f`, `2df04cd1`, `b64af873`. Root-caused from the container log on the third failure and fixed in `845e9363`, **not yet re-verified** (needs a fourth rebuild) |
 
 ## 9. Live write probe — 2026-08-07, `etendo-go-local`
 
@@ -219,7 +248,7 @@ tagged `MCP-BENCHMARK 2026-08-07` in `description` and deleted afterwards; dispo
 | Fix 1b — `not_found` wording | ✅ | The new text ("neither the id of an existing record nor a value any selector matched … Use `neo_selectors`") came back live — which also **proves the deploy contained IMP-15**, making every other verdict here attributable. |
 | Fix 2 — batch routes through the resolver | ✅ | `currency: "EUR"` (a display name) passed on the batch **header** op; the batch's failure was at index 1, the line. Pre-IMP-15 the header op died with a raw DAL `status: -4`. |
 | Fix 3 — batch failures get the IMP-5 envelope | ✅ | `{"committed":false,"failedAt":{"index":1,"id":"l1"},"error":{"status":500,"error":"server_error","detail":"Operation 'l1' rejected by server: Unit of Measure mismatch (product/transaction)","seeAlso":"docs(topic:\"creating records\")"}}` — no `status: -4` anywhere. |
-| Secondary — `uOM` | ❌ | Message 20111 on both verbs. Re-fixed in `2df04cd1` — which **did not fix it either**; see §9.4. |
+| Secondary — `uOM` | ❌ | Message 20111 on both verbs. Re-fixed in `2df04cd1` and again in `b64af873` — **neither fixed it**; root-caused in round three and fixed in `845e9363`; see §9.4–9.5. |
 
 Side confirmations from the same calls, worth carrying into the next run report: **IMP-16** looks
 healthy (`orderDate` and `accountingDate` both came back ISO `2026-08-07`, no year-12 corruption) and
@@ -269,19 +298,44 @@ diagnosis in §6.
 | Deployed bytecode check | `2df04cd1` **was** live (`grep -a` found `injectLineUomIfApplicable` in the deployed `McpToolRouter.class`), which is what ruled out a stale deploy |
 | Product `D627916D…` ("Fernet") | `c_uom_id = 100` — so injecting it would have satisfied the trigger, proving the injection never ran |
 
-Fixed in `b64af873`. Data disposition: header `931FB816B09347CEA4E447498C5A1AB1` deleted
-(`neo_delete` → `deleted: true`); no line was ever created, so nothing else to clean.
+Fixed — as it turned out, *not* — in `b64af873`. Data disposition: header
+`931FB816B09347CEA4E447498C5A1AB1` deleted (`neo_delete` → `deleted: true`); no line was ever
+created, so nothing else to clean.
+
+### 9.5 Third probe round — 2026-08-07, after the `b64af873` deploy
+
+Re-probe of the `uOM` clause only. **It failed a third time** — and this round finally produced the
+real diagnosis, because it stopped theorising and read the container log.
+
+| Step | Result |
+|---|---|
+| `neo_create` `sales-order/header` (`1000022`, id `488023AD…`) | ✅ created; `currency: "102"` resolved again |
+| `neo_create` `sales-order/lines`, no `uOM` | ❌ `Unit of Measure mismatch (product/transaction)`, raw and envelope-less |
+| Control probe: same body with `uOM: "0"` | ❌ but *differently* — a clean `422 not_found` on `uOM` from `McpFkResolver`, which proves FK resolution runs on `uOM` before the injection and that the sentinel path was never the live one |
+| Deployed bytecode check (`javap -c -p`) | `b64af873` **was** live: the disassembly shows the `""` / `"0"` / `"null"` guard byte-for-byte. Bytecode verification ruled out a stale deploy for the second round running — and still explained nothing |
+| **`docker logs etendo-tomcat-1`** | **decisive.** The callout answered `"uOM":{"value":"100","_identifier":"Unit"}`, yet the failing INSERT bound `C_UOM_ID = 'ADF850C3E6E9413B9F9EEA5C87456073'` = **Centimeter**. The body's `uOM` was real, valid and wrong — see §6 |
+
+Fixed in `845e9363`. Data disposition: header `488023AD74834049BA81635364CAEDAC` deleted
+(`neo_delete` → `deleted: true`); no line was created. One leftover remains repo-wide — order
+`1000017` (`1FE5335E766C49E5903991036B8B9DC1`, `MCP-BENCHMARK 2026-08-05 batch`), the orphan header
+from the non-atomic batch in §9.2.1; it is kept deliberately as evidence for that defect.
 
 ## 10. What is still owed
 
-1. **Compile + unit-test run of `b64af873`** — the user owns build/deploy; that commit is not
-   compile-verified.
-2. **A third deploy to `etendo-go-local`**, then a re-probe of the `uOM` clause only (the other three
-   are already credited by §9.1), and a `/mcp-comparison` run to move the status mark and MARI.
-3. **A regression test for the guard.** `b64af873` is a one-line predicate that two probe rounds
-   missed; it deserves a unit test asserting the injection fires when the body carries `uOM` as
-   `""`, `"0"` and `JSONObject.NULL`, and does *not* fire when it carries a real id. Delegate to
-   Tester per the repo's testing rule.
+1. **Compile + unit-test run of `b64af873` and `845e9363`** — the user owns build/deploy; neither
+   commit is compile-verified.
+2. **A fourth deploy to `etendo-go-local`**, then a re-probe of the `uOM` clause only (the other
+   three are already credited by §9.1), and a `/mcp-comparison` run to move the status mark and MARI.
+3. **A regression test for the injection.** Three probe rounds died on the same predicate. The test
+   must assert the case that actually broke: the injection **overrides** a `uOM` the defaults pass
+   put in the body (a real id for the wrong UOM) and **preserves** one the caller supplied — not
+   merely that it fires on `""` / `"0"` / `JSONObject.NULL`, which is what the last two fixes
+   over-fitted to. Delegate to Tester per the repo's testing rule.
 4. **Register the §9.2 defects** in the registry as new items, plus the line-level `orderDate`
    omission found in §9.4 (same class as §9.2.2 — `neo_schema view:"create"` under-reporting
    required fields, now observed on both `header` and `lines`).
+5. **Consider a defect for `tryInjectFirstFromLookup` itself.** Preselecting the alphabetically
+   first combo option for a mandatory FK is FIC parity by design, but for `C_UOM_ID` on a
+   product-bearing line it produces a value that is guaranteed wrong whenever the product's UOM is
+   not alphabetically first. `845e9363` fixes the symptom for `uOM`; the general question — which
+   mandatory FKs are genuinely user-choices versus derivable — is open and worth its own item.
