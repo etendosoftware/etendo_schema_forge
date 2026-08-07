@@ -18,9 +18,7 @@ const breadcrumb = 'Inventory / Product';
 
 // @sf-generated-start summary:product
 const summary = [
-  { key: 'eTGOPurchasePrice', column: 'EM_ETGO_Purchase_Price', type: 'amount' },
-  { key: 'eTGOSalePrice', column: 'EM_ETGO_Sale_Price', type: 'amount' },
-  { key: 'eTGOStock', column: 'EM_ETGO_Stock', type: 'number' },
+
 ];
 
 const statusField = null;
@@ -544,7 +542,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1 },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 1000 },
         ]}
         primaryTabs={[
           { key: 'general', label: 'General' },

@@ -57,9 +57,15 @@ describe('Sales InvoiceHeaderTable — columns', () => {
   });
 
   it('renders doc-type badge on transactionDocument column via getArSubtype', () => {
-    assert.match(src, /getArSubtype\(row\)/, 'transactionDocument column must call getArSubtype to detect NC/DEV subtypes');
-    assert.match(src, /creditNotesTab/, 'NC badge must use the creditNotesTab i18n key');
-    assert.match(src, /returnsTab/, 'DEV badge must use the returnsTab i18n key');
+    assert.match(src, /getArSubtype\(row\)/, 'transactionDocument column must call getArSubtype to detect the RECTIFICATIVA subtype');
+    assert.match(src, /rectificativeInvoicesTab/, 'RECTIFICATIVA badge must use the rectificativeInvoicesTab i18n key (ETP-4737: replaces the former creditNotesTab/returnsTab split)');
+  });
+});
+
+describe('Sales InvoiceHeaderTable — payment-state color roles (ETP-4767)', () => {
+  it('uses semantic success and warning background, border, and foreground roles', () => {
+    assert.match(src, /background:'var\(--status-success-bg\)',color:'var\(--status-success-fg\)'/);
+    assert.match(src, /background:'var\(--status-warning-bg\)',border:'1px solid var\(--status-warning-border\)',color:'var\(--status-warning-fg\)'/);
   });
 });
 

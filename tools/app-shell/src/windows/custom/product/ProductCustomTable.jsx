@@ -18,8 +18,8 @@ const columns = [
     subtitle: 'searchKey',
     media: { field: 'image', kind: 'neoImage', fallback: 'box' },
     parts: [
-      { key: 'searchKey', column: 'Value', type: 'string', labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
-      { key: 'name', column: 'Name', type: 'string', labels: { en_US: 'Name', es_ES: 'Nombre' } },
+      { key: 'searchKey', column: 'Value', type: 'string', required: true, labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
+      { key: 'name', column: 'Name', type: 'string', required: true, labels: { en_US: 'Name', es_ES: 'Nombre' } },
     ],
   },
   // NOTE: no split `name` / `searchKey` filter columns here. ETP-4609 needed them
@@ -35,7 +35,17 @@ const columns = [
     column: 'ProductType',
     type: 'enum',
     label: 'Product Type',
-    enumLabels: { E: 'Expense type', I: 'Item', R: 'Resource', S: 'Service' },
+    // ETP-4685 — i18n keys (resolved via ui()/genericLabels), not raw English
+    // literals, so this custom table's filter/grid enum labels stay in sync
+    // with the pipeline's own fix in generate-frontend.js (buildEnumLabelKey).
+    // Keyed by the stable ProductType Value code (E/I/R/S), not the display
+    // Name, matching the `statuses` section's own rl.value-keyed convention.
+    enumLabels: {
+      E: 'productTypeE',
+      I: 'productTypeI',
+      R: 'productTypeR',
+      S: 'productTypeS',
+    },
     enumVariants: { I: 'blue', S: 'purple', R: 'teal', E: 'orange' },
     required: true,
   },
@@ -45,11 +55,19 @@ const columns = [
   // row, sort and filter run server-side on the real entity property — hence:
   //   - `sortable: true`
   //   - `backendSortKey` / `backendFilterKey` map the display key to that property
-  //     (the column `key` stays 'sale'/'purchase'/'stock' for React + render)
+  //     (the column `key` is display-only, for React + render). The price keys are
+  //     'salePrice'/'purchasePrice', NOT 'sale'/'purchase': those names belong to the
+  //     contract's IsSold/IsPurchased booleans (see ProductAdditionalInfoPanel), and
+  //     reusing them here made one key mean two things in the same window — which
+  //     the F19 validator rule reports as a required-flag divergence.
   //   - `filterMode: 'numeric'` so the advanced filter offers numeric operators
   //     (greaterThan/between/…) and a number input instead of text `iContains`.
+  // ETP-4685 — keys renamed from 'sale'/'purchase' to 'salePrice'/'purchasePrice':
+  // those names collided with the contract's real 'sale'/'purchase' fields
+  // (IsSold/IsPurchased booleans, unrelated to price), tripping the F19
+  // required-flag drift check on an unrelated name coincidence.
   {
-    key: 'sale',
+    key: 'salePrice',
     labels: { en_US: 'Sales', es_ES: 'Venta' },
     type: 'custom',
     sortable: true,
@@ -61,7 +79,7 @@ const columns = [
     ),
   },
   {
-    key: 'purchase',
+    key: 'purchasePrice',
     labels: { en_US: 'Purchase', es_ES: 'Compra' },
     type: 'custom',
     sortable: true,

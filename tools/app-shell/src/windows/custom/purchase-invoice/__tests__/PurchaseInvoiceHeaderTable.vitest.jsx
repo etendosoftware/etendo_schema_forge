@@ -1,9 +1,9 @@
 // Mocks must be hoisted before imports (Vitest hoisting)
-vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
-  useLabel: () => (key) => key,
-  useMenuLabel: () => (key) => key,
-  useLocale: () => ({
+// Mutable holders so individual tests can swap the locale dictionary / selected
+// org without re-declaring the module mocks. `defaultDictionary` is the shape
+// every pre-existing test relies on; overriding tests must restore it.
+const i18nMock = vi.hoisted(() => {
+  const defaultDictionary = {
     genericLabels: {
       dueDate: 'dueDate',
       statusDocColumn: 'statusDocColumn',
@@ -13,17 +13,30 @@ vi.mock('@/i18n', () => ({
       pagada: 'pagada',
       addPago: 'addPago',
       invoicesTab: 'invoicesTab',
-      creditNotesTab: 'creditNotesTab',
+      rectificativeInvoicesTab: 'rectificativeInvoicesTab',
       returnInvoiceTab: 'returnInvoiceTab',
       'invoiceList.col.siiStatus': 'SII Status',
     },
     statuses: {},
-  }),
+  };
+  return { defaultDictionary, dictionary: defaultDictionary };
+});
+
+const authMock = vi.hoisted(() => ({
+  defaultSelectedOrg: { id: 'org-1' },
+  selectedOrg: { id: 'org-1' },
+}));
+
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => key,
+  useLabel: () => (key) => key,
+  useMenuLabel: () => (key) => key,
+  useLocale: () => i18nMock.dictionary,
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
+  useAuth: () => ({ selectedOrg: authMock.selectedOrg, logout: vi.fn() }),
 }));
 
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
@@ -185,8 +198,9 @@ vi.mock('@/components/contract-ui', () => ({
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { resolveFilterMode } from '@/lib/gridQuery';
 import PurchaseInvoiceHeaderTable from '../PurchaseInvoiceHeaderTable.jsx';
 
@@ -289,7 +303,7 @@ describe('PurchaseInvoiceHeaderTable', () => {
   it('renders transactionDocument column with credit note badge for AP CreditMemo', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     // The column container renders multiple rows including the NC row (AP CreditMemo)
-    expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('creditNotesTab');
+    expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('rectificativeInvoicesTab');
   });
 
   it('renders transactionDocument column with dash for unknown doc type', () => {
@@ -298,7 +312,7 @@ describe('PurchaseInvoiceHeaderTable', () => {
     // The column container includes multiple rows so check via textContent
     const col = screen.getByTestId('col-render-transactionDocument');
     expect(col.textContent).toContain('invoicesTab');
-    expect(col.textContent).toContain('creditNotesTab');
+    expect(col.textContent).toContain('rectificativeInvoicesTab');
   });
 
   it('does not show SII column when showSii is false', () => {
@@ -494,6 +508,120 @@ describe('PurchaseInvoiceHeaderTable — outstandingAmount credit-note/return ba
   });
 });
 
+// ── ETP-4738: Factura Rectificativa de Compra recognized via apInvoiceSubtype ──
+// A rectificative invoice with a negative total is reclassified server-side to
+// apInvoiceSubtype: 'RECTIFICATIVA' (unified with the legacy AP CreditMemo subtype
+// per ETP-4737), but its doc-type identifier ("Factura Rectificativa") never
+// matches NC_RETURN_TYPES nor the legacy credit/memo keyword fallback in
+// getApSubtype. isNcOrReturn() must still treat it as a credit note via the
+// server-injected subtype field alone. This exercises the REAL
+// artifacts/purchase-invoice/custom/purchaseInvoiceSubtype.js (not mocked —
+// @generated resolves to artifacts/ in vitest.config.js).
+describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage (ETP-4738)', () => {
+  let capturedColumns = null;
+
+  beforeEach(() => {
+    capturedColumns = null;
+    vi.clearAllMocks();
+    getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
+
+    vi.doMock('@/components/contract-ui', () => ({
+      DataTable: ({ columns }) => {
+        capturedColumns = columns;
+        return <div data-testid="DataTable__6b7cdb" />;
+      },
+    }));
+  });
+
+  function getColRender(key) {
+    if (!capturedColumns) return null;
+    const col = capturedColumns.find((c) => c.key === key);
+    return col?.render ?? null;
+  }
+
+  const RECTIFICATIVA_ROW = {
+    eTGODueDate: '2026-06-01',
+    outstandingAmount: '-15.00',
+    grandTotalAmount: '-15.00',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'Factura Rectificativa',
+    apInvoiceSubtype: 'RECTIFICATIVA',
+    aeatsiiEstado: null,
+  };
+
+  const RECTIFICATIVA_ROW_APPLIED = {
+    ...RECTIFICATIVA_ROW,
+    outstandingAmount: '0',
+  };
+
+  const NORMAL_ROW_WITH_FAC_SUBTYPE = {
+    eTGODueDate: '2026-06-15',
+    outstandingAmount: '300',
+    grandTotalAmount: '300',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'AP Invoice',
+    apInvoiceSubtype: 'FAC',
+    aeatsiiEstado: null,
+  };
+
+  it('outstandingAmount — Factura Rectificativa (apInvoiceSubtype: RECTIFICATIVA, unrecognized doc-type name) shows the purple "Saldo a favor" badge', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('outstandingAmount');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
+    expect(container.textContent).toMatch(/Saldo a favor/);
+    expect(container.textContent).not.toMatch(/Pendiente/);
+  });
+
+  it('outstandingAmount — fully-consumed Factura Rectificativa (apInvoiceSubtype: RECTIFICATIVA) shows the green "Aplicada" pill', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('outstandingAmount');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW_APPLIED)}</>);
+    expect(container.textContent).toMatch(/Aplicada/);
+  });
+
+  it('grandTotalAmount — inverts sign for a Factura Rectificativa row via apInvoiceSubtype alone', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('grandTotalAmount');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
+    // grandTotalAmount is already -15, isNcOrReturn -> -Math.abs(-15) = -15
+    expect(container.textContent).toContain('-15:EUR');
+  });
+
+  it('eTGODueDate — Factura Rectificativa renders a plain date (no progress-state dot), same as legacy credit types', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('eTGODueDate');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
+    expect(container.textContent).toBe('date:2026-06-01');
+  });
+
+  it('regression guard: legacy doc-type-name fallback still works when apInvoiceSubtype is ABSENT (old/undeployed backend)', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('outstandingAmount');
+    if (!renderFn) return;
+    // NC_ROW (AP CreditMemo, no apInvoiceSubtype field) — must still resolve to NC via
+    // the legacy identifier fallback inside getApSubtype.
+    const { container } = render(<>{renderFn(NC_ROW)}</>);
+    expect(container.querySelector('button')).toBeTruthy();
+    expect(container.textContent).toMatch(/Saldo a favor/);
+  });
+
+  it('negative control: a normal invoice with apInvoiceSubtype "FAC" still renders the amber pending badge, never the credit badge', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('outstandingAmount');
+    if (!renderFn) return;
+    const { container } = render(<>{renderFn(NORMAL_ROW_WITH_FAC_SUBTYPE)}</>);
+    expect(container.querySelector('button')).toHaveAttribute('aria-label', 'addPago');
+    expect(container.textContent).not.toMatch(/Saldo a favor/);
+    expect(container.textContent).not.toMatch(/Aplicada/);
+  });
+});
+
 // ── Regression: advanced filter mode for custom-render columns (ETP-4705) ──
 // `type: 'custom'` is required on these columns to drive their badge/button
 // cell render, but resolveFilterMode() falls back to 'text' for any type it
@@ -543,5 +671,151 @@ describe('PurchaseInvoiceHeaderTable — advanced filter mode for custom columns
     // filterMode hint resolves to 'text' via resolveFilterMode's default case —
     // this is the exact regression the fix above prevents on the real columns.
     expect(resolveFilterMode({ key: 'eTGODueDate', type: 'custom' })).toBe('text');
+  });
+});
+
+// ── Branch / fallback coverage (ETP-4738) ─────────────────────────────────────
+// The defensive fallbacks in this component (missing locale dictionary, missing
+// selected org, rows arriving without an amount or a currency) and the purple
+// "Saldo a favor" click handler were never exercised. These tests drive each of
+// them through the real component and assert the resulting behaviour, not just
+// the absence of a crash.
+describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
+    capturedColumnsHolder.value = null;
+  });
+
+  afterEach(() => {
+    // Restore the shared mock holders so the rest of the file keeps its defaults.
+    i18nMock.dictionary = i18nMock.defaultDictionary;
+    authMock.selectedOrg = authMock.defaultSelectedOrg;
+  });
+
+  function getColumn(key) {
+    const cols = capturedColumnsHolder.value;
+    expect(cols, 'DataTable never received a columns prop').toBeTruthy();
+    const col = cols.find((c) => c.key === key);
+    expect(col, `expected column "${key}"`).toBeTruthy();
+    return col;
+  }
+
+  function renderCell(key, row) {
+    return render(<>{getColumn(key).render(row)}</>);
+  }
+
+  // ── setPaymentRow from the purple credit-note badge (uncovered line 172) ────
+
+  it('clicking the purple "Saldo a favor" badge opens the payment history modal', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(screen.queryByTestId('payment-history-modal')).toBeNull();
+    // MOCK_ROWS credit memo with -2.30 unused → "Saldo a favor · 2.3:GBP"
+    fireEvent.click(screen.getByText(/Saldo a favor · 2\.3:GBP/));
+    expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
+  });
+
+  it('closing the modal opened from the "Saldo a favor" badge clears the selected row', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    fireEvent.click(screen.getByText(/Saldo a favor · 27\.6:CHF/));
+    expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Close payment modal'));
+    expect(screen.queryByTestId('payment-history-modal')).toBeNull();
+  });
+
+  it('"Saldo a favor" click stops propagation so the row navigation is not triggered', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const rowClick = vi.fn();
+    const cell = render(
+      // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
+      <div onClick={rowClick}>{getColumn('outstandingAmount').render(NC_ROW)}</div>,
+    );
+    fireEvent.click(cell.container.querySelector('button'));
+    expect(rowClick).not.toHaveBeenCalled();
+    // The click still reached the component's own handler (modal is mounted in
+    // the component tree rendered above, so query the whole document).
+    expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
+  });
+
+  // ── locale dictionary fallbacks (uncovered branches on lines 45/46) ─────────
+
+  it('falls back to raw label keys when the locale dictionary has no genericLabels', () => {
+    i18nMock.dictionary = null;
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(getColumn('grandTotalAmount').label).toBe('impTotal');
+    expect(getColumn('outstandingAmount').label).toBe('pendingPaymentColumn');
+    expect(getColumn('eTGODueDate').label).toBe('dueDate');
+    expect(getColumn('transactionDocument').label).toBe('documentType');
+    expect(getColumn('transactionDocument').labels).toEqual({ en_US: 'documentType' });
+  });
+
+  it('uses translated genericLabels when present and falls back per missing key', () => {
+    i18nMock.dictionary = {
+      genericLabels: { impTotal: 'Importe total', documentType: 'Tipo de documento' },
+      statuses: {},
+    };
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(getColumn('grandTotalAmount').label).toBe('Importe total');
+    expect(getColumn('transactionDocument').label).toBe('Tipo de documento');
+    // Keys absent from the dictionary fall back to the key itself.
+    expect(getColumn('eTGODueDate').label).toBe('dueDate');
+    expect(getColumn('documentStatus').label).toBe('statusDocColumn');
+  });
+
+  it('SII column label falls back to "SII Status" when the dictionary key is missing', () => {
+    getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+    i18nMock.dictionary = { genericLabels: { impTotal: 'Importe total' }, statuses: {} };
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(getColumn('_siiStatus').label).toBe('SII Status');
+  });
+
+  it('SII column uses the translated label when the dictionary provides it', () => {
+    getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+    i18nMock.dictionary = {
+      genericLabels: { 'invoiceList.col.siiStatus': 'Estado SII' },
+      statuses: {},
+    };
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(getColumn('_siiStatus').label).toBe('Estado SII');
+  });
+
+  // ── selected-org fallback (uncovered branch on line 49) ────────────────────
+
+  it('passes the selected org id to useFiscalConfig', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(useFiscalConfig).toHaveBeenCalledWith('org-1', '/api');
+  });
+
+  it('passes a null orgId to useFiscalConfig when no org is selected', () => {
+    authMock.selectedOrg = null;
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(useFiscalConfig).toHaveBeenCalledWith(null, '/api');
+  });
+
+  // ── row-level fallbacks in the outstandingAmount cell (lines 153/154) ──────
+
+  it('outstanding cell falls back to EUR when the row carries no currency identifier', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const row = { ...NC_ROW, outstandingAmount: '-5', 'currency$_identifier': undefined };
+    const { container } = renderCell('outstandingAmount', row);
+    expect(container.textContent).toBe('Saldo a favor · 5:EUR');
+  });
+
+  it('outstanding cell treats a missing amount as 0 — credit note reads as fully applied', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const row = { ...NC_ROW };
+    delete row.outstandingAmount;
+    const { container } = renderCell('outstandingAmount', row);
+    expect(container.textContent).toMatch(/Aplicada/);
+  });
+
+  it('outstanding cell treats a null amount as 0 — regular invoice reads as paid', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const { container } = renderCell('outstandingAmount', {
+      ...AP_INVOICE_ROW,
+      outstandingAmount: null,
+      'currency$_identifier': undefined,
+    });
+    expect(container.textContent).toMatch(/pagada/);
   });
 });

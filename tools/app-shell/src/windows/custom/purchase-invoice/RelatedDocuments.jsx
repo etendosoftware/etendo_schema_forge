@@ -5,8 +5,7 @@ import {
   DocChip, RelatedDocumentsShell, docChipProps,
   fetchByCriteria, fetchChild, fetchById,
 } from '@/components/related-documents';
-
-const RETURN_INVOICE_TYPES = new Set(['Return Material Purchase Invoice', 'Reversed Purchase Invoice', 'Factura de Devolución']);
+import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoiceSubtype.js';
 
 async function fetchPayments(invoiceId, token, apiBaseUrl) {
   const plans = await fetchChild('purchase-invoice', 'paymentPlan', invoiceId, token, apiBaseUrl);
@@ -40,18 +39,23 @@ async function fetchLinkedReturnDeliveries(invoiceId, token, apiBaseUrl) {
   return results.filter(Boolean);
 }
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, docsRefreshSignal }) {
   const [purchaseOrder, setPurchaseOrder] = useState(null);
   const [receipts, setReceipts] = useState([]);
   const [payments, setPayments] = useState([]);
   const [returnDeliveries, setReturnDeliveries] = useState([]);
+  const [originInvoice, setOriginInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const ui = useUI();
 
-  const docTypeId = data?.['transactionDocument$_identifier'];
-  const isReturn = RETURN_INVOICE_TYPES.has(docTypeId);
+  // ETP-4737: resolved via getApSubtype — NOT a hardcoded doc-type-name Set. A
+  // fixed name Set silently misses any new document type sharing the same
+  // category (this is exactly how this check missed "Factura Rectificativa
+  // (compras)" until this fix; see PurchaseInvoiceHeaderTable.jsx for the same fix).
+  const apSubtype = getApSubtype(data);
+  const isReturn = apSubtype === 'RECTIFICATIVA';
 
   useEffect(() => {
     if (!recordId) return;
@@ -88,8 +92,18 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
           setReturnDeliveries([]);
         });
     }
+    // ETP-4737: `originInvoice` is set when this rectificativa was created via the
+    // "Import from Source Invoice" popup (manual correction) — independent of the
+    // isReturn branch above (which covers the auto-generated-from-Albarán case).
+    // Server injects just the id (+ _identifier), not the full record, so fetch it here.
+    const originInvoicePromise = data?.originInvoice
+      ? fetchById('purchase-invoice', 'header', data.originInvoice, token, apiBaseUrl).catch(() => null)
+      : Promise.resolve(null);
+    promise = Promise.all([promise, originInvoicePromise]).then(([, originResult]) => {
+      setOriginInvoice(originResult);
+    });
     promise.finally(() => setLoading(false));
-  }, [recordId, docTypeId, data?.salesOrder, data?.linkedReceipts, token, apiBaseUrl, refreshKey]);
+  }, [recordId, apSubtype, data?.salesOrder, data?.linkedReceipts, data?.originInvoice, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   const chips = [];
 
@@ -116,6 +130,15 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       <DocChip
         key={`receipt-${r.id}`}
         {...docChipProps({ type: r.isReturn ? 'return-to-vendor' : 'receipt', doc: r, ui, navigate })}
+        data-testid="DocChip__bb79ed" />
+    );
+  }
+
+  if (originInvoice) {
+    chips.push(
+      <DocChip
+        key="origin-invoice"
+        {...docChipProps({ type: 'invoice', doc: originInvoice, ui, navigate })}
         data-testid="DocChip__bb79ed" />
     );
   }

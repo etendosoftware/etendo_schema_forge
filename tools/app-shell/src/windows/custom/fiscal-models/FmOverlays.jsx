@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { Star, Play, OctagonAlert, TriangleAlert, X, Check } from 'lucide-react';
+import { Star, Play, Landmark, OctagonAlert, TriangleAlert, X, Check } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import './fiscal-models.css';
 
@@ -27,17 +27,26 @@ function parseCityLine(cityLine) {
   return { postal, city: rest, province: '' };
 }
 
-// PresentModal — 2-path submission:
-//   1. submitted_ack — upload PDF/XML receipt; status → submitted_ack
-//   2. submitted     — submitted without receipt; status → submitted
-export function PresentModal({ decl, onConfirm, onClose }) {
+// PresentModal — 2 manual paths + 1 opt-in AEAT sentinel path:
+//   1. submitted_ack   — upload PDF/XML receipt; status → submitted_ack
+//   2. submitted       — submitted without receipt; status → submitted
+//   3. aeat_telematic  — opt-in sentinel path (showAeatPath, 303 only):
+//      onConfirm reports the literal status 'aeat_telematic', which is
+//      never a real declaration status — the caller (FmModel303Page)
+//      intercepts it and opens the dedicated AeatSubmitFlow instead of
+//      changing the declaration status directly.
+// The former "Otra Plataforma" (external-agency) path was removed from
+// this modal — its status remains valid and fully-rendered for any
+// declaration that already carries it, it just can no longer be newly
+// selected here.
+export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   const ui = useUI();
   const t = ui;
   const [path, setPath] = useState(null);
   const [acuseFile, setAcuseFile] = useState(null);
   const fileRef = useRef(null);
 
-  const canConfirm = path === 'submitted' || (path === 'submitted_ack' && acuseFile);
+  const canConfirm = path === 'submitted' || path === 'aeat_telematic' || (path === 'submitted_ack' && acuseFile);
 
   function handleConfirm() {
     onConfirm({ status: path, acuseFile: path === 'submitted_ack' ? acuseFile : null });
@@ -47,6 +56,9 @@ export function PresentModal({ decl, onConfirm, onClose }) {
   const PATHS = [
     { id: 'submitted_ack', icon: <Star size={16} strokeWidth={1.75} data-testid="Star__cda0bb" />, titleKey: 'fm.present.path.acuse',      descKey: 'fm.present.path.acuse_desc' },
     { id: 'submitted',     icon: <Play size={16} strokeWidth={1.75} data-testid="Play__cda0bb" />, titleKey: 'fm.present.path.sin_acuse',  descKey: 'fm.present.path.sin_acuse_desc' },
+    ...(showAeatPath ? [
+      { id: 'aeat_telematic', icon: <Landmark size={16} strokeWidth={1.75} data-testid="Landmark__cda0bb" />, titleKey: 'fm.present.path.aeat', descKey: 'fm.present.path.aeat_desc' },
+    ] : []),
   ];
 
   return (
@@ -140,7 +152,7 @@ export function PresentModal({ decl, onConfirm, onClose }) {
             disabled={!canConfirm}
             onClick={handleConfirm}
           >
-            {t('fm.action.confirm_presentation')}
+            {path === 'aeat_telematic' ? (t('fm.action.continue') ?? 'Continue') : t('fm.action.confirm_presentation')}
           </button>
         </div>
 

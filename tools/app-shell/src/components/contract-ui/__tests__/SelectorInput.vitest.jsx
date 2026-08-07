@@ -26,7 +26,10 @@ vi.mock('lucide-react', () => ({
 // Renders a button trigger with data-testid and placeholder/value text.
 vi.mock('@/components/ui/select', () => ({
   Select: ({ children, value, onValueChange, required }) => (
-    <div data-select-value={value ?? ''} data-required={required ? 'true' : 'false'}>
+    <div
+      data-select-value={value ?? ''}
+      data-select-value-type={value === undefined ? 'undefined' : 'string'}
+      data-required={required ? 'true' : 'false'}>
       {children}
     </div>
   ),
@@ -116,6 +119,27 @@ describe('SelectorInput', () => {
     // The empty "__empty__" option should be rendered
     const emptyOption = container.querySelector('[data-value="__empty__"]');
     expect(emptyOption).toBeTruthy();
+  });
+
+  // Regression for the "clearing an FK needs two clicks" bug (ETP-4751 Bug B).
+  // @radix-ui/react-select derives isControlled from `value !== undefined`. Passing
+  // `undefined` for the empty state flips the Select controlled→uncontrolled, and
+  // Radix's controllable-state hook swaps to a fresh internal store during that flip,
+  // swallowing the onValueChange of the selection that triggered it (the dropped first
+  // clear). The empty state MUST be a constant-typed '' so the Select stays controlled
+  // for its whole lifetime while still showing the placeholder.
+  it('passes a string (not undefined) as the Select value when empty, to keep it controlled', () => {
+    const { container } = renderSelector({ value: '', displayValue: '' });
+    const select = container.querySelector('[data-select-value-type]');
+    expect(select.getAttribute('data-select-value-type')).toBe('string');
+    expect(select.getAttribute('data-select-value')).toBe('');
+  });
+
+  it('passes the id as the Select value when a value is set', () => {
+    const { container } = renderSelector({ value: 'CAUSE_X', displayValue: 'Cause X' });
+    const select = container.querySelector('[data-select-value-type]');
+    expect(select.getAttribute('data-select-value-type')).toBe('string');
+    expect(select.getAttribute('data-select-value')).toBe('CAUSE_X');
   });
 
   it('does NOT render empty-option when field is required', () => {

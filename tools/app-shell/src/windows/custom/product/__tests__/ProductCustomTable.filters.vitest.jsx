@@ -69,6 +69,24 @@ describe('ProductCustomTable — identity cell & Advanced Filter fields (ETP-460
     expect(combinedCol).toBeUndefined();
   });
 
+  // ETP-4609 — this is the exact real-world data that triggered the QA-reported
+  // bug: both parts of Product's identity cell are `required: true`, yet the
+  // Advanced Filter kept offering "Está vacío"/"No está vacío" for Nombre and
+  // Identificador. The root cause was in `expandMultiFieldColumns` (ListView.jsx),
+  // which silently dropped `part.required` when exploding a multiField column
+  // into pseudo-columns — see ListView.vitest.jsx and AdvancedFilterBuilder.vitest.jsx
+  // for the regression tests covering that fix directly. This test only guards
+  // that ProductCustomTable keeps declaring `required: true` on both parts, so
+  // the upstream fix has real data to propagate.
+  it('declares both identity parts (searchKey, name) as required', () => {
+    render(<ProductCustomTable data={[]} />);
+    const identityCell = capturedProps.columns.find((c) => c.key === 'name');
+    const namePart = identityCell.parts.find((p) => p.key === 'name');
+    const searchKeyPart = identityCell.parts.find((p) => p.key === 'searchKey');
+    expect(namePart.required).toBe(true);
+    expect(searchKeyPart.required).toBe(true);
+  });
+
   it('declares no standalone `searchKey` column — the multiField part supplies it', () => {
     render(<ProductCustomTable data={[]} />);
     const searchKeyCol = capturedProps.columns.find((c) => c.key === 'searchKey');
@@ -132,7 +150,7 @@ describe('ProductCustomTable — identity cell & Advanced Filter fields (ETP-460
   it('invokes the stored-computed sale/purchase/stock column render callbacks', () => {
     render(<ProductCustomTable data={[]} />);
     const row = { eTGOSalePrice: 12.5, eTGOPurchasePrice: 7, eTGOStock: 3, 'currency$_identifier': 'USD' };
-    for (const key of ['sale', 'purchase', 'stock']) {
+    for (const key of ['salePrice', 'purchasePrice', 'stock']) {
       const col = capturedProps.columns.find((c) => c.key === key);
       expect(typeof col.render).toBe('function');
       expect(col.render(row)).toBeTruthy();

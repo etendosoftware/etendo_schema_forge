@@ -71,6 +71,7 @@ vi.mock('lucide-react', () => ({
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
   ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
+  FileCheck: () => null,
 }));
 
 import FmModel303Page from '../FmModel303Page.jsx';

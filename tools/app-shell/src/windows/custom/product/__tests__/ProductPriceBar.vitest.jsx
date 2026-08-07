@@ -161,13 +161,22 @@ function renderBar(overrides = {}) {
 }
 
 /**
+ * The add action reuses the shared AddLineButton, whose own data-testid
+ * (`action-add-line`) is not unique in this window, so the component is wrapped in a
+ * `price-add-tariff` span. Clicks must land on the real <button> inside it.
+ */
+function addTariffButton() {
+  return within(screen.getByTestId('price-add-tariff')).getByRole('button');
+}
+
+/**
  * Reveal the CreatableSearchSelect and open its dropdown.
  * Clicking the "+ add tariff" link sets adding=true (renders the selector);
  * focusing the text input opens the dropdown (options + create action).
  */
 async function openTariffSelect(user) {
   await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-  await user.click(screen.getByTestId('price-add-tariff'));
+  await user.click(addTariffButton());
   const input = await screen.findByTestId('field-priceListVersion');
   await user.click(input);
   return input;
@@ -700,7 +709,7 @@ describe('ProductPriceBar', () => {
     renderBar({ api: apiWithPriceSelector() });
 
     await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-    await user.click(screen.getByTestId('price-add-tariff'));
+    await user.click(addTariffButton());
 
     await waitFor(() => {
       const selectorCalls = calls.filter((c) =>
@@ -724,7 +733,7 @@ describe('ProductPriceBar', () => {
     renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
 
     await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-    await user.click(screen.getByTestId('price-add-tariff'));
+    await user.click(addTariffButton());
 
     await new Promise((r) => setTimeout(r, 30));
 
@@ -790,7 +799,7 @@ describe('ProductPriceBar', () => {
     renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
 
     await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-    await user.click(screen.getByTestId('price-add-tariff'));
+    await user.click(addTariffButton());
 
     const row = await screen.findByTestId('price-add-tariff-row');
     // Name selector + unit-price stepper + list-price stepper + cancel button.
@@ -813,7 +822,7 @@ describe('ProductPriceBar', () => {
     renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
 
     await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-    await user.click(screen.getByTestId('price-add-tariff'));
+    await user.click(addTariffButton());
 
     await screen.findByTestId('price-add-tariff-row');
     await user.click(screen.getByTestId('price-add-cancel'));
@@ -843,7 +852,7 @@ describe('ProductPriceBar', () => {
     renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
 
     await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-    await user.click(screen.getByTestId('price-add-tariff'));
+    await user.click(addTariffButton());
 
     // No saved rows in this section, so the only steppers are the add-row drafts:
     // [0] = unit price, [1] = list price. Each commits on blur.
@@ -891,7 +900,7 @@ describe('ProductPriceBar', () => {
     renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
 
     await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
-    await user.click(screen.getByTestId('price-add-tariff'));
+    await user.click(addTariffButton());
 
     const spinbuttons = screen.getAllByRole('spinbutton');
     await user.clear(spinbuttons[0]);
@@ -920,5 +929,254 @@ describe('ProductPriceBar', () => {
     expect(body.standardPrice).toBe('15');
     expect(body.listPrice).toBe('20');
     expect(body.priceLimit).toBe('20');
+  });
+
+  // -----------------------------------------------------------------------
+  // Tariff name vs. version name (the user picks a TARIFF, so the price list
+  // name wins over the version name — they differ for the onboarding-created
+  // lists: "Lista de venta (sin impuestos)" vs "Version Lista de venta (...)").
+  // -----------------------------------------------------------------------
+  it('a row shows the tariff name, not the version name', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': {
+        response: {
+          data: [salesRow({
+            'priceListVersion$_identifier': 'Version Lista de venta (sin impuestos)',
+            'priceList$_identifier': 'Lista de venta (sin impuestos)',
+          })],
+        },
+      },
+    });
+
+    renderBar();
+
+    await screen.findByDisplayValue('Lista de venta (sin impuestos)');
+    expect(
+      screen.queryByDisplayValue('Version Lista de venta (sin impuestos)'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('falls back to the version name when the row carries no tariff name', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [salesRow()] } },
+    });
+
+    renderBar();
+
+    await screen.findByDisplayValue('Sales List v1');
+  });
+
+  it('selector options show the tariff name, not the version name', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [] } },
+      'GET /price/selectors/M_PriceList_Version_ID': {
+        items: [{
+          id: SALES_PLV_ID,
+          label: 'Version Lista de venta (sin impuestos)',
+          name: 'Version Lista de venta (sin impuestos)',
+          'priceList$_identifier': 'Lista de venta (sin impuestos)',
+          salesPriceList: true,
+        }],
+      },
+    });
+
+    const user = userEvent.setup();
+    renderBar({ api: apiWithPriceSelector() });
+
+    await openTariffSelect(user);
+
+    const option = await screen.findByTestId(`option-priceListVersion-${SALES_PLV_ID}`);
+    expect(option).toHaveTextContent('Lista de venta (sin impuestos)');
+    expect(option).not.toHaveTextContent('Version Lista de venta');
+  });
+
+  // -----------------------------------------------------------------------
+  // Already-priced tariffs are excluded from the selector
+  // -----------------------------------------------------------------------
+  it('excludes a tariff that already has a price for this product', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [salesRow()] } },
+    });
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await screen.findByDisplayValue('Sales List v1');
+    await openTariffSelect(user);
+
+    // SALES_PLV_ID is already priced (salesRow), so it must not be offered.
+    expect(
+      screen.queryByTestId(`option-priceListVersion-${SALES_PLV_ID}`),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the "all tariffs already priced" hint when no option is left', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [salesRow()] } },
+    });
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await screen.findByDisplayValue('Sales List v1');
+    await openTariffSelect(user);
+
+    const hint = await screen.findByTestId('price-no-available-tariffs');
+    expect(hint).toHaveTextContent('priceAllSalesTariffsAssigned');
+  });
+
+  it('does NOT show the hint while options are still available', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [] } },
+    });
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await openTariffSelect(user);
+
+    await screen.findByTestId(`option-priceListVersion-${SALES_PLV_ID}`);
+    expect(screen.queryByTestId('price-no-available-tariffs')).not.toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------------
+  // Option list freshness — a fetch-once cache left tariffs created during the
+  // session permanently out of the selector (so deleting their price could
+  // never bring them back).
+  // -----------------------------------------------------------------------
+  it('re-fetches the selector options every time the add row is opened', async () => {
+    const calls = [];
+    global.fetch = buildFetch(
+      {
+        'GET /price?parentId=': { response: { data: [] } },
+        'GET /price/selectors/M_PriceList_Version_ID': {
+          items: [{ id: SALES_PLV_ID, label: 'Sales PLV', salesPriceList: true }],
+        },
+      },
+      calls,
+    );
+
+    const user = userEvent.setup();
+    renderBar({ api: apiWithPriceSelector() });
+
+    await openTariffSelect(user);
+    await waitFor(() => {
+      expect(calls.filter((c) => c.url.includes('/price/selectors/'))).toHaveLength(1);
+    });
+
+    await user.click(screen.getByTestId('price-add-cancel'));
+    await screen.findByTestId('price-add-tariff');
+    await user.click(addTariffButton());
+
+    await waitFor(() => {
+      expect(calls.filter((c) => c.url.includes('/price/selectors/')).length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it('offers a tariff that appeared after the first add-row session', async () => {
+    let selectorItems = [];
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [] } },
+      'GET /price/selectors/M_PriceList_Version_ID': () => ({ items: selectorItems }),
+    });
+
+    const user = userEvent.setup();
+    renderBar({ api: apiWithPriceSelector() });
+
+    await openTariffSelect(user);
+    await screen.findByTestId('price-no-available-tariffs');
+
+    // A tariff shows up between sessions (created via "+ Create tariff", or in
+    // another tab, or freed up by deleting its price).
+    selectorItems = [{
+      id: SALES_PLV_ID,
+      label: 'Sales PLV',
+      'priceList$_identifier': 'Sales PLV',
+      salesPriceList: true,
+    }];
+
+    await user.click(screen.getByTestId('price-add-cancel'));
+    await screen.findByTestId('price-add-tariff');
+    await user.click(addTariffButton());
+    await user.click(await screen.findByTestId('field-priceListVersion'));
+
+    await screen.findByTestId(`option-priceListVersion-${SALES_PLV_ID}`);
+  });
+
+  it('asks the server for more than its default page of options', async () => {
+    const calls = [];
+    global.fetch = buildFetch(
+      {
+        'GET /price?parentId=': { response: { data: [] } },
+        'GET /price/selectors/M_PriceList_Version_ID': { items: [] },
+      },
+      calls,
+    );
+
+    const user = userEvent.setup();
+    renderBar({ api: apiWithPriceSelector() });
+
+    await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
+    await user.click(addTariffButton());
+
+    await waitFor(() => {
+      const selectorCall = calls.find((c) => c.url.includes('/price/selectors/'));
+      expect(selectorCall?.url).toContain('limit=');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Layout — the add action lives in the section header and the add row opens
+  // at the TOP of the list, so both stay put however many tariffs exist. The
+  // section itself never scrolls: the detail content column does.
+  // -----------------------------------------------------------------------
+  it('renders every row without an inner scroll container', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': {
+        response: { data: [salesRow(), salesRow({ id: 'price-s2', priceListVersion: 'plv-sales-2' })] },
+      },
+    });
+
+    const { container } = renderBar();
+
+    await screen.findByTestId('price-delete-price-s1');
+    expect(screen.getAllByTestId(/^price-delete-/)).toHaveLength(2);
+    expect(container.querySelector('[class*="overflow-y-auto"]')).toBeNull();
+    expect(container.querySelector('[class*="max-h-"]')).toBeNull();
+  });
+
+  it('puts the add action in the section header, aligned over the list-price column', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [salesRow()] } },
+    });
+
+    renderBar();
+
+    const header = await screen.findByTestId('price-section-header');
+    expect(within(header).getByRole('heading', { level: 3 })).toBeInTheDocument();
+    const wrapper = within(header).getByTestId('price-add-tariff');
+    // Same column grid as the rows: title box, then the unit-price slot, then the
+    // list-price slot which holds the action, right-aligned so its right edge matches
+    // the right edge of the list-price steppers below.
+    expect(wrapper.parentElement.className).toContain('w-[201px]');
+    expect(wrapper.parentElement.className).toContain('justify-end');
+    expect(header.children).toHaveLength(3);
+  });
+
+  it('opens the add row above the existing rows', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [salesRow()] } },
+    });
+
+    const user = userEvent.setup();
+    renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+
+    await screen.findByTestId('price-delete-price-s1');
+    await user.click(addTariffButton());
+
+    const addRow = await screen.findByTestId('price-add-tariff-row');
+    const firstRow = screen.getByTestId('price-delete-price-s1');
+    // Node.DOCUMENT_POSITION_FOLLOWING (4) => addRow comes before firstRow.
+    expect(addRow.compareDocumentPosition(firstRow) & 4).toBeTruthy();
   });
 });

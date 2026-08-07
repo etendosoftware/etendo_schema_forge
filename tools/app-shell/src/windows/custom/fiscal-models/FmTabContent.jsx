@@ -141,6 +141,11 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
   const sorted = [...incidents].sort((a, b) =>
     (a.severity === 'block' ? 0 : 1) - (b.severity === 'block' ? 0 : 1)
   );
+  // Suggestion/action (casilla deep-link) only apply to the not-yet-built casilla-level
+  // validation flow — AEAT submission incidents never populate them. Hide both columns
+  // when no row has anything to show, instead of rendering permanently-empty '—' cells.
+  const hasSuggestion = sorted.some((inc) => inc.suggestion);
+  const hasAction = sorted.some((inc) => inc.origin?.match(/Casilla\s+\d+/i));
 
   return (
     <div style={{ flex: 1, overflow: 'auto', marginTop: '-8px' }}>
@@ -162,8 +167,8 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
                 <th>{t('fm.incidents.col.severity')}</th>
                 <th>{t('fm.incidents.col.origin')}</th>
                 <th>{t('fm.incidents.col.message')}</th>
-                <th>{t('fm.incidents.col.suggestion')}</th>
-                <th>{t('fm.incidents.col.action')}</th>
+                {hasSuggestion && <th>{t('fm.incidents.col.suggestion')}</th>}
+                {hasAction && <th>{t('fm.incidents.col.action')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -176,18 +181,20 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
                     }
                   </td>
                   <td>{inc.origin ?? '—'}</td>
-                  <td><strong>{inc.message}</strong></td>
-                  <td>{inc.suggestion ?? '—'}</td>
-                  <td>
-                    {inc.origin?.match(/Casilla\s+\d+/i) && onGoToSources && (
-                      <button
-                        onClick={() => onGoToSources()}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: 'hsl(var(--foreground))', display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'underline' }}
-                      >
-                        {t('fm.sources.title')} <ChevronRight size={13} strokeWidth={2} data-testid="ChevronRight__931756" />
-                      </button>
-                    )}
-                  </td>
+                  <td>{inc.message}</td>
+                  {hasSuggestion && <td>{inc.suggestion ?? '—'}</td>}
+                  {hasAction && (
+                    <td>
+                      {inc.origin?.match(/Casilla\s+\d+/i) && onGoToSources && (
+                        <button
+                          onClick={() => onGoToSources()}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: 'hsl(var(--foreground))', display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'underline' }}
+                        >
+                          {t('fm.sources.title')} <ChevronRight size={13} strokeWidth={2} data-testid="ChevronRight__931756" />
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -1,8 +1,8 @@
 {
-  "version": "0.34.0",
-  "generatedAt": "2026-04-29T19:04:55.657Z",
-  "updatedAt": "2026-07-28T13:29:09.185Z",
-  "contractChecksum": "e7d163e989c97f04",
+  "version": "0.35.0",
+  "generatedAt": "2026-07-30T22:14:36.610Z",
+  "updatedAt": "2026-08-02T18:39:15.278Z",
+  "contractChecksum": "120265cd419788b2",
   "apiPrediction": {
     "specName": "goods-shipment",
     "baseUrl": "/sws/neo/goods-shipment",
@@ -102,6 +102,14 @@
         "url": "/sws/neo/goods-shipment/goodsShipment/selectors/costcenter"
       },
       {
+        "entity": "goodsShipment",
+        "field": "etgoCurrency",
+        "column": "EM_ETGO_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/etgoCurrency"
+      },
+      {
         "entity": "goodsShipmentLine",
         "field": "product",
         "column": "M_Product_ID",
@@ -149,28 +157,6 @@
         ]
       },
       {
-        "name": "processGoodsJava",
-        "actionType": "utilityAction",
-        "entity": "goodsShipment",
-        "column": "Process_Goods_Java",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "49DEE812BF0545269781FCEBF2235924",
-        "processType": "classic"
-      },
-      {
         "name": "documentAction",
         "actionType": "documentAction",
         "entity": "goodsShipment",
@@ -208,6 +194,28 @@
           "User lacks permission to execute the action"
         ],
         "processId": "109",
+        "processType": "classic"
+      },
+      {
+        "name": "processGoodsJava",
+        "actionType": "utilityAction",
+        "entity": "goodsShipment",
+        "column": "Process_Goods_Java",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "49DEE812BF0545269781FCEBF2235924",
         "processType": "classic"
       },
       {
@@ -252,6 +260,46 @@
           "Record is in an incompatible state"
         ],
         "processId": "62250E8866EA4D96A66C309878DC039E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "goodsShipment",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -346,46 +394,6 @@
         "processType": "obuiapp"
       },
       {
-        "name": "etblkpBulkposting",
-        "actionType": "documentAction",
-        "entity": "goodsShipment",
-        "column": "EM_Etblkp_Bulkposting",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/etblkpBulkposting",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "57496FB9CF9E4E8F847224017941570E",
-        "processType": "obuiapp"
-      },
-      {
         "name": "explode",
         "actionType": "utilityAction",
         "entity": "goodsShipmentLine",
@@ -445,6 +453,14 @@
     },
     "window": {
       "category": "sales"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
     }
   },
   "formState": {
@@ -498,10 +514,6 @@
             "required": true,
             "defaultValue": "N"
           },
-          "processed": {
-            "readOnly": true,
-            "required": true
-          },
           "etblkpAccountingstatus": {
             "readOnly": true,
             "required": true,
@@ -511,6 +523,14 @@
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
+          },
+          "processed": {
+            "readOnly": true,
+            "required": true
+          },
+          "etgoCurrency": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
           }
         }
       },
@@ -554,7 +574,8 @@
         "warehouse",
         "businessPartner",
         "partnerAddress",
-        "movementDate"
+        "movementDate",
+        "etgoCurrency"
       ],
       "lineFields": [
         "product",
@@ -600,10 +621,10 @@
     "actions": [
       "createLinesFrom",
       "documentAction",
+      "etblkpBulkposting",
       "generateTo",
       "receiveMaterials",
-      "sendMaterials",
-      "etblkpBulkposting"
+      "sendMaterials"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -615,12 +636,12 @@
       "Source document has no valid lines to copy",
       "Target entity already has linked records",
       "Required reference data is missing (price list, warehouse, etc.)",
-      "Required context is missing",
-      "User lacks permission",
-      "Record is in an incompatible state",
       "Document is already completed or closed",
       "Document has pending lines or missing required fields",
       "User lacks permission to execute the action",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
       "Required field without default value must be provided"
     ],
     "examples": [
@@ -631,7 +652,8 @@
           "warehouse",
           "businessPartner",
           "partnerAddress",
-          "movementDate"
+          "movementDate",
+          "etgoCurrency"
         ]
       },
       {
@@ -652,5 +674,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "c94b2ca06d5482d0"
+  "checksum": "ada737dc47980d55"
 }

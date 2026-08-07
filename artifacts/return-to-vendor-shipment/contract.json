@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.24.0",
   "generatedAt": "2026-07-06T16:17:20.534Z",
-  "updatedAt": "2026-07-21T12:35:22.639Z",
-  "checksum": "a7808c99a8b397bd",
+  "updatedAt": "2026-08-06T13:47:46.616Z",
+  "checksum": "eed628b2edf5cbce",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -16,8 +16,22 @@
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
       },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
       "processOverrides": {
         "Process Shipment": {
+          "exclude": true
+        },
+        "etblkpBulkposting": {
           "exclude": true
         }
       },
@@ -35,12 +49,17 @@
       },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
-      "sendDocument": {
-        "enabled": false
-      },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
-      "maxDetailLines": 0
+      "maxDetailLines": 0,
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill"
+        }
+      ]
     },
     "entities": {
       "returnToVendorShipment": {
@@ -321,6 +340,52 @@
             }
           },
           {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "gridOrder": 8,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          },
+          {
             "name": "etblkpBulkposting",
             "apiKey": "etblkpBulkposting",
             "column": "EM_Etblkp_Bulkposting",
@@ -422,6 +487,13 @@
             "derivation": {
               "type": "computed",
               "source": "DR"
+            }
+          },
+          {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
             }
           },
           {
@@ -642,8 +714,22 @@
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
       },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
       "processOverrides": {
         "Process Shipment": {
+          "exclude": true
+        },
+        "etblkpBulkposting": {
           "exclude": true
         }
       },
@@ -661,11 +747,16 @@
       },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
-      "sendDocument": {
-        "enabled": false
-      },
       "linesLayout": "inlineEditable",
-      "maxDetailLines": 0
+      "maxDetailLines": 0,
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill"
+        }
+      ]
     },
     "entities": {
       "returnToVendorShipment": {
@@ -750,7 +841,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
@@ -821,8 +912,8 @@
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
-            "visibility": "discarded",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1240,6 +1331,14 @@
             "type": "string",
             "visibility": "readOnly",
             "required": false
+          },
+          {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
           }
         ],
         "javaQualifier": "returnToVendorShipmentHeaderHandler"
@@ -1722,12 +1821,6 @@
       },
       {
         "entity": "returnToVendorShipment",
-        "field": "posted",
-        "column": "Posted",
-        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/posted"
-      },
-      {
-        "entity": "returnToVendorShipment",
         "field": "calculateFreight",
         "column": "Calculate_Freight",
         "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/calculateFreight",
@@ -1871,14 +1964,6 @@
         "description": "Action endpoint for 'invoicefromshipment' in returnToVendorShipment should exist"
       },
       {
-        "id": "t-action-endpoint-returnToVendorShipment-posted",
-        "category": "action-endpoint",
-        "entity": "returnToVendorShipment",
-        "field": "posted",
-        "runner": "node",
-        "description": "Action endpoint for 'posted' in returnToVendorShipment should exist"
-      },
-      {
         "id": "t-action-endpoint-returnToVendorShipment-processGoodsJava",
         "category": "action-endpoint",
         "entity": "returnToVendorShipment",
@@ -1965,6 +2050,14 @@
         "description": "Default value for 'movementDate' in returnToVendorShipment should be a string"
       },
       {
+        "id": "t-default-value-type-returnToVendorShipment-posted",
+        "category": "default-value-type",
+        "entity": "returnToVendorShipment",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in returnToVendorShipment should be a string"
+      },
+      {
         "id": "t-default-value-type-returnToVendorShipmentLine-lineNo",
         "category": "default-value-type",
         "entity": "returnToVendorShipmentLine",
@@ -1989,6 +2082,14 @@
         "description": "Display logic for 'etblkpBulkposting' in returnToVendorShipment should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-returnToVendorShipment-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "returnToVendorShipment",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in returnToVendorShipment should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-returnToVendorShipmentLine-orderQuantity",
         "category": "displaylogic-evaluable",
         "entity": "returnToVendorShipmentLine",
@@ -2003,6 +2104,14 @@
         "field": "etblkpBulkposting",
         "runner": "node",
         "description": "Display logic for 'etblkpBulkposting' in returnToVendorShipment should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-returnToVendorShipment-posted",
+        "category": "displaylogic-valid",
+        "entity": "returnToVendorShipment",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in returnToVendorShipment should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-returnToVendorShipmentLine-orderQuantity",
@@ -2075,6 +2184,14 @@
         "field": "partnerAddress",
         "runner": "node",
         "description": "Field 'partnerAddress' should be present in returnToVendorShipment"
+      },
+      {
+        "id": "t-field-presence-returnToVendorShipment-posted",
+        "category": "field-presence",
+        "entity": "returnToVendorShipment",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in returnToVendorShipment"
       },
       {
         "id": "t-field-presence-returnToVendorShipment-sourceReceiptDocNo",
@@ -2211,6 +2328,14 @@
         "field": "partnerAddress",
         "runner": "node",
         "description": "Field 'partnerAddress' should have type 'string' in returnToVendorShipment"
+      },
+      {
+        "id": "t-field-type-returnToVendorShipment-posted",
+        "category": "field-type",
+        "entity": "returnToVendorShipment",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in returnToVendorShipment"
       },
       {
         "id": "t-field-type-returnToVendorShipment-sourceReceiptDocNo",
@@ -2706,6 +2831,14 @@
         "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for returnToVendorShipment"
       },
       {
+        "id": "t-system-field-returnToVendorShipment-etgoCurrency",
+        "category": "system-field",
+        "entity": "returnToVendorShipment",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "System field 'etgoCurrency' should exist in backend but not frontend for returnToVendorShipment"
+      },
+      {
         "id": "t-system-field-returnToVendorShipment-externalBusinessPartnerReference",
         "category": "system-field",
         "entity": "returnToVendorShipment",
@@ -2856,14 +2989,6 @@
         "field": "pickDate",
         "runner": "node",
         "description": "System field 'pickDate' should exist in backend but not frontend for returnToVendorShipment"
-      },
-      {
-        "id": "t-system-field-returnToVendorShipment-posted",
-        "category": "system-field",
-        "entity": "returnToVendorShipment",
-        "field": "posted",
-        "runner": "node",
-        "description": "System field 'posted' should exist in backend but not frontend for returnToVendorShipment"
       },
       {
         "id": "t-system-field-returnToVendorShipment-print",
@@ -3273,15 +3398,15 @@
       }
     ],
     "summary": {
-      "total": 182,
+      "total": 186,
       "byCategory": {
-        "action-endpoint": 13,
+        "action-endpoint": 12,
         "crud-flags": 2,
-        "default-value-type": 5,
-        "displaylogic-evaluable": 2,
-        "displaylogic-valid": 2,
-        "field-presence": 17,
-        "field-type": 17,
+        "default-value-type": 6,
+        "displaylogic-evaluable": 3,
+        "displaylogic-valid": 3,
+        "field-presence": 18,
+        "field-type": 18,
         "readonlylogic-evaluable": 10,
         "readonlylogic-valid": 10,
         "rule-declared": 3,
@@ -3291,7 +3416,7 @@
         "visibility": 2
       },
       "byRunner": {
-        "node": 182,
+        "node": 186,
         "junit": 0
       }
     }

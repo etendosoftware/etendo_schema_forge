@@ -111,6 +111,45 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
+  describe('ETP-4028 — CreateInvoiceConfirmModal price-list picker wiring', () => {
+    it('imports CreateInvoiceConfirmModal', () => {
+      assert.match(src, /import CreateInvoiceConfirmModal from '@\/components\/contract-ui\/CreateInvoiceConfirmModal'/);
+    });
+
+    it('renders CreateInvoiceConfirmModal with showPriceListPicker enabled', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?showPriceListPicker[\s\S]*?\/>/);
+    });
+
+    it('passes isSOTrx (bare, defaults to truthy) — goods-shipment offers SALES price lists', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?\bisSOTrx\b[\s\S]*?\/>/);
+      // Must not be explicitly set to false for the shipment (sales) flow
+      assert.doesNotMatch(src, /<CreateInvoiceConfirmModal[\s\S]*?isSOTrx=\{false\}[\s\S]*?\/>/);
+    });
+
+    it('passes apiBaseUrl through to the modal (required for the price-list fetch)', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?apiBaseUrl=\{apiBaseUrl\}[\s\S]*?\/>/);
+    });
+
+    it('onConfirm closes the confirm dialog and forwards the chosen priceListId to handleCreateInvoice', () => {
+      assert.match(
+        src,
+        /onConfirm=\{\(priceListId\) => \{ setShowInvoiceConfirm\(false\); handleCreateInvoice\(priceListId\); \}\}/,
+      );
+    });
+
+    it('handleCreateInvoice accepts priceListId and threads it into the POST body', () => {
+      assert.match(src, /const handleCreateInvoice = async \(priceListId\) => \{/);
+      assert.match(
+        src,
+        /body: JSON\.stringify\(\{ priceListId \}\)/,
+      );
+    });
+
+    it('posts to the createDraftInvoice action (sales-side)', () => {
+      assert.match(src, /goods-shipment\/goodsShipment\/\$\{recordId\}\/action\/createDraftInvoice/);
+    });
+  });
+
   describe('ConfirmShipmentInvoicedModal — fmtAmount (real currency formatting)', () => {
     // fmtAmount is not exported (internal to the modal, reachable only via a hard-to-
     // stage UI state — a draft shipment that already has a linked invoice). Extract
@@ -143,6 +182,36 @@ describe('GoodsShipmentActions', () => {
       const fmtAmount = getRealFmtAmount();
       assert.equal(fmtAmount(1234.56, 'EUR'), '1.234,56 €');
       assert.doesNotMatch(fmtAmount(1234.56, 'EUR'), /EUR/);
+    });
+  });
+
+  // ETP-4702 — regression guard. This component used to render its own private
+  // kebab popover (menuOpen/menuRef state, previously ~lines 207-237) as a SECOND,
+  // independent kebab button rendered next to the generic moreMenuContent kebab
+  // (Post/Unpost + the new GoodsShipmentMoreMenu "Download PDF" item). That
+  // duplicated the kebab menu on completed shipments. The private popover was
+  // removed outright — this component must never regrow it.
+  describe('no private kebab-menu popover (ETP-4702)', () => {
+    it('has no private kebab-menu open/close state', () => {
+      assert.doesNotMatch(src, /menuOpen/);
+    });
+
+    it('has no ref for a private kebab popover', () => {
+      assert.doesNotMatch(src, /menuRef/);
+    });
+
+    it('has no standalone kebab trigger character', () => {
+      assert.doesNotMatch(src, new RegExp(String.fromCharCode(0x22ee)));
+    });
+
+    it('still renders the Print button wired to handlePrint (untouched by the popover removal)', () => {
+      assert.match(src, /const handlePrint = async \(\) => \{/);
+      assert.match(src, /onClick=\{handlePrint\}/);
+      assert.match(src, /\{ui\('print'\)\}/);
+    });
+
+    it('still generates the shipment PDF via generateShipmentPdf for the print flow', () => {
+      assert.match(src, /generateShipmentPdf\(recordId, apiBaseUrl, token, pdfLabels\)/);
     });
   });
 });

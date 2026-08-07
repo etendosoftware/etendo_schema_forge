@@ -32,9 +32,16 @@ describe('FmOverlays — no removed components', () => {
   it('does NOT reference T1_2026_BOXES (was CompareDrawer-only)', () => assert.doesNotMatch(src, /T1_2026_BOXES/));
 });
 
-describe('PresentModal — 2 paths', () => {
+describe('PresentModal — 2 manual paths + 1 opt-in AEAT path', () => {
   it('has submitted_ack path', () => assert.match(src, /submitted_ack/));
   it('has submitted (no ack) path', () => assert.match(src, /'submitted'/));
   it('does not have a submitted_ext path', () => assert.doesNotMatch(src, /submitted_ext/));
   it('file upload tied to submitted_ack path', () => assert.match(src, /acuseFile/));
+  it('has an aeat_telematic sentinel path, gated behind showAeatPath', () => {
+    assert.match(src, /aeat_telematic/);
+    assert.match(src, /showAeatPath/);
+  });
+  it('canConfirm allows the aeat_telematic path without requiring acuseFile', () => {
+    assert.match(src, /path === 'aeat_telematic'/);
+  });
 });

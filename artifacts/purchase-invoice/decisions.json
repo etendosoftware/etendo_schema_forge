@@ -49,11 +49,11 @@
       },
       {
         "label": "invoicesTab",
-        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D"
       },
       {
-        "label": "creditNotesTab",
-        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D"
+        "label": "rectificativeInvoicesTab",
+        "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D%7D%5D"
       }
     ],
     "lineEntityConfig": "invoice",
@@ -111,6 +111,26 @@
   "entities": {
     "header": {
       "javaQualifier": "purchaseInvoiceHeaderHandler",
+      "namedFilters": [
+        {
+          "name": "completed",
+          "label": "Paid",
+          "description": "Fully paid invoices (payment complete).",
+          "where": "e.paymentComplete = true"
+        },
+        {
+          "name": "pending",
+          "label": "Unpaid",
+          "description": "Unpaid invoices with nothing paid yet (outstanding equals the total).",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)"
+        },
+        {
+          "name": "partial",
+          "label": "Partially paid",
+          "description": "Invoices with a partial payment: some amount paid but a balance remains.",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)"
+        }
+      ],
       "fields": {
         "documentNo": {
           "visibility": "readOnly",
@@ -119,7 +139,8 @@
           "form": false,
           "searchable": true,
           "readOnlyLogic": null,
-          "seq": 20
+          "seq": 20,
+          "businessCritical": true
         },
         "transactionDocument": {
           "visibility": "editable",
@@ -137,7 +158,8 @@
           "searchable": true,
           "section": "principal",
           "readOnlyLogic": null,
-          "seq": 30
+          "seq": 30,
+          "businessCritical": true
         },
         "businessPartner": {
           "grid": true,
@@ -147,7 +169,8 @@
           "reference": "BusinessPartner",
           "readOnlyLogic": "@Processed@='Y'",
           "displayLogic": null,
-          "seq": 10
+          "seq": 10,
+          "businessCritical": true
         },
         "partnerAddress": {
           "section": "principal",
@@ -284,7 +307,8 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
-          "gridOrder": 6
+          "gridOrder": 6,
+          "businessCritical": true
         },
         "summedLineAmount": {
           "visibility": "readOnly",
@@ -315,7 +339,8 @@
           "visibility": "readOnly",
           "grid": true,
           "gridOrder": 7,
-          "form": false
+          "form": false,
+          "businessCritical": true
         },
         "eTGODueDate": {
           "visibility": "readOnly",
