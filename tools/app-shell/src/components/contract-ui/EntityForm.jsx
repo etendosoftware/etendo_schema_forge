@@ -630,8 +630,14 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *  - onChange: (fieldKey, value) => void
  *  - catalogs: Record<string, Array<{ id, name, ... }>> for FK reference data
  *  - displayLogic: { readOnly: { fieldName: bool }, visibility: { fieldName: bool } }
+ *  - trailing: optional React node rendered as an ADDITIONAL grid item after the
+ *    field cells, INSIDE the same grid container — so it flows into the next free
+ *    grid cell instead of starting a new grid. Undefined for every existing caller.
+ *  - renderAsFragment: when true, emit the field cell(s) WITHOUT the wrapping grid
+ *    container (a bare fragment), so the caller can splice them into another
+ *    EntityForm's grid via its `trailing` slot. Opt-in; default false.
  */
-export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -1456,6 +1462,22 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     return node;
   };
 
+  // `renderAsFragment` (opt-in) emits the field cell(s) WITHOUT the wrapping grid
+  // container, so a caller can splice them into ANOTHER EntityForm's grid (e.g. the
+  // Taxes header form's `trailing` slot) and have them flow into the next free grid
+  // cell instead of starting their own grid row. Only the bare cell markup differs —
+  // field registration, readOnly/display logic, errors and onChange are unchanged.
+  // The image-pin layout is a full grid container by definition, so it is never
+  // fragment-rendered (an image footer would not opt into this path).
+  if (renderAsFragment) {
+    return (
+      <>
+        {fieldsToRender.map(renderFieldWithError)}
+        {trailing}
+      </>
+    );
+  }
+
   if (imageField) {
     const imgLabel = imageField.label ?? t(imageField.column) ?? imageField.key;
     const imgReadOnly = formReadOnly
@@ -1466,6 +1488,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       <div className="flex gap-6 items-stretch">
         <div className={`flex-1 min-w-0 ${gridClass}`} style={gridStyle}>
           {fieldsToRender.map(renderFieldWithError)}
+          {trailing}
         </div>
         <div className="shrink-0 w-64 flex flex-col">
           <ImageField
@@ -1486,6 +1509,10 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   return (
     <div className={gridClass} style={gridStyle}>
       {displayFields.map(renderFieldWithError)}
+      {/* Additional grid item(s) rendered INSIDE the same grid container so they
+          flow into the next free cell(s) after the native fields (opt-in; undefined
+          for every existing caller → strictly additive). */}
+      {trailing}
     </div>
   );
 }

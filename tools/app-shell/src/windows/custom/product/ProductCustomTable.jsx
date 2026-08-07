@@ -35,7 +35,17 @@ const columns = [
     column: 'ProductType',
     type: 'enum',
     label: 'Product Type',
-    enumLabels: { E: 'Expense type', I: 'Item', R: 'Resource', S: 'Service' },
+    // ETP-4685 — i18n keys (resolved via ui()/genericLabels), not raw English
+    // literals, so this custom table's filter/grid enum labels stay in sync
+    // with the pipeline's own fix in generate-frontend.js (buildEnumLabelKey).
+    // Keyed by the stable ProductType Value code (E/I/R/S), not the display
+    // Name, matching the `statuses` section's own rl.value-keyed convention.
+    enumLabels: {
+      E: 'productTypeE',
+      I: 'productTypeI',
+      R: 'productTypeR',
+      S: 'productTypeS',
+    },
     enumVariants: { I: 'blue', S: 'purple', R: 'teal', E: 'orange' },
     required: true,
   },
@@ -52,6 +62,10 @@ const columns = [
   //     the F19 validator rule reports as a required-flag divergence.
   //   - `filterMode: 'numeric'` so the advanced filter offers numeric operators
   //     (greaterThan/between/…) and a number input instead of text `iContains`.
+  // ETP-4685 — keys renamed from 'sale'/'purchase' to 'salePrice'/'purchasePrice':
+  // those names collided with the contract's real 'sale'/'purchase' fields
+  // (IsSold/IsPurchased booleans, unrelated to price), tripping the F19
+  // required-flag drift check on an unrelated name coincidence.
   {
     key: 'salePrice',
     labels: { en_US: 'Sales', es_ES: 'Venta' },

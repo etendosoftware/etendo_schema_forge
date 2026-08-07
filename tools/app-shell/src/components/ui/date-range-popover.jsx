@@ -158,7 +158,7 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
               type="button"
               onClick={handleApplyCustom}
               disabled={!canApplyCustom}
-              className="inline-flex h-10 items-center justify-center rounded-full bg-foreground px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-10 items-center justify-center rounded-full bg-foreground px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
               {ui('dateRangeApply')}
             </button>
@@ -416,7 +416,7 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
                     className={cn(
                       'h-8 rounded-lg px-2 text-sm font-medium transition-colors',
                       isSelected
-                        ? 'bg-foreground text-primary-foreground hover:bg-primary hover:text-foreground'
+                        ? 'bg-foreground text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground'
                         : 'text-foreground hover:bg-muted',
                     )}
                   >

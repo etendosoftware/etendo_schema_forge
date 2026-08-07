@@ -31,7 +31,7 @@ async function fetchPayments(orderId, token, apiBaseUrl) {
   return results.filter(Boolean);
 }
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, docsRefreshSignal }) {
   const [related, setRelated] = useState({});
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +54,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         setPayments(paymentResults);
         setLoading(false);
       });
-  }, [recordId, token, apiBaseUrl, refreshKey]);
+  }, [recordId, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   const chips = [];
 

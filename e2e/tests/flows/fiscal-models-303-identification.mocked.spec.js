@@ -149,18 +149,24 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
     await goToIdentificacion(page);
   });
 
-  test('datos_bancarios is visible for Ingreso (I) with Domiciliación title', async ({ page }) => {
+  test('datos_bancarios is hidden for Ingreso (I) — EDID065 fix, I no longer allows/requires IBAN', async ({ page }) => {
     const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
     await select.selectOption('I');
-    // I shows datos_bancarios with Domiciliación title (IBAN required, no SWIFT)
-    await expect(
-      page.locator('.fm-aeat-section').filter({ hasText: /domiciliaci/i }).last()
-    ).toBeVisible();
+    // AEAT rejects Modelo 303 submissions with error EDID065 if IBAN is present for a tipo
+    // other than U/D/X — the datos_bancarios section (and its IBAN field) must not render for I.
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/i })
-    ).toBeVisible();
+    ).not.toBeVisible();
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /SWIFT|BIC/i })
+    ).not.toBeVisible();
+  });
+
+  test('datos_bancarios is hidden for Devolución cta. corriente (V) — EDID065 fix, V no longer allows/requires IBAN', async ({ page }) => {
+    const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
+    await select.selectOption('V');
+    await expect(
+      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/i })
     ).not.toBeVisible();
   });
 

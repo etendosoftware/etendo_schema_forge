@@ -1,8 +1,8 @@
 {
   "version": "0.8.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
-  "updatedAt": "2026-06-24T20:46:50.413Z",
-  "contractChecksum": "467bdf2c8a939ac3",
+  "updatedAt": "2026-08-04T14:03:25.379Z",
+  "contractChecksum": "d43ccec2d3f8430f",
   "apiPrediction": {
     "specName": "sii-monitor",
     "baseUrl": "/sws/neo/sii-monitor",
@@ -10,10 +10,10 @@
       "organizations": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/organizations",
         "detailUrl": "/sws/neo/sii-monitor/organizations/{id}",
         "supportedFilters": []
@@ -21,10 +21,10 @@
       "issuedInvoices": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/issuedInvoices",
         "detailUrl": "/sws/neo/sii-monitor/issuedInvoices/{id}",
         "supportedFilters": []
@@ -32,10 +32,10 @@
       "issuedInvoicesSiiData": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/issuedInvoicesSiiData",
         "detailUrl": "/sws/neo/sii-monitor/issuedInvoicesSiiData/{id}",
         "supportedFilters": []
@@ -43,10 +43,10 @@
       "receivedInvoices": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/receivedInvoices",
         "detailUrl": "/sws/neo/sii-monitor/receivedInvoices/{id}",
         "supportedFilters": []
@@ -54,10 +54,10 @@
       "receivedInvoicesSiiData": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/receivedInvoicesSiiData",
         "detailUrl": "/sws/neo/sii-monitor/receivedInvoicesSiiData/{id}",
         "supportedFilters": []
@@ -65,10 +65,10 @@
       "cashCriterionPayments": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/cashCriterionPayments",
         "detailUrl": "/sws/neo/sii-monitor/cashCriterionPayments/{id}",
         "supportedFilters": []
@@ -76,10 +76,10 @@
       "paymentsSiiData": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/paymentsSiiData",
         "detailUrl": "/sws/neo/sii-monitor/paymentsSiiData/{id}",
         "supportedFilters": []
@@ -87,10 +87,10 @@
       "issuedInvoices(previousPeriod)": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)",
         "detailUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}",
         "supportedFilters": []
@@ -98,10 +98,10 @@
       "issuedInvoices(previousPeriod)SiiData": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData",
         "detailUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData/{id}",
         "supportedFilters": []
@@ -109,10 +109,10 @@
       "receivedInvoices(previousPeriod)": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)",
         "detailUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}",
         "supportedFilters": []
@@ -120,10 +120,10 @@
       "receivedInvoices(previousPeriod)SiiData": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData",
         "detailUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData/{id}",
         "supportedFilters": []
@@ -2838,7 +2838,8 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "monitor"
+      "category": "monitor",
+      "readOnly": true
     }
   },
   "formState": {
@@ -3559,5 +3560,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "5854af3432ebb773"
+  "checksum": "78b08344a0c337b1"
 }
