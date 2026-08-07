@@ -268,6 +268,25 @@ PDF/print + attachment tools · find-by-document-number lookups · per-verb perm
 schema · cursor pagination alongside offset · `overdue` named filter (needs a payment-schedule
 subquery).
 
+> **Boolean type inconsistency in `neo_defaults`** — raised 2026-08-07 while verifying IMP-16, whose
+> twin it is. The same `c_invoice` columns come back with different JSON types per spec, and the
+> direction **inverts**: `printDiscount` is `true` on `sales-invoice/header` and `"Y"` on
+> `purchase-invoice/header`, while `etvfacSentToVerifac` is `"N"` on the former and `false` on the
+> latter (`etvfacSimpinvart7273` and `etvfacInvNoIDArt61d` likewise). In JavaScript `"N"` is
+> **truthy**, so an agent reads the opposite of what the ERP said. Same structural cause as IMP-16:
+> normalization lived in one per-field call reachable only from pass 1
+> (`NeoDefaultsService.coerceBooleanDefault`), so the callout writeback and combo preselection in
+> `NeoDefaultsCascadeHelper`, `NeoHiddenMandatoryDefaultsResolver` and handler-injected values all
+> bypassed it — and which fields a callout touches differs per window, hence the inversion.
+> **Fix implemented 2026-08-07 (compiled locally, not deployed, not probed)**: `NeoBooleanFormat`
+> util + a `canonicalizeBooleanDefaults` post-pass beside the date one, and the two write coercers
+> unified (they disagreed on case — MCP accepted `"y"`, REST did not). Not MCP-only:
+> `NeoDefaultsService` also backs the REST `/defaults` the React form reads, so one change covers
+> both. React needs **no** change — every boolean it reads already passes an explicit
+> `=== true || === 'Y' || === 'true'` guard at ~30 sites, so there is no user-visible defect today;
+> the victim is the agent. Full analysis: `com.etendoerp.go/docs/neo-headless.md` §4.3.2. Promote to
+> an IMP and score it in the next `/mcp-comparison` run.
+
 ---
 
 ## 4. Changelog
