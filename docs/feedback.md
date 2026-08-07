@@ -788,3 +788,30 @@ unrelated drift already (they structurally cannot, for three independent reasons
 window with no `decisions.json` as out of scope for a normal fix-and-regen task — regenerating it
 requires first deciding whether to adopt it into the real pipeline at all, which is its own,
 separate piece of work.
+
+---
+
+## [2026-08-06] ETP-4745 — `hideDelete` never reached NEO backend; root cause fixed in `schema_forge_core`, 10 windows still need a re-push
+
+**Component:** `cli/src/lib/entity-methods.js` (`resolveContractEntityMethods()`) — `schema_forge_core` repo, not this one. Consumed here only as a published/`LOCAL_CORE` dependency, and via the `decisions.json → hideDelete` key documented in `docs/decisions-reference.md` and `docs/ui-customization.md`.
+
+**Symptom:** setting `hideDelete: true` (window- or entity-level) in `decisions.json` hid the delete affordance in the UI, but a direct `DELETE` API call against the same entity still succeeded — `hideDelete` never reached `ETGO_SF_ENTITY.ISDELETE`. Confirmed by the ETP-4745 QA pass, live DB query: **every window in this repo that currently declares `hideDelete` (10 total) has `isdelete='Y'` in the local dev DB's `ETGO_SF_ENTITY` right now.**
+
+**Root cause and fix:** see the Jira ticket (ETP-4745) and GitHub issue [etendosoftware/schema_forge_core#116](https://github.com/etendosoftware/schema_forge_core/issues/116) for the full write-up. In short: `resolveContractEntityMethods()` — the single function both `push-to-neo.js` (live DB push) and `lib/neo-delta.js` (offline XML delta) read the resolved HTTP-method set from — silently ignored `hideDelete` when folding `decisions.json`'s read-only/method intent into the entity's method list. Fixed generically in `schema_forge_core` branch `feature/ETP-4745` (commit `6f02aac37`); no window-specific code changed. Pipeline validator rule F21 was updated to also catch a stale `hideDelete`-derived `crud.<entity>.delete` (see `docs/pipeline-validator-reference.md`).
+
+**This fix does NOT self-apply to already-declared windows.** `push-to-neo.js` only runs when a window is explicitly re-pushed; existing `ETGO_SF_ENTITY` rows keep their current (wrong) `ISDELETE='Y'` value until that happens. **Once the `schema_forge_core` fix is merged and published (or consumed via `LOCAL_CORE=1`), the following 10 windows/entities need `make regen ONLY=<window> PUSH_TO_NEO=1` followed by `./gradlew export.database`** to actually close the gap — this re-push is a deliberate, separate step requiring explicit human go-ahead, not part of the ETP-4745 pipeline run itself:
+
+| Window | `hideDelete` scope |
+|--------|---------------------|
+| `asset-group` | entity `accounting` |
+| `business-partner-category` | entity `accounting` |
+| `contacts` | entities `customerAccounting`, `vendorAccounting` |
+| `open-close-period-control` | window-level |
+| `product-category` | entity `accounting` |
+| `product` | entity `accounting` |
+| `tax-category` | window-level |
+| `tax` | window-level + entity `accounting` |
+| `user` | entity `userRoles` |
+| `warehouse` | entity `accounting` |
+
+**Lesson:** a `decisions.json` flag that reaches `contract.json` is not proof it reaches the runtime. `apiPrediction.crud.<entity>.delete: false` in the contract is a *declared intent*; only `push-to-neo.js`/`neo-delta.js` actually writing `ISDELETE='N'` to `ETGO_SF_ENTITY` makes NEO Headless enforce it. When adding a new declarative flag that's supposed to restrict the live API, verify the write path (`resolveContractEntityMethods()` or equivalent), not just the contract shape — this is exactly the same class of gap ETP-4254 closed for `readOnly`/`methods`, and `hideDelete` had quietly never gotten the same treatment.
