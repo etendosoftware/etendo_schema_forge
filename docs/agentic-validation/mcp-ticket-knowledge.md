@@ -50,6 +50,14 @@ the advisory-only note on `businessCritical` are in
 **`docs/agentic-validation/mcp-field-flags-pipeline.md`** — read it only when a ticket
 actually concerns one of those flags.
 
+Likewise, a ticket reporting that an agent **wrote** to something it should not have been
+able to write — a monitor, a log, a dashboard, a report — is **upstream-config**: the entity's
+`ETGO_SF_ENTITY` method flags are driven from `decisions.json`
+(`window.readOnly` / `entities.<e>.readOnly` / `entities.<e>.methods`). Qualification criteria,
+the declaration syntax, and the crucial caveat that the flags gate **CRUD only** (not actions,
+processes, callouts, selectors, defaults or evaluate-display) are in
+**`docs/agentic-validation/agentic-write-exposure-criteria.md`**.
+
 ---
 
 ## MCP code map (where tools resolve)

@@ -1,8 +1,8 @@
 {
   "version": "0.80.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-05T00:41:41.963Z",
-  "checksum": "bf0f3737ec56d944",
+  "updatedAt": "2026-08-07T11:33:42.769Z",
+  "checksum": "053beaa1ebd2b782",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -178,6 +178,7 @@
             },
             "section": "principal",
             "seq": 20,
+            "businessCritical": true,
             "validation": {
               "required": true,
               "maxLength": 30
@@ -207,6 +208,7 @@
             "defaultValue": "@#Date@",
             "section": "principal",
             "seq": 30,
+            "businessCritical": true,
             "gridOrder": 1,
             "validation": {
               "required": true,
@@ -237,6 +239,7 @@
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "businessCritical": true,
             "gridOrder": 3,
             "validation": {
               "required": true,
@@ -547,6 +550,7 @@
             "grid": true,
             "form": false,
             "sourceRequired": true,
+            "businessCritical": true,
             "gridOrder": 6,
             "validation": {
               "required": true,
@@ -692,6 +696,7 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "businessCritical": true,
             "gridOrder": 7,
             "validation": {
               "required": true,
@@ -5244,7 +5249,8 @@
             "column": "DocumentNo",
             "type": "string",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "invoiceDate",
@@ -5252,7 +5258,8 @@
             "column": "DateInvoiced",
             "type": "date",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "businessPartner",
@@ -5260,7 +5267,8 @@
             "column": "C_BPartner_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "partnerAddress",
@@ -5340,7 +5348,8 @@
             "column": "GrandTotal",
             "type": "amount",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "summedLineAmount",
@@ -5404,7 +5413,8 @@
             "column": "OutstandingAmt",
             "type": "amount",
             "visibility": "readOnly",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "orderDate",

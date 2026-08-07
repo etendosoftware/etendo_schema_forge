@@ -52,6 +52,24 @@ const IDENT_PARAM_MAP = [
   ['baja_domiciliacion', 'Cancel_Modify_Debit'],
 ];
 
+// Declaration types (tipo_declaracion) for which AEAT actually allows/requires an
+// IBAN: Domiciliación (U), Devolución (D), and Devolución transferencia extranjero
+// (X). For any other tipo, AEAT rejects the submission with error EDID065 if IBAN
+// is present. Shared by generate303File and AeatSubmitFlow — both must guard the
+// same set before hitting the network.
+export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
+
+// Declaration type (tipo_declaracion) for which AEAT's NRC (Número de Referencia Completo)
+// field actually applies: Ingreso (I) only, per AEAT's own bundled Modelo 303 spec. The backend
+// already discards any NRC value for every other tipo before it reaches AEAT
+// (`Fiscal303BoxesHandler#resolveNrcForSubmission`, mirroring Classic's
+// `AEAT303PresentationServlet`) — this constant mirrors the Java side's
+// `DECLARATION_TYPE_INGRESO` 1:1 so both layers agree on the same literal. UI-only visibility
+// gate: NRC is NOT mandatory even for tipo I (no AEAT "required" rule found — a real AEAT flow,
+// "reconocimiento de deuda", lets you submit an Ingreso declaration without one), so this must
+// never be paired with a required/blocking validation.
+export const DECLARATION_TYPE_INGRESO = 'I';
+
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
 const BOX_PARAM_MAP = {
@@ -84,7 +102,7 @@ function applyRectificativaParams(params, identChecks) {
     params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
 }
 
-function applyIdentParams(params, identChecks) {
+export function applyIdentParams(params, identChecks) {
   for (const [field, paramName] of IDENT_PARAM_MAP) {
     const v = identChecks[field];
     if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
@@ -118,7 +136,7 @@ function parseServerMessage(raw) {
   } catch (_) { return undefined; }
 }
 
-function triggerDownload(blob, downloadName) {
+export function triggerDownload(blob, downloadName) {
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = objectUrl;
@@ -129,13 +147,36 @@ function triggerDownload(blob, downloadName) {
   URL.revokeObjectURL(objectUrl);
 }
 
+/**
+ * Decodes a base64 string (no `data:` URI prefix) into a Blob. Mirrors the
+ * atob → Uint8Array pattern already used by usePreviewAttachment.js for
+ * base64-encoded attachment payloads, so both call sites agree on the same
+ * decoding convention.
+ */
+export function base64ToBlob(base64, mimeType = 'application/pdf') {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: mimeType });
+}
+
+/**
+ * Decodes a base64 payload (e.g. `pdfBase64` from POST /fiscal303/submit)
+ * and triggers a browser download — for endpoints that return the file
+ * inline in a JSON response rather than as a fetch Response blob.
+ */
+export function triggerBase64Download(base64, downloadName, mimeType = 'application/pdf') {
+  if (!base64) return;
+  triggerDownload(base64ToBlob(base64, mimeType), downloadName);
+}
+
 export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
   if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
 
   const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
-  const IBAN_REQUIRED_TIPOS = ['D', 'G', 'I', 'V', 'U', 'X'];
 
-  if (IBAN_REQUIRED_TIPOS.includes(tipo) && !identChecks?.bank_iban?.trim()) {
+  if (
+    (IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true) &&
+    !identChecks?.bank_iban?.trim()
+  ) {
     return { ok: false, error: 'iban_required' };
   }
 
@@ -157,6 +198,72 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
     return { ok: true };
   } catch (_) {
     return { ok: false, error: 'network' };
+  }
+}
+
+/**
+ * Calls PUT /neo/fiscal303/declarations?id=... to persist a manual status
+ * change. Despite the URL, this endpoint is generic across fiscal models —
+ * both 303 and 349 declarations live in the same backend table.
+ * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+ */
+export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
+
+/**
+ * Calls GET /neo/fiscal303/incidents?id=... to fetch the AEAT validation rows persisted for a
+ * declaration — replaced (not appended) on every telematic submission attempt, test mode and
+ * production alike (see ETP-4456, `Fiscal303BoxesHandler#handleSubmit` +
+ * `FiscalDeclCrudHandler#replaceIncidents`). Maps the backend's generic `{code, message, severity}`
+ * rows into the shape `IncidentsTab`/`SourcesTab` (`FmTabContent.jsx`) already expect from the demo
+ * mock data (`DEMO_DECLARATIONS` in `FmListPage.jsx`): `origin` = code, `message` = message,
+ * `severity` = the backend's own `severity` value (`'block'` for AEAT errors, `'warn'` for AEAT
+ * warnings/avisos — added in ETP-4456's `severity` column on `ETGO_Fiscal_Decl_Incident`, so no
+ * mapping/translation is needed here beyond a defensive fallback). Any row missing/blank `severity`
+ * (e.g. data persisted before this column existed) defaults to `'block'`, matching the backend's
+ * own default for legacy rows (`FiscalDeclCrudHandler#resolveSeverity`). `blocking`/`warning` are
+ * now the actual counts of each severity in the response, rather than an assumed all-blocking
+ * shape. These rows never carry a casilla number, so the existing "ir a Casilla X" button in
+ * `IncidentsTab` (matched via `inc.origin?.match(/Casilla\s+\d+/i)`) naturally never renders for
+ * them — left untouched, it's for a separate, not-yet-built casilla-validation feature.
+ * Returns `{ blocking, warning, items }` on success, or the all-zero empty shape when
+ * token/apiBaseUrl/id are missing or the request fails — safe to always destructure.
+ */
+export async function fetchDeclarationIncidents(id, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl || !id) return EMPTY_INCIDENTS;
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const res = await fetch(`${base}/fiscal303/incidents?id=${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return EMPTY_INCIDENTS;
+    const body = await res.json().catch(() => null);
+    const rows = Array.isArray(body?.data) ? body.data : [];
+    const items = rows.map(r => ({
+      origin: r.code ?? '',
+      message: r.message ?? '',
+      severity: r.severity === 'warn' ? 'warn' : 'block',
+    }));
+    const blocking = items.filter(i => i.severity === 'block').length;
+    const warning = items.filter(i => i.severity === 'warn').length;
+    return { blocking, warning, items };
+  } catch (_) {
+    return EMPTY_INCIDENTS;
   }
 }
 
