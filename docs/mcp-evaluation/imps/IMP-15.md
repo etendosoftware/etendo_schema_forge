@@ -6,8 +6,8 @@
 | **Specification** | registry **Appendix A** (A.6 fixes, A.7 done-when) |
 | **Evidence** | W3, W8, B11, B15 (2026-08-05 / 2026-08-06) |
 | **Repo** | `com.etendoerp.go` |
-| **Implemented** | 2026-08-07, commits `12dd847f` + `2df04cd1` on `feature/ETP-4793` |
-| **Live probe** | 2026-08-07 on `etendo-go-local` — §10. Three of four clauses pass; the `uOM` secondary failed and was re-fixed in `2df04cd1` (uncompiled). |
+| **Implemented** | 2026-08-07, commits `12dd847f` + `2df04cd1` + `b64af873` on `feature/ETP-4793` |
+| **Live probe** | 2026-08-07 on `etendo-go-local`, two rounds — §9. Three of four clauses pass; the `uOM` secondary failed twice and was finally root-caused in `b64af873` (uncompiled). |
 
 This file records **what shipped**. It changes no status mark and no MARI figure — those move only
 through a `/mcp-comparison` run. `2df04cd1` has **not been compiled or deployed**; the credit for
@@ -126,24 +126,56 @@ bare `500 "Unit of Measure mismatch (product/transaction)"` — and the value wa
 from an undocumented key in the product selector's response. `handleCreate` now runs the same
 injection (the method was widened from package-private to `public static`).
 
-**This clause shipped broken in `12dd847f` and was re-fixed in `2df04cd1`.** The live probe (§10)
-still hit message 20111 on *both* verbs against a deploy that demonstrably contained IMP-15. Two
-independent holes, neither visible to a unit test:
+**This clause shipped broken in `12dd847f`, was mis-diagnosed in `2df04cd1`, and was actually fixed
+in `b64af873`.** Take the diagnosis history seriously — it cost two probe rounds.
 
-1. **The injection silently did nothing.** It read `C_UOM_ID` with raw JDBC over
-   `OBDal.getInstance().getConnection(false)` and swallowed every exception at `log.debug`. Ruled
-   out first: a stale `uOM` from defaults (neither the AD column nor the `ETGO_SF_FIELD` row has a
-   `defaultvalue`, and `neo_defaults` returns no `uOM` at all) and body rejection (sending
-   `uOM: "100"` explicitly created the line fine, proving the property is accepted and persisted).
-   It now reads through the DAL (`Product#getUOM`) and logs `warn` — the old `debug` is exactly what
-   hid the cause behind a trigger error raised much later.
-2. **The batch path never ran it at all.** `neo_batch` enters the CRUD pipeline through
-   `BatchService#createRecord`, not `NeoCrudHandler#executePostCreate`; `12dd847f` only wired
-   `handleCreate`.
+**The real cause (`b64af873`).** The injection's own early-return guard was skipping it:
 
-Both MCP call sites now share `McpToolRouter#injectLineUomIfApplicable`, guarded on the entity
-actually declaring `uOM` and skipping `$ref:` placeholders so a batch sentinel is never mistaken for
-a product id.
+```java
+String existingUom = body.optString("uOM", "");
+if (!existingUom.isEmpty()) { return; }   // ← the bug
+```
+
+The callout cascade runs immediately *before* the injection on every create path, and the AD callout
+behind it, `SL_Order_Product`, derives the UOM from the request parameter `inpmProductId_UOM`
+(`SL_Order_Product.java:53,99`) — a value the UI's product combo supplies and a NEO create never
+does. So the cascade writes an empty/null `uOM` back into the body, and **jettison's `optString`
+renders `JSONObject.NULL` as the string `"null"`**, which is not `isEmpty()`. The guard read the
+sentinel as a real value and returned; the sentinel then reached the DAL and the trigger compared
+`COALESCE(C_UOM_ID,'0')` against the product's own UOM. The guard now treats `""`, `"0"` and
+`"null"` as absent, while an explicit caller-supplied `uOM` still wins — the only case the guard was
+ever meant to protect.
+
+This single line explains every observation at once: why the injection looked dead on **all three**
+create paths (they all run it after the same cascade), and why passing `uOM: "100"` explicitly
+always worked.
+
+**The two things `2df04cd1` changed were not the cause**, though both are worth keeping — and the
+second one is why the mis-diagnosis was reasonable rather than careless:
+
+1. **The raw-JDBC read.** It read `C_UOM_ID` over `OBDal.getInstance().getConnection(false)` and
+   swallowed every exception at `log.debug`. That `debug` is genuinely why the cause stayed hidden —
+   a swallowed failure here surfaces much later as an opaque trigger error with nothing tying it
+   back — so the rewrite to `Product#getUOM` with a `warn` stays. But it was never firing at all,
+   so the JDBC was not what failed.
+2. **The batch pre-pass.** `12dd847f` wired only `handleCreate`, and the assumption was that
+   `neo_batch` therefore never ran the injection. **That assumption was wrong**:
+   `BatchService#createRecord` dispatches through `NeoCrudHandler#handleDefault`, which reaches
+   `executePostCreate` (`NeoCrudHandler.java:385`) and runs the injection natively. Batch failed for
+   the same guard reason as everything else. The pre-pass is kept anyway, because it puts `uOM` in
+   the body *before* the cascade, which lands it in `protectedCalloutFields` and stops the cascade
+   from clobbering it — belt and braces rather than a fix.
+
+Both MCP call sites share `McpToolRouter#injectLineUomIfApplicable`, guarded on the entity actually
+declaring `uOM` and skipping `$ref:` placeholders so a batch sentinel is never mistaken for a
+product id.
+
+**Method note.** Round two was only conclusive because the deployed bytecode was verified rather
+than assumed: `grep -a "injectLineUomIfApplicable"` against
+`volumes/tomcat/webapps/etendo/WEB-INF/classes/…/McpToolRouter.class` proved the re-fix *was* live,
+which is what ruled out "stale deploy" and forced the search back into the guard. The class mtimes
+differ from local time by exactly 3 h with identical seconds — a timezone artifact of the container
+copy, not evidence of a stale file.
 
 **Root cause of the trigger error, for the record.** AD message `20111` is raised by the DB trigger
 `c_orderline_trg`: it reads `M_PRODUCT.C_UOM_ID` for the line's product and raises unless it equals
@@ -172,7 +204,7 @@ than a convenience.
 | regression test: display name | `McpFkResolverTest.displayNameResolvesViaSelector` |
 | …on each verb | the resolver is the single shared code path both verbs take; `skippedValueIsUntouched` covers the batch-only `$ref:` rule |
 | no raw `status: -4` on any batch error path | `McpToolRouterSupportTest.rewritesTheFailure` (asserts the serialized error contains no `-4`), `mapsStatusesToCodes`, `extractsDalMessages`, `passesThroughNonFailures` |
-| `uOM` never 500s on `sales-order/lines` | ❌ **failed live** in `12dd847f`; re-fixed in `2df04cd1`, **not re-verified** (needs a rebuild) |
+| `uOM` never 500s on `sales-order/lines` | ❌ **failed live twice** — in `12dd847f` and again in `2df04cd1`; root cause found on the second failure and fixed in `b64af873`, **not yet re-verified** (needs a third rebuild) |
 
 ## 9. Live write probe — 2026-08-07, `etendo-go-local`
 
@@ -187,7 +219,7 @@ tagged `MCP-BENCHMARK 2026-08-07` in `description` and deleted afterwards; dispo
 | Fix 1b — `not_found` wording | ✅ | The new text ("neither the id of an existing record nor a value any selector matched … Use `neo_selectors`") came back live — which also **proves the deploy contained IMP-15**, making every other verdict here attributable. |
 | Fix 2 — batch routes through the resolver | ✅ | `currency: "EUR"` (a display name) passed on the batch **header** op; the batch's failure was at index 1, the line. Pre-IMP-15 the header op died with a raw DAL `status: -4`. |
 | Fix 3 — batch failures get the IMP-5 envelope | ✅ | `{"committed":false,"failedAt":{"index":1,"id":"l1"},"error":{"status":500,"error":"server_error","detail":"Operation 'l1' rejected by server: Unit of Measure mismatch (product/transaction)","seeAlso":"docs(topic:\"creating records\")"}}` — no `status: -4` anywhere. |
-| Secondary — `uOM` | ❌ | Message 20111 on both verbs. Root-caused and re-fixed in `2df04cd1`; see §6. |
+| Secondary — `uOM` | ❌ | Message 20111 on both verbs. Re-fixed in `2df04cd1` — which **did not fix it either**; see §9.4. |
 
 Side confirmations from the same calls, worth carrying into the next run report: **IMP-16** looks
 healthy (`orderDate` and `accountingDate` both came back ISO `2026-08-07`, no year-12 corruption) and
@@ -224,10 +256,32 @@ healthy (`orderDate` and `accountingDate` both came back ISO `2026-08-07`, no ye
 | `sales-order/header` `C507C03963B64955B5AB33FB02E7C006` (`1000020`) | orphan left by the non-atomic batch — deleted afterwards, and *that it existed at all* is finding §9.2.1 |
 | `sales-order/header` `1FE5335E766C49E5903991036B8B9DC1` (`1000017`) | **not deleted** — predates this run (2026-08-05); same orphan pattern, left in place as standing evidence for §9.2.1 |
 
+### 9.4 Second probe round — 2026-08-07, after the `2df04cd1` deploy
+
+Re-probe of the `uOM` clause only. **It failed again**, and that failure is what produced the actual
+diagnosis in §6.
+
+| Step | Result |
+|---|---|
+| `neo_create` `sales-order/header` (`1000021`, id `931FB816…`) | ✅ created; `currency: "102"` resolved again |
+| `neo_create` `sales-order/lines`, no `uOM` | ❌ first attempt returned a **clean IMP-5 envelope** — `{status:422, error:"validation_error", missingFields:[{name:"orderDate", column:"DateOrdered"}], hint:…, seeAlso:…}`. Worth noting on its own: the line's `orderDate` is required but is not surfaced by `neo_schema view:"create"` either, the same defect class as §9.2.2. |
+| …retried with `orderDate` | ❌ `Unit of Measure mismatch (product/transaction)`, raw and envelope-less — §9.2.3 again |
+| Deployed bytecode check | `2df04cd1` **was** live (`grep -a` found `injectLineUomIfApplicable` in the deployed `McpToolRouter.class`), which is what ruled out a stale deploy |
+| Product `D627916D…` ("Fernet") | `c_uom_id = 100` — so injecting it would have satisfied the trigger, proving the injection never ran |
+
+Fixed in `b64af873`. Data disposition: header `931FB816B09347CEA4E447498C5A1AB1` deleted
+(`neo_delete` → `deleted: true`); no line was ever created, so nothing else to clean.
+
 ## 10. What is still owed
 
-1. **Compile + unit-test run of `2df04cd1`** — the user owns build/deploy; that commit is not
+1. **Compile + unit-test run of `b64af873`** — the user owns build/deploy; that commit is not
    compile-verified.
-2. **A deploy to `etendo-go-local`**, then a re-probe of the `uOM` clause only (the other three are
-   already credited by §9.1), and a `/mcp-comparison` run to move the status mark and MARI.
-3. **Register the three §9.2 defects** in the registry as new items.
+2. **A third deploy to `etendo-go-local`**, then a re-probe of the `uOM` clause only (the other three
+   are already credited by §9.1), and a `/mcp-comparison` run to move the status mark and MARI.
+3. **A regression test for the guard.** `b64af873` is a one-line predicate that two probe rounds
+   missed; it deserves a unit test asserting the injection fires when the body carries `uOM` as
+   `""`, `"0"` and `JSONObject.NULL`, and does *not* fire when it carries a real id. Delegate to
+   Tester per the repo's testing rule.
+4. **Register the §9.2 defects** in the registry as new items, plus the line-level `orderDate`
+   omission found in §9.4 (same class as §9.2.2 — `neo_schema view:"create"` under-reporting
+   required fields, now observed on both `header` and `lines`).
