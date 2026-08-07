@@ -18,8 +18,7 @@ describe('FmModel303Page — composition', () => {
   it('has back navigation (onBack)', () => assert.match(src, /onBack/));
   it('renders KpiWidget for summary values', () => assert.match(src, /KpiWidget/));
   it('uses STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX/));
-  it('renders ConfigDrawer', () => assert.match(src, /ConfigDrawer/));
-  it('renders CompareDrawer', () => assert.match(src, /CompareDrawer/));
+  it('renders a standalone Generar fichero action-bar button', () => assert.match(src, /fm\.action\.gen303/));
 });
 
 describe('FmModel303Page — stepper', () => {
@@ -50,4 +49,8 @@ describe('FmModel303Page — no removed features', () => {
   it('does not reference AuditReasonModal', () => assert.doesNotMatch(src, /AuditReasonModal/));
   it('does not reference CellHistoryPanel', () => assert.doesNotMatch(src, /CellHistoryPanel/));
   it('does not have manual adjustment inputs', () => assert.doesNotMatch(src, /manualAdj/));
+  it('does not reference CompareDrawer (Comparar removed)', () => assert.doesNotMatch(src, /CompareDrawer/));
+  it('does not reference ConfigDrawer (Configuración removed from this page)', () => assert.doesNotMatch(src, /ConfigDrawer/));
+  it('does not define a MoreOptionsMenu function', () => assert.doesNotMatch(src, /function MoreOptionsMenu/));
+  it('does not reference the Historial tab', () => assert.doesNotMatch(src, /fm\.tab\.history/));
 });

@@ -106,7 +106,7 @@
   background: var(--fm-gray-900); color: hsl(var(--card));
   border-color: var(--fm-gray-900); font-weight: 600;
 }
-.fm-toolbar__btn--primary:hover { background: hsl(var(--primary)); border-color: hsl(var(--primary)); color: hsl(var(--foreground)); }
+.fm-toolbar__btn--primary:hover { background: hsl(var(--accent-highlight)); border-color: hsl(var(--accent-highlight)); color: hsl(var(--accent-highlight-foreground)); }
 /* legacy modifier — base already sets 14px/400 */
 .fm-toolbar__count-badge {
   display: inline-flex; align-items: center; justify-content: center;

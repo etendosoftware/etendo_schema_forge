@@ -2,9 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { Star, Play, ArrowUpRight, Info, OctagonAlert, TriangleAlert, X, Check } from 'lucide-react';
+import { Star, Play, OctagonAlert, TriangleAlert, X, Check } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { formatCurrency } from '@/lib/formatCurrency.js';
 import './fiscal-models.css';
 
 function parseCityLine(cityLine) {
@@ -28,10 +27,9 @@ function parseCityLine(cityLine) {
   return { postal, city: rest, province: '' };
 }
 
-// PresentModal — 3-path submission:
+// PresentModal — 2-path submission:
 //   1. submitted_ack — upload PDF/XML receipt; status → submitted_ack
 //   2. submitted     — submitted without receipt; status → submitted
-//   3. submitted_ext — submitted via external agency; status → submitted_ext
 export function PresentModal({ decl, onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
@@ -39,7 +37,7 @@ export function PresentModal({ decl, onConfirm, onClose }) {
   const [acuseFile, setAcuseFile] = useState(null);
   const fileRef = useRef(null);
 
-  const canConfirm = path === 'submitted_ext' || path === 'submitted' || (path === 'submitted_ack' && acuseFile);
+  const canConfirm = path === 'submitted' || (path === 'submitted_ack' && acuseFile);
 
   function handleConfirm() {
     onConfirm({ status: path, acuseFile: path === 'submitted_ack' ? acuseFile : null });
@@ -49,7 +47,6 @@ export function PresentModal({ decl, onConfirm, onClose }) {
   const PATHS = [
     { id: 'submitted_ack', icon: <Star size={16} strokeWidth={1.75} data-testid="Star__cda0bb" />, titleKey: 'fm.present.path.acuse',      descKey: 'fm.present.path.acuse_desc' },
     { id: 'submitted',     icon: <Play size={16} strokeWidth={1.75} data-testid="Play__cda0bb" />, titleKey: 'fm.present.path.sin_acuse',  descKey: 'fm.present.path.sin_acuse_desc' },
-    { id: 'submitted_ext', icon: <ArrowUpRight size={16} strokeWidth={1.75} data-testid="ArrowUpRight__cda0bb" />, titleKey: 'fm.present.path.otra', descKey: 'fm.present.path.otra_desc' },
   ];
 
   return (
@@ -677,106 +674,6 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
             {t('fm.action.save') ?? 'Guardar'}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// T1/2026 reference — used as prev when current decl is T2/2026
-const T1_2026_BOXES = { 7:3248, 27:682.08, 45:3498.39, 46:-2816.31 };
-
-export function CompareDrawer({ decl, prevDecl, onClose }) {
-  const ui = useUI();
-  const t = ui;
-
-  const boxes    = decl.boxes    ?? {};
-  const summary  = decl.summary  ?? {};
-  const pb       = prevDecl?.boxes ?? T1_2026_BOXES;
-  const prevLabel = prevDecl ? `${prevDecl.period} ${prevDecl.year}` : 'T1 2026';
-  const currLabel = `${decl.period} ${decl.year}`;
-
-  const currBase = (boxes[1] ?? 0) + (boxes[4] ?? 0) + (boxes[7] ?? 0);
-  const prevBase = (pb[1] ?? 0) + (pb[4] ?? 0) + (pb[7] ?? 0);
-
-  const rows = [
-    { label: t('fm.compare.row.base'),     prev: prevBase,         curr: currBase,                              separator: false },
-    { label: t('fm.compare.row.iva_dev'),  prev: pb[27] ?? 0,      curr: boxes[27] ?? summary.accrued   ?? 0,  separator: false },
-    { label: t('fm.compare.row.iva_ded'),  prev: pb[45] ?? 0,      curr: boxes[45] ?? summary.deductible ?? 0, separator: false },
-    { label: t('fm.compare.row.result'),   prev: pb[46] ?? 0,      curr: boxes[46] ?? summary.result    ?? 0,  separator: true  },
-    { label: t('fm.compare.row.intracom'), prev: pb[59] ?? 0,      curr: boxes[59] ?? 0,                       separator: false },
-    { label: t('fm.compare.row.exports'),  prev: pb[60] ?? 0,      curr: boxes[60] ?? 0,                       separator: false },
-  ];
-
-  const resultRow = rows.find(r => r.label === t('fm.compare.row.result'));
-  const resultImproved = resultRow && Math.abs(resultRow.curr) > Math.abs(resultRow.prev);
-  const devImproved    = (boxes[27] ?? 0) > (pb[27] ?? 0);
-
-  return (
-    <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="fm-config-modal" onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
-        <div className="fm-config-modal__header">
-          <div className="fm-config-modal__titles">
-            <div className="fm-config-modal__title">{t('fm.compare.title')}</div>
-            <div className="fm-config-modal__sub">{prevLabel} → {currLabel}</div>
-          </div>
-          <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
-        </div>
-
-        {/* Body */}
-        <div className="fm-config-modal__body" style={{ minHeight: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '6px 0', fontSize: 12, fontWeight: 400, color: 'hsl(var(--foreground))', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
-            <span />
-            <span style={{ textAlign: 'right', minWidth: 100 }}>{prevLabel}</span>
-            <span style={{ textAlign: 'right', minWidth: 100 }}>{currLabel}</span>
-            <span style={{ textAlign: 'right', minWidth: 72 }}>{t('fm.compare.delta')}</span>
-          </div>
-          {rows.map((r) => {
-            const d      = r.curr - r.prev;
-            const up     = d >= 0;
-            const pctNum = r.prev !== 0 ? (d / Math.abs(r.prev)) * 100 : null;
-            let deltaColor = 'hsl(var(--text-disabled))';
-            if (pctNum != null) deltaColor = up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))';
-            const arrow     = up ? '↑' : '↓';
-            const deltaText = pctNum == null ? '—' : `${arrow} ${Math.abs(pctNum).toFixed(1)}%`;
-            return (
-              <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '10px 0', borderBottom: r.separator ? '2px solid hsl(var(--border-subtle))' : '1px solid hsl(var(--muted))', fontSize: 14, alignItems: 'center' }}>
-                <span style={{ color: 'hsl(var(--foreground))' }}>{r.label}</span>
-                <span style={{ textAlign: 'right', minWidth: 100, color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency('EUR', r.prev)}</span>
-                <span style={{ textAlign: 'right', minWidth: 100, color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency('EUR', r.curr)}</span>
-                <span style={{ textAlign: 'right', minWidth: 72, color: deltaColor, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                  {deltaText}
-                </span>
-              </div>
-            );
-          })}
-          <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--fm-info-bg)', borderRadius: 12, fontSize: 14, color: 'var(--fm-info-fg)', display: 'flex', gap: 8 }}>
-            <Info
-              size={14}
-              style={{ flexShrink: 0, marginTop: 1, color: 'var(--fm-info-fg)' }}
-              data-testid="Info__cda0bb" />
-            <span>
-              {devImproved
-                ? t('fm.compare.insight.dev_improved', { prev: prevLabel })
-                : t('fm.compare.insight.dev_fell', { prev: prevLabel })
-              }
-              {' '}
-              {resultImproved
-                ? t('fm.compare.insight.result_higher', { curr: currLabel })
-                : t('fm.compare.insight.result_lower', { curr: currLabel })
-              }
-            </span>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="fm-config-modal__footer" style={{ justifyContent: 'flex-end' }}>
-          <button className="fm-btn fm-btn--save-pill fm-btn--save-pill--active" onClick={onClose}>
-            {t('fm.action.close') ?? 'Cerrar'}
-          </button>
-        </div>
-
       </div>
     </div>
   );

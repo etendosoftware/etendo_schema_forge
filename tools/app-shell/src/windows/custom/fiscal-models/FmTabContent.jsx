@@ -248,7 +248,7 @@ export function FilesTab({ decl, t, onGenerate, fileBlocked, genLabel }) {
           </span>
           <button
             className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ marginTop: 8, borderRadius: 20, padding: '8px 20px' }}
+            style={{ marginTop: 8, borderRadius: 20, padding: '9px 20px' }}
             onClick={onGenerate}
           >
             <FileText size={14} strokeWidth={1.75} data-testid="FileText__931756" />
@@ -260,29 +260,3 @@ export function FilesTab({ decl, t, onGenerate, fileBlocked, genLabel }) {
   );
 }
 
-export function HistoryTab({ decl, t }) {
-  const history = decl.history ?? [];
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      {history.length === 0 ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {t('fm.list.empty') ?? 'No se encontraron declaraciones'}
-          </span>
-        </div>
-      ) : (
-        <div className="fm-timeline">
-          {history.map((e) => (
-            <div key={`${e.at}-${e.text}`} className="fm-timeline__event">
-              <div className="fm-timeline__dot">{e.icon ?? '○'}</div>
-              <div className="fm-timeline__body">
-                <div className="fm-timeline__text">{e.text}</div>
-                <div className="fm-timeline__meta">{e.at} · {e.who}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

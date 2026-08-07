@@ -88,15 +88,15 @@ describe('FmCatalogPage — rendering', () => {
     expect(pillText).toContain('fm.catalog.periodicity.quarterly');
   });
 
-  it('303 pills render in exact declared order: quarterly then monthly', () => {
+  it('303 pills render in the same order as 349: monthly then quarterly', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const card303 = Array.from(container.querySelectorAll('.fm-catalog-card'))
       .find(c => c.textContent.includes('303'));
     const pillText = Array.from(card303.querySelectorAll('.fm-catalog-card__pill'))
       .map(p => p.textContent);
     expect(pillText).toEqual([
-      'fm.catalog.periodicity.quarterly',
       'fm.catalog.periodicity.monthly',
+      'fm.catalog.periodicity.quarterly',
     ]);
   });
 
@@ -201,6 +201,100 @@ describe('FmCatalogPage — close and save', () => {
     // After toggling 303 off it should be false
     expect(savedActive['303']).toBe(false);
     expect(savedActive['349']).toBe(true);
+  });
+
+  // Regression: previously the backdrop overlay was rendered externally by
+  // FmListPage, so clicking it to close the drawer bypassed FmCatalogPage's
+  // onSave entirely and silently discarded toggled model states. Now
+  // FmCatalogPage owns its own overlay + drawer wrapper, and a single
+  // handleClose (calling onSave then onBack) backs BOTH the backdrop click
+  // and the X button, so both close paths save consistently.
+  it('calls onSave and onBack when the backdrop overlay is clicked (not just the X button)', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const overlay = container.querySelector('.fm-catalog-overlay');
+    fireEvent.click(overlay);
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': true, '349': true }));
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it('persists a toggle made before closing via the backdrop overlay (the actual bug being fixed)', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const switches = container.querySelectorAll('[role="switch"]');
+    fireEvent.click(switches[0]); // toggle 303 off
+    const overlay = container.querySelector('.fm-catalog-overlay');
+    fireEvent.click(overlay);
+    const savedActive = onSave.mock.calls[0][0];
+    expect(savedActive['303']).toBe(false);
+    expect(savedActive['349']).toBe(true);
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it('does not close when clicking inside the drawer itself (stopPropagation on the drawer wrapper)', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const drawer = container.querySelector('.fm-catalog-drawer');
+    fireEvent.click(drawer);
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it('calls onSave/onBack with the unchanged activeModels when the backdrop is clicked without any toggle', () => {
+    // Edge case: closing via backdrop when `active` state is identical to the
+    // original `activeModels` prop — no toggles made before closing.
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const original = { '303': true, '349': true };
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={original} />
+    );
+    const overlay = container.querySelector('.fm-catalog-overlay');
+    fireEvent.click(overlay);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true });
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  // Gap: handleClose has no idempotency guard (no "already closed" flag). In
+  // the real app this is masked because FmListPage unmounts FmCatalogPage on
+  // the first onBack, but the component itself does not protect against being
+  // invoked twice (e.g. two click events reaching it before that unmount
+  // commits). This test documents the current (unguarded) behavior — see
+  // BUG report to Forge for the risk assessment.
+  it('handleClose has no de-dup guard: firing the backdrop click twice invokes onSave/onBack twice', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const overlay = container.querySelector('.fm-catalog-overlay');
+    fireEvent.click(overlay);
+    fireEvent.click(overlay);
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onBack).toHaveBeenCalledTimes(2);
+  });
+
+  it('handleClose has no de-dup guard: firing the X button twice invokes onSave/onBack twice', () => {
+    const onBack = vi.fn();
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
+    );
+    const closeBtn = container.querySelector('.fm-catalog-header__back');
+    fireEvent.click(closeBtn);
+    fireEvent.click(closeBtn);
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onBack).toHaveBeenCalledTimes(2);
   });
 });
 

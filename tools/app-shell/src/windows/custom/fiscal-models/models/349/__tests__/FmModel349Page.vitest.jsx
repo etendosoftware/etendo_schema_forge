@@ -60,7 +60,6 @@ vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
   IncidentsTab: () => null,
   FilesTab: () => null,
-  HistoryTab: () => null,
 }));
 
 vi.mock('lucide-react', () => ({

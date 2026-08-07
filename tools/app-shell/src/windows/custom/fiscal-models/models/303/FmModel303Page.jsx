@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import {
-  Settings, Download,
-  OctagonAlert, TriangleAlert, CircleCheck, ArrowLeftRight,
-  Calculator, Loader2, MoreVertical, TrendingUp, TrendingDown, Clock,
+  Download,
+  OctagonAlert, TriangleAlert, CircleCheck,
+  Calculator, Loader2, MoreVertical, TrendingUp, TrendingDown,
   ClipboardCheck, ReceiptText, Folder,
 } from 'lucide-react';
 import { Tabs, KpiWidget } from '../../FmCommon.jsx';
-import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
+import { SourcesTab, IncidentsTab, FilesTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
-import { PresentModal, FileGenModal303, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
+import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File } from '../../fiscalModelsUtils.js';
 
@@ -166,62 +166,6 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
   );
 }
 
-// ── More options kebab menu ──────────────────────────────────────
-function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBlocked, t }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        className="fm-section-header__icon-btn"
-        style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', background: 'hsl(var(--card))' }}
-        onClick={() => setOpen(o => !o)}
-        aria-label="Más opciones"
-      >
-        <MoreVertical size={15} strokeWidth={1.75} data-testid="MoreVertical__4f6c0d" />
-      </button>
-      {open && (
-        <div className="fm-status-select__menu" role="menu" style={{ right: 0, left: 'auto', minWidth: 220 }}>
-          <button className="fm-status-select__item fm-status-select__item--14" role="menuitem" onClick={() => { onCompare(); setOpen(false); }}>
-            <ArrowLeftRight
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="ArrowLeftRight__4f6c0d" />
-            {t('fm.action.compare') ?? 'Comparar'}
-          </button>
-          <button className="fm-status-select__item fm-status-select__item--14" role="menuitem" onClick={() => { onConfig(); setOpen(false); }}>
-            <Settings
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--foreground))' }}
-              data-testid="Settings__4f6c0d" />
-            {t('fm.config.title') ?? 'Configuración'}
-          </button>
-          <button
-            className="fm-status-select__item fm-status-select__item--14"
-            role="menuitem"
-            onClick={() => { onGenerate(); setOpen(false); }}
-            disabled={generating}
-          >
-            <Download
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
-              data-testid="Download__4f6c0d" />
-            {t('fm.action.gen303') ?? 'Generar fichero 303'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function getBoxValue(liveBoxes, num) {
   const e = toBoxArray(liveBoxes).find(b => b.num === num);
   return e ? (e.value ?? 0) : null;
@@ -252,8 +196,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [activeTab, setActiveTab] = useState('boxes');
   const [showPresent, setShowPresent] = useState(false);
   const [showFilegen, setShowFilegen] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const [showCompare, setShowCompare] = useState(false);
   const [orgIdent, setOrgIdent] = useState({ nif: '', nombre: '' });
   const [identChecks, setIdentChecks] = useState(decl.identification ?? {});
   const handleIdentChange = (id, value) => {
@@ -345,8 +287,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     { id: 'files',     label: t('fm.tab.files') ?? 'Ficheros',
       badge: decl.file ? 1 : null,
       icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__4f6c0d" /> },
-    { id: 'history',   label: t('fm.tab.history') ?? 'Historial',
-      icon: <Clock size={16} strokeWidth={1.75} data-testid="Clock__4f6c0d" /> },
   ];
 
   const periodLabel = `${decl.year}/${formatPeriod(decl.period)}`;
@@ -382,7 +322,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         <button
           className="fm-btn"
           onClick={onBack}
-          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', fontSize: 14, color: 'hsl(var(--foreground))' }}
+          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}
         >
           {t('fm.action.cancel') ?? 'Cancelar'}
         </button>
@@ -395,36 +335,41 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
         <div style={{ flex: 1 }} />
 
-        <MoreOptionsMenu
-          onCompare={() => setShowCompare(true)}
-          onConfig={() => setShowConfig(true)}
-          onGenerate={() => { setGenError(null); setShowFilegen(true); }}
-          generating={generating}
-          fileBlocked={fileBlocked}
-          t={t}
-          data-testid="MoreOptionsMenu__4f6c0d" />
-
         <button
           className="fm-btn"
           onClick={handleCompute}
           disabled={computing}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
         >
           {computing
             ? <Loader2
-            size={24}
+            size={16}
             strokeWidth={1.75}
             style={{ animation: 'spin 1s linear infinite' }}
             data-testid="Loader2__4f6c0d" />
-            : <Calculator size={24} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />
+            : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />
           }
           {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+        </button>
+
+        <button
+          className="fm-btn"
+          onClick={() => { setGenError(null); setShowFilegen(true); }}
+          disabled={generating}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
+        >
+          <Download
+            size={16}
+            strokeWidth={1.75}
+            style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
+            data-testid="Download__4f6c0d" />
+          {t('fm.action.gen303') ?? 'Generar fichero 303'}
         </button>
 
         {!isSubmitted && (
           <button
             className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
             onClick={() => setShowPresent(true)}
           >
             <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__4f6c0d" />
@@ -550,9 +495,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
               genLabel={t('fm.action.gen303') ?? 'Generar fichero 303'}
               data-testid="FilesTab__4f6c0d" />
           )}
-          {activeTab === 'history' && (
-            <HistoryTab decl={decl} t={t} data-testid="HistoryTab__4f6c0d" />
-          )}
         </div>
       )}
       {showPresent && (
@@ -569,16 +511,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           onClose={() => setShowFilegen(false)}
           data-testid="FileGenModal303__4f6c0d" />
       )}
-      {showConfig && <ConfigDrawer
-        onClose={() => setShowConfig(false)}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        model="303"
-        data-testid="ConfigDrawer__4f6c0d" />}
-      {showCompare && <CompareDrawer
-        decl={decl}
-        onClose={() => setShowCompare(false)}
-        data-testid="CompareDrawer__4f6c0d" />}
     </div>
   );
 }

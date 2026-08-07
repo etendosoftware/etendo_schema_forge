@@ -63,11 +63,11 @@ Modelo 349:
 | `draft` | blue | Draft — boxes may still be computing |
 | `ready` | green | Ready — review complete, file can be generated |
 | `submitted` | teal | Filed via the standard channel |
-| `submitted_ext` | violet | Filed via an alternative channel |
+| `submitted_ext` | violet | Filed via an alternative channel — legacy/historical only, see note below |
 | `submitted_ack` | emerald | Filed with receipt acknowledgement |
 | `skipped` | grey | Intentionally skipped |
 
-Status transitions are driven by `StatusPillMenu` inline in the list and by the detail page action buttons.
+Status transitions are driven by `StatusPillMenu` inline in the list and by the detail page action buttons. Clicking **"Marcar como 'Presentado'"** opens `PresentModal`, which now offers only **2 submission paths**: `submitted_ack` (upload a PDF/XML receipt) and `submitted` (mark as submitted without a receipt). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
 
 ## Modelo 303 detail page (`FmModel303Page`)
 
@@ -91,6 +91,10 @@ Three steps (0-based index):
 | Sources | Invoice rows that feed the boxes, filterable by incidents |
 | Files | Generated `.txt` file download |
 | Incidents | Blocking and warning validation messages |
+
+### Action bar
+
+Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), **"Marcar como 'Presentado'"** opening `PresentModal`. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Marcar como 'Presentado'" is. The `MoreVertical` icon still rendered next to the page title is decorative only; it has no menu attached (see "List page toolbar" above for the removal of this page's former kebab).
 
 ### Identification section (`tipo_declaracion` + bank data)
 
@@ -132,11 +136,15 @@ Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalA
 
 - **Operadores** — operator table with key filter chips and live name/NIF-IVA search. Null `name`/`nif` fields are guarded (`?? ''`) before case-folding to avoid runtime crashes.
 - **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by NIF-IVA. Filter state shows `fm.m349.invoices.filtering_by` + count badge.
-- **Rectificaciones / Incidencias / Ficheros / Historial** — coming soon.
+- **Rectificaciones / Incidencias / Ficheros** — coming soon.
 
 ### KPIs
 
 Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sourced from `_precomputed.operators`.
+
+### Action bar and kebab menu
+
+The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone, always-visible button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Marcar como 'Presentado'"** and, unlike that button, not gated on submission status (`!isSubmitted`).
 
 ### PDF preview and file generation
 
@@ -155,7 +163,7 @@ Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sou
 
 `FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The toolbar's visible actions are, in order: the year/model/status `FilterDropdown` filters, the search and sort icon buttons, the **"Catálogo de modelos (N)"** button (`N = activeCount`), and — only when `activeCount > 0` — **"+ Nueva declaración"**.
 
-This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`) and remains in active use elsewhere: the Modelo-303 detail page's own separate 3-dot menu (Comparar / Configuración / Generar — see `models/303/FmModel303Page.jsx`) still opens it, and the model catalog described below is a full drawer of its own (`FmCatalogPage`), unrelated to `ConfigDrawer`. No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
+This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`), but its only remaining caller is the model catalog drawer (`FmCatalogPage.jsx`, described below) — `FmModel303Page.jsx` no longer has a 3-dot menu at all; its former Comparar / Configuración / Generar kebab (`MoreOptionsMenu`, plus `CompareDrawer` and this page's own `ConfigDrawer` usage) was removed entirely (see "Modelo 303 detail page" below for where "Generar fichero" now lives). No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
 
 ## Model catalog (`FmCatalogPage`)
 
@@ -170,7 +178,16 @@ The catalog drawer lists the tax forms the tenant can enable/disable. It current
 
 Each catalog entry declares a `periodicities: string[]` array (not a single `periodicity` string) — `FmCatalogPage` renders one `.fm-catalog-card__pill` per value, reusing the existing `fm.catalog.periodicity.monthly/quarterly/annual` locale keys. The header's model-count badge (`CATALOG.length`) and the "active models" counter are always derived from the `CATALOG` array, never hardcoded.
 
-Toggling a model on/off in the drawer updates the `activeModels` map (`{ [modelId]: boolean }`) that `FmListPage` owns and persists via `onSave`. That same map is threaded down to `NewDeclModal` (see below) so the "new declaration" flow only ever offers models the tenant actually activated.
+Toggling a model on/off in the drawer updates a local `active` map (`{ [modelId]: boolean }`) inside `FmCatalogPage`; closing the drawer calls `onSave(active)`, which `FmListPage` uses to update its own `activeModels` state. That same map is threaded down to `NewDeclModal` (see below) so the "new declaration" flow only ever offers models the tenant actually activated.
+
+### Persistence (NEO Headless, per-Client)
+
+`activeModels` is not purely in-memory state anymore — it round-trips through NEO Headless and survives reloads:
+
+- **On mount**, if `token` and `apiBaseUrl` are both present, `FmListPage` issues `GET {base}/fiscal-models-catalog` with an `Authorization: Bearer` header and seeds `activeModels` from the JSON response (`{"303": true, "349": false}`-shaped). A tenant with nothing saved yet gets back `{}` from the backend — i.e. **no model is active by default**; there is no hardcoded "both models active" starting point. When `token`/`apiBaseUrl` are absent (e.g. tests, storybook-like contexts), the fetch is skipped entirely and `activeModels` simply stays at its initial value, `{}`.
+- **On save**, `FmCatalogPage`'s `onSave` callback updates `FmListPage`'s `activeModels` state immediately (so the UI reflects the change without waiting on the network) and closes the drawer, then — only when `token`/`apiBaseUrl` are present — fire-and-forgets a `PUT {base}/fiscal-models-catalog` with the new map as the JSON body. A failed `PUT` is silently swallowed (`.catch(() => {})`), the same convention `FavoritesContext.jsx`'s `syncToServer` uses — the UI does not roll back or surface an error; the next successful `GET` (e.g. after a reload) is the source of truth.
+- **`catalogLoaded`** gates rendering while the initial `GET` is in flight. It starts `true` only when `token`/`apiBaseUrl` are missing; otherwise it starts `false` and flips to `true` in the `GET`'s `.finally()`, regardless of whether the request succeeded or failed. While `catalogLoaded` is `false`: the table region shows a "Cargando…" `EmptyState` instead of either the real table or the "no active models" empty state, and the "+ Nueva declaración" toolbar button does not render at all — its guard is `catalogLoaded && activeCount > 0`, not just `activeCount > 0` (see "No active models" below). This avoids flashing an incorrect CTA/empty-state before the real catalog value is known.
+- **Scope: per-Client, not per-org or per-user.** The backend service (`NeoFiscalModelsCatalogService`, `com.etendoerp.go`) stores the map in `AD_PREFERENCE` under key `ETGO_FiscalModelsCatalog`, scoped only to `OBContext.getOBContext().getCurrentClient()` — organization, user and role are all passed as `null` to `Preferences`. Every user of the same client, in any organization, with any role, reads and writes the same catalog state.
 
 ### "Nueva declaración" respects the active catalog
 
@@ -184,6 +201,8 @@ This in-modal guard is now **defense in depth**: `FmListPage`'s "+ Nueva declara
 
 - **"+ Nueva declaración" toolbar button is not rendered at all** (not just disabled) when `activeCount === 0` — there is nothing productive to create until a model is enabled.
 - **Table region shows a dedicated empty state** — `EmptyState` with only `title = fm.list.empty_no_active_models` ("No tienen modelos activos, configure desde el Catálogo de modelos."). It no longer renders a `cta` button: the always-visible "Catálogo de modelos (N)" toolbar button (see above) already covers that action, so a second, redundant "open catalog" entry point inside the empty state was removed. The `fm.list.empty_no_active_models_cta` locale key still exists in `en_US.json`/`es_ES.json` — it is simply unused in source now. This message takes priority over the generic `fm.list.empty` state even when `filtered` still holds stale rows from before all models were deactivated — the check is `activeCount === 0`, evaluated before `filtered.length === 0`.
+
+The full precedence in the table region is: `!catalogLoaded` (the "Cargando…" loading state — see Persistence above) → `activeCount === 0` (this empty state) → `filtered.length === 0` (generic `fm.list.empty`) → the real table.
 
 ### Active catalog gates the declarations list, not just the create flow
 
@@ -209,7 +228,7 @@ Practical effect: deactivating a model in the catalog immediately hides all of i
 | `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels) |
 | `models/349/FmModel349Page.jsx` | Modelo 349 detail |
 | `FmCommon.jsx` | Shared components: `NumberedStepper`, `ResultPill`, `StatusPillMenu`, `SummaryCard` |
-| `FmOverlays.jsx` | Modals and drawers: `PresentModal`, `FileGenModal`, `NewDeclModal`, `ConfigDrawer`, `CompareDrawer` |
+| `FmOverlays.jsx` | Modals and drawers: `PresentModal`, `FileGenModal`, `NewDeclModal`, `ConfigDrawer` |
 | `FmDebugPanel.jsx` | Developer panel (keystroke-activated) for testing with fixture data |
 
 ## NEO Headless endpoints
@@ -218,6 +237,8 @@ Practical effect: deactivating a model in the catalog immediately hides all of i
 |--------|------|---------|
 | `GET` | `/fiscal303/declarations` | FmListPage — fetch all declarations |
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
+| `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client) |
+| `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client) |
 | `GET` | `/fiscal303/boxes?year=&period=` | `computeBoxes303` |
 | `GET` | `/fiscal303/modified?year=&period=&since=` | `checkModified303` |
 | `GET` | `/fiscal303/generate?year=&period=&tipo=` | `generate303File` |

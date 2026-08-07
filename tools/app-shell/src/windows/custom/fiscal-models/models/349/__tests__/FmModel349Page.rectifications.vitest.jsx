@@ -48,7 +48,6 @@ vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
   IncidentsTab: () => null,
   FilesTab: () => null,
-  HistoryTab: () => null,
 }));
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: () => null,
@@ -185,7 +184,7 @@ describe('FmModel349Page — rectifications empty state', () => {
 // ── (c) compute path ─────────────────────────────────────────────────────────
 
 describe('FmModel349Page — compute result refreshes the rectifications tab', () => {
-  it('Recalcular applies compute349Operators().rectifications to KPI, badge and table', async () => {
+  it('Calcular applies compute349Operators().rectifications to KPI, badge and table', async () => {
     compute349Operators.mockResolvedValue({
       operators: [],
       invoices: [],
@@ -195,7 +194,7 @@ describe('FmModel349Page — compute result refreshes the rectifications tab', (
     expect(rectifKpiValue()).toBe('0');
 
     const recalc = Array.from(container.querySelectorAll('button'))
-      .find(b => b.textContent.includes('fm.action.recalc'));
+      .find(b => b.textContent.includes('fm.action.compute'));
     fireEvent.click(recalc);
 
     await waitFor(() => expect(rectifKpiValue()).toBe('2'));

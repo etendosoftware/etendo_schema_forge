@@ -16,7 +16,6 @@ vi.mock('@/components/ui/checkbox', () => ({
 }));
 
 import {
-  CompareDrawer,
   ConfigDrawer,
   DrillDownPanel,
   FileGenModal,
@@ -66,12 +65,11 @@ describe('FmOverlays interactive coverage', () => {
     await user.click(screen.getByText('fm.present.path.sin_acuse'));
     await user.click(screen.getByText('fm.action.confirm_presentation'));
     expect(onConfirm).toHaveBeenCalledWith({ status: 'submitted', acuseFile: null });
+  });
 
-    onConfirm.mockClear();
-    rerender(<PresentModal decl={{ id: 'd1' }} onConfirm={onConfirm} onClose={onClose} />);
-    await user.click(screen.getByText('fm.present.path.otra'));
-    await user.click(screen.getByText('fm.action.confirm_presentation'));
-    expect(onConfirm).toHaveBeenCalledWith({ status: 'submitted_ext', acuseFile: null });
+  it('does not render the "Otra Plataforma" (submitted_ext) path', () => {
+    render(<PresentModal decl={{ id: 'd1' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByText('fm.present.path.otra')).not.toBeInTheDocument();
   });
 
   it('edits and confirms file generation contact data', async () => {
@@ -152,29 +150,6 @@ describe('FmOverlays interactive coverage', () => {
     await user.click(screen.getByText('fm.config.m349.title'));
     expect(screen.getByText('fm.config.m349.keys')).toBeInTheDocument();
     await user.click(screen.getByText('fm.action.save'));
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('renders comparison rows with explicit previous declaration and fallback previous data', () => {
-    const onClose = vi.fn();
-    const { rerender } = render(
-      <CompareDrawer
-        decl={{ period: 'T2', year: 2026, boxes: { 1: 100, 27: 200, 45: 50, 46: 150, 59: 10, 60: 20 }, summary: {} }}
-        prevDecl={{ period: 'T1', year: 2026, boxes: { 1: 80, 27: 100, 45: 60, 46: 40 } }}
-        onClose={onClose}
-      />,
-    );
-    expect(screen.getByText('T1 2026 → T2 2026')).toBeInTheDocument();
-    expect(screen.getByText(/fm.compare.insight.dev_improved/)).toBeInTheDocument();
-
-    rerender(
-      <CompareDrawer
-        decl={{ period: 'T3', year: 2026, boxes: { 27: 1, 46: -1 }, summary: { deductible: 2 } }}
-        onClose={onClose}
-      />,
-    );
-    expect(screen.getByText('T1 2026 → T3 2026')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('fm.action.close'));
     expect(onClose).toHaveBeenCalled();
   });
 

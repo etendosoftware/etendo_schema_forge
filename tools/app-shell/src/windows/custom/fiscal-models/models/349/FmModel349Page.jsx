@@ -2,16 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import {
   Download, CircleCheck, Search,
-  RefreshCw, Globe, Eye, MoreVertical, ChevronDown, Users, FileEdit, Clock,
+  Loader2, Globe, MoreVertical, ChevronDown, Users, FileEdit,
   TriangleAlert, Folder, ReceiptText, Calculator, PenLine, ShieldAlert, Info,
 } from 'lucide-react';
 import { KpiWidget, Tabs } from '../../FmCommon.jsx';
-import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
+import { SourcesTab, IncidentsTab, FilesTab } from '../../FmTabContent.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File } from '../../fiscalModelsUtils.js';
-import { use349Pdf } from './use349Pdf.js';
-import { DocumentPreview } from '../../../../../components/contract-ui/DocumentPreview.jsx';
 import '../../fiscal-models.css';
 
 // ── Constants ────────────────────────────────────────────────────
@@ -151,58 +149,6 @@ function KeyFilterDropdown({ value, onChange, t }) {
   );
 }
 
-// ── More options kebab menu ──────────────────────────────────────
-function MoreOptionsMenu349({ onVies, onPreviewPdf, onGenerate, pdfLoading, generating, t }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        className="fm-btn"
-        style={{ padding: '8px 10px', borderRadius: 8 }}
-        onClick={() => setOpen(o => !o)}
-        aria-label="Más opciones"
-      >
-        <MoreVertical size={15} strokeWidth={1.75} data-testid="MoreVertical__346dd5" />
-      </button>
-      {open && (
-        <div className="fm-status-select__menu" role="menu" style={{ right: 0, left: 'auto', minWidth: 220 }}>
-          <button className="fm-status-select__item" role="menuitem" onClick={() => { onVies(); setOpen(false); }}>
-            <Globe
-              size={13}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--muted-foreground))' }}
-              data-testid="Globe__346dd5" />
-            VIES
-          </button>
-          <button className="fm-status-select__item" role="menuitem" onClick={() => { onPreviewPdf(); setOpen(false); }} disabled={pdfLoading}>
-            <Eye
-              size={13}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--muted-foreground))' }}
-              data-testid="Eye__346dd5" />
-            {t('fm.action.preview_pdf') ?? 'Vista previa PDF'}
-          </button>
-          <button className="fm-status-select__item" role="menuitem" onClick={() => { onGenerate(); setOpen(false); }} disabled={generating}>
-            <Download
-              size={13}
-              strokeWidth={1.75}
-              style={{ color: 'hsl(var(--muted-foreground))' }}
-              data-testid="Download__346dd5" />
-            {t('fm.action.generate_file') ?? 'Generar fichero'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 // ── Main ─────────────────────────────────────────────────────────
 export default function FmModel349Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
@@ -228,8 +174,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const [invoiceNifFilter, setInvoiceNifFilter] = useState(null);
   const [computing,    setComputing]    = useState(false);
   const [generating,   setGenerating]   = useState(false);
-  const [showPdf,      setShowPdf]      = useState(false);
-  const { pdfUrl, loading: pdfLoading, generatePdf, clearPdf } = use349Pdf();
 
   const operators = liveOperators ?? decl.operators ?? MOCK_OPERATORS;
   const stepIdx   = STEPPER_INDEX[status] ?? 0;
@@ -270,11 +214,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     const ok = await generate349File(decl, { token, apiBaseUrl, phone, contact });
     setGenerating(false);
     if (!ok) console.error('generate349File failed for', decl.year, decl.period);
-  }
-
-  async function handlePreviewPdf() {
-    const url = await generatePdf(decl, operators);
-    if (url) setShowPdf(true);
   }
 
   const searchLower  = searchQuery.trim().toLowerCase();
@@ -318,7 +257,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: liveInvoices?.length ?? null, icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
     { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
     { id:'files',     label: t('fm.m349.tab.files'),     badge: null,                   icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__346dd5" /> },
-    { id:'history',   label: t('fm.m349.tab.history'),   badge: null,                   icon: <Clock size={16} strokeWidth={1.75} data-testid="Clock__346dd5" /> },
   ];
 
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
@@ -353,7 +291,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         background: 'hsl(var(--card))', flexShrink: 0,
       }}>
         <button className="fm-btn" onClick={onBack}
-          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', fontSize: 14, color: 'hsl(var(--foreground))' }}>
+          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}>
           {t('fm.action.cancel') ?? 'Cancelar'}
         </button>
         <span style={{
@@ -365,33 +303,37 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
         <div style={{ flex: 1 }} />
 
-        <MoreOptionsMenu349
-          onVies={() => {}}
-          onPreviewPdf={handlePreviewPdf}
-          onGenerate={() => setShowFilegen(true)}
-          pdfLoading={pdfLoading}
-          generating={generating}
-          t={t}
-          data-testid="MoreOptionsMenu349__346dd5" />
-
         <button
           className="fm-btn"
           onClick={handleCompute}
           disabled={computing}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '8px 12px', fontSize: 14 }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
         >
-          <RefreshCw
-            size={20}
-            strokeWidth={1.75}
-            style={computing ? { animation: 'spin 1s linear infinite' } : {}}
-            data-testid="RefreshCw__346dd5" />
-          {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.recalc') ?? 'Recalcular')}
+          {computing
+            ? <Loader2
+                size={16}
+                strokeWidth={1.75}
+                style={{ animation: 'spin 1s linear infinite' }}
+                data-testid="Loader2__346dd5" />
+            : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__346dd5" />
+          }
+          {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+        </button>
+
+        <button
+          className="fm-btn"
+          onClick={() => setShowFilegen(true)}
+          disabled={generating}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
+        >
+          <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
+          {t('fm.action.gen349') ?? 'Generar fichero 349'}
         </button>
 
         {!isSubmitted && (
           <button
             className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
             onClick={() => setShowPresent(true)}
           >
             <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
@@ -514,9 +456,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                   <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: 0, lineHeight: 1, fontSize: 16 }}>×</button>
                 )}
               </div>
-              <button className="fm-toolbar__btn fm-toolbar__btn--primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 14, padding: '8px 12px' }}>
-                + {t('fm.m349.action.new_operator') ?? 'Nuevo operador'}
-              </button>
             </div>
 
             {/* Full-width separator above NIF-IVA columns */}
@@ -631,7 +570,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
       </div>
       {/* Shared tab content — same layout as 303 */}
-      {(activeTab === 'invoices' || activeTab === 'incidents' || activeTab === 'files' || activeTab === 'history') && (
+      {(activeTab === 'invoices' || activeTab === 'incidents' || activeTab === 'files') && (
         <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'invoices' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
           {activeTab === 'invoices' && (
             <SourcesTab
@@ -657,9 +596,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
               genLabel={t('fm.action.gen349') ?? 'Generar fichero 349'}
               data-testid="FilesTab__346dd5" />
           )}
-          {activeTab === 'history' && (
-            <HistoryTab decl={decl} t={t} data-testid="HistoryTab__346dd5" />
-          )}
         </div>
       )}
       {/* Overlays */}
@@ -676,14 +612,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           onConfirm={({ phone, contact }) => handleGenerate({ phone, contact })}
           onClose={() => setShowFilegen(false)}
           data-testid="FileGenModal__346dd5" />
-      )}
-      {showPdf && (
-        <DocumentPreview
-          open={showPdf}
-          onClose={() => { setShowPdf(false); clearPdf(); }}
-          title={`Modelo 349 · ${decl.year} ${decl.period}`}
-          pdfUrl={pdfUrl}
-          data-testid="DocumentPreview__346dd5" />
       )}
     </div>
   );

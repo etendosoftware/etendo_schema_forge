@@ -59,23 +59,8 @@ describe('FmModel349Page — compute & generate wiring', () => {
     assert.match(src, /function handleCompute|handleCompute\s*=/));
   it('has handleGenerate function', () =>
     assert.match(src, /function handleGenerate|handleGenerate\s*=/));
-  it('has handlePreviewPdf function', () =>
-    assert.match(src, /function handlePreviewPdf|handlePreviewPdf\s*=/));
   it('liveOperators state is defined', () =>
     assert.match(src, /liveOperators/));
-});
-
-describe('FmModel349Page — PDF preview', () => {
-  it('imports use349Pdf', () =>
-    assert.match(src, /use349Pdf/));
-  it('imports DocumentPreview', () =>
-    assert.match(src, /DocumentPreview/));
-  it('renders DocumentPreview (in JSX)', () =>
-    assert.match(src, /<DocumentPreview/));
-  it('has showPdf state', () =>
-    assert.match(src, /showPdf/));
-  it('calls clearPdf on close (onClose clears state)', () =>
-    assert.match(src, /clearPdf/));
 });
 
 describe('FmModel349Page — button states', () => {
@@ -83,6 +68,52 @@ describe('FmModel349Page — button states', () => {
     assert.match(src, /disabled=\{computing\}/));
   it('Generate button has disabled={generating} attribute', () =>
     assert.match(src, /disabled=\{generating\}/));
-  it('Preview PDF button has disabled={pdfLoading} attribute', () =>
-    assert.match(src, /disabled=\{pdfLoading\}/));
+});
+
+describe('FmModel349Page — no removed features (kebab / PDF preview)', () => {
+  // MoreOptionsMenu349 (VIES + Vista previa PDF) and the whole PDF-preview
+  // pipeline it dragged along were removed from this page. VIES lives on in
+  // the still-present banner; PDF preview has no replacement UI on this page.
+  it('does not define a MoreOptionsMenu349 function', () =>
+    assert.doesNotMatch(src, /function MoreOptionsMenu349/));
+  it('does not have a handlePreviewPdf function', () =>
+    assert.doesNotMatch(src, /handlePreviewPdf/));
+  it('does not have a showPdf state', () =>
+    assert.doesNotMatch(src, /showPdf/));
+  it('does not reference clearPdf', () =>
+    assert.doesNotMatch(src, /clearPdf/));
+  it('does not import use349Pdf', () =>
+    assert.doesNotMatch(src, /use349Pdf/));
+  it('does not import DocumentPreview', () =>
+    assert.doesNotMatch(src, /DocumentPreview/));
+  it('does not import the Eye icon', () =>
+    assert.doesNotMatch(src, /\bEye\b/));
+  it('does not reference fm.action.preview_pdf', () =>
+    assert.doesNotMatch(src, /fm\.action\.preview_pdf/));
+});
+
+describe('FmModel349Page — kept icon imports (Globe, MoreVertical)', () => {
+  // Globe and MoreVertical must survive the kebab/PDF cleanup — Globe is
+  // still used by the VIES banner, MoreVertical by the title bar's
+  // decorative icon. A regression here means one of those broke silently.
+  it('still imports Globe', () => assert.match(src, /\bGlobe\b/));
+  it('still imports MoreVertical', () => assert.match(src, /\bMoreVertical\b/));
+});
+
+describe('FmModel349Page — Calcular button uses the shared compute key', () => {
+  // The compute button's label now shares fm.action.compute/'Calcular' with
+  // Modelo 303's compute button, instead of its own fm.action.recalc key.
+  it('uses fm.action.compute for the compute button label', () =>
+    assert.match(src, /fm\.action\.compute/));
+  it('does not reference the orphaned fm.action.recalc key', () =>
+    assert.doesNotMatch(src, /fm\.action\.recalc/));
+});
+
+describe('FmModel349Page — standalone Generar fichero button', () => {
+  it('renders a standalone Generar fichero 349 button in the action bar', () =>
+    assert.match(src, /fm\.action\.gen349/));
+});
+
+describe('FmModel349Page — no Historial tab', () => {
+  it('does not reference the Historial tab', () => assert.doesNotMatch(src, /fm\.tab\.history/));
 });

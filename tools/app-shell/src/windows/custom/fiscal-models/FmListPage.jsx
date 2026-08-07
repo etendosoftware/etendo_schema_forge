@@ -227,8 +227,6 @@ function KpiCardsRow({ decls, t }) {
   );
 }
 
-const DEFAULT_ACTIVE = { '303': true, '349': true };
-
 function normDecl(d) {
   return {
     ...d,
@@ -339,6 +337,21 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
       .catch(() => {});
   }, [token, apiBaseUrl]);
 
+  const [activeModels, setActiveModels] = useState({});
+  const [catalogLoaded, setCatalogLoaded] = useState(!token || !apiBaseUrl);
+
+  useEffect(() => {
+    if (!token || !apiBaseUrl) return;
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    fetch(`${base}/fiscal-models-catalog`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => setActiveModels(data ?? {}))
+      .catch(() => {})
+      .finally(() => setCatalogLoaded(true));
+  }, [token, apiBaseUrl]);
+
   const draftDecls303 = useMemo(
     () => decls.filter(d => d.model === '303' && d.status === 'draft'),
     [decls]
@@ -376,7 +389,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   const [modelFilter, setModelFilter]   = useState('all');
   const [yearFilter,  setYearFilter]    = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [activeModels, setActiveModels] = useState(DEFAULT_ACTIVE);
   const [showCatalog,  setShowCatalog]  = useState(false);
   const [showNewDecl,  setShowNewDecl]  = useState(false);
   const [selected,     setSelected]     = useState(new Set());
@@ -484,12 +496,14 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
           options={yearOptions}
           onChange={setYearFilter}
           data-testid="FilterDropdown__cb728e" />
-        <FilterDropdown
-          label="Todos los modelos"
-          value={modelFilter}
-          options={modelOptions}
-          onChange={setModelFilter}
-          data-testid="FilterDropdown__cb728e" />
+        {catalogLoaded && (
+          <FilterDropdown
+            label="Todos los modelos"
+            value={modelFilter}
+            options={modelOptions}
+            onChange={setModelFilter}
+            data-testid="FilterDropdown__cb728e" />
+        )}
         <FilterDropdown
           label="Todos los estados"
           value={statusFilter}
@@ -508,17 +522,17 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
 
         <button
           className="fm-toolbar__btn"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
           onClick={() => setShowCatalog(true)}
         >
           <LayoutGrid size={14} strokeWidth={1.75} data-testid="LayoutGrid__cb728e" />
-          {t('fm.catalog.title') ?? 'Catálogo de modelos'} ({activeCount})
+          {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
         </button>
 
-        {activeCount > 0 && (
+        {catalogLoaded && activeCount > 0 && (
           <button
             className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
             onClick={() => setShowNewDecl(true)}
           >
             + Nueva declaración
@@ -526,18 +540,26 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
         )}
       </div>
       {/* ── KPI cards row ─────────────────────────────────────── */}
-      <KpiCardsRow decls={modelYearFiltered} t={t} data-testid="KpiCardsRow__cb728e" />
+      {catalogLoaded && (
+        <KpiCardsRow decls={modelYearFiltered} t={t} data-testid="KpiCardsRow__cb728e" />
+      )}
       {/* ── Table ──────────────────────────────────────────────── */}
       <div className="fm-table-wrap">
-        {activeCount === 0
+        {!catalogLoaded
           ? (
             <EmptyState
-              title={t('fm.list.empty_no_active_models') ?? 'No tienen modelos activos, configure desde el Catálogo de modelos.'}
+              message={t('loading') ?? 'Cargando…'}
               data-testid="EmptyState__cb728e" />
           )
-          : filtered.length === 0
-            ? <EmptyState data-testid="EmptyState__cb728e" />
-            : (
+          : activeCount === 0
+            ? (
+              <EmptyState
+                title={t('fm.list.empty_no_active_models') ?? 'No tienen modelos activos, configure desde el Catálogo de modelos.'}
+                data-testid="EmptyState__cb728e" />
+            )
+            : filtered.length === 0
+              ? <EmptyState data-testid="EmptyState__cb728e" />
+              : (
             <table className="fm-table">
               <thead>
                 <tr>
@@ -636,18 +658,26 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
         data-testid="NewDeclModal__cb728e" />}
       {/* ── Catalog drawer (slides from right) ───────────────────── */}
       {showCatalog && (
-        <>
-          <div className="fm-catalog-overlay" onClick={() => setShowCatalog(false)} />
-          <div className="fm-catalog-drawer">
-            <FmCatalogPage
-              activeModels={activeModels}
-              onBack={() => setShowCatalog(false)}
-              onSave={(newActive) => { setActiveModels(newActive); setShowCatalog(false); }}
-              token={token}
-              apiBaseUrl={apiBaseUrl}
-              data-testid="FmCatalogPage__cb728e" />
-          </div>
-        </>
+        <FmCatalogPage
+          activeModels={activeModels}
+          onBack={() => setShowCatalog(false)}
+          onSave={(newActive) => {
+            setActiveModels(newActive);
+            setShowCatalog(false);
+            if (token && apiBaseUrl) {
+              const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+              fetch(`${base}/fiscal-models-catalog`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(newActive),
+              })
+                .then(r => { if (!r.ok) throw new Error(r.status); })
+                .catch(() => {});
+            }
+          }}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          data-testid="FmCatalogPage__cb728e" />
       )}
     </div>
   );

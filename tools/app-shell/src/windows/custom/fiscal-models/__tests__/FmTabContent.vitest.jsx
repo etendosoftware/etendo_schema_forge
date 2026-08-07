@@ -25,7 +25,7 @@ vi.mock('../fiscalModelsUtils.js', () => ({
 // ── Import under test ───────────────────────────────────────────────────────
 
 import { render, screen, fireEvent } from '@testing-library/react';
-import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../FmTabContent.jsx';
+import { SourcesTab, IncidentsTab, FilesTab } from '../FmTabContent.jsx';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -159,26 +159,5 @@ describe('FilesTab', () => {
   it('uses custom genLabel when provided', () => {
     render(<FilesTab decl={{ file: null }} t={t} onGenerate={vi.fn()} genLabel="Custom Label" />);
     expect(document.body.textContent).toContain('Custom Label');
-  });
-});
-
-// ── HistoryTab ──────────────────────────────────────────────────────────────
-
-describe('HistoryTab', () => {
-  it('shows empty state when no history', () => {
-    render(<HistoryTab decl={{ history: [] }} t={t} />);
-    expect(document.body.textContent).toContain('fm.list.empty');
-  });
-
-  it('renders timeline events', () => {
-    const decl = {
-      history: [
-        { at: '2026-01-10', text: 'Created draft', who: 'admin', icon: '+' },
-        { at: '2026-01-15', text: 'Submitted', who: 'admin', icon: '>' },
-      ],
-    };
-    render(<HistoryTab decl={decl} t={t} />);
-    expect(document.body.textContent).toContain('Created draft');
-    expect(document.body.textContent).toContain('Submitted');
   });
 });

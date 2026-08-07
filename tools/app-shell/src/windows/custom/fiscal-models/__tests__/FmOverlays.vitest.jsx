@@ -21,7 +21,7 @@ vi.mock('@/components/ui/checkbox', () => ({
   ),
 }));
 
-import { PresentModal, FileGenModal, NewDeclModal, CompareDrawer } from '../FmOverlays.jsx';
+import { PresentModal, FileGenModal, NewDeclModal } from '../FmOverlays.jsx';
 
 // ── PresentModal ──────────────────────────────────────────────────────────────
 
@@ -33,11 +33,15 @@ describe('PresentModal', () => {
     expect(document.body.textContent).toContain('fm.present.title');
   });
 
-  it('renders all three submission paths', () => {
+  it('renders both submission paths (acuse, sin_acuse)', () => {
     render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
     expect(document.body.textContent).toContain('fm.present.path.acuse');
     expect(document.body.textContent).toContain('fm.present.path.sin_acuse');
-    expect(document.body.textContent).toContain('fm.present.path.otra');
+  });
+
+  it('does not render the "Otra Plataforma" (submitted_ext) path option', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).not.toContain('fm.present.path.otra');
   });
 
   it('confirm button is disabled when no path is selected', () => {
@@ -47,11 +51,11 @@ describe('PresentModal', () => {
     expect(confirmBtn.disabled).toBe(true);
   });
 
-  it('confirm button becomes enabled when submitted_ext path is selected', () => {
+  it('confirm button becomes enabled when the submitted (sin_acuse) path is selected', () => {
     const { container } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
     // Find path cards by looking for div with onClick
     const pathCards = container.querySelectorAll('[style*="cursor: pointer"]');
-    // Click the "otra" path (last one)
+    // Click the "sin_acuse"/submitted path (last one — only 2 paths remain)
     fireEvent.click(pathCards[pathCards.length - 1]);
     const confirmBtn = Array.from(container.querySelectorAll('button'))
       .find(b => b.textContent.includes('fm.action.confirm_presentation'));
@@ -88,6 +92,34 @@ describe('PresentModal', () => {
     expect(onConfirm).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'submitted' })
     );
+  });
+
+  it('confirm button stays disabled on the submitted_ack (acuse) path until a file is uploaded', () => {
+    const { container } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    // Select "acuse" (submitted_ack) path — 1st card.
+    const pathCards = container.querySelectorAll('[style*="cursor: pointer"]');
+    fireEvent.click(pathCards[0]);
+    const confirmBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.confirm_presentation'));
+    // canConfirm = path === 'submitted' || (path === 'submitted_ack' && acuseFile) —
+    // no file selected yet, so it must remain disabled (not an off-by-one leftover
+    // from the removed 3rd path).
+    expect(confirmBtn.disabled).toBe(true);
+  });
+
+  it('calls onConfirm with status submitted_ack and the uploaded file once a file is attached on the acuse path', () => {
+    const onConfirm = vi.fn();
+    const { container } = render(<PresentModal decl={decl} onConfirm={onConfirm} onClose={vi.fn()} />);
+    const pathCards = container.querySelectorAll('[style*="cursor: pointer"]');
+    fireEvent.click(pathCards[0]); // submitted_ack (acuse) path
+    const fileInput = container.querySelector('input[type="file"]');
+    const file = new File(['dummy'], 'acuse.pdf', { type: 'application/pdf' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    const confirmBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.confirm_presentation'));
+    expect(confirmBtn.disabled).toBe(false);
+    fireEvent.click(confirmBtn);
+    expect(onConfirm).toHaveBeenCalledWith({ status: 'submitted_ack', acuseFile: file });
   });
 
   it('does not propagate click from modal body to overlay', () => {
@@ -180,123 +212,6 @@ describe('FileGenModal (backdrop and header close)', () => {
     const onClose = vi.fn();
     const { container } = render(<FileGenModal decl={decl} onConfirm={vi.fn()} onClose={onClose} />);
     const closeBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('✕'));
-    fireEvent.click(closeBtn);
-    expect(onClose).toHaveBeenCalled();
-  });
-});
-
-// ── CompareDrawer ─────────────────────────────────────────────────────────────
-
-describe('CompareDrawer', () => {
-  const decl = {
-    period: 'T2', year: 2026,
-    boxes: { 1: 10000, 27: 1000, 45: 800, 46: 200, 59: 500, 60: 300 },
-    summary: {},
-  };
-  const prevDecl = {
-    period: 'T1', year: 2026,
-    boxes: { 1: 8000, 27: 800, 45: 700, 46: 100, 59: 400, 60: 200 },
-  };
-
-  it('renders modal title', () => {
-    render(<CompareDrawer decl={decl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('fm.compare.title');
-  });
-
-  it('shows prevLabel and currLabel in subtitle', () => {
-    render(<CompareDrawer decl={decl} prevDecl={prevDecl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('T1 2026');
-    expect(document.body.textContent).toContain('T2 2026');
-  });
-
-  it('falls back to "T1 2026" as prevLabel when prevDecl is not provided', () => {
-    render(<CompareDrawer decl={decl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('T1 2026');
-  });
-
-  it('renders all six comparison row labels', () => {
-    render(<CompareDrawer decl={decl} prevDecl={prevDecl} onClose={vi.fn()} />);
-    ['fm.compare.row.base', 'fm.compare.row.iva_dev', 'fm.compare.row.iva_ded',
-      'fm.compare.row.result', 'fm.compare.row.intracom', 'fm.compare.row.exports',
-    ].forEach(key => expect(document.body.textContent).toContain(key));
-  });
-
-  it('shows ↑ arrow for positive delta', () => {
-    // All curr > prev in default decl/prevDecl pair
-    render(<CompareDrawer decl={decl} prevDecl={prevDecl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('↑');
-  });
-
-  it('shows ↓ arrow when curr value is lower than prev', () => {
-    const declLower = { ...decl, boxes: { ...decl.boxes, 27: 500 } }; // 500 < prev 800
-    render(<CompareDrawer decl={declLower} prevDecl={prevDecl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('↓');
-  });
-
-  it('shows — when prev value is zero (undefined percentage)', () => {
-    const prevZero = { period: 'T1', year: 2026, boxes: { 1: 0, 27: 0, 45: 0, 46: 0, 59: 0, 60: 0 } };
-    render(<CompareDrawer decl={decl} prevDecl={prevZero} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('—');
-  });
-
-  it('renders the formatted amount with thousands grouping for values in the 1000-9999 range', () => {
-    // boxes[27] (iva_dev) curr=1000 sits exactly in the range where Intl silently
-    // drops the grouping separator when `useGrouping` isn't explicit.
-    render(<CompareDrawer decl={decl} prevDecl={prevDecl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('1.000,00');
-  });
-
-  it('shows dev_improved insight when current IVA devengado exceeds previous', () => {
-    // boxes[27]=1000 > prevDecl.boxes[27]=800 → devImproved true
-    render(<CompareDrawer decl={decl} prevDecl={prevDecl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('fm.compare.insight.dev_improved');
-  });
-
-  it('shows dev_fell insight when current IVA devengado is lower', () => {
-    const declLower = { ...decl, boxes: { ...decl.boxes, 27: 500 } }; // 500 < 800
-    render(<CompareDrawer decl={declLower} prevDecl={prevDecl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('fm.compare.insight.dev_fell');
-  });
-
-  it('shows result_higher insight when |curr result| exceeds |prev result|', () => {
-    // |boxes[46]=200| > |prevDecl.boxes[46]=100| → resultImproved true
-    render(<CompareDrawer decl={decl} prevDecl={prevDecl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('fm.compare.insight.result_higher');
-  });
-
-  it('shows result_lower insight when |curr result| does not exceed |prev result|', () => {
-    const declLowerResult = { ...decl, boxes: { ...decl.boxes, 46: 50 } }; // |50| < |100|
-    render(<CompareDrawer decl={declLowerResult} prevDecl={prevDecl} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('fm.compare.insight.result_lower');
-  });
-
-  it('calls onClose when × header button is clicked', () => {
-    const onClose = vi.fn();
-    const { container } = render(<CompareDrawer decl={decl} onClose={onClose} />);
-    const closeBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('✕'));
-    fireEvent.click(closeBtn);
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('calls onClose when overlay backdrop is clicked', () => {
-    const onClose = vi.fn();
-    const { container } = render(<CompareDrawer decl={decl} onClose={onClose} />);
-    fireEvent.click(container.querySelector('.fm-modal-overlay'));
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('does not propagate click from modal body to overlay', () => {
-    const onClose = vi.fn();
-    const { container } = render(<CompareDrawer decl={decl} onClose={onClose} />);
-    fireEvent.click(container.querySelector('.fm-config-modal'));
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('calls onClose when footer close button is clicked', () => {
-    const onClose = vi.fn();
-    const { container } = render(<CompareDrawer decl={decl} onClose={onClose} />);
-    const closeBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => b.textContent.includes('fm.action.close'));
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalled();
   });
