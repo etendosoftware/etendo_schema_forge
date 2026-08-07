@@ -621,7 +621,7 @@ export function ListModalWindow({
             })}
 
             {formError && (
-              <div className="flex items-start gap-2 rounded-md border border-destructive bg-destructive px-3 py-2 text-sm text-destructive">
+              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 <X size={16} className="mt-0.5 flex-shrink-0" data-testid="X__19eda5" />
                 <span>{formError}</span>
               </div>

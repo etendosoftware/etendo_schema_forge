@@ -1105,11 +1105,11 @@ their own `BulkDeleteSelectionBar` + `useBatchDeleteDialog`.
    the whole toolbar), and while that flag also suppressed the selection bar there was no
    delete affordance to reach even with checkboxes on.
 
-The wrapper (`windows/custom/financial-account/index.jsx`) also sets
-`listViewOptions.hideEye: true`: a financial account is not a printable document, so the
-selection bar's document-preview action has nothing to show. `hidePrint` already covers the
-Printer button from `decisions.json`; `hideEye` has no `decisions.json` equivalent, so it is
-set on the wrapper. Net result: **Eliminar seleccionados** is the only action in the bar.
+The wrapper (`windows/custom/financial-account/index.jsx`) also keeps `hidePrint` from
+`decisions.json`, which covers the Printer button. The selection bar's "Vista Previa" (eye)
+button was removed unconditionally from `ListView.jsx` in ETP-4644 — it no longer exists in
+any window, so this wrapper no longer needs a flag for it either. Net result: **Eliminar
+seleccionados** is the only action in the bar.
 
 **Testids** for anyone writing specs against this: row `row-{id}` (its checkbox is the
 `Checkbox__eb5261` inside it — DataTable does not emit a per-row select testid),
