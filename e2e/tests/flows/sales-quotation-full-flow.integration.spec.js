@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
+import { assertPeriodOpen } from '../helpers/period-helpers.js';
 
 /**
  * Sales Quotation — Full flow: Presupuesto → Pedido de venta → Albarán →
@@ -274,6 +275,11 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
   );
 
   test('Presupuesto → Pedido → Albarán → Factura propagates a negative-quantity/positive-price line at every stage', async ({ page }) => {
+    // ETP-4567 — fail fast if the accounting period isn't open for the doc
+    // types this flow confirms, instead of timing out ~10s later on an
+    // unrelated UI element with a confusing generic Playwright timeout.
+    await assertPeriodOpen();
+
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 
