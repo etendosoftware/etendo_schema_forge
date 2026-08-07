@@ -73,3 +73,32 @@ export function expectEmailsCardOnSendGatedByStatus({ hiddenIt, shownIt, renderH
     expect(typeof lastCall.onSend).toBe('function');
   });
 }
+
+/**
+ * Generates the "disabled on one status / enabled on another" test pair for a
+ * gated trigger that stays IN the DOM but toggles its `disabled` attribute —
+ * the pattern used by "Descargar PDF" (ETP-4789), as opposed to the Send
+ * trigger which is removed from the DOM entirely (see
+ * `expectPresenceGatedByStatus` above). The PDF must already be available
+ * (hasPdf/pdfBlob/pdfUrl truthy) in BOTH renders, so the only variable under
+ * test is the documentStatus gate — otherwise a false positive is possible
+ * (disabled because there's no PDF yet, not because of the status gate).
+ *
+ * @param {object} config
+ * @param {string} config.hiddenIt - test description for the "disabled" case
+ * @param {string} config.shownIt - test description for the "enabled" case
+ * @param {() => void} config.renderHidden - renders the preview (with a PDF already available) in the status that must disable the trigger
+ * @param {() => void} config.renderShown - renders the preview (with a PDF already available) in the status that must enable the trigger
+ * @param {() => (HTMLElement|null)} config.findElement - Testing Library lookup for the trigger, called after each render
+ */
+export function expectDisabledGatedByStatus({ hiddenIt, shownIt, renderHidden, renderShown, findElement }) {
+  it(hiddenIt, () => {
+    renderHidden();
+    expect(findElement()).toBeDisabled();
+  });
+
+  it(shownIt, () => {
+    renderShown();
+    expect(findElement()).not.toBeDisabled();
+  });
+}

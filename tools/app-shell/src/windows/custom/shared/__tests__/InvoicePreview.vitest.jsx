@@ -116,6 +116,7 @@ import EmailsCard from '../preview-cards/EmailsCard.jsx';
 import {
   expectPresenceGatedByStatus,
   expectEmailsCardOnSendGatedByStatus,
+  expectDisabledGatedByStatus,
 } from './testUtils/sendActionGatingCases.js';
 
 const defaultInvoice = {
@@ -368,6 +369,36 @@ describe('InvoicePreview', () => {
       renderHidden: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('DR') }),
       renderShown: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('CO') }),
       EmailsCardMock: vi.mocked(EmailsCard),
+    });
+  });
+
+  // ── ETP-4789: Download PDF gating by documentStatus ───────────────────────
+  // InvoiceActionButtons (the local action bar) always passed
+  // onDownloadPdf=p.handleDownloadPdf regardless of documentStatus — only
+  // hasPdf gated it. The fix reuses the same isSendable variable already
+  // computed for Send (specName !== 'purchase-invoice' && documentStatus ===
+  // 'CO'). The download button only renders at all for sales invoices
+  // (isSalesInvoice), so these cases must set that flag. These cases must
+  // FAIL against the current (unfixed) source.
+  describe('Download PDF gating by documentStatus (ETP-4789)', () => {
+    function renderSalesInvoiceWithPdf(status) {
+      const invoice = { ...defaultInvoice, documentStatus: status };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: invoice,
+        isSalesInvoice: true,
+        isDraft: status === 'DR',
+        pdfUrl: 'blob:test',
+        pdfBlob: new Blob(['%PDF'], { type: 'application/pdf' }),
+      }));
+      return renderInvoicePreview({ specName: 'sales-invoice', invoice });
+    }
+
+    expectDisabledGatedByStatus({
+      hiddenIt: 'disables the download button for a sales-invoice in DR (draft) status, even with a PDF available',
+      shownIt: 'enables the download button for a sales-invoice in CO (completed) status',
+      renderHidden: () => renderSalesInvoiceWithPdf('DR'),
+      renderShown: () => renderSalesInvoiceWithPdf('CO'),
+      findElement: () => screen.getByTestId('Download__cf88e6').closest('button'),
     });
   });
 });

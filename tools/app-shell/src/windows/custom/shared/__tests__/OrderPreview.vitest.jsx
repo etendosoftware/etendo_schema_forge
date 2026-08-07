@@ -35,8 +35,10 @@ vi.mock('../GenericPreviewModal.jsx', () => ({
 }));
 
 vi.mock('../PreviewActionButtons.jsx', () => ({
-  // Mirrors the real component's {onEmail && (...)} gate (PreviewActionButtons.jsx)
-  // so tests can assert whether OrderPreview passed a truthy onEmail or not.
+  // Mirrors the real component's {onEmail && (...)} gate and its
+  // disabled={!hasPdf || !onDownloadPdf} download gate (PreviewActionButtons.jsx,
+  // ETP-4789) so tests can assert whether OrderPreview passed a truthy
+  // onEmail/onDownloadPdf or not.
   default: ({ onEmail, onDownloadPdf, hasPdf, sendLabel, downloadLabel, editLabel }) => (
     <div data-testid="action-buttons">
       {onEmail && (
@@ -44,7 +46,7 @@ vi.mock('../PreviewActionButtons.jsx', () => ({
           {sendLabel}
         </button>
       )}
-      <button data-testid="download-btn" onClick={onDownloadPdf} disabled={!hasPdf}>
+      <button data-testid="download-btn" onClick={onDownloadPdf} disabled={!hasPdf || !onDownloadPdf}>
         {downloadLabel}
       </button>
       <button data-testid="edit-btn">{editLabel}</button>
@@ -113,6 +115,7 @@ import EmailsCard from '../preview-cards/EmailsCard.jsx';
 import {
   expectPresenceGatedByStatus,
   expectEmailsCardOnSendGatedByStatus,
+  expectDisabledGatedByStatus,
 } from './testUtils/sendActionGatingCases.js';
 
 const defaultOrder = {
@@ -299,6 +302,34 @@ describe('OrderPreview', () => {
     it('applies the same DR gating for purchase-order (no per-spec status difference for this rule)', () => {
       renderOrderPreview({ specName: 'purchase-order', order: { ...defaultOrder, documentStatus: 'DR' } });
       expect(screen.queryByTestId('email-btn')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── ETP-4789: Download PDF gating by documentStatus ───────────────────────
+  // OrderPreview always passed onDownloadPdf=handleDownloadPdf regardless of
+  // documentStatus — only hasPdf gated it. The fix reuses the same isSendable
+  // variable already computed for Send (documentStatus === 'CO', no per-spec
+  // difference between sales-order and purchase-order). These cases must FAIL
+  // against the current (unfixed) source.
+  describe('Download PDF gating by documentStatus (ETP-4789)', () => {
+    function renderWithPdf(order, specName = 'sales-order') {
+      const pdfMock = { pdfUrl: 'blob:test', pdfBlob: new Blob(), loading: false, error: null };
+      useOrderPdf.mockReturnValue(pdfMock);
+      usePurchaseOrderPdf.mockReturnValue(pdfMock);
+      return renderOrderPreview({ order, specName });
+    }
+
+    expectDisabledGatedByStatus({
+      hiddenIt: 'disables the download button when order.documentStatus is DR (draft), even with a PDF available',
+      shownIt: 'enables the download button when order.documentStatus is CO (completed)',
+      renderHidden: () => renderWithPdf({ ...defaultOrder, documentStatus: 'DR' }),
+      renderShown: () => renderWithPdf({ ...defaultOrder, documentStatus: 'CO' }),
+      findElement: () => screen.getByTestId('download-btn'),
+    });
+
+    it('applies the same DR gating for purchase-order (no per-spec status difference for this rule)', () => {
+      renderWithPdf({ ...defaultOrder, documentStatus: 'DR' }, 'purchase-order');
+      expect(screen.getByTestId('download-btn')).toBeDisabled();
     });
   });
 });
