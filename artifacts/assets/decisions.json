@@ -22,7 +22,6 @@
     "formScrollPaddingX": "px-2",
     "hideListFilters": false,
     "hideLink": true,
-    "hideEyeCount": true,
     "hideMoreDetails": true,
     "detailSortBy": "sEQNoAsset asc",
     "labelOverrides": {
@@ -74,7 +73,7 @@
     },
     "secondaryTabs": {
       "assetAcct": {
-        "tabOrder": 1,
+        "tabOrder": 1000,
         "label": "Accounting",
         "addLineFields": [
           "accountingSchema",

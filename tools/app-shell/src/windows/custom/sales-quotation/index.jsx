@@ -12,6 +12,7 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import QuotationPreview from '../shared/QuotationPreview.jsx';
 import { useSavedPreviewRecord } from '../shared/useSavedPreviewRecord.js';
 
@@ -85,6 +86,15 @@ function CustomQuotationTable(props) {
       columns={quotationColumns}
       {...props}
       data-testid="QuotationTable__bc8637" />
+  );
+}
+
+function SalesQuotationBulkActions({ selectedRows, windowName }) {
+  return (
+    <CopyLinkButton
+      selectedRows={selectedRows}
+      windowName={windowName}
+      data-testid="CopyLinkButton__bc8637" />
   );
 }
 
@@ -171,6 +181,8 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}
         rowQuickActions={rowQuickActions}
+        hideLink
+        bulkActions={SalesQuotationBulkActions}
         renderPreview={renderPreview}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
