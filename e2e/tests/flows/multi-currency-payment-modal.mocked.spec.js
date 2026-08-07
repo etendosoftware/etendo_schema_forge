@@ -62,7 +62,26 @@ async function installMocks(page, {
   });
 
   // List + detail + per-invoice action POSTs all live under /header**.
-  await page.route('**/sws/neo/purchase-invoice/header{/**,}**', async (route) => {
+  //
+  // NOTE on the glob pattern: Playwright's own glob→regex compiler
+  // (playwright-core/lib/utils/isomorphic/urlMatch.js) only treats `**` as
+  // "crosses path separators" when it is immediately preceded AND followed by
+  // `/` (or start/end of the whole glob). Inside a brace group like
+  // `header{/**,}**`, the `**` right before the `,` is followed by `,`, not
+  // `/`, so the deep-match special case never triggers and it silently
+  // degrades to `[^/]*` — matching only ONE path segment past `/header`
+  // (e.g. `/header/acc-1`) and NOT two-or-more (e.g.
+  // `/header/<id>/action/invoiceAccounts`). Any POST that needs a
+  // `/header/<id>/action/<name>` sub-path therefore fell through to the
+  // generic `/sws/**` stub from login() and got its synthetic
+  // `{id:'e2e-record-id', ...}` body instead of this mock's data — which is
+  // why `selectedAccount`/`selectedMethodObj` stayed undefined and the
+  // multi-currency `cp-conversion-fields` block never rendered. Registering
+  // the SAME handler under two separate glob patterns sidesteps the bug
+  // entirely: `header/**` (bare `**` outside any brace, correctly deep) for
+  // any sub-path, and `header**` (also brace-free) for the bare/query-string
+  // case. See docs/e2e-testing-guide.md for the broader gotcha writeup.
+  const headerHandler = async (route) => {
     const req = route.request();
     const url = req.url();
 
@@ -98,7 +117,9 @@ async function installMocks(page, {
       return jsonOk(route, { response: { data: [invoice], totalRows: 1 } });
     }
     return route.fallback();
-  });
+  };
+  await page.route('**/sws/neo/purchase-invoice/header/**', headerHandler);
+  await page.route('**/sws/neo/purchase-invoice/header**', headerHandler);
 
   await page.route('**/sws/neo/purchase-invoice/paymentPlan{/**,}**', (route) =>
     jsonOk(route, { response: { data: [{ finPaymentScheduleID: 'sched-1', outstandingAmount: '100' }] } }));
