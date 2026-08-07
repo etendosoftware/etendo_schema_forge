@@ -43,8 +43,14 @@ vi.mock('../useCertExpiry.js', () => ({
   useCertExpiry: () => ({ daysLeft: null }),
 }));
 
-vi.mock('../fiscalConfig.utils.js', () => ({
+vi.mock('../fiscalConfig.utils.js', async (importActual) => ({
+  ...(await importActual()),
   detectProfile: vi.fn(() => 'sii'),
+}));
+
+// Change SIF dialog renders a portal Dialog; stub it out for page-level tests.
+vi.mock('../ChangeSifDialog.jsx', () => ({
+  default: () => null,
 }));
 
 // Section component mocks
@@ -110,6 +116,7 @@ vi.mock('@/components/ui/button', () => ({
 
 vi.mock('lucide-react', () => ({
   Save: () => <svg data-testid="icon-save" />,
+  RefreshCw: () => <svg data-testid="icon-refresh" />,
 }));
 
 // --- Import under test ----------------------------------------------------

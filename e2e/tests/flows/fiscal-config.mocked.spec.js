@@ -367,6 +367,147 @@ test.describe('Fiscal Config — certificate upload flow', () => {
   });
 });
 
+// ── Change SIF flow (ETP-4785) ────────────────────────────────────────────────
+//
+// Maps to Jira TCs where they are UI-observable:
+//   TC2 — Change SIF deactivates the active config (PUT { active:false }, NOT a
+//         DELETE) and the row is kept as a trace → after refetch the profile
+//         resolves to unconfigured → the onboarding wizard reappears.
+//   TC4 — leaving the wizard (no active SIF record) is a valid "no-SIF" state:
+//         the wizard territory screen is shown, no config section, no crash.
+//   TC6 — for VERI*FACTU the permanence notice is shown in the confirm dialog
+//         and the change is STILL allowed (informational, isReady is not a block).
+//
+// Stateful config mock: after the deactivation PUT, subsequent list loads return
+// the record flagged inactive (active:'N'), reproducing the NEO NO_ACTIVE_FILTER
+// trace-row behavior so the front resolves the org back to `unconfigured`.
+
+async function installChangeSifMocks(page, { spec, record }) {
+  const state = { deactivated: false };
+  await page.route(`**/sws/neo/${spec}/**`, async route => {
+    const req = route.request();
+    const method = req.method();
+    if (method === 'GET') {
+      const row = state.deactivated ? { ...record, active: 'N' } : { ...record, active: 'Y' };
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(neoOk([row])),
+      });
+    }
+    if (method === 'PUT') {
+      state.deactivated = true;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(neoOk([{ ...record, active: 'N' }])),
+      });
+    }
+    return route.fallback();
+  });
+  for (const other of ['sii-config', 'tbai-config', 'verifactu-config'].filter(s => s !== spec)) {
+    await page.route(`**/sws/neo/${other}/**`, route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) }),
+    );
+  }
+  return state;
+}
+
+const CHANGE_SIF_CASES = [
+  {
+    label: 'SII',
+    spec: 'sii-config',
+    detailFieldLabel: t('fiscal.sii.field.enrolled'),
+    record: { id: 'e2e-csif-sii-001', acogidaAlSII: 'N', navarra: 'N', guipuzcoa: 'N' },
+    noticeKey: 'fiscal.changeSif.notice.sii',
+  },
+  {
+    label: 'TBAI',
+    spec: 'tbai-config',
+    detailFieldLabel: t('fiscal.tbai.field.enrollDate'),
+    record: { id: 'e2e-csif-tbai-001', etsgSifTerritory: 'ARABA' },
+    noticeKey: 'fiscal.changeSif.notice.tbai',
+  },
+  {
+    label: 'VERIFACTU',
+    spec: 'verifactu-config',
+    detailFieldLabel: t('fiscal.verifactu.field.tax'),
+    record: { id: 'e2e-csif-vf-001', tAXType: '01', defaultQR: 'N', isReady: 'N' },
+    noticeKey: 'fiscal.changeSif.notice.verifactu',
+  },
+];
+
+test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
+  for (const c of CHANGE_SIF_CASES) {
+    test(`TC2 ${c.label}: Change SIF PUTs { active:false } (not DELETE) → wizard reappears`, async ({ page }) => {
+      await loginWithOrg(page);
+      await installChangeSifMocks(page, c);
+      await navigateTo(page, 'fiscal-config');
+
+      await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+      await page.getByTestId('FiscalConfigPage__changeSif').click();
+
+      await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible();
+      await expect(page.getByTestId('ChangeSifDialog__confirm')).toBeVisible();
+
+      const [putReq] = await Promise.all([
+        page.waitForRequest(req => req.method() === 'PUT' && req.url().includes(`/${c.spec}/`)),
+        page.getByTestId('ChangeSifDialog__confirm').click(),
+      ]);
+      expect(putReq.url()).toContain(c.record.id);
+      expect(JSON.parse(putReq.postData() || '{}')).toEqual({ active: false });
+      expect(putReq.method()).not.toBe('DELETE');
+
+      // After deactivation the refetch resolves to `unconfigured` → the existing
+      // onboarding wizard reappears (TC2 end-state + TC4 valid no-SIF state).
+      await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+      await expect(page.getByText(c.detailFieldLabel)).toHaveCount(0);
+    });
+  }
+
+  test('TC6 VERIFACTU: confirm dialog shows the permanence notice and still allows the change', async ({ page }) => {
+    const c = CHANGE_SIF_CASES.find(x => x.label === 'VERIFACTU');
+    await loginWithOrg(page);
+    await installChangeSifMocks(page, c);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('FiscalConfigPage__changeSif').click();
+
+    await expect(page.getByTestId('ChangeSifDialog__notice')).toBeVisible();
+    await expect(page.getByText(t(c.noticeKey))).toBeVisible();
+
+    const confirm = page.getByTestId('ChangeSifDialog__confirm');
+    await expect(confirm).toBeEnabled();
+
+    const [putReq] = await Promise.all([
+      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes(`/${c.spec}/`)),
+      confirm.click(),
+    ]);
+    expect(JSON.parse(putReq.postData() || '{}')).toEqual({ active: false });
+    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+  });
+
+  test('TC4 cancel keeps the active config (no PUT, no wizard)', async ({ page }) => {
+    const c = CHANGE_SIF_CASES.find(x => x.label === 'SII');
+    await loginWithOrg(page);
+    await installChangeSifMocks(page, c);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('FiscalConfigPage__changeSif').click();
+    await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible();
+
+    let sawPut = false;
+    page.on('request', req => { if (req.method() === 'PUT' && req.url().includes(`/${c.spec}/`)) sawPut = true; });
+
+    await page.getByTestId('ChangeSifDialog__cancel').click();
+    await expect(page.getByTestId('ChangeSifDialog__content')).toHaveCount(0);
+    await expect(page.getByText(c.detailFieldLabel)).toBeVisible();
+    expect(sawPut).toBe(false);
+  });
+});
+
 // ── Onboarding save regression (ETP-4401) ─────────────────────────────────────
 //
 // Real flow exercised: territory pick → confirm → createRecords() POSTs the new

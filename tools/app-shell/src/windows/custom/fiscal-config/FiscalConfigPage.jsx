@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Save } from 'lucide-react';
+import { Save, RefreshCw } from 'lucide-react';
 import OrgDropdown from './FiscalOrgDropdown.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -17,7 +17,18 @@ import SiiSection from './SiiSection.jsx';
 import TbaiSection from './TbaiSection.jsx';
 import VerifactuSection from './VerifactuSection.jsx';
 import FiscalConfigDebugPanel from './FiscalConfigDebugPanel.jsx';
+import ChangeSifDialog from './ChangeSifDialog.jsx';
 import TabBar from './TabBar.jsx';
+
+// Profiles that represent a real, active fiscal config (i.e. "Change SIF" applies).
+const CONFIGURED_PROFILES = ['sii', 'sii-navarra', 'sii+tbai', 'tbai', 'verifactu'];
+
+// Label for the save button, reflecting the current save state.
+function resolveSaveLabel(ui, saving, savedOk) {
+  if (saving) return ui('fiscal.saving');
+  if (savedOk) return `✓ ${ui('fiscal.save')}`;
+  return ui('fiscal.save');
+}
 
 // ── FiscalConfigPage ───────────────────────────────────────────────────────────
 
@@ -37,6 +48,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   const [saveError, setSaveError] = useState(null);
   const [savedOk, setSavedOk] = useState(false);
   const [resetKey, setResetKey] = useState(0);
+  const [changeSifOpen, setChangeSifOpen] = useState(false);
 
   const {
     loading, error, profile,
@@ -132,11 +144,12 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
     );
   }
 
+  // "Change SIF" only applies to a real, active config resolved from the API —
+  // not in mock/debug mode (mock records cannot be deactivated on the server).
+  const canChangeSif = !mockOverride && orgId && CONFIGURED_PROFILES.includes(effectiveProfile);
+
   // ── Org bar ──────────────────────────────────────────────────────────────────
-  let saveLabel;
-  if (saving) saveLabel = ui('fiscal.saving');
-  else if (savedOk) saveLabel = `✓ ${ui('fiscal.save')}`;
-  else saveLabel = ui('fiscal.save');
+  const saveLabel = resolveSaveLabel(ui, saving, savedOk);
 
   const orgBar = (
     <div className="flex-shrink-0 border-b border-[hsl(var(--border-subtle))]">
@@ -150,6 +163,16 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
             data-testid="OrgDropdown__310303" />
         </div>
         <div className="flex items-center gap-2">
+          {canChangeSif && (
+            <Button
+              variant="outline"
+              onClick={() => setChangeSifOpen(true)}
+              disabled={saving}
+              data-testid="FiscalConfigPage__changeSif">
+              <RefreshCw size={14} className="mr-1.5" data-testid="RefreshCw__310303" />
+              {ui('fiscal.changeSif.action')}
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={handleCancel}
@@ -179,6 +202,16 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   return (
     <>
       {DebugPanel}
+      {canChangeSif && (
+        <ChangeSifDialog
+          open={changeSifOpen}
+          onOpenChange={setChangeSifOpen}
+          profile={effectiveProfile}
+          records={{ sii: siiRecord, tbai: tbaiRecord, verifactu: verifactuRecord }}
+          apiBaseUrl={apiBaseUrl}
+          onChanged={refetch}
+          data-testid="ChangeSifDialog__310303" />
+      )}
       <div className="relative h-full flex flex-col overflow-hidden">
         {orgBar}
 
