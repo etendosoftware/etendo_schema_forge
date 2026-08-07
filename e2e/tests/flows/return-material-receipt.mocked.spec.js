@@ -77,7 +77,7 @@ const ROWS = [
  */
 async function installReturnReceiptMocks(page) {
   // Lines endpoint — always empty
-  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine**', async (route) => {
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -86,7 +86,7 @@ async function installReturnReceiptMocks(page) {
   });
 
   // Header list + detail
-  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt**', async (route) => {
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     const method = req.method();

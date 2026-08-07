@@ -113,7 +113,7 @@ async function installSalesOrderMocks(page, { header, line }) {
     });
   });
 
-  await page.route('**/sws/neo/sales-order/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -123,7 +123,7 @@ async function installSalesOrderMocks(page, { header, line }) {
   });
 
   // evaluate-display returns {} so client-side logic drives the UI.
-  await page.route('**/sws/neo/sales-order/evaluate-display**', async (route) => {
+  await page.route('**/sws/neo/sales-order/evaluate-display{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

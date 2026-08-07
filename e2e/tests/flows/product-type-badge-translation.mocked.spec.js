@@ -40,7 +40,7 @@ test.describe('Product grid — Tipo badge translation (ETP-4685)', () => {
   test('grid shows the translated Tipo badge (Artículo/Servicio), not the raw English AD name', async ({ page }) => {
     await login(page);
 
-    await page.route('**/sws/neo/product/product**', async (route) => {
+    await page.route('**/sws/neo/product/product{/**,}**', async (route) => {
       const req = route.request();
       const url = req.url();
       const method = req.method();

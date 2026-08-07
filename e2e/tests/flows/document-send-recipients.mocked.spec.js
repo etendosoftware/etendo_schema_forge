@@ -50,7 +50,7 @@ const ROWS = [
  * List + detail mock for the given spec's header entity.
  */
 async function installListMock(page, spec) {
-  await page.route(`**/sws/neo/${spec}/header**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/header{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !/\/header\/[^/?]+/.test(url)) {
