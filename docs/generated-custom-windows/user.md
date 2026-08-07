@@ -6,7 +6,7 @@ This window should let administrators maintain a person’s application identity
 ## What this window should allow
 Users should be able to:
 - create, find, open, update, and delete user records;
-- maintain identity fields such as Name, Username, First Name, Last Name, Email, Description, Position, and Phone;
+- maintain identity fields such as Name, First Name, Last Name, Email, Description, Position, and Phone;
 - connect the user to a Business Partner and Supervisor through search-based selectors;
 - set or update the Password while reviewing read-only security indicators such as Expired Password, Locked, and Last Password Update;
 - choose default context values for Language, Client, Organization, and Warehouse;
@@ -14,12 +14,14 @@ Users should be able to:
 
 **Role assignment (ETP-4512):** `defaultRole` (`Default_Ad_Role_ID`) is now read-only/badge-only (`columnType: "status"`, `enumValues` mapping the 5 GOClient role ids to display names) — its native selector only ever listed roles the user already had, which made it useless for assigning a *new* role. The actual editing surface is `AssignRoleControl` (`tools/app-shell/src/windows/custom/user/AssignRoleControl.jsx`, wired as `window.headerExtra.customForm`), which sources its options from the unrestricted `userRoles.role` selector and writes through the same `defaultRole` field on save. `UserRoleAssignmentHandler` (`com.etendoerp.go`, `@Named("user")`) intercepts that save and syncs `AD_User_Roles` — deleting any existing row(s) for the user and inserting exactly one for the new role — since real login/window-access checks read `AD_User_Roles`, not `Default_Ad_Role_ID`.
 
+**Admin-initiated user creation (ETP-4829):** Email is now a mandatory field (`required: true` in `decisions.json`/the contract) on both create and edit. Username is no longer shown on this window at all — `decisions.json`'s `username` field is `visibility: "system"` (excluded from the generated frontend contract entirely, confirmed absent from `UserForm.jsx`/`UserTable.jsx`/`mockData.js`) and is always a direct, lower-cased copy of Email, matching the convention `EtendoGoJwtDalHelper`/`AD_User.username` already relies on to link an `AD_User` row to its `etgo_account` row by matching value. Because generated code has no beforeSave-derivation support (see `docs/possible-limitations.md` L1), the copy is enforced server-side: `UserRoleAssignmentHandler.handle()` (`com.etendoerp.go`) rewrites the `POST` request body's `username` to the trimmed/lower-cased `email` before the default create runs, and rejects a blank/missing email with 400. On a successful create, `UserRoleAssignmentHandler.afterHandle()` reads the created record's `email`/`name` back out of the response and provisions a matching `etgo_account` row in `pending` status (no password) via `EtendoGoAccountProvisioning.ensurePendingAccount` — best-effort, never failing the parent `AD_User` creation. The account stays unusable (cannot log in) until ETP-4830's invite-email flow sets a password and flips `ETGO_ACCOUNT.STATUS` to `active` — that transition is ETP-4830's responsibility, not implemented here.
+
 ## Interaction model
 - Route: `/user` for the list and `/user/:recordId` for the record detail.
 - Visibility: visible in System > Settings from `tools/app-shell/src/menu.json`; it is not marked hidden.
 - Implementation type: generated window loaded from `tools/app-shell/src/windows/registry.js` into the shared app-shell list/detail flow.
 - Window shape: master-child. The parent entity is `user`, and the visible child entity on the detail page is `userRoles`.
-- List behavior: the generated page exposes list filtering by `name`, `username`, and `email`.
+- List behavior: the generated page exposes list filtering by `name` and `email` (`username` removed from filters and the grid — ETP-4829).
 - Detail behavior: the detail page renders the main user form, the Assigned Role control (headerExtra), plus a now read-only child table/form for User Roles (view-only confirmation of the single row `UserRoleAssignmentHandler` maintains — no Add-line button, since `userRoles.role`/`roleAdmin` are both `readOnly` in `decisions.json`).
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 
@@ -42,7 +44,8 @@ Users should be able to:
 - The callout-backed synchronization between Name, First Name, and Last Name is suggested by the contract, but the current evidence does not prove the exact browser interaction, so it should not be treated as confirmed UI behavior without manual verification.
 
 ## Manual verification
-1. Open `/user` and confirm the list can locate records by `name`, `username`, and `email`.
+1. Open `/user` and confirm the list can locate records by `name` and `email`, and that no `username` column or filter is visible.
+1a. Create a new user from `/user` with a valid email and confirm it saves; confirm the AD_User's `username` was set to the email (lower-cased) and a matching `etgo_account` row exists in `pending` status. Attempt to create a user with a blank email and confirm the request is rejected (400).
 2. Open `/user/:recordId` and confirm the form shows identity fields, Business Partner and Supervisor lookup fields, security indicators, and default selectors.
 3. Assign a role via the header's Assigned Role control (`AssignRoleControl`) and confirm Default Client and Default Organization react to that choice; then change Default Client and confirm Default Warehouse reacts to the client.
 4. Save and confirm the assigned role shows as a status badge in both the header (grid-styled, read-only) and the row for this user in the `/user` list. Confirm the User Roles child table shows exactly one row matching the assignment, with no visible Add-line control.
@@ -58,6 +61,7 @@ Users should be able to:
 - User Roles child columns are grounded in `artifacts/user/generated/web/user/UserRolesTable.jsx`; the absence of `addLineFields` on that entity (all fields `readOnly`) is grounded in `artifacts/user/contract.json`.
 - The Assigned Role headerExtra and its unrestricted-selector rationale are grounded in `tools/app-shell/src/windows/custom/user/AssignRoleControl.jsx` and covered by `tools/app-shell/src/windows/custom/user/__tests__/AssignRoleControl.vitest.jsx`; end-to-end assignment-to-badge behavior is covered by `e2e/tests/flows/role-assignment.mocked.spec.js` (see `docs/e2e-testing-guide.md`).
 - The `AD_User_Roles` sync from `Default_Ad_Role_ID` is implemented and unit-tested in `com.etendoerp.go`'s `UserRoleAssignmentHandler`/`UserRoleAssignmentHandlerTest` (ETP-4512) — see `docs/neo-headless-extensibility.md` §4 "Post-hook: Sync a Related Entity from a Parent Field" (this repo) for the general pattern.
+- The `username = email` enforcement and pending `etgo_account` provisioning on create (ETP-4829) are implemented and unit-tested in the same `UserRoleAssignmentHandler`/`UserRoleAssignmentHandlerTest`, plus `EtendoGoAccountProvisioning`/`EtendoGoAccountProvisioningTest` and `EtendoGoJwtDalHelper#createPendingAccount`/`EtendoGoJwtDalHelperTest` (all `com.etendoerp.go`).
 - Contract evidence for callouts, selectors, child entities, and declared actions is grounded in `artifacts/user/contract.json`.
 - Generated but currently unmounted email-configuration UI exists in `artifacts/user/generated/web/user/EmailConfigurationTable.jsx` and `artifacts/user/generated/web/user/EmailConfigurationForm.jsx`.
 - Shared list/detail shell behavior and defaults loading behavior are described in `docs/generated-custom-windows/app-shell-functional-flows.md`.

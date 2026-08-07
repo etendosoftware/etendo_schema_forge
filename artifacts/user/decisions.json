@@ -22,10 +22,9 @@
           "section": "principal"
         },
         "username": {
-          "visibility": "editable",
-          "grid": true,
-          "searchable": true,
-          "section": "principal"
+          "visibility": "system",
+          "derivation": { "type": "fromField", "source": "email" },
+          "reason": "ETP-4829: never shown or independently editable on the admin-facing form (create or edit) — always a direct copy of email, matching the convention EtendoGoJwtDalHelper/AD_User.username already relies on to link an AD_User row to its etgo_account row by matching value. Frontend never renders or sends this field; UserRoleAssignmentHandler.handle() enforces username=email server-side on POST (defense in depth, since generated code has no beforeSave derivation support per docs/possible-limitations.md L1)."
         },
         "firstName": {
           "visibility": "editable",
@@ -39,9 +38,11 @@
         },
         "email": {
           "visibility": "editable",
+          "required": true,
           "grid": true,
           "searchable": true,
-          "section": "principal"
+          "section": "principal",
+          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it."
         },
         "password": {
           "visibility": "editable",
