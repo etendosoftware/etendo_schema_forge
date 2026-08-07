@@ -1,8 +1,8 @@
 {
   "version": "0.26.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-07-30T10:37:22.278Z",
-  "checksum": "77f2b05c4b12ce37",
+  "updatedAt": "2026-08-05T12:39:14.179Z",
+  "checksum": "189363c77e46bc36",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -12,7 +12,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "customComponents": {
         "topbarRight": "OrderCreateInvoice",
         "topbarExtra": "OrderDraftChips",
@@ -1037,7 +1036,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "customComponents": {
         "topbarRight": "OrderCreateInvoice",
         "topbarExtra": "OrderDraftChips",

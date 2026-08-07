@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Loader2, Send, Download, Printer } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Loader2, Download, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
@@ -184,14 +184,6 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
             >
               {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__8d2ae7" /> : <Download className="h-3.5 w-3.5" data-testid="Download__8d2ae7" />}
               {downloading ? ui('generating') : ui('download')}
-            </button>
-            <button
-              disabled
-              title={ui('comingSoon')}
-              className="h-8 px-3 flex items-center gap-1.5 rounded-md bg-status-info/50 text-status-info-foreground text-xs font-medium cursor-not-allowed"
-            >
-              <Send className="h-3.5 w-3.5" data-testid="Send__8d2ae7" />
-              {ui('sendByEmail')}
             </button>
             <button onClick={onClose} className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 ml-1">
               <X className="h-4 w-4" data-testid="X__8d2ae7" />

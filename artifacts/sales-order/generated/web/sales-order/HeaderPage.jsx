@@ -477,7 +477,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrint
         noHeaderBorder
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Order", config: {} } }]}
@@ -510,7 +509,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       api={api}
       dateFilterKey="orderDate"
       bulkActions={(ctx) => <OrderReactivateBulkAction {...ctx} />}
-      hidePrint
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument

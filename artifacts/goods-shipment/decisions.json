@@ -7,7 +7,6 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
     "customComponents": {
       "topbarRight": "GoodsShipmentActions",
       "topbarExtra": "GoodsShipmentBillingBadge",

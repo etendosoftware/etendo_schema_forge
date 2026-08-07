@@ -204,14 +204,22 @@ describe('GoodsShipmentActions', () => {
       assert.doesNotMatch(src, new RegExp(String.fromCharCode(0x22ee)));
     });
 
-    it('still renders the Print button wired to handlePrint (untouched by the popover removal)', () => {
-      assert.match(src, /const handlePrint = async \(\) => \{/);
-      assert.match(src, /onClick=\{handlePrint\}/);
-      assert.match(src, /\{ui\('print'\)\}/);
+  });
+
+  // ETP-4729 — print unification. The private text "Imprimir" button
+  // (handlePrint + a direct generateShipmentPdf(...) call) that used to live in
+  // this component was removed: print is now served exclusively by the generic
+  // icon-only print flow in DetailView.jsx / DocumentPrintDrawer.jsx. This
+  // component must never regrow its own handlePrint/print button — that would
+  // duplicate the print entry point alongside the generic one.
+  describe('no private text print button (ETP-4729 — unified onto the generic print icon)', () => {
+    it('has no local handlePrint handler', () => {
+      assert.doesNotMatch(src, /const handlePrint\s*=/);
     });
 
-    it('still generates the shipment PDF via generateShipmentPdf for the print flow', () => {
-      assert.match(src, /generateShipmentPdf\(recordId, apiBaseUrl, token, pdfLabels\)/);
+    it('does not import or call generateShipmentPdf directly (that lives in useShipmentPdf, consumed only by GoodsShipmentMoreMenu\'s Download PDF item)', () => {
+      assert.doesNotMatch(src, /import\s+.*generateShipmentPdf.*from/);
+      assert.doesNotMatch(src, /generateShipmentPdf\(/);
     });
   });
 });
