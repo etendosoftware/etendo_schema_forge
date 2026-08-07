@@ -8,6 +8,9 @@ tools/decision-panel/dist/
 !.claude/skills/**
 !.claude/agents/
 !.claude/agents/**
+!.claude/hooks/
+!.claude/hooks/**
+!.claude/settings.json
 artifacts/test-report.xml
 artifacts/test-report.html
 .DS_Store
