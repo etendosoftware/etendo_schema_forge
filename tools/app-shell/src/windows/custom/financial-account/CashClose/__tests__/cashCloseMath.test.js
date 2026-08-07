@@ -11,7 +11,7 @@ import {
   toggleAllVisible,
   toggleOne,
   visibleMovements,
-} from './cashCloseMath.js';
+} from '../cashCloseMath.js';
 
 /** The prototype's own fixture, so the numbers below match the design handoff exactly. */
 const MOVEMENTS = [
