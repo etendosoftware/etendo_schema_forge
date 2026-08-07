@@ -353,6 +353,12 @@ function extractResponseMeta(data) {
 const EMPTY_FILTERS = {};
 const EMPTY_DEFS = {};
 
+// ETP-4751 — transient exemption-cause signals stamped by InvoiceLineHandler on the LINE-save
+// response ROOT. They are NOT persisted entity fields, so a plain header GET (refreshHeaderTotals)
+// does not return them — it must PRESERVE any value already on the client record instead of
+// dropping it, otherwise the flag is wiped before the SIF tab's toast effect can observe it.
+const EXEMPTION_SIGNAL_KEYS = ['exemptionCauseAutoFilled', 'exemptionCauseWarning'];
+
 export function parseCriteriaInto(v, out) {
     try {
         const parsed = JSON.parse(v);
@@ -1068,12 +1074,27 @@ export function useEntity(entity, childEntity, {
             })
             .then(data => {
                 const row = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
-                setSelected(row);
+                // ETP-4751 — carry forward the transient exemption-cause signals: the header GET
+                // does not echo them (they are not entity fields), so a naive setSelected(row)
+                // would wipe the flag a line-save just set before the SIF toast effect runs.
+                setSelected(prev => {
+                    const next = { ...row };
+                    if (prev) {
+                        for (const key of EXEMPTION_SIGNAL_KEYS) {
+                            if (prev[key] !== undefined) next[key] = prev[key];
+                        }
+                    }
+                    return next;
+                });
                 setEditing(prev => {
                     if (!prev) return { ...row };
                     const merged = { ...prev };
                     for (const [key, val] of Object.entries(row)) {
                         if (!userChangedKeysRef.current.has(key)) merged[key] = val;
+                    }
+                    // Signal keys are transient client-only flags — never overwrite them from the GET.
+                    for (const key of EXEMPTION_SIGNAL_KEYS) {
+                        if (prev[key] !== undefined) merged[key] = prev[key];
                     }
                     return merged;
                 });
@@ -1081,6 +1102,25 @@ export function useEntity(entity, childEntity, {
             .catch(() => {
             });
     }, [apiBaseUrl, entity, headers]);
+
+    // ETP-4751 — surface the invoice-line handler's transient exemption-cause signals
+    // (exemptionCauseAutoFilled / exemptionCauseWarning) to the header state so the SIF
+    // tab can toast. The backend (InvoiceLineHandler#autoFillExemptionCauseAfterLineSave)
+    // stamps AT MOST ONE of these on the LINE-save response body; they are mutually
+    // exclusive and never real entity fields. We mirror the value into BOTH `selected`
+    // and `editing` so it never shows up as a PATCH diff (buildPatchPayload compares the
+    // two), and we ALWAYS write the resolved boolean (true when present, false when not)
+    // so the flag flips back to false between saves — that reset is what lets the SIF
+    // tab's one-shot toast guard re-arm and fire again on the next qualifying line save.
+    const applyExemptionCauseSignals = useCallback((serverLineRecord) => {
+        if (!serverLineRecord || typeof serverLineRecord !== 'object') return;
+        const patch = {};
+        for (const key of EXEMPTION_SIGNAL_KEYS) {
+            patch[key] = serverLineRecord[key] === true || serverLineRecord[key] === 'true';
+        }
+        setSelected(prev => (prev ? { ...prev, ...patch } : prev));
+        setEditing(prev => (prev ? { ...prev, ...patch } : prev));
+    }, []);
 
     // ETP-4029 — narrow escape hatch for refreshHeaderTotals's userChangedKeysRef
     // protection above, scoped to ONE known cross-surface-sync case (see call site
@@ -1398,31 +1438,61 @@ export function useEntity(entity, childEntity, {
             // pending header edits in editing while updating server-computed fields (totals).
             fetchChildren(selected.id);
             refreshHeaderTotals(selected.id);
+            const savedLine = normalizeRecord(data?.response?.data?.[0] ?? data, childEntity);
+            // ETP-4751 — the exemption-cause signals live at the RESPONSE ROOT
+            // (InvoiceLineHandler#augmentResponseWithSignal does body.put(signalKey, true) on the
+            // full NEO response, i.e. {response:{data:[line]}, exemptionCauseWarning:true}), NOT on
+            // the nested line record. Pass the raw parsed root `data` so applyExemptionCauseSignals
+            // can read data.exemptionCauseWarning / data.exemptionCauseAutoFilled; `savedLine` is
+            // still what we return / feed to the children refresh.
+            applyExemptionCauseSignals(data);
             setSaveError(null);
             toast.success(ui('lineAdded'));
-            return normalizeRecord(data?.response?.data?.[0] ?? data, childEntity) ?? true;
+            return savedLine ?? true;
         } catch (err) {
             const msg = err?.message || 'Network error';
             setSaveError(msg);
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren, ui]);
+    }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren, ui, refreshHeaderTotals, applyExemptionCauseSignals]);
 
-    const handleUpdateChild = useCallback((childId, fieldOrObject, value) => {
+    const handleUpdateChild = useCallback((childId, fieldOrObject, value, signalSource) => {
         setChildren(prev => prev.map(c => {
             if (String(c.id) !== String(childId)) return c;
             if (typeof fieldOrObject === 'object') return { ...c, ...fieldOrObject };
             return { ...c, [fieldOrObject]: value };
         }));
+        // ETP-4751 — mirror the transient exemption-cause signals onto the header like
+        // handleAddChild does. The backend stamps them at the RESPONSE ROOT
+        // (InvoiceLineHandler#augmentResponseWithSignal), NOT on the nested line record, so the
+        // caller must pass the raw PATCH/PUT response root as `signalSource`. `fieldOrObject` is
+        // the client-side / nested-line object and never carries the flag, so fall back to it only
+        // to keep the resolved boolean flipping back to false between saves (which re-arms the
+        // one-shot toast guard). Prefer signalSource when provided; otherwise keep the original
+        // object-only behaviour so unrelated single-field (string) updates don't reset the flag.
+        if (signalSource) applyExemptionCauseSignals(signalSource);
+        else if (typeof fieldOrObject === 'object') applyExemptionCauseSignals(fieldOrObject);
         if (selected?.id) refreshHeaderTotals(selected.id);
-    }, [selected, refreshHeaderTotals]);
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
 
     const handleDeleteChild = useCallback((childId) => {
         setChildren(prev => prev.filter(c => String(c.id) !== String(childId)));
+        // ETP-4751 — reset the transient exemption-cause signals to false on line delete.
+        // The backend only stamps these flags on LINE-SAVE responses (POST/PATCH), never on
+        // a delete, so without this reset the flag keeps whatever value the last line save
+        // left it at. On an edited invoice that previously warned (flag stuck `true`),
+        // deleting all lines then re-adding an exempt line stamps `true` again with no
+        // intervening `true→false` transition, so the SIF tab's one-shot toast guard never
+        // re-arms and the warning silently fails to re-fire. Passing an empty object makes
+        // applyExemptionCauseSignals write both keys as `false` (resolved boolean), which is
+        // exactly the reset the guard needs. Ordered BEFORE refreshHeaderTotals so the false
+        // is what refreshHeaderTotals carries forward (it copies the signal keys from `prev`
+        // when the header GET returns), not overwritten by it.
+        applyExemptionCauseSignals({});
         // Refresh header to update totals after line deletion
         if (selected?.id) refreshHeaderTotals(selected.id);
-    }, [selected, refreshHeaderTotals]);
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
 
     const handleSaveAndProcess = useCallback(async (draftModeConfig) => {
         const saved = await handleSave({ silent: true });

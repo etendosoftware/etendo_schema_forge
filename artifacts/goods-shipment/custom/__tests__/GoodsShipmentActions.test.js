@@ -184,4 +184,34 @@ describe('GoodsShipmentActions', () => {
       assert.doesNotMatch(fmtAmount(1234.56, 'EUR'), /EUR/);
     });
   });
+
+  // ETP-4702 — regression guard. This component used to render its own private
+  // kebab popover (menuOpen/menuRef state, previously ~lines 207-237) as a SECOND,
+  // independent kebab button rendered next to the generic moreMenuContent kebab
+  // (Post/Unpost + the new GoodsShipmentMoreMenu "Download PDF" item). That
+  // duplicated the kebab menu on completed shipments. The private popover was
+  // removed outright — this component must never regrow it.
+  describe('no private kebab-menu popover (ETP-4702)', () => {
+    it('has no private kebab-menu open/close state', () => {
+      assert.doesNotMatch(src, /menuOpen/);
+    });
+
+    it('has no ref for a private kebab popover', () => {
+      assert.doesNotMatch(src, /menuRef/);
+    });
+
+    it('has no standalone kebab trigger character', () => {
+      assert.doesNotMatch(src, new RegExp(String.fromCharCode(0x22ee)));
+    });
+
+    it('still renders the Print button wired to handlePrint (untouched by the popover removal)', () => {
+      assert.match(src, /const handlePrint = async \(\) => \{/);
+      assert.match(src, /onClick=\{handlePrint\}/);
+      assert.match(src, /\{ui\('print'\)\}/);
+    });
+
+    it('still generates the shipment PDF via generateShipmentPdf for the print flow', () => {
+      assert.match(src, /generateShipmentPdf\(recordId, apiBaseUrl, token, pdfLabels\)/);
+    });
+  });
 });

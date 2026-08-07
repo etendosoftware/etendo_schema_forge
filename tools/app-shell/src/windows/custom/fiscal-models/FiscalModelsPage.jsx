@@ -4,6 +4,7 @@ import FmModel303Page from './models/303/FmModel303Page';
 import FmModel349Page from './models/349/FmModel349Page';
 import FmDebugPanel from './FmDebugPanel.jsx';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
+import { persistDeclarationStatus } from './fiscalModelsUtils.js';
 
 export default function FiscalModelsPage({ token, apiBaseUrl }) {
   const [view, setView] = useState({ type: 'list' });
@@ -45,8 +46,11 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onBack={handleBack}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          onStatusChange={(id, newStatus) => {
-            setView(v => v.type === '303' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
+          onStatusChange={async (id, newStatus) => {
+            const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl });
+            if (result.ok) {
+              setView(v => v.type === '303' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
+            }
           }}
           data-testid="FmModel303Page__ca1112" />
       )}
@@ -56,8 +60,11 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onBack={handleBack}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          onStatusChange={(id, newStatus) => {
-            setView(v => v.type === '349' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
+          onStatusChange={async (id, newStatus) => {
+            const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl });
+            if (result.ok) {
+              setView(v => v.type === '349' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
+            }
           }}
           data-testid="FmModel349Page__ca1112" />
       )}

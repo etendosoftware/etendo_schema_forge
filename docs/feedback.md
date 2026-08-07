@@ -596,3 +596,195 @@ removed, and it produced a form with neither defaults nor callouts at all.
 **Fix applied:** accepted `make regen-check ONLY=contacts FROM_CACHE=1`'s output wholesale (this is what CI's offline check itself computes, so it is the authoritative "correct" checksum for the currently-committed content) — committed the checksum/`updatedAt` bump on `contract.json` and `contract.mcp.json`. `npx sf-validate-pipeline --scope=contacts`: OK. A subsequent `make regen-check ONLY=contacts FROM_CACHE=1` run produces zero diff, confirming the branch is drift-free.
 
 **Lesson:** a pre-push/CI drift failure that touches ONLY `checksum`/`updatedAt` (no other content) on a window that was recently hand-patched for the es_ES label bug is most likely this checksum-recompute artifact, not a real content regression — verify with a full `git diff` (not a sampled one) before assuming it's the label-stripping bug again, and prefer `make regen-check ONLY=<window> FROM_CACHE=1` (the CI-equivalent, cache-backed command) over a live-DB `make regen` when investigating this specific class of drift, since the live DB reintroduces the unrelated es_ES gap and makes the two issues harder to tell apart.
+
+---
+
+## [2026-08-04] ETP-4718 — `SendDocumentModal`'s "Mensaje" field is hardcoded read-only, platform-wide (known gap, not fixed in this ticket)
+
+**Component:** `tools/app-shell/src/components/contract-ui/SendDocumentModal.jsx` (`EmailFormPanel`)
+
+**Affected windows:** every window that uses the document-send action (`SendDocumentModal`/`EmailFormPanel`) — not specific to any one window. Confirmed present on `return-to-vendor-shipment` while implementing ETP-4718, but the field's `readOnly` flag and its `value` (sourced from a hardcoded empty string) are set unconditionally inside the shared component, so this applies equally to every other document-send window (`sales-invoice`, `sales-order`, `sales-quotation`, `goods-shipment`, `purchase-order`, etc.).
+
+**Symptom:** in the Send Document dialog, the "Mensaje" (Message) field is rendered but not editable — the user cannot type a custom message body before sending.
+
+**Root cause:** `EmailFormPanel` hardcodes the Message field as `readOnly`, with its displayed `value` sourced from a hardcoded empty string, rather than wiring it to editable component state.
+
+**Why it wasn't fixed under ETP-4718:** ETP-4718's Jira acceptance criteria explicitly required the Message field to be "enabled and editable," so this is a known, currently-unresolved gap against that ticket's literal text. It was not fixed here because the fix lives in the shared `SendDocumentModal` component, not in anything scoped to a single window — changing it affects every window that uses document-send (sales-invoice, sales-order, sales-quotation, goods-shipment, return-to-vendor-shipment, purchase-order, etc.), which is out of scope for a single-window ticket. Confirmed independently by three parties: the coordinator (live browser test), Window Agent, and QA (Sentinel).
+
+**Recommendation:** file this as its own ticket. Scope: make the subject/message fields editable in `EmailFormPanel`, then wire the edited body into the send command per the contract command shape documented in `docs/document-email-contract-implementation.md` (note: the current command schema only allows `recipientEdits` as a recipient-related field — sending a free-text message body would need its own allowlisted command field and backend contract support, following the same "browser sends a minimal command, backend resolves/validates" model described there).
+
+**Reference:** `docs/generated-custom-windows/return-to-vendor-shipment.md` — Gap assessment section, ETP-4718 bullet — documents the same limitation from the window's perspective; this entry is the platform-wide, cross-window record of it.
+## [2026-08-04] ETP-4685 — List-type (`AD_Ref_List`) grid/filter columns showed English labels regardless of UI language
+
+**Component:** `schema_forge_core`'s `generate-frontend.js` (root cause, fixed in that repo — see its own `docs/feedback.md`/this repo's PR #1023 for the generator-side fix and `buildEnumLabelKey`), plus 3 consumers in this repo: `ProductCustomTable.jsx`, `InlineLinesPanel.jsx`, and the `registry.js` window map (investigation-only finding, no fix needed).
+
+**Symptom:** the "Tipo de producto" (Product Type) Advanced Filter in the Product window showed
+`Item`/`Service` in English no matter the active UI language, while the grid column showed
+"Servicio" for the same value — coincidentally correct, not a real translation (the AD menu entry
+happens to be named "Service", resolved through `useMenuLabel()`'s fallback chain, not through any
+actual `ProductType` translation).
+
+**Root cause:** the generator hardcoded each `AD_Ref_List` option's English `Name` directly into
+`enumLabels`, instead of an i18n key resolvable per-locale. The Spanish translation already existed
+in Etendo's own `AD_Ref_List_Trl` table and was never consulted for this purpose. Fixed at the
+generator level with `buildEnumLabelKey(columnName, valueCode)` — keyed by the stable `Value` CODE
+(e.g. `productTypeI`), not the mutable `Name`, matching the precedent already used by the
+`statuses` section (`rl.value`-keyed). This surfaced **two more consumers of `enumLabels` in this
+repo alone**, beyond the generated grid column itself:
+
+1. **`ProductCustomTable.jsx`** (hand-written custom table, duplicates the grid column definition
+   because Product overrides the generated table) — had its own hardcoded `enumLabels` with English
+   `Name` values, same bug, independent of the generator fix. Patched by hand to the same
+   code-keyed convention (`productTypeE/I/R/S`).
+2. **`InlineLinesPanel.jsx`** (the grid's **inline-edit** `<select>` for List-type columns — a
+   third rendering path, distinct from both the Advanced Filter and the read-only grid cell) — read
+   `col.enumLabels[value]` directly as the `<SelectItem>` label **without ever passing it through
+   `ui()`**. Before the generator fix this at least showed readable (if wrong-language) English
+   text; after the generator fix alone it would have shown the *raw i18n key* (e.g.
+   `"productTypeI"`) verbatim to the user — a regression, not a fix, if shipped without touching
+   this file too. Root cause specifically: `EditCell` (the component that actually renders the
+   `<select>`) never had `ui` in its scope or props — `renderLineCell` had it, but never forwarded
+   it down. Fixed by threading `ui` through: `renderLineCell` → `<EditCell ui={ui} />` → destructured
+   in `EditCell`'s signature → `{ui(label) ?? label}` for the option text.
+
+**Investigation-only finding (no fix applied, just documenting so it isn't re-investigated):**
+`tools/app-shell/src/windows/registry.js` declares `payment-out`, `sales-invoice`, and
+`purchase-invoice` **twice** as object keys — once pointing at the `@generated/...` module, later
+in the file at a `./custom/.../index.jsx` override. In a plain JS object literal the **later**
+key silently wins, so the earlier `@generated` entry for these 3 windows is dead code, never
+rendered. This matters for THIS ticket because it means these windows' generated List-type columns
+(if any) can never exhibit this bug in practice — the custom table is what actually renders.
+
+**Scope-check lesson (the expensive one):** an initial grep-based sweep for "any window with a
+List-type grid/filter column" turned up ~15 candidate windows. Live verification with the Chrome
+MCP browser tool against each one (not just re-reading the generated source) showed the *real*
+user-visible bug existed in only **2**: `contacts` and `tax`. The rest were false positives for one
+of three reasons: (a) already using a hand-written custom table that happened to translate
+correctly, (b) shadowed by the registry duplicate-key issue above (dead generated code, never
+reached), or (c) not actually reachable as a List-type filter in the current simplified UI. **Do
+not treat a grep/static "affected windows" list as the verification step — it is only a candidate
+list.** Confirm each one live before spending fix effort on it.
+
+**Drift-risk distinction (separate from the "does the user see a bug today" question):** bumping
+`schema_forge_core`'s package pin to get the generator fix affects **every** window with any
+List-type grid/filter column when it is next regenerated — roughly 20 windows by the same grep
+sweep above, a strict superset of the 2 windows with a live, user-visible bug. A window with no
+visible bug today (its List column happens to already resolve correctly some other way, or isn't
+reachable) will still show as "drifted" the moment someone else regenerates it after this pin bump,
+because its *generated file content* changes even though nothing was visibly broken. This is a
+distinct risk from "does it have the bug" and needs its own resolution (regenerate proactively vs.
+accept the drift and let the next core-pin-sync task absorb it) — see the ETP-4685 plan file for
+the decision point.
+
+**Lesson:** an i18n/label bug in a generated component can have more independently-broken
+consumers than the one the bug report describes — the reporter only sees the Advanced Filter and
+grid cell, but any custom override (`windows/custom/<x>/...`) or alternate render path
+(inline-edit, list-modal, form view) that duplicates `enumLabels` handling must be re-audited
+individually; grep for `enumLabels` repo-wide rather than assuming the generator fix alone covers
+every place a List-type value's label is displayed.
+
+---
+
+## [2026-08-04] ETP-4685 — Batch-regenerating after a generator fix: correct scoping, a real generator regression found, and ~20 unrelated pre-existing-drift windows that NO existing check will ever catch
+
+**Component:** the regen workflow around a generator-level fix (`generate-frontend.js` in
+`schema_forge_core`), plus a real bug in that same fix, plus a gap in this repo's own CI/hook
+coverage (`pipeline-validate.yml`, `offline-regen-check.yml`, `.githooks/pre-commit`,
+`cli/config/regen-windows.json`) unrelated to ETP-4685 itself but discovered while doing this work.
+
+**What the correct chain of steps actually is, for a `schema_forge_core` generator-level fix:**
+1. Fix + publish the generator (`schema_forge_core`, TDD, preview package via `publish-preview.yml`
+   or a real release).
+2. Bump the pin in the consuming repo (`package.json` + lockfiles for
+   `app-shell-core`/`schema-forge-cli`/`schema-forge-core`).
+3. **Get the authoritative "which windows changed" list from `sf-validate-pipeline` itself (its F16
+   rule — "generated file differs from generator output"), run with NO `--scope`/`--staged`/
+   `--changed-since` filter, across the whole repo** — not from a manual grep for the pattern you
+   think the fix touches. F16 only needs `contract.json` + `generated/`, so it works even for
+   windows with no `decisions.json`. A grep-based candidate list (what this ticket used first) can
+   both under- and over-count; the validator's own drift check is the ground truth.
+4. From that list, split windows into: (a) actually within this fix's blast radius (confirm by
+   diffing what changed — e.g. only `enumLabels` values) vs. (b) pre-existing, unrelated drift that
+   already existed before this fix (confirm this split empirically — see the "how we proved it"
+   paragraph below — never just by eyeballing the diff).
+5. For set (a) only: `make regen ONLY=<comma-separated list>`, review the diff file-by-file (watch
+   for the two regressions documented below and in the entry above — this is not a rubber-stamp
+   step), run tests, live-verify the windows with a real user-visible bug, commit.
+6. Leave set (b) alone and flag it as a separate, out-of-scope problem (see below) — do not fold
+   unrelated pre-existing drift into this PR.
+
+**What we actually ran (for the record, since "we just ran `make regen`" undersells what happened):**
+NOT a bare `make regen` (which — see below — wouldn't have touched most of set (b) anyway).
+`make regen ONLY=<the 27 windows whose generated files literally contain `enumLabels`>` — a list
+built by grep, i.e. before we had done step 3 above properly. This produced clean, expected diffs
+for 26 of them (one, `financial-account`, also picked up 3 files hit by the already-documented
+`AD_Ref_List_Trl` stale-cache label-stripping bug from earlier in this doc — reverted, unrelated to
+this fix). We ONLY discovered the ~20-window set (b) afterward, by separately running
+`SF_ROOT="$(pwd)" npx sf-validate-pipeline` with no scope at all — a read-only diagnostic, not a
+regen — across the whole repo out of general rigor. **`make regen` on those ~20 extra windows was
+then attempted and immediately no-opped** ("Skipping N window(s) without decisions.json" / "not in
+menu or no windowId: ... / No active windows to process") — confirming set (b) was never written to
+by anything we ran; its drift is 100% pre-existing.
+
+**Real generator regression found in step 5 (fixed by hand for now, root cause still open in
+`schema_forge_core`):** the fix applies `buildEnumLabelKey(columnName, valueCode)` to BOTH
+`type: 'enum'` and `type: 'status'` columns. For genuine `AD_Ref_List`-backed `status` columns
+(e.g. `DocStatus`) this is a real improvement. But for **boolean-like synthetic status fields**
+(`Processed` Y/N, or `true`/`false` — not `AD_Ref_List` values at all, just a column-name-derived
+pseudo-enum) the OLD generator already emitted the correct, working, hand-designed generic keys
+(`statusDraft`/`statusProcessed` — see `statusBadge.js`'s `MAP` and the matching, already-translated
+`genericLabels` entries). The new fix overwrote those with column-scoped keys
+(`processedN`/`processedY`/`processedTrue`/`processedFalse`) that have **no translation anywhere** —
+a regression from "correctly translated" to "raw key literally shown to the user", hit in exactly 3
+windows (`amortization`, `goods-movements`, `physical-inventory`). Detected by cross-checking every
+new key introduced by the batch regen against `genericLabels` in both locale files (163 new keys,
+159 already translated from the earlier broad extraction, 4 not — all 4 traced to this one pattern).
+Manually reverted those 3 fields to the old, working keys before presenting the diff; the actual fix
+(special-case boolean-like/non-`AD_Ref_List` status values in `generate-frontend.js` so they keep
+using the shared generic-key convention) is still open in `schema_forge_core`.
+
+**How we proved the ~20-window drift predates this fix (don't just assert it — show it):**
+`npm install --no-save` the prior released version (`0.3.24`, the pin before this ticket's bump),
+re-ran the same full-repo `sf-validate-pipeline`, and diffed the two violation lists. Every one of
+the 22 windows this fix legitimately touches showed up as "fixed by the bump" (violated under
+`0.3.24`, clean under the new preview). The ~20 unrelated windows showed **byte-identical**
+violations under both versions — proof they have nothing to do with this fix.
+
+**Why no existing check has ever caught the ~20-window drift (all three checked, all three miss it,
+confirmed by reading the actual workflow/hook source, not by assumption):**
+1. `.githooks/pre-commit` and CI's `pipeline-validate.yml` (on `pull_request`) both scope
+   `sf-validate-pipeline` to only what changed (`--staged` / `--changed-since=origin/<base>`
+   respectively). These ~20 windows are never part of anyone's diff (no `decisions.json`, mostly not
+   in `registry.js` — i.e. dead code, unreachable from the running app), so a scoped check can
+   never see them.
+2. `pipeline-validate.yml` DOES run unscoped on `push` to `main` — but with
+   `continue-on-error: true` ("shadow mode... keeps the job green even with violations") AND its
+   PR-comment step is gated on `github.event_name == 'pull_request'`. On the one run where it has
+   the right scope, nothing tells a human — the violations sit in an uploaded `validation.json`
+   artifact nobody has a reason to open.
+3. `offline-regen-check.yml` (mirrors the Jenkins "Offline Regeneration Check" stage) and the local
+   `pre-push` hook's drift check both run `make regen(-check)`, which is itself bounded by
+   `cli/config/regen-windows.json` — a curated allowlist of 46 window names that structurally
+   excludes all ~20 of these (they were presumably left out deliberately, since they have no
+   `decisions.json` to regenerate from). Scope is irrelevant here — this check never touches them
+   regardless of what changed.
+
+**Root windows affected (orphaned, not part of this fix, no `decisions.json`, mostly unregistered —
+likely leftover from an early CRM/HR exploratory extraction pass):** `absence`, `activity`,
+`bom-production`, `bp-location`, `commission`, `commission-payment`, `cost-adjustment`, `deal`,
+`document`, `employee`, `inventory-quality-inspection`, `landed-cost`, `lead`,
+`manage-requisitions`, `packing`, `project`, `recurring-invoice`, `requisition`,
+`stock-reservation`, `time-tracking`, `uom`, `warehouse-picking-list`, `warehouse-storage-bins`.
+Spot-checking a few (`absence`, `activity`, `document`, `employee`) by reproducing the current
+generator's output in `/tmp` (not committed) and diffing against the committed file shows the drift
+predates even ETP-4603's `forwardRef`/`InlineLinesPanel` inline-edit pattern and the
+`@sf-generated-start/end` marker convention — this is many generator generations of drift, not one.
+
+**Lesson:** after any `schema_forge_core` generator change, use the FULL, unscoped
+`sf-validate-pipeline` run as the authoritative discovery mechanism for "what needs regen" — not a
+grep for the pattern you think you changed (grep undercounted here: it missed nothing extra in this
+case, but there's no guarantee it always will) and not an assumption that CI/hooks would have caught
+unrelated drift already (they structurally cannot, for three independent reasons above). Treat any
+window with no `decisions.json` as out of scope for a normal fix-and-regen task — regenerating it
+requires first deciding whether to adopt it into the real pipeline at all, which is its own,
+separate piece of work.

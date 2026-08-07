@@ -106,7 +106,7 @@ describe('generate303File — guard clauses', () => {
   it('rejects a blank/whitespace-only IBAN for IBAN-required tipos', async () => {
     const result = await generate303File(
       { year: 2026, period: 'T1' },
-      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'G', bank_iban: '   ' } }
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'U', bank_iban: '   ' } }
     );
     assert.equal(result.error, 'iban_required');
   });
@@ -182,6 +182,7 @@ describe('generate303File — success path with identChecks and manualOverrides'
         apiBaseUrl: '/x',
         identChecks: {
           tipo_declaracion: 'N',
+          bank_iban: 'ES9121000418450200051332',
           rectificativa: true,
           nro_justificante: '999',
           motivo_rectificacion: 'R',
@@ -204,7 +205,12 @@ describe('generate303File — success path with identChecks and manualOverrides'
       {
         token: 'tok',
         apiBaseUrl: '/x',
-        identChecks: { tipo_declaracion: 'N', rectificativa: true, motivo_rectificacion: 'D' },
+        identChecks: {
+          tipo_declaracion: 'N',
+          bank_iban: 'ES9121000418450200051332',
+          rectificativa: true,
+          motivo_rectificacion: 'D',
+        },
       }
     );
     assert.match(capturedUrl, /AdministrativeDiscrepancyRectifyingReason=Y/);

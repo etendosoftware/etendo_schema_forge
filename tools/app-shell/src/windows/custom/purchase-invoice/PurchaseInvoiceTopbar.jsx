@@ -5,6 +5,7 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import SendToSifButton from '../shared/SendToSifButton.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import CloneButton from '../shared/CloneButton.jsx';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
@@ -32,7 +33,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
   const totalPaid = grandTotal - outstanding;
   const isFullyPaid = data.paymentComplete === true || data.paymentComplete === 'Y' || outstanding <= 0;
   const isCompleted = docStatus === 'CO';
-  // ETP-4737: resolved via getApSubtype — NOT a hardcoded doc-type-name check. A
+  // ETP-4737/ETP-4738: resolved via getApSubtype — NOT a hardcoded doc-type-name check. A
   // fixed name Set silently misses any new document type sharing the same
   // category (this is exactly how this badge missed "Factura Rectificativa
   // (compras)" until this fix; see PurchaseInvoiceHeaderTable.jsx for the same fix).
@@ -61,6 +62,10 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
             apiBaseUrl={apiBaseUrl}
             status={data?.documentStatus}
             data-testid="SendToSifButton__8addd1" />
+          <CopyRecordLinkButton
+            recordId={recordId}
+            windowName="purchase-invoice"
+            data-testid="CopyRecordLinkButton__8addd1" />
           {showClone && createPortal(
             <CloneOrderModal
               recordId={recordId}

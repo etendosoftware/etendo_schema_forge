@@ -5,6 +5,7 @@ import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import HeaderPage from '@generated/sales-invoice/generated/web/sales-invoice/HeaderPage';
@@ -78,10 +79,16 @@ const OVERDUE_INITIAL_COLUMNS = [
 
 function SalesInvoiceBulkAction(props) {
   return (
-    <BulkDocumentAction
-      {...props}
-      labelKey="confirmBulk"
-      data-testid="BulkDocumentAction__c01c21" />
+    <>
+      <BulkDocumentAction
+        {...props}
+        labelKey="confirmBulk"
+        data-testid="BulkDocumentAction__c01c21" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__c01c21" />
+    </>
   );
 }
 
@@ -215,6 +222,7 @@ export default function SalesInvoiceWindow(props) {
         dateFilterKey="invoiceDate"
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         rowQuickActions={rowQuickActions}
+        hideLink
         bulkActions={SalesInvoiceBulkAction}
         refreshTrigger={refreshKey}
         renderPreview={({ row, onClose, onEdit }) => (
