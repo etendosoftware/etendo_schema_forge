@@ -4,15 +4,20 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
-const repo = process.cwd();
 const input = JSON.parse(readFileSync(0, 'utf8'));
 const toolInput = input.tool_input ?? {};
-const filePath = path.resolve(repo, toolInput.file_path ?? toolInput.path ?? '');
+const filePath = path.resolve(process.cwd(), toolInput.file_path ?? toolInput.path ?? '');
 const isDetailView = /(?:^|\/)DetailView\.(?:jsx|tsx)$/.test(filePath);
 
 if (!isDetailView) process.exit(0);
 
-function runGit(args) {
+// Resolved from the FILE's own directory, never from process.cwd() — a hook
+// spawned while editing a file under a nested `git worktree add` checkout
+// (e.g. .worktrees/feature-X/) must use THAT worktree's root and HEAD, not
+// the main checkout's. Using cwd here silently produced a bogus relativePath
+// (base lookups landed on paths that never existed at that ref) and a
+// phantom "base has 0 lines" false-positive block.
+function runGit(repo, args) {
   return execFileSync('git', ['-C', repo, ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
@@ -24,14 +29,14 @@ function lineCount(source) {
   return source.split(/\r?\n/).length - (source.endsWith('\n') ? 1 : 0);
 }
 
-function resolveBaseRef() {
+function resolveBaseRef(repo) {
   const configured = process.env.DETAILVIEW_BASE_REF;
   const candidates = configured
     ? [configured]
     : ['origin/epic/ETP-3504', 'epic/ETP-3504', 'origin/main', 'main', 'origin/develop', 'develop'];
   return candidates.find((ref) => {
     try {
-      runGit(['rev-parse', '--verify', ref]);
+      runGit(repo, ['rev-parse', '--verify', ref]);
       return true;
     } catch {
       return false;
@@ -39,9 +44,9 @@ function resolveBaseRef() {
   });
 }
 
-function sourceAtBase(base, relativePath) {
+function sourceAtBase(repo, base, relativePath) {
   try {
-    return runGit(['show', `${base}:${relativePath}`]);
+    return runGit(repo, ['show', `${base}:${relativePath}`]);
   } catch {
     return '';
   }
@@ -63,15 +68,19 @@ function projectedSource(current) {
 }
 
 try {
+  const repo = execFileSync('git', ['-C', path.dirname(filePath), 'rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
   const relativePath = path.relative(repo, filePath);
-  const baseRef = resolveBaseRef();
+  const baseRef = resolveBaseRef(repo);
   if (!baseRef) {
     console.error('[detailview-growth] BLOCKED: no base ref found. Set DETAILVIEW_BASE_REF explicitly.');
     process.exit(2);
   }
 
-  const mergeBase = runGit(['merge-base', 'HEAD', baseRef]);
-  const baseSource = sourceAtBase(mergeBase, relativePath);
+  const mergeBase = runGit(repo, ['merge-base', 'HEAD', baseRef]);
+  const baseSource = sourceAtBase(repo, mergeBase, relativePath);
   const currentSource = existsSync(filePath) ? readFileSync(filePath, 'utf8') : '';
   const before = lineCount(currentSource);
   const baseline = lineCount(baseSource);
