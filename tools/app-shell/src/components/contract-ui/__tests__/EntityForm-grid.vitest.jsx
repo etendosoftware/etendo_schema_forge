@@ -131,4 +131,56 @@ describe('EntityForm — horizontal grid layout (ETP-4000)', () => {
     expect(grid.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
     expect(grid.className).not.toMatch(/(^|\s)md:grid-cols-4(\s|$)/);
   });
+
+  // ETP-4751 — `trailing` / `renderAsFragment` (inline SIF field flows into the header grid)
+  describe('trailing slot + renderAsFragment (ETP-4751)', () => {
+    it('renders `trailing` as an additional child INSIDE the grid container (flows into the next cell)', () => {
+      const { container } = render(
+        <EntityForm
+          fields={fields}
+          data={{}}
+          onChange={vi.fn()}
+          layout="horizontal"
+          trailing={<div data-testid="trailing-cell">extra</div>}
+        />
+      );
+      const grid = getGridWrapper(container);
+      const trailing = container.querySelector('[data-testid="trailing-cell"]');
+      expect(trailing).not.toBeNull();
+      // The trailing node is a DIRECT child of the grid container, so it flows into
+      // the next free grid cell alongside the native field cells — NOT below the grid.
+      expect(trailing.parentElement).toBe(grid);
+      // It is the LAST child, after the two field cells.
+      expect(grid.lastElementChild).toBe(trailing);
+    });
+
+    it('undefined `trailing` is strictly additive — no extra grid child, no behavior change', () => {
+      const { container } = render(
+        <EntityForm fields={fields} data={{}} onChange={vi.fn()} layout="horizontal" />
+      );
+      const grid = getGridWrapper(container);
+      // Only the two field cells; no phantom trailing node.
+      expect(grid.children.length).toBe(fields.length);
+    });
+
+    it('renderAsFragment emits bare field cells WITHOUT the wrapping grid container', () => {
+      const { container } = render(
+        <EntityForm
+          fields={[fields[0]]}
+          data={{}}
+          onChange={vi.fn()}
+          layout="horizontal"
+          renderAsFragment
+        />
+      );
+      // No grid wrapper: the top-level node is the field cell itself, not a
+      // `grid ...` container. This lets the caller splice the cell into ANOTHER
+      // form's grid via its `trailing` slot.
+      const top = container.firstElementChild;
+      expect(top).not.toBeNull();
+      expect(top.className || '').not.toMatch(/(^|\s)grid(\s|$)/);
+      // The field input still renders (registration/rendering intact).
+      expect(container.querySelector('[data-testid="field-name"]')).not.toBeNull();
+    });
+  });
 });

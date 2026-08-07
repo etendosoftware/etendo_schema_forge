@@ -10,6 +10,7 @@ import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shi
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { useShipmentPdf } from './useShipmentPdf';
@@ -44,6 +45,10 @@ function GoodsShipmentBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__9851c7" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__9851c7" />
     </>
   );
 }
@@ -128,6 +133,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}
         labelOverrides={LABEL_OVERRIDES}
+        hideLink
         bulkActions={GoodsShipmentBulkActions}
         renderPreview={({ row, onClose, onEdit }) => (
           <GoodsShipmentPreview
