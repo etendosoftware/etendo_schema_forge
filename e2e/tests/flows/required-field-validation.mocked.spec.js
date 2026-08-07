@@ -32,6 +32,18 @@ import { login } from '../helpers/auth.js';
  * (action-save-draft) button is the correct trigger for this test.
  */
 
+/**
+ * Budget for the FIRST visibility gate of each test — the one that waits for the
+ * window to finish mounting.
+ *
+ * 20s, not the usual 8s: on a cold dev server vite compiles this window's chunk
+ * on first request, and with several workers hitting it at once 8s is not enough.
+ * The spec then failed in parallel and passed when run alone, which reads as a
+ * product bug and is not one. Gates that run AFTER the form is already on screen
+ * keep their short timeouts — a slow assertion there is a real signal.
+ */
+const MOUNT_TIMEOUT = 20_000;
+
 async function installQuotationNewMocks(page, { postResponse } = {}) {
   // List endpoint — return empty so the page doesn't try to show a table.
   await page.route('**/sws/neo/sales-quotation/quotation', async (route) => {
@@ -85,7 +97,7 @@ test.describe('Required-field validation — /sales-quotation/new (ETP-3894)', (
   test('shows inline error on required field when saving empty form', async ({ page }) => {
     // Wait for the form to be fully rendered before clicking.
     const bpWrapper = page.getByTestId('field-businessPartner');
-    await expect(bpWrapper).toBeVisible({ timeout: 8_000 });
+    await expect(bpWrapper).toBeVisible({ timeout: MOUNT_TIMEOUT });
 
     // "Guardar" (save draft) is action-save-draft in draftMode windows.
     // Clicking it calls handleSave() which runs the formFieldsRef validation.
@@ -104,7 +116,7 @@ test.describe('Required-field validation — /sales-quotation/new (ETP-3894)', (
   // -------------------------------------------------------------------------
   test('toast appears when required fields are missing on save', async ({ page }) => {
     const bpWrapper = page.getByTestId('field-businessPartner');
-    await expect(bpWrapper).toBeVisible({ timeout: 8_000 });
+    await expect(bpWrapper).toBeVisible({ timeout: MOUNT_TIMEOUT });
 
     const saveDraftBtn = page.getByTestId('action-save-draft');
     await expect(saveDraftBtn).toBeVisible({ timeout: 5_000 });
@@ -124,7 +136,7 @@ test.describe('Required-field validation — /sales-quotation/new (ETP-3894)', (
     // Using the save button as the readiness signal — it only becomes visible once
     // the form is fully mounted and stable (no loading skeleton).
     const saveDraftBtn = page.getByTestId('action-save-draft');
-    await expect(saveDraftBtn).toBeVisible({ timeout: 8_000 });
+    await expect(saveDraftBtn).toBeVisible({ timeout: MOUNT_TIMEOUT });
 
     // No save attempt yet — the error element must not exist in the DOM.
     const bpError = page.getByTestId('error-businessPartner');
@@ -151,7 +163,7 @@ test.describe('Required-field validation — /sales-quotation/new (ETP-3894)', (
   // -------------------------------------------------------------------------
   test('renders the dd-MM-yyyy orderDate default as 14 May 2026', async ({ page }) => {
     const dateInput = page.getByTestId('field-orderDate');
-    await expect(dateInput).toBeVisible({ timeout: 8_000 });
+    await expect(dateInput).toBeVisible({ timeout: MOUNT_TIMEOUT });
     // DateField shows a locale-formatted value; es_ES is the app default and
     // gives dd/mm/yyyy.
     await expect(dateInput).toHaveValue('14/05/2026');

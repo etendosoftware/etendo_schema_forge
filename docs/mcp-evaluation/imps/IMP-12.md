@@ -699,3 +699,27 @@ row is a release, not a code gap.
 `label: "EM_Aeatsii_Cause_Exemption_ID"` and no `description`, while `sales-invoice/header` labels the
 same column *"SII - Cause Exemption"* (§11.4). Unchanged by this wave, as expected — it is an IMP-1
 missing-`AD_Field`-label gap and needs its own fix.
+
+**Root cause, pinned 2026-08-07.** Both specs read the *same* table and the *same* column
+(`C_Invoice.EM_Aeatsii_Cause_Exemption_ID`, re-probed live on `etendo-go-local`), so the difference
+cannot come from the column. It comes from the window: `AD_Field` has a row for that column only in
+the *Sales Invoice* and *Tax Rate* windows —
+
+```sql
+SELECT w.name AS window_name, t.name AS tab_name, f.name AS field_name, f.isdisplayed
+FROM ad_field f
+  JOIN ad_tab t    ON t.ad_tab_id = f.ad_tab_id
+  JOIN ad_window w ON w.ad_window_id = t.ad_window_id
+  JOIN ad_column c ON c.ad_column_id = f.ad_column_id
+WHERE c.columnname = 'EM_Aeatsii_Cause_Exemption_ID';
+-- Sales Invoice / Header / "SII - Cause Exemption" / Y
+-- Tax Rate     / Tax    / "SII - Cause Exemption" / Y
+-- (no row for Purchase Invoice)
+```
+
+— and with no `AD_Field` there is nothing to read a label or a `help` text from, so `neo_schema`
+falls back to the DB column name. This reframes part of IMP-1's remaining 43 raw labels: they are
+not all *unlabelled fields*, some are *absent `AD_Field` records*, and the two cases are fixed in
+different repos (an AD record in `com.etendoerp.go` vs an `applyCuratedLabels` override in
+`schema_forge_core`). Whoever picks IMP-1 up should run the query above per offending field first —
+the answer decides which repo the fix lands in.

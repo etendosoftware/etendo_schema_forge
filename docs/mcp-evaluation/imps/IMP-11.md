@@ -320,6 +320,21 @@ Two residual gaps, split by whether the MCP can see them:
   null. Measured — `neo_schema(purchase-invoice, basicDiscounts)` reports `fieldCount: 5` where the
   DB holds 9 rows. This also explains all 5 "mixed" entities, so e.g. `sales-order/header` still
   serves 97 fully-classified fields.
+
+  **Null-safety audited 2026-08-07** — "left alone" is only safe if every reader tolerates the null
+  column, so all 15 files touching `SFField` were checked. All 105 rows were created on
+  `2026-06-17`, the table's first day, and sit in just two specs (`sales-order` header/lines 56,
+  `purchase-invoice` lines/tax/basicDiscounts 49); every one of the 6235 rows written since has a
+  column. Each `getADColumn()` call site guards: `McpResourceProvider:412`, `ToolRegistry:794`,
+  `McpQuerySupport:211`, `McpSchemaFieldBuilder:158`/`:191`, `NeoDefaultsService:136`/`:464`/`:1301`,
+  `NeoSelectorService:97`/`:150`/`:392` skip or null-check explicitly, and
+  `NeoProcessService:250` delegates to `collectColumnInfo`, which null-checks first.
+
+  One site dereferences without a guard — `NeoDefaultsService:182`, pass 2 over `sequenceSFFields`
+  — and is safe only because pass 1 populates that list *after* its own `adColumn == null` check
+  ~45 lines earlier. It cannot NPE today, but the invariant is invisible at the point of use, so a
+  future reordering of the two passes would turn these inert rows into a 500 on
+  `neo_defaults(sales-order, header)`. A comment now marks the dependency.
 - **1892 fields across 105 *uncurated* entities — real impact, out of IMP-11's scope.** No contract
   covers them, and the writer loop iterates `extractFieldsFromContract`, so a regen has nothing to
   refresh them from. `neo_schema(sales-invoice, ticketbai)` returns 4 fields with **no**
