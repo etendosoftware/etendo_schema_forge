@@ -20199,8 +20199,6 @@
     "fm.action.more_options": "Más opciones",
     "fm.action.new_operator": "Nuevo operador",
     "fm.config.m303.regimes": "Regímenes fiscales",
-    "fm.config.declarant.concept_condition": "Condición sobre el concepto",
-    "fm.config.declarant.amount_tolerance": "Tolerancia de importe",
     "fm.m303.kpi.incidents": "Incidencias",
     "fm.col.model": "Modelo",
     "fm.col.year": "Año",
