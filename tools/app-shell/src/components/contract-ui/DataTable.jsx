@@ -12,7 +12,7 @@ import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
-import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
+import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
@@ -1925,8 +1925,15 @@ export function DataTable({
   }, [addRow?.fields]);
 
   const visibleColumns = useMemo(() => {
+    // ETP-4803 — drop columns that never render as a grid column in either
+    // lines renderer (e.g. `dimensionsPanel`) BEFORE any other filter. This
+    // must mirror InlineLinesPanel's own `visibleColumns` exactly, since
+    // DataTable's hidden `hideHeader` colgroup replicates that flex layout's
+    // math — a phantom column here desyncs `growColumnWidth()` for every
+    // subsequent column in the inline add-row form.
+    let base = columns.filter(isLineGridColumn);
     // Start from explicit hiddenColumns prop
-    let base = hiddenColumns.length > 0 ? columns.filter(col => !hiddenColumns.includes(col.key)) : columns;
+    base = hiddenColumns.length > 0 ? base.filter(col => !hiddenColumns.includes(col.key)) : base;
     // Auto-hide columns whose controlling field (displayIf) is inactive in ALL
     // saved rows AND in the current add-row values.
     if (Object.keys(displayIfControllers).length > 0) {
