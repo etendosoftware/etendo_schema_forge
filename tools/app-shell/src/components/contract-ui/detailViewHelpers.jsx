@@ -21,6 +21,17 @@ export function formatAmount(val, curr) {
   return formatCurrency(curr, val);
 }
 
+export function getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lineConfig, data) {
+  return bottomSection?.showLineTotals !== false ? (() => {
+    const total = selectedChildRows.reduce((acc, row) => {
+      const v = parseFloat(String(row?.[lineConfig.grossField] ?? row?.lineGrossAmount ?? 0));
+      return acc + (Number.isFinite(v) ? v : 0);
+    }, 0);
+    const curr = data?.['currency$_identifier'] || '';
+    return curr ? formatCurrency(curr, total) : total.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+  })() : null;
+}
+
 // ─── Layout / className helpers ───────────────────────────────────────────────
 
 function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
@@ -383,6 +394,34 @@ export function getAddLineWrapperClassName(linesLayout) {
   return linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-card z-10' : 'relative';
 }
 
+export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPadding = false } = {}) {
+  const inline = linesLayout === 'inlineEditable';
+  const padY = inline ? 8 : 10;
+  const padX = inline ? 8 : 16;
+  // Default keeps the original symmetric padding (numeric 8 for inlineEditable,
+  // '10px 16px' otherwise) so the primary path is byte-for-byte unchanged.
+  // noTopPadding drops ONLY the top so the add-button sits snug under the child
+  // table, while horizontal padding still aligns it with table content.
+  let padding;
+  if (noTopPadding) {
+    padding = `0 ${padX}px ${padY}px`;
+  } else if (inline) {
+    padding = padY;
+  } else {
+    padding = `${padY}px ${padX}px`;
+  }
+  return {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    // The top border separates the lines from the add-button in the primary
+    // header-lines path. Secondary/child tabs already have the table's own
+    // bottom border, so they pass withBorder:false to avoid a double divider.
+    ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, hsl(var(--border-subtle)))' } : {}),
+    padding
+  };
+}
+
 export function resolveCanAddLines(addLineGuard, data, requiredHeaderFields, children = []) {
   if (addLineGuard) {
     return addLineGuard(data, children);
@@ -394,6 +433,19 @@ export function resolveCanAddLines(addLineGuard, data, requiredHeaderFields, chi
   } else {
     return true;
   }
+}
+
+// ETP-4565 — st.maxDetailLines mirrors window.maxDetailLines' semantics
+// (generator: `addLineGuard={(_, children) => children.length < N}`) but is
+// declared per secondary tab (`window.secondaryTabs.<key>.maxDetailLines` in
+// decisions.json), since a window can have several secondaryTabs that each
+// need an independent cap (e.g. contacts' customerAccounting/vendorAccounting).
+// `N > 0` hides the add affordances once the tab's own child count reaches N;
+// `0` disables manual add entirely (import-only-style, matching maxDetailLines:0
+// on the detailEntity pattern). Undeclared (null/undefined) stays uncapped —
+// today's behavior for every secondaryTabs entry that predates this flag.
+export function resolveCanAddSecondaryLines(st, childrenCount) {
+  return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
 export async function parseBackendErrorMessage(res) {
@@ -1012,6 +1064,114 @@ export function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
         ? parseFloat((gross / taxFactor).toFixed(6))
         : gross;
   }
+}
+
+// ─── Primary line row handlers ──────────────────────────────────────────────
+
+export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui }) {
+  return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
+    // Inline autosave with callout chain. NEO Headless expects API keys
+    // (camelCase), an unwrapped body, and numeric strings coerced for
+    // BigDecimal — mirrors the side-panel save at line ~1750. When a
+    // trigger field changes (e.g., product), `handleLineFieldChange`
+    // populates `derivedUpdates` with all callout-driven fields (price,
+    // tax, description, etc.) so they can be PATCHed in one shot.
+    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+        || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+    const coerce = (v) => (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v);
+    const payloadValue = coerce(value);
+
+    // Build the row snapshot the callout sees: existing row + the change.
+    // Strip null/empty inherited keys that the parent has set (e.g.
+    // businessPartner, priceList on OrderLine). buildCalloutFormState
+    // by contract does NOT overwrite a row value with the header's,
+    // so without this prune the callout would receive
+    // businessPartner=null and NEO returns listPrice=0. The addRow
+    // flow doesn't hit this because it starts from an empty values
+    // object, but existing rows include denormalized parent keys.
+    const headerSnapshot = hook.editing || hook.selected || {};
+    const cleanRow = {...row};
+    for (const k of Object.keys(headerSnapshot)) {
+      const v = cleanRow[k];
+      if (v === null || v === undefined || v === '') {
+        delete cleanRow[k];
+      }
+    }
+    const snapshot = {...cleanRow, [fieldKey]: payloadValue};
+    if (opts?.identifier !== undefined) {
+      snapshot[fieldKey + '$_identifier'] = opts.identifier;
+    }
+    // Mirror DataTable's selector-aux merge (lines 468–512). The
+    // selector item carries `_aux` (product_PSTD, _PLIM, _UOM, _CURR)
+    // and top-level fields (standardPrice, isTaxIncluded, currency)
+    // that the callout needs to compute the price. Without this, the
+    // callout has no access to the price-list metadata and returns 0.
+    const selectedItem = opts?.selectedItem;
+    if (selectedItem && typeof selectedItem === 'object') {
+      mergeSelectorAuxFields(selectedItem, snapshot, fieldKey);
+      mergeSelectorContextFields(selectedItem, snapshot, fieldKey);
+    }
+
+    // Run callout (no-op for fields without one). Captures derived fields
+    // through the applyUpdates callback so we can fold them into the PATCH.
+    let derivedUpdates = {};
+    try {
+      await handleLineFieldChange(fieldKey, payloadValue, snapshot, (updates) => {
+        derivedUpdates = {...updates};
+      });
+    } catch {
+      // Callout is best-effort; PATCH continues with the user-typed value only.
+    }
+
+    // PATCH body: send the full row + derived + change. NEO Headless
+    // doesn't reliably recompute derived fields (lineGrossAmount,
+    // standardPrice) when only a partial body arrives — observed
+    // when changing product to one with a different price. The
+    // side-panel save (line ~1750) sends the whole row for the same
+    // reason, so we mirror that here for parity.
+    const fieldValues = {};
+    // 1. Start from the cleaned row (skips already-null inherited keys).
+    collectRowFieldValues(cleanRow, fieldValues, coerce);
+    // 2. Overlay derived fields from the callout (incl. lineGrossAmount,
+    //    standardPrice, unitPrice, listPrice).
+    for (const [k, v] of Object.entries(derivedUpdates)) {
+      if (k.endsWith('$_identifier')) continue;
+      fieldValues[k] = coerce(v);
+    }
+    // 3. The user-changed field always wins (last-write).
+    fieldValues[fieldKey] = payloadValue;
+
+    // Derive unitPrice (PriceActual) = listPrice × (1 - discount/100).
+    // Without this the backend keeps the pre-discount PriceActual and
+    // confirmed totals don't match the discounted lineNetAmount we just
+    // computed — matches the side-panel save flow.
+    prepareLineForPost(fieldValues);
+
+    const res = await fetch(childUrl, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+      body: JSON.stringify(fieldValues),
+    });
+    if (res.ok) {
+      applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue, fieldValues, opts, hook, row);
+      // Server response wins over the optimistic cache when present —
+      // picks up trigger-computed fields (e.g. etgoQtydiff) that only
+      // exist after the DB flush, mirroring the secondary-tab handler
+      // above (line ~425). NEO wraps the saved record in
+      // {response:{data:[...]}}.
+      const updated = await res.json().catch(() => null);
+      const serverRow = updated?.response?.data?.[0] ?? null;
+      // ETP-4751 — pass the raw response ROOT (`updated`) as the exemption-cause signal source:
+      // InvoiceLineHandler stamps exemptionCauseWarning/exemptionCauseAutoFilled at the response
+      // root, not on the nested line row (`serverRow`), so a line EDIT that turns a line exempt
+      // still surfaces the SIF warning toast.
+      if (serverRow) hook.handleUpdateChild?.(row.id, serverRow, undefined, updated);
+    } else {
+      const msg = await extractErrorMessage(res);
+      toast.error(msg || ui('networkError'));
+      throw new Error(msg || 'PATCH failed');
+    }
+  } : undefined;
 }
 
 // ─── Secondary tab handlers ──────────────────────────────────────────────────

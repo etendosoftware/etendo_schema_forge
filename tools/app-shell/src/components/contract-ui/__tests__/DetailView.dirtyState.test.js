@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'DetailView.jsx'), 'utf8');
+const saveActionsSrc = readFileSync(join(__dirname, '..', 'DetailSaveActions.jsx'), 'utf8');
 
 /**
  * Regression guard for the dirty-state Save button feature added in ETP-3662.
@@ -48,29 +49,30 @@ describe('DetailView — Save button disabled conditions (ETP-3662)', () => {
     // action-save-draft is the Save Draft button in draftMode windows. It checks
     // isSaving, !isDirty, AND blockSaveForBalance (ETP-4244 balance footer gate) —
     // an unbalanced journal must not be persistable even as a draft.
-    assert.match(src, /data-testid="action-save-draft"[^>]*disabled=\{hook\.isSaving \|\| !isDirty \|\| blockSaveForBalance\}/);
+    // These patterns now live in DetailSaveActions.jsx (extracted from DetailView).
+    assert.match(saveActionsSrc, /data-testid="action-save-draft"[^>]*disabled=\{hook\.isSaving \|\| !isDirty \|\| blockSaveForBalance\}/);
   });
 
   it('gates the existing-record Save button with !isDirty', () => {
     // The non-draftMode existing-record Save button checks isDocumentReadOnly, isSaving, !isDirty,
     // AND blockSaveForBalance (ETP-4244 balance footer gate).
-    assert.match(src, /disabled=\{isDocumentReadOnly \|\| hook\.isSaving \|\| !isDirty \|\| blockSaveForBalance\}/);
+    assert.match(saveActionsSrc, /disabled=\{isDocumentReadOnly \|\| hook\.isSaving \|\| !isDirty \|\| blockSaveForBalance\}/);
   });
 
   it('does NOT gate the new-record Save button with isDirty', () => {
     // New-record Save must only check isDocumentReadOnly, isSaving, and blockSaveForBalance — never !isDirty.
-    assert.match(src, /disabled=\{isDocumentReadOnly \|\| hook\.isSaving \|\| blockSaveForBalance\}/);
+    assert.match(saveActionsSrc, /disabled=\{isDocumentReadOnly \|\| hook\.isSaving \|\| blockSaveForBalance\}/);
   });
 
   it('does NOT gate the draftMode Confirm button with !isDirty', () => {
     // The Confirm button in draftMode is gated by hook.isSaving and blockCompleteForBalance
     // (ETP-4244 balance/empty footer gate) — but NEVER by !isDirty.
-    assert.match(src, /data-testid="action-save" disabled=\{hook\.isSaving \|\| blockCompleteForBalance/);
+    assert.match(saveActionsSrc, /data-testid="action-save" disabled=\{hook\.isSaving \|\| blockCompleteForBalance/);
     // Double-check: the full disabled expression for the Confirm button must NOT contain !isDirty.
     // (It may contain !hook.childrenLoading — that token is unrelated and must not trip a false match.)
-    const confirmIdx = src.indexOf('data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance');
+    const confirmIdx = saveActionsSrc.indexOf('data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance');
     assert.notEqual(confirmIdx, -1);
-    const around = src.slice(confirmIdx, confirmIdx + 200);
+    const around = saveActionsSrc.slice(confirmIdx, confirmIdx + 200);
     assert.doesNotMatch(around, /!isDirty/);
   });
 });
@@ -82,12 +84,13 @@ describe('DetailView — distinct test ids for new-record Save vs Confirm (PR #7
     // collide with the new-record Save button and make getByTestId('action-save')
     // ambiguous in E2E. The draftMode Confirm keeps action-save (its disabled
     // expression has a trailing "|| (draftMode..." so it won't match this regex).
-    assert.match(src, /data-testid="action-complete" disabled=\{hook\.isSaving \|\| blockCompleteForBalance\}/);
+    // Patterns live in DetailSaveActions.jsx (extracted from DetailView).
+    assert.match(saveActionsSrc, /data-testid="action-complete" disabled=\{hook\.isSaving \|\| blockCompleteForBalance\}/);
   });
 
   it('does not render two action-save buttons in the new-record path', () => {
     // Guard against re-introducing the duplicate: the new-record Confirm must not
     // carry the same gate-expression as a second action-save.
-    assert.doesNotMatch(src, /data-testid="action-save" disabled=\{hook\.isSaving \|\| blockCompleteForBalance\}/);
+    assert.doesNotMatch(saveActionsSrc, /data-testid="action-save" disabled=\{hook\.isSaving \|\| blockCompleteForBalance\}/);
   });
 });
