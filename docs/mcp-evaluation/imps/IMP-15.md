@@ -356,11 +356,15 @@ evidence for §9.2.1.
    green in §9.6, but the module's test suite has not been run against them.
 2. **A `/mcp-comparison` run** to move the status mark and MARI. The code side of IMP-15 is done:
    all four clauses are credited live (§9.1 + §9.6).
-3. **A regression test for the injection.** Three probe rounds died on the same predicate. The test
-   must assert the case that actually broke: the injection **overrides** a `uOM` the defaults pass
-   put in the body (a real id for the wrong UOM) and **preserves** one the caller supplied — not
-   merely that it fires on `""` / `"0"` / `JSONObject.NULL`, which is what the last two fixes
-   over-fitted to. Delegate to Tester per the repo's testing rule.
+3. ~~A regression test for the injection.~~ **Done** — `f0e488de` extends
+   `src-test/src/com/etendoerp/go/schemaforge/NeoCommercialLinePolicyTest.java` with 9 cases, all
+   additive (187 lines added, 0 removed). The load-bearing one is
+   `testInjectProductDerivedUom_defaultsGuessPresent_userDidNotProvideIt_isOverridden`: body carries
+   the real Centimeter id `ADF850C3E6E9413B9F9EEA5C87456073`, `userProvidedUom = false`, and the
+   assertion is that it is **overridden** with the product's `"100"`. That single test fails against
+   all three broken fixes, which the sentinel-only cases (`""` / `"0"` / `"null"`) do not — the file
+   carries a comment saying so, so nobody "simplifies" it away later. The companion case asserts a
+   caller-supplied `uOM` survives untouched with `obDal.verifyNoInteractions()`. **Not yet run.**
 4. **Register the §9.2 defects** in the registry as new items, plus the line-level `orderDate`
    omission found in §9.4 (same class as §9.2.2 — `neo_schema view:"create"` under-reporting
    required fields, now observed on both `header` and `lines`).
