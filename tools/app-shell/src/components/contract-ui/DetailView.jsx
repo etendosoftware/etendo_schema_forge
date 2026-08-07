@@ -4,49 +4,8 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
-import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
-import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
-
-const TAB_ICONS = {
-  'custom:attachments': AttachmentIcon,
-  'custom:sif': Shield,
-  'custom:pricing': PricingIcon,
-  'products': WarehouseProductsIcon,
-};
-
-function TabStripButton({
-  iconKey, label, count, isActive, onClick,
-  paddingY = 'py-2.5', showHoverLine = false, indicatorCls, tMenu, testId,
-}) {
-  const defaultCls = 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
-  return (
-    <button
-      onClick={onClick}
-      data-testid={testId}
-      className={[
-        `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium transition-colors relative`,
-        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-      ].join(' ')}
-    >
-      {React.createElement(TAB_ICONS[iconKey] ?? List, { className: 'h-4 w-4' })}
-      {tMenu(label)}
-      {count != null && (
-        <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">
-          {count}
-        </span>
-      )}
-      {showHoverLine ? (
-        <span className={[
-          'absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-colors',
-          isActive ? 'bg-foreground' : 'bg-transparent group-hover:bg-muted-foreground/30',
-        ].join(' ')} />
-      ) : (
-        isActive && <span className={indicatorCls || defaultCls} />
-      )}
-    </button>
-  );
-}
+import { X, Check, Save, Printer, Mail, Trash2, Loader2, Lock, Undo2 } from 'lucide-react';
+import { TabStripButton } from './TabStripButton';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
@@ -76,13 +35,6 @@ import {
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-
-// DocumentTotalsPanel/BalanceFooterPanel call their `formatAmount` prop as
-// (value, currency) — keep that signature here, delegating to the shared
-// formatCurrency(currencyCode, value) util, whose argument order is reversed.
-function formatAmount(val, curr) {
-  return formatCurrency(curr, val);
-}
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
@@ -97,102 +49,15 @@ import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
+  applyCalloutComboUpdates, detailContentPadding, formatAmount, getTabStripBleedClassName, resolveSecondaryRowClickHandler,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
 // Only the definition site moved (R1: no test was edited).
 export {
-  SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
+  SecondaryPanelTab, applyCalloutComboUpdates, applyCalloutFieldUpdates, getTabStripBleedClassName, applyLocalChildRowUpdate, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
 } from './detailViewHelpers.jsx';
-
-/**
- * Compute the padding classes for the main detail content column.
- *
- * Combinations:
- *  - `hasSidebar` true → reserved space for the right side panel (pr-2 inline,
- *    pl-6 pr-2 classic).
- *  - `hasSidebar` false, variant `'panel'` → standalone Panel tab (pr-6 inline,
- *    px-6 classic).
- *  - `hasSidebar` false, variant `'content'` → form content card (no padding
- *    inline because the inner card supplies its own, px-6 classic).
- *
- * Extracted from inline JSX to avoid the nested-ternary anti-pattern Sonar
- * S3358 was flagging inside the className templates.
- */
-function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
-  const isInline = linesLayout === 'inlineEditable';
-  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
-  if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
-  return isInline ? '' : (paddingXOverride ?? 'px-6');
-}
-
-const BLEED_AXIS = { px: 'mx', pr: 'mr', pl: 'ml' };
-
-/**
- * Horizontal bleed for the secondary tab strip, so its bottom border reaches both
- * edges of the panel instead of starting a few pixels in.
- *
- * The strip is a sibling of the form card inside the padded content column (the only
- * thing between them is `getLinesTabsSectionClassName`'s `mt-2`), so it inherits that
- * column's horizontal padding. Each padding token is cancelled with a matching negative
- * margin and then re-applied inside, which moves the border out to the edges while
- * leaving the tab buttons exactly where they were. Derived from the SAME
- * `detailContentPadding()` inputs as the column itself so the two cannot drift.
- */
-export function getTabStripBleedClassName({
-  linesLayout,
-  sidePanel,
-  sidebarContent,
-  sidebarAboveTabsOnly,
-  compactSidebarPadding,
-  formScrollPaddingX = null,
-} = {}) {
-  const padding = detailContentPadding(
-    linesLayout,
-    !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)),
-    'content',
-    compactSidebarPadding,
-    formScrollPaddingX,
-  );
-  return padding
-      .split(/\s+/)
-      .filter(Boolean)
-      .flatMap((token) => {
-        const match = /^(px|pr|pl)-(.+)$/.exec(token);
-        if (!match) return [];
-        return [`-${BLEED_AXIS[match[1]]}-${match[2]}`, token];
-      })
-      .join(' ');
-}
-
-/**
- * Resolve the `onRowClick` handler for a secondary-tab table.
- *
- * Priority:
- *  1. `customAddModal` tabs (e.g. Dirección) → click opens the popup editor.
- *  2. Tabs with a `Form` AND a non-inline layout → click selects the row for
- *     the side-panel form.
- *  3. Inline-editable tabs → no row click handler. Editing happens in place via
- *     the pencil action; opening a side panel would defeat that UX.
- */
-function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout }) {
-  if (st.customAddModal) return openCustomModal;
-  if (st.Form && linesLayout !== 'inlineEditable') return openSecondaryLine;
-  return undefined;
-}
-
-export function applyCalloutComboUpdates(combos, ctx) {
-  const { triggerField } = ctx;
-  for (const [key, combo] of Object.entries(combos)) {
-    // Never override the field the user just changed via its own combo response.
-    // The callout may refresh the list of options for that field, but the user's
-    // explicit selection must always win — auto-selecting the first entry would
-    // silently revert their choice (e.g., NC → FAC on invoice doc type).
-    if (key === triggerField) continue;
-    applyOneComboEntry(key, combo, ctx);
-  }
-}
 
 /**
  * Returns the `onSelectionChange` handler for a secondary tab when the lines

@@ -11,6 +11,7 @@ import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
+import {formatCurrency} from '@/lib/formatCurrency.js';
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
@@ -933,5 +934,71 @@ export function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
     result.netUnitPrice = taxFactor != null && taxFactor > 1
         ? parseFloat((gross / taxFactor).toFixed(6))
         : gross;
+  }
+}
+
+// (value, currency) signature — delegates to formatCurrency(currencyCode, value) whose arg order is reversed.
+export function formatAmount(val, curr) {
+  return formatCurrency(curr, val);
+}
+
+function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
+  const isInline = linesLayout === 'inlineEditable';
+  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
+  if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
+  return isInline ? '' : (paddingXOverride ?? 'px-6');
+}
+
+const BLEED_AXIS = { px: 'mx', pr: 'mr', pl: 'ml' };
+
+/**
+ * Horizontal bleed for the secondary tab strip, so its bottom border reaches both
+ * edges of the panel instead of starting a few pixels in.
+ *
+ * The strip is a sibling of the form card inside the padded content column (the only
+ * thing between them is `getLinesTabsSectionClassName`'s `mt-2`), so it inherits that
+ * column's horizontal padding. Each padding token is cancelled with a matching negative
+ * margin and then re-applied inside, which moves the border out to the edges while
+ * leaving the tab buttons exactly where they were. Derived from the SAME
+ * `detailContentPadding()` inputs as the column itself so the two cannot drift.
+ */
+export function getTabStripBleedClassName({
+  linesLayout,
+  sidePanel,
+  sidebarContent,
+  sidebarAboveTabsOnly,
+  compactSidebarPadding,
+  formScrollPaddingX = null,
+} = {}) {
+  const padding = detailContentPadding(
+    linesLayout,
+    !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)),
+    'content',
+    compactSidebarPadding,
+    formScrollPaddingX,
+  );
+  return padding
+      .split(/\s+/)
+      .filter(Boolean)
+      .flatMap((token) => {
+        const match = /^(px|pr|pl)-(.+)$/.exec(token);
+        if (!match) return [];
+        return [`-${BLEED_AXIS[match[1]]}-${match[2]}`, token];
+      })
+      .join(' ');
+}
+
+export function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout }) {
+  if (st.customAddModal) return openCustomModal;
+  if (st.Form && linesLayout !== 'inlineEditable') return openSecondaryLine;
+  return undefined;
+}
+
+export function applyCalloutComboUpdates(combos, ctx) {
+  const { triggerField } = ctx;
+  for (const [key, combo] of Object.entries(combos)) {
+    // Never override the field the user just changed via its own combo response.
+    if (key === triggerField) continue;
+    applyOneComboEntry(key, combo, ctx);
   }
 }
