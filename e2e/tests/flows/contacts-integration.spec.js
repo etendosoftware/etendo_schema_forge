@@ -467,8 +467,8 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(addAddrBtn.first()).toBeVisible({ timeout: 5_000 });
     await addAddrBtn.first().click();
 
-    // Address uses a modal ("Ubicación") — wait for it
-    await expect(page.getByText(/^ubicaci[oó]n$/i)).toBeVisible({ timeout: 5_000 });
+    // Address uses a modal ("Dirección") — wait for it
+    await expect(page.getByText(/^direcci[oó]n$/i)).toBeVisible({ timeout: 5_000 });
 
     // The modal overlay is: div.fixed.inset-0.z-50
     // Modal inputs are the ones with class border-gray-300 (no name/testid)

@@ -1101,6 +1101,52 @@ instead of the default input when it detects this property.
   `en_US.json` and `es_ES.json` under `genericLabels`.
 - This is a form-only feature: the grid column always uses the standard cell renderer.
 
+### Input Prefix (`inputPrefix`)
+
+Renders a fixed, non-editable chip immediately before a text input inside `EntityForm` —
+e.g. a `"https://"` scheme for a website field whose stored column value is only the part
+after the scheme. Purely visual + validation-aware; the chip's text is never part of the
+value the field reads from or writes to `data`.
+
+```json
+"etgoWeb": {
+  "visibility": "editable",
+  "form": true,
+  "inputPrefix": "https://"
+}
+```
+
+The generator emits `inputPrefix: 'https://'` verbatim into the field descriptor in the
+generated fields array. `EntityForm`'s `renderInputField` wraps the input in a chip +
+input row (same visual pattern as `OrganizationPage.jsx`'s hand-built "Sitio web" field)
+whenever `f.inputPrefix` is present; fields without it render exactly as before.
+
+**Validation:** `recipientEdits.js`'s format validators (`getEmailFieldError`,
+`getWebsiteFieldError`, `getPhoneFieldError` — wired into `useEntity.js`'s save gate)
+reconstruct the full value as `field.inputPrefix + value` before checking, so a prefixed
+field validates identically to an unprefixed one storing its full value directly. This is
+generic — not website-specific — so an email or phone field could adopt a fixed prefix
+later with zero validator code changes.
+
+**Rules:**
+- Only meaningful on text-type fields rendered via the default `<Input>`/`<DeferredInput>`
+  path in `renderInputField` — declaring it on a select/FK/checkbox field has no effect.
+- The prefix text itself is a literal string, not an i18n key — it is not expected to
+  vary by locale (e.g. `"https://"` is the same everywhere). If a locale-varying prefix
+  is ever needed, that is a new, separate feature, not a use of this property.
+- Do not confuse with `subPrefix` (`generate-frontend.js`/`listModalCells.jsx`) — an
+  unrelated concept for composite **grid-cell** rendering, not a form input.
+
+**Known limitation — legacy data:** the value shown in the input is always the raw stored
+column value, verbatim. If a field already has existing records whose stored value
+includes the scheme (e.g. `etgoWeb = "https://hola.com"` from before `inputPrefix` was
+enabled), the chip renders on top of that, showing the scheme twice (`https:// | https://hola.com`)
+until the underlying data is cleaned up — `EntityForm` does not strip a duplicated prefix
+from the displayed value. Saving without touching the field persists the value unchanged
+(no data corruption), but the visual duplication remains until fixed. Prefer enabling
+`inputPrefix` on new fields, or pair it with a data migration when adding it to a field
+that already has values stored with the scheme included.
+
 ### Logic & Behavior
 
 | Property | Type | Default | Purpose |
