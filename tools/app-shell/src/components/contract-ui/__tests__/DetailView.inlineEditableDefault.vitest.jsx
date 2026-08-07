@@ -1,10 +1,17 @@
 /**
- * Covers the secondaryDeleteConfirm dialog's real DELETE flow — reached by
- * selecting a secondary-tab row (openSecondaryLine, via st.Table's
- * onRowClick) then clicking "delete" in its sidebar (secondaryDetailSidebar's
- * onDeleteLine), which is otherwise never exercised elsewhere.
+ * ETP-4763 — guards the new default `linesLayout='inlineEditable'` for
+ * DetailView's primary lines table.
+ *
+ * Before this change the default was 'classic', so clicking a line row
+ * opened the right-hand DetailForm sidebar (buildLineRowClickHandler,
+ * detailViewHelpers.jsx). The default flip means a row click now does
+ * NOT open that sidebar unless a window explicitly opts back into
+ * `linesLayout="classic"`. This is intentionally a single, obvious place
+ * to catch a future accidental default change in either direction.
+ *
+ * Harness mirrors DetailView.lineSidebarSaveDeleteFlow.vitest.jsx.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { DetailView } from '../DetailView.jsx';
@@ -26,7 +33,7 @@ const mockHook = {
   items: [],
   selected: { id: '123', documentNo: 'SO-001', documentStatus: 'DR', processed: false },
   editing: { id: '123', documentNo: 'SO-001', documentStatus: 'DR', processed: false },
-  children: [],
+  children: [{ id: 'L1', product: 'P1', 'product$_identifier': 'Widget', unitPrice: 10, lineNetAmount: 100 }],
   isDirtyHeader: false,
   loadingChildren: false,
   childrenLoading: false,
@@ -48,17 +55,8 @@ const mockHook = {
   primeSaved: vi.fn(),
 };
 
-const SECONDARY_ROWS = [{ id: 'ADDR-1', street: 'Main St' }];
-const secondaryHandleDeleteChild = vi.fn();
-
 vi.mock('@/hooks/useEntity', () => ({
-  useEntity: (entity, detailEntity) => {
-    if (detailEntity === 'lines') return mockHook;
-    if (detailEntity === 'addresses') {
-      return { ...mockHook, children: SECONDARY_ROWS, handleDeleteChild: secondaryHandleDeleteChild };
-    }
-    return { ...mockHook, children: [] };
-  },
+  useEntity: () => mockHook,
   extractErrorMessage: async () => 'Error',
 }));
 
@@ -202,26 +200,22 @@ const MockForm = ({ data }) => (
   </div>
 );
 
-const MockTable = ({ data }) => (
-  <div data-testid="mock-table">
-    {(data || []).map(r => <div key={r.id}>{r.id}</div>)}
-  </div>
-);
-
-// Secondary tab's own Table — exposes onRowClick (= openSecondaryLine, since
-// st.Form is set and linesLayout is explicitly 'classic' below).
-const StubSecondaryTable = ({ data, onRowClick }) => (
-  <div data-testid="stub-secondary-table">
+// Same stub shape as DetailView.lineSidebarSaveDeleteFlow.vitest.jsx — exposes
+// onRowClick directly so the test doesn't depend on any particular table markup.
+const StubDetailTable = ({ data, onRowClick }) => (
+  <div data-testid="stub-detail-table">
     {(data || []).map(r => (
-      <button key={r.id} type="button" data-testid={`secondary-row-${r.id}`} onClick={() => onRowClick?.(r)}>
+      <button key={r.id} type="button" data-testid={`row-${r.id}`} onClick={() => onRowClick?.(r)}>
         {r.id}
       </button>
     ))}
   </div>
 );
 
-const StubSecondaryForm = ({ data }) => (
-  <div data-testid="stub-secondary-form">{data?.id}</div>
+const StubDetailForm = ({ data }) => (
+  <div data-testid="stub-detail-form">
+    <span data-testid="stub-detail-form-data">{JSON.stringify(data)}</span>
+  </div>
 );
 
 function renderDetailView(props = {}) {
@@ -231,8 +225,8 @@ function renderDetailView(props = {}) {
         entity="header"
         detailEntity="lines"
         Form={MockForm}
-        DetailTable={MockTable}
-        DetailForm={null}
+        DetailTable={StubDetailTable}
+        DetailForm={StubDetailForm}
         summary={[]}
         statusField="documentStatus"
         processes={[]}
@@ -246,71 +240,33 @@ function renderDetailView(props = {}) {
         token="test-token"
         apiBaseUrl="/api/sales-order"
         breadcrumb="Sales / Orders"
-        // linesLayout now defaults to 'inlineEditable' (ETP-4763), which also
-        // gates resolveSecondaryRowClickHandler off — pin 'classic' so the
-        // secondary sidebar row-click flow under test stays reachable.
-        linesLayout="classic"
-        secondaryTabs={[{ key: 'addresses', label: 'Addresses', Table: StubSecondaryTable, Form: StubSecondaryForm }]}
         {...props}
       />
     </MemoryRouter>,
   );
 }
 
-describe('DetailView secondaryDeleteConfirm dialog (real onDeleteLine flow)', () => {
+describe('DetailView linesLayout default (ETP-4763)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('selects a secondary row, opens the sidebar, and deletes it after confirming', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('without a linesLayout prop, clicking a line row does not open the DetailForm sidebar', async () => {
     const user = userEvent.setup();
     renderDetailView();
 
-    await user.click(screen.getByTestId('tab-addresses'));
-    await user.click(await screen.findByTestId('secondary-row-ADDR-1'));
-    await screen.findByTestId('stub-secondary-form');
+    await user.click(screen.getByTestId('row-L1'));
 
-    const sidebarDeleteButtons = screen.getAllByRole('button', { name: 'delete' })
-      .filter(b => b.getAttribute('data-testid') !== 'action-delete');
-    await user.click(sidebarDeleteButtons[sidebarDeleteButtons.length - 1]);
-    const dialogDeleteButtons = await screen.findAllByRole('button', { name: 'delete' });
-    await user.click(dialogDeleteButtons[dialogDeleteButtons.length - 1]);
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/addresses/ADDR-1'),
-      expect.objectContaining({ method: 'DELETE' }),
-    ));
-    await waitFor(() => expect(secondaryHandleDeleteChild).toHaveBeenCalledWith('ADDR-1'));
-
-    const { toast } = await import('sonner');
-    expect(toast.success).toHaveBeenCalledWith('Record deleted');
-
-    vi.unstubAllGlobals();
+    expect(screen.queryByTestId('stub-detail-form')).not.toBeInTheDocument();
   });
 
-  it('shows an error toast and keeps the row when the DELETE fails', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: false, status: 500 });
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('with linesLayout="classic", clicking a line row still opens the DetailForm sidebar', async () => {
     const user = userEvent.setup();
-    renderDetailView();
+    renderDetailView({ linesLayout: 'classic' });
 
-    await user.click(screen.getByTestId('tab-addresses'));
-    await user.click(await screen.findByTestId('secondary-row-ADDR-1'));
-    await screen.findByTestId('stub-secondary-form');
+    await user.click(screen.getByTestId('row-L1'));
 
-    const sidebarDeleteButtons = screen.getAllByRole('button', { name: 'delete' })
-      .filter(b => b.getAttribute('data-testid') !== 'action-delete');
-    await user.click(sidebarDeleteButtons[sidebarDeleteButtons.length - 1]);
-    const dialogDeleteButtons = await screen.findAllByRole('button', { name: 'delete' });
-    await user.click(dialogDeleteButtons[dialogDeleteButtons.length - 1]);
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(secondaryHandleDeleteChild).not.toHaveBeenCalled();
-
-    vi.unstubAllGlobals();
+    expect(await screen.findByTestId('stub-detail-form')).toBeInTheDocument();
+    expect(screen.getByTestId('stub-detail-form-data').textContent).toContain('L1');
   });
 });
