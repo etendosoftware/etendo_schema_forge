@@ -34,7 +34,7 @@ export function getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lin
 
 // ─── Layout / className helpers ───────────────────────────────────────────────
 
-function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
+export function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
   const isInline = linesLayout === 'inlineEditable';
   if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
   if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
