@@ -8,7 +8,7 @@ const columns = [
   { key: 'financialAccountTransaction', column: 'FIN_Finacc_Transaction_ID', type: 'selector', label: 'Financial account transaction' },
   { key: 'payment', column: 'FIN_Payment_ID', type: 'selector', label: 'Payment' },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency' },
-  { key: 'transactionType', column: 'Trxtype', type: 'enum', label: 'Transaction Type', enumLabels: { 'BPD': 'BP Deposit', 'BPW': 'BP Withdrawal', 'BF': 'Bank fee' } },
+  { key: 'transactionType', column: 'Trxtype', type: 'enum', label: 'Transaction Type', enumLabels: { 'BPD': 'trxtypeBpd', 'BPW': 'trxtypeBpw', 'BF': 'trxtypeBf' } },
   { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'G/L Item' },
 ];
 // @sf-generated-end columns:clearedItems
