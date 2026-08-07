@@ -216,7 +216,7 @@ export default function QuotationConfirmModal({
     const docLabel = createdDoc.type === 'order' ? ui('sqOrderCreated') : ui('soInvoiceCreated');
     const goLabel  = createdDoc.type === 'order' ? ui('sqViewOrder')    : ui('soViewInvoice');
     const isDraft = createdDoc.status === 'Draft';
-    const badgeColor = isDraft ? { bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)' } : { bg: 'hsl(var(--card))', text: 'var(--status-success-fg)' };
+    const badgeColor = isDraft ? { bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)' } : { bg: 'var(--status-success-bg)', text: 'var(--status-success-fg)' };
     const badgeLabel = isDraft ? ui('statusDraft') : ui('statusCompleted');
 
     return (
@@ -225,10 +225,10 @@ export default function QuotationConfirmModal({
           <div style={{ padding: '28px 24px', textAlign: 'center' }}>
             <div style={{
               width: 48, height: 48, borderRadius: '50%', margin: '0 auto 14px',
-              background: 'hsl(var(--card))',
+              background: 'var(--status-success-bg)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--status-success-bg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--status-success-fg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
@@ -291,7 +291,7 @@ export default function QuotationConfirmModal({
             {ui('quotationDocumentLabel')} #{documentNo}
           </div>
           <div style={{
-            background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10,
+            background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
             padding: '14px 16px', marginBottom: 14,
           }}>
             <div style={{ fontSize: 11, color: 'var(--status-info-border)' }}>
@@ -301,7 +301,7 @@ export default function QuotationConfirmModal({
               {formatCurrency(currency, grandTotal)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
-              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-bg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{formatCurrency(currency, totalLines)}</span>
+              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-fg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{formatCurrency(currency, totalLines)}</span>
             </div>
           </div>
         </div>
@@ -373,7 +373,7 @@ function OptionCard({ selected, onClick, icon, title, badge, subtitle, disabled,
       onClick={disabled ? undefined : onClick}
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 10,
-        border: selected ? '2px solid var(--status-info-border)' : '0.5px solid hsl(var(--card))',
+        border: selected ? '2px solid var(--status-info-border)' : '0.5px solid hsl(var(--border-subtle))',
         borderRadius: 8, padding: selected ? '11px 13px' : '12px 14px',
         cursor: disabled ? 'not-allowed' : 'pointer',
         background: selected ? 'hsl(var(--card))' : 'hsl(var(--card))',
@@ -385,7 +385,7 @@ function OptionCard({ selected, onClick, icon, title, badge, subtitle, disabled,
         width: 32, height: 32, borderRadius: 6, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: selected ? 'hsl(var(--card))' : 'hsl(var(--card))',
-        color: selected ? 'var(--status-info-bg)' : 'hsl(var(--muted))',
+        color: selected ? 'var(--status-info-fg)' : 'hsl(var(--muted))',
       }}>
         {icon}
       </div>
@@ -397,7 +397,7 @@ function OptionCard({ selected, onClick, icon, title, badge, subtitle, disabled,
           {badge && (
             <span style={{
               fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-              background: 'hsl(var(--card))', color: 'var(--status-success-bg)',
+              background: 'var(--status-success-bg)', color: 'var(--status-success-fg)',
               letterSpacing: '0.3px',
             }}>
               {badge}
@@ -410,8 +410,8 @@ function OptionCard({ selected, onClick, icon, title, badge, subtitle, disabled,
       </div>
       <div style={{
         width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-        border: selected ? 'none' : '1.5px solid hsl(var(--card))',
-        background: selected ? 'var(--status-info-bg)' : 'hsl(var(--card))',
+        border: selected ? 'none' : '1.5px solid hsl(var(--border-subtle))',
+        background: selected ? 'var(--status-info-fg)' : 'hsl(var(--card))',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--card))' }} />}
@@ -431,15 +431,15 @@ const overlayStyle = {
 const cardStyle = {
   width: 480, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
   overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer',
+  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
 };
 
 const btnPrimary = {
   fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: 'var(--status-info-bg)', color: 'hsl(var(--card))', cursor: 'pointer',
+  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
 };

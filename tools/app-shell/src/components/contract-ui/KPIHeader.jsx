@@ -35,7 +35,7 @@ function formatValue(value, format, currencyLabel, locale) {
 
 const KPI_SCHEMES = {
   revenueThisMonth:  { bg: 'bg-status-success dark:bg-status-success', icon: 'text-status-success-foreground' },
-  expensesThisMonth: { bg: 'bg-destructive dark:bg-destructive',         icon: 'text-destructive'     },
+  expensesThisMonth: { bg: 'bg-destructive dark:bg-destructive',         icon: 'text-destructive-foreground'     },
   netProfit:         { bg: 'bg-status-info dark:bg-status-info',        icon: 'text-status-info-foreground'    },
   pendingInvoices:   { bg: 'bg-status-warning dark:bg-status-warning',      icon: 'text-status-warning-foreground'   },
 };
