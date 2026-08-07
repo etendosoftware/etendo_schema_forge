@@ -82,7 +82,7 @@ async function installListMock(page, spec) {
     [docNoField]: r.documentNo, // some windows use a different key (e.g. orderReference)
     ...cfg.extra,
   }));
-  await page.route(`**/sws/neo/${spec}/${entityPath}**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/${entityPath}{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !new RegExp(`/${entityPath}/[^/?]+`).test(url)) {

@@ -55,7 +55,7 @@ const FILTER_OPTIONS = {
  * Must run AFTER login() to take precedence over the generic stub.
  */
 async function installMocks(page, { rows = ROWS } = {}) {
-  await page.route(`**/sws/neo/${SPEC}/${ENTITY}**`, async (route) => {
+  await page.route(`**/sws/neo/${SPEC}/${ENTITY}{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
 

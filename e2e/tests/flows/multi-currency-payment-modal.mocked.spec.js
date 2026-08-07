@@ -62,7 +62,7 @@ async function installMocks(page, {
   });
 
   // List + detail + per-invoice action POSTs all live under /header**.
-  await page.route('**/sws/neo/purchase-invoice/header**', async (route) => {
+  await page.route('**/sws/neo/purchase-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 
@@ -100,13 +100,13 @@ async function installMocks(page, {
     return route.fallback();
   });
 
-  await page.route('**/sws/neo/purchase-invoice/paymentPlan**', (route) =>
+  await page.route('**/sws/neo/purchase-invoice/paymentPlan{/**,}**', (route) =>
     jsonOk(route, { response: { data: [{ finPaymentScheduleID: 'sched-1', outstandingAmount: '100' }] } }));
 
-  await page.route('**/sws/neo/session**', (route) =>
+  await page.route('**/sws/neo/session{/**,}**', (route) =>
     jsonOk(route, { currencyCode: orgCurrency }));
 
-  await page.route('**/sws/neo/validate-exchange-rate**', (route) =>
+  await page.route('**/sws/neo/validate-exchange-rate{/**,}**', (route) =>
     jsonOk(route, rate == null ? {} : { rate }));
 }
 
