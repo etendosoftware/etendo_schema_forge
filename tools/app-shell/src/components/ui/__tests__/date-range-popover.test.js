@@ -5,16 +5,16 @@
 // `hover:bg-primary` with `hover:text-foreground` — on hover, background and
 // text collapse to the same color and the label disappears.
 //
-// Fix under test: the hover text class must be `hover:text-primary-foreground`
-// instead of `hover:text-foreground`, so only the background swaps on hover
-// while the text keeps the base-state pairing (`text-primary-foreground`),
-// which is guaranteed distinct from `--primary` in BOTH themes.
+// Fix under test: the hover state uses the brand-yellow highlight tokens
+// (`hover:bg-accent-highlight` / `hover:text-accent-highlight-foreground`) —
+// the same convention already shipped for this exact bug in ETP-4767 and used
+// by the shared month/year-picker chrome's PickerGrid (ETP-4771 Case 2 below),
+// so hover feedback is consistent across every date picker in the app.
 //
 // This is a source-reading test (no render/mount) — it inspects the raw JSX
 // text for the exact className string on the Aplicar button only, anchored
 // on its distinguishing `onClick={handleApplyCustom}` prop so it cannot be
-// satisfied by any other button in the file (e.g. the month/year picker
-// button further down shares the same buggy pairing but is NOT in scope here).
+// satisfied by any other button in the file.
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -46,14 +46,15 @@ describe('DateRangePopoverContent — Aplicar button hover contrast (ETP-4771)',
     );
   });
 
-  it('pairs hover:bg-primary with hover:text-primary-foreground (the fix)', () => {
+  it('pairs hover:bg-accent-highlight with hover:text-accent-highlight-foreground (the fix)', () => {
     const className = applyButtonMatch[1];
     assert.match(
       className,
-      /hover:bg-primary\s+hover:text-primary-foreground\b/,
-      'Aplicar button hover state should only swap the background (hover:bg-primary) ' +
-        'while keeping text on hover:text-primary-foreground, which is distinct from ' +
-        '--primary in both light and dark theme.',
+      /hover:bg-accent-highlight\s+hover:text-accent-highlight-foreground\b/,
+      'Aplicar button hover state should use the brand-yellow highlight tokens ' +
+        '(hover:bg-accent-highlight / hover:text-accent-highlight-foreground) — the same ' +
+        'convention ETP-4767 shipped for this bug and the shared date-picker chrome already uses, ' +
+        'so it is guaranteed distinct from the base state in both light and dark theme.',
     );
   });
 });

@@ -42,6 +42,7 @@ import {
   getInlineEditableShrinkClassName,
   sidePanelWrapperCls,
   runAddLineAction,
+  buildInitialTabs,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -369,5 +370,137 @@ describe('getAddLineMenuActions', () => {
   it('keeps the raw label when the translation comes back empty', () => {
     const get = () => [{ label: 'importLines' }];
     expect(getAddLineMenuActions(get, {}, { current: null }, () => '')[0].label).toBe('importLines');
+  });
+});
+
+describe('buildInitialTabs (ETP-4415 — cross-group tabOrder sort)', () => {
+  const baseUi = (key) => key;
+  const basePanelCounts = {};
+  const baseHook = { children: [] };
+
+  function makeProps(overrides = {}) {
+    return {
+      secondaryTabs: [],
+      secondaryHooks: [],
+      panelCounts: basePanelCounts,
+      ui: baseUi,
+      DetailTable: null,
+      detailLabel: 'Lines',
+      detailEntity: 'orderLine',
+      hook: baseHook,
+      detailTabIndex: undefined,
+      detailTabOrder: undefined,
+      CustomLines: null,
+      customLinesLabel: 'Invoices',
+      customLinesCount: null,
+      customTabsAfterBottom: false,
+      tabCustomTabs: [],
+      customTabCounts: {},
+      customTabVisibility: {},
+      ...overrides,
+    };
+  }
+
+  it("reproduces today's default order when nothing declares tabOrder: secondaryTabs, then customs (no lines)", () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab' }],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting', 'custom:pricing']);
+  });
+
+  it('a higher secondaryTabs tabOrder sorts it after a default-weight custom tab', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting', tabOrder: 1000 }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab' }],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['custom:pricing', 'accounting']);
+  });
+
+  it('a lower custom-tab tabOrder sorts it before a default-weight secondaryTab', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab', tabOrder: 1 }],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['custom:pricing', 'accounting']);
+  });
+
+  it('ties keep insertion order among secondaryTabs (stable sort)', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [
+        { key: 'accounting', label: 'Accounting' },
+        { key: 'tax', label: 'Tax' },
+      ],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting', 'tax']);
+  });
+
+  it('a custom tab hidden via customTabVisibility is excluded before the sort runs', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting', tabOrder: 1000 }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab' }],
+      customTabVisibility: { pricing: false },
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting']);
+  });
+
+  it('customTabsAfterBottom suppresses custom tabs from the sorted list entirely', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab', tabOrder: -50 }],
+      customTabsAfterBottom: true,
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting']);
+  });
+
+  it("lines tab defaults to first when neither detailTabIndex nor detailTabOrder is set (matches today's unshift)", () => {
+    const tabs = buildInitialTabs(makeProps({
+      DetailTable: true,
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['lines', 'accounting']);
+  });
+
+  it('detailTabIndex splices the lines tab at the same position as the old array-splice behavior', () => {
+    const tabs = buildInitialTabs(makeProps({
+      DetailTable: true,
+      secondaryTabs: [
+        { key: 'accounting', label: 'Accounting' },
+        { key: 'tax', label: 'Tax' },
+      ],
+      detailTabIndex: 1,
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting', 'lines', 'tax']);
+  });
+
+  it('an out-of-range detailTabIndex falls back to first, matching the old unshift fallback', () => {
+    const tabs = buildInitialTabs(makeProps({
+      DetailTable: true,
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      detailTabIndex: 99,
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['lines', 'accounting']);
+  });
+
+  it('detailTabOrder takes precedence over detailTabIndex and places the lines tab by weight', () => {
+    const tabs = buildInitialTabs(makeProps({
+      DetailTable: true,
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      tabCustomTabs: [{ key: 'pricing', label: 'Price', placement: 'tab' }],
+      detailTabIndex: 0,
+      detailTabOrder: 500,
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['accounting', 'lines', 'custom:pricing']);
+  });
+
+  it('Producto acceptance case: Contabilidad sorts after Precio and Attachments', () => {
+    const tabs = buildInitialTabs(makeProps({
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting', tabOrder: 1000 }],
+      tabCustomTabs: [
+        { key: 'pricing', label: 'Price', placement: 'tab' },
+        { key: 'attachments', labelKey: 'attachments', placement: 'tab' },
+      ],
+    }));
+    expect(tabs.map(t => t.key)).toEqual(['custom:pricing', 'custom:attachments', 'accounting']);
   });
 });

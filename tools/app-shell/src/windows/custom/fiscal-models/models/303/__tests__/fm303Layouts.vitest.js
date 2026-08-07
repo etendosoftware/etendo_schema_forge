@@ -528,6 +528,44 @@ describe('SUPPORTED_YEARS', () => {
   });
 });
 
+// ── datos_bancarios section (EDID065 fix — AEAT rejects IBAN for tipos other
+// than U/D/X — AND the ETP-4456 follow-up fix that widens visibility to an
+// anyOf so a rectificativa under any tipo_declaracion can still enter the
+// AEAT-mandatory bank fields) ─────────────────────────────────────────────
+
+describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectificativa anyOf fix)', () => {
+  const layout = getLayout303(2026, 1);
+  const sec = layout.sections.find(s => s.id === 'datos_bancarios');
+
+  it('sectionVisibleWhen is an anyOf of tipo_declaracion U/D/X OR rectificativa checked', () => {
+    expect(sec.sectionVisibleWhen).toEqual({ anyOf: [
+      { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
+      { field: 'rectificativa', equals: true },
+    ] });
+  });
+
+  it('bank_iban stays required: true (Classic also requires IBAN for the rectificativa case)', () => {
+    const iban = sec.fields.find(f => f.id === 'bank_iban');
+    expect(iban.required).toBe(true);
+  });
+
+  it('titleKeyMap only maps D, X (devolucion) and U (domiciliacion) — no G, I, V entries', () => {
+    expect(sec.titleKeyMap).toEqual({
+      D: 'fm.section.devolucion',
+      X: 'fm.section.devolucion',
+      U: 'fm.section.domiciliacion',
+    });
+    expect(sec.titleKeyMap).not.toHaveProperty('G');
+    expect(sec.titleKeyMap).not.toHaveProperty('I');
+    expect(sec.titleKeyMap).not.toHaveProperty('V');
+  });
+
+  it('is still returned by getLayout303 (titleKeyMap alone satisfies the titleKey||titleKeyMap filter)', () => {
+    expect(sec).toBeTruthy();
+    expect(sec.titleKeyFrom).toBe('tipo_declaracion');
+  });
+});
+
 // ── sin_actividad section ─────────────────────────────────────────────────────
 
 describe('getLayout303 — sin_actividad section', () => {

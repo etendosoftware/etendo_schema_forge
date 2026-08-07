@@ -404,12 +404,6 @@ export default function FinancialAccountWindow(props) {
         // AccountsHeaderTable hides its own toolbar while rows are picked so the two read
         // as one swap rather than two stacked bars.
         hideListBar: true,
-        // A financial account is not a printable document, so the selection bar's
-        // document-preview action has nothing to show. `hidePrint` is already declared in
-        // decisions.json and covers the Printer button; this covers the Eye button, which
-        // has no decisions.json equivalent. Leaves "Eliminar seleccionados" as the only
-        // action in the bar.
-        hideEye: true,
         // AccountsHeaderTable pins its toolbar + KPI sidebar and scrolls only the rows,
         // so it must not sit inside ListView's own ScrollPane.
         tableOwnsScroll: true,

@@ -4,9 +4,14 @@ import ReturnDocStatsPanel from './ReturnDocStatsPanel.jsx';
 export function buildReturnPreviewContent({
   doc, pdfBlob, handleDownload, modalRef,
   specs, partnerName, movementDate, token, apiBaseUrl, ui,
+  // ETP-4718 — optional: callers that wire a send-email modal pass onEmail here so
+  // PreviewActionButtons renders the "Enviar" button. Omitted by callers that don't
+  // wire send yet, so existing behavior (no send button) stays unchanged for them.
+  onEmail,
 }) {
   const actionButtons = (
     <PreviewActionButtons
+      onEmail={onEmail}
       onDownloadPdf={handleDownload}
       hasPdf={!!pdfBlob}
       triggerEdit={() => modalRef.current?.triggerEdit?.()}

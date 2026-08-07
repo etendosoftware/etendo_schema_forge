@@ -3,9 +3,6 @@
   "window": {
     "category": "purchases",
     "name": "Return to Vendor Shipment",
-    "sendDocument": {
-      "enabled": false
-    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -32,8 +29,30 @@
     "processOverrides": {
       "Process Shipment": {
         "exclude": true
+      },
+      "etblkpBulkposting": {
+        "exclude": true
       }
-    }
+    },
+    "menuActions": [
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      }
+    ],
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill"
+      }
+    ]
   },
   "entities": {
     "header": {
@@ -263,7 +282,21 @@
           "visibility": "discarded"
         },
         "posted": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 8,
+          "badge": true,
+          "visibleWhenCapability": "showAccountingFields",
+          "badgeLabels": {
+            "true": { "en_US": "Posted", "es_ES": "Contabilizado" },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         },
         "receiveMaterials": {
           "visibility": "discarded"

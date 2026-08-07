@@ -1,5 +1,9 @@
 // Mocks must be declared before any imports that pull in the mocked modules.
 
+vi.mock('sonner', () => ({
+  toast: { info: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn() },
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLabel: () => (key) => key,
@@ -103,7 +107,31 @@ vi.mock('@/components/ui/select', () => {
   };
 });
 
+// ETP-4751 (Block B): the exemption cause is now an editable FK selector when the
+// invoice hasn't been sent to SII. Stand-in for the real SelectorInput that exposes
+// the props SifTab wires (entityName / selectorUrl / value / displayValue) as data
+// attributes, plus a trigger button that fires the two-arg onChange(id, label) the
+// FK pair relies on — so a test can assert the two resulting onChange calls.
+vi.mock('@/components/contract-ui/SelectorInput.jsx', () => ({
+  SelectorInput: ({ entityName, selectorUrl, value, displayValue, onChange }) => (
+    <div
+      data-testid="mock-selector-input"
+      data-entity-name={entityName}
+      data-selector-url={selectorUrl ?? ''}
+      data-value={value ?? ''}
+      data-display-value={displayValue ?? ''}
+    >
+      <button
+        type="button"
+        data-testid="mock-selector-pick"
+        onClick={() => onChange && onChange('CAUSE_ID', 'Cause label')}
+      />
+    </div>
+  ),
+}));
+
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import SifTab from '../SifTab.jsx';
@@ -300,6 +328,213 @@ describe('SifTab', () => {
     it('derives specName purchase-invoice from apiBaseUrl last segment', () => {
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/purchase-invoice' })} />);
       expect(screen.getByText('sifDataTabs.tab.sii')).toBeInTheDocument();
+    });
+  });
+
+  // ── SII exemption cause: editable FK selector + Classic gating (ETP-4751 Block B) ──
+  // Previously the exemption cause always rendered read-only. It is now editable via a
+  // SelectorInput (backed by /header/selectors/aeatsiiCauseExemption) ONLY when the
+  // invoice actually carries an exempt tax (`hasExemptTaxes`, served by the backend
+  // NeoHandler), is still a draft, and has not been sent to SII (`aeatsiiIssent`). With
+  // no exempt taxes it renders READ-ONLY but stays visible (Classic parity). Both
+  // sales-invoice and purchase-invoice share this component.
+
+  describe('SII exemption cause — editable selector + gating (ETP-4751)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('sii');
+    });
+
+    it('renders the SelectorInput when editable (draft, has exempt taxes, not sent to SII)', () => {
+      render(<SifTab {...makeProps({
+        data: {
+          documentStatus: 'DR',
+          hasExemptTaxes: true,
+          aeatsiiCauseExemption: 'E1',
+          'aeatsiiCauseExemption$_identifier': 'Exempt reason 1',
+        },
+      })} />);
+      const selector = screen.getByTestId('mock-selector-input');
+      expect(selector).toBeInTheDocument();
+      expect(selector).toHaveAttribute('data-entity-name', 'header');
+      expect(selector).toHaveAttribute(
+        'data-selector-url',
+        '/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption',
+      );
+      expect(selector).toHaveAttribute('data-value', 'E1');
+      expect(selector).toHaveAttribute('data-display-value', 'Exempt reason 1');
+    });
+
+    it('fires onChange twice (id + $_identifier) when an exemption cause is selected', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', hasExemptTaxes: true, aeatsiiCauseExemption: 'E1' },
+        onChange,
+      })} />);
+      fireEvent.click(screen.getByTestId('mock-selector-pick'));
+      expect(onChange).toHaveBeenCalledWith('aeatsiiCauseExemption', 'CAUSE_ID');
+      expect(onChange).toHaveBeenCalledWith('aeatsiiCauseExemption$_identifier', 'Cause label');
+    });
+
+    it('renders read-only (no SelectorInput) when the invoice has NO exempt taxes, even as a draft', () => {
+      render(<SifTab {...makeProps({
+        data: {
+          documentStatus: 'DR',
+          hasExemptTaxes: false,
+          'aeatsiiCauseExemption$_identifier': 'Exempt reason 1',
+        },
+      })} />);
+      expect(screen.queryByTestId('mock-selector-input')).not.toBeInTheDocument();
+      const readOnly = screen.getByTestId('input-sif-exemption');
+      expect(readOnly).toBeInTheDocument();
+      expect(readOnly).toBeDisabled();
+    });
+
+    it('renders READ-ONLY (no SelectorInput) when there are no exempt taxes, even as a draft with no cause', () => {
+      // ETP-4751 Block F: read-only gating must apply whenever the invoice carries no exempt
+      // tax — `hasExemptTaxes` is refreshed from the header GET after every line change, so an
+      // invoice with only non-exempt lines keeps the field locked.
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', hasExemptTaxes: false },
+      })} />);
+      expect(screen.queryByTestId('mock-selector-input')).not.toBeInTheDocument();
+      expect(screen.getByTestId('input-sif-exemption')).toBeDisabled();
+    });
+
+    it('no longer renders an inline missing-cause warning (moved to a line-save toast)', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', hasExemptTaxes: true },
+      })} />);
+      expect(screen.queryByTestId('sif-exemption-missing-warning')).not.toBeInTheDocument();
+    });
+
+    it('renders the exemption cause read-only (no SelectorInput) once sent to SII', () => {
+      render(<SifTab {...makeProps({
+        data: {
+          documentStatus: 'CO',
+          hasExemptTaxes: true,
+          aeatsiiIssent: 'Y',
+          aeatsiiCauseExemption: 'E1',
+          'aeatsiiCauseExemption$_identifier': 'Exempt reason 1',
+        },
+      })} />);
+      expect(screen.queryByTestId('mock-selector-input')).not.toBeInTheDocument();
+      const readOnly = screen.getByTestId('input-sif-exemption');
+      expect(readOnly).toHaveValue('Exempt reason 1');
+      expect(readOnly).toBeDisabled();
+    });
+
+    it('is editable for purchase-invoice too, with the purchase-invoice selector URL', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: {
+          documentStatus: 'DR',
+          hasExemptTaxes: true,
+          aeatsiiCauseExemption: 'E2',
+          'aeatsiiCauseExemption$_identifier': 'Exempt reason 2',
+        },
+        onChange,
+      })} />);
+      const selector = screen.getByTestId('mock-selector-input');
+      expect(selector).toHaveAttribute(
+        'data-selector-url',
+        '/sws/neo/purchase-invoice/header/selectors/aeatsiiCauseExemption',
+      );
+      expect(selector).toHaveAttribute('data-value', 'E2');
+      fireEvent.click(screen.getByTestId('mock-selector-pick'));
+      expect(onChange).toHaveBeenCalledWith('aeatsiiCauseExemption', 'CAUSE_ID');
+      expect(onChange).toHaveBeenCalledWith('aeatsiiCauseExemption$_identifier', 'Cause label');
+    });
+
+    it('read-only exemption cause holds for purchase-invoice sent to SII', () => {
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: {
+          documentStatus: 'CO',
+          hasExemptTaxes: true,
+          aeatsiiIssent: true,
+          'aeatsiiCauseExemption$_identifier': 'Exempt reason 2',
+        },
+      })} />);
+      expect(screen.queryByTestId('mock-selector-input')).not.toBeInTheDocument();
+      expect(screen.getByTestId('input-sif-exemption')).toHaveValue('Exempt reason 2');
+    });
+  });
+
+  // ── SII exemption cause line-save toasts (ETP-4751 Block B/F) ────────────────
+  // The invoice-line backend handler (InvoiceLineHandler) stamps at most ONE mutually
+  // exclusive signal on the line-save response, mirrored onto the header `data` by
+  // useEntity#applyExemptionCauseSignals:
+  //   • exemptionCauseAutoFilled → info toast ("Causa de exención modificada").
+  //     Dormant in production (no default cause is seeded) but fully implemented + tested.
+  //   • exemptionCauseWarning → warning toast ("Debería indicarse una causa de exención"),
+  //     the Block-F replacement for the removed inline missing-cause banner.
+
+  describe('SII exemption cause line-save toasts (ETP-4751)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('sii');
+    });
+
+    it('fires the info toast exactly once when the backend reports the cause was auto-filled', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', hasExemptTaxes: true, exemptionCauseAutoFilled: true },
+      })} />);
+      expect(toast.info).toHaveBeenCalledTimes(1);
+      expect(toast.info).toHaveBeenCalledWith(
+        'sifDataTabs.toast.exemptionCauseModified.title',
+        expect.objectContaining({
+          description: 'sifDataTabs.toast.exemptionCauseModified.description',
+        }),
+      );
+    });
+
+    it('does NOT fire the info toast when the backend does not report an auto-fill', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', hasExemptTaxes: true },
+      })} />);
+      expect(toast.info).not.toHaveBeenCalled();
+    });
+
+    it('fires the warning toast exactly once when the backend reports exemptionCauseWarning', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', hasExemptTaxes: true, exemptionCauseWarning: true },
+      })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+      expect(toast.warning).toHaveBeenCalledWith(
+        'sifDataTabs.toast.exemptionCauseRequired.title',
+        expect.objectContaining({
+          description: 'sifDataTabs.toast.exemptionCauseRequired.description',
+        }),
+      );
+    });
+
+    it('does NOT fire the warning toast when the backend does not report a warning', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', hasExemptTaxes: true },
+      })} />);
+      expect(toast.warning).not.toHaveBeenCalled();
+    });
+
+    // ETP-4751 W2 regression guard (observable-toast layer): the one-shot guard must
+    // RE-ARM when the signal flips back to false between saves. This is the whole reason
+    // useEntity#applyExemptionCauseSignals always writes the resolved boolean (false when
+    // absent) on every line update/delete — including plain non-exemption object-form line
+    // edits (W2). A stale-true flag that never resets would leave the guard latched and the
+    // warning would silently fail to re-fire on the next qualifying save. Simulate the
+    // true → false → true transition the backend/handler produce across successive saves.
+    it('re-fires the warning toast after the flag resets to false then true again (ETP-4751 W2)', () => {
+      const base = { documentStatus: 'DR', hasExemptTaxes: true };
+      const { rerender } = render(<SifTab {...makeProps({ data: { ...base, exemptionCauseWarning: true } })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+
+      // A subsequent line save (or a plain object-form line edit — the W2 path) resets the
+      // signal to false; no toast fires on the reset, and the guard re-arms.
+      rerender(<SifTab {...makeProps({ data: { ...base, exemptionCauseWarning: false } })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+
+      // Next qualifying save stamps it true again → the toast fires a SECOND time.
+      rerender(<SifTab {...makeProps({ data: { ...base, exemptionCauseWarning: true } })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(2);
     });
   });
 
