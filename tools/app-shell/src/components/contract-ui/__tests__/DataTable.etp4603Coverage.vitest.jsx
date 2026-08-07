@@ -75,6 +75,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
 vi.mock('@/lib/linesColumnWidth.js', () => ({
   columnMinWidthPx: () => 96,
   columnFlex: (col) => (col?.flexGrow === 0 ? '0 0 80px' : '1 1 120px'),
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 
 vi.mock('@/components/ui/select', () => ({
@@ -202,6 +203,61 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     expect(cols[0].style.width).toMatch(/^calc\(/);
     // Header row is hidden entirely in this mode.
     expect(screen.getByTestId('TableHeader__eb5261')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  // ETP-4803 — `dimensionsPanel` never renders as a fixed grid column in
+  // InlineLinesPanel (it renders via a hover action + expand sub-row
+  // instead). DataTable's hidden `hideHeader` colgroup must reproduce that
+  // SAME column set, or `growColumnWidth()`'s fixed/grow totals go out of
+  // sync with the real header row and every column after the phantom one
+  // gets the wrong width. Reproduces the live bug on purchase-invoice /
+  // sales-invoice / purchase-shipment / sales-shipment lines and confirms
+  // the fix: the `dimensionsPanel` column is dropped from `visibleColumns`
+  // before the colgroup is built, exactly like InlineLinesPanel does.
+  it('excludes a dimensionsPanel column from the hidden add-row colgroup, matching InlineLinesPanel', () => {
+    const columnsWithoutDimensions = [
+      { key: 'name', label: 'Name', type: 'string' },
+      { key: 'fixed', label: 'Fixed', type: 'string', flexGrow: 0 },
+    ];
+    const columnsWithDimensions = [
+      columnsWithoutDimensions[0],
+      { key: 'dimensions', label: 'Dimensions', type: 'dimensionsPanel', dimensionFields: [] },
+      columnsWithoutDimensions[1],
+    ];
+
+    const { container: withoutDimensions } = render(
+      <DataTable
+        columns={columnsWithoutDimensions}
+        data={baseRows}
+        hideHeader
+        linesLayout="inlineEditable"
+        selectable={false}
+      />,
+    );
+    const colsWithout = [...withoutDimensions.querySelectorAll('colgroup col')]
+      .map((c) => c.style.width);
+
+    const { container: withDimensions } = render(
+      <DataTable
+        columns={columnsWithDimensions}
+        data={baseRows}
+        hideHeader
+        linesLayout="inlineEditable"
+        selectable={false}
+      />,
+    );
+    const colsWith = [...withDimensions.querySelectorAll('colgroup col')]
+      .map((c) => c.style.width);
+
+    // The dimensionsPanel column must add NO <col> and change NO width —
+    // adding it to the schema is a byte-for-byte no-op on the colgroup,
+    // exactly as it is on InlineLinesPanel's real header/flex row. Before
+    // the fix, this list gained a phantom `120px`/'1 0' entry that desynced
+    // fixedColsTotalPx/growCount, shrinking every subsequent grow column's
+    // calc() width.
+    expect(colsWith).toEqual(colsWithout);
+    expect(colsWithout[1]).toBe('80px');
+    expect(colsWithout[0]).toMatch(/^calc\(/);
   });
 
   // ── visibleColumns auto-hide/reveal for a displayIf-controlled column ───

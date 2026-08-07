@@ -29,7 +29,10 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: () => '' }));
 vi.mock('@/lib/resolveColumnLabel.js', () => ({ resolveColumnLabel: (c) => c.key }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => String(v) }));
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({ applyCalloutUpdates: () => ({}) }));
-vi.mock('@/lib/linesColumnWidth.js', () => ({ columnMinWidthPx: () => 80 }));
+vi.mock('@/lib/linesColumnWidth.js', () => ({
+  columnMinWidthPx: () => 80,
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
+}));
 vi.mock('./ProductSearchDrawer.jsx', () => ({ default: () => null }));
 vi.mock('./ProductStockSearchDrawer.jsx', () => ({ default: () => null }));
 vi.mock('./SelectorInput.jsx', () => ({ SelectorInput: () => null }));
