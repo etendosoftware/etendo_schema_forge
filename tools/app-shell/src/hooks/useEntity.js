@@ -1100,9 +1100,15 @@ export function useEntity(entity, childEntity, {
             if (res.ok) {
                 const data = await res.json();
                 if (data.defaults) {
-                    // Normalize values from Etendo format:
+                    // Normalize values from Etendo format (see normalizeDefaultValue):
                     // - Dates: dd-MM-yyyy → yyyy-MM-dd (HTML date input)
-                    // - Booleans: "Y" → true, "N" → false (NEO defaults returns strings, not booleans)
+                    // - Quoted SQL literals: 'foo' → foo
+                    // - Integers → strings (list/enum columns are VARCHAR in the DB)
+                    // Booleans are NOT normalized here (this comment used to claim they
+                    // were, and they never have been). NEO canonicalizes them server-side
+                    // since ETP-4793, and every consumer additionally tolerates the raw
+                    // "Y"/"N" storage encoding — see EntityForm.renderCheckboxField and
+                    // e2e/tests/flows/boolean-defaults-tolerance.mocked.spec.js.
                     const { id: _discardId, ...rest } = data.defaults;
                     backendDefaultKeysRef.current = new Set(Object.keys(rest));
                     const normalized = { ...rest };
