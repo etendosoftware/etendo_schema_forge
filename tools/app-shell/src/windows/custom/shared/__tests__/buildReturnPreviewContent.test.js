@@ -50,6 +50,10 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /canDownload = true/);
   });
 
+  it('accepts an optional onEmail param (ETP-4718 — send-email wiring)', () => {
+    assert.match(src, /\bonEmail,/);
+  });
+
   // ── Return value ───────────────────────────────────────────────────────────
 
   it('returns an object with actionButtons and tabs keys', () => {
@@ -62,8 +66,8 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /<PreviewActionButtons/);
   });
 
-  it('does NOT pass onEmail to PreviewActionButtons (email removed)', () => {
-    assert.doesNotMatch(src, /onEmail=/);
+  it('forwards the onEmail param to PreviewActionButtons (ETP-4718 — send-email wiring)', () => {
+    assert.match(src, /<PreviewActionButtons[\s\S]{0,40}onEmail=\{onEmail\}/);
   });
 
   it('passes hasPdf={!!pdfBlob} to PreviewActionButtons', () => {

@@ -98,6 +98,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `detailSortBy` | string | `null` | Any valid sort expression | Default sort order for the detail entity tab (e.g., `"sEQNoAsset asc"`). Passed directly to DetailView as the `detailSortBy` prop. |
 | `documentDateField` | string | `"orderDate"` | Any header date field name | Names the header field that holds this document's primary date (e.g., `"orderDate"` for orders/quotations, `"invoiceDate"` for invoices). `DetailView` uses it for exchange-rate lookups (currency conversion of new lines and the currency-dropdown validation) and other document-date-dependent logic. Windows without an `orderDate` field (e.g. sales/purchase invoices) MUST declare this explicitly, or those lookups silently no-op. Defaults to `"orderDate"` for backward compatibility with windows that don't declare it. |
 | `statusBar` | object | `null` | See below | Generates a summary status bar above the detail form showing key numeric fields and an optional progress indicator. |
+| `statusPills` | array | `[]` | See below | Renders one or more additional status pills next to the document-status pill on the detail view's action bar, driven by a boolean-like header field (e.g. an accounting `posted` pill). |
 | `subsetFilters` | array | `null` | See below | Segmented, radio-style filter above the list. One is always active, mutually exclusive, applied before any other filter. Ideal for "which universe am I looking at" selectors (e.g., All / Customers / Vendors). |
 | `quickFilters` | array | `null` | See below | Independent toggle pills above the list. Each can be on/off; multiple can be active simultaneously. Combined with the active subset and column filters using AND. Ideal for "refinements" (e.g., only overdue, only pending delivery). |
 | `rowQuickActions` | object | _absent_ (feature ON with canonical defaults) | See below | Hover-revealed action overlay on each grid row. The feature is ON by default for every window with canonical actions (Edit / Duplicate / Email / Delete) plus a kebab containing everything from `menuActions` — **no contract block is emitted in that case**. Declare the section only to disable the feature (`enabled: false`), override an action's visibility (`actions.<key>.show: false` / `visibleWhen`), or promote a process to a fixed button (`show: "fixed"`). |
@@ -177,6 +178,35 @@ Generates a `{WindowName}StatusBar` component inside `@sf-generated` markers. Th
 | `completedIcon` | string | Lucide icon shown at 100% (e.g., `CheckCircle2`). |
 
 The generator emits `headerContent={(data) => <{WindowName}StatusBar data={data} />}` on the DetailView prop automatically.
+
+### Status Pills (`window.statusPills`)
+
+Renders one or more additional status pills next to the standard document-status pill on the detail view's action bar (the row that already shows Cancel + the `DocumentStatusPill` bound to `documentStatus`). Each entry reads a boolean-like header field and shows a `DocumentStatusPill` in one of two states, without any custom component.
+
+```json
+{
+  "statusPills": [
+    {
+      "field": "posted",
+      "trueKey": "postedStatus",
+      "falseKey": "notPostedStatus",
+      "_note": "Accounting status pill"
+    }
+  ]
+}
+```
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `field` | string | Header field to read (`data[field]`). Etendo `'Y'`/`'N'`-aware: truthy when `true`, `'Y'`, or `'true'`. |
+| `trueKey` | string | i18n key (resolved through `useUI()`) shown when the field is truthy. Renders with `tone: "success"`. |
+| `falseKey` | string | i18n key shown when the field is falsy. Renders with `tone: "warning"`. Omit for a **one-sided pill** that only appears in the truthy state — `DetailView` guards against rendering the generator's literal `'undefined'` fallback and hides the pill instead when the current value's key is missing. |
+| `visibleWhenCapability` | string | Optional. Same capability gate as the field-level property of the same name (see `visibleWhenCapability` under Grid cell flags below) — the pill is omitted entirely (not just disabled) when the named capability resolves `false` for the current role. |
+| `_note` | string | Optional free-text comment, ignored at runtime. Useful for documenting *why* the pill exists inline in `decisions.json`. |
+
+**Mechanics:** the generator resolves this array into an `extraBadges` array of `{ key: field, type: 'statusPill', trueKey, falseKey, visibleWhenCapability }` entries, emitted inside an `@sf-generated-start extraBadges:{Window}` marker and passed to `<DetailView extraBadges={extraBadges} />`. `DetailView.jsx` renders each `statusPill` entry as a `DocumentStatusPill` when the field's value is non-null and a resolvable i18n key exists for its current state. (`extraBadges` also accepts an older plain-badge shape — `{ key, label, style, hideWhenStatus, when }` — predating the `statusPill` type; new windows should always go through the `statusPills` decision above, which emits `type: 'statusPill'` entries, not the legacy shape directly.)
+
+**Real example — `posted` on `purchase-invoice`/`sales-invoice` (ETP-4520) and `return-to-vendor-shipment`/`return-material-receipt` (ETP-4707, 3rd window on the pattern):** shown above. Pair with the field-level `badge`/`badgeLabels`/`badgeVariants` properties (see Grid cell flags below) to show the same true/false state as both a grid-column pill and a form-header pill, driven by one `posted` field.
 
 ### Attachments (`window.attachments`)
 
@@ -270,7 +300,7 @@ generated `<Page>` component, sorted by `tabOrder`.
 
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
-| `tabOrder` | number | `99` | Sort order among secondary tabs (ascending). |
+| `tabOrder` | number | `99` | Global sort weight across the ENTIRE tab strip (ETP-4415) — not just among secondary tabs. Lower sorts first. Also settable on `customPanelTabs[]`/`extraTabs[]` items and `attachments` (default `999`, i.e. after secondaryTabs); the lines tab uses `window.detailTabOrder` (or the legacy `window.detailTabIndex`, see below) instead, since it isn't declared per-entry. A window declaring no `tabOrder` anywhere renders in exactly the pre-ETP-4415 order. |
 | `label` | string | `toLabel(key)` | Tab label (menu-translatable via `tMenu`). |
 | `tabMode` | string | `null` | `"form-only"` renders `isFormTab: true` (a plain form bound to the header's own state, not a child table) — see `SecondaryFormTab`'s prop contract in `docs/ui-customization.md` §17. Any other value (or `"table-form"`) is a genuine child-entity table + detail form. |
 | `addLineFields` | array | `[]` | Field keys shown in the tab's inline add-row. Resolved against the entity's own contract fields (labels, lookups, defaults, etc. carried over automatically). |
@@ -281,6 +311,14 @@ generated `<Page>` component, sorted by `tabOrder`.
 | `maxDetailLines` | number | `null` | **(ETP-4565)** Caps this tab's own child count, mirroring the top-level `window.maxDetailLines` semantics for the `detailEntity` pattern but scoped per secondary tab — a window can declare several `secondaryTabs`, each needing an independent cap (e.g. `contacts`' `customerAccounting` vs. `vendorAccounting`). `N > 0` hides the add-line button, the empty-state add trigger, and the inline add-row once the tab's child count reaches `N` (e.g. `1` for a "registro único" accounting-schema row). `0` disables manual add entirely for that tab. Undeclared (default) stays uncapped. Implemented by `resolveCanAddSecondaryLines(st, childrenCount)` in `tools/app-shell/src/components/contract-ui/DetailView.jsx`, fed by the `maxDetailLines` prop the generator emits on the tab's entry in `buildSecondaryTabPropEntry` (`generate-frontend.js`, `schema_forge_core`). |
 
 **Real examples:** `product`/`asset-group` (`secondaryTabs.accounting.maxDetailLines: 1`), `contacts` (`secondaryTabs.customerAccounting.maxDetailLines: 1` and `secondaryTabs.vendorAccounting.maxDetailLines: 1`) — all four cap their accounting-schema row at exactly one record, the `secondaryTabs`-pattern equivalent of `window.maxDetailLines: 1` on `product-category`/`business-partner-category`/`tax`'s `detailEntity`. Full extension-point reference (Panel/Form prop contracts, custom-window wiring): `docs/ui-customization.md` §17.
+
+**Cross-group ordering (ETP-4415).** `tabOrder` used to only sort within `secondaryTabs`; it now sorts the whole tab strip (`secondaryTabs` + lines + `customPanelTabs`/`extraTabs`/`attachments`) together, computed at runtime in `buildInitialTabs()` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`). This lets a classic tab (e.g. Contabilidad) render after a custom tab (e.g. Precio) — previously impossible since classic tabs were always emitted before custom ones. `relatedDocuments` does not participate (it renders via a separate footer path, not this tab strip, regardless of this feature).
+
+**The lines tab** is positioned by `window.detailTabOrder` (number, new, preferred) or the legacy `window.detailTabIndex` (a splice index among `secondaryTabs`, kept working for backward compatibility but not recommended for new windows — it's a position, not a weight, and interacts less predictably with custom tabs). Neither declared → the lines tab renders first, matching pre-ETP-4415 behavior.
+
+**Side effect:** the detail view opens on whichever tab ends up first after sorting (`activeTab` starts at index 0). Reordering a window's tabs can change its default-open tab — this is expected, not a bug to work around with a separate "default tab" key.
+
+**Incompatible with `customTabsAfterBottom: true`.** That flag renders custom tabs in a separate strip below `bottomSection`, entirely outside this sort — any `tabOrder` on a custom tab in that mode is a silent no-op, flagged by pipeline-validator rule F21 (see `docs/pipeline-validator-reference.md`).
 
 ### Subset Filters (`window.subsetFilters`)
 
@@ -573,6 +611,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
 | `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
+| `namedFilters` | array | `null` | **Hand-authored named HQL filters** the NEO Headless MCP exposes as `{ "status": "<name>" }` list filters. See below. |
 | `virtualFields` | array | `[]` | Columns with **no AD column behind them**, injected per row by the entity's NeoHandler in `afterHandle`. See below. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
 | `hideDelete` | boolean | `false` | Disables the CRUD delete capability for **this entity only** (`apiPrediction.crud.<entity>.delete: false`) — unlike `window.hideDelete`, which disables delete uniformly across every entity in the window. `DetailView`'s row-delete handler, bulk-delete bar, and delete-eligibility checks all gate directly on this same `crud.delete` flag, so setting it also removes the row-level delete icon/checkbox in the UI, not just the declared API capability — for **both** plain `DataTable` list/lines tabs and `linesLayout: "inlineEditable"` tabs (`InlineLinesPanel`, see ETP-4565: before that fix the icon still rendered — and silently no-opped on click — on `inlineEditable` tabs, since only `DataTable` gated its trash button on `onDeleteRow`). Use for a child/detail entity whose rows are exclusively managed as a side effect of the parent's own save (e.g. a NeoHandler syncing a join table from a parent field) — manual row deletion there would let a user bypass that invariant. Added ETP-4512 (`userRoles` on the `user` window). |
@@ -639,6 +678,52 @@ Enables a two-button save workflow: "Save Draft" (save only) + "Save & {label}" 
 **When disabled** (default): single "Save" button.
 **When enabled**: "Save draft" + "Save & {label}" buttons, plus process buttons from `processEndpoints`.
 
+### Named Filters (`entities.{name}.namedFilters`)
+
+Hand-authored named business filters the NEO Headless **MCP** exposes to AI agents as a
+`{ "status": "<name>" }` filter on `neo_list`. Each entry pairs a stable `name` with an **HQL `where`
+fragment** over the entity alias `e`. This is the canonical way to give an agent document-status
+semantics (paid / unpaid / partial) that plain `key=value` or range filters cannot express — the
+fragment can compare field-to-field and use HQL functions (`abs`, `now`, …).
+
+```json
+"entities": {
+  "header": {
+    "namedFilters": [
+      { "name": "completed", "label": "Paid", "description": "Fully paid invoices.",
+        "where": "e.paymentComplete = true" },
+      { "name": "pending", "label": "Unpaid", "description": "Nothing collected yet.",
+        "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)" },
+      { "name": "partial", "label": "Partially paid", "description": "Some collected, balance remains.",
+        "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)" }
+    ]
+  }
+}
+```
+
+| Property | Type | Required | Purpose |
+|----------|------|----------|---------|
+| `name` | string | ✅ | Stable filter key the agent passes as `{ "status": name }`. First entry wins on duplicate names. |
+| `where` | string | ✅ | HQL boolean fragment over alias `e` (the entity). Spliced verbatim into the fetch `WHERE`. |
+| `label` | string | — | Short human label surfaced in `neo_schema` docs. |
+| `description` | string | — | One-line explanation surfaced in `neo_schema` docs. |
+
+**Flow:** `decisions.json` → `resolve-curated` (normalize, trim, drop entries missing `name`/`where`,
+dedupe by `name`) → `contract.json` (`backendContract.entities[e].namedFilters`) → `push-to-neo`
+(`ETGO_SF_ENTITY.NAMED_FILTERS`, a `text`/CLOB column) → MCP. `neo_schema` returns each filter's
+`name`/`label`/`description` (**never the `where`**) so the agent can discover the available statuses;
+an unknown name returns the valid list as a clean handled error, not a 500.
+
+**Authoring rules (MANDATORY):**
+- Author the `where` **only over persisted, queryable columns.** Never reference a computed/transient
+  column (e.g. an invoice's `eTGODueDate`) — Hibernate cannot put it in a `WHERE` and the query throws
+  at creation. This is exactly why `overdue` (overdue-by-date) is intentionally **not** authored on the
+  invoice header: `C_Invoice` has no persisted due-date column.
+- The fragment is spliced verbatim and runs with the same trust as the rest of the spec — treat it as
+  trusted code, never interpolate user input into it.
+- An entity with no `namedFilters` falls back to a plain column match on `status`, so this is
+  backward-compatible.
+
 ## Field Properties (`entities.{name}.fields.{fieldName}.*`)
 
 Field keys use **camelCase from raw schema** (e.g., `"businessPartner"`, `"orderDate"`).
@@ -681,6 +766,39 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `multiField` | object | `null` | Compose this "host" grid field with sibling fields into **one** composite column: bold title + optional subtitle chip + optional authenticated media image. See below. |
 | `dimensionsPanel` | boolean | `false` | Collect this field into the ONE synthetic `type: 'dimensionsPanel'` grid column instead of its own column — see below. Read regardless of the field's own `grid` value (typically `grid: false`, since the field renders inside the expand-row panel, not as a standalone column). |
 | `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
+
+#### Boolean badge rendering (`badge`, `badgeLabels`, `badgeVariants`)
+
+For a **boolean** grid column, these three field-level properties render the cell as a colored pill/chip instead of the default plain Yes/No text. Shipped first on `posted` (`purchase-invoice`/`sales-invoice`, ETP-4520), then reused unchanged on `return-to-vendor-shipment`/`return-material-receipt` (ETP-4707 — the 3rd window on the pattern).
+
+| Property | Type | Default | Purpose |
+|----------|------|---------|---------|
+| `badge` | boolean | `false` | Renders the boolean column as a `Tag` pill instead of plain Yes/No text. Requires the field to resolve as a boolean at runtime (`type: "boolean"`, or an Etendo `'Y'`/`'N'`-serialized value). |
+| `badgeLabels` | object | `null` | `{ "true": <label>, "false": <label> }`. Each `<label>` is either a plain string or a per-locale object `{ en_US, es_ES }`. Resolved at render time by `createBadgeLabelResolver` (`tools/app-shell/src/components/contract-ui/DataTable.cellRenderers.jsx`) against the active locale, falling back to `en_US` and then to the generic `statusComplete`/`statusInProcess` i18n keys when the object (or that side of it) is absent. |
+| `badgeVariants` | object | `{ "true": "green", "false": "neutral" }` | `{ "true": <Tag variant>, "false": <Tag variant> }`. Any variant accepted by the shared `Tag` component (e.g. `"green"`, `"orange"`, `"blue"`, `"purple"`, `"red"`). |
+
+**Filtering:** `resolveFilterMode()` (`tools/app-shell/src/lib/gridQuery.js`) auto-detects `type: "boolean"` + `badgeLabels` present and switches the column's Advanced Filter (funnel icon) to `booleanLabel` mode, offering the two `badgeLabels` strings themselves (not raw `true`/`false`) as the selectable filter values — no extra `decisions.json` flag needed beyond what is already set for the badge.
+
+**Example — `posted` on `return-to-vendor-shipment`/`return-material-receipt` (ETP-4707):**
+
+```json
+"posted": {
+  "visibility": "readOnly",
+  "form": false,
+  "grid": true,
+  "gridOrder": 8,
+  "type": "boolean",
+  "badge": true,
+  "visibleWhenCapability": "showAccountingFields",
+  "badgeLabels": {
+    "true":  { "en_US": "Posted",     "es_ES": "Contabilizado" },
+    "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+  },
+  "badgeVariants": { "true": "green", "false": "orange" }
+}
+```
+
+Renders a green "Contabilizado" pill or an orange "Sin contabilizar" pill in the grid, and both strings become the two selectable options in that column's Advanced Filter. Pair with `window.statusPills` (see the Window Properties section above) to also surface the same true/false state as a pill on the detail-view form header, driven by the same field.
 
 #### Composite list column (`multiField`)
 

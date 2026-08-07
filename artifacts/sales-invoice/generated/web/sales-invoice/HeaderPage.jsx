@@ -54,7 +54,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList', 'transactionDocument'];
+const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -154,6 +154,27 @@ export const api = {
       "reference": "Org",
       "inputMode": "selector",
       "url": "/sws/neo/sales-invoice/header/selectors/adOrgId"
+    },
+    {
+      "entity": "header",
+      "field": "transactionDocument",
+      "column": "C_DocTypeTarget_ID",
+      "reference": "DocumentType",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "AD_Org_ID",
+            "source": "field",
+            "field": "adOrgId"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
@@ -272,27 +293,6 @@ export const api = {
       "reference": "aeatsii_cause_exemption",
       "inputMode": "selector",
       "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
-    },
-    {
-      "entity": "header",
-      "field": "transactionDocument",
-      "column": "C_DocTypeTarget_ID",
-      "reference": "DocumentType",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
-      "context": {
-        "required": [
-          {
-            "param": "IsSOTrx",
-            "source": "windowCategory"
-          },
-          {
-            "param": "AD_Org_ID",
-            "source": "field",
-            "field": "adOrgId"
-          }
-        ]
-      }
     },
     {
       "entity": "lines",
@@ -448,6 +448,14 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
       "field": "tBAIQRcode",
       "column": "em_tbai_qrcode",
       "url": "/sws/neo/sales-invoice/header/{id}/action/tBAIQRcode",
@@ -468,6 +476,14 @@ export const api = {
       "column": "EM_Tbai_Xmlgenerator",
       "url": "/sws/neo/sales-invoice/header/{id}/action/tbaiXmlgenerator",
       "processId": "BE2486102F2C41779B760609FD69A225",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
       "processType": "obuiapp"
     },
     {
@@ -538,22 +554,6 @@ export const api = {
       "column": "EM_Psd2_Generate_Bank_Payment",
       "url": "/sws/neo/sales-invoice/header/{id}/action/psd2GenerateBankPayment",
       "processId": "0661406A983B4D8EA611F8596F114D52",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
-      "field": "eTPRRemovePayment",
-      "column": "EM_Etpr_Remove_Payment",
-      "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
-      "processId": "745FCF75B6F14024B96CC14429D8E952",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {

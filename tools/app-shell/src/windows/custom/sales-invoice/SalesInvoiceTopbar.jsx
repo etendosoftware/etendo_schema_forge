@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import InvoiceTopbarExtra from '@generated/sales-invoice/custom/InvoiceTopbarExtra';
 import CloneButton from '../shared/CloneButton.jsx';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { useUI } from '@etendosoftware/app-shell-core';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 
@@ -29,6 +30,10 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
         onClick={() => setShowClone(true)}
         title={ui('cloneOrderBtn')}
         data-testid="CloneButton__5c4da7" />
+      <CopyRecordLinkButton
+        recordId={recordId}
+        windowName="sales-invoice"
+        data-testid="CopyRecordLinkButton__5c4da7" />
       <InvoiceTopbarExtra
         data={data}
         recordId={recordId}

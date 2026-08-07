@@ -216,12 +216,23 @@ describe('OrderCreateInvoice', () => {
 
     it('switches to semantic success roles when disabled', () => {
       assert.match(src, /disabled\s*\?\s*'2px solid var\(--status-success-border\)'/);
-      assert.match(src, /background:\s*disabled\s*\?\s*'hsl\(var\(--card\)\)'/);
+      assert.match(src, /background:\s*disabled\s*\?\s*'var\(--status-success-bg\)'/);
       assert.match(src, /color:\s*disabled\s*\?\s*'var\(--status-success-fg\)'/);
     });
 
     it('renders the checkmark for both checked and disabled states', () => {
       assert.match(src, /\(checked\s*\|\|\s*disabled\)\s*&&\s*\(/);
+    });
+  });
+
+  describe('semantic color roles (ETP-4767)', () => {
+    it('uses foreground roles for selected and completed checkbox indicators', () => {
+      assert.match(src, /background:\s*disabled\s*\?\s*'var\(--status-success-fg\)'\s*:\s*\(checked\s*\?\s*'var\(--status-info-fg\)'/);
+    });
+
+    it('uses semantic surface roles for the confirmation summary and warning', () => {
+      assert.match(src, /background: 'var\(--status-info-bg\)', border: '0\.5px solid var\(--status-info-border\)'/);
+      assert.match(src, /background: 'var\(--status-warning-bg\)', border: '1px solid var\(--status-warning-border\)'/);
     });
   });
 
