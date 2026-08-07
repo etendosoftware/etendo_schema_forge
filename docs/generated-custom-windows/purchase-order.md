@@ -183,6 +183,8 @@ When a purchase order is denominated in a currency different from the organizati
 
 `GET /sws/neo/validate-exchange-rate` is implemented in `NeoExchangeRateService.java`. It queries `C_Conversion_Rate` for the most recent active row valid on the document date. Both ISO 4217 codes and internal DB IDs are accepted. If the direct `FROM→TO` row is absent, the endpoint tries the inverse direction and returns `1/rate`, so configuring only one direction in Etendo is sufficient. Full parameter reference: see the Sales Order dual-currency section above.
 
+Rows are scoped `AD_Client_ID IN ('0', <client>)`, so the System-level rates that currencyLayer syncs (ETP-4474) are visible to every tenant. The header callout's `noExchangeRateAvailable` warning resolves availability through the same helper since ETP-4838 — see `sales-order.md` § "`NeoExchangeRateService.hasRate` — the single source of truth".
+
 ### Currency change handling (ETP-4027 functional model)
 
 The `currency` field on the header form is **always editable on draft purchase orders**, including those with saved lines. The DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` no longer blocks the change (the `C_Currency_ID` clause was removed in ETP-4027 Phase 0). The frontend enforces a rate-availability validation at the dropdown change moment, and the per-line conversion runs only on lines added AFTER a save.

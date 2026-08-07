@@ -191,11 +191,30 @@ When a sales order is denominated in a currency different from the organization'
 | `toCurrency` | yes | ISO 4217 code (`"EUR"`) or DB record ID |
 | `date` | yes | `YYYY-MM-DD` |
 
-The endpoint first tries the direct `FROM→TO` direction. If no row is found, it tries the inverse `TO→FROM` direction and returns `1/rate`. This means configuring only one direction in Etendo's currency conversion setup is sufficient — both `USD→EUR` and `EUR→USD` resolve from a single row. Scoping is client + org (org-level rows take priority over `AD_Org_ID = '0'` rows).
+The endpoint first tries the direct `FROM→TO` direction. If no row is found, it tries the inverse `TO→FROM` direction and returns `1/rate`. This means configuring only one direction in Etendo's currency conversion setup is sufficient — both `USD→EUR` and `EUR→USD` resolve from a single row.
+
+**Scoping (ETP-4474):** rows are matched with `AD_Client_ID IN ('0', <current client>)` and `AD_Org_ID IN ('0', <current org>)`, ordered `ad_client_id DESC` so a tenant-specific rate wins over the shared System row for the same pair and date. Rates synced from currencyLayer live at the System client, so a filter on the tenant alone finds nothing.
 
 **multiplyrate convention:** Etendo stores `multiplyrate` such that `to_amount = from_amount × multiplyrate`. The endpoint returns this value directly; the inverse fallback already applies the `1/rate` division before returning.
 
 **Same-currency short-circuit:** when `fromCurrencyId == toCurrencyId`, the endpoint skips the DB query and returns `{ hasRate: true, rate: 1.0 }` immediately.
+
+#### `NeoExchangeRateService.hasRate` — the single source of truth (ETP-4838)
+
+Two *different* server paths answer "is there a rate?" for the same currency change:
+
+| Path | Trigger | Effect |
+|---|---|---|
+| `GET /sws/neo/validate-exchange-rate` | the frontend, before applying the dropdown change | reverts the dropdown + `noConversionRateError` toast |
+| `POST {spec}/header/callout` | the AD callout, when `field == "currency"` | appends a `WARNING` message `noExchangeRateAvailable` |
+
+Both now resolve availability through the same package-private helper, `NeoExchangeRateService.hasRate(from, to, date)` — same client-or-system scoping, same inverse-direction fallback, same fail-open on a DB error. They can no longer disagree.
+
+Before ETP-4838 the callout path ran its own private copy of the query in `AbstractOrderHeaderHandler` and `AbstractInvoiceHeaderHandler`, filtered by `ad_client_id = ?` only. Once ETP-4474 moved the currencyLayer rates to the System client, those copies stopped finding them: the frontend accepted the change (`hasRate: true`) while the callout warned "no rate available" for the very same pair and date. The warning was cosmetic — the document completed and posted with the correct rate — but it fired on **every** manual currency change across purchase orders, sales orders, sales quotations, and both invoice windows.
+
+The warning only ever fires when the user edits the `currency` field by hand. The common flow, where the price list sets the currency, never sets `currency` as the callout trigger field — which is why the regression went unnoticed for three weeks.
+
+**Open follow-up:** the callout returns the i18n *key* (`noExchangeRateAvailable`), not a sentence, and `useCallout.js` toasts it verbatim — so on the (now rare) occasions the warning is legitimate, the user sees the raw camelCase key. Tracked separately; ETP-4838 covers only the false positive.
 
 ### Currency change handling (ETP-4027 functional model)
 
