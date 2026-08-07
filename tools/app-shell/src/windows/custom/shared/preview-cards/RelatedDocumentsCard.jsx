@@ -95,7 +95,7 @@ function DocRow({ type, doc, ui, navigate }) {
  *   specs        Array<{ key, type, fetch: async(id, token, base) => row[] }>
  *   fetchExtra   async(id, token, base) => Array<{ type, doc }> — optional chained fetch
  */
-export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, specs = [], fetchExtra }) {
+export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, specs = [], fetchExtra, docsRefreshSignal }) {
   const ui = useUI();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
@@ -124,7 +124,7 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
         setItems([...specResults.flat(), ...extraResults]);
       })
       .finally(() => setLoading(false));
-  }, [documentId, token, apiBaseUrl, refreshKey]);
+  }, [documentId, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   if (!documentId || specs.length === 0) return null;
 
