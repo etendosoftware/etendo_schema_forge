@@ -143,7 +143,7 @@ export default function AssetCategoryPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, maxDetailLines: 1 },
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, maxDetailLines: 1, tabOrder: 1 },
         ]}
         hidePrint
         noHeaderBorder

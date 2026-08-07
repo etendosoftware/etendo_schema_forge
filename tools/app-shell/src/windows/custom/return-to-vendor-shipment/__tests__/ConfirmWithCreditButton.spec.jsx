@@ -31,6 +31,7 @@ vi.mock('../useReturnToVendorPdf', () => ({
 }));
 
 import ConfirmWithCreditButton from '../ConfirmWithCreditButton.jsx';
+import { itRendersOnlyCopyLinkOutsideDrOrCo } from '../../shared/__tests__/confirmWithCreditButtonCopyLinkTest.jsx';
 
 const BASE_PROPS = {
   recordId: 'RTV-001',
@@ -51,12 +52,7 @@ describe('ConfirmWithCreditButton (return-to-vendor)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders nothing when status is not DR or CO', () => {
-    const { container } = render(
-      <ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'CL', linesCount: 2 }} />,
-    );
-    expect(container.firstChild).toBeNull();
-  });
+  itRendersOnlyCopyLinkOutsideDrOrCo(ConfirmWithCreditButton, BASE_PROPS);
 
   it('renders confirm button in DR status', () => {
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'DR', linesCount: 2 }} />);
