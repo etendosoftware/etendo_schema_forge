@@ -1,23 +1,94 @@
 import { buildAuthHeaders } from '@etendosoftware/etendo-go-core/onboarding/api';
 
-/**
- * Calls the onboarding endpoint for the paid upgrade flow.
- *
- * This does not reuse `runOnboardingStream` from the core package for two
- * reasons: that helper serialises a fixed allowlist of fields, so it would drop
- * `paymentToken`; and it starts reading the NDJSON stream without checking the
- * status, so a 402 paywall response would surface as a generic "no result"
- * failure instead of a payment error. Everything else — endpoint, auth header
- * shape and message protocol — matches the core helper.
- */
-
 /** Error codes this module raises, mapped to i18n keys by the page. */
 export const UPGRADE_ERROR_CODES = {
-  paymentRequired: 'upgradePaymentRequired',
-  streamUnavailable: 'upgradeStreamUnavailable',
-  missingResult: 'upgradeMissingResult',
+  checkoutUnavailable: 'upgradeCheckoutUnavailable',
+  checkoutCreationFailed: 'upgradeCheckoutCreationFailed',
+  sessionExpired: 'upgradeSessionExpired',
   failed: 'upgradeGenericError',
 };
+
+/**
+ * Creates a provider-hosted checkout session for a known paid action.
+ *
+ * The browser sends product intent only. Pricing, currency, Stripe Price IDs,
+ * and payment confirmation are server-owned. The returned URL is safe to use
+ * as a redirect target because it is issued by the authenticated backend.
+ */
+export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {}) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/checkout/sessions`, {
+    method: 'POST',
+    headers: buildAuthHeaders(token),
+    body: JSON.stringify({
+      action: input.action || 'productive-tenant',
+      upgradeAction: input.upgradeAction || 'create-productive',
+      ...(input.clientName ? { clientName: input.clientName } : {}),
+      ...(input.language ? { language: input.language } : {}),
+      ...(input.countryCode ? { countryCode: input.countryCode } : {}),
+    }),
+  });
+
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
+  }
+  if (!data?.checkoutUrl || !data?.requestId) {
+    throw buildError(UPGRADE_ERROR_CODES.checkoutUnavailable);
+  }
+  return { checkoutUrl: data.checkoutUrl, requestId: data.requestId, expiresAt: data.expiresAt || null };
+}
+
+export async function getCheckoutStatus(fetchImpl, baseUrl, token, requestId) {
+  const response = await fetchImpl(
+    `${baseUrl}/sws/go/checkout/sessions/${encodeURIComponent(requestId)}`,
+    { headers: buildAuthHeaders(token) }
+  );
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+  }
+  return data || { status: 'pending' };
+}
+
+/** Starts the existing idempotent onboarding chain after the webhook authorizes the request. */
+export async function runPaidOnboarding(fetchImpl, baseUrl, token, input, onMessage) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/onboarding`, {
+    method: 'POST',
+    headers: buildAuthHeaders(token),
+    body: JSON.stringify({
+      clientName: input.clientName,
+      currency: input.currency || 'EUR',
+      language: input.language || 'en_US',
+      countryCode: input.countryCode || 'AR',
+      paymentToken: input.paymentToken,
+      upgradeAction: input.upgradeAction || 'create-productive',
+    }),
+  });
+  if (response.status === 401) throw buildError(UPGRADE_ERROR_CODES.sessionExpired, null, 401);
+  if (!response.body?.getReader) throw buildError(UPGRADE_ERROR_CODES.checkoutCreationFailed);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = null;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (value) buffer += decoder.decode(value, { stream: !done });
+    if (done) buffer += decoder.decode();
+    const lines = buffer.split('\n');
+    buffer = done ? '' : lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const message = JSON.parse(line);
+      onMessage?.(message);
+      if (message.type === 'result') result = message;
+    }
+    if (done) break;
+  }
+  if (!result || result.success === false) throw buildError(UPGRADE_ERROR_CODES.checkoutCreationFailed);
+  return result;
+}
 
 /** localStorage key holding the account-level token that owns tenants. */
 const PLATFORM_TOKEN_KEY = 'sf_platform_token';
@@ -30,6 +101,21 @@ const PLATFORM_TOKEN_KEY = 'sf_platform_token';
 export function getPlatformToken(storage = globalThis.localStorage) {
   try {
     return storage?.getItem(PLATFORM_TOKEN_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns the active browser credential for account-level upgrade operations. The backend accepts
+ * both the account session and the selected environment JWT and resolves them to one account.
+ */
+export function getCheckoutToken(storage = globalThis.localStorage) {
+  try {
+    // The selected environment JWT is the session currently used by NEO and remains valid when
+    // another tab refreshes the account token. The platform token is only the fallback for the
+    // account/onboarding screen where no environment has been selected yet.
+    return storage?.getItem('sf_auth_token') || storage?.getItem('sf_platform_token') || null;
   } catch {
     return null;
   }
@@ -48,100 +134,4 @@ async function readJsonSafely(response) {
   } catch {
     return null;
   }
-}
-
-/**
- * Parses one NDJSON line, or returns null when it cannot be read.
- *
- * A malformed line must not abort a provisioning run already underway: the
- * tenant is being created server-side regardless of what the client can parse.
- */
-function parseStreamLine(line) {
-  if (!line.trim()) return null;
-  try {
-    return JSON.parse(line);
-  } catch {
-    return null;
-  }
-}
-
-/** Forwards every complete message in a chunk, returning the last result seen. */
-function drainLines(lines, onMessage) {
-  let result = null;
-  for (const line of lines) {
-    const message = parseStreamLine(line);
-    if (!message) continue;
-    onMessage?.(message);
-    if (message.type === 'result') result = message;
-  }
-  return result;
-}
-
-/** Consumes an NDJSON body, forwarding each message and keeping the final result. */
-export async function readNdjsonStream(reader, onMessage) {
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let finalResult = null;
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: !done });
-    if (done) buffer += decoder.decode();
-
-    const lines = buffer.split('\n');
-    // Keep the trailing partial line until more bytes arrive.
-    buffer = done ? '' : lines.pop();
-
-    finalResult = drainLines(lines, onMessage) ?? finalResult;
-
-    if (done) break;
-  }
-
-  return finalResult;
-}
-
-/**
- * Creates a second, productive tenant behind the mock paywall.
- *
- * @param {Function} fetchImpl fetch implementation
- * @param {string} baseUrl API base (may be '')
- * @param {string} token platform token
- * @param {object} form { clientName, currency, language, countryCode, paymentToken }
- * @param {Function} [onMessage] receives each streamed progress/result message
- * @returns {Promise<object>} the final `result` message
- */
-export async function createProductiveTenant(fetchImpl, baseUrl, token, form, onMessage) {
-  const response = await fetchImpl(`${baseUrl}/sws/go/onboarding`, {
-    method: 'POST',
-    headers: buildAuthHeaders(token),
-    body: JSON.stringify({
-      clientName: form.clientName,
-      currency: form.currency,
-      language: form.language,
-      countryCode: form.countryCode,
-      paymentToken: form.paymentToken,
-    }),
-  });
-
-  // The paywall answers before any provisioning starts, so there is no stream
-  // to read — surface it as a payment error the page can act on.
-  if (response.status === 402) {
-    const data = await readJsonSafely(response);
-    throw buildError(UPGRADE_ERROR_CODES.paymentRequired, data?.message, 402);
-  }
-
-  if (!response.ok) {
-    const data = await readJsonSafely(response);
-    throw buildError(UPGRADE_ERROR_CODES.failed, data?.error?.message || data?.message, response.status);
-  }
-
-  if (!response.body?.getReader) {
-    throw buildError(UPGRADE_ERROR_CODES.streamUnavailable);
-  }
-
-  const finalResult = await readNdjsonStream(response.body.getReader(), onMessage);
-  if (!finalResult) {
-    throw buildError(UPGRADE_ERROR_CODES.missingResult);
-  }
-  return finalResult;
 }

@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Check, CircleAlert, CreditCard, Loader2, Rocket } from 'lucide-react';
-import {
-  initialSetupSteps,
-  applyProgressMessage,
-  fetchEnvironments,
-} from '@etendosoftware/etendo-go-core/onboarding';
+import { initialSetupSteps, applyProgressMessage, fetchEnvironments } from '@etendosoftware/etendo-go-core/onboarding';
 import { useUI, getStoredLocale } from '@/i18n';
 import { detectBaseUrl } from '@/auth/api.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,22 +10,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  createMockPaymentToken,
-  formatCardNumber,
-  isDeclinedCard,
-  validateCheckout,
-} from '@/lib/upgrade/mockPayment.js';
-import { createProductiveTenant, getPlatformToken, UPGRADE_ERROR_CODES } from '@/lib/upgrade/api.js';
+  createCheckoutSession,
+  getCheckoutToken,
+  getCheckoutStatus,
+  runPaidOnboarding,
+  UPGRADE_ERROR_CODES,
+} from '@/lib/upgrade/api.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 
 /**
- * Placeholder price for the mock checkout. Real pricing is a product decision
- * that has not been made yet; nothing is charged either way.
+ * Display price until the backend plan catalog is exposed to the product UI.
  */
-const MOCK_MONTHLY_PRICE = '€49';
-
-/** Defaults for the tenant being provisioned, mirroring the onboarding flow. */
-const TENANT_DEFAULTS = { currency: 'EUR', countryCode: 'ES' };
+const PRODUCTIVE_MONTHLY_PRICE = '€49';
 
 const FREE_FEATURES = ['upgradeFreeFeatureExplore', 'upgradeFreeFeatureSample', 'upgradeFreeFeatureSingle'];
 const PRODUCTIVE_FEATURES = [
@@ -49,7 +41,9 @@ const STEP_LABELS = {
   finalize: 'upgradeStepFinalize',
 };
 
-const EMPTY_FORM = { tenantName: '', cardholder: '', cardNumber: '', expiry: '', cvc: '' };
+const EMPTY_FORM = { tenantName: '', upgradeAction: 'create-productive', conversionClientId: '' };
+const PENDING_CHECKOUT_NAME = 'sf_pending_checkout_tenant_name';
+const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
 
 function PlanCard({ testId, name, tagline, price, features, current, highlighted, ui }) {
   return (
@@ -206,7 +200,7 @@ export default function UpgradePage() {
 
   useEffect(() => {
     let cancelled = false;
-    const token = getPlatformToken();
+    const token = getCheckoutToken();
     if (!token) {
       setAccountState('unavailable');
       return undefined;
@@ -227,46 +221,81 @@ export default function UpgradePage() {
     };
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') !== 'success') return undefined;
+    const requestId = params.get('requestId');
+    const token = getCheckoutToken();
+    const tenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
+    const upgradeAction = sessionStorage.getItem(PENDING_CHECKOUT_ACTION) || 'create-productive';
+    if (!requestId || !token || !tenantName) {
+      setFormError('upgradeCheckoutCreationFailed');
+      return undefined;
+    }
+    let cancelled = false;
+    setForm(previous => ({ ...previous, tenantName, upgradeAction }));
+    setPhase('running');
+    (async () => {
+      try {
+        let status = { status: 'pending' };
+        for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
+          status = await getCheckoutStatus(fetch, detectBaseUrl(), token, requestId);
+          if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
+        await runPaidOnboarding(fetch, detectBaseUrl(), token, {
+          clientName: status.clientName || tenantName,
+          paymentToken: requestId,
+          upgradeAction,
+          language: getStoredLocale(),
+          countryCode: 'AR',
+        }, message => {
+          if (!cancelled) setSteps(previous => applyProgressMessage(previous, message));
+        });
+        if (cancelled) return;
+        sessionStorage.removeItem(PENDING_CHECKOUT_NAME);
+        window.history.replaceState({}, '', '/upgrade');
+        setPhase('success');
+      } catch (error) {
+        if (!cancelled) {
+          setPhase('form');
+          setFormError(error?.code || 'upgradeCheckoutCreationFailed');
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const update = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
     setErrors(prev => (prev[field] ? { ...prev, [field]: undefined } : prev));
   };
 
-  const runUpgrade = async paymentToken => {
-    const token = getPlatformToken();
+  const runUpgrade = async () => {
+    const token = getCheckoutToken();
     if (!token) {
       setFormError('upgradeSessionExpired');
       return;
     }
 
     setPhase('running');
-    setSteps(initialSetupSteps());
-
     try {
-      const result = await createProductiveTenant(
+      const session = await createCheckoutSession(
         fetch,
         detectBaseUrl(),
         token,
         {
+          action: 'productive-tenant',
           clientName: form.tenantName.trim(),
-          currency: TENANT_DEFAULTS.currency,
-          countryCode: TENANT_DEFAULTS.countryCode,
+          upgradeAction: form.upgradeAction,
           language: getStoredLocale(),
-          paymentToken,
-        },
-        message => {
-          if (message.type === 'progress' && message.step) {
-            setSteps(prev => applyProgressMessage(prev, message));
-          }
         }
       );
-
-      if (result.success) {
-        setPhase('success');
-        return;
-      }
-      setPhase('form');
-      setFormError('upgradeGenericError');
+      // Payment and provisioning are confirmed by the backend/webhook. The
+      // browser only follows the provider-hosted URL and never handles cards.
+      sessionStorage.setItem(PENDING_CHECKOUT_NAME, form.tenantName.trim());
+      sessionStorage.setItem(PENDING_CHECKOUT_ACTION, form.upgradeAction);
+      window.location.assign(session.checkoutUrl);
     } catch (error) {
       setPhase('form');
       setFormError(
@@ -282,12 +311,27 @@ export default function UpgradePage() {
   const showAccountLoading = phase === 'form' && accountState === 'loading';
   const showFirstTenantFree = phase === 'form' && hasNoTenants;
   const showCheckout = phase === 'form' && accountState !== 'loading' && !hasNoTenants;
+  const demoEnvironments = environments.filter(env => env?.plan !== 'productive');
+  const currentDemo = demoEnvironments.find(env => env.clientId === localStorage.getItem('sf_auth_client_id'))
+    || demoEnvironments[0];
+
+  useEffect(() => {
+    if (currentDemo && !form.conversionClientId) {
+      setForm(previous => ({
+        ...previous,
+        upgradeAction: 'convert-demo',
+        conversionClientId: currentDemo.clientId,
+        tenantName: currentDemo.clientName || previous.tenantName,
+      }));
+    }
+  }, [currentDemo?.clientId]);
 
   const handleSubmit = event => {
     event.preventDefault();
     setFormError(null);
 
-    const validation = validateCheckout(form);
+    const validation = {};
+    if (!form.tenantName.trim()) validation.tenantName = 'upgradeTenantNameRequired';
 
     // Submitting a name the account already owns is treated by the backend as
     // resuming that tenant, not creating a new one — no charge, but also no new
@@ -297,7 +341,7 @@ export default function UpgradePage() {
     const alreadyOwned = environments.some(
       env => String(env?.clientName ?? '').trim().toLowerCase() === requested
     );
-    if (requested && alreadyOwned) {
+    if (form.upgradeAction === 'create-productive' && requested && alreadyOwned) {
       validation.tenantName = 'upgradeTenantNameTaken';
     }
 
@@ -307,15 +351,8 @@ export default function UpgradePage() {
     }
     setErrors({});
 
-    // The declined test card never reaches the network — the point is to
-    // exercise the error path, not the backend.
-    if (isDeclinedCard(form.cardNumber)) {
-      setFormError('upgradePaymentDeclined');
-      return;
-    }
-
     // Not awaited: runUpgrade drives its own phase/error state and never rejects.
-    runUpgrade(createMockPaymentToken());
+    runUpgrade();
   };
 
   return (
@@ -343,7 +380,7 @@ export default function UpgradePage() {
           testId="upgrade-plan-productive"
           name={ui('upgradePlanProductiveName')}
           tagline={ui('upgradePlanProductiveTagline')}
-          price={ui('upgradePlanProductivePrice', { amount: MOCK_MONTHLY_PRICE })}
+          price={ui('upgradePlanProductivePrice', { amount: PRODUCTIVE_MONTHLY_PRICE })}
           features={PRODUCTIVE_FEATURES}
           highlighted
           ui={ui}
@@ -393,7 +430,6 @@ export default function UpgradePage() {
                 data-testid="CreditCard__58bad7" />
               <CardTitle className="text-base" data-testid="CardTitle__58bad7">{ui('upgradeCheckoutTitle')}</CardTitle>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{ui('upgradeMockPaymentNotice')}</p>
           </CardHeader>
           <CardContent data-testid="CardContent__58bad7">
             <form className="space-y-5" onSubmit={handleSubmit} noValidate data-testid="upgrade-form">
@@ -408,57 +444,42 @@ export default function UpgradePage() {
                 ui={ui}
               />
 
-              <Field
-                id="upgrade-cardholder"
-                data-testid="upgrade-cardholder"
-                label={ui('upgradeCardholderLabel')}
-                placeholder={ui('upgradeCardholderPlaceholder')}
-                autoComplete="cc-name"
-                value={form.cardholder}
-                onChange={event => update('cardholder', event.target.value)}
-                error={errors.cardholder}
-                ui={ui}
-              />
-
-              <Field
-                id="upgrade-card-number"
-                data-testid="upgrade-card-number"
-                label={ui('upgradeCardNumberLabel')}
-                placeholder={ui('upgradeCardNumberPlaceholder')}
-                inputMode="numeric"
-                autoComplete="cc-number"
-                value={form.cardNumber}
-                onChange={event => update('cardNumber', formatCardNumber(event.target.value))}
-                error={errors.cardNumber}
-                ui={ui}
-              />
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  id="upgrade-expiry"
-                  data-testid="upgrade-expiry"
-                  label={ui('upgradeExpiryLabel')}
-                  placeholder={ui('upgradeExpiryPlaceholder')}
-                  inputMode="numeric"
-                  autoComplete="cc-exp"
-                  value={form.expiry}
-                  onChange={event => update('expiry', event.target.value)}
-                  error={errors.expiry}
-                  ui={ui}
-                />
-                <Field
-                  id="upgrade-cvc"
-                  data-testid="upgrade-cvc"
-                  label={ui('upgradeCvcLabel')}
-                  placeholder={ui('upgradeCvcPlaceholder')}
-                  inputMode="numeric"
-                  autoComplete="cc-csc"
-                  value={form.cvc}
-                  onChange={event => update('cvc', event.target.value)}
-                  error={errors.cvc}
-                  ui={ui}
-                />
-              </div>
+              {demoEnvironments.length > 0 && (
+                <fieldset className="space-y-3" data-testid="upgrade-target-choice">
+                  <legend className="text-sm font-medium">{ui('upgradeTargetLabel')}</legend>
+                  <label className="flex items-start gap-2 rounded-md border p-3">
+                    <input
+                      type="radio"
+                      name="upgradeAction"
+                      value="convert-demo"
+                      checked={form.upgradeAction === 'convert-demo'}
+                      onChange={() => update('upgradeAction', 'convert-demo')}
+                      data-testid="upgrade-target-convert"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium">{ui('upgradeConvertDemo')}</span>
+                      <span className="block text-xs text-muted-foreground">{ui('upgradeConvertDemoBody')}</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 rounded-md border p-3">
+                    <input
+                      type="radio"
+                      name="upgradeAction"
+                      value="create-productive"
+                      checked={form.upgradeAction === 'create-productive'}
+                      onChange={() => {
+                        update('upgradeAction', 'create-productive');
+                        update('tenantName', '');
+                      }}
+                      data-testid="upgrade-target-create"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium">{ui('upgradeCreateNew')}</span>
+                      <span className="block text-xs text-muted-foreground">{ui('upgradeCreateNewBody')}</span>
+                    </span>
+                  </label>
+                </fieldset>
+              )}
 
               {formError && (
                 <div
@@ -471,7 +492,7 @@ export default function UpgradePage() {
                 </div>
               )}
 
-              <Button type="submit" data-testid="upgrade-submit">
+              <Button type="submit" data-testid="upgrade-submit" disabled={phase === 'running'}>
                 {ui('upgradeSubmit')}
               </Button>
             </form>

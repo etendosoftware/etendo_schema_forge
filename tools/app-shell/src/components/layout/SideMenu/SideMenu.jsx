@@ -69,6 +69,7 @@ import {
   TENANT_UPGRADE,
 } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
 
 const ICON_MAP = {
@@ -596,6 +597,14 @@ export default function SideMenu({
                         />
                         <span className="flex-1 truncate">
                           {env.clientName || env.orgName || ui('yourCompany')}
+                        </span>
+                        <span className={cn(
+                          'ml-2 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                          env.plan === 'productive'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-600'
+                        )}>
+                          {ui(environmentPlanLabelKey(env))}
                         </span>
                         {switching === env.clientId && (
                           <Loader2
