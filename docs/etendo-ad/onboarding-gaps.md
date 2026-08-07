@@ -13,6 +13,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A3b | Accounting | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL (doubtful debt, bad-debt expense/revenue, allowance for doubtful debt, deferred product expense/revenue) | Onboarding sampledata XML (`C_ACCTSCHEMA_DEFAULT.xml`) — dataset-only, no new service | ETP-4245 |
 | A4 | Accounting | `A_Amortization` table (`AD_Table_id 800060`) inactive on `c_acctschema_table` — amortization documents cannot post | Onboarding sampledata XML (`C_ACCTSCHEMA_TABLE.xml`) — dataset-only, no new service | ETP-4452 |
 | A2b | Accounting | Posting a Goods Receipt fails with generic "Account could not be found." — `C_BP_Group_Acct.NotInvoicedReceipts_Acct` stuck NULL on one stale pre-existing row (GOClient "Cliente" group) | Corrective-only data-fix (`R17`) — CONFIRMED no preventive gap: current onboarding code already wires this column correctly for every group created today | ETP-4706 |
+| A2b (generalized) | Accounting | Same stale-row class of drift, generalized to the other 11 `*_acct` columns on `C_BP_Group_Acct`; 4 of them (`DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct`) turned out to be an ONGOING preventive gap too — neither the core `c_bp_group_trg()` trigger nor `BP_GROUP_ACCT_SQL` ever populated them | Both fronts closed (`R21` corrective + `OnboardingAccountingWiringService#patchBpGroupAcctMissingColumns` preventive) | ETP-4720 |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
@@ -372,6 +373,7 @@ NULL — the same stale-row class of drift, just for other account types on the 
 explicitly scoped itself to Not-Invoiced-Receipts only; a follow-up ticket should decide whether to
 generalize R17 into a "resync every NULL `*_acct` column against the schema default" fix for this row
 (and any other row like it) rather than one column at a time.
+**RESOLVED by ETP-4720 (2026-08-05) — see the "A2b (generalized)" section immediately below.**
 
 **Fix:** `cli/src/data-fixes/sql/20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql` —
 single guarded `UPDATE`, scoped to `:client_id`, backfilling `notinvoicedreceipts_acct` from
@@ -387,6 +389,69 @@ entirely — a byte-for-byte mirror of the live NULL above. Fixed for hygiene on
 `OnboardingDatasetDefinition.INCLUDED_TABLES`, so this has no runtime/onboarding effect — it just
 prevents the stale value from resurfacing if the file is ever regenerated or the table is later
 added to the included set. If you independently find this XML stale, it's already handled.
+
+---
+
+### A2b (generalized) — the other 11 `C_BP_Group_Acct.*_acct` columns, 4 of them an ONGOING preventive gap (ETP-4720, 2026-08-05)
+
+**Task:** generalize R17's single-column backfill (`NotInvoicedReceipts_Acct`) to the other 11
+`*_acct` columns on `C_BP_Group_Acct` flagged as out-of-scope above. The ticket's own text assumed
+this was corrective-only, same as R17 — that assumption held for 7 of the 11 columns but was
+**wrong** for the other 4.
+
+**Root cause, confirmed by reading both live provisioning paths (not assumed):**
+- `pg_get_functiondef('c_bp_group_trg')` (the core, unmodified Postgres trigger that fires on every
+  `C_BP_Group` insert) shows its own `INSERT` **omits 5 of the table's columns entirely**:
+  `WriteOff_Rev_Acct`, `DoubtfulDebt_Acct`, `BadDebtExpense_Acct`, `BadDebtRevenue_Acct`,
+  `AllowanceForDoubtful_Acct`. It DOES include the other 6 of the 11
+  (`NotInvoicedRevenue_Acct`/`NotInvoicedReceivables_Acct`/`UnEarnedRevenue_Acct`/
+  `PayDiscount_Exp_Acct`/`PayDiscount_Rev_Acct`/`V_Liability_Services_Acct`).
+- `OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` (the Java fallback, guarded by `NOT EXISTS`
+  at the row level) includes `WriteOff_Rev_Acct` but still omits the other 4.
+- Because `C_BP_Group` is always inserted (firing the trigger) BEFORE this Java statement ever runs,
+  the trigger always wins the INSERT race and the Java fallback's own `NOT EXISTS` guard never gets a
+  chance to contribute these 4 columns either. Whichever path "wins," the resulting row is missing
+  the same 4 columns — for every tenant, every group, always.
+
+**Live confirmation this is an ONGOING preventive gap, not only legacy drift:** swept all 12 tenants
+on the dev DB — `DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/
+`AllowanceForDoubtful_Acct` were NULL on **every** `C_BP_Group_Acct` row of every tenant whose
+`C_AcctSchema_Default` already had them populated (via R11), including "Empresa E2E d5be89a8"
+(client `2D54A79B1B2649218C5FED9307B84DC9`), onboarded **2026-07-29 — 6 days before this was
+diagnosed — via the current onboarding code**.
+
+**6 of the other 7 columns have no source value anywhere on this DB; the 7th has one pre-existing
+exception.** `C_AcctSchema_Default`'s own `NotInvoicedRevenue_Acct`/`NotInvoicedReceivables_Acct`/
+`UnEarnedRevenue_Acct`/`PayDiscount_Exp_Acct`/`PayDiscount_Rev_Acct`/`V_Liability_Services_Acct` are
+NULL fleet-wide on all 14 schemas — R11 only ever completed 6 *different* Defaults-tab columns.
+`WriteOff_Rev_Acct` is the exception: it is NOT NULL on F&B International Group's schema
+`732913485BB040FFA4643FF06D1AA095` (populated since 2026-07-08, before this ticket), so R21's
+`@check` does NOT no-op for F&B today — 2 of its `C_BP_Group_Acct` rows on that schema are still
+NULL and WILL be backfilled the first time R21 runs there (verified live, 2026-08-05, during DOCS
+review). This is an R11-adjacent gap, out of this ticket's scope; R21's `@check` correctly excludes
+the other 6 columns today and will self-heal them automatically per-tenant the moment a future fix
+populates `C_AcctSchema_Default` for them.
+
+**Per-partner override audit (explicitly checked, not assumed):** of the 11 columns, only
+`V_Liability_Services_Acct` has a matching per-partner override column, on `C_BP_Vendor_Acct`.
+`C_BP_Customer_Acct` has neither of the 11. Since R21 (and its preventive twin) only ever write the
+group-level table, a per-partner override's existence is orthogonal — no extra guard was needed.
+
+**Fix — both fronts closed:**
+- **Corrective:** `cli/src/data-fixes/sql/20260805T120000Z__R21-bp-group-acct-remaining-columns.sql`
+  — one guarded `UPDATE`, `COALESCE(a.col, d.col)` per column, row-level `WHERE` mirroring `@check`,
+  scoped to `:client_id`. Never touches `notinvoicedreceipts_acct` (R17's own scope). Verified live
+  in a rolled-back transaction on GOClient: exactly the 4 sourced columns filled on all 3 groups, the
+  other 7 stayed NULL (no source value), re-run affected 0 rows, R17's own column untouched.
+- **Preventive:** `OnboardingAccountingWiringService#patchBpGroupAcctMissingColumns` (com.etendoerp.go),
+  a `COALESCE`-guarded `UPDATE` covering the same 5 columns the trigger/Java fallback omit, wired as
+  the new LAST provisioning step in `EtendoGoJwtServlet.ensureOnboardingDataset` (right before the
+  data-fix baseline is stamped). `ONBOARDING_PROVISIONED_THROUGH` bumped to R21's own timestamp,
+  `2026-08-05T12:00:00Z`.
+- **Tests:** `cli/test/data-fixes-r21-bp-group-acct-remaining-columns.test.js` (corrective, static
+  parse validation of `@check`/`@apply` per column) and
+  `OnboardingAccountingWiringServiceTest`/`EtendoGoJwtServletOnboardingDatasetTest` (preventive,
+  Java/Mockito — confirms the new step runs, is scoped by client, and is wired before the baseline).
 
 ---
 
