@@ -467,8 +467,12 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(addAddrBtn.first()).toBeVisible({ timeout: 5_000 });
     await addAddrBtn.first().click();
 
-    // Address uses a modal ("Dirección") — wait for it
-    await expect(page.getByText(/^direcci[oó]n$/i)).toBeVisible({ timeout: 5_000 });
+    // Address uses LocationEditorModal ("Dirección") — wait for it. Scope to the modal
+    // overlay (inline style position:fixed + z-index:150, see LocationEditorModal.jsx)
+    // since the background grid's "Dirección" column header also matches the text and
+    // would otherwise trip Playwright's strict-mode check.
+    const addressModal = page.locator('div[style*="z-index: 150"]');
+    await expect(addressModal.getByText(/^direcci[oó]n$/i).first()).toBeVisible({ timeout: 5_000 });
 
     // The modal overlay is: div.fixed.inset-0.z-50
     // Modal inputs are the ones with class border-gray-300 (no name/testid)
