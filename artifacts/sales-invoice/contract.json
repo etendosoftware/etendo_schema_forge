@@ -1,8 +1,8 @@
 {
   "version": "0.67.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-08-05T13:22:03.136Z",
-  "checksum": "4112b22caf6cf3d0",
+  "updatedAt": "2026-08-07T12:06:34.688Z",
+  "checksum": "65630b3cdc4626a0",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -12,7 +12,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
@@ -2611,7 +2610,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",

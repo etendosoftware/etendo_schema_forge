@@ -9,7 +9,6 @@
     "relatedDocuments": true,
     "notesField": "description",
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
     "noHeaderBorder": true,
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",

@@ -17747,6 +17747,8 @@
     "download": "Descargar",
     "documentPreview": "Vista previa del documento",
     "comingSoon": "Próximamente",
+    "reportServiceUnavailable": "El servicio de reportes no está disponible. Intentalo de nuevo en un momento.",
+    "pdfGenerationFailed": "No se pudo generar el PDF. Intentalo de nuevo.",
     "report": "Informe",
     "records": "registros",
     "loadingAllRecords": "Cargando todos los registros...",

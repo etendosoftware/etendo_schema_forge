@@ -1016,6 +1016,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
           { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
         hideDeleteWhenComplete
+        hidePrint
         noHeaderBorder
         notesField="description"
         dimensionsPanelFieldKeys={["project","costcenter"]}
@@ -1047,6 +1048,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       api={api}
       subsetFilters={[{"label":"allTab"},{"label":"invoicesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D"},{"label":"rectificativeInvoicesTab","filter":"criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D%7D%5D"}]}
       dateFilterKey="invoiceDate"
+      hidePrint
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument={{"enabled":true,"allowEmail":false}}
