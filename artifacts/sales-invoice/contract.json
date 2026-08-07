@@ -1,8 +1,8 @@
 {
   "version": "0.67.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-08-07T11:33:43.068Z",
-  "checksum": "1a4ed1a5f54ab06f",
+  "updatedAt": "2026-08-07T12:06:34.688Z",
+  "checksum": "65630b3cdc4626a0",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -4029,7 +4029,27 @@
             "required": false
           }
         ],
-        "javaQualifier": "salesInvoiceHeaderHandler"
+        "javaQualifier": "salesInvoiceHeaderHandler",
+        "namedFilters": [
+          {
+            "name": "completed",
+            "where": "e.paymentComplete = true",
+            "label": "Paid",
+            "description": "Fully paid invoices (payment complete)."
+          },
+          {
+            "name": "pending",
+            "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)",
+            "label": "Unpaid",
+            "description": "Unpaid invoices with nothing collected yet (outstanding equals the total)."
+          },
+          {
+            "name": "partial",
+            "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)",
+            "label": "Partially paid",
+            "description": "Invoices with a partial payment: some amount collected but a balance remains."
+          }
+        ]
       },
       "lines": {
         "tableName": "C_InvoiceLine",
