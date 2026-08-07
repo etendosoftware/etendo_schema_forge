@@ -48,7 +48,7 @@
           "visibility": "editable",
           "section": "security",
           "displayLogic": null,
-          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave)"
+          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave). ETP-4829: on create, this same field doubles as an optional temporary workaround — if an admin types a password here, com.etendoerp.go's UserRoleAssignmentHandler also uses it (hashed, validated against PasswordPolicy.isStrong) to create the linked etgo_account already active, instead of pending on ETP-4830's invite-email flow. AD_User.Password itself is unaffected (unrelated password store)."
         },
         "isPasswordExpired": {
           "visibility": "readOnly",
