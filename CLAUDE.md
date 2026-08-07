@@ -239,6 +239,15 @@ See `docs/window-templates.md` for layout types (kanban, calendar, custom), conf
 
 **Every user-visible string MUST be translated.** The app is primarily used in Spanish by real clients. Hardcoded English strings are treated as bugs. See `docs/i18n-guide.md` for the full reference (hooks, locale JSON structure, rules for adding keys). Key hooks: `useUI()` for generic labels, `useLabel()` for AD fields, `useMenuLabel()` for menus/tabs. All new keys must be added to BOTH `en_US.json` and `es_ES.json`.
 
+## Currency & Amount Formatting (MANDATORY)
+
+**Every monetary value MUST be formatted through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString` call.** A hardcoded locale (`'en-US'`, unpinned `undefined`) or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. Treat any new ad-hoc money formatter as a bug, not a style nit.
+
+- **Browser (React components):** `formatCurrency(currencyCode, value)` and `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`. Never format an amount with `.toFixed()`, `toLocaleString()`, or your own `Intl.NumberFormat` for currency/amount display.
+- **jsreport / PDF / printed reports:** `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js` — this is the only helper string that may cross the HTTP boundary into the jsreport container. Never write a second `formatCurrency`/`formatNumber` Handlebars helper by hand.
+- Both read the instance-wide thousands/decimal separators from one shared NEO config source (`GET /sws/neo/currency-format`, `currencyFormatConfig.js`) — see `docs/plans/2026-07-28-currency-format-centralization-proposal.md` for the full architecture.
+- Before adding a new component or report that displays an amount, **grep for `formatCurrency` first** — there is almost certainly an existing pattern to copy in a sibling window/component.
+
 ## Testing
 
 Contract tests (Node.js), Unit tests (JUnit in Etendo Go), Integration tests (OBBaseTest), E2E (Playwright).
@@ -256,7 +265,41 @@ Every process must declare >=3 edge cases. Every kept rule must have a behaviora
 - **Pre-commit:** `make install` activates `.githooks/pre-commit` — runs only on staged artifact/generator/registry files
 - **CI:** `.github/workflows/pipeline-validate.yml` runs `npx sf-validate-pipeline` in shadow mode (annotates, doesn't block) until P3 backfill lands
 
-**Bypass:** `git commit --no-verify` (WIP only — never on epic-branch PRs).
+**Bypass:** `git commit --no-verify` (WIP only — never on epic-branch PRs). Note that
+`git push --no-verify` is a different matter and is blocked for agents — see
+**Agent Guardrails** below.
+
+## Agent Guardrails (committed Claude hooks)
+
+`.claude/settings.json` is versioned and ships repo-wide Claude Code hooks. Every
+teammate who opens this repo in Claude Code gets them automatically; the scripts
+live in `.claude/hooks/`.
+
+| Hook | Event | Effect |
+|---|---|---|
+| `block-push-no-verify.sh` | `PreToolUse` / `Bash` | **Denies** any `git push --no-verify` issued through the Bash tool |
+
+Why: `--no-verify` skips `.githooks/pre-push`, the only local gate that catches
+failing tests, coverage drops (`docs/coverage-gate.md`) and Sonar regressions
+before CI. Bypassing it converts a seconds-long local failure into a 1h+ Jenkins
+cycle. When the gate blocks a push, **fixing what it reports is the task** — do
+not route around it. If the gate itself is broken, say so and stop.
+
+The hook denies a segment only when it is a real invocation: it blanks quoted
+spans, drops `VAR=value` prefixes, then requires the segment to *start* with
+`git` and to carry `push` as a bare word plus `--no-verify`. So `cd x && git push
+--no-verify` and `HUSKY=0 git push --no-verify` are caught, while a commit message
+or grep pattern that merely mentions the flag is not.
+
+Deliberately NOT blocked: `git commit --no-verify` (documented WIP escape hatch)
+and `git push -n` (that's `--dry-run`, not a bypass). The hook only constrains the
+Bash tool — a human can always run the bypass in their own terminal.
+
+Adding a hook: drop an executable script in `.claude/hooks/`, register it in
+`.claude/settings.json`, and pipe-test it with a synthetic payload
+(`echo '{"tool_name":"Bash","tool_input":{"command":"..."}}' | .claude/hooks/<script>`)
+before committing. Note `.gitignore` ignores `.claude/*` — both paths are
+explicitly un-ignored via negation rules, so a new subdirectory needs its own.
 
 **Adding a new rule (F11+):** implemented in the `schema_forge_core` repo (`cli/src/validate-pipeline.js`, fixtures under `cli/test/fixtures/pipeline-validator/`, tests in `cli/test/validate-pipeline.test.js`) — publish + bump the package per `docs/repo-topology.md`. AND update the rules table in this repo's `docs/pipeline-validator-reference.md`. The reference doc is canonical — if a rule is not documented there, it doesn't exist.
 

@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -143,7 +145,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
   if (isCompleted && !fetched) {
-    return <>{confirmedPanel}<span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
+    return <>{confirmedPanel}<CopyRecordLinkButton recordId={recordId} windowName="purchase-order" /><span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
   // ── COMPLETED — compute derived values ─────────────────────────────────────
@@ -194,6 +196,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
       {(isDraft || isCompleted) && <SendDocumentButton
         onClick={() => setShowSend(true)}
         data-testid="SendDocumentButton__8b5323" />}
+      <CopyRecordLinkButton recordId={recordId} windowName="purchase-order" />
       {clonePortal}
       {isDraft && showConfirm && createPortal(
         <ConfirmModal
@@ -464,14 +467,14 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
               </div>
             )}
             <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {grandTotal > 0 ? `${fmtNum(grandTotal)}${currency ? ` ${currency}` : ''}` : '0,00'}
+              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)', marginBottom: 10 }}>
               {lineCount != null ? (lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })) : '…'}
               {' '}<span style={{ color: 'var(--status-info-bg)' }}>·</span>{' '}
               {ui('soSubtotal')}{' '}
               <span style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>
-                {fmtNum(totalLines)}{currency ? ` ${currency}` : ''}
+                {formatCurrency(currency, totalLines)}
               </span>
             </div>
             <div style={{ borderRadius: 6, background: 'hsl(var(--card))', border: '1px solid var(--status-warning-bg)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -600,8 +603,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
 
   const invoiceSubtitle = totalOrder > 0
     ? (totalInvoiced > 0
-        ? ui('poAmountInvoicedOf', { invoiced: `${fmtNum(totalInvoiced)}${currency ? ` ${currency}` : ''}`, pending: `${fmtNum(totalPending)}${currency ? ` ${currency}` : ''}` })
-        : `${fmtNum(totalPending)}${currency ? ` ${currency}` : ''} ${ui('poPendingInvoice')}`)
+        ? ui('poAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), pending: formatCurrency(currency, totalPending) })
+        : `${formatCurrency(currency, totalPending)} ${ui('poPendingInvoice')}`)
     : ui('poCreateInvoiceCheckDesc');
 
   const handleCreate = async () => {
@@ -668,7 +671,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               </div>
             )}
             <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4 }}>
-              {grandTotal > 0 ? `${fmtNum(grandTotal)}${currency ? ` ${currency}` : ''}` : '0,00'}
+              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
             </div>
           </div>
         </div>
@@ -757,14 +760,14 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
     DR: { label: ui('orderStatusDraft'),     bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
     CO: { label: ui('orderStatusCompleted'), bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
     CL: { label: ui('orderStatusClosed'),    bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' },
-    VO: { label: ui('orderStatusVoided'),    bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive))' },
+    VO: { label: ui('orderStatusVoided'),    bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive-foreground))' },
   };
   const badge = statusMap[status] || { label: status, bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' };
 
   const lineCount   = lines?.length ?? null;
   const productLine = lineCount === null
     ? '…'
-    : `${lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })}  ·  ${currency} ${fmtNum(total)}`;
+    : `${lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })}  ·  ${formatCurrency(currency, total)}`;
 
   const handleClone = async () => {
     setLoading(true);

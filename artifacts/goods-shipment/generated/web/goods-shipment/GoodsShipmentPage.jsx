@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import GoodsShipmentTable from './GoodsShipmentTable';
@@ -12,6 +13,7 @@ import GoodsShipmentBottomPanel from '../../../custom/GoodsShipmentBottomPanel';
 import GoodsShipmentActions from '../../../custom/GoodsShipmentActions';
 import GoodsShipmentBillingBadge from '../../../custom/GoodsShipmentBillingBadge';
 import BulkInvoiceFromShipment from '../../../custom/BulkInvoiceFromShipment';
+import GoodsShipmentMoreMenu from '../../../custom/GoodsShipmentMoreMenu';
 import catalogs from './mockCatalogs';
 
 
@@ -46,7 +48,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:goodsShipment
 
 // @sf-generated-start requiredHeaderFields:goodsShipment
-const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etblkpAccountingstatus', 'etblkpBulkposting'];
+const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etblkpAccountingstatus', 'etblkpBulkposting', 'etgoCurrency'];
 // @sf-generated-end requiredHeaderFields:goodsShipment
 
 // @sf-generated-start addLineFields:goodsShipmentLine
@@ -166,6 +168,14 @@ export const api = {
       "url": "/sws/neo/goods-shipment/goodsShipment/selectors/costcenter"
     },
     {
+      "entity": "goodsShipment",
+      "field": "etgoCurrency",
+      "column": "EM_ETGO_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-shipment/goodsShipment/selectors/etgoCurrency"
+    },
+    {
       "entity": "goodsShipmentLine",
       "field": "product",
       "column": "M_Product_ID",
@@ -199,18 +209,18 @@ export const api = {
     },
     {
       "entity": "goodsShipment",
-      "field": "processGoodsJava",
-      "column": "Process_Goods_Java",
-      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
-      "processId": "49DEE812BF0545269781FCEBF2235924",
-      "processType": "classic"
-    },
-    {
-      "entity": "goodsShipment",
       "field": "documentAction",
       "column": "DocAction",
       "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/documentAction",
       "processId": "109",
+      "processType": "classic"
+    },
+    {
+      "entity": "goodsShipment",
+      "field": "processGoodsJava",
+      "column": "Process_Goods_Java",
+      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
+      "processId": "49DEE812BF0545269781FCEBF2235924",
       "processType": "classic"
     },
     {
@@ -227,6 +237,14 @@ export const api = {
       "column": "Invoicefromshipment",
       "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/invoicefromshipment",
       "processId": "62250E8866EA4D96A66C309878DC039E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "goodsShipment",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -262,14 +280,6 @@ export const api = {
       "processType": "obuiapp"
     },
     {
-      "entity": "goodsShipment",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
-      "processType": "obuiapp"
-    },
-    {
       "entity": "goodsShipmentLine",
       "field": "explode",
       "column": "Explode",
@@ -301,9 +311,19 @@ export const api = {
   },
   "window": {
     "category": "sales"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "EM_ETGO_Currency_ID": "Currency"
+    },
+    "es_ES": {
+      "EM_ETGO_Currency_ID": "Moneda"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:GoodsShipmentPage
 export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
   const windowAccessTier = useWindowAccess('169');
@@ -343,12 +363,14 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         bottomSection={GoodsShipmentBottomPanel}
         topbarRight={GoodsShipmentActions}
         topbarExtra={GoodsShipmentBillingBadge}
+        customMenuContent={GoodsShipmentMoreMenu}
         menuActions={({ data, status }) => [
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
           { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
         requiredHeaderFields={requiredHeaderFields}
         salesTheme
+        labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument
         {...props} window={effectiveWindow}
@@ -368,6 +390,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
       dateFilterKey="movementDate"
       bulkActions={(ctx) => <BulkInvoiceFromShipment {...ctx} />}
       hidePrint
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument
       {...props} window={effectiveWindow}

@@ -31,6 +31,7 @@ vi.mock('../useReturnToVendorPdf', () => ({
 }));
 
 import ConfirmWithCreditButton from '../ConfirmWithCreditButton.jsx';
+import { itRendersOnlyCopyLinkOutsideDrOrCo } from '../../shared/__tests__/confirmWithCreditButtonCopyLinkTest.jsx';
 
 const BASE_PROPS = {
   recordId: 'RTV-001',
@@ -51,12 +52,7 @@ describe('ConfirmWithCreditButton (return-to-vendor)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders nothing when status is not DR or CO', () => {
-    const { container } = render(
-      <ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'CL', linesCount: 2 }} />,
-    );
-    expect(container.firstChild).toBeNull();
-  });
+  itRendersOnlyCopyLinkOutsideDrOrCo(ConfirmWithCreditButton, BASE_PROPS);
 
   it('renders confirm button in DR status', () => {
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'DR', linesCount: 2 }} />);
@@ -121,5 +117,20 @@ describe('ConfirmWithCreditButton (return-to-vendor)', () => {
       />,
     );
     expect(screen.queryByTestId('action-clone')).not.toBeInTheDocument();
+  });
+
+  // ETP-4737: postConfirmButtonLabel={ui('returnToVendor.createCreditNote')} is
+  // hardcoded on this wrapper — verify it actually reaches the rendered button
+  // text through ConfirmWithCreditButtonBase, instead of the base's own
+  // ui('createReturnInvoice') fallback.
+  it('forwards ui("returnToVendor.createCreditNote") as the create-return-invoice button label', () => {
+    render(
+      <ConfirmWithCreditButton
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', returnInvoices: [] }}
+      />,
+    );
+    const btn = screen.getByTestId('action-create-return-invoice');
+    expect(btn).toHaveTextContent('returnToVendor.createCreditNote');
   });
 });

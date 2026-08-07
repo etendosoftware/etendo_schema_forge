@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, token, apiBaseUrl }) {
   const ui = useUI();
@@ -20,9 +21,19 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
     return { same: allSame, name };
   }, [invoiceableRows]);
 
+  // ETP-4028: shipments now carry their own currency — a single invoice cannot mix
+  // lines from documents in different currencies, so block the batch the same way
+  // an inconsistent business partner already blocks it.
+  const currencyCheck = useMemo(() => {
+    if (invoiceableRows.length === 0) return { same: false };
+    const firstCurrency = invoiceableRows[0].etgoCurrency;
+    const allSame = invoiceableRows.every(r => r.etgoCurrency === firstCurrency);
+    return { same: allSame };
+  }, [invoiceableRows]);
+
   const invoiceableCount = invoiceableRows.length;
   const allInvoiced = invoiceableCount === 0;
-  const canCreate = invoiceableCount > 0 && bpCheck.same;
+  const canCreate = invoiceableCount > 0 && bpCheck.same && currencyCheck.same;
 
   if (selectedRows.length < 1) return null;
 
@@ -30,7 +41,9 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
     ? ui('allShipmentsAlreadyInvoiced')
     : !bpCheck.same
       ? ui('selectShipmentsSameCustomer')
-      : undefined;
+      : !currencyCheck.same
+        ? ui('selectShipmentsSameCurrency')
+        : undefined;
 
   return (
     <>
@@ -206,7 +219,10 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
   };
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-  const fmtNum = (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // No currency field is available on these rows (bulk cross-shipment selection) —
+  // format the number in Spanish grouping without a symbol, same as formatCurrency's
+  // own fallback for an unrecognized/missing currency code.
+  const fmtNum = (v) => formatCurrency(undefined, Number(v || 0));
 
   const handleCreate = async () => {
     if (creating || totalSelectedLines === 0) return;

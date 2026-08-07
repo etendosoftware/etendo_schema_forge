@@ -350,6 +350,39 @@ public class SalesOrderHandler implements NeoHandler {
 - **Per field** — `if` on `fieldName` (selectors, actions)
 - **Pre vs Post** — `handle()` vs `afterHandle()`
 
+### 2.7 `servesActions()`: declare an ACTION surface (MANDATORY when you serve actions)
+
+If your handler answers `NeoEndpointType.ACTION`, **override `servesActions()` to return
+`true`** (ETP-4254):
+
+```java
+@Named("not-posted-documents")
+public class NotPostedDocumentsHandler implements NeoHandler {
+
+  /** This spec is tab-less; without this the MCP catalog would hide it. */
+  @Override
+  public boolean servesActions() {
+    return true;
+  }
+  ...
+}
+```
+
+**Why.** The MCP catalog drops a spec whose every included entity is handler-backed (no
+`AD_Tab`) — that is how the dashboard's widgets stay out of `neo_discover` and out of the CRUD
+tool enums, since the generic CRUD path cannot serve them. But "no `AD_Tab`" alone is too
+broad: a tab-less spec can still expose a genuine transactional action route, and
+`hasSpecAccess` gates `neo_action` too. So a tab-less spec is hidden only when it *also*
+declares no action surface (`McpToolRouterSupport.isCatalogExcludedSpec` +
+`NeoActionSurface`). `ETGO_SF_ENTITY` has no action metadata, so the handler is the only
+authority.
+
+The default is `false`, and the probe is fail-open (unregistered handler / CDI failure → the
+spec stays visible), so forgetting it only matters for a **tab-less** entity — where it silently
+removes the whole spec from the agentic catalog with nothing in the UI to show it. Declaring it
+regardless keeps the catalog honest if the entity ever loses its tab. Full criteria:
+[`agentic-validation/agentic-write-exposure-criteria.md`](agentic-validation/agentic-write-exposure-criteria.md) §6.
+
 ---
 
 ## 3. Endpoint Reference
@@ -626,6 +659,55 @@ public NeoResponse handle(NeoContext ctx) {
 Real implementations: `GlJournalHeaderHandler#completeJournal` (ETP-4244),
 `AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` (ETP-4388, shared by
 `SalesInvoiceHeaderHandler` and `PurchaseInvoiceHeaderHandler`).
+
+### Pre-hook: Fill AD-Mandatory Columns the Window Does Not Expose
+
+**Trigger condition:** a column is mandatory in the Application Dictionary but the window has
+no editable field for it, so a create built only from the visible fields fails validation.
+This is the shape that most often tempts a client-side workaround — the front-end knows the
+values it is about to send, so it is trivially easy to patch the payload there. Don't: the
+app-shell is metadata-driven and must stay entity-agnostic, and a client-side fix covers only
+the path that goes through the form (never `/batch` imports, MCP, or any other API caller).
+
+Before writing a handler, check whether `NeoHiddenMandatoryDefaultsResolver` already covers
+the case. It resolves mandatory AD columns automatically, but only when **both** hold:
+
+- the column is **not** exposed as a Schema Forge field (`ETGO_SF_FIELD`), and
+- the column has an AD default value to resolve.
+
+Anything derived from *other values in the same request* is out of its reach — it runs on the
+`/defaults` (pre-fill) path, before the user has typed anything. That derivation belongs in a
+`handle()` pre-hook, which mutates `ctx.getRequestBody()` and returns `null` so the default
+CRUD path still runs:
+
+```java
+@Named("contactHandler")   // ETGO_SF_ENTITY.Java_Qualifier of the contacts spec's `contact`
+public class ContactHandler implements NeoHandler {
+  @Override
+  public NeoResponse handle(NeoContext ctx) {
+    JSONObject body = ctx.getRequestBody();
+    if (body == null || !isWrite(ctx.getHttpMethod())) return null;
+    deriveName(ctx, body);                                     // AD_User.Name
+    if ("POST".equals(ctx.getHttpMethod())) deriveUsername(body); // AD_User.Username
+    return null;                                               // continue to default CRUD
+  }
+}
+```
+
+Two rules this recipe encodes:
+
+- **Truncate to the column length.** The derived value can exceed the target column even when
+  its source fits — `C_BPartner.Value` is `VARCHAR(40)` while `Name` is 60, so using the name
+  verbatim as a placeholder search key fails with *"Value too long. Length 48, maximum
+  allowed 40"*.
+- **Derive on POST only, unless the update genuinely needs it.** Rewriting a derived column on
+  every update can silently reassign a value other systems depend on — `AD_User.Username` is
+  unique and is the login identifier, so `ContactHandler` never touches it on PATCH/PUT.
+
+Real implementations (ETP-4156): `ContactHandler` (`AD_User.Name` / `AD_User.Username` for the
+contacts spec), `BusinessPartnerHandler#deriveNameFromPerson` + its placeholder `searchKey`
+(`C_BPartner`). Both replaced hardcoded entity-name branches in the app-shell's generic
+`useEntity` hook.
 
 ---
 

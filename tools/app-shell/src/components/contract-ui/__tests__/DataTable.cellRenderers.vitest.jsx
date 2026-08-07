@@ -43,8 +43,18 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
   resolveColumnLabel: (col) => col.label ?? col.key,
 }));
 
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (val, currency) => `${currency ?? ''}${val != null ? String(val) : ''}`.trim(),
+vi.mock('@/lib/formatCurrency.js', () => ({
+  formatCurrency: (currency, val) => `${currency ?? ''}${val != null ? String(val) : ''}`.trim(),
+}));
+
+const useNeoImageMock = vi.fn();
+
+vi.mock('@/hooks/useNeoImage', () => ({
+  useNeoImage: (...args) => useNeoImageMock(...args),
+}));
+
+vi.mock('@/components/ui/box-icon', () => ({
+  BoxIcon: () => <span data-testid="box-icon" />,
 }));
 
 import {
@@ -54,6 +64,7 @@ import {
   renderDateCell,
   renderDefaultCell,
   renderEnumCell,
+  renderMultiFieldCell,
   renderPercentCell,
   renderSignedDeltaCell,
   renderStatusCell,
@@ -90,6 +101,7 @@ describe('CELL_RENDERERS', () => {
       date: renderDateCell,
       amount: renderAmountCell,
       signedDelta: renderSignedDeltaCell,
+      multiField: renderMultiFieldCell,
       default: renderDefaultCell,
     });
   });
@@ -182,6 +194,83 @@ describe('renderBooleanCell', () => {
     expect(screen.getByText('yes')).toBeInTheDocument();
     expect(container.querySelector('.text-status-success-foreground')).toBeTruthy();
   });
+
+  // ETP-4707 — return-material-receipt / return-to-vendor-shipment's `posted`
+  // field is the 3rd window to use `badge: true` + `badgeLabels` +
+  // `badgeVariants` (after purchase-invoice/sales-invoice), and the first to
+  // get renderer-level coverage. col.badgeLabels here mirrors the real
+  // decisions.json shape: a per-locale object, not a plain string.
+  describe('with col.badge: true (Tag-based badge)', () => {
+    const badgeCol = {
+      key: 'posted',
+      type: 'boolean',
+      badge: true,
+      badgeLabels: {
+        true: { en_US: 'Posted', es_ES: 'Contabilizado' },
+        false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' },
+      },
+      badgeVariants: { true: 'green', false: 'orange' },
+    };
+
+    it('renders the true-variant Tag with the locale-resolved true label', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        locale: 'es_ES',
+        col: badgeCol,
+        rawValue: 'Y',
+      }));
+
+      const tag = screen.getByTestId('tag');
+      expect(tag).toHaveAttribute('data-variant', 'green');
+      expect(tag).toHaveTextContent('Contabilizado');
+    });
+
+    it('renders the false-variant Tag with the locale-resolved false label', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        locale: 'es_ES',
+        col: badgeCol,
+        rawValue: 'N',
+      }));
+
+      const tag = screen.getByTestId('tag');
+      expect(tag).toHaveAttribute('data-variant', 'orange');
+      expect(tag).toHaveTextContent('Sin contabilizar');
+    });
+
+    it('falls back to en_US when the current locale is missing from the label map', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        locale: 'fr_FR',
+        col: badgeCol,
+        rawValue: true,
+      }));
+
+      expect(screen.getByTestId('tag')).toHaveTextContent('Posted');
+    });
+
+    it('does not crash and falls back to the em-dash when the value is undefined', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        col: badgeCol,
+        rawValue: undefined,
+      }));
+
+      expect(screen.queryByTestId('tag')).not.toBeInTheDocument();
+      expect(screen.getByText('—')).toBeInTheDocument();
+    });
+
+    it('does not crash and falls back to the em-dash when the value is null', () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        col: badgeCol,
+        rawValue: null,
+      }));
+
+      expect(screen.queryByTestId('tag')).not.toBeInTheDocument();
+      expect(screen.getByText('—')).toBeInTheDocument();
+    });
+  });
 });
 
 describe('renderDateCell', () => {
@@ -273,5 +362,94 @@ describe('renderDefaultCell', () => {
     expect(truncated).toBeTruthy();
     expect(truncated).toHaveAttribute('title', long);
     expect(truncated).toHaveTextContent(long);
+  });
+});
+
+describe('renderMultiFieldCell', () => {
+  beforeEach(() => {
+    useNeoImageMock.mockReset();
+    useNeoImageMock.mockReturnValue(null);
+  });
+
+  it('renders the title in bold from row[col.title]', () => {
+    const { container } = renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A' },
+      col: { key: 'name', type: 'multiField', title: 'name' },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    const title = screen.getByText('Widget A');
+    expect(title.className).toBe('text-sm font-semibold text-[hsl(var(--foreground))] leading-5');
+    expect(container.querySelector('.flex.items-center.gap-3')).toBeTruthy();
+  });
+
+  it('renders the subtitle chip only when row[col.subtitle] is present', () => {
+    renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A', searchKey: 'SKU-1' },
+      col: { key: 'name', type: 'multiField', title: 'name', subtitle: 'searchKey' },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    const chip = screen.getByText('SKU-1');
+    expect(chip.className).toBe(
+      'inline-flex items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit',
+    );
+  });
+
+  it('omits the subtitle chip when row[col.subtitle] is absent', () => {
+    renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A' },
+      col: { key: 'name', type: 'multiField', title: 'name', subtitle: 'searchKey' },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    expect(screen.queryByText('SKU-1')).toBeNull();
+  });
+
+  it('does not render a media box when col.media is not configured', () => {
+    const { container } = renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A' },
+      col: { key: 'name', type: 'multiField', title: 'name' },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    expect(container.querySelector('.w-10.h-10.rounded-lg')).toBeNull();
+    expect(useNeoImageMock).toHaveBeenCalledWith(undefined, 'tok', '/api');
+  });
+
+  it('renders the resolved image when useNeoImage returns a url', () => {
+    useNeoImageMock.mockReturnValue('blob:fake-url');
+    const { container } = renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A', image: 'img-1' },
+      col: { key: 'name', type: 'multiField', title: 'name', media: { field: 'image', kind: 'neoImage', fallback: 'box' } },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    const box = container.querySelector('.w-10.h-10.rounded-lg.bg-\\[hsl\\(var\\(--muted\\)\\)\\]');
+    expect(box).toBeTruthy();
+    const img = box.querySelector('img');
+    expect(img).toHaveAttribute('src', 'blob:fake-url');
+    expect(img).toHaveAttribute('alt', 'Widget A');
+    expect(useNeoImageMock).toHaveBeenCalledWith('img-1', 'tok', '/api');
+  });
+
+  it('renders the BoxIcon fallback when useNeoImage returns null', () => {
+    useNeoImageMock.mockReturnValue(null);
+    const { container } = renderCell(renderMultiFieldCell({
+      row: { id: '1', name: 'Widget A', image: 'img-1' },
+      col: { key: 'name', type: 'multiField', title: 'name', media: { field: 'image', kind: 'neoImage', fallback: 'box' } },
+      token: 'tok',
+      apiBaseUrl: '/api',
+    }));
+
+    const box = container.querySelector('.w-10.h-10.rounded-lg.bg-\\[hsl\\(var\\(--muted\\)\\)\\]');
+    expect(box).toBeTruthy();
+    expect(screen.getByTestId('box-icon')).toBeInTheDocument();
+    expect(box.querySelector('img')).toBeNull();
   });
 });

@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
@@ -134,9 +134,17 @@ function computeRowClassName(isHighlighted, isEditing, hasRowClick) {
  * "Add dimensions" trigger) render through the exact same code path. Defaults
  * to `[]` so every existing caller renders byte-for-byte the same as before
  * this slot existed.
+ *
+ * ETP-4565 — `canDelete` mirrors DataTable's own `{onDeleteRow && (...)}` gate
+ * (DataTable.jsx ~1450): when the caller doesn't pass `onDeleteRow` (e.g. a
+ * `hideDelete: true` entity, whose capability resolves to `delete: false` in
+ * the contract), the Trash2 button must not render at all — not just no-op on
+ * click. Edit stays unaffected; only the delete button is gated. Defaults to
+ * `true` so every existing caller (which always passes a real `onDeleteRow`
+ * today) renders byte-for-byte the same as before this gate existed.
  */
 function renderRowActionStrip({
-  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete, extraActions = [],
+  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, extraActions = [],
 }) {
   if (!showActions && !reserveActionSlot) return null;
   return (
@@ -172,16 +180,18 @@ function renderRowActionStrip({
           >
             <Pencil className="h-4 w-4" data-testid="Pencil__3b7ec2" />
           </button>
-          <button
-            type="button"
-            aria-label={ui('deleteRowTooltip') ?? 'Delete'}
-            title={ui('deleteRowTooltip') ?? 'Delete'}
-            onClick={onDelete}
-            disabled={isDeleting}
-            className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
-          >
-            <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              aria-label={ui('deleteRowTooltip') ?? 'Delete'}
+              title={ui('deleteRowTooltip') ?? 'Delete'}
+              onClick={onDelete}
+              disabled={isDeleting}
+              className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -291,6 +301,7 @@ function renderLineCell({
           selectorContext={selectorContext}
           isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
           onCommit={(val, extras) => onCommit(row, col, val, extras)}
+          ui={ui}
           data-testid="EditCell__3b7ec2" />
       ) : (
         <ReadCell
@@ -389,7 +400,7 @@ function ReadCell({ row, col, locale, t, ui }) {
   }
   if (col.type === 'amount') {
     // No currency symbol on line-level cells — the currency is shown at the header level.
-    return <span className="tabular-nums">{formatAmount(row[col.key])}</span>;
+    return <span className="tabular-nums">{formatCurrency(undefined, row[col.key])}</span>;
   }
   if (col.type === 'percent') {
     const val = Number(row[col.key]);
@@ -411,6 +422,18 @@ function ReadCell({ row, col, locale, t, ui }) {
   }
   if (col.type === 'date') {
     return renderDateCell(row[col.key], locale);
+  }
+  // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
+  // display text; resolve through ui() like EditCell already does, or the
+  // read-only cell (what the user sees before ever clicking to edit it)
+  // falls through to the raw backend identifier below, untranslated.
+  if (col.type === 'enum' || col.type === 'select' || col.type === 'status') {
+    const raw = row[col.key];
+    const key = col.enumLabels?.[raw];
+    if (key != null) {
+      const label = ui?.(key) ?? key;
+      return <span className="block truncate" title={label || undefined}>{label}</span>;
+    }
   }
   const display = resolveIdentifier(row, col.key);
   if (typeof display === 'string') {
@@ -475,7 +498,7 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
 /**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
-function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid }) {
+function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui }) {
   const inputRef = useRef(null);
   useEffect(() => {
     // Only steal focus on initial mount when nothing else is focused. Cells re-mount
@@ -539,7 +562,10 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         <SelectContent data-testid="SelectContent__3b7ec2">
           {!col.required && <SelectItem value="__empty__" data-testid="SelectItem__3b7ec2">&nbsp;</SelectItem>}
           {options.map(([v, label]) => (
-            <SelectItem key={v} value={v} data-testid="SelectItem__3b7ec2">{label}</SelectItem>
+            // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
+            // display text; resolve through ui() like DistinctEnumPicker/ListFilterBar do,
+            // or this shows the raw internal key instead of a translated label.
+            (<SelectItem key={v} value={v} data-testid="SelectItem__3b7ec2">{ui(label) ?? label}</SelectItem>)
           ))}
         </SelectContent>
       </Select>
@@ -669,6 +695,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       const editingRowEl = panelRef.current?.querySelector(`[data-testid="line-row-${editingRowId}"]`);
       if (!editingRowEl) return;
       if (editingRowEl.contains(e.target)) return;
+      // Radix primitives with disableOutsidePointerEvents (e.g. <Select>) set
+      // document.body.style.pointerEvents = 'none' while open, so a click on
+      // an underlying field never reaches it — the event target resolves to
+      // <html>, matching none of the selectors below. Treat any click while
+      // such a layer is active as belonging to it, not to "outside the row".
+      if (document.body.style.pointerEvents === 'none') return;
       const portalSelectors = [
         '[data-radix-popper-content-wrapper]',
         '[role="dialog"]',
@@ -958,6 +990,13 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     }
   }, [editingRowId, isDocumentReadOnly, onDeleteRow, pendingDelete]);
 
+  // ETP-4565 — no `onDeleteRow` means the entity has no delete capability at all
+  // (e.g. `hideDelete: true` resolves `apiPrediction.crud.<entity>.delete` to
+  // `false`, and DetailView/secondaryTabs never pass a handler down in that
+  // case). Mirrors DataTable's `{onDeleteRow && (...)}` gate on its own trash
+  // button — without it the icon rendered anyway and silently no-opped on click.
+  const canDelete = onDeleteRow != null;
+
   // --- Render -----------------------------------------------------------------
 
   const headerStyle = {
@@ -1097,6 +1136,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui,
               onEdit: () => handleEditClick(row),
               onDelete: () => handleDeleteClick(row),
+              canDelete,
               extraActions: [
                 ...(hasDimensionsPanel ? [{
                   key: 'dimensions',

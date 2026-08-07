@@ -43,8 +43,18 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
     assert.match(src, /result\.success[\s\S]{0,350}hook\.fetchById\?\.\(currentId\)/);
   });
 
-  it('shows toast.error with result.message or ui(actionFailed) on failure', () => {
-    assert.match(src, /toast\.error\(result\.message\s*\|\|\s*ui\(['"]actionFailed['"]\)\)/);
+  it('shows toast.error with the (translated) result.message or ui(actionFailed) on failure (ETP-4706)', () => {
+    // The message is passed through translateBackendError before falling back to the
+    // generic actionFailed label, so backend errors with a known translation (e.g. the
+    // "Account could not be found. (Business Partner: ...)" enrichment) render localized.
+    assert.match(
+      src,
+      /toast\.error\(translateBackendError\(result\.message,\s*ui\)\s*\|\|\s*ui\(['"]actionFailed['"]\)\)/,
+    );
+  });
+
+  it('imports translateBackendError from @/lib/backendErrors.js', () => {
+    assert.match(src, /import\s*\{\s*translateBackendError\s*\}\s*from\s*'@\/lib\/backendErrors\.js'/);
   });
 
   it('disables the menu button while either docAction or neoAction is loading', () => {

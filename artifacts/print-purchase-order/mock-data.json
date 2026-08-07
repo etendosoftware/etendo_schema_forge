@@ -1,0 +1,31 @@
+{
+  "header": {
+    "c_order_id": "C3D4E5F60718293A4B5C6D7E8F901234",
+    "documentno": "PC/2026-000097",
+    "dateordered": "2026-07-02",
+    "poreference": "REQ-2026-4471",
+    "doc_type": "Purchase Order",
+    "bp_name": "Tech Components Ltd",
+    "bp_location": "Unit 14, Riverside Park, Manchester M15 4FN",
+    "description": "Reposición de stock de almacén central.",
+    "grandtotal": 9438.00,
+    "totallines": 7800.00,
+    "payment_term": "30 días",
+    "delivery_term": "Recogida en almacén",
+    "currency": "EUR",
+    "status": "Complete",
+    "org_name": "Etendo Demo, S.L.",
+    "org_taxid": "B12345678",
+    "org_address": "Avenida de la Innovación 8",
+    "org_postal": "41020",
+    "org_city": "Sevilla"
+  },
+  "lines": [
+    { "line": 10, "product_name": "Sensor de temperatura PT100", "quantity": 200, "uom": "Unidad", "priceactual": 24.00, "linenetamt": 4800.00 },
+    { "line": 20, "product_name": "Cable apantallado 4x0,5mm (rollo 100m)", "quantity": 40, "uom": "Rollo", "priceactual": 45.00, "linenetamt": 1800.00 },
+    { "line": 30, "product_name": "Armario eléctrico IP65 600x400", "quantity": 12, "uom": "Unidad", "priceactual": 100.00, "linenetamt": 1200.00 }
+  ],
+  "taxes": [
+    { "tax_name": "IVA 21%", "taxbaseamt": 7800.00, "taxamt": 1638.00 }
+  ]
+}

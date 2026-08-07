@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export default function SendToEvaluationModal({
   quotationId,
@@ -19,11 +20,6 @@ export default function SendToEvaluationModal({
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
-
-  const fmtNum = (v) =>
-    v != null && v !== ''
-      ? Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : '-';
 
   useEffect(() => {
     let cancelled = false;
@@ -110,17 +106,17 @@ export default function SendToEvaluationModal({
             {ui('quotationDocumentLabel')} #{documentNo}
           </div>
           <div style={{
-            background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10,
+            background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
             padding: '14px 16px', marginBottom: 14,
           }}>
             <div style={{ fontSize: 11, color: 'var(--status-info-border)' }}>
               {bpName}
             </div>
             <div data-testid="confirm-summary-total" style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {fmtNum(grandTotal)} {currency}
+              {formatCurrency(currency, grandTotal)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
-              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-bg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{fmtNum(totalLines)} {currency}</span>
+              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-fg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{formatCurrency(currency, totalLines)}</span>
             </div>
           </div>
         </div>
@@ -175,15 +171,15 @@ const overlayStyle = {
 const cardStyle = {
   width: 460, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
   overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer',
+  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
 };
 
 const btnPrimary = {
   fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: 'var(--status-info-bg)', color: 'hsl(var(--card))', cursor: 'pointer',
+  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
 };

@@ -8,18 +8,19 @@ import GoodsReceiptPreview from './GoodsReceiptPreview.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useUI } from '@/i18n';
 
 const HEADER_COLUMNS = [
-  { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false },
+  { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status' },
-  { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
-  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector' },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
+  { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', required: true },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent' },
 ];
 
@@ -31,6 +32,7 @@ const LABEL_OVERRIDES = {
     DocStatus: 'Estado doc.',
     M_Warehouse_ID: 'Almacén',
     InvoiceStatus: 'Estado de facturación',
+    EM_ETGO_Currency_ID: 'Moneda',
   },
   en_US: {
     MovementDate: 'Movement Date',
@@ -39,6 +41,7 @@ const LABEL_OVERRIDES = {
     DocStatus: 'Document Status',
     M_Warehouse_ID: 'Warehouse',
     InvoiceStatus: 'Invoice Status',
+    EM_ETGO_Currency_ID: 'Currency',
   },
 };
 
@@ -53,12 +56,18 @@ function CustomHeaderTable(props) {
 
 function GoodsReceiptBulkAction(props) {
   return (
-    <BulkDocumentAction
-      {...props}
-      entity="goodsReceipt"
-      buildActions={buildInOutActions}
-      labelKey="confirmBulk"
-      data-testid="BulkDocumentAction__bf4f23" />
+    <>
+      <BulkDocumentAction
+        {...props}
+        entity="goodsReceipt"
+        buildActions={buildInOutActions}
+        labelKey="confirmBulk"
+        data-testid="BulkDocumentAction__bf4f23" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__bf4f23" />
+    </>
   );
 }
 
@@ -142,6 +151,7 @@ export default function GoodsReceiptWindow(props) {
         rowQuickActions={rowQuickActions}
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}
+        hideLink
         bulkActions={GoodsReceiptBulkAction}
         renderPreview={({ row, onClose, onEdit }) => (
           <GoodsReceiptPreview

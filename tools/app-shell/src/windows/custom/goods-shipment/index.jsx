@@ -10,6 +10,7 @@ import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shi
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { useShipmentPdf } from './useShipmentPdf';
@@ -21,12 +22,12 @@ const LABEL_OVERRIDES = {
 };
 
 const COLUMNS = [
-  { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status' },
-  { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
-  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string' },
+  { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
+  { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string', required: true },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent' },
 ];
 
@@ -44,6 +45,10 @@ function GoodsShipmentBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__9851c7" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__9851c7" />
     </>
   );
 }
@@ -128,6 +133,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}
         labelOverrides={LABEL_OVERRIDES}
+        hideLink
         bulkActions={GoodsShipmentBulkActions}
         renderPreview={({ row, onClose, onEdit }) => (
           <GoodsShipmentPreview

@@ -13,14 +13,14 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
+// ETP-4685 — a handful of enum i18n keys translated for the "resolves enum option
+// labels through ui()" test below; any other key falls through unchanged, so this
+// stays a no-op for every other test in this file.
+const ETP4685_TEST_TRANSLATIONS = { taxCategoryVat21: 'Artículo (prueba)', taxCategoryVat10: 'Servicio (prueba)' };
 vi.mock('@/i18n', () => ({
   useLabel: () => () => '',
-  useUI: () => (key) => key,
+  useUI: () => (key) => ETP4685_TEST_TRANSLATIONS[key] ?? key,
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
-}));
-
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (v, cur) => (v != null ? `${Number(v).toFixed(2)}${cur ? ` ${cur}` : ''}` : '—'),
 }));
 
 vi.mock('@/lib/resolveIdentifier.js', () => ({
@@ -118,6 +118,17 @@ function renderPanel(props = {}) {
   return { ...result, ref };
 }
 
+// Radix Select needs a few pointer-capture DOM APIs jsdom does not implement —
+// only exercised by the "resolves enum option labels through ui()" test below,
+// which opens a real Select dropdown (see AccountBadgeSelect.vitest.jsx for the
+// same pattern).
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+  Element.prototype.scrollIntoView = vi.fn();
+});
+
 // --- Tests ---
 
 describe('InlineLinesPanel', () => {
@@ -145,11 +156,12 @@ describe('InlineLinesPanel', () => {
     expect(screen.getByText('Gadget')).toBeInTheDocument();
   });
 
-  it('formats amount columns', () => {
+  it('formats amount columns in es-ES locale (comma decimal, no currency symbol)', () => {
     renderPanel();
-    // formatAmount mock returns "50.00" for lineNetAmount=50
-    expect(screen.getByText('50.00')).toBeInTheDocument();
-    expect(screen.getByText('60.00')).toBeInTheDocument();
+    // Real formatCurrency(undefined, value) — no currency code available at this column,
+    // falls back to plain es-ES number formatting: comma decimal, no symbol/code shown.
+    expect(screen.getByText('50,00')).toBeInTheDocument();
+    expect(screen.getByText('60,00')).toBeInTheDocument();
   });
 
   it('shows edit and delete actions on hover', async () => {
@@ -319,6 +331,35 @@ describe('InlineLinesPanel', () => {
       await userEvent.click(trashBtn);
     });
     expect(onDeleteRow).toHaveBeenCalledWith(ROWS[0]);
+  });
+
+  // ETP-4565 — regression: `hideDelete: true` windows (e.g. product-category's
+  // Contabilidad tab) resolve `onDeleteRow` to undefined all the way up from the
+  // contract's `apiPrediction.crud.<entity>.delete: false`. DataTable already gates
+  // its own trash button on `onDeleteRow` (see DataTable.jsx ~1450); InlineLinesPanel
+  // did not, so the icon rendered anyway and silently no-opped on click. This asserts
+  // the icon itself is absent — not just inert — when no delete handler is provided.
+  it('does not render the delete (trash) icon when onDeleteRow is not provided (ETP-4565)', async () => {
+    renderPanel({ onDeleteRow: undefined });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    // Edit (pencil) must still render — only delete is gated.
+    expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeInTheDocument();
+    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeNull();
+    expect(within(actions).queryByRole('button', { name: /delete/i })).toBeNull();
+  });
+
+  it('still renders the delete (trash) icon when onDeleteRow IS provided (no regression)', async () => {
+    renderPanel();
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeInTheDocument();
   });
 
   it('numeric column headers are right-aligned', () => {
@@ -677,6 +718,89 @@ describe('InlineLinesPanel', () => {
     expect(trigger).toBeInTheDocument();
   });
 
+  // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw display
+  // text; the inline-edit <Select> must resolve each option through ui() like
+  // DistinctEnumPicker/ListFilterBar do, or it shows the raw internal key.
+  it('resolves enum option labels through ui() instead of showing the raw enumLabels key', async () => {
+    const columns = [
+      {
+        key: 'taxCategory',
+        label: 'Tax',
+        type: 'enum',
+        column: 'C_TaxCategory_ID',
+        enumLabels: { VAT21: 'taxCategoryVat21', VAT10: 'taxCategoryVat10' },
+      },
+    ];
+    const rows = [{ id: 'E1', taxCategory: 'VAT21' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-E1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    const trigger = within(row).getByTestId('field-taxCategory');
+    await act(async () => { await userEvent.click(trigger); });
+    const options = screen.getAllByTestId('SelectItem__3b7ec2');
+    const optionTexts = options.map((o) => o.textContent);
+    // The mocked ui() (see top-of-file TRANSLATIONS) maps these keys to Spanish text;
+    // the raw keys must never reach the DOM.
+    expect(optionTexts).toContain('Artículo (prueba)');
+    expect(optionTexts).not.toContain('taxCategoryVat21');
+    expect(optionTexts).not.toContain('taxCategoryVat10');
+  });
+
+  // ETP-4685 — ReadCell (the cell as shown BEFORE the user clicks to edit it)
+  // has no branch for `type: 'enum'`/`type: 'status'`, so it falls through to
+  // the generic `resolveIdentifier` fallback — the raw backend identifier
+  // (an untranslated AD Name), never the enumLabels-resolved, ui()-translated
+  // text EditCell already shows once editing starts. This is what the user
+  // sees by default, on every row, without ever clicking anything.
+  it('resolves enum column labels through ui() in read-only mode (before editing)', () => {
+    const columns = [
+      {
+        key: 'taxCategory',
+        label: 'Tax',
+        type: 'enum',
+        column: 'C_TaxCategory_ID',
+        enumLabels: { VAT21: 'taxCategoryVat21', VAT10: 'taxCategoryVat10' },
+      },
+    ];
+    const rows = [{ id: 'E1', taxCategory: 'VAT21', 'taxCategory$_identifier': '21% VAT' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-E1');
+    expect(within(row).getByText('Artículo (prueba)')).toBeInTheDocument();
+    expect(within(row).queryByText('taxCategoryVat21')).not.toBeInTheDocument();
+    expect(within(row).queryByText('21% VAT')).not.toBeInTheDocument();
+  });
+
   it('renders date input type in edit mode', async () => {
     const columns = [
       { key: 'orderDate', label: 'Date', type: 'date', column: 'DateOrdered' },
@@ -965,8 +1089,8 @@ describe('InlineLinesPanel', () => {
         onDeleteRow={vi.fn().mockResolvedValue()}
       />,
     );
-    // formatAmount mock returns "99.10"
-    expect(screen.getByText('99.10')).toBeInTheDocument();
+    // es-ES comma decimal, no currency symbol (no currency code passed at this column).
+    expect(screen.getByText('99,10')).toBeInTheDocument();
   });
 
   it('selector column shows InlineSearchCombo in edit mode', async () => {
@@ -1156,7 +1280,7 @@ describe('InlineLinesPanel', () => {
         onDeleteRow={vi.fn().mockResolvedValue()}
       />,
     );
-    // formatAmount mock returns '—' for null
+    // formatCurrency mock returns '—' for null
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
@@ -1319,7 +1443,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('100.00')).toBeInTheDocument();
+    expect(screen.getByText('100,00')).toBeInTheDocument();
   });
 
   it('readOnly column is not editable', () => {
@@ -1343,7 +1467,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('50.00')).toBeInTheDocument();
+    expect(screen.getByText('50,00')).toBeInTheDocument();
   });
 
   it('column with custom render function uses it', () => {
@@ -1410,7 +1534,7 @@ describe('InlineLinesPanel', () => {
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()}
         isDocumentReadOnly={true} />,
     );
-    expect(container.textContent).toContain('5.00');
+    expect(container.textContent).toContain('5,00');
   });
 
   it('renders multiple rows with alternating row IDs', () => {
@@ -1440,7 +1564,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('250.00')).toBeInTheDocument();
+    expect(screen.getByText('250,00')).toBeInTheDocument();
   });
 
   it('renders string column with identifier fallback', () => {

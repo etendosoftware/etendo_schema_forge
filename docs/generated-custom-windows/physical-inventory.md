@@ -146,3 +146,32 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Advanced-filter mode on rich cells — ETP-4681
+
+Two columns of this window were resolving to the wrong advanced-filter mode:
+
+| Column | Where | Real type | Was | Now |
+|--------|-------|-----------|-----|-----|
+| `warehouse` (`M_Warehouse_ID`) | `tools/app-shell/src/windows/custom/physical-inventory/index.jsx` — `type: 'custom'` | foreign key | `text` (matched against the raw UUID) | `identifier` |
+| `etgoQtydiff` (`EM_Etgo_Qtydiff`) | generated `InventoryLineTable.jsx`, emitted as `type: 'signedDelta'` from `"columnType": "signedDelta"` in `decisions.json` | numeric | `text` | `numeric` |
+
+Neither needed a per-column annotation — both were fixed generically in
+`resolveFilterMode` / `inferFilterMode` (`tools/app-shell/src/lib/gridQuery.js`):
+
+- `signedDelta` is now mapped to `numeric` by `inferFilterMode`, so the difference
+  column offers `=, ≠, >, ≥, <, ≤, Entre` and a numeric input.
+- Unrecognized column types (`custom` among them) no longer short-circuit the
+  inference chain, so they reach the `_ID` foreign-key heuristic — which is what
+  restores `identifier` mode on `warehouse` and makes it match the visible
+  warehouse name instead of the UUID.
+
+Manual check: open the list, filter by **Almacén** and confirm typing part of a
+warehouse name narrows the rows; filter by the difference column and confirm the
+numeric operators are offered. Full reference:
+[`list-filters.md`](../list-filters.md).
+
+## Semantic visual states
+
+The inventory-list dialog and top-bar controls use structural surface, border, and
+foreground roles. The Generate action remains the standard high-contrast action.

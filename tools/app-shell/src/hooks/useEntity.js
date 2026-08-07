@@ -280,46 +280,11 @@ const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
     'vendorBlocking',
 ]);
 
-function derivePersonName(firstName, lastName) {
-    const first = String(firstName ?? '').trim();
-    const last = String(lastName ?? '').trim();
-    return [first, last].filter(Boolean).join(' ').slice(0, 60);
-}
-
-export function applyContactNameDefaults(payload, source) {
-    if (!payload.name) {
-        const derivedName = derivePersonName(
-            payload.firstName ?? source.firstName,
-            payload.lastName ?? source.lastName
-        );
-        if (derivedName) payload.name = derivedName;
-    }
-    if (!payload.username && payload.name) {
-        payload.username = String(payload.name).slice(0, 60);
-    }
-}
-
-export function applyContactsRequiredFields(entity, payload, source = {}) {
-    if (!payload || typeof payload !== 'object') return payload;
-
-    if (entity === 'contact' || entity === 'adUser' || entity === 'user') {
-        applyContactNameDefaults(payload, source);
-    }
-
-    if (entity === 'businessPartner' || entity === 'bpartner') {
-        if (!payload.name && source.name) payload.name = source.name;
-        if (!payload.searchKey) {
-            const fallback = source.searchKey || source.name || payload.name;
-            // C_BPartner.Value (searchKey) is AD-constrained to 40 chars — reproduced via a
-            // real create with a long commercial name ("Value too long. Length 48, maximum
-            // allowed 40"). Name itself has more headroom (60, same as derivePersonName
-            // above), so only this fallback needs truncating.
-            if (fallback) payload.searchKey = String(fallback).slice(0, 40);
-        }
-    }
-
-    return payload;
-}
+// ETP-4156: the per-entity `name` / `username` / `searchKey` derivations that used to live
+// here (applyContactsRequiredFields, branching on the hardcoded entity names contact /
+// adUser / user / businessPartner / bpartner) now run server-side, where they are not tied
+// to a window: BusinessPartnerHandler + ContactNameSyncHandler for C_BPartner, and
+// ContactHandler for AD_User. See docs/neo-headless-extensibility.md.
 
 /**
  * Resolve the backend sort key for a given column.
@@ -357,8 +322,33 @@ function normalizeRows(rows, entityName) {
     return Array.isArray(rows) ? rows.map(row => normalizeRecord(row, entityName)) : [];
 }
 
+/**
+ * Everything the list response carried alongside the rows.
+ *
+ * NEO writes a handler's response body verbatim (no output schema, no key
+ * whitelist), and `NeoFieldFilter` only ever rewrites `response.data[i]` — so a
+ * NeoHandler's `afterHandle` can legitimately attach collection-level aggregates
+ * (e.g. a `summary` with balance totals) next to `data`. Returns null when the
+ * payload is a bare array or has no siblings worth surfacing.
+ */
+function extractResponseMeta(data) {
+    const envelope = data?.response;
+    if (!envelope || typeof envelope !== 'object') return null;
+    // Copy-then-delete rather than destructuring `data` into a throwaway binding, which
+    // reads as an unused variable (Sonar S1481).
+    const rest = { ...envelope };
+    delete rest.data;
+    return Object.keys(rest).length > 0 ? rest : null;
+}
+
 const EMPTY_FILTERS = {};
 const EMPTY_DEFS = {};
+
+// ETP-4751 — transient exemption-cause signals stamped by InvoiceLineHandler on the LINE-save
+// response ROOT. They are NOT persisted entity fields, so a plain header GET (refreshHeaderTotals)
+// does not return them — it must PRESERVE any value already on the client record instead of
+// dropping it, otherwise the flag is wiped before the SIF tab's toast effect can observe it.
+const EXEMPTION_SIGNAL_KEYS = ['exemptionCauseAutoFilled', 'exemptionCauseWarning'];
 
 export function parseCriteriaInto(v, out) {
     try {
@@ -608,13 +598,12 @@ export function getMethod(isNew) {
     return isNew ? 'POST' : 'PATCH';
 }
 
-export function buildPatchPayload(editing, selected, entity) {
+export function buildPatchPayload(editing, selected) {
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
         if (key === 'id') continue;
         if (value !== selected[key]) payload[key] = value;
     }
-    applyContactsRequiredFields(entity, payload, editing);
     return payload;
 }
 
@@ -629,7 +618,7 @@ export function buildSavePayload({
     formFieldsRef,
 }) {
     if (!isNew && selected) {
-        return buildPatchPayload(editing, selected, entity);
+        return buildPatchPayload(editing, selected);
     }
 
     const payload = {};
@@ -647,7 +636,6 @@ export function buildSavePayload({
         isContactsBusinessPartnerCreate,
         payload,
     );
-    applyContactsRequiredFields(entity, payload, editing);
     return payload;
 }
 
@@ -769,6 +757,12 @@ export function useEntity(entity, childEntity, {
     const logout = useLogout();
     const ui = useUI();
     const [items, setItems] = useState([]);
+    // The list response envelope minus the rows — i.e. any sibling of `response.data`
+    // the backend chose to send (`totalRows`, `hasMore`, and notably aggregates like
+    // `summary`). NEO serializes handler responses verbatim, so a NeoHandler can attach
+    // collection-level aggregates in its afterHandle; without this they were parsed and
+    // dropped. Consumers read it through ListView's `headerContent({ meta })`.
+    const [meta, setMeta] = useState(null);
     const [selected, setSelected] = useState(null);
     const [editing, setEditing] = useState(null);
     const [children, setChildren] = useState([]);
@@ -842,6 +836,7 @@ export function useEntity(entity, childEntity, {
             .then(data => {
                 const rows = normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity);
                 setItems(rows);
+                setMeta(extractResponseMeta(data));
                 startRowRef.current = rows.length;
                 if (rows.length < BATCH_SIZE) setHasMore(false);
                 setLoading(false);
@@ -849,6 +844,7 @@ export function useEntity(entity, childEntity, {
             .catch((e) => {
                 console.error('refresh error', e);
                 setItems([]);
+                setMeta(null);
                 setHasMore(false);
                 setLoading(false);
             });
@@ -881,6 +877,10 @@ export function useEntity(entity, childEntity, {
             .then(data => {
                 const rows = normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity);
                 setItems(prev => [...prev, ...rows]);
+                // Aggregates are computed over the whole collection server-side, so each
+                // page repeats the same values — refreshing keeps them in sync if the
+                // backend ever recomputes, and never mixes page-scoped with total-scoped.
+                setMeta(extractResponseMeta(data));
                 startRowRef.current = start + rows.length;
                 if (rows.length < BATCH_SIZE) setHasMore(false);
                 setLoadingMore(false);
@@ -1000,12 +1000,27 @@ export function useEntity(entity, childEntity, {
             })
             .then(data => {
                 const row = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
-                setSelected(row);
+                // ETP-4751 — carry forward the transient exemption-cause signals: the header GET
+                // does not echo them (they are not entity fields), so a naive setSelected(row)
+                // would wipe the flag a line-save just set before the SIF toast effect runs.
+                setSelected(prev => {
+                    const next = { ...row };
+                    if (prev) {
+                        for (const key of EXEMPTION_SIGNAL_KEYS) {
+                            if (prev[key] !== undefined) next[key] = prev[key];
+                        }
+                    }
+                    return next;
+                });
                 setEditing(prev => {
                     if (!prev) return { ...row };
                     const merged = { ...prev };
                     for (const [key, val] of Object.entries(row)) {
                         if (!userChangedKeysRef.current.has(key)) merged[key] = val;
+                    }
+                    // Signal keys are transient client-only flags — never overwrite them from the GET.
+                    for (const key of EXEMPTION_SIGNAL_KEYS) {
+                        if (prev[key] !== undefined) merged[key] = prev[key];
                     }
                     return merged;
                 });
@@ -1013,6 +1028,25 @@ export function useEntity(entity, childEntity, {
             .catch(() => {
             });
     }, [apiBaseUrl, entity, headers]);
+
+    // ETP-4751 — surface the invoice-line handler's transient exemption-cause signals
+    // (exemptionCauseAutoFilled / exemptionCauseWarning) to the header state so the SIF
+    // tab can toast. The backend (InvoiceLineHandler#autoFillExemptionCauseAfterLineSave)
+    // stamps AT MOST ONE of these on the LINE-save response body; they are mutually
+    // exclusive and never real entity fields. We mirror the value into BOTH `selected`
+    // and `editing` so it never shows up as a PATCH diff (buildPatchPayload compares the
+    // two), and we ALWAYS write the resolved boolean (true when present, false when not)
+    // so the flag flips back to false between saves — that reset is what lets the SIF
+    // tab's one-shot toast guard re-arm and fire again on the next qualifying line save.
+    const applyExemptionCauseSignals = useCallback((serverLineRecord) => {
+        if (!serverLineRecord || typeof serverLineRecord !== 'object') return;
+        const patch = {};
+        for (const key of EXEMPTION_SIGNAL_KEYS) {
+            patch[key] = serverLineRecord[key] === true || serverLineRecord[key] === 'true';
+        }
+        setSelected(prev => (prev ? { ...prev, ...patch } : prev));
+        setEditing(prev => (prev ? { ...prev, ...patch } : prev));
+    }, []);
 
     // ETP-4029 — narrow escape hatch for refreshHeaderTotals's userChangedKeysRef
     // protection above, scoped to ONE known cross-surface-sync case (see call site
@@ -1272,8 +1306,6 @@ export function useEntity(entity, childEntity, {
                 body[key] = val;
             }
 
-            applyContactsRequiredFields(childEntity, body, childData);
-
             // Include parentId in the body — the backend resolves it to the correct FK field name
             // and uses it to load parent record values for @FieldName@ defaults (generic, no hardcoding).
             body.parentId = selected.id;
@@ -1293,31 +1325,61 @@ export function useEntity(entity, childEntity, {
             // pending header edits in editing while updating server-computed fields (totals).
             fetchChildren(selected.id);
             refreshHeaderTotals(selected.id);
+            const savedLine = normalizeRecord(data?.response?.data?.[0] ?? data, childEntity);
+            // ETP-4751 — the exemption-cause signals live at the RESPONSE ROOT
+            // (InvoiceLineHandler#augmentResponseWithSignal does body.put(signalKey, true) on the
+            // full NEO response, i.e. {response:{data:[line]}, exemptionCauseWarning:true}), NOT on
+            // the nested line record. Pass the raw parsed root `data` so applyExemptionCauseSignals
+            // can read data.exemptionCauseWarning / data.exemptionCauseAutoFilled; `savedLine` is
+            // still what we return / feed to the children refresh.
+            applyExemptionCauseSignals(data);
             setSaveError(null);
             toast.success(ui('lineAdded'));
-            return normalizeRecord(data?.response?.data?.[0] ?? data, childEntity) ?? true;
+            return savedLine ?? true;
         } catch (err) {
             const msg = err?.message || 'Network error';
             setSaveError(msg);
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren, ui]);
+    }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren, ui, refreshHeaderTotals, applyExemptionCauseSignals]);
 
-    const handleUpdateChild = useCallback((childId, fieldOrObject, value) => {
+    const handleUpdateChild = useCallback((childId, fieldOrObject, value, signalSource) => {
         setChildren(prev => prev.map(c => {
             if (String(c.id) !== String(childId)) return c;
             if (typeof fieldOrObject === 'object') return { ...c, ...fieldOrObject };
             return { ...c, [fieldOrObject]: value };
         }));
+        // ETP-4751 — mirror the transient exemption-cause signals onto the header like
+        // handleAddChild does. The backend stamps them at the RESPONSE ROOT
+        // (InvoiceLineHandler#augmentResponseWithSignal), NOT on the nested line record, so the
+        // caller must pass the raw PATCH/PUT response root as `signalSource`. `fieldOrObject` is
+        // the client-side / nested-line object and never carries the flag, so fall back to it only
+        // to keep the resolved boolean flipping back to false between saves (which re-arms the
+        // one-shot toast guard). Prefer signalSource when provided; otherwise keep the original
+        // object-only behaviour so unrelated single-field (string) updates don't reset the flag.
+        if (signalSource) applyExemptionCauseSignals(signalSource);
+        else if (typeof fieldOrObject === 'object') applyExemptionCauseSignals(fieldOrObject);
         if (selected?.id) refreshHeaderTotals(selected.id);
-    }, [selected, refreshHeaderTotals]);
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
 
     const handleDeleteChild = useCallback((childId) => {
         setChildren(prev => prev.filter(c => String(c.id) !== String(childId)));
+        // ETP-4751 — reset the transient exemption-cause signals to false on line delete.
+        // The backend only stamps these flags on LINE-SAVE responses (POST/PATCH), never on
+        // a delete, so without this reset the flag keeps whatever value the last line save
+        // left it at. On an edited invoice that previously warned (flag stuck `true`),
+        // deleting all lines then re-adding an exempt line stamps `true` again with no
+        // intervening `true→false` transition, so the SIF tab's one-shot toast guard never
+        // re-arms and the warning silently fails to re-fire. Passing an empty object makes
+        // applyExemptionCauseSignals write both keys as `false` (resolved boolean), which is
+        // exactly the reset the guard needs. Ordered BEFORE refreshHeaderTotals so the false
+        // is what refreshHeaderTotals carries forward (it copies the signal keys from `prev`
+        // when the header GET returns), not overwritten by it.
+        applyExemptionCauseSignals({});
         // Refresh header to update totals after line deletion
         if (selected?.id) refreshHeaderTotals(selected.id);
-    }, [selected, refreshHeaderTotals]);
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
 
     const handleSaveAndProcess = useCallback(async (draftModeConfig) => {
         const saved = await handleSave({ silent: true });
@@ -1434,7 +1496,7 @@ export function useEntity(entity, childEntity, {
     }, []);
 
     return {
-        items, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
+        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
         fieldErrors, registerFields,

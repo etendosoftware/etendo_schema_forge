@@ -388,7 +388,7 @@ below.
 Use this when a window already ships **its own** delete or bulk-delete
 affordance and stacking the generic action would be redundant/confusing.
 
-Unlike `hidePrint` / `hideStatusFilter` / `hideEye` (documented in
+Unlike `hidePrint` / `hideStatusFilter` (documented in
 `docs/decisions-reference.md` as `window.*` decisions.json keys that the
 generator compiles into the `listViewOptions` prop it passes to `ListView`),
 `hideBulkDelete` has **no decisions.json/generator wiring yet** — that
@@ -397,10 +397,16 @@ this sub-task). Today the only way to set it is to pass `listViewOptions`
 directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
 same way `contacts` does it. **That object REPLACES — it does not merge with —
 the `listViewOptions` the generated page already passes to `ListView`**, so the
-wrapper must repeat every flag the generated page sets (`hidePrint`, `hideEye`,
+wrapper must repeat every flag the generated page sets (`hidePrint`,
 `hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
 dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
 canonical example.
+
+> **ETP-4644:** the selection bar's "Vista Previa" (eye) button — and its
+> `listViewOptions.hideEye` / `hideEyeCount` opt-out flags — were removed
+> entirely from `ListView.jsx`. The button had no working backend and did not
+> apply to any window, so it is gone unconditionally, with no flag needed or
+> supported anymore.
 
 **Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
 does **not** mean "this window has no bulk delete." `contacts` has its own,
@@ -409,6 +415,51 @@ older bulk-delete affordance (a trash + X button pair rendered via
 unified with `useBulkRowDelete` in this sub-task — that migration is tracked
 as a follow-up. Read `hideBulkDelete: true` on a window as "has a different,
 not-yet-migrated bulk-delete," never as "has none."
+
+**`listViewOptions.hideListBar` gates only the IDLE list bar — never the
+selection bar (ETP-4658 regression fix).** `hideListBar` exists for windows whose
+custom `headerTable` slot draws the window's whole toolbar itself: the native
+idle strip is then a duplicate that leaves an empty padded band behind, because
+sort/refresh have no `hide*` flag of their own. It does **not** suppress the
+selection bar, which is a different thing — transient, never empty, and the
+standardized home of "Delete selected". While it did suppress both, every
+custom-`headerTable` window silently lost grid multi-select delete; that is how
+`financial-account` lost it, since the flag hid the only delete affordance even
+once the grid was selectable again.
+
+This is safe by construction rather than by convention: **the selection bar is
+unreachable unless the grid is selectable.** A custom `headerTable` that wants no
+selection at all simply keeps `selectable={false}` on its own `DataTable` and
+never renders rows that can be picked — so it never sees a selection bar either
+way. Conversely, a window that wants checkboxes but not the *generic* delete
+button uses `hideBulkDelete`, not `hideListBar`.
+
+Note that a window doing this swaps two bars, not stacks them: `ListView` renders
+its selection bar as a **sibling above** the slot and cannot reach inside it, so
+the slot must hide its own toolbar while a selection exists. To let it, `ListView`
+now forwards its authoritative **`selectedRows`** in the Table-slot props
+(read-only for the slot; `DataTable` has no such prop, so the spread is inert):
+
+```jsx
+function MyHeaderTable({ data, meta, selectedRows, ...props }) {
+  const selectionActive = (selectedRows?.length ?? 0) > 0;
+  return (
+    <>
+      {!selectionActive && <MyToolbar />}
+      <DataTable {...props} data={data} /* selectable stays at its default */ />
+    </>
+  );
+}
+```
+
+**Do NOT mirror the selection into slot-local state by wrapping
+`onSelectionChange`.** `DataTable` empties and prunes its internal selection `Set`
+silently from its `clearSelectionTrigger` / `deselectTrigger` effects **without**
+calling `onSelectionChange`, so a local mirror still reads "selected" after a
+successful bulk delete or a cancel — and the slot's toolbar never comes back.
+Always derive from the `selectedRows` prop. See
+`artifacts/financial-account/custom/AccountsHeaderTable.jsx` for the canonical
+example — including why the toolbar is unmounted rather than merely hidden.
 
 **Standardized delete-failure UX (applies to header, row, and bulk delete —
 no configuration needed):**
@@ -580,6 +631,8 @@ function MyLinesEmptyState({ data, onAddLine, canAddLine = true, ...rest }) {
 - `maxDetailLines: 1`: `business-partner-category`, `product-category` (accounting tab capped at one row per accounting schema)
 - `maxDetailLines: 0` (import-only lines, ETP-4462): `return-material-receipt` (lines imported from the source shipment) and `return-to-vendor-shipment` (lines imported from the source goods receipt) — both bottom panels (`artifacts/{window}/custom/*BottomPanel.jsx`) forward `canAddLine`, swap the empty-state description to the import-only keys `linesImportOnlyFromShipment` / `linesImportOnlyFromReceipt` (defined in `en_US`, `es_ES`, and `es_AR`), and re-render their import trigger (`ReturnReceiptLineActions` / `ReturnToVendorLineActions`) above `LinesBottomSection` via the panel-rendered pattern so importing stays available on drafts that already have lines
 
+**This flag only caps the `window.detailEntity` pattern (a window's single primary lines tab).** For a `window.secondaryTabs` entry (Accounting, Customer/Vendor Accounting, etc. rendered beside the lines tab, not as the lines tab itself), use the per-tab `maxDetailLines` inside that tab's own config instead — see §17 below (ETP-4565).
+
 ---
 
 ### 12. `hideMoreMenu` — hide the "more" (⋮) button conditionally
@@ -709,6 +762,7 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 **MVP scope (current iteration):**
 - Inline edit covers all column types: `string`, `number`, `amount`, `percent`, `date`, `selector` and `search`. Selector/search columns use `InlineSearchCombo` — a compact text input with server-side search (`?q=term`) and portal dropdown — so FK fields with many options (e.g., tax rates) are filterable by typing. Lookup/popup columns (e.g., product) continue to open `ProductSearchDrawer`.
 - Pencil and trash carry full logic. No other action icons are rendered in this iteration.
+- **Delete icon gating (ETP-4565):** the trash icon only renders when the caller passes a real `onDeleteRow` handler — `InlineLinesPanel` derives `canDelete = onDeleteRow != null` and wraps the Trash2 button in it, mirroring `DataTable`'s pre-existing `{onDeleteRow && (...)}` gate on its own row-delete button. When an entity declares `hideDelete: true` (see `docs/decisions-reference.md`), `apiPrediction.crud.<entity>.delete` resolves to `false` and `DetailView` never passes `onDeleteRow` down — before this fix, the icon still rendered on `inlineEditable` tabs and silently no-opped on click (the backend correctly rejected the delete, but nothing told the user why nothing happened). Purely additive: every caller that already passes `onDeleteRow` (the default for every window with a deletable lines entity) renders byte-for-byte the same as before.
 - Desktop only (>= 1280 px). Tablet/mobile responsive support is out of scope for this iteration.
 - **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
 - **Dynamic column visibility (ETP-4543):** `InlineLinesPanel` accepts a `hiddenColumns = []` prop (mirroring `DataTable`'s existing one) that hides columns whose key is in the list, on top of any static `col.hidden` flag. `DetailView.jsx` computes this list from `lineDisplayLogic.visibility` (the same live evaluate-display map already threaded into the secondary `DetailForm`) and passes it to the primary lines table — so a grid column whose field resolves to `visibility: false` (e.g. a config-gated accounting dimension behind `@ACCT_DIMENSION_DISPLAY@`) is hidden at runtime rather than always shown just because it exists as a column. This makes `grid: true` fields under `inlineEditable` layouts respect the same runtime visibility rules non-grid fields already got via `DetailForm` — see `docs/feedback.md` ("ETP-4543") and `docs/generated-custom-windows/sales-invoice.md` for the full write-up.
@@ -861,11 +915,30 @@ carry `requiredVisual: true` because their obligatoriness depends on the "Tipo d
 
 **What it does:** renders one or more extra tabs next to the header's detail content, backed
 either by a hand-written `Panel` component (freeform content, e.g. a custom fetch-and-render
-subtab) or a generated `Form` component (a plain entity form reused as a secondary tab). This is
-a runtime prop passed to the generated `<Page>` component from a hand-written `windows/custom/
-{window}/index.jsx` wrapper — **not** a `decisions.json` key — so it requires `window.layoutType:
-"custom"` (the pipeline only emits a bare scaffold for `"custom"` layouts; there is no
-declarative `decisions.json` shape for this yet).
+subtab), a generated `Form` component (a plain entity form reused as a secondary tab), or a
+generated `Table` + `Form` pair backed by a genuine child entity (Accounting, Tax, Payment Plan,
+Customer/Vendor Accounting, etc.).
+
+**Two ways to declare it — don't confuse them:**
+
+1. **Declarative, `decisions.json → window.secondaryTabs`** (the common case — no custom
+   `index.jsx` needed). `resolveSecondaryTabDefs` (`generate-frontend.js`) reads this object
+   directly and emits the `Table`/`Form`/`Panel` imports and the `secondaryTabs` prop array on the
+   generated `<Page>` itself — works with the normal `"default"` `layoutType`. This is what
+   `product`, `product-category`, `business-partner-category`, `tax`, `asset-group`, and `contacts`
+   use for their Accounting/Customer-Accounting/Vendor-Accounting tabs. Full property reference
+   (`tabOrder`, `label`, `addLineFields`, `requireSavedRecord`, `customPanel`/`customTable`/
+   `customForm`, `customAddModal`, `readOnlyLogic`, and the per-tab `maxDetailLines` cap added in
+   ETP-4565): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
+   (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
+   every other entry, not just within its own group — see `docs/decisions-reference.md`'s
+   `secondaryTabs` section for the full reference and the `customTabsAfterBottom` incompatibility.
+2. **Runtime prop, hand-written `windows/custom/{window}/index.jsx`** (documented below) — a
+   `Panel`-backed tab with freeform fetch-and-render content that doesn't map to any generated
+   entity at all, passed to the generated `<Page>` component from a hand-written wrapper. Requires
+   `window.layoutType: "custom"` (the pipeline only emits a bare scaffold for `"custom"` layouts).
+   Used by `warehouse` and `calendar` below.
 
 ```jsx
 // windows/custom/{window}/index.jsx
@@ -949,10 +1022,176 @@ file when building URLs in a `menuActions` component.
 list/detail entity — inline custom rendering, aggregation, or an interaction shape the generator
 doesn't produce (expandable rows, a read-only trial-balance-style grid, etc.).
 
-**Real examples:** `warehouse` (`WarehouseTransactionsTable`/`WarehouseProductsTab` as `Panel`s
+**Real examples (runtime-prop path):** `warehouse` (`WarehouseTransactionsTable`/`WarehouseProductsTab` as `Panel`s
 reading `parentId`, single backing spec — the common case); `calendar` (`PeriodsExpandablePanel`,
 `AccountingPanel` — the multi-spec exception above, each panel's `apiBaseUrl` rewritten to a
 different real spec).
+
+**Real examples (declarative `decisions.json` path, `maxDetailLines` — ETP-4565):** `product` and
+`asset-group` cap their `secondaryTabs.accounting` tab at one record
+(`"maxDetailLines": 1`); `contacts` caps both `secondaryTabs.customerAccounting` and
+`secondaryTabs.vendorAccounting` the same way — all four are the "registro único" requirement for
+an accounting-schema row, the `secondaryTabs`-pattern equivalent of `window.maxDetailLines: 1` on
+`product-category`/`business-partner-category`/`tax`'s `detailEntity` (see §11 above). The cap is
+enforced client-side by `resolveCanAddSecondaryLines(st, childrenCount)` in `DetailView.jsx`,
+gating `secondaryAddLineBar`, the inline `addRow`, and the empty-state add trigger once the tab's
+own child count reaches the declared `maxDetailLines`.
+
+---
+
+### 18. `multiField` — composite list column (stacked identity cell)
+
+**What it does:** turns a single list column into a **composite identity cell** that stacks several
+row fields together — a bold **title**, an optional **subtitle chip**, and an optional **authenticated
+media image** — while still behaving like real, first-class columns: each declared *part* is a
+clickable sort header (own `_sortBy`) and expands into its own pseudo-column in the advanced filter.
+It is **not** a new component and **not** a custom slot: it is a `type: 'multiField'` decorator on the
+existing `DataTable`, declared entirely in `decisions.json`. No hand-written JSX, no file in
+`windows/custom/`.
+
+Introduced in ETP-4603. It replaces the previous pattern of a bespoke per-window cell component (e.g.
+Product's old `ProductNameCell`) with a generic, config-driven column that any window can adopt.
+
+**Design note — columns are derived from grid fields (Design A).** There is **no** `window.listColumns`
+array. List columns are derived from the entity's grid fields, so `multiField` is declared as a
+**decorator on a "host" grid field** (the field whose value becomes the title). The decorator absorbs
+the sibling fields it references — they stop rendering as their own standalone columns and fold into
+the composite cell instead.
+
+**Use when:** a list row's identity is better read as one rich cell than as three separate columns —
+typically a master-data window (Product, Business Partner, etc.) where users recognize a record by an
+image + a primary name + a secondary code, and still want to sort/filter by each of those parts.
+
+**Avoid when:** the fields are unrelated data points that users genuinely compare column-by-column, or
+the "title" field is not the natural primary label of the row.
+
+#### Decision tree (inside the feature)
+
+```
+I want to combine several list fields into one column
+│
+├─ Just a title + a small code/label underneath it
+│   └─ → multiField with subtitle (no media)
+│
+├─ Title + code + a thumbnail image (product photo, avatar…)
+│   └─ → multiField with subtitle + media { kind: "neoImage" }
+│
+├─ I want users to still sort/filter by each stacked field
+│   └─ → declare each as a parts[] entry (default: sortable + filterable)
+│
+├─ One stacked field should be display-only (no sort header, no filter)
+│   └─ → parts[].sortable: false  and/or  parts[].filterable: false
+│
+└─ I need a fully bespoke rendering the decorator can't express
+    └─ → not multiField — use a cellType renderer or a custom layout
+```
+
+#### The decorator shape (declared in `decisions.json`)
+
+Set `multiField` on the **host** grid field. The host field's own value is the **title** — there is no
+`title` key in the declaration; the field you attach the decorator to *is* the title.
+
+```json
+"name": {
+  "visibility": "editable",
+  "grid": true,
+  "multiField": {
+    "subtitle": "searchKey",
+    "media": { "field": "image", "kind": "neoImage", "fallback": "box" },
+    "parts": [
+      { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
+      { "field": "name",      "labels": { "en_US": "Name",       "es_ES": "Nombre" } }
+    ],
+    "partSeparator": " & "
+  }
+}
+```
+
+| Key | Type | Default | Semantics |
+|-----|------|---------|-----------|
+| *(host field)* | — | — | The grid field carrying the decorator. Its value renders as the **bold title**. |
+| `subtitle` | string | `null` | Sibling field name whose value renders as the **chip** under the title. Omit for a title-only cell. |
+| `media` | object | `null` | `{ field, kind: "neoImage", fallback: "box" }`. `field` = row property holding the image id; `kind: "neoImage"` fetches the image with an authenticated Bearer request (see below); `fallback: "box"` shows a package glyph when empty. Omit for no image. |
+| `parts` | array | `[title, subtitle]` | Ordered segments that behave like real columns for **per-part sort** and **filter expansion**. Each entry: `{ field, sortable?, filterable?, labels?, label? }`. `sortable`/`filterable` default `true`. `labels` (`{ en_US, es_ES }`) or `label` relabel that segment's header (e.g. show *Identifier* for `searchKey`) without renaming the underlying field. When omitted, defaults to the title field plus the subtitle field (if any). |
+| `partSeparator` | string | `" & "` | String joining the part labels in the composite column header (part order drives the header text). |
+
+#### The emitted contract (what the generator writes into `columnsArray`)
+
+The generator resolves each `parts[].field`, the `subtitle`, and `media.field` against the resolved
+contract to fill in the runtime `key`/`column`/`type`/`label(s)`, and emits a single resolved column
+descriptor:
+
+```js
+{
+  key: 'name', column: 'Name', type: 'multiField',
+  title: 'name',                 // row field → bold title
+  subtitle: 'searchKey',         // row field → chip (optional)
+  media: { field: 'image', kind: 'neoImage', fallback: 'box' },   // optional
+  parts: [                       // per-part: sort header + filter expansion
+    { key: 'searchKey', column: 'Value', type: 'string', labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
+    { key: 'name',      column: 'Name',  type: 'string', labels: { en_US: 'Name',       es_ES: 'Nombre' } },
+  ],
+  partSeparator: ' & ',
+}
+```
+
+So the declared `field` (decisions.json) becomes the resolved `key`/`column`/`type` (contract). You edit
+the `field` form; you never hand-write the resolved form.
+
+#### Per-part sort
+
+Each `parts[]` entry with `sortable !== false` renders its label as a **clickable header button** with
+its own `_sortBy` — clicking *Identifier* sorts the list by `searchKey`, clicking *Name* sorts by
+`name`, independently, even though both live in one visual column. `sortable: false` renders the part
+label as plain, non-clickable text.
+
+#### Advanced-filter expansion
+
+Each `parts[]` entry with `filterable !== false` **expands into its own pseudo-column** in the advanced
+filter builder — so a user filtering the list sees *Identifier* and *Name* as separately filterable
+fields, not one opaque "multiField" blob. `filterable: false` keeps that segment out of the filter
+builder.
+
+#### Absorbed fields still carry their data
+
+The `subtitle` field, `media.field`, and any `parts[]` field that is **not** the host are **dropped
+from `columnsArray`** — they no longer render as standalone columns. **Their data still arrives**,
+though, because the list fetch sends **no field projection**: NEO Headless returns every configured
+entity field for each row regardless of which columns are shown. That is what lets the renderer paint
+the subtitle/image and lets per-part sort/filter target the absorbed fields.
+
+#### Authenticated media (`useNeoImage`)
+
+`media.kind: "neoImage"` renders through the `useNeoImage(imageId, token, apiBaseUrl)` hook, which
+issues an **authenticated Bearer fetch** to `{apiBaseUrl}/image/{imageId}` and returns an object URL for
+an `<img>` src. On a missing id or a failed fetch it falls back to the `BoxIcon` package glyph
+(`fallback: "box"`). The hook now lives in the core package (`@etendosoftware/app-shell-core`) and is
+consumed via the shim `@/hooks/useNeoImage`.
+
+#### Validation (rule F18)
+
+Pipeline validator rule **F18** (implemented in `schema_forge_core`) blocks the pipeline when a
+`multiField` decorator references a sibling field that does not exist on the same entity (`subtitle`,
+`media.field`, or any `parts[].field`), or when a **sort-enabled** part (`sortable !== false`) — or the
+host — is **not queryable** (missing from the entity's `searchableFields` / `supportedFilters`, so the
+backend would reject `_sortBy` on it). It is a no-op for windows without any `multiField` decorator.
+Fix by referencing only real same-entity fields and marking non-queryable segments `sortable: false`
+(or making the field searchable). Full row: [`docs/pipeline-validator-reference.md`](pipeline-validator-reference.md) (F18).
+
+#### Real example — the Product identity column
+
+Product's list uses `multiField` on its `name` grid field to render the product identity as one cell:
+the **name** in bold as the title, the **search key** as a subtitle chip, and the product **image**
+(authenticated `neoImage`, `box` fallback) to the left. Two `parts` — *Identifier* (`searchKey`) and
+*Name* (`name`) — make the cell sortable per part (clicking each header sorts by that field) and
+filterable (each part expands as its own pseudo-column in the advanced filter). The composite header
+reads *"Identifier & Name"* / *"Identificador & Nombre"*. See the exact declaration in
+[`docs/decisions-reference.md`](decisions-reference.md) → *Composite list column (`multiField`)* and the
+window guide [`docs/generated-custom-windows/product.md`](generated-custom-windows/product.md).
+
+**Cross-references:**
+- [`docs/decisions-reference.md`](decisions-reference.md) — canonical decorator key table (*Composite list column (`multiField`)*).
+- [`docs/pipeline-validator-reference.md`](pipeline-validator-reference.md) — rule F18.
 
 ---
 
@@ -990,6 +1229,9 @@ I need to customize the UI of a window
 │   ├─ Replace the master list table
 │   │   └─ → window.customComponents.headerTable
 │   │
+│   ├─ Stack title + code + image into one sortable/filterable list column
+│   │   └─ → multiField decorator on the host grid field (decisions.json)
+│   │
 │   └─ Secondary document actions (cancel, reverse, duplicate)
 │       └─ → window.menuActions
 │
@@ -1001,6 +1243,7 @@ I need to customize the UI of a window
     ├─ Empty state when lines tab is empty → linesEmptyState prop + addLineGuard
     ├─ Gate add-line button on header field → addLineGuard prop
     ├─ Cap line count / disable manual line creation (import-only lines) → window.maxDetailLines (0 = import-only)
+    ├─ Cap a secondaryTabs entry's own record count (e.g. accounting tab = 1) → window.secondaryTabs.<key>.maxDetailLines
     ├─ Hide ⋮ menu on new/processed records → hideMoreMenu prop (boolean or function)
     ├─ Hover overlay with per-row actions on the list (Edit/Duplicate/Email/kebab/Delete)
     │   └─ → window.rowQuickActions (on by default; declare only to disable or override)

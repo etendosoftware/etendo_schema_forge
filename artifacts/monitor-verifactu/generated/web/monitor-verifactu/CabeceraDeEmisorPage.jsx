@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CabeceraDeEmisorTable from './CabeceraDeEmisorTable';
 import CabeceraDeEmisorForm from './CabeceraDeEmisorForm';
@@ -68,10 +69,10 @@ export const api = {
     "cabeceraDeEmisor": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/monitor-verifactu/cabeceraDeEmisor",
       "detailUrl": "/sws/neo/monitor-verifactu/cabeceraDeEmisor/{id}",
       "supportedFilters": []
@@ -79,10 +80,10 @@ export const api = {
     "facturasRechazadas": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/monitor-verifactu/facturasRechazadas",
       "detailUrl": "/sws/neo/monitor-verifactu/facturasRechazadas/{id}",
       "supportedFilters": []
@@ -90,21 +91,27 @@ export const api = {
     "facturasParcialmenteAceptadas": {
       "get": true,
       "getById": true,
-      "post": true,
+      "post": false,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas",
       "detailUrl": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID",
+        "PUT",
+        "PATCH"
+      ]
     },
     "facturasAceptadas": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/monitor-verifactu/facturasAceptadas",
       "detailUrl": "/sws/neo/monitor-verifactu/facturasAceptadas/{id}",
       "supportedFilters": []
@@ -112,10 +119,10 @@ export const api = {
     "facturasInválidas": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/monitor-verifactu/facturasInválidas",
       "detailUrl": "/sws/neo/monitor-verifactu/facturasInválidas/{id}",
       "supportedFilters": []
@@ -211,7 +218,8 @@ export const api = {
     "parentFilter": "parentId={id} for child entities"
   },
   "window": {
-    "category": "monitor"
+    "category": "monitor",
+    "readOnly": true
   }
 };
 
@@ -260,6 +268,7 @@ export default function CabeceraDeEmisorPage({ windowName, recordId, ...props })
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hideCreate
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />

@@ -88,7 +88,7 @@ the same primitives `DetailTabs.jsx` uses for the Movements/Reconciliation/State
   so their bank accounts — including the highest-traffic demo account, "Bank - Account 1" — cannot
   populate this tab until an admin sets one).
 - **Capability-gated Accounting tab (ETP-4520, UI label "Contabilidad"):** the tab is only reachable for a role granted
-  the `showAccountingFields` capability. This window is `layoutType: "custom"`, so — unlike the
+  the `showAccountingFields` capability. The tab lives in the hand-written DETAIL half, so — unlike the
   invoice windows' `posted` field/status pill, which declares `"visibleWhenCapability":
   "showAccountingFields"` in `decisions.json` and is resolved generically by `isCapabilityVisible()`
   inside `DataTable.jsx`/`DetailView.jsx` (see `sales-invoice.md`/`purchase-invoice.md`, "Reactive
@@ -192,6 +192,10 @@ POST/PUT /sws/neo/financial-account/accountingConfiguration
   visibilities; `artifacts/financial-account/contract.json`/`contract.mcp.json` reflect the new
   entity and its two selector endpoints (`ValidCombination` reference) after `make regen
   ONLY=financial-account`.
+
+**ETP-4565 review — single-record + non-deletable requirements already satisfied structurally, no change needed.** Investigated as part of ETP-4565 ("Contabilidad tab: single record + non-deletable" across 8 master-data windows). `useFinancialAccountAccounting.js`'s `fetchAccountingConfiguration`/`saveAccountingConfiguration` are both handled entirely by `FinancialAccountAccountingHandler`, which always "resolve[s]/find-or-create[s] the single per-ledger row for the account transparently" — there is no "Add new accounting row" affordance in the UI at all, and no delete affordance either (no Trash icon anywhere in `AccountingConfigurationSection`). Both requirements are therefore inherently met by the current design; no `decisions.json` or code change was made for this ticket.
+
+**Auto-creation (requirement 3) is a confirmed gap, however:** the handler's find-or-create only fires lazily on first GET (i.e., when a user with the `showAccountingFields` capability opens the Contabilidad tab), not eagerly at account-creation time, and the created row starts with no default account (`fINAssetAcct` is required with no default value shown) rather than "default accounts inherited from the Esquema Contable" as the ticket requires. DB-verified: of the 12 most-recently-created financial accounts (via the GO onboarding flow — `Caja`/`Cuenta de Banco`/`Tarjeta`), 0 have a `FIN_Financial_Account_Acct` row; only pre-existing/legacy (`APRM_*`) records created outside the current GO flow have one. Flagged for follow-up investigation in `com.etendoerp.go`, not fixed in this pass — see the ETP-4565 coordinator report.
 
 **Generic component fix (ETP-4530):** `CreatableSearchSelect` (`components/contract-ui/`) did not
 re-sync its `options` state when a caller passed a `staticOptions` array that started empty and
@@ -853,7 +857,13 @@ Status derivation in list response: `COMPLETED` = processed=Y AND posted=Y; `WIT
 
 ## Pipeline / artifact status
 
-The artifact directory `artifacts/financial-account/` only contains a stub `decisions.json` (`layoutType: "custom"`). It is whitelisted in `cli/src/validate-pipeline.js → CUSTOM_ONLY_ARTIFACTS` because there is no contract pipeline: the window is fully hand-written and consumes real NEO endpoints.
+`artifacts/financial-account/` is a full pipeline artifact: `decisions.json` (no longer
+`layoutType: "custom"`), a generated `contract.json` and a generated `generated/web/financial-account/`
+tree whose `AccountPage.jsx` is what the window actually mounts for the LIST — through the
+`AccountsHeaderTable` slot declared in `window.customComponents.headerTable`. `make regen ONLY=financial-account`
+and `sf-validate-pipeline --scope=financial-account` both apply to it like to any registered window.
+The DETAIL half is still hand-written React (PSD2, statement import and the reconciliation engine
+have no AD backing) and consumes real NEO endpoints directly.
 
 > **Local-DB translation gap when running `make regen` on this window.** Some local sandbox DBs are missing `AD_Ref_List_Trl` es_ES rows for the `type`/`pSD2StatementFrequency`/`pSD2ConnectionStatus`/`etblkpAccountingstatus` enum fields used by this window's `account`/`transaction`/`importedBankStatements` entities — a `make regen ONLY=financial-account` run against such a DB will silently drop those enum labels from `contract.json` (and the generated forms) with no error, only the "AD cache looks STALE" warning as a hint. See `docs/feedback.md` → "`make regen` Silently Strips es_ES Enum Labels on a DB Missing `AD_Ref_List_Trl` Rows" (added during ETP-4530) for the exact `AD_Reference_ID`s affected and the diff-and-restore workaround. This is a local-environment data gap, not a code bug — do not "fix" it by editing the generator.
 
@@ -907,12 +917,99 @@ All keys prefixed `financeAccountDetail*` and `financeAccountMovements*`, added 
 
 ## Contract-driven grid columns
 
-The window stays **custom** (`layoutType: "custom"`, bespoke React structure), but its four grids now read their **column set, order, labels and cell types from `contract.json`** instead of hardcoded JSX:
+The window **no longer declares `layoutType: "custom"`**. The LIST is the generated page's
+list branch (`ListView` + the `AccountsHeaderTable` slot); only the DETAIL is still
+hand-written, reached through a wrapper that branches on `recordId`. Its grids read their
+**column set, order, labels and cell renderers from `contract.json`** instead of hardcoded JSX:
 
-- `components/financial-accounts/contractColumns.js` → `getContractGridColumns(entity)` reads `@generated/financial-account/contract.json` and returns the ordered, grid-flagged fields for an entity (`account`, `transaction`, `importedBankStatements`, `bankStatementLines`).
-- Field-level config lives in `artifacts/financial-account/decisions.json` (`grid` / `gridOrder` per field). Edit decisions → `node cli/src/resolve-curated.js --window financial-account --write` regenerates `contract.json`; the grids pick up the change with no JSX edits.
-- Adding/removing a grid column or reordering = a `decisions.json` change, **not** a code change. Visibility (`editable`/`readOnly`/`system`/`discarded`) and `readOnlyLogic` also come from the contract.
+- `components/financial-accounts/contractColumns.js` → `getContractGridColumns(entity)` reads `@generated/financial-account/contract.json` and returns the ordered, grid-flagged fields for an entity (`account`, `transaction`, `importedBankStatements`, `bankStatementLines`), forwarding `column`, `gridLabelKey`, `cellType` and `columnType` along with the name/label/type.
+- Field-level config lives in `artifacts/financial-account/decisions.json`. Per field: `grid` / `gridOrder` (which columns and in what order), `gridLabelKey` (the header's i18n key) and `cellType` (which renderer draws the cell). Edit decisions → `make regen ONLY=financial-account SKIP_EXTRACT=1` regenerates `contract.json`; the grids pick up the change with no JSX edits.
+- **`cellType` for this window resolves through `components/financial-accounts/accountCellTypes.jsx`**, a window-scoped registry (`accountName`, `accountType`, `accountBalance`, `reconcilePill`). It is deliberately NOT one of the shared registries: `contract-ui/listModalCells.jsx` is wired only to `ListModalWindow` (`layoutType: "list-modal"`), and `DataTable.cellRenderers.jsx` is keyed by column *type* and generic to every window, whereas these cells are account-specific (bank avatar, PSD2 affordance, chunked IBAN). What `cellType` makes declarative is the **binding** — which column gets which renderer — not the rendering itself; the cell components stay React.
+- **`pendingCount` ("Por conciliar") is a `virtualFields[]` entry** on `entities.account`. It has no AD column: `FinancialAccountHandler.afterHandle` injects it per row. Same mechanism `payment-in`, `payment-out`, `return-material-receipt` and `return-to-vendor-shipment` already use. Caveat: `appendVirtualFields` (`resolve-curated.js`, in `schema_forge_core`) copies a closed whitelist, so **two** of the per-field knobs above do not reach a virtual field and each needs its own route:
+  - `cellType` is excluded → its renderer is bound through `VIRTUAL_FIELD_CELL_TYPES` in `accountCellTypes.jsx`.
+  - `gridLabelKey` is excluded too → its header is translated through **`window.labelOverrides`** instead, which `resolveColumnLabel` consults at priority 3 (`translate(col.column)`), outranking the raw English `label` the virtual field carries at priority 4. Declaring `gridLabelKey` on a virtual field is silently dropped and leaves the header in English — that is how this column shipped reading "Pending" in Spanish (fixed in ETP-4658). The `financeAccountsColPending` key still exists in both locale files for the other consumers of that wording.
+
+  Remove both workarounds if the whitelist ever widens.
+- Adding/removing a grid column, reordering, relabelling or changing a renderer = a `decisions.json` change, **not** a code change (a genuinely new *kind* of cell still needs a renderer added to the registry). Visibility (`editable`/`readOnly`/`system`/`discarded`) and `readOnlyLogic` also come from the contract.
+- **Column widths stay in code** (`COLUMN_CHROME` in `AccountsHeaderTable.jsx`) on purpose: `decisions.json` is a semantic contract, not a stylesheet; Tailwind arbitrary values must be static in source, so a runtime `w-[${n}px]` would never compile; and `pl-[84px]` is not a width but a mirror of `NameCell`'s 44px grip + 32px avatar + 8px padding, so it is coupled to that cell body.
+- **Two pieces of list chrome are props, not decisions**, because both are generic `ListView`/`DataTable` behaviours the retired page had and every other window may want:
+  - `tablePaddingX=""` (passed by the wrapper in `windows/custom/financial-account/index.jsx`) cancels `ListView`'s default `px-2` on the table region. That padding would inset the slot's full-bleed rules — the one under the toolbar and the vertical one between the KPI panel and the rows — from both edges. The slot owns its inner spacing instead.
+  - `rowHoverStyle="elevated"` (passed to `DataTable` by `AccountsHeaderTable`) restores the retired `AccountRow`'s hover: an opaque background plus `shadow-lg` and `z-10`, so the row reads as a raised card and its shadow spills over the neighbouring separators. The default `"tint"` is `DataTable`'s pre-existing `hover:bg-muted/50` — no other grid changes. Selection backgrounds always win over the elevated background. In this mode `DataTable` also pads its table wrapper by 24px at the bottom: that wrapper is `overflow-x-auto overflow-y-visible`, which the CSS spec computes as `auto` on **both** axes, so without the padding the last row's downward shadow (`0 10px 15px -3px` ≈ 22px of reach) is clipped away and the last row looks like it has no hover at all.
+- **Reveal-on-hover affordances inside cells need the named group variant.** `DataTable` marks each row as `group/row`, not `group`, and Tailwind's `group-hover:` does not match a named group. Dropping the named variant is what made the copy-IBAN button and the drag grip silently vanish when the list moved onto `DataTable` — the exact same trap the row kebab hit. `accountColumns.jsx` and `AccountRowActions.jsx` therefore carry **both** variants (`group-hover:opacity-100 group-hover/row:opacity-100`): the named one is load-bearing, the unnamed one is cheap insurance for any future host that marks rows as a plain `group`, since jsdom can catch neither (it loads no Tailwind and computes no opacity).
+- **The hand-rolled `AccountsTable` host is deleted** (ETP-4658): `AccountsTable/{index,AccountsTableHeader,AccountRow}.jsx`, their tests, the `ACCOUNT_CELL_RENDERERS`/`ACCOUNT_COLUMNS` registry and the barrel export. Nothing mounted it once the list became the generated `ListView`, and declaring `pendingCount` in the contract had left it rendering that column twice with an off-by-one `colspan`. What survives in `AccountsTable/accountColumns.jsx` is only the three cell bodies (`NameCell`/`TypeCell`/`BalanceCell`), bound to columns by `accountCellTypes.jsx`. The folder name is now a misnomer; moving the file was left out on purpose to avoid churning imports and the tests that pin its path.
+- Nothing validates `gridLabelKey` or `cellType` (no rule in the pipeline validator, no whitelist). A typo'd label key renders **the key itself** on screen, because `useUI` returns the key on a miss; an unknown `cellType` falls back to DataTable's generic type renderer.
 - `readOnlyLogic.js` for these fields is produced by `generate-contract.js → convertLogicToJs` (AD expression → JS). The translator handles `@Col@='v'`, `!=`, empty (`!''`/`=''`), `null` and numeric (`>0`) forms; any expression that still contains a raw `@token@` after translation is marked `evaluable:false` (never emits invalid JS). All `readonlylogic-valid` contract tests must stay green after a regen.
+
+### Grid multi-select delete on the Cuentas list (ETP-4656 · restored in ETP-4658)
+
+The list supports **selecting several accounts and deleting them in one action**, per
+ETP-4656's scope table (*Contabilidad y Finanzas → Cuentas financieras: F ✅ · GH ✅ ·
+GM ✅*, where GM = grid multi-select). It runs entirely on the **standardized generic
+path** — no bespoke bulk-delete code in this window:
+
+| Piece | Where it lives |
+| --- | --- |
+| Row checkboxes | `DataTable`'s own `selectable` column (its default, `true`) |
+| Selection state | `ListView` (`selectedRows`, `clearSelectionCounter`, `deselectTrigger`, `deselectRowIds`) — forwarded read-only to the slot as `selectedRows` |
+| Selection bar + "Eliminar seleccionados" | `ListView`, rendered **above** the `AccountsHeaderTable` slot |
+| Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` → `lib/batchDelete.js` |
+
+**How the flow behaves.** Tick one or more row checkboxes → the slot's own
+`AccountsToolbar` unmounts and `ListView`'s selection bar takes its place (one swap, not
+two stacked bars) → **Eliminar seleccionados (N)** opens the shared confirm dialog → on
+confirm one DELETE per row goes out in parallel, then a single toast reports the outcome:
+
+- **all succeeded** → list refetches, selection clears, toolbar comes back.
+- **partial failure** → list refetches (the deleted rows disappear) and only the *failed*
+  rows stay checked, so the user can retry exactly those. `ListView` keeps them checked in
+  DataTable's internal Set via `deselectTrigger` + `deselectRowIds`.
+- **all failed** → no refetch, selection untouched.
+
+**"Delete" here means archive.** The generic path issues
+`DELETE {apiBaseUrl}/{entity}/{id}` = `DELETE /sws/neo/financial-account/account/{id}`,
+which is byte-for-byte the endpoint `useAccountMutations().archiveAccount(id)` calls. So
+`FinancialAccountHandler`'s open-reconciliations guard (409) and its soft-archive
+(`IsActive='N'`) apply unchanged, and a guarded account simply lands in the "failed"
+bucket of the partial-failure branch above. That equivalence is *why* no bespoke
+`useBatchDeleteDialog` + `archiveAccount` wiring was added here — unlike the **Movimientos**
+and **Extractos importados** detail tabs, which are not `ListView`s and therefore must keep
+their own `BulkDeleteSelectionBar` + `useBatchDeleteDialog`.
+
+**Two things were load-bearing to make this work, and both are easy to re-break:**
+
+1. **`AccountsHeaderTable` must NOT pass `selectable={false}` to `DataTable`.** It did
+   (hardcoded *after* the `{...props}` spread, so it won), which is exactly how the feature
+   was lost: ETP-4656 built bulk delete on the retired hand-assembled
+   `pages/FinancialAccountsPage.jsx`, ETP-4658 replaced that page with this slot on a
+   divergent branch, and with no textual conflict the tests outlived the feature. The slot
+   now leaves `selectable` at DataTable's default and forwards `{...props}` untouched so
+   `onSelectionChange` / `clearSelectionTrigger` / `deselectTrigger` / `deselectRowIds`
+   reach the grid. The hover quick-actions overlay stays suppressed **separately** and
+   declaratively (`window.rowQuickActions.enabled: false`), since per-row actions belong to
+   the trailing `AccountRowActions` column — do not conflate the two.
+   The toolbar swap reads `ListView`'s `selectedRows` prop directly and **must not** mirror
+   it into slot-local state via `onSelectionChange`: `DataTable` empties its internal
+   selection `Set` silently from its `clearSelectionTrigger` / `deselectTrigger` effects
+   without calling `onSelectionChange`, so a mirror would still read "selected" after a
+   successful bulk delete or a cancel and the toolbar would never reappear.
+2. **`listViewOptions.hideListBar` gates only the IDLE list bar, not the selection bar** —
+   see `docs/ui-customization.md` §9c. This window sets `hideListBar: true` (its slot draws
+   the whole toolbar), and while that flag also suppressed the selection bar there was no
+   delete affordance to reach even with checkboxes on.
+
+The wrapper (`windows/custom/financial-account/index.jsx`) also keeps `hidePrint` from
+`decisions.json`, which covers the Printer button. The selection bar's "Vista Previa" (eye)
+button was removed unconditionally from `ListView.jsx` in ETP-4644 — it no longer exists in
+any window, so this wrapper no longer needs a flag for it either. Net result: **Eliminar
+seleccionados** is the only action in the bar.
+
+**Testids** for anyone writing specs against this: row `row-{id}` (its checkbox is the
+`Checkbox__eb5261` inside it — DataTable does not emit a per-row select testid),
+`selection-count`, `bulk-delete-selected`, and the dialog's
+`DialogContent__bulk-delete` / `bulk-delete-confirm` / `Button__bulk-delete-cancel`.
+The toolbar's `cuentas-toolbar` genuinely **leaves the DOM** while a selection is active
+(it is unmounted, not hidden), so a `toHaveCount(0)` assertion is correct. Type filter and
+search text are held in `AccountsHeaderTable` state, so they survive that unmount.
 
 ## Known deviations from the Figma frame
 

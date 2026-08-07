@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI, getStoredLocale } from '@/i18n';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, onClose }) {
   const ui = useUI();
@@ -48,10 +49,10 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
   const d = freshData || {};
   const name     = d.name || d.documentNo || '';
   const totalNum = linesTotal !== null ? linesTotal : (d.totalAmortization != null ? Number(d.totalAmortization) : null);
-  const total    = totalNum !== null
-    ? totalNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : '...';
   const currency = d['currency$_identifier'] || '';
+  const total    = totalNum !== null
+    ? (currency ? formatCurrency(currency, totalNum) : totalNum.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }))
+    : '...';
 
   const handleConfirm = async () => {
     if (loading) return;
@@ -103,7 +104,7 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
           <div style={blueCardStyle}>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>{name || '...'}</div>
             <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {total}{currency ? ` ${currency}` : ''}
+              {total}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
               {lineCount != null ? ui('amortizationLineCountLabel', { count: lineCount }) : '...'}
@@ -147,16 +148,16 @@ const overlayStyle = {
 };
 const cardStyle = {
   width: 420, borderRadius: 14, background: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.15)', border: '0.5px solid hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.15)', border: '0.5px solid hsl(var(--border-subtle))',
   overflow: 'hidden',
 };
 const blueCardStyle = {
-  background: 'hsl(var(--card))', border: '0.5px solid var(--status-info-bg)', borderRadius: 10,
+  background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
   padding: '14px 16px', marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 0,
 };
 const warningStyle = {
   display: 'flex', alignItems: 'flex-start', gap: 8,
-  background: 'hsl(var(--card))', border: '0.5px solid var(--status-warning-bg)', borderRadius: 8,
+  background: 'var(--status-warning-bg)', border: '0.5px solid var(--status-warning-border)', borderRadius: 8,
   padding: '10px 12px', marginTop: 10,
 };
 const closeBtnStyle = {
@@ -166,9 +167,9 @@ const closeBtnStyle = {
 };
 const btnSecondary = {
   padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500,
-  background: 'hsl(var(--card))', border: '1px solid hsl(var(--card))', color: 'var(--status-info-bg)', cursor: 'pointer',
+  background: 'hsl(var(--card))', border: '1px solid hsl(var(--border-subtle))', color: 'hsl(var(--foreground))', cursor: 'pointer',
 };
 const btnPrimary = {
   padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-  background: 'var(--status-info-bg)', border: 'none', color: 'hsl(var(--card))', cursor: 'pointer',
+  background: 'var(--status-info-fg)', border: 'none', color: 'hsl(var(--card))', cursor: 'pointer',
 };
