@@ -1,19 +1,73 @@
-/**
- * Extracted from DetailView.jsx via ast-refactor.
- */
 import React, {useEffect, useRef, useState} from 'react';
-import {Button} from '@/components/ui/button.jsx';
-import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
-import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
-import BalanceFooterPanel from './BalanceFooterPanel.jsx';
+import { toast } from 'sonner';
+
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import {computeBalance} from '@/lib/balanceTotals';
+import {formatCurrency} from '@/lib/formatCurrency.js';
+import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
-import {getCatalogOptions} from '@/lib/selectorCatalog.js';
+
+import {Button} from '@/components/ui/button.jsx';
+import BalanceFooterPanel from './BalanceFooterPanel.jsx';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
-import {formatCurrency} from '@/lib/formatCurrency.js';
-import { toast } from 'sonner';
-import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
+import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
+
+// ─── Formatting utils ─────────────────────────────────────────────────────────
+
+// (value, currency) signature — delegates to formatCurrency whose arg order is reversed.
+export function formatAmount(val, curr) {
+  return formatCurrency(curr, val);
+}
+
+// ─── Layout / className helpers ───────────────────────────────────────────────
+
+function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
+  const isInline = linesLayout === 'inlineEditable';
+  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
+  if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
+  return isInline ? '' : (paddingXOverride ?? 'px-6');
+}
+
+const BLEED_AXIS = { px: 'mx', pr: 'mr', pl: 'ml' };
+
+/**
+ * Horizontal bleed for the secondary tab strip, so its bottom border reaches both
+ * edges of the panel instead of starting a few pixels in.
+ *
+ * The strip is a sibling of the form card inside the padded content column (the only
+ * thing between them is `getLinesTabsSectionClassName`'s `mt-2`), so it inherits that
+ * column's horizontal padding. Each padding token is cancelled with a matching negative
+ * margin and then re-applied inside, which moves the border out to the edges while
+ * leaving the tab buttons exactly where they were. Derived from the SAME
+ * `detailContentPadding()` inputs as the column itself so the two cannot drift.
+ */
+export function getTabStripBleedClassName({
+  linesLayout,
+  sidePanel,
+  sidebarContent,
+  sidebarAboveTabsOnly,
+  compactSidebarPadding,
+  formScrollPaddingX = null,
+} = {}) {
+  const padding = detailContentPadding(
+    linesLayout,
+    !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)),
+    'content',
+    compactSidebarPadding,
+    formScrollPaddingX,
+  );
+  return padding
+      .split(/\s+/)
+      .filter(Boolean)
+      .flatMap((token) => {
+        const match = /^(px|pr|pl)-(.+)$/.exec(token);
+        if (!match) return [];
+        return [`-${BLEED_AXIS[match[1]]}-${match[2]}`, token];
+      })
+      .join(' ');
+}
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
@@ -43,6 +97,8 @@ export function evalDisplayLogicRaw(expr, data) {
     return op === '=' ? actual === expected : actual !== expected;
   });
 }
+
+// ─── Components ───────────────────────────────────────────────────────────────
 
 export /**
  * Collapsible section that hides itself entirely when children render as null.
@@ -128,6 +184,8 @@ export function normalizePatchFieldValues(patchEdits, fieldValues) {
   }
 }
 
+// ─── Field update / callout handlers ─────────────────────────────────────────
+
 export function applyCalloutFieldUpdates(updates, ctx) {
   const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
@@ -170,6 +228,17 @@ export function applyOneComboEntry(key, combo, ctx) {
     hook.handleChange(key + '$_identifier', selectedLabel);
   }
 }
+
+export function applyCalloutComboUpdates(combos, ctx) {
+  const { triggerField } = ctx;
+  for (const [key, combo] of Object.entries(combos)) {
+    // Never override the field the user just changed via its own combo response.
+    if (key === triggerField) continue;
+    applyOneComboEntry(key, combo, ctx);
+  }
+}
+
+// ─── Selector / merge helpers ─────────────────────────────────────────────────
 
 /**
  * Folds the selector item's top-level fields into the callout snapshot:
@@ -263,6 +332,12 @@ export function getSecondaryEditRowHandler(st, setCustomModalState) {
   return st.customAddModal
       ? (row) => setCustomModalState({key: st.key, rowId: row.id})
       : undefined;
+}
+
+export function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout }) {
+  if (st.customAddModal) return openCustomModal;
+  if (st.Form && linesLayout !== 'inlineEditable') return openSecondaryLine;
+  return undefined;
 }
 
 export function SecondaryPanelTab(props) {
@@ -939,6 +1014,8 @@ export function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
   }
 }
 
+// ─── Secondary tab handlers ──────────────────────────────────────────────────
+
 export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySelectedRows, st, enableSecondaryRowDelete = false) {
   return (linesLayout === 'inlineEditable' || enableSecondaryRowDelete)
       ? (rows) => setSecondarySelectedRows(prev => ({...prev, [st.key]: rows}))
@@ -1118,70 +1195,4 @@ export function SecondaryFormTab(props) {
         labelOverrides={props.labelOverrides}
     />
   </div>;
-}
-
-// (value, currency) signature — delegates to formatCurrency(currencyCode, value) whose arg order is reversed.
-export function formatAmount(val, curr) {
-  return formatCurrency(curr, val);
-}
-
-function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
-  const isInline = linesLayout === 'inlineEditable';
-  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
-  if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
-  return isInline ? '' : (paddingXOverride ?? 'px-6');
-}
-
-const BLEED_AXIS = { px: 'mx', pr: 'mr', pl: 'ml' };
-
-/**
- * Horizontal bleed for the secondary tab strip, so its bottom border reaches both
- * edges of the panel instead of starting a few pixels in.
- *
- * The strip is a sibling of the form card inside the padded content column (the only
- * thing between them is `getLinesTabsSectionClassName`'s `mt-2`), so it inherits that
- * column's horizontal padding. Each padding token is cancelled with a matching negative
- * margin and then re-applied inside, which moves the border out to the edges while
- * leaving the tab buttons exactly where they were. Derived from the SAME
- * `detailContentPadding()` inputs as the column itself so the two cannot drift.
- */
-export function getTabStripBleedClassName({
-  linesLayout,
-  sidePanel,
-  sidebarContent,
-  sidebarAboveTabsOnly,
-  compactSidebarPadding,
-  formScrollPaddingX = null,
-} = {}) {
-  const padding = detailContentPadding(
-    linesLayout,
-    !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)),
-    'content',
-    compactSidebarPadding,
-    formScrollPaddingX,
-  );
-  return padding
-      .split(/\s+/)
-      .filter(Boolean)
-      .flatMap((token) => {
-        const match = /^(px|pr|pl)-(.+)$/.exec(token);
-        if (!match) return [];
-        return [`-${BLEED_AXIS[match[1]]}-${match[2]}`, token];
-      })
-      .join(' ');
-}
-
-export function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout }) {
-  if (st.customAddModal) return openCustomModal;
-  if (st.Form && linesLayout !== 'inlineEditable') return openSecondaryLine;
-  return undefined;
-}
-
-export function applyCalloutComboUpdates(combos, ctx) {
-  const { triggerField } = ctx;
-  for (const [key, combo] of Object.entries(combos)) {
-    // Never override the field the user just changed via its own combo response.
-    if (key === triggerField) continue;
-    applyOneComboEntry(key, combo, ctx);
-  }
 }
