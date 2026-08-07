@@ -62,6 +62,13 @@ describe('Sales InvoiceHeaderTable — columns', () => {
   });
 });
 
+describe('Sales InvoiceHeaderTable — payment-state color roles (ETP-4767)', () => {
+  it('uses semantic success and warning background, border, and foreground roles', () => {
+    assert.match(src, /background:'var\(--status-success-bg\)',color:'var\(--status-success-fg\)'/);
+    assert.match(src, /background:'var\(--status-warning-bg\)',border:'1px solid var\(--status-warning-border\)',color:'var\(--status-warning-fg\)'/);
+  });
+});
+
 describe('Sales InvoiceHeaderTable — due date column', () => {
   it('reads eTGODueDate from the row (no payment-plan fetch)', () => {
     assert.match(src, /const d = row\.eTGODueDate/);
