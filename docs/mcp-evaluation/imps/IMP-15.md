@@ -7,7 +7,7 @@
 | **Evidence** | W3, W8, B11, B15 (2026-08-05 / 2026-08-06) |
 | **Repo** | `com.etendoerp.go` |
 | **Implemented** | 2026-08-07, commits `12dd847f` + `2df04cd1` + `b64af873` + `845e9363` on `feature/ETP-4793` |
-| **Live probe** | 2026-08-07 on `etendo-go-local`, three rounds — §9. Three of four clauses pass; the `uOM` secondary failed all three rounds and was finally root-caused from the container log in `845e9363` (uncompiled). |
+| **Live probe** | 2026-08-07 on `etendo-go-local`, four rounds — §9. **All four clauses pass** as of the `845e9363` deploy; the `uOM` secondary failed rounds 1–3 and was root-caused from the container log (§9.5), then verified green on both `neo_create` and `neo_batch` (§9.6). |
 
 This file records **what shipped**. It changes no status mark and no MARI figure — those move only
 through a `/mcp-comparison` run. `2df04cd1` has **not been compiled or deployed**; the credit for
@@ -233,7 +233,7 @@ than a convenience.
 | regression test: display name | `McpFkResolverTest.displayNameResolvesViaSelector` |
 | …on each verb | the resolver is the single shared code path both verbs take; `skippedValueIsUntouched` covers the batch-only `$ref:` rule |
 | no raw `status: -4` on any batch error path | `McpToolRouterSupportTest.rewritesTheFailure` (asserts the serialized error contains no `-4`), `mapsStatusesToCodes`, `extractsDalMessages`, `passesThroughNonFailures` |
-| `uOM` never 500s on `sales-order/lines` | ❌ **failed live three times** — `12dd847f`, `2df04cd1`, `b64af873`. Root-caused from the container log on the third failure and fixed in `845e9363`, **not yet re-verified** (needs a fourth rebuild) |
+| `uOM` never 500s on `sales-order/lines` | ✅ **verified live in round four** (§9.6) — after failing three times (`12dd847f`, `2df04cd1`, `b64af873`). Fixed in `845e9363`; the line now creates on the first call with `uOM: "100"` derived from the product, on `neo_create` and `neo_batch` alike |
 
 ## 9. Live write probe — 2026-08-07, `etendo-go-local`
 
@@ -248,7 +248,7 @@ tagged `MCP-BENCHMARK 2026-08-07` in `description` and deleted afterwards; dispo
 | Fix 1b — `not_found` wording | ✅ | The new text ("neither the id of an existing record nor a value any selector matched … Use `neo_selectors`") came back live — which also **proves the deploy contained IMP-15**, making every other verdict here attributable. |
 | Fix 2 — batch routes through the resolver | ✅ | `currency: "EUR"` (a display name) passed on the batch **header** op; the batch's failure was at index 1, the line. Pre-IMP-15 the header op died with a raw DAL `status: -4`. |
 | Fix 3 — batch failures get the IMP-5 envelope | ✅ | `{"committed":false,"failedAt":{"index":1,"id":"l1"},"error":{"status":500,"error":"server_error","detail":"Operation 'l1' rejected by server: Unit of Measure mismatch (product/transaction)","seeAlso":"docs(topic:\"creating records\")"}}` — no `status: -4` anywhere. |
-| Secondary — `uOM` | ❌ | Message 20111 on both verbs. Re-fixed in `2df04cd1` and again in `b64af873` — **neither fixed it**; root-caused in round three and fixed in `845e9363`; see §9.4–9.5. |
+| Secondary — `uOM` | ✅ *(round four)* | Message 20111 on both verbs in rounds 1–3; `2df04cd1` and `b64af873` **fixed neither**. Root-caused in round three from the container log and fixed in `845e9363`; verified green on `neo_create` and `neo_batch` in §9.6. |
 
 Side confirmations from the same calls, worth carrying into the next run report: **IMP-16** looks
 healthy (`orderDate` and `accountingDate` both came back ISO `2026-08-07`, no year-12 corruption) and
@@ -320,12 +320,42 @@ Fixed in `845e9363`. Data disposition: header `488023AD74834049BA81635364CAEDAC`
 `1000017` (`1FE5335E766C49E5903991036B8B9DC1`, `MCP-BENCHMARK 2026-08-05 batch`), the orphan header
 from the non-atomic batch in §9.2.1; it is kept deliberately as evidence for that defect.
 
+### 9.6 Fourth probe round — 2026-08-07, after the `845e9363` deploy
+
+**The `uOM` clause passes.** All four A.6 clauses are now credited live on `etendo-go-local`.
+
+| Step | Result |
+|---|---|
+| Deployed signature check | `javap -p` shows `injectProductDerivedUomIfMissing(JSONObject, boolean)` — the two-argument form, so `845e9363` is live |
+| `neo_create` `sales-order/header` (`1000023`, id `096ECE05…`) | ✅ created; `currency: "102"` resolved |
+| `neo_create` `sales-order/lines`, **no `uOM` sent** | ✅ **first call, no corrections** — response carries `"uOM": "100"`, `"uOM$_identifier": "Unit"`. Message 20111 is gone |
+| `neo_batch` header + line with `$ref:h1`, no `uOM` | ✅ `{"committed":true,"operations":[{"id":"h1","ok":true,…},{"id":"l1","ok":true,…}]}` — the display name `currency:"EUR"` resolved on the header op and the line got the right UOM. **First end-to-end green batch of the whole exercise** |
+
+Two incidental observations from the same round, both worth carrying forward:
+
+* **`neo_schema view:"create"` under-reports again**, third occurrence. The header create failed its
+  first attempt on `invoiceAddress` *and* `partnerAddress`, neither surfaced by the create view —
+  same defect class as §9.2.2, now observed on `sales-order/header` (×2 fields), `sales-order/lines`
+  (`orderDate`) and here. The failure itself was a clean IMP-5 envelope naming both fields, so the
+  *recovery* path is good; the *first-call* path is what costs M2.
+* **A third independent reproduction of the non-atomicity defect (§9.2.1)**, and the most realistic
+  one yet: a caller-side typo in the `$ref` syntax (`$ref:h1.id` instead of `$ref:h1`) failed the
+  batch at index 1 and still left orphan header `1000024` with zero lines under `committed:false`.
+  Note also that an unresolvable `$ref` is not caught by the pre-pass — it leaks through as a raw
+  DAL message (*"New object Order(null) (key: $ref:h1.id_Order) refered to but not present in the
+  import set"*) rather than a validation error naming the unknown op id.
+
+Data disposition: `1000023` + its line, and the batch's `1000024` and the successful batch pair, all
+deleted via `neo_delete` (`deleted: true` on each). One leftover remains repo-wide — order `1000017`
+(`1FE5335E766C49E5903991036B8B9DC1`, `MCP-BENCHMARK 2026-08-05 batch`), kept deliberately as standing
+evidence for §9.2.1.
+
 ## 10. What is still owed
 
-1. **Compile + unit-test run of `b64af873` and `845e9363`** — the user owns build/deploy; neither
-   commit is compile-verified.
-2. **A fourth deploy to `etendo-go-local`**, then a re-probe of the `uOM` clause only (the other
-   three are already credited by §9.1), and a `/mcp-comparison` run to move the status mark and MARI.
+1. **Unit-test run of `b64af873` and `845e9363`** — compiled and deployed by the user, and probed
+   green in §9.6, but the module's test suite has not been run against them.
+2. **A `/mcp-comparison` run** to move the status mark and MARI. The code side of IMP-15 is done:
+   all four clauses are credited live (§9.1 + §9.6).
 3. **A regression test for the injection.** Three probe rounds died on the same predicate. The test
    must assert the case that actually broke: the injection **overrides** a `uOM` the defaults pass
    put in the body (a real id for the wrong UOM) and **preserves** one the caller supplied — not
