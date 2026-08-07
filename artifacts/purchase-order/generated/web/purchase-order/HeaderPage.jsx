@@ -782,7 +782,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         documentDateField="orderDate"
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument
         selectorPriceCurrency="org"
         {...props} window={effectiveWindow}

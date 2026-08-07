@@ -683,7 +683,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         salesTheme
         labelOverrides={labelOverrides}
         lineConfig={INVOICE_LINE_CONFIG}
-        linesLayout="inlineEditable"
         sendDocument
         {...props} window={effectiveWindow}
       />

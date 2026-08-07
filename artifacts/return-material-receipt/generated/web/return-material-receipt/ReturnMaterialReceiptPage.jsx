@@ -324,7 +324,6 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
         {...props} window={effectiveWindow}
       />

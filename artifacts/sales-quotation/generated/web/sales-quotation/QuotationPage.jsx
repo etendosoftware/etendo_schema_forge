@@ -490,7 +490,6 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         documentDateField="orderDate"
         salesTheme
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument
         selectorPriceCurrency="org"
         {...props} window={effectiveWindow}

@@ -371,7 +371,6 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         salesTheme
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument
         {...props} window={effectiveWindow}
       />

@@ -345,7 +345,6 @@ export default function BusinessPartnerCategoryPage({ windowName, recordId, ...p
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_BP_Group", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
       </>
