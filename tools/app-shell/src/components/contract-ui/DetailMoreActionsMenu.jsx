@@ -21,6 +21,7 @@ export function DetailMoreActionsMenu({
   menuActions,
   neoAction,
   recordId,
+  setDocsRefreshSignal,
   sqBtnSize,
   statusField,
   token,
@@ -78,6 +79,7 @@ export function DetailMoreActionsMenu({
       const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
       toast.success(msg);
       hook.fetchById?.(currentId);
+      setDocsRefreshSignal(v => v + 1);
     } catch (err) {
       toast.error(err.message);
     }
@@ -89,6 +91,7 @@ export function DetailMoreActionsMenu({
     if (result.success) {
       toast.success(msg);
       hook.fetchById?.(currentId);
+      setDocsRefreshSignal(v => v + 1);
     } else {
       toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
     }

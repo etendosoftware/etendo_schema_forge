@@ -388,7 +388,7 @@ below.
 Use this when a window already ships **its own** delete or bulk-delete
 affordance and stacking the generic action would be redundant/confusing.
 
-Unlike `hidePrint` / `hideStatusFilter` / `hideEye` (documented in
+Unlike `hidePrint` / `hideStatusFilter` (documented in
 `docs/decisions-reference.md` as `window.*` decisions.json keys that the
 generator compiles into the `listViewOptions` prop it passes to `ListView`),
 `hideBulkDelete` has **no decisions.json/generator wiring yet** — that
@@ -397,10 +397,16 @@ this sub-task). Today the only way to set it is to pass `listViewOptions`
 directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
 same way `contacts` does it. **That object REPLACES — it does not merge with —
 the `listViewOptions` the generated page already passes to `ListView`**, so the
-wrapper must repeat every flag the generated page sets (`hidePrint`, `hideEye`,
+wrapper must repeat every flag the generated page sets (`hidePrint`,
 `hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
 dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
 canonical example.
+
+> **ETP-4644:** the selection bar's "Vista Previa" (eye) button — and its
+> `listViewOptions.hideEye` / `hideEyeCount` opt-out flags — were removed
+> entirely from `ListView.jsx`. The button had no working backend and did not
+> apply to any window, so it is gone unconditionally, with no flag needed or
+> supported anymore.
 
 **Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
 does **not** mean "this window has no bulk delete." `contacts` has its own,
@@ -924,6 +930,10 @@ Customer/Vendor Accounting, etc.).
    (`tabOrder`, `label`, `addLineFields`, `requireSavedRecord`, `customPanel`/`customTable`/
    `customForm`, `customAddModal`, `readOnlyLogic`, and the per-tab `maxDetailLines` cap added in
    ETP-4565): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
+   (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
+   every other entry, not just within its own group — see `docs/decisions-reference.md`'s
+   `secondaryTabs` section for the full reference and the `customTabsAfterBottom` incompatibility.
 2. **Runtime prop, hand-written `windows/custom/{window}/index.jsx`** (documented below) — a
    `Panel`-backed tab with freeform fetch-and-render content that doesn't map to any generated
    entity at all, passed to the generated `<Page>` component from a hand-written wrapper. Requires
