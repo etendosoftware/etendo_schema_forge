@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
+import { useRowEmailModal } from './useRowEmailModal.jsx';
 
 export default function ReturnWindowShell({
   windowName, recordId, apiBaseUrl, token,
@@ -12,6 +13,11 @@ export default function ReturnWindowShell({
   headerEntity,
   routePrefix,
   duplicateAction,
+  // ETP-4718 — optional per-window row-hover "Enviar" (send-email) wiring.
+  // Shape: { usePdf, documentType, visibleWhen }. When omitted, the row Email
+  // action stays exactly as before (icon gated only by `documentPreview`, no
+  // onEmail handler) — existing callers of this shell are unaffected.
+  emailAction,
   ...pageProps
 }) {
   const navigate = useNavigate();
@@ -30,6 +36,14 @@ export default function ReturnWindowShell({
     onSuccess: () => setRefreshKey(k => k + 1),
   });
 
+  const { onEmail: onRowEmail, emailModalPortal } = useRowEmailModal({
+    usePdf: emailAction?.usePdf,
+    apiBaseUrl,
+    token,
+    windowName,
+    documentType: emailAction?.documentType,
+  });
+
   const rowQuickActions = useMemo(() => ({
     enabled: true,
     editMode: 'navigate',
@@ -38,12 +52,14 @@ export default function ReturnWindowShell({
     actions: {
       edit: { show: true },
       duplicate: duplicateAction || { show: true },
+      email: { show: !!emailAction, visibleWhen: emailAction?.visibleWhen },
       delete: { show: true },
     },
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onDelete: requestDelete,
     onClone: (row) => setCloneTargets([row]),
-  }), [navigate, windowName, requestDelete, duplicateAction]);
+    onEmail: emailAction ? onRowEmail : undefined,
+  }), [navigate, windowName, requestDelete, duplicateAction, emailAction, onRowEmail]);
 
   if (recordId) {
     return (
@@ -82,6 +98,7 @@ export default function ReturnWindowShell({
           data-testid="CloneOrderModal__3ea846" />,
         document.body,
       )}
+      {emailModalPortal}
     </>
   );
 }

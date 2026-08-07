@@ -11,7 +11,8 @@
  *   - named filter presets (apply / save)
  *   - per-column filters (merge, clear one, clear all) and the refetch they trigger
  *   - view mode persistence and the sort popover's outside-click dismissal
- *   - the selection bar's preview / print / clone actions
+ *   - the selection bar's print / clone actions (ETP-4644 removed the "Vista
+ *     Previa" button unconditionally — a test asserts it never renders)
  *   - refresh (button, refreshTrigger, after a row delete) and infinite scroll
  *   - the report / document-print / send-document modals
  *   - the preview row (internal vs. host-owned) and its close/edit paths
@@ -123,10 +124,9 @@ vi.mock('../ReportDrawer.jsx', () => ({
   default: (props) => { reportDrawerProps = props; return props.open ? <div data-testid="report-drawer" /> : null; },
 }));
 
-let docPrintProps = null;
 const printDocumentsMock = vi.fn();
 vi.mock('../DocumentPrintDrawer.jsx', () => ({
-  default: (props) => { docPrintProps = props; return props.open ? <div data-testid="doc-print-drawer" /> : null; },
+  default: () => null,
   printDocuments: (...args) => printDocumentsMock(...args),
 }));
 
@@ -232,7 +232,6 @@ beforeEach(() => {
   filterBarProps = null;
   scrollPaneProps = null;
   reportDrawerProps = null;
-  docPrintProps = null;
   sendDocumentProps = null;
   pageMetaArgs = null;
   vi.clearAllMocks();
@@ -821,21 +820,11 @@ describe('ListView — selection bar actions', () => {
     act(() => { tableProps.onSelectionChange(SELECTED); });
   }
 
-  it('opens the document-print drawer with the selected ids from "preview"', async () => {
-    const user = userEvent.setup();
+  it('never renders the "Vista Previa" button in the selection bar (ETP-4644)', () => {
     render(<ListView {...defaultProps} />);
     selectRows();
 
-    expect(docPrintProps.open).toBe(false);
-    await user.click(screen.getByText('preview').closest('button'));
-
-    expect(screen.getByTestId('doc-print-drawer')).toBeInTheDocument();
-    expect(docPrintProps.open).toBe(true);
-    expect(docPrintProps.documentIds).toEqual(['r1', 'r2']);
-    expect(docPrintProps.windowName).toBe('test-entity');
-
-    act(() => { docPrintProps.onClose(); });
-    expect(screen.queryByTestId('doc-print-drawer')).not.toBeInTheDocument();
+    expect(screen.queryByText('preview')).not.toBeInTheDocument();
   });
 
   it('prints the selected documents with the window name and token', async () => {
@@ -863,9 +852,6 @@ describe('ListView — selection bar actions', () => {
     const user = userEvent.setup();
     render(<ListView {...defaultProps} />);
     act(() => { tableProps.onSelectionChange(['r1', 'r2']); });
-
-    await user.click(screen.getByText('preview').closest('button'));
-    expect(docPrintProps.documentIds).toEqual(['r1', 'r2']);
 
     await user.click(screen.getByText(/^print/).closest('button'));
     expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function));

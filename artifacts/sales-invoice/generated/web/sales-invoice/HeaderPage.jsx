@@ -663,7 +663,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' },
+          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
         hideDeleteWhenComplete
         noHeaderBorder

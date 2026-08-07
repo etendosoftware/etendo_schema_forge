@@ -606,7 +606,7 @@ export default function EntityCreationModal({
             </div>
           ))}
           {error && (
-            <div className="mt-4 rounded-md bg-destructive border border-destructive px-4 py-3 text-sm text-destructive">
+            <div className="mt-4 rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}

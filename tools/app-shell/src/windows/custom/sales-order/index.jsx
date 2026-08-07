@@ -4,6 +4,7 @@ import GeneratedApp from '@generated/sales-order/generated/web/sales-order/index
 import HeaderTable from '@generated/sales-order/generated/web/sales-order/HeaderTable';
 import OrderReactivateBulkAction from '@generated/sales-order/custom/OrderReactivateBulkAction';
 import BulkOrderMoreMenu from '@generated/sales-order/custom/BulkOrderMoreMenu';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { ConfirmModal, ManageDocsLauncher } from '@generated/sales-order/custom/OrderCreateInvoice';
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
@@ -133,10 +134,15 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
         rowQuickActions={rowQuickActions}
         token={token}
         apiBaseUrl={apiBaseUrl}
+        hideLink
         bulkActions={(ctx) => (
           <>
             <BulkOrderMoreMenu {...ctx} data-testid="BulkOrderMoreMenu__6339e4" />
             <OrderReactivateBulkAction {...ctx} data-testid="OrderReactivateBulkAction__6339e4" />
+            <CopyLinkButton
+              selectedRows={ctx.selectedRows}
+              windowName={ctx.windowName}
+              data-testid="CopyLinkButton__6339e4" />
           </>
         )}
         dateFilterKey="orderDate"

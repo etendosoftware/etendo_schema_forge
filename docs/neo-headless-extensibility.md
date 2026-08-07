@@ -350,6 +350,39 @@ public class SalesOrderHandler implements NeoHandler {
 - **Per field** — `if` on `fieldName` (selectors, actions)
 - **Pre vs Post** — `handle()` vs `afterHandle()`
 
+### 2.7 `servesActions()`: declare an ACTION surface (MANDATORY when you serve actions)
+
+If your handler answers `NeoEndpointType.ACTION`, **override `servesActions()` to return
+`true`** (ETP-4254):
+
+```java
+@Named("not-posted-documents")
+public class NotPostedDocumentsHandler implements NeoHandler {
+
+  /** This spec is tab-less; without this the MCP catalog would hide it. */
+  @Override
+  public boolean servesActions() {
+    return true;
+  }
+  ...
+}
+```
+
+**Why.** The MCP catalog drops a spec whose every included entity is handler-backed (no
+`AD_Tab`) — that is how the dashboard's widgets stay out of `neo_discover` and out of the CRUD
+tool enums, since the generic CRUD path cannot serve them. But "no `AD_Tab`" alone is too
+broad: a tab-less spec can still expose a genuine transactional action route, and
+`hasSpecAccess` gates `neo_action` too. So a tab-less spec is hidden only when it *also*
+declares no action surface (`McpToolRouterSupport.isCatalogExcludedSpec` +
+`NeoActionSurface`). `ETGO_SF_ENTITY` has no action metadata, so the handler is the only
+authority.
+
+The default is `false`, and the probe is fail-open (unregistered handler / CDI failure → the
+spec stays visible), so forgetting it only matters for a **tab-less** entity — where it silently
+removes the whole spec from the agentic catalog with nothing in the UI to show it. Declaring it
+regardless keeps the catalog honest if the entity ever loses its tab. Full criteria:
+[`agentic-validation/agentic-write-exposure-criteria.md`](agentic-validation/agentic-write-exposure-criteria.md) §6.
+
 ---
 
 ## 3. Endpoint Reference

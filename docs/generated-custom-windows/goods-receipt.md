@@ -19,6 +19,8 @@ A user should be able to:
 - open linked purchasing documents to understand where the receipt came from and whether invoices already exist for the same order
 - complete multiple draft receipts at once from the list selection bar using the bulk action (labeled "Confirmar" / i18n key `confirmBulk`), which processes each receipt through the standard `documentAction=CO` endpoint
 - preview a completed receipt by selecting a row, and create a purchase invoice directly from that preview panel (the row hover eye quick-action was removed — see ETP-4729 note below)
+- preview a completed receipt from the list row quick-action or by selecting a row, and create a purchase invoice directly from that preview panel
+- copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved
 
 ## Interaction model
 
@@ -62,6 +64,8 @@ No current evidence shows:
 - status-driven actions beyond draft-only intake actions and draft completion
 - visible parent-child reactions that automatically default line values from the header during manual line entry, aside from normal `parentId` linkage and contract defaults
 
+Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears only when exactly one row is selected — hidden with 0 or 2+ rows selected. In the detail topbar, `Copy link` is visible whenever the record has a persisted `recordId` (not the unsaved `'new'` sentinel), with no selection gate since detail always represents a single record. Both copy `{origin}/{windowName}/{recordId}` to the clipboard, show a `Link copied` / `Enlace copiado` toast, and display a `Copy link` / `Copiar enlace` tooltip on hover. The legacy dead link icon previously shown in the idle-state (no-selection) grid toolbar is now hidden via the `hideLink` prop passed to `<ListView>`.
+
 ## Gap assessment
 
 - The business semantics suggest that confirming a goods receipt should finalize vendor delivery intake, but the current evidence only proves draft processing is wired through `documentAction=CO`; it does not prove the exact status transitions, stock effects, or downstream accounting effects after confirmation.
@@ -85,11 +89,12 @@ No current evidence shows:
 10. Select two or more draft goods receipts from the list and confirm the bulk action bar shows a `Confirmar (N)` button. Trigger it and verify all selected receipts move to completed status and a result toast appears.
 11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
 12. Confirm there is **no** document-email access anywhere in this window: no envelope action on a list row hover, no "Enviar" button in the preview panel header, and no email envelope in the form-view action bar. The send-document feature is disabled for this window (ETP-4372).
-13. Create a receipt from a purchase order confirmed in a non-org currency via the "Manage Receipt" action and confirm the new receipt's Currency field is pre-filled from the order, not the org default.
-14. On a draft receipt, confirm Currency defaults to the org's currency, is editable, and becomes read-only once the receipt is completed.
-15. On a draft receipt with existing lines, change Currency and add a new line; confirm existing lines are unaffected.
-16. On a receipt with a non-default Currency, open **Import from Purchase Order** / **Import from Purchase Invoice** and confirm only matching-currency source documents are listed, with a dedicated empty-state message when none match.
-17. From a completed receipt's preview, use **Create Invoice** and confirm the popup shows Currency read-only (inherited) and a required Tarifa selector; confirm the generated invoice's lines price off the selected price list.
+13. In the list, select 0, then 1, then 2+ receipts and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/goods-receipt/<id>`. Open a saved receipt and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
+14. Create a receipt from a purchase order confirmed in a non-org currency via the "Manage Receipt" action and confirm the new receipt's Currency field is pre-filled from the order, not the org default.
+15. On a draft receipt, confirm Currency defaults to the org's currency, is editable, and becomes read-only once the receipt is completed.
+16. On a draft receipt with existing lines, change Currency and add a new line; confirm existing lines are unaffected.
+17. On a receipt with a non-default Currency, open **Import from Purchase Order** / **Import from Purchase Invoice** and confirm only matching-currency source documents are listed, with a dedicated empty-state message when none match.
+18. From a completed receipt's preview, use **Create Invoice** and confirm the popup shows Currency read-only (inherited) and a required Tarifa selector; confirm the generated invoice's lines price off the selected price list.
 
 ## Automated evidence
 
@@ -116,6 +121,7 @@ No current evidence shows:
 - The generated `GoodsReceiptPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_InOut` AD table.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
 - **ETP-4032 — Receipt invoice preview modal**: `GoodsReceiptPreview.jsx` now exposes a "Create Invoice" action for completed receipts. `GoodsReceiptTopbar.jsx` shows an invoice-status pill. `ConfirmResultModal` was extracted to `tools/app-shell/src/components/contract-ui/` and is now shared across goods-receipt, goods-shipment, purchase-order, and sales-order.
+- **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`; `artifacts/goods-receipt/custom/GoodsReceiptActions.jsx` (the `topbarRight` component for this window) wires `CopyRecordLinkButton` into the detail topbar.
 - **ETP-4028 — Currency field**: same `EM_ETGO_CURRENCY_ID` column on `M_InOut` as goods-shipment (shared table). `NeoCommercialDocumentFactory.java` and `CreatePurchaseReturnHandler.java` set `.setEtgoCurrency(...)` on every receipt-creation path. `artifacts/goods-receipt/decisions.json` declares `etgoCurrency` (editable, `defaultExpr: "@C_Currency_ID@"`, locked on `Processed='Y'`) plus `window.labelOverrides`.
 - **ETP-4028 — Currency-filtered imports**: `artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx` and `ImportFromPurchaseInvoiceModal.jsx` fetch the receipt header for `etgoCurrency` and filter candidate documents by matching currency, computing `statusAndBpCandidates` first and then narrowing by currency (so the "excluded by currency" empty state only fires when status/BP-eligible documents exist but none match the currency).
 - **ETP-4028 — Price-list picker at invoice time**: `GoodsReceiptActions.jsx` wires the shared `CreateInvoiceConfirmModal` (`showPriceListPicker`, `isSOTrx={false}`) and forwards `priceListId` to the `createPurchaseInvoice` endpoint. `CreatePurchaseInvoiceHandler.java` gained `applyPriceListOverride`/`resolvePriceListOverride` helpers, applied in the linked-PO path (before `createInvoiceLinesFromDocumentLines`) and threaded through the no-PO fallback (`createFromReceiptNoPo`, now 3-arg, with a backward-compatible 2-arg overload), where it takes precedence over the vendor's default purchase price list when provided.

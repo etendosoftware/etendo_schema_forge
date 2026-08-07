@@ -7,7 +7,7 @@ const columns = [
   { key: 'smtpServer', column: 'Smtpserver', type: 'string', label: 'Smtp Server', required: true },
   { key: 'sMTPAuthentification', column: 'IsSmtpAuthorization', type: 'boolean', label: 'SMTP Authentification', required: true },
   { key: 'smtpServerAccount', column: 'Smtpserveraccount', type: 'string', label: 'Smtp Server Account' },
-  { key: 'smtpConnectionSecurity', column: 'Smtpconnectionsecurity', type: 'enum', label: 'SMTP Connection Security', enumLabels: { 'N': 'None', 'STARTTLS': 'STARTTLS', 'SSL': 'SSL' }, required: true },
+  { key: 'smtpConnectionSecurity', column: 'Smtpconnectionsecurity', type: 'enum', label: 'SMTP Connection Security', enumLabels: { 'N': 'smtpconnectionsecurityN', 'STARTTLS': 'smtpconnectionsecurityStarttls', 'SSL': 'smtpconnectionsecuritySsl' }, required: true },
   { key: 'smtpPort', column: 'Smtpport', type: 'number', label: 'Smtp Port', required: true },
   { key: 'testSuccessful', column: 'Istestsuccessful', type: 'boolean', label: 'Test Successful', required: true },
   { key: 'defaultConfiguration', column: 'Isdefaultconfig', type: 'boolean', label: 'Default', required: true },

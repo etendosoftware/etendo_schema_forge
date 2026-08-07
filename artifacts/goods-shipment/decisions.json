@@ -11,7 +11,8 @@
       "topbarRight": "GoodsShipmentActions",
       "topbarExtra": "GoodsShipmentBillingBadge",
       "bulkActions": "BulkInvoiceFromShipment",
-      "bottomSection": "GoodsShipmentBottomPanel"
+      "bottomSection": "GoodsShipmentBottomPanel",
+      "moreMenuContent": "GoodsShipmentMoreMenu"
     },
     "linesLayout": "inlineEditable",
     "menuActions": [

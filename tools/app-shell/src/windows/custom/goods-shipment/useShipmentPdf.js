@@ -158,3 +158,11 @@ export function getShipmentPdfLabels(ui) {
     signatureDate:     ui('shipmentPdfSignatureDate'),
   };
 }
+
+// ETP-4702 — kept for GoodsShipmentMoreMenu.jsx's "Download PDF" kebab-menu item,
+// which generates the PDF on demand instead of via the useShipmentPdf hook above.
+export async function generateShipmentPdf(shipmentId, apiBaseUrl, token, labels) {
+  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+  const data = await buildShipmentData(shipmentId, base, token);
+  return renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
+}
