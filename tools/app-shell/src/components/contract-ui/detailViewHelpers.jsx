@@ -12,6 +12,8 @@ import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 import {formatCurrency} from '@/lib/formatCurrency.js';
+import { toast } from 'sonner';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
@@ -935,6 +937,187 @@ export function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
         ? parseFloat((gross / taxFactor).toFixed(6))
         : gross;
   }
+}
+
+export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySelectedRows, st, enableSecondaryRowDelete = false) {
+  return (linesLayout === 'inlineEditable' || enableSecondaryRowDelete)
+      ? (rows) => setSecondarySelectedRows(prev => ({...prev, [st.key]: rows}))
+      : undefined;
+}
+
+export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
+  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
+  return !st.customAddModal && linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
+    const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
+        || `${apiBaseUrl}/${st.key}/${row.id}`;
+    const includesIdentifier = opts?.identifier !== undefined;
+    const optimistic = includesIdentifier
+        ? {[fieldKey]: value, [`${fieldKey}$_identifier`]: opts.identifier}
+        : {[fieldKey]: value};
+    // Snapshot the previous values so we can revert on failure.
+    const previous = includesIdentifier
+        ? {[fieldKey]: row[fieldKey], [`${fieldKey}$_identifier`]: row[`${fieldKey}$_identifier`]}
+        : {[fieldKey]: row[fieldKey]};
+    secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, optimistic);
+    let res;
+    try {
+      res = await fetch(childUrl, {
+        method: 'PATCH',
+        headers: {...(token ? {Authorization: `Bearer ${token}`} : {}), 'Content-Type': 'application/json'},
+        body: JSON.stringify({[fieldKey]: value}),
+      });
+    } catch (err) {
+      secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
+      toast.error(err?.message || ui('networkError'));
+      throw err;
+    }
+    if (res.ok) {
+      const updated = await res.json().catch(() => null);
+      // Server response wins over the optimistic cache when present
+      // — keeps any callout-driven fields the backend computed.
+      // NEO wraps the saved record in {response:{data:[...]}}.
+      const serverRow = updated?.response?.data?.[0] ?? null;
+      if (serverRow) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, serverRow);
+      // ETP-4029: editing rate/foreignAmount here also updates the invoice
+      // header's hidden eTGOCurrencyRate on the backend (reverse sync — see
+      // InvoiceExchangeRateHandler). Without this, the header's currency-rate
+      // picker keeps showing the stale value until a manual reload.
+      // refreshHeaderTotals is the same lightweight, non-disruptive header
+      // refresh already used after primary-line edits — it re-GETs the header
+      // and merges in only the fields the user hasn't touched, so any of the
+      // user's own in-progress unsaved header edits survive untouched.
+      //
+      // clearUserChangedKey('eTGOCurrencyRate') runs first, and ONLY for this
+      // one field: if the user had earlier edited the rate via the header's
+      // own CurrencyRatePicker in this same visit (already saved), that edit
+      // permanently marks eTGOCurrencyRate as "user changed" for the rest of
+      // the session (see useEntity.handleChange) — refreshHeaderTotals would
+      // then refuse to overwrite it, leaving the header stuck on the old
+      // value even though the tab's edit just persisted a newer one. This is
+      // a narrow, deliberate exception for this specific cross-surface sync;
+      // see the full rationale on clearUserChangedKey's definition.
+      if (st.key === 'exchangeRates' && hook?.selected?.id) {
+        hook.clearUserChangedKey('eTGOCurrencyRate');
+        hook.refreshHeaderTotals(hook.selected.id);
+      }
+    } else {
+      secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
+      const msg = await extractErrorMessage(res);
+      toast.error(msg || ui('networkError'));
+      throw new Error(msg || 'PATCH failed');
+    }
+  } : undefined;
+}
+
+export function buildSecondaryLineHandlers(deps) {
+  const {
+    st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
+    extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
+    selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
+    setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
+    setSecondaryLineEdits, setSecondaryLineEditColumns, setSecondaryDeleting,
+    setSecondarySelectedRows,
+  } = deps;
+
+  const onAdd = async (lineData) => {
+    const entryKeys = new Set(st.addLineFields.entry.map(f => f.key));
+    const filtered = {};
+    for (const [k, v] of Object.entries(lineData)) {
+      if (entryKeys.has(k)) filtered[k] = v;
+    }
+    const result = await secondaryHooks[stIdx]?.handleAddChild?.(filtered);
+    if (result) setAddingSecondaryLine(prev => ({...prev, [st.key]: false}));
+    return result;
+  };
+
+  const onSaveLine = async () => {
+    setSavingSecondaryLine(true);
+    try {
+      const secUrl = `${apiBaseUrl}/${st.key}/${selectedSecondaryLine.id}`;
+      const fieldValues = {};
+      for (const [k, v] of Object.entries(secondaryLineEdits)) {
+        if (k.endsWith('$_identifier')) continue;
+        if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
+          fieldValues[k] = parseFloat(v);
+        } else {
+          fieldValues[k] = v;
+        }
+      }
+      const res = await fetch(secUrl, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+        body: JSON.stringify(fieldValues),
+      });
+      if (res.ok) {
+        const updated = await res.json().catch(() => null);
+        const serverValues = updated?.response?.data?.[0] ?? null;
+        setSelectedSecondaryLine(prev => ({...prev, ...secondaryLineEdits, ...(serverValues ?? {})}));
+        secondaryHooks[stIdx]?.handleUpdateChild?.(selectedSecondaryLine.id, serverValues ?? secondaryLineEdits);
+        setSecondaryLineEdits(null);
+        setSecondaryLineEditColumns({});
+        toast.success('Record saved');
+      } else {
+        toast.error(await extractErrorMessage(res));
+      }
+    } catch (err) {
+      toast.error(err.message || 'Network error');
+    } finally {
+      setSavingSecondaryLine(false);
+    }
+  };
+
+  const onDelete = async () => {
+    if (!(await confirmDelete())) return;
+    setSecondaryDeleting(prev => ({...prev, [st.key]: true}));
+    const rows = secondarySelectedRows[st.key] ?? [];
+    try {
+      const { succeeded, failed } = await runBatchDelete(rows, (row) => {
+        const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
+            || `${apiBaseUrl}/${st.key}/${row.id}`;
+        return fetch(childUrl, {
+          method: 'DELETE',
+          headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+        }).then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return row;
+        });
+      });
+
+      for (const row of succeeded) {
+        secondaryHooks[stIdx]?.handleDeleteChild?.(row.id);
+        if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === row.id) {
+          setSelectedSecondaryLine(null);
+        }
+      }
+
+      secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
+      setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
+
+      toastBatchDeleteOutcome(ui, { succeeded, failed, total: rows.length });
+    } catch (err) {
+      toast.error(err.message || ui('networkError'));
+    } finally {
+      setSecondaryDeleting(prev => ({...prev, [st.key]: false}));
+    }
+  };
+
+  return { onAdd, onSaveLine, onDelete };
+}
+
+export function SecondaryFormTab(props) {
+  return <div className="flex-1 min-w-0">
+    <props.st.Form
+        data={props.data ?? {}}
+        readOnly={!props.hook.editing}
+        onChange={props.onChange}
+        entity={props.st.key}
+        catalogs={props.catalogs}
+        token={props.token}
+        apiBaseUrl={props.apiBaseUrl}
+        selectorContext={props.selectorContextByEntity[props.st.key]}
+        labelOverrides={props.labelOverrides}
+    />
+  </div>;
 }
 
 // (value, currency) signature — delegates to formatCurrency(currencyCode, value) whose arg order is reversed.
