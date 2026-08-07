@@ -74,15 +74,10 @@ vi.mock('../fiscalTargets.js', () => ({
   getInvoiceFiscalTargets: () => ({ showSii: false, showTbai: false, showVerifactu: false }),
 }));
 
-vi.mock('../useDocumentCurrency.js', () => ({
-  useDocumentCurrency: vi.fn(() => ({
-    orgCurrencyCode: null,
-    exchangeRate: null,
-    isSameCurrency: true,
-    loading: false,
-    convertAmount: (amount) => amount,
-  })),
-}));
+vi.mock('../useDocumentCurrency.js', async (importOriginal) => {
+  const { mockUseDocumentCurrency } = await import('./testUtils/mockUseDocumentCurrency.js');
+  return mockUseDocumentCurrency(importOriginal);
+});
 
 vi.mock('../preview-cards/SummaryCard.jsx', () => ({
   default: vi.fn(() => <div data-testid="summary-card" />),
@@ -94,7 +89,9 @@ vi.mock('../preview-cards/PaymentsCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/EmailsCard.jsx', () => ({
-  default: () => <div data-testid="emails-card" />,
+  // vi.fn (not a plain arrow) so tests can inspect the onSend prop InvoicePreview
+  // passes in, mirroring the SummaryCard prop-inspection pattern used above.
+  default: vi.fn(() => <div data-testid="emails-card" />),
 }));
 
 vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
@@ -115,6 +112,11 @@ import InvoicePreview from '../InvoicePreview.jsx';
 import { useInvoicePreview } from '../useInvoicePreview.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
 import SummaryCard from '../preview-cards/SummaryCard.jsx';
+import EmailsCard from '../preview-cards/EmailsCard.jsx';
+import {
+  expectPresenceGatedByStatus,
+  expectEmailsCardOnSendGatedByStatus,
+} from './testUtils/sendActionGatingCases.js';
 
 const defaultInvoice = {
   id: 'inv-1',
@@ -320,6 +322,52 @@ describe('InvoicePreview', () => {
 
       const lastCall = vi.mocked(SummaryCard).mock.calls.at(-1)?.[0];
       expect(lastCall.exchangeRate).toBeCloseTo(2.5);
+    });
+  });
+
+  // ── ETP-4717 Pair 3 regression: preview drawer Send gating ────────────────
+  // InvoicePreview gates onEmail only by `specName !== 'purchase-invoice'`, never
+  // by documentStatus. The fix will additionally require invoice.documentStatus
+  // === 'CO'. These DR cases must FAIL against the current (unfixed) source; the
+  // purchase-invoice exclusion case is expected to already pass (no regression there).
+  describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
+    // Sets up useInvoicePreview's mocked hook for a sales-invoice at the given
+    // status and returns the matching invoice fixture, mirroring the isDraft/
+    // isSalesInvoice wiring the real hook would derive from documentStatus.
+    function setupSalesInvoice(status) {
+      const invoice = { ...defaultInvoice, documentStatus: status };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: invoice,
+        isSalesInvoice: true,
+        isDraft: status === 'DR',
+      }));
+      return invoice;
+    }
+
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the action-bar Send button for a sales-invoice in DR (draft) status',
+      shownIt: 'renders the action-bar Send button for a sales-invoice in CO (completed) status',
+      renderHidden: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('DR') }),
+      renderShown: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('CO') }),
+      findElement: () => screen.queryByText('invoicePreviewSend'),
+    });
+
+    it('still hides the action-bar Send button for purchase-invoice regardless of status (existing exclusion holds)', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: defaultInvoice, // documentStatus: 'CO'
+        isSalesInvoice: false,
+        isDraft: false,
+      }));
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: defaultInvoice });
+      expect(screen.queryByText('invoicePreviewSend')).not.toBeInTheDocument();
+    });
+
+    expectEmailsCardOnSendGatedByStatus({
+      hiddenIt: 'passes onSend: undefined to EmailsCard when invoice.documentStatus is DR (draft) for sales-invoice',
+      shownIt: 'passes a truthy onSend function to EmailsCard when invoice.documentStatus is CO (completed) for sales-invoice',
+      renderHidden: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('DR') }),
+      renderShown: () => renderInvoicePreview({ specName: 'sales-invoice', invoice: setupSalesInvoice('CO') }),
+      EmailsCardMock: vi.mocked(EmailsCard),
     });
   });
 });

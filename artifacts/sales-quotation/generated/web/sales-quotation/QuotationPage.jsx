@@ -507,7 +507,7 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
       api={api}
       dateFilterKey="orderDate"
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@!='DR'"}}}}
       sendDocument
       {...props} window={effectiveWindow}
     />

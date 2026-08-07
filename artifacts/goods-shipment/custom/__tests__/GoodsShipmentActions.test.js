@@ -185,6 +185,21 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
+  // ETP-4717 (Pair 2 — P2) — regression lock-in. Unlike sales-order,
+  // purchase-order, sales-invoice, and sales-quotation, this window already
+  // gates the Send button correctly (Completed/CO only). This test locks that
+  // in so a future shared-logic refactor across the 5 windows cannot silently
+  // regress the one window that already does it right.
+  describe('Send button visibility gated by document status (ETP-4717 — already correct)', () => {
+    it('gates the Send button on isCompleted only (not isDraft || isCompleted)', () => {
+      assert.match(src, /\{isCompleted && <SendDocumentButton/);
+    });
+
+    it('does not also show the Send button while in Draft (DR)', () => {
+      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+    });
+  });
+
   // ETP-4702 — regression guard. This component used to render its own private
   // kebab popover (menuOpen/menuRef state, previously ~lines 207-237) as a SECOND,
   // independent kebab button rendered next to the generic moreMenuContent kebab

@@ -510,7 +510,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       dateFilterKey="orderDate"
       bulkActions={(ctx) => <OrderReactivateBulkAction {...ctx} />}
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@='CO'"}}}}
       sendDocument
       {...props} window={effectiveWindow}
     />

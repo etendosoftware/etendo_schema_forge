@@ -50,6 +50,13 @@
         "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
       }
     ],
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@='CO'"
+        }
+      }
+    },
     "labelOverrides": {
       "en_US": {
         "EM_ETGO_Currency_ID": "Currency"

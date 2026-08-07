@@ -94,6 +94,10 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   if (!quotation) return null;
 
   const isDraft = quotation.documentStatus === 'DR';
+  // ETP-4717 — Send is available from "Bajo evaluación" (UE) onward, not
+  // while still Draft (DR). Matches the Grid row quick-action and Form-view
+  // topbar gates.
+  const isSendable = quotation.documentStatus !== 'DR';
 
   const openEmailModal = () => {
     setSendModalClosing(false);
@@ -152,7 +156,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
       label: ui('quotationPreviewGeneral'),
       content: <QuotationGeneralTab
         quotation={quotation}
-        onSend={openEmailModal}
+        onSend={isSendable ? openEmailModal : undefined}
         token={token}
         apiBaseUrl={apiBaseUrl}
         orgCurrencyCode={orgCurrencyCode}
@@ -187,7 +191,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const actionButtons = (
     <PreviewActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={openEmailModal}
+      onEmail={isSendable ? openEmailModal : undefined}
       onDownloadPdf={handleDownloadPdf}
       hasPdf={!!pdfUrl}
       sendLabel={ui('quotationPreviewSend')}

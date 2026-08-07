@@ -69,6 +69,13 @@
       "specName": "sales-quotation",
       "hasPdf": true,
       "cacheOnComplete": true
+    },
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@!='DR'"
+        }
+      }
     }
   },
   "entities": {

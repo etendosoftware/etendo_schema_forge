@@ -94,6 +94,7 @@ vi.mock('@/components/related-documents/constants.jsx', () => ({
 import { render, screen, fireEvent } from '@testing-library/react';
 import GoodsShipmentPreview from '../GoodsShipmentPreview.jsx';
 import { useShipmentPdf } from '../useShipmentPdf.js';
+import { expectPresenceGatedByStatus } from '../../shared/__tests__/testUtils/sendActionGatingCases.js';
 
 const defaultShipment = {
   id: 'ship-1',
@@ -196,6 +197,30 @@ describe('GoodsShipmentPreview', () => {
     renderGSPreview();
     const downloadBtn = screen.getByTestId('icon-download').closest('button');
     expect(downloadBtn).toBeDisabled();
+  });
+
+  // ── ETP-4717 Pair 3 regression: preview drawer Send gating ────────────────
+  // GoodsShipmentPreview never gated its Send action by documentStatus — the
+  // primary action-bar Button (Mail icon) is a raw always-rendered button,
+  // and EmailsCard's onSend is always openEmailModal. The fix will only wire
+  // these up when shipment.documentStatus === 'CO'. These DR cases must FAIL
+  // against the current (unfixed) source.
+  describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the action-bar Send (mail) button when shipment.documentStatus is DR (draft)',
+      shownIt: 'renders the action-bar Send (mail) button when shipment.documentStatus is CO (completed)',
+      renderHidden: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } }),
+      renderShown: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } }),
+      findElement: () => screen.queryByTestId('icon-mail'),
+    });
+
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the EMAILS-section send link when shipment.documentStatus is DR (draft)',
+      shownIt: 'renders the EMAILS-section send link when shipment.documentStatus is CO (completed)',
+      renderHidden: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } }),
+      renderShown: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } }),
+      findElement: () => screen.queryByText('previewCardSendEmail'),
+    });
   });
 
   it('download button is not disabled when pdfBlob is set', () => {

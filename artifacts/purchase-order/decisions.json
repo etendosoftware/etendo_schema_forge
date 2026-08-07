@@ -50,6 +50,13 @@
       "hasPdf": false,
       "cacheOnComplete": true,
       "dropZone": true
+    },
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@='CO'"
+        }
+      }
     }
   },
   "entities": {

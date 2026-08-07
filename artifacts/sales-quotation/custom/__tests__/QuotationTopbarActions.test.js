@@ -109,4 +109,18 @@ describe('QuotationTopbarActions', () => {
       assert.match(src, /<QuotationConfirmModal[\s\S]*?onSave=\{onSave\}[\s\S]*?\/>/);
     });
   });
+
+  // ETP-4717 (Pair 2 — P2): the Send button must NOT be available while the
+  // quotation is still Draft (DR) — it must be visible from "Bajo evaluación"
+  // (UE) onward. Today it renders unconditionally, with zero status gating.
+  describe('Send button visibility gated by document status (ETP-4717)', () => {
+    it('gates the Send button so it does not render while status is DR', () => {
+      assert.match(
+        src,
+        /status\s*!==\s*['"]DR['"]\s*&&\s*<SendDocumentButton/,
+        'SendDocumentButton must be gated behind a `status !== \'DR\'` check — today it renders ' +
+          'unconditionally regardless of documentStatus',
+      );
+    });
+  });
 });
