@@ -313,6 +313,7 @@
         "orderQuantity": {
           "visibility": "readOnly",
           "grid": true,
+          "gridReadOnly": true,
           "section": "principal",
           "seq": 30
         },
