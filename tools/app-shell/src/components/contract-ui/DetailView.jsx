@@ -1302,7 +1302,7 @@ export function DetailView({
   labelOverrides,
   enableSecondaryRowDelete = false,
   sidebarClassName = 'w-96 shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5',
-  linesLayout = 'classic',
+  linesLayout = 'inlineEditable',
   autoSaveOnBlur = false,
   toolbarPaddingX = 'px-6',
   tabsBarPaddingX = 'px-6',

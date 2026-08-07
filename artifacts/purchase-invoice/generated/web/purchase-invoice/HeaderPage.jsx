@@ -1030,7 +1030,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         documentDateField="invoiceDate"
         labelOverrides={labelOverrides}
         lineConfig={INVOICE_LINE_CONFIG}
-        linesLayout="inlineEditable"
         sendDocument={{"enabled":true,"allowEmail":false}}
         {...props} window={effectiveWindow}
       />
