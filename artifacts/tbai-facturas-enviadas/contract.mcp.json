@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-05-04T17:05:55.224Z",
-  "updatedAt": "2026-05-26T18:57:35.898Z",
-  "contractChecksum": "412ce87e943e851e",
+  "updatedAt": "2026-08-04T14:03:25.704Z",
+  "contractChecksum": "351c5d78b41384f2",
   "apiPrediction": {
     "specName": "tbai-facturas-enviadas",
     "baseUrl": "/sws/neo/tbai-facturas-enviadas",
@@ -10,10 +10,10 @@
       "sincronización": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/tbai-facturas-enviadas/sincronización",
         "detailUrl": "/sws/neo/tbai-facturas-enviadas/sincronización/{id}",
         "supportedFilters": []
@@ -21,10 +21,10 @@
       "resultadoValidación": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación",
         "detailUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación/{id}",
         "supportedFilters": []
@@ -55,7 +55,8 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "monitor"
+      "category": "monitor",
+      "readOnly": true
     }
   },
   "formState": {
@@ -130,5 +131,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "d8984084c3b97ac9"
+  "checksum": "d4a913e1adbd8bbd"
 }
