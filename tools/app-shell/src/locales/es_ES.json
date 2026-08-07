@@ -17296,6 +17296,7 @@
     "addLinesManuallyOrImportFromOrderOrInvoice": "Añade líneas manualmente o impórtalas desde un pedido o factura",
     "totalDiscountSaved": "Descuento total guardado",
     "noteSaved": "Nota guardada",
+    "notesMaxLengthExceeded": "El campo Notas no puede superar los 255 caracteres.",
     "noPendingGoodsReceiptsForSupplier": "No hay albaranes de recepción pendientes para este proveedor.",
     "noGoodsReceiptsMatchYourSearch": "Ningún albarán de recepción coincide con la búsqueda.",
     "noGoodsReceiptsMatchCurrency": "No hay albaranes de recepción pendientes para este proveedor en la moneda de la factura.",
