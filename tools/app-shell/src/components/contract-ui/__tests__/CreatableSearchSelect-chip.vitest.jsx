@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Mock i18n hooks — return the key as-is
@@ -161,5 +161,27 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
     });
     const chevron = container.querySelector('svg.lucide-chevron-down');
     expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+  });
+
+  it('applies the same full-field hover background to an empty field as to a populated chip (regression)', async () => {
+    const { container: emptyContainer } = render(<Harness initialValue="" initialDisplay="" />);
+    const emptyInput = screen.getByTestId('field-address');
+    // Wrapper is the input's grandparent (input -> flex row -> outer wrapper div).
+    const emptyWrapper = emptyInput.closest('.group.relative');
+    expect(emptyWrapper.className).toMatch(/hover:bg-\[hsl\(var\(--muted\)\)\]/);
+
+    const { container: chipContainer } = render(
+      <Harness initialValue="ADDR-1" initialDisplay="123 Main St" />
+    );
+    const chip = within(chipContainer).getByTestId('field-address-chip');
+    const chipWrapper = chip.closest('.group.relative');
+    expect(chipWrapper.className).toMatch(/hover:bg-\[hsl\(var\(--muted\)\)\]/);
+
+    // both non-disabled states resolve to the exact same hover class
+    expect(emptyWrapper.className).toContain('bg-card hover:bg-[hsl(var(--muted))]');
+    expect(chipWrapper.className).toContain('bg-card hover:bg-[hsl(var(--muted))]');
+
+    // sanity check container is unused directly but rendered without error
+    expect(emptyContainer).toBeTruthy();
   });
 });
