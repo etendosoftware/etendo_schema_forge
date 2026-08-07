@@ -135,18 +135,18 @@ export default function PaymentActivity({ data, recordId, token, apiBaseUrl }) {
                   width: 6,
                   height: 6,
                   borderRadius: '50%',
-                  backgroundColor: 'hsl(var(--card))',
+                  backgroundColor: 'hsl(var(--border-subtle))',
                   flexShrink: 0,
                   position: 'relative',
                   top: 1,
                 }}
               />
               {/* Event text */}
-              <span className="text-sm" style={{ color: 'var(--status-info-fg)' }}>{ev.text}</span>
+              <span className="text-sm" style={{ color: 'hsl(var(--foreground))' }}>{ev.text}</span>
               {/* Dotted filler */}
               <span
                 className="flex-1"
-                style={{ borderBottom: '1px dotted hsl(var(--foreground))', minWidth: 16, marginBottom: 3 }}
+                style={{ borderBottom: '1px dotted hsl(var(--border-subtle))', minWidth: 16, marginBottom: 3 }}
               />
               {/* Date */}
               <span className="text-xs shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }}>{ev.date}</span>
@@ -166,10 +166,10 @@ export default function PaymentActivity({ data, recordId, token, apiBaseUrl }) {
           className="flex-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
           style={{
             padding: '7px 12px',
-            border: '1px dashed hsl(var(--card))',
+            border: '1px dashed hsl(var(--border-subtle))',
             borderRadius: 6,
             backgroundColor: 'hsl(var(--card))',
-            color: 'var(--status-info-bg)',
+            color: 'hsl(var(--foreground))',
           }}
         />
         <button
@@ -181,9 +181,9 @@ export default function PaymentActivity({ data, recordId, token, apiBaseUrl }) {
             width: 28,
             height: 28,
             borderRadius: 6,
-            border: '1px solid hsl(var(--card))',
+            border: '1px solid hsl(var(--border-subtle))',
             backgroundColor: 'hsl(var(--card))',
-            color: 'var(--status-info-bg)',
+            color: 'hsl(var(--foreground))',
             cursor: noteText.trim() ? 'pointer' : 'default',
           }}
         >

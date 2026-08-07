@@ -67,7 +67,7 @@ export default function DocumentTotalsPanel({
   const hasPerProductDiscount = discountAmt != null && discountAmt > 0;
   const canShowTotalDiscount = !readOnly && !!lineConfig?.discountField && (lines.length > 0 || pendingLine != null);
 
-  const divider = <div className="border-t border-border-structural" />;
+  const divider = <div className="border-t border-border" />;
 
   return (
     <div className="mt-1 flex flex-col items-end" data-inline-add-portal="true">
