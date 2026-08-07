@@ -517,6 +517,58 @@ second line of defense in case it doesn't.
 
 ---
 
+## [2026-07-30] ETP-4741 — Creation-form defaults race fixed; two follow-ups deferred
+
+The race fix itself (defaults-loading gate on the `/new` route, 4s gate-release budget, epoch-based
+invalidation of superseded sessions, user-edit merge guard, record-load neutralization) is documented in
+`docs/generated-custom-windows/app-shell-functional-flows.md` §4 and
+`docs/ops/app-shell-observability.md` (`defaults_block`). Two follow-ups were agreed and
+deliberately deferred:
+
+- A `handleNew()` session superseded by a newer `handleNew()` is made epoch-inert but its fetch is
+  NOT aborted — it runs to completion against a form that will ignore it. Only record-load
+  neutralization (`handleSelect`/`fetchById`) aborts the in-flight request. The 4s timer does not
+  abort either: it only releases the gate, so the request is unbounded, not capped at 4s.
+- A mocked Playwright spec covering the `/new` defaults gate and the record-navigation
+  (neutralization) path is recommended but not yet written; current coverage is Vitest-only
+  (`tools/app-shell/src/hooks/__tests__/useEntity.defaultsRace.vitest.jsx`).
+
+---
+
+## [2026-07-31] ETP-4741 — Initial-callout latch can be consumed before the defaults land (pre-existing, deferred)
+
+**Component:** `tools/app-shell/src/components/contract-ui/DetailView.jsx` — the "fire callouts for
+non-dependent selector fields" effect (around L2951-2978).
+
+**Symptom:** on a `/new` route the backend defaults arrive and are merged into the form, but the
+initial callout chain (e.g. `businessPartner` → `priceList` / `paymentTerms`) never runs, so the
+dependent fields stay empty until the user re-picks a value by hand.
+
+**Root cause:** the effect is latched by `defaultCalloutsTriggeredRef` and arms as soon as
+`hook.editing` becomes non-empty *for any reason*. Typing into a plain, non-selector field is
+enough: the effect runs, sets the latch, then computes its `triggers` as the selectors filtered by
+`hook.editing[s.field]` — still empty, because the defaults have not landed — and fires nothing.
+When the defaults merge a moment later the effect re-runs, but `defaultCalloutsTriggeredRef.current`
+is already `true`, so it returns immediately. The latch condition tracks "the form has some value"
+when what it actually needs is "the defaults have been applied".
+
+**Pre-existing, not introduced by this branch:** verified against the branch base (`85a147423`) —
+the effect and its latch condition are byte-identical there; ETP-4741's only change to
+`DetailView.jsx` is the one-line `isLoadingRecordForRoute` gate. What ETP-4741 does change is the
+exposure window: while `defaultsLoading` is true the new-record form is gated, so typing is
+impossible. The only remaining way in is the window between the 4s gate release and a late defaults
+response — which is exactly the case the redesigned timeout now keeps alive (the request is no
+longer discarded), so the narrowed defect deserves an explicit record rather than silence.
+
+**Why it was not fixed here:** the fix is a one-line change to the latch condition, but it lands in
+`DetailView.jsx`, a file that is hot in ETP-4730 / PR #994. Touching it from this branch would
+manufacture a merge conflict out of all proportion to a residual, pre-existing defect. A follow-up
+ticket carries it.
+
+**Where the fix belongs:** in the latch condition itself — arm on the defaults having actually been
+applied (or on a non-empty `triggers` set), not on `editing` merely becoming non-empty. Do **not**
+"fix" it by re-introducing the timeout's old discard behavior: that is the regression ETP-4741
+removed, and it produced a form with neither defaults nor callouts at all.
 ## [2026-07-30] ETP-4565 — `contacts` hit the known `AD_Ref_List_Trl` translation-stripping gap
 
 **Follow-up to** "`make regen` Silently Strips es_ES Enum Labels on a DB Missing `AD_Ref_List_Trl` Rows" above (originally documented against `financial-account`, also hit by `goods-shipment`). `contacts` is now a third confirmed occurrence.
