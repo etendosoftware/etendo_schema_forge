@@ -66,7 +66,9 @@ async function openNewForm(page) {
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await page.getByTestId('action-new').click();
   await page.waitForURL('**/asset-group/new', { timeout: 5_000 });
-  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
+  // 20s, not the usual 8s: on a cold dev server vite compiles this window's chunk
+  // on first request, and with several workers hitting it at once 8s is not enough.
+  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 20_000 });
 }
 
 // [shape sent by /defaults, human-readable name, expected checked state]
