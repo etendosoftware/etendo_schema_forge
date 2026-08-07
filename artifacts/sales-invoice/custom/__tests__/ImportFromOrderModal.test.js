@@ -57,6 +57,14 @@ describe('ImportFromOrderModal — source shape', () => {
     assert.match(src, /buildLineBody=\{buildLineBody\}/);
     assert.match(src, /afterImport=\{afterImport\}/);
   });
+
+  // ETP-4724: buildLineBody must carry the source order line's custom
+  // description through to the created invoice line, otherwise the backend
+  // falls back to the product's default description. This assertion is
+  // expected to FAIL against current source until the fix lands.
+  it('carries the order line description into the built invoice line body', () => {
+    assert.match(src, /description:\s*line\.description\s*\|\|\s*null/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -191,5 +199,58 @@ describe('ImportFromOrderModal — fetchDocuments currency filter', () => {
     assert.equal(result.documents.length, 1);
     assert.equal(result.documents[0].id, 'o1');
     assert.equal(result.excludedByCurrency, false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildLineBody — behavioral description-passthrough test (ETP-4724)
+//
+// buildLineBody is re-derived verbatim from the CURRENT source below (byte
+// -for-byte, minus the missing `description` line the bug report calls out),
+// so it faithfully reproduces today's (buggy) behavior: the built body never
+// carries `line.description`, so the backend falls back to the product's
+// default description when creating the invoice line.
+//
+// Once the fix lands in ImportFromOrderModal.jsx (adding
+// `description: line.description || null` to the returned object), update
+// ONLY the re-derived `buildLineBody` copy below to match — the assertion
+// itself (`result.description === 'Entrega especial'`) does not need to
+// change, and should then pass.
+// ---------------------------------------------------------------------------
+
+async function buildLineBody({ line, qty, invoiceId, lineNo }) {
+  const unitPrice = Number(line.unitPrice) || 0;
+  const listPrice = Number(line.listPrice) || unitPrice;
+  const grossUnitPrice = Number(line.grossUnitPrice) || 0;
+  const discount = Number(line.discount) || 0;
+  return {
+    parentId: invoiceId,
+    product: line.product,
+    invoicedQuantity: qty,
+    unitPrice,
+    listPrice,
+    ...(grossUnitPrice ? { grossUnitPrice } : {}),
+    ...(discount ? { etgoDiscount: discount } : {}),
+    lineNetAmount: unitPrice * qty,
+    tax: line.tax || null,
+    uOM: line.uOM || null,
+    lineNo,
+    cOrderlineId: line.id,
+  };
+}
+
+describe('ImportFromOrderModal — buildLineBody description passthrough', () => {
+  it('carries the order line description into the built invoice line body', async () => {
+    const line = {
+      id: 'ol1',
+      product: 'p1',
+      description: 'Entrega especial',
+      unitPrice: 10,
+      listPrice: 10,
+      tax: 't1',
+      uOM: 'u1',
+    };
+    const result = await buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(result.description, 'Entrega especial');
   });
 });
