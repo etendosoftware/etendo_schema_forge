@@ -1,8 +1,8 @@
 {
   "version": "0.23.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-08-05T12:39:14.392Z",
-  "checksum": "2f2b7038b738b880",
+  "updatedAt": "2026-08-07T18:34:30.570Z",
+  "checksum": "e0e1b8f90e534da9",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -68,6 +68,13 @@
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@!='DR'"
+          }
+        }
+      },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "selectorPriceCurrency": "org"
@@ -1065,6 +1072,13 @@
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@!='DR'"
+          }
+        }
+      },
       "linesLayout": "inlineEditable",
       "selectorPriceCurrency": "org"
     },
