@@ -740,6 +740,12 @@ The locale defaults to `es_ES` in mock mode (no real `LocaleProvider` data). Use
 page.getByRole('button', { name: /cerrar|close/i })
 ```
 
+### Gotcha: `VITE_MOCK=true` silently bypasses `page.route()` mocks
+
+`make dev-mock` starts the dev server with `VITE_MOCK=true`, which makes the app shell replace `window.fetch` with a wrapper that serves data straight out of the generated `mockData.js` files, before the request ever reaches the network layer. Playwright's `page.route()` intercepts real network requests — with `VITE_MOCK=true` there is no network request to intercept, so a carefully installed `.mocked.spec.js` route mock is silently ignored and the page renders whatever `mockData.js` happens to contain instead. This broke even the canonical `document-posting.mocked.spec.js` for reasons that had nothing to do with the test's own correctness, until the dev server was restarted as a plain `vite --port <port>` (no `VITE_MOCK`) instead.
+
+**Rule of thumb:** for any `.mocked.spec.js` test that installs `page.route()` interceptors, run the dev server WITHOUT `VITE_MOCK` — `make dev`, or `cd tools/app-shell && npx vite --port <port>` directly. Despite its name and its "required for E2E tests" `Makefile` comment, `make dev-mock` is for manual/offline UI browsing against bundled sample data, not for the `page.route()`-based mocked-spec pattern described throughout this guide. If a mocked spec fails in ways that don't match the assertion you wrote (wrong data, mock never hit, unrelated fields), check which dev server mode is running before debugging the test itself.
+
 ## Tips
 
 - **Start with smoke tests** — just verify the window loads. Then add flow tests.
