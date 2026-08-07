@@ -45,6 +45,7 @@ export default function LinesBottomSection({
   totalDiscountPct,
   onTotalDiscountChange,
   onNotesSave,
+  docsRefreshSignal,
   relatedDocuments: RelatedDocumentsComponent,
   totalsField = 'etgoTotalDiscount',
   // Inventory / shipment-style windows (albaranes, recepciones, movimientos)
@@ -81,6 +82,7 @@ export default function LinesBottomSection({
                   apiBaseUrl={apiBaseUrl}
                   api={api}
                   layout="chips"
+                  docsRefreshSignal={docsRefreshSignal}
                   data-testid="RelatedDocumentsComponent__751847" />
               </div>
             </div>
@@ -123,7 +125,7 @@ export default function LinesBottomSection({
               SifDataTabs. Rendered as a React component with standard
               data/recordId/token props. */}
           {NotesExtraComponent && (
-            <div className="mt-3 border-t border-border-structural px-3 pt-3">
+            <div className="mt-3 border-t border-border px-3 pt-3">
               <NotesExtraComponent
                 data={data}
                 recordId={recordId}
@@ -137,7 +139,7 @@ export default function LinesBottomSection({
 
         {showTotals && (
           <>
-            <div className="border-l border-border-structural" />
+            <div className="border-l border-border" />
 
             {/* Right column: Totals — fixed 520px wide, with a soft
                 minHeight: 200 floor so the panel keeps a stable visual rhythm

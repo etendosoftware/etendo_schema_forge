@@ -6,6 +6,55 @@ set -e
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
+# Execution stays local unless explicitly enabled. The value may be exported by
+# the shell or declared in the unversioned .env file.
+PREPUSH_EXECUTION="${PREPUSH_EXECUTION:-}"
+if [ -z "$PREPUSH_EXECUTION" ] && [ -f "$REPO_DIR/.env" ]; then
+  PREPUSH_EXECUTION="$(awk -F= '
+    $1 == "PREPUSH_EXECUTION" {
+      value = substr($0, index($0, "=") + 1)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]\r]+$/, "", value)
+      gsub(/^['\"']|['\"']$/, "", value)
+      print value
+      exit
+    }
+  ' "$REPO_DIR/.env")"
+fi
+
+case "$PREPUSH_EXECUTION" in
+  ""|local)
+    ;;
+  cloud)
+    # Keep credentials out of the hook environment. Only cloud-runner settings
+    # are copied from .env when the caller did not explicitly export them.
+    if [ -f "$REPO_DIR/.env" ]; then
+      for env_key in \
+        PREPUSH_KUBECONFIG PREPUSH_NPMRC PREPUSH_KUBE_CONTEXT \
+        PREPUSH_NAMESPACE PREPUSH_DEPLOYMENT PREPUSH_SONAR_ENV_FILE PREPUSH_GO_REPO; do
+        if [ -z "${!env_key:-}" ]; then
+          env_value="$(awk -F= -v key="$env_key" '
+            $1 == key {
+              value = substr($0, index($0, "=") + 1)
+              sub(/^[[:space:]]+/, "", value)
+              sub(/[[:space:]\r]+$/, "", value)
+              gsub(/^['\"']|['\"']$/, "", value)
+              print value
+              exit
+            }
+          ' "$REPO_DIR/.env")"
+          [ -n "$env_value" ] && export "$env_key=$env_value"
+        fi
+      done
+    fi
+    exec "$REPO_DIR/scripts/run-remote-prepush.sh" "$@"
+    ;;
+  *)
+    echo "ERROR: PREPUSH_EXECUTION must be 'local' or 'cloud' (found '$PREPUSH_EXECUTION')." >&2
+    exit 2
+    ;;
+esac
+
 echo "==> Running pre-push checks..."
 
 cd "$REPO_DIR"
