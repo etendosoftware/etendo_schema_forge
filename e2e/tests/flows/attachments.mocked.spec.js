@@ -381,7 +381,7 @@ test.describe.skip('Suite D — Download (mocked)', () => {
     await installPaymentMocks(page, { items: [ATT_1] });
 
     // Register a more specific route after installPaymentMocks so it wins.
-    await page.route(`**/sws/neo/attachments/file/${ATT_1.id}**`, async (route) => {
+    await page.route(`**/sws/neo/attachments/file/${ATT_1.id}{/**,}**`, async (route) => {
       if (route.request().method() === 'GET') {
         downloadCalled = true;
         await route.fulfill({
@@ -411,7 +411,7 @@ test.describe.skip('Suite D — Download (mocked)', () => {
     await installPaymentMocks(page, { items: [ATT_1, ATT_2] });
 
     // Register after installPaymentMocks so it takes priority for /zip requests.
-    await page.route('**/sws/neo/attachments/**/zip**', async (route) => {
+    await page.route('**/sws/neo/attachments/**/zip{/**,}**', async (route) => {
       zipCalled = true;
       await route.fulfill({
         status: 200,
@@ -557,7 +557,7 @@ async function installSalesOrderMocks(page, { items = [], onUpload = null, onDel
   });
 
   // Lines GET — return empty so the Lines tab renders cleanly
-  await page.route('**/sws/neo/sales-order/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({
       status: 200,
@@ -819,7 +819,7 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1] });
 
-    await page.route(`**/sws/neo/attachments/file/${SO_ATT_1.id}**`, async (route) => {
+    await page.route(`**/sws/neo/attachments/file/${SO_ATT_1.id}{/**,}**`, async (route) => {
       if (route.request().method() === 'GET') {
         downloadCalled = true;
         await route.fulfill({
@@ -848,7 +848,7 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1, SO_ATT_2] });
 
-    await page.route('**/sws/neo/attachments/**/zip**', async (route) => {
+    await page.route('**/sws/neo/attachments/**/zip{/**,}**', async (route) => {
       zipCalled = true;
       await route.fulfill({
         status: 200,

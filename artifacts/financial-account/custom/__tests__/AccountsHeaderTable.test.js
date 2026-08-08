@@ -118,9 +118,17 @@ describe('AccountsHeaderTable — contract-driven columns', () => {
 
   // DataTable appends `text-right tabular-nums` itself for numeric column types
   // (DataTable.jsx:1423), so restating it in the chrome only duplicated the class.
+  // The one exception is `GRID_TYPE_OVERRIDE`: `pendingCount` is contractually
+  // "integer" (it IS a count) but always renders through `reconcilePill`, never as a
+  // right-aligned number, so its DataTable-facing `type` is overridden to keep the
+  // pill left-aligned like every other status cell — see the constant's own comment.
   it('leaves numeric alignment to DataTable rather than pinning it in the chrome', () => {
     assert.doesNotMatch(src, /text-right/);
-    assert.match(src, /type: col\.type/);
+    assert.match(src, /type: GRID_TYPE_OVERRIDE\[col\.name\] \?\? col\.type/);
+  });
+
+  it('only overrides the grid type for pendingCount, not any other column', () => {
+    assert.match(src, /const GRID_TYPE_OVERRIDE = \{\s*pendingCount: 'string',\s*\}/);
   });
 
   it('binds the cell bodies through the cellType registry, not a local map', () => {

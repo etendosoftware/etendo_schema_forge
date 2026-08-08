@@ -125,6 +125,86 @@ export function createReportHelpers({ numberFormat } = {}) {
 }
 
 /**
+ * Verbatim SOURCE TEXT of the canonical helpers, keyed by the helper name
+ * jsreport must register them under.
+ *
+ * WHY A SECOND, STRING COPY OF THE FUNCTIONS ABOVE — READ BEFORE "DEDUPLICATING":
+ * `buildJsreportHelpersString()` used to serialize the live functions with
+ * `fn.toString()`. That silently breaks in a production bundle: the helpers are
+ * local declarations inside `createReportHelpers()`'s closure, so the minifier
+ * renames both the FUNCTION NAMES (`function ifCond(` → `function l(`) and every
+ * CLOSURE VARIABLE they capture (`_prevGroupValues` → `e`). jsreport derives each
+ * helper's name from the `function <name>(` text it receives, so the emitted
+ * string declared `l`/`i`/… and jsreport answered `400 missing helper "ifCond"`;
+ * `isGroupBreak` additionally hit a `ReferenceError` on the renamed closure var.
+ * It only ever worked in dev, where nothing is minified.
+ *
+ * Emitting hardcoded source text is the fix, and it is the same pattern the
+ * three helpers that already survived minification (`__groupEsEs`,
+ * `formatCurrency`, `formatNumber`) have always used: no bundle identifier —
+ * neither a function name nor a captured variable — can leak into the string, so
+ * the output is byte-identical in dev and in a minified production build. The
+ * alternative (recreating the live helpers from these strings via
+ * `new Function`) is ruled out by Sonar S1523, per this module's docstring.
+ *
+ * INVARIANT: each entry here must stay behaviourally identical to its
+ * same-named function in `createReportHelpers()` above. They are a matched pair;
+ * change one, change the other. A parity test guards this — see
+ * `tools/app-shell/test/report-jsreport-helpers-builder.test.js`.
+ *
+ * `formatCurrency`/`formatNumber` are intentionally absent — they are generated
+ * per call with the instance separators / decimal precision baked in.
+ */
+const JSREPORT_HELPER_SOURCES = {
+  isGroupBreak: `function isGroupBreak(field, currentValue) {
+  var prev = _prevGroupValues[field];
+  _prevGroupValues[field] = currentValue;
+  return prev !== currentValue;
+}`,
+  resetGroupTracking: `function resetGroupTracking() {
+  _prevGroupValues = {};
+}`,
+  formatDate: `function formatDate(value) {
+  if (value == null || value === '') return '';
+  var d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+}`,
+  formatBoolean: `function formatBoolean(value) {
+  return value ? 'Yes' : 'No';
+}`,
+  ifCond: `function ifCond(v1, operator, v2, options) {
+  switch (operator) {
+    case '===': return v1 === v2 ? options.fn(this) : options.inverse(this);
+    case '!==': return v1 !== v2 ? options.fn(this) : options.inverse(this);
+    default: return options.inverse(this);
+  }
+}`,
+  eq: `function eq(a, b) { return a === b; }`,
+  sumField: `function sumField(rows, field) {
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce(function(acc, row) {
+    var val = Number(row[field]);
+    return acc + (isNaN(val) ? 0 : val);
+  }, 0);
+}`,
+  formatDateDisplay: `function formatDateDisplay(value) {
+  if (value == null || value === '') return '';
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(String(value))) {
+    var parts = value.split('-');
+    return parts[2] + '-' + parts[1] + '-' + parts[0];
+  }
+  return String(value);
+}`,
+  sumRowsByCategory: `function sumRowsByCategory(rows, categoryPrefix, field) {
+  if (!Array.isArray(rows)) return 0;
+  return rows
+    .filter(function(r) { return (r.category || '').startsWith(categoryPrefix); })
+    .reduce(function(sum, r) { return sum + (Number(r[field]) || 0); }, 0);
+}`,
+};
+
+/**
  * Statically recover the `formatNumber` Intl options from a report's
  * `helpers.js` source WITHOUT executing it. Returns the options object the
  * artifact's `formatNumber` passed to `Intl.NumberFormat`, or `undefined` when
@@ -170,10 +250,20 @@ export function registerReportHelpers(handlebars, helpersCode) {
 
 // Helper names covered by the canonical set — anything else found in a report's
 // raw helpers.js (e.g. `qrCode`) is report-specific and must be preserved verbatim.
+//
+// Derived from JSREPORT_HELPER_SOURCES (the source-text map) rather than
+// hand-maintained as a third, separate list: a helper added there without
+// being added here would silently fail to get stripped from a report's
+// extras, letting a report-declared function with the same name survive
+// alongside the canonical one — two `function <name>(` declarations in the
+// emitted string, with JS hoisting picking whichever the report declared.
+// `formatCurrency`/`formatNumber` are added explicitly because they are
+// intentionally excluded from JSREPORT_HELPER_SOURCES (generated per call
+// with instance separators baked in — see that map's docstring).
 const CANONICAL_HELPER_NAMES = new Set([
-  'isGroupBreak', 'resetGroupTracking', 'formatDate', 'formatCurrency',
-  'formatBoolean', 'formatNumber', 'ifCond', 'eq', 'sumField',
-  'formatDateDisplay', 'sumRowsByCategory',
+  ...Object.keys(JSREPORT_HELPER_SOURCES),
+  'formatCurrency',
+  'formatNumber',
 ]);
 
 function extractBraceBlock(source, startIdx) {
@@ -213,12 +303,17 @@ function extractRequireLines(source) {
  *
  * jsreport runs in a separate Docker container reachable only over HTTP, with
  * no shared module system with this repo — so it can never `import`
- * formatCurrency() or this module directly. Instead, this function serializes
- * (via `fn.toString()`) the SAME canonical functions `createReportHelpers()`
- * already uses for the on-screen HTML preview, and appends only the
+ * formatCurrency() or this module directly. Instead, this function emits the
+ * canonical helper set as source text (`JSREPORT_HELPER_SOURCES`, the matched
+ * string pair of `createReportHelpers()`'s functions) and appends only the
  * report-SPECIFIC extras (e.g. `qrCode` + its `require`) extracted from the
  * report's raw `artifacts/<id>/helpers.js`. The result is the single source of
  * truth for both render paths — not a second, hand-maintained copy per report.
+ *
+ * It deliberately does NOT serialize the live functions with `fn.toString()`:
+ * that is minification-unsafe and shipped a production-only
+ * `400 missing helper "ifCond"` — see `JSREPORT_HELPER_SOURCES` for the full
+ * rationale before changing this.
  *
  * `formatCurrency`/`formatNumber` cannot rely on `Intl.NumberFormat` in the
  * serialized string: jsreport runs its own separate Node process (see module
@@ -251,7 +346,6 @@ function extractRequireLines(source) {
  */
 export function buildJsreportHelpersString(helpersCode, numberFormatOverride, separators) {
   const numberFormat = numberFormatOverride || extractNumberFormatOptions(helpersCode);
-  const helpers = createReportHelpers({ numberFormat });
   const thousandsSeparator = (separators && separators.thousandsSeparator) || '.';
   const decimalSeparator = (separators && separators.decimalSeparator) || ',';
 
@@ -286,9 +380,10 @@ export function buildJsreportHelpersString(helpersCode, numberFormatOverride, se
   return __groupEsEs(num, ${minFrac}, ${maxFrac});
 }`;
 
-  const canonicalSrc = Object.entries(helpers)
-    .filter(([name, fn]) => typeof fn === 'function' && name !== 'formatNumber' && name !== 'formatCurrency')
-    .map(([, fn]) => fn.toString())
+  // NEVER build this from `fn.toString()` on the live helpers: those are closure
+  // locals, so a production bundle emits minified function names AND minified
+  // closure-variable references — see JSREPORT_HELPER_SOURCES above.
+  const canonicalSrc = Object.values(JSREPORT_HELPER_SOURCES)
     .concat(groupEsEsSrc, formatCurrencySrc, formatNumberSrc)
     .join('\n\n');
 

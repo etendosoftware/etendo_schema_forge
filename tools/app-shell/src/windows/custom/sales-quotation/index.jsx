@@ -15,6 +15,7 @@ import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import QuotationPreview from '../shared/QuotationPreview.jsx';
 import { useSavedPreviewRecord } from '../shared/useSavedPreviewRecord.js';
+import { SEND_VISIBLE_WHEN_NOT_DRAFT } from '../shared/sendActionVisibility.js';
 
 const draftModeWithModal = {
   enabled: true,
@@ -143,6 +144,8 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
       edit:      { show: true },
       duplicate: { show: true },
       delete:    { show: true },
+      // ETP-4717 — see sendActionVisibility.js
+      email:     { visibleWhen: SEND_VISIBLE_WHEN_NOT_DRAFT },
     },
     documentPreview: true,
     onEdit:   (row) => navigate(`/${windowName}/${row.id}`),

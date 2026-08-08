@@ -37,7 +37,7 @@ const BANK_LINE_GENERIC = {
 };
 
 async function installMocks(page) {
-  await page.route('**/sws/neo/contacts/businessPartner**', async (route) => {
+  await page.route('**/sws/neo/contacts/businessPartner{/**,}**', async (route) => {
     const url = route.request().url();
     const method = route.request().method();
     if (method === 'GET' && !/\/businessPartner\/[^/?]+/.test(url)) {
@@ -49,7 +49,7 @@ async function installMocks(page) {
     route.fallback();
   });
 
-  await page.route('**/sws/neo/contacts/bankAccount**', async (route) => {
+  await page.route('**/sws/neo/contacts/bankAccount{/**,}**', async (route) => {
     const method = route.request().method();
     if (method === 'GET') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [BANK_LINE_GENERIC], totalRows: 1 } }) });
@@ -62,7 +62,7 @@ async function installMocks(page) {
   });
 
   for (const entity of ['contact', 'locationAddress', 'customer', 'vendorCreditor']) {
-    await page.route(`**/sws/neo/contacts/${entity}**`, async (route) => {
+    await page.route(`**/sws/neo/contacts/${entity}{/**,}**`, async (route) => {
       if (route.request().method() === 'GET') {
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [], totalRows: 0 } }) });
       }

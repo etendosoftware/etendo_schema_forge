@@ -293,10 +293,27 @@ describe('evalRowVisibleWhen', () => {
     );
   });
 
-  it('returns true when referenced field is absent from row', () => {
+  // ── ETP-4717 fail-closed regression ─────────────────────────────────────
+  // A referenced field missing from the row means the clause cannot be
+  // evaluated. Previously this fail-opened (treated as satisfied → the
+  // gated action stayed visible). The fix fails closed: an unevaluable
+  // clause is NOT satisfied, so a `visibleWhen` gate defaults to HIDING
+  // the action, not showing it. These cases must FAIL against the current
+  // (unfixed) `evalRowVisibleWhen` source, which still returns `true`.
+  it('returns false when referenced field is absent from row (fail-closed)', () => {
     assert.equal(
       evalRowVisibleWhen("@MissingField@='X'", { otherField: 'Y' }),
-      true,
+      false,
+    );
+  });
+
+  it('returns false for a != clause when referenced field is absent from row (fail-closed)', () => {
+    // A naive != implementation could trivially return true here (absent
+    // !== 'X'); the fail-closed contract requires false regardless of the
+    // operator, since the clause is unevaluable either way.
+    assert.equal(
+      evalRowVisibleWhen("@MissingField@!='X'", { otherField: 'Y' }),
+      false,
     );
   });
 
@@ -308,7 +325,7 @@ describe('evalRowVisibleWhen', () => {
     );
   });
 
-  it('handles null row gracefully', () => {
-    assert.equal(evalRowVisibleWhen("@Field@='X'", null), true);
+  it('hides gracefully — fails closed — when row is null', () => {
+    assert.equal(evalRowVisibleWhen("@Field@='X'", null), false);
   });
 });
