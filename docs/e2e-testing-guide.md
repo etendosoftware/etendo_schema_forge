@@ -717,6 +717,14 @@ Patterns that already end in `/**` (e.g. the generic `**/sws/**` catch-all) are 
 
 This was diagnosed against a large batch of pre-existing `.mocked.spec.js` failures (55 tests across ~22 files, then 5 more once the first fix landed) that had nothing to do with the PRs under test — the bug pre-dated them. Reach for the two-route pattern by default in any new `page.route()` call whose real endpoint can receive a sub-path (detail GET by id, `/action/...`, `/defaults`, `/selectors/...`) — especially anything under `/action/<name>`, which is always 2+ segments deep.
 
+### Root cause of the above: a silently downgraded `@playwright/test` pin
+
+The glob-crossing bug described above is not a permanent Playwright limitation — it's specific to `@playwright/test` `1.50.0`. Verified empirically: the exact same isolated repro (two `page.route()` calls, no app code) fails on `1.50.0` and passes cleanly on `1.58.2`.
+
+`e2e/package.json` was pinned to `"1.50.0"` (no caret) by an unrelated commit that was only trying to bump the `schema_forge_core` preview pin (`7c38d5cf2`, ETP-4763) — the Playwright downgrade from `"^1.50.0"` was accidental collateral. Because `e2e/` has **no committed lockfile**, this silently forced every fresh `npm install` onto that exact old version from then on, with no warning. It also explains why the 55-test failure wasn't reproducible for everyone on the team: anyone who ran `npm install` before that commit landed, or who had a stale `node_modules` with a newer resolved version already on disk, never hit it.
+
+**Current pin:** exact `"1.58.2"` (still no caret, deliberately — see reasoning below). If you ever need to bump this again, pin exactly and verify the new version doesn't reintroduce glob-matching regressions before merging; don't switch to a caret range, since a caret + no lockfile is what let this drift happen unnoticed in the first place. Do not remove the two-route fixes above when bumping — they're correct regardless of Playwright version and are cheap insurance against this exact class of regression recurring silently.
+
 ### Canonical reference
 
 `e2e/tests/flows/row-quick-actions.mocked.spec.js` covers the four pilot windows (sales-order, purchase-order, sales-invoice, purchase-invoice) and is the recommended starting point for any list-row UI test. It demonstrates: mocked list+detail endpoints, per-window expected-button matrix, hover→overlay assertion, edit-navigates-to-detail flow, and delete-opens-dialog flow.
