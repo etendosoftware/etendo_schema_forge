@@ -13,6 +13,7 @@ import { ManualStatementModal } from './ManualStatementModal';
 import { StatementConfirmDialog } from './StatementConfirmDialog';
 import { applyAdvancedFilter } from './statementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
+import { parseCalendarDate } from '@/lib/dateOnly';
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 /**
@@ -166,9 +167,9 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     const base = statements.filter((s) => {
       if (status && s.status !== status) return false;
       if (from || to) {
-        const d = new Date(s.importDate);
-        if (from && d < from) return false;
-        if (to && d > to) return false;
+        const d = parseCalendarDate(s.importDate);
+        if (from && d && d < from) return false;
+        if (to && d && d > to) return false;
       }
       if (q) {
         const haystack = [s.fileName, s.name, s.documentNo, s.notes]
