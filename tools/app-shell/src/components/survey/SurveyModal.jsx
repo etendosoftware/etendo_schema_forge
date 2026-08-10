@@ -240,7 +240,7 @@ function CannedResponseGrid({ options, onPick }) {
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '10px 12px', borderRadius: 10, textAlign: 'left',
             border: `1px solid ${T.border2}`,
-            background: '#fff', color: T.fg2,
+            background: 'hsl(var(--card))', color: T.fg2,
             font: font(12, 500), cursor: 'pointer',
           }}
         >

@@ -143,7 +143,7 @@ describe('SurveyModal — NPS flow', () => {
     await user.click(screen.getByTestId('SurveyModal__back'));
 
     expect(screen.getByTestId('SurveyModal__nps-scale')).toBeInTheDocument();
-    expect(screen.getByTestId('SurveyModal__nps-7')).toHaveStyle({ background: '#C28800' });
+    expect(screen.getByTestId('SurveyModal__nps-7')).toHaveStyle({ background: 'var(--status-warning-fg)' });
   });
 
   it('Back clears stale tags: resubmitting under a different score/segment does not carry the previously-selected tag (regression)', async () => {
@@ -161,7 +161,7 @@ describe('SurveyModal — NPS flow', () => {
 
     // Score selection UI is back, with the previously-selected score preserved.
     expect(screen.getByTestId('SurveyModal__nps-scale')).toBeInTheDocument();
-    expect(screen.getByTestId('SurveyModal__nps-9')).toHaveStyle({ background: '#17663A' });
+    expect(screen.getByTestId('SurveyModal__nps-9')).toHaveStyle({ background: 'var(--status-success-fg)' });
 
     // Pick a different score (detractor segment) and advance to followup again,
     // WITHOUT re-selecting any tag.
@@ -359,7 +359,7 @@ describe('SurveyModal — CSAT flow', () => {
     expect(screen.getByTestId('SurveyModal__star-2')).toHaveAttribute('aria-label', '2');
     // The star scale re-renders with the preserved score: stars 1-2 render filled.
     const star2Svg = screen.getByTestId('SurveyModal__star-2').querySelector('svg');
-    expect(star2Svg).toHaveAttribute('fill', '#FFC233');
+    expect(star2Svg).toHaveAttribute('fill', 'var(--status-warning-fg)');
   });
 
   it('Back clears stale feedback: switching to a high score after Back does not resubmit the old low-score feedback (regression)', async () => {
