@@ -69,7 +69,6 @@
     "listBaseFilter": "criteria=%7B%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22customer%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D%7D",
     "listViewOptions": {
       "hidePrint": true,
-      "hideEye": true,
       "hideCounter": true,
       "hideLink": true
     },
@@ -269,7 +268,8 @@
           "grid": true,
           "label": "Web",
           "section": "principal",
-          "order": 9
+          "order": 9,
+          "inputPrefix": "https://"
         },
         "etgoEmail": {
           "visibility": "editable",

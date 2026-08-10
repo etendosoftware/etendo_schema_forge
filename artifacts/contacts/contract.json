@@ -1,8 +1,8 @@
 {
-  "version": "0.46.0",
+  "version": "0.48.0",
   "generatedAt": "2026-07-31T19:26:59.736Z",
-  "updatedAt": "2026-08-04T16:33:19.885Z",
-  "checksum": "88066a93bb4490da",
+  "updatedAt": "2026-08-07T11:54:28.394Z",
+  "checksum": "3199e5602e3ebad9",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -118,7 +118,6 @@
       ],
       "listViewOptions": {
         "hidePrint": true,
-        "hideEye": true,
         "hideCounter": true,
         "hideLink": true
       },
@@ -586,6 +585,7 @@
             "required": false,
             "grid": true,
             "form": true,
+            "inputPrefix": "https://",
             "section": "principal",
             "validation": {
               "maxLength": 60
@@ -5110,7 +5110,6 @@
       ],
       "listViewOptions": {
         "hidePrint": true,
-        "hideEye": true,
         "hideCounter": true,
         "hideLink": true
       },

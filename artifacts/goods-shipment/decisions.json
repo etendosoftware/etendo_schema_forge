@@ -7,12 +7,12 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
     "customComponents": {
       "topbarRight": "GoodsShipmentActions",
       "topbarExtra": "GoodsShipmentBillingBadge",
       "bulkActions": "BulkInvoiceFromShipment",
-      "bottomSection": "GoodsShipmentBottomPanel"
+      "bottomSection": "GoodsShipmentBottomPanel",
+      "moreMenuContent": "GoodsShipmentMoreMenu"
     },
     "linesLayout": "inlineEditable",
     "menuActions": [
@@ -50,6 +50,13 @@
         "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
       }
     ],
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@='CO'"
+        }
+      }
+    },
     "labelOverrides": {
       "en_US": {
         "EM_ETGO_Currency_ID": "Currency"
@@ -306,6 +313,7 @@
         "orderQuantity": {
           "visibility": "readOnly",
           "grid": true,
+          "gridReadOnly": true,
           "section": "principal",
           "seq": 30
         },

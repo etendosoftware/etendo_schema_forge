@@ -1,0 +1,1951 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-08-01T00:36:50.964Z",
+  "updatedAt": "2026-08-03T16:25:15.395Z",
+  "checksum": "261839b234d57627",
+  "frontendContract": {
+    "window": {
+      "id": "110",
+      "name": "Organización",
+      "primaryEntity": "organization",
+      "category": "configuration",
+      "layoutType": "custom"
+    },
+    "entities": {
+      "organization": {
+        "tableName": "AD_Org",
+        "tabId": "143",
+        "tabName": "Organization",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "socialName",
+            "apiKey": "socialName",
+            "column": "Social_Name",
+            "label": "Legal Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "label": "Currency",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Currency",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "etgoBusinessType",
+            "apiKey": "etgoBusinessType",
+            "column": "EM_Etgo_Business_Type",
+            "label": "Business Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "CO"
+            },
+            "enumValues": [
+              {
+                "value": "AD",
+                "name": "Advisory"
+              },
+              {
+                "value": "CO",
+                "name": "Company"
+              },
+              {
+                "value": "FL",
+                "name": "Freelancer"
+              }
+            ],
+            "defaultValue": "CO",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "etgoBusinessType",
+            "derivation": {
+              "type": "computed",
+              "source": "CO"
+            }
+          }
+        ]
+      },
+      "information": {
+        "tableName": "AD_OrgInfo",
+        "tabId": "170",
+        "tabName": "Information",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "locationAddress",
+            "apiKey": "locationAddress",
+            "column": "C_Location_ID",
+            "label": "Location / Address",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "reference": "Location",
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "taxID",
+            "apiKey": "taxID",
+            "column": "TaxID",
+            "label": "Tax ID",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "yourCompanyDocumentImage",
+            "apiKey": "yourCompanyDocumentImage",
+            "column": "Your_Company_Document_Image",
+            "label": "Your Company Document Image",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "etgoEmail",
+            "apiKey": "etgoEmail",
+            "column": "EM_Etgo_Email",
+            "label": "Email",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "etgoPhone",
+            "apiKey": "etgoPhone",
+            "column": "EM_Etgo_Phone",
+            "label": "Phone",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "etgoWeb",
+            "apiKey": "etgoWeb",
+            "column": "EM_Etgo_Web",
+            "label": "Web",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": []
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "110",
+      "name": "Organización",
+      "primaryEntity": "organization",
+      "category": "configuration",
+      "layoutType": "custom"
+    },
+    "entities": {
+      "organization": {
+        "tableName": "AD_Org",
+        "tabId": "143",
+        "tabName": "Organization",
+        "fields": [
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "summaryLevel",
+            "apiKey": "summaryLevel",
+            "column": "IsSummary",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "socialName",
+            "apiKey": "socialName",
+            "column": "Social_Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "organizationType",
+            "apiKey": "organizationType",
+            "column": "AD_Orgtype_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "allowPeriodControl",
+            "apiKey": "allowPeriodControl",
+            "column": "IsPeriodControlAllowed",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "calendar",
+            "apiKey": "calendar",
+            "column": "C_Calendar_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "intrCCalendar",
+            "apiKey": "intrCCalendar",
+            "column": "EM_Intr_C_Calendar_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "ready",
+            "apiKey": "ready",
+            "column": "IsReady",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "generalLedger",
+            "apiKey": "generalLedger",
+            "column": "C_Acctschema_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMGlitem",
+            "apiKey": "aPRMGlitem",
+            "column": "EM_APRM_Glitem_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "periodControlAllowedOrganization",
+            "apiKey": "periodControlAllowedOrganization",
+            "column": "AD_Periodcontrolallowed_Org_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "calendarOwnerOrganization",
+            "apiKey": "calendarOwnerOrganization",
+            "column": "AD_Calendarowner_Org_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "inheritedCalendar",
+            "apiKey": "inheritedCalendar",
+            "column": "AD_Inheritedcalendar_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "legalEntityOrganization",
+            "apiKey": "legalEntityOrganization",
+            "column": "AD_Legalentity_Org_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "businessUnitOrganization",
+            "apiKey": "businessUnitOrganization",
+            "column": "AD_Businessunit_Org_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "etsgAddCertificate",
+            "apiKey": "etsgAddCertificate",
+            "column": "EM_Etsg_Add_Certificate",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etgoBusinessType",
+            "apiKey": "etgoBusinessType",
+            "column": "EM_Etgo_Business_Type",
+            "type": "enum",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "AD_Org_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "information": {
+        "tableName": "AD_OrgInfo",
+        "tabId": "170",
+        "tabName": "Information",
+        "fields": [
+          {
+            "name": "locationAddress",
+            "apiKey": "locationAddress",
+            "column": "C_Location_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "taxID",
+            "apiKey": "taxID",
+            "column": "TaxID",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "dUNS",
+            "apiKey": "dUNS",
+            "column": "DUNS",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "userContact",
+            "apiKey": "userContact",
+            "column": "AD_User_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "yourCompanyDocumentImage",
+            "apiKey": "yourCompanyDocumentImage",
+            "column": "Your_Company_Document_Image",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "notTaxDeductable",
+            "apiKey": "notTaxDeductable",
+            "column": "Istaxundeductable",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "cashVAT",
+            "apiKey": "cashVAT",
+            "column": "Iscashvat",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "isDoubleCash",
+            "apiKey": "isDoubleCash",
+            "column": "IsDoubleCash",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "aPRMPaymentDescription",
+            "apiKey": "aPRMPaymentDescription",
+            "column": "EM_Aprm_Payment_Desc",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "logo",
+            "apiKey": "logo",
+            "column": "Logo",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "automaticWriteoffAmt",
+            "apiKey": "automaticWriteoffAmt",
+            "column": "Automatic_Writeoff_Amt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesTaxExemptRate",
+            "apiKey": "salesTaxExemptRate",
+            "column": "C_Tax_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "referenceOrder",
+            "apiKey": "referenceOrder",
+            "column": "Reference_Order",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat390Isperson",
+            "apiKey": "aeat390Isperson",
+            "column": "EM_Aeat390_Isperson",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "aeat390Firstname",
+            "apiKey": "aeat390Firstname",
+            "column": "EM_Aeat390_Firstname",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "etvfacInstallationNumber",
+            "apiKey": "etvfacInstallationNumber",
+            "column": "EM_Etvfac_Installation_Number",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat390Surname1",
+            "apiKey": "aeat390Surname1",
+            "column": "EM_Aeat390_Surname1",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat390Surname2",
+            "apiKey": "aeat390Surname2",
+            "column": "EM_Aeat390_Surname2",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat390RepNif",
+            "apiKey": "aeat390RepNif",
+            "column": "EM_Aeat390_Rep_Nif",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat390RepName",
+            "apiKey": "aeat390RepName",
+            "column": "EM_Aeat390_Rep_Name",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat303IsNatPer",
+            "apiKey": "aeat303IsNatPer",
+            "column": "EM_Aeat303_Is_Nat_Per",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "aeat303PersonName",
+            "apiKey": "aeat303PersonName",
+            "column": "EM_Aeat303_Person_Name",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat303PersonSurnames",
+            "apiKey": "aeat303PersonSurnames",
+            "column": "EM_Aeat303_Person_Surnames",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "etsgHasSIIConfig",
+            "apiKey": "etsgHasSIIConfig",
+            "column": "EM_Etsg_Has_Sii_Config",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etsgHasTbaiConfig",
+            "apiKey": "etsgHasTbaiConfig",
+            "column": "EM_Etsg_Has_Tbai_Config",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etsgHasVfactuConfig",
+            "apiKey": "etsgHasVfactuConfig",
+            "column": "EM_Etsg_Has_Vfactu_Config",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "etgoEmail",
+            "apiKey": "etgoEmail",
+            "column": "EM_Etgo_Email",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "etgoPhone",
+            "apiKey": "etgoPhone",
+            "column": "EM_Etgo_Phone",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "etgoWeb",
+            "apiKey": "etgoWeb",
+            "column": "EM_Etgo_Web",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/organization",
+        "entity": "organization",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/organization/:id",
+        "entity": "organization",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/organization",
+        "entity": "organization",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/organization/:id",
+        "entity": "organization",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/organization/:id",
+        "entity": "organization",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/information",
+        "entity": "information",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/information/:id",
+        "entity": "information",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/information",
+        "entity": "information",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/information/:id",
+        "entity": "information",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/information/:id",
+        "entity": "information",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "organizaci-n",
+    "baseUrl": "/sws/neo/organizaci-n",
+    "crud": {
+      "organization": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/organizaci-n/organization",
+        "detailUrl": "/sws/neo/organizaci-n/organization/{id}",
+        "supportedFilters": []
+      },
+      "information": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/organizaci-n/information",
+        "detailUrl": "/sws/neo/organizaci-n/information/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "organization",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/organizaci-n/organization/selectors/currency"
+      },
+      {
+        "entity": "information",
+        "field": "locationAddress",
+        "column": "C_Location_ID",
+        "reference": "Location",
+        "inputMode": "search",
+        "url": "/sws/neo/organizaci-n/information/selectors/locationAddress"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "organization",
+        "field": "ready",
+        "column": "IsReady",
+        "url": "/sws/neo/organizaci-n/organization/{id}/action/ready",
+        "processId": "53863D4359114ADE92133F772135AEEB",
+        "processType": "classic"
+      },
+      {
+        "entity": "organization",
+        "field": "etsgAddCertificate",
+        "column": "EM_Etsg_Add_Certificate",
+        "url": "/sws/neo/organizaci-n/organization/{id}/action/etsgAddCertificate",
+        "processId": "77AAF82CC5344022AAD6ECBC9925E574",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "configuration"
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-action-endpoint-organization-etsgAddCertificate",
+        "category": "action-endpoint",
+        "entity": "organization",
+        "field": "etsgAddCertificate",
+        "runner": "node",
+        "description": "Action endpoint for 'etsgAddCertificate' in organization should exist"
+      },
+      {
+        "id": "t-action-endpoint-organization-ready",
+        "category": "action-endpoint",
+        "entity": "organization",
+        "field": "ready",
+        "runner": "node",
+        "description": "Action endpoint for 'ready' in organization should exist"
+      },
+      {
+        "id": "t-crud-flags-information",
+        "category": "crud-flags",
+        "entity": "information",
+        "runner": "node",
+        "description": "CRUD flags for 'information' should all be booleans"
+      },
+      {
+        "id": "t-crud-flags-organization",
+        "category": "crud-flags",
+        "entity": "organization",
+        "runner": "node",
+        "description": "CRUD flags for 'organization' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-organization-etgoBusinessType",
+        "category": "default-value-type",
+        "entity": "organization",
+        "field": "etgoBusinessType",
+        "runner": "node",
+        "description": "Default value for 'etgoBusinessType' in organization should be a string"
+      },
+      {
+        "id": "t-field-presence-information-etgoEmail",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "etgoEmail",
+        "runner": "node",
+        "description": "Field 'etgoEmail' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-etgoPhone",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "etgoPhone",
+        "runner": "node",
+        "description": "Field 'etgoPhone' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-etgoWeb",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "etgoWeb",
+        "runner": "node",
+        "description": "Field 'etgoWeb' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-locationAddress",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "locationAddress",
+        "runner": "node",
+        "description": "Field 'locationAddress' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-taxID",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "taxID",
+        "runner": "node",
+        "description": "Field 'taxID' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-yourCompanyDocumentImage",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "yourCompanyDocumentImage",
+        "runner": "node",
+        "description": "Field 'yourCompanyDocumentImage' should be present in information"
+      },
+      {
+        "id": "t-field-presence-organization-currency",
+        "category": "field-presence",
+        "entity": "organization",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should be present in organization"
+      },
+      {
+        "id": "t-field-presence-organization-etgoBusinessType",
+        "category": "field-presence",
+        "entity": "organization",
+        "field": "etgoBusinessType",
+        "runner": "node",
+        "description": "Field 'etgoBusinessType' should be present in organization"
+      },
+      {
+        "id": "t-field-presence-organization-name",
+        "category": "field-presence",
+        "entity": "organization",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in organization"
+      },
+      {
+        "id": "t-field-presence-organization-socialName",
+        "category": "field-presence",
+        "entity": "organization",
+        "field": "socialName",
+        "runner": "node",
+        "description": "Field 'socialName' should be present in organization"
+      },
+      {
+        "id": "t-field-type-information-etgoEmail",
+        "category": "field-type",
+        "entity": "information",
+        "field": "etgoEmail",
+        "runner": "node",
+        "description": "Field 'etgoEmail' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-information-etgoPhone",
+        "category": "field-type",
+        "entity": "information",
+        "field": "etgoPhone",
+        "runner": "node",
+        "description": "Field 'etgoPhone' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-information-etgoWeb",
+        "category": "field-type",
+        "entity": "information",
+        "field": "etgoWeb",
+        "runner": "node",
+        "description": "Field 'etgoWeb' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-information-locationAddress",
+        "category": "field-type",
+        "entity": "information",
+        "field": "locationAddress",
+        "runner": "node",
+        "description": "Field 'locationAddress' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-information-taxID",
+        "category": "field-type",
+        "entity": "information",
+        "field": "taxID",
+        "runner": "node",
+        "description": "Field 'taxID' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-information-yourCompanyDocumentImage",
+        "category": "field-type",
+        "entity": "information",
+        "field": "yourCompanyDocumentImage",
+        "runner": "node",
+        "description": "Field 'yourCompanyDocumentImage' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-organization-currency",
+        "category": "field-type",
+        "entity": "organization",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should have type 'string' in organization"
+      },
+      {
+        "id": "t-field-type-organization-etgoBusinessType",
+        "category": "field-type",
+        "entity": "organization",
+        "field": "etgoBusinessType",
+        "runner": "node",
+        "description": "Field 'etgoBusinessType' should have type 'string' in organization"
+      },
+      {
+        "id": "t-field-type-organization-name",
+        "category": "field-type",
+        "entity": "organization",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in organization"
+      },
+      {
+        "id": "t-field-type-organization-socialName",
+        "category": "field-type",
+        "entity": "organization",
+        "field": "socialName",
+        "runner": "node",
+        "description": "Field 'socialName' should have type 'string' in organization"
+      },
+      {
+        "id": "t-rule-declared-A-adir-Certificado-Digital-a-Organizaci-n",
+        "category": "rule-declared",
+        "rule": "Añadir Certificado Digital a Organización",
+        "runner": "node",
+        "description": "Rule 'Añadir Certificado Digital a Organización' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-Client-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Client Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-Org-AD-Orgtype-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "AD_Org-AD_Orgtype_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'AD_Org-AD_Orgtype_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-Org-C-Calendar-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "AD_Org-C_Calendar_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'AD_Org-C_Calendar_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-Org-IsPeriodControlAllowed-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "AD_Org-IsPeriodControlAllowed-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'AD_Org-IsPeriodControlAllowed-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-Org-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Org Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Org Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Allowed-PeriodActions",
+        "category": "rule-declared",
+        "rule": "Allowed PeriodActions",
+        "runner": "node",
+        "description": "Rule 'Allowed PeriodActions' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-EndDate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-EndDate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-EndDate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-PeriodNo-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-PeriodNo-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-PeriodNo-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-PeriodType-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-PeriodType-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-PeriodType-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-StartDate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-StartDate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-StartDate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Copy-to-next-year",
+        "category": "rule-declared",
+        "rule": "Copy to next year",
+        "runner": "node",
+        "description": "Rule 'Copy to next year' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-EmailConfiguration-Port-Smtpconnectionsecurity",
+        "category": "rule-declared",
+        "rule": "EmailConfiguration_Port_Smtpconnectionsecurity",
+        "runner": "node",
+        "description": "Rule 'EmailConfiguration_Port_Smtpconnectionsecurity' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Open-Close",
+        "category": "rule-declared",
+        "rule": "Open/Close",
+        "runner": "node",
+        "description": "Rule 'Open/Close' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Open-Close-All",
+        "category": "rule-declared",
+        "rule": "Open/Close All",
+        "runner": "node",
+        "description": "Rule 'Open/Close All' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Open-Close-Periods",
+        "category": "rule-declared",
+        "rule": "Open Close Periods",
+        "runner": "node",
+        "description": "Rule 'Open Close Periods' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-General-Ledgers-Acct-Length-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-General Ledgers-Acct_Length-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-General Ledgers-Acct_Length-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-General-Ledgers-AD-Sequence-Bp-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-General Ledgers-AD_Sequence_Bp_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-General Ledgers-AD_Sequence_Bp_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-General-Ledgers-AD-Sequence-Pr-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-General Ledgers-AD_Sequence_Pr_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-General Ledgers-AD_Sequence_Pr_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-General-Ledgers-SubAcct-Length-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-General Ledgers-SubAcct_Length-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-General Ledgers-SubAcct_Length-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-C-Tax-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-C_Tax_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-C_Tax_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-EM-Aeat303-Person-Name-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-EM_Aeat303_Person_Name-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-EM_Aeat303_Person_Name-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-EM-Aeat303-Person-Surnames-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-EM_Aeat303_Person_Surnames-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-EM_Aeat303_Person_Surnames-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-EM-Aeat390-Firstname-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-EM_Aeat390_Firstname-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-EM_Aeat390_Firstname-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-EM-Aeat390-Rep-Name-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-EM_Aeat390_Rep_Name-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-EM_Aeat390_Rep_Name-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-EM-Aeat390-Rep-Nif-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-EM_Aeat390_Rep_Nif-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-EM_Aeat390_Rep_Nif-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-EM-Aeat390-Surname1-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-EM_Aeat390_Surname1-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-EM_Aeat390_Surname1-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-EM-Aeat390-Surname2-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-EM_Aeat390_Surname2-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-EM_Aeat390_Surname2-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-Iscashvat-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-Iscashvat-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-Iscashvat-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Information-IsDoubleCash-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Information-IsDoubleCash-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Information-IsDoubleCash-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Intrastat-Port-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Intrastat-Port-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Intrastat-Port-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-AD-Businessunit-Org-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-AD_Businessunit_Org_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-AD_Businessunit_Org_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-AD-Calendarowner-Org-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-AD_Calendarowner_Org_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-AD_Calendarowner_Org_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-AD-Inheritedcalendar-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-AD_Inheritedcalendar_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-AD_Inheritedcalendar_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-AD-Legalentity-Org-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-AD_Legalentity_Org_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-AD_Legalentity_Org_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-AD-Periodcontrolallowed-Org-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-AD_Periodcontrolallowed_Org_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-AD_Periodcontrolallowed_Org_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-C-Acctschema-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-C_Acctschema_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-C_Acctschema_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-C-Calendar-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-C_Calendar_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-C_Calendar_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-EM-Etsg-Add-Certificate-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-EM_Etsg_Add_Certificate-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-EM_Etsg_Add_Certificate-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-EM-Intr-C-Calendar-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-EM_Intr_C_Calendar_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-EM_Intr_C_Calendar_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-IsPeriodControlAllowed-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-IsPeriodControlAllowed-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-IsPeriodControlAllowed-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-organization-Organization-IsReady-displayLogic",
+        "category": "rule-declared",
+        "rule": "organization-Organization-IsReady-displayLogic",
+        "runner": "node",
+        "description": "Rule 'organization-Organization-IsReady-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SalesTaxExemptRate",
+        "category": "rule-declared",
+        "rule": "SalesTaxExemptRate",
+        "runner": "node",
+        "description": "Rule 'SalesTaxExemptRate' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Organization-NotTaxDeductable-Istaxundeductable",
+        "category": "rule-declared",
+        "rule": "SE_Organization_NotTaxDeductable_Istaxundeductable",
+        "runner": "node",
+        "description": "Rule 'SE_Organization_NotTaxDeductable_Istaxundeductable' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-Period-Control-AD-Orgtype-ID",
+        "category": "rule-declared",
+        "rule": "SE_Period_Control_AD_Orgtype_ID",
+        "runner": "node",
+        "description": "Rule 'SE_Period_Control_AD_Orgtype_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Set-as-Ready",
+        "category": "rule-declared",
+        "rule": "Set as Ready",
+        "runner": "node",
+        "description": "Rule 'Set as Ready' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-IsDefault-Isdefault",
+        "category": "rule-declared",
+        "rule": "SL_IsDefault_Isdefault",
+        "runner": "node",
+        "description": "Rule 'SL_IsDefault_Isdefault' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Organization-Info-Value",
+        "category": "rule-declared",
+        "rule": "SL_Organization_Info_Value",
+        "runner": "node",
+        "description": "Rule 'SL_Organization_Info_Value' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-RefreshSequenceAndLength-IsBpNewAccount",
+        "category": "rule-declared",
+        "rule": "SL_RefreshSequenceAndLength_IsBpNewAccount",
+        "runner": "node",
+        "description": "Rule 'SL_RefreshSequenceAndLength_IsBpNewAccount' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-RefreshSequenceAndLength-IsPrNewAccount",
+        "category": "rule-declared",
+        "rule": "SL_RefreshSequenceAndLength_IsPrNewAccount",
+        "runner": "node",
+        "description": "Rule 'SL_RefreshSequenceAndLength_IsPrNewAccount' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Test-SMTP-Connection",
+        "category": "rule-declared",
+        "rule": "Test SMTP Connection",
+        "runner": "node",
+        "description": "Rule 'Test SMTP Connection' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Years-of-the-Intrastat-Calendar",
+        "category": "rule-declared",
+        "rule": "Years of the Intrastat Calendar",
+        "runner": "node",
+        "description": "Rule 'Years of the Intrastat Calendar' (validation) should be declared"
+      },
+      {
+        "id": "t-selector-endpoint-information-locationAddress",
+        "category": "selector-endpoint",
+        "entity": "information",
+        "field": "locationAddress",
+        "runner": "node",
+        "description": "Selector endpoint for 'locationAddress' in information should exist"
+      },
+      {
+        "id": "t-selector-endpoint-organization-currency",
+        "category": "selector-endpoint",
+        "entity": "organization",
+        "field": "currency",
+        "runner": "node",
+        "description": "Selector endpoint for 'currency' in organization should exist"
+      },
+      {
+        "id": "t-system-field-information-active",
+        "category": "system-field",
+        "entity": "information",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aeat303IsNatPer",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aeat303IsNatPer",
+        "runner": "node",
+        "description": "System field 'aeat303IsNatPer' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aeat303PersonName",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aeat303PersonName",
+        "runner": "node",
+        "description": "System field 'aeat303PersonName' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aeat303PersonSurnames",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aeat303PersonSurnames",
+        "runner": "node",
+        "description": "System field 'aeat303PersonSurnames' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aeat390Firstname",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aeat390Firstname",
+        "runner": "node",
+        "description": "System field 'aeat390Firstname' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aeat390Isperson",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aeat390Isperson",
+        "runner": "node",
+        "description": "System field 'aeat390Isperson' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aeat390RepName",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aeat390RepName",
+        "runner": "node",
+        "description": "System field 'aeat390RepName' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aeat390RepNif",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aeat390RepNif",
+        "runner": "node",
+        "description": "System field 'aeat390RepNif' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aeat390Surname1",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aeat390Surname1",
+        "runner": "node",
+        "description": "System field 'aeat390Surname1' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aeat390Surname2",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aeat390Surname2",
+        "runner": "node",
+        "description": "System field 'aeat390Surname2' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-aPRMPaymentDescription",
+        "category": "system-field",
+        "entity": "information",
+        "field": "aPRMPaymentDescription",
+        "runner": "node",
+        "description": "System field 'aPRMPaymentDescription' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-automaticWriteoffAmt",
+        "category": "system-field",
+        "entity": "information",
+        "field": "automaticWriteoffAmt",
+        "runner": "node",
+        "description": "System field 'automaticWriteoffAmt' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-businessPartner",
+        "category": "system-field",
+        "entity": "information",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "System field 'businessPartner' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-cashVAT",
+        "category": "system-field",
+        "entity": "information",
+        "field": "cashVAT",
+        "runner": "node",
+        "description": "System field 'cashVAT' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-client",
+        "category": "system-field",
+        "entity": "information",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-createdBy",
+        "category": "system-field",
+        "entity": "information",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-creationDate",
+        "category": "system-field",
+        "entity": "information",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-dUNS",
+        "category": "system-field",
+        "entity": "information",
+        "field": "dUNS",
+        "runner": "node",
+        "description": "System field 'dUNS' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-etsgHasSIIConfig",
+        "category": "system-field",
+        "entity": "information",
+        "field": "etsgHasSIIConfig",
+        "runner": "node",
+        "description": "System field 'etsgHasSIIConfig' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-etsgHasTbaiConfig",
+        "category": "system-field",
+        "entity": "information",
+        "field": "etsgHasTbaiConfig",
+        "runner": "node",
+        "description": "System field 'etsgHasTbaiConfig' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-etsgHasVfactuConfig",
+        "category": "system-field",
+        "entity": "information",
+        "field": "etsgHasVfactuConfig",
+        "runner": "node",
+        "description": "System field 'etsgHasVfactuConfig' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-etvfacInstallationNumber",
+        "category": "system-field",
+        "entity": "information",
+        "field": "etvfacInstallationNumber",
+        "runner": "node",
+        "description": "System field 'etvfacInstallationNumber' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-id",
+        "category": "system-field",
+        "entity": "information",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-isDoubleCash",
+        "category": "system-field",
+        "entity": "information",
+        "field": "isDoubleCash",
+        "runner": "node",
+        "description": "System field 'isDoubleCash' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-logo",
+        "category": "system-field",
+        "entity": "information",
+        "field": "logo",
+        "runner": "node",
+        "description": "System field 'logo' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-notTaxDeductable",
+        "category": "system-field",
+        "entity": "information",
+        "field": "notTaxDeductable",
+        "runner": "node",
+        "description": "System field 'notTaxDeductable' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-referenceOrder",
+        "category": "system-field",
+        "entity": "information",
+        "field": "referenceOrder",
+        "runner": "node",
+        "description": "System field 'referenceOrder' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-salesTaxExemptRate",
+        "category": "system-field",
+        "entity": "information",
+        "field": "salesTaxExemptRate",
+        "runner": "node",
+        "description": "System field 'salesTaxExemptRate' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-updated",
+        "category": "system-field",
+        "entity": "information",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-updatedBy",
+        "category": "system-field",
+        "entity": "information",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-information-userContact",
+        "category": "system-field",
+        "entity": "information",
+        "field": "userContact",
+        "runner": "node",
+        "description": "System field 'userContact' should exist in backend but not frontend for information"
+      },
+      {
+        "id": "t-system-field-organization-active",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-allowPeriodControl",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "allowPeriodControl",
+        "runner": "node",
+        "description": "System field 'allowPeriodControl' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-aPRMGlitem",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "aPRMGlitem",
+        "runner": "node",
+        "description": "System field 'aPRMGlitem' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-businessUnitOrganization",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "businessUnitOrganization",
+        "runner": "node",
+        "description": "System field 'businessUnitOrganization' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-calendar",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "calendar",
+        "runner": "node",
+        "description": "System field 'calendar' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-calendarOwnerOrganization",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "calendarOwnerOrganization",
+        "runner": "node",
+        "description": "System field 'calendarOwnerOrganization' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-client",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-createdBy",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-creationDate",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-description",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "description",
+        "runner": "node",
+        "description": "System field 'description' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-etsgAddCertificate",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "etsgAddCertificate",
+        "runner": "node",
+        "description": "System field 'etsgAddCertificate' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-generalLedger",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "generalLedger",
+        "runner": "node",
+        "description": "System field 'generalLedger' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-id",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-inheritedCalendar",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "inheritedCalendar",
+        "runner": "node",
+        "description": "System field 'inheritedCalendar' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-intrCCalendar",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "intrCCalendar",
+        "runner": "node",
+        "description": "System field 'intrCCalendar' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-legalEntityOrganization",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "legalEntityOrganization",
+        "runner": "node",
+        "description": "System field 'legalEntityOrganization' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-organizationType",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "organizationType",
+        "runner": "node",
+        "description": "System field 'organizationType' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-periodControlAllowedOrganization",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "periodControlAllowedOrganization",
+        "runner": "node",
+        "description": "System field 'periodControlAllowedOrganization' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-ready",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "ready",
+        "runner": "node",
+        "description": "System field 'ready' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-searchKey",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "System field 'searchKey' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-summaryLevel",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "summaryLevel",
+        "runner": "node",
+        "description": "System field 'summaryLevel' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-updated",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-system-field-organization-updatedBy",
+        "category": "system-field",
+        "entity": "organization",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for organization"
+      },
+      {
+        "id": "t-visibility-information",
+        "category": "visibility",
+        "entity": "information",
+        "runner": "node",
+        "description": "Entity 'information' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-visibility-organization",
+        "category": "visibility",
+        "entity": "organization",
+        "runner": "node",
+        "description": "Entity 'organization' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 135,
+      "byCategory": {
+        "action-endpoint": 2,
+        "crud-flags": 2,
+        "default-value-type": 1,
+        "field-presence": 10,
+        "field-type": 10,
+        "rule-declared": 52,
+        "selector-endpoint": 2,
+        "system-field": 54,
+        "visibility": 2
+      },
+      "byRunner": {
+        "node": 135,
+        "junit": 0
+      }
+    }
+  }
+}

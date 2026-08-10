@@ -49,7 +49,10 @@ const TOKENS = {
 // chevron gets the same breathing room from the row's left border that every other
 // leading column already has — it previously had none, sitting flush against the edge.
 const CHECKBOX_COLUMN_WIDTH = 40;
-const CHEVRON_COLUMN_WIDTH = 44;
+// Exported — DataTable's add-row-only companion table (see renderLinesColgroup
+// in DataTable.jsx) reserves a matching leading column so the two independently
+// mounted tables stay pixel-aligned when a dimensionsPanel column is present.
+export const CHEVRON_COLUMN_WIDTH = 44;
 // Left indent for the dimensions expand sub-row so its first field aligns with the first
 // real grid column above it: chevron column + checkbox column + the first cell's own
 // leading `cellPaddingX`.
@@ -301,6 +304,7 @@ function renderLineCell({
           selectorContext={selectorContext}
           isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
           onCommit={(val, extras) => onCommit(row, col, val, extras)}
+          ui={ui}
           data-testid="EditCell__3b7ec2" />
       ) : (
         <ReadCell
@@ -422,6 +426,18 @@ function ReadCell({ row, col, locale, t, ui }) {
   if (col.type === 'date') {
     return renderDateCell(row[col.key], locale);
   }
+  // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
+  // display text; resolve through ui() like EditCell already does, or the
+  // read-only cell (what the user sees before ever clicking to edit it)
+  // falls through to the raw backend identifier below, untranslated.
+  if (col.type === 'enum' || col.type === 'select' || col.type === 'status') {
+    const raw = row[col.key];
+    const key = col.enumLabels?.[raw];
+    if (key != null) {
+      const label = ui?.(key) ?? key;
+      return <span className="block truncate" title={label || undefined}>{label}</span>;
+    }
+  }
   const display = resolveIdentifier(row, col.key);
   if (typeof display === 'string') {
     return <span className="block truncate" title={display || undefined}>{display}</span>;
@@ -485,7 +501,7 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
 /**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
-function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid }) {
+function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui }) {
   const inputRef = useRef(null);
   useEffect(() => {
     // Only steal focus on initial mount when nothing else is focused. Cells re-mount
@@ -549,7 +565,10 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         <SelectContent data-testid="SelectContent__3b7ec2">
           {!col.required && <SelectItem value="__empty__" data-testid="SelectItem__3b7ec2">&nbsp;</SelectItem>}
           {options.map(([v, label]) => (
-            <SelectItem key={v} value={v} data-testid="SelectItem__3b7ec2">{label}</SelectItem>
+            // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
+            // display text; resolve through ui() like DistinctEnumPicker/ListFilterBar do,
+            // or this shows the raw internal key instead of a translated label.
+            (<SelectItem key={v} value={v} data-testid="SelectItem__3b7ec2">{ui(label) ?? label}</SelectItem>)
           ))}
         </SelectContent>
       </Select>
@@ -679,6 +698,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       const editingRowEl = panelRef.current?.querySelector(`[data-testid="line-row-${editingRowId}"]`);
       if (!editingRowEl) return;
       if (editingRowEl.contains(e.target)) return;
+      // Radix primitives with disableOutsidePointerEvents (e.g. <Select>) set
+      // document.body.style.pointerEvents = 'none' while open, so a click on
+      // an underlying field never reaches it — the event target resolves to
+      // <html>, matching none of the selectors below. Treat any click while
+      // such a layer is active as belonging to it, not to "outside the row".
+      if (document.body.style.pointerEvents === 'none') return;
       const portalSelectors = [
         '[data-radix-popper-content-wrapper]',
         '[role="dialog"]',
