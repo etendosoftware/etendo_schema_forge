@@ -552,3 +552,42 @@ the 2026-08-10 run measured is closed by a call site, not by a parser change.
 | 5 | `neo_update` on a `sales-order` header with `orderDate: "09-08-2026"` | stored `2026-08-09` — **and** `accountingDate` unchanged unless a hook mirrored it, in which case also `2026-08-09`. This is C11 re-run; it is the one probe that decides IMP-24's status |
 | 6 | `neo_update` with `orderDate: "06/08/2026"` | the value is refused or errors loudly; nothing is stored in the first century. Confirms the `WARN`-and-pass-through boundary is where §6.1 says it is |
 | 7 | Server log during 5–6 | `[MCP] Normalized date 'orderDate': '09-08-2026' -> '2026-08-09'` on 5; a single `Unrecognized date format` `WARN` on 6 |
+
+### 9.1 Verified — 2026-08-10, after the user's compile + redeploy
+
+Probed on `etendo-go-local` against a record this investigation created and then deleted (a
+`sales-order` header tagged `MCP-BENCHMARK 2026-08-10 date-fix`, `1000028` /
+`E4018D6F88964E9993F43CC4C635B76E`). No pre-existing record was written to. Deleted afterwards via
+`neo_delete`; the marker sweep across `c_order` and `c_orderline` returns 0 rows, and the id is gone.
+
+| # | Result | Measured |
+|---|---|---|
+| 3 | ✅ | `neo_create` with **no** dates sent → `orderDate` and `accountingDate` both `2026-08-10`; in the database `dateordered`, `dateacct` and `datepromised` are all real 2026 dates, none first-century |
+| 5 | ✅ | `neo_update {"orderDate": "09-08-2026"}` → response `2026-08-09`, **and** `accountingDate` mirrored as `2026-08-09`. Database agrees: `dateordered = dateacct = 2026-08-09`. This is C11 re-run: it previously returned `status: 0` with `0015-02-16` on both fields. **The corruption vector is closed** |
+| 6 | ✅ (on the safety question) | `neo_update {"orderDate": "06/08/2026"}` → refused, nothing stored. The value never reaches the first century |
+| 7 | ✅ | Exactly the two expected lines, and nothing else: one `INFO … Normalized date 'orderDate': '09-08-2026' -> '2026-08-09'` on 5, one `WARN … Unrecognized date format for 'orderDate': '06/08/2026' passed through unchanged` on 6 |
+
+Check 5 also settles the ordering argument in §9's *What changed* table by observation rather than by
+reading: `accountingDate` is written by the `NeoHandler` pre-hook, and it carries the canonical value.
+Coercing *before* the hook is what makes that true — the reverse order would have mirrored
+`"09-08-2026"` and reintroduced the bug on the sibling field alone.
+
+**Two findings the probes produced that are not IMP-16's:**
+
+1. **The refusal in check 6 is a raw DAL envelope, not an IMP-5 one.** What came back was
+   `Validation error: {"status":-4,"errors":{"orderDate":"java.text.ParseException: Unparseable date:
+   \"06/08/2026\"","accountingDate":"..."}}` — a leaked `status: -4` with a Java exception class name in
+   the message. It is loud, so it is safe; it is not *usable*, so it is not done. This is now concrete
+   input for IMP-24's remaining half (target shape: Holded's HTTP 400 naming value + expected format +
+   an example) and an IMP-5 observation in its own right — the MCP update path leaks the raw envelope
+   IMP-5 was supposed to have covered.
+2. **`scheduledDeliveryDate` is written but not projected.** The create log shows
+   `Normalized date 'scheduledDeliveryDate': '10-08-2026' -> '2026-08-10'`, and `datepromised` in the
+   database is `2026-08-10` — so the field exists in the `sales-order` spec and the write path handles
+   it correctly. But it is absent from both `neo_list` and `neo_get` responses. That is a read-side
+   projection question, not a date question; it is *not* the silent-unknown-field drop of IMP-18 and
+   should not be filed under it without checking the spec's field list first.
+
+Checks 1, 2 and 4 of §7 (the `neo_defaults` diff over ~8 windows, the React-form round trip, and their
+log) remain unrun. They cover the **read/emit** half, which the 2026-08-10 run had already credited
+behaviourally; the write half is what this section closes.
