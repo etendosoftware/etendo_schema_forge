@@ -158,9 +158,20 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
   }, [loading, error, header, info]);
 
   const baseline = useMemo(() => buildFormFromData(header, info), [header, info]);
+  // `form` doesn't catch up with `baseline` until the effect above fires — one
+  // render AFTER `loading` flips to false — so anything that reads `form`
+  // directly to DISPLAY a value (an input's `value`, BusinessTypeCards'
+  // `selected` prop, …) sees a transient empty/stale snapshot during that gap,
+  // not just `isDirty`. `displayForm` is what every render read should use;
+  // `form` itself stays the mutable draft `updateField`/save/discard operate
+  // on. Falls back to `baseline` (not `emptyForm`) while !formReady so the
+  // very first painted frame already shows real data instead of a flash of
+  // empty fields — and `isDirty` becomes trivially false in that window since
+  // displayForm === baseline by construction, no separate guard needed.
+  const displayForm = formReady ? form : baseline;
   const isDirty = useMemo(
-    () => formReady && JSON.stringify(form) !== JSON.stringify(baseline),
-    [formReady, form, baseline],
+    () => JSON.stringify(displayForm) !== JSON.stringify(baseline),
+    [displayForm, baseline],
   );
 
   const updateField = (field, value) => {
@@ -251,7 +262,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
     );
   }
 
-  const countryFlag = getCountryFlag(form.countryLabel);
+  const countryFlag = getCountryFlag(displayForm.countryLabel);
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden" data-testid="OrganizationPage__root">
@@ -288,8 +299,8 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
           testId="OrganizationPage__section-identity"
           data-testid="SectionRow__a5f503">
           <OrgLogoField
-            imageId={form.yourCompanyDocumentImage}
-            orgName={form.name}
+            imageId={displayForm.yourCompanyDocumentImage}
+            orgName={displayForm.name}
             token={token}
             apiBaseUrl={apiBaseUrl}
             onChange={(id) => updateField('yourCompanyDocumentImage', id)}
@@ -312,7 +323,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               </Label>
               <Input
                 id="org-name"
-                value={form.name}
+                value={displayForm.name}
                 onChange={e => updateField('name', e.target.value)}
                 aria-invalid={Boolean(fieldErrors.name)}
                 className={'bg-card hover:bg-muted focus-visible:bg-card' + (fieldErrors.name ? ' border-destructive' : '')}
@@ -326,7 +337,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
           <div className="flex flex-col gap-2">
             <Label className="text-sm text-foreground font-medium" data-testid="Label__org-business-type">{ui('orgBusinessTypeLabel')}</Label>
             <BusinessTypeCards
-              value={form.etgoBusinessType}
+              value={displayForm.etgoBusinessType}
               onChange={(v) => updateField('etgoBusinessType', v)}
               data-testid="BusinessTypeCards__a5f503" />
           </div>
@@ -345,7 +356,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               </Label>
               <Input
                 id="org-nif"
-                value={form.taxID}
+                value={displayForm.taxID}
                 onChange={e => updateField('taxID', e.target.value)}
                 aria-invalid={Boolean(fieldErrors.taxID)}
                 className={'bg-card hover:bg-muted focus-visible:bg-card' + (fieldErrors.taxID ? ' border-destructive' : '')}
@@ -365,7 +376,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               </Label>
               <Input
                 id="org-legal-name"
-                value={form.socialName}
+                value={displayForm.socialName}
                 onChange={e => updateField('socialName', e.target.value)}
                 aria-invalid={Boolean(fieldErrors.socialName)}
                 className={'bg-card hover:bg-muted focus-visible:bg-card' + (fieldErrors.socialName ? ' border-destructive' : '')}
@@ -382,8 +393,8 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             <div className="flex flex-col gap-1.5">
               <LocationModalField
                 field={{ id: 'org-fiscal-address', key: 'locationAddress' }}
-                value={form.locationAddress}
-                displayValue={form.locationAddressLabel}
+                value={displayForm.locationAddress}
+                displayValue={displayForm.locationAddressLabel}
                 onChange={(id, label) => setForm(f => ({ ...f, locationAddress: id, locationAddressLabel: label }))}
                 // Deliberately the WAREHOUSE spec's base, not organization's own. NEO Headless
                 // has no "location" entity (tab-less C_Location CRUD + country/region
@@ -421,7 +432,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
                 className="flex h-9 items-center gap-1.5 rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground cursor-not-allowed"
                 data-testid="OrganizationPage__country">
                 {countryFlag && <span aria-hidden="true">{countryFlag}</span>}
-                <span className="truncate">{form.countryLabel || '—'}</span>
+                <span className="truncate">{displayForm.countryLabel || '—'}</span>
               </div>
             </div>
           </div>
@@ -435,7 +446,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               <div
                 className="flex h-9 items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground cursor-not-allowed"
                 data-testid="OrganizationPage__currency">
-                <span className="truncate">{form.currencyLabel || '—'}</span>
+                <span className="truncate">{displayForm.currencyLabel || '—'}</span>
               </div>
             </div>
           </div>
@@ -458,7 +469,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               <Input
                 id="org-email"
                 type="email"
-                value={form.email}
+                value={displayForm.email}
                 onChange={e => updateField('email', e.target.value)}
                 className="bg-card hover:bg-muted focus-visible:bg-card"
                 data-testid="OrganizationPage__email" />
@@ -467,7 +478,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               <Label htmlFor="org-phone" className="text-sm text-foreground font-medium" data-testid="Label__org-phone">{ui('orgPhoneLabel')}</Label>
               <Input
                 id="org-phone"
-                value={form.phone}
+                value={displayForm.phone}
                 onChange={e => updateField('phone', e.target.value)}
                 className="bg-card hover:bg-muted focus-visible:bg-card"
                 data-testid="OrganizationPage__phone" />
@@ -489,7 +500,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
                 data-testid="PrefixedInput__a5f503">
                 <Input
                   id="org-web"
-                  value={form.web}
+                  value={displayForm.web}
                   onChange={e => updateField('web', e.target.value)}
                   className="border-0 bg-card hover:bg-muted focus-visible:bg-card rounded-none focus-visible:ring-0 focus-visible:outline-none"
                   data-testid="OrganizationPage__web" />
