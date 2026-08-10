@@ -601,8 +601,8 @@ export default function SideMenu({
                         <span className={cn(
                           'ml-2 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
                           env.plan === 'productive'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-slate-100 text-slate-600'
+                            ? 'bg-status-success text-status-success-foreground'
+                            : 'bg-muted text-muted-foreground'
                         )}>
                           {ui(environmentPlanLabelKey(env))}
                         </span>
