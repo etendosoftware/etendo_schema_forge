@@ -121,25 +121,67 @@ fixing precisely because the lenient parser **succeeds** on them.
 ## 6. Done when
 
 - [x] An unusable caller-supplied date returns a 422 naming the field, the value, the expected format and an example
-- [x] `2026-08-06T14:30:00+02:00` still goes through untouched (§2) — the case a blanket fix would have broken
+- [x] `2026-08-06T14:30:00+02:00` still goes through untouched (§2) — the case a blanket fix would have broken. **Unit tests only**; §7's probe 5 tried and missed (no editable datetime is exposed), so this one is not measured live
 - [x] A server-injected default in a bad shape is never rejected (§3)
 - [x] An ineligible domain type (time-of-day, absolute) is never judged
 - [x] The REST write path is byte-identical to before (§5)
 - [x] Unit tests green — 147/147 across `McpToolRouterSupportTest` + `NeoDateFormatTest`, plus 27/27 on the call-site guard and the REST coercer, run standalone against the deployed jars
+- [x] **Verified live** on `etendo-go-local` after a user-run compile + deploy — see §7
 - [ ] `./gradlew test` on the full module — **owed, must be run by the user.** After IMP-16 §9.2 a standalone run does not count as load-bearing
-- [ ] **Compile + deploy, then a live write probe** — owed, and the probe needs fresh authorization (prior scope: create a record of my own and delete it, never touch a pre-existing one)
+- [ ] The `neo_update` call site probed live (§7, probe 6 — blocked, not run)
 - [ ] Corpus row in `etendo-go-docs` mentioning the 422 (separate repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
 
-## 7. One thing to be honest about
+## 7. Live verification (2026-08-10, after a user-run compile + deploy)
+
+Every probe is a `neo_create` with a **deliberately incomplete** payload. The date 422 is emitted
+before the `missingFields` check, so in *any* branch — fix working, fix broken, or the DAL rejecting —
+nothing persists. No record was created, and none was touched.
+
+| # | Probe | Result |
+|---|---|---|
+| 1 | `orderDate:"06/08/2026"` | **422** `invalidDates:[{orderDate, received:"06/08/2026", yyyy-MM-dd, 2026-08-10}]`. The `status:-4` + `java.text.ParseException` is gone |
+| 2 | `orderDate:"2026-02-30"` | **422**, `received:"2026-02-30"` — the ISO-shaped impossible date, not resolved to the 28th |
+| 3 | `orderDate:"2026-13-40"` + `scheduledDeliveryDate:"banana"` | **422** listing **both**, in order |
+| 4 | `orderDate:"2026-08-11"` + `scheduledDeliveryDate:"11-08-2026"` | **No date rejection** — falls through to `missingFields`. `11-08-2026` is *repaired*, not refused |
+| 5 | `datePrinted:"2026-08-11T14:30:00+02:00"` | Not rejected. But see below — this probe did **not** exercise the classifier |
+| 6 | `neo_update` with a bad date and a non-existent id | **Not run** — blocked by the permission classifier |
+
+**Probe 4 is the one that shows the design is a split, not a rejection.** A `dd-MM-yyyy` value is
+still repaired by IMP-16's coercer; only the irreparable is rejected. A change that rejected
+everything `toCanonical` turns down would have failed here, and this is the shape of call that fails
+most often in practice.
+
+**Probe 5 did not test what it was meant to, and the log says why.** `datePrinted` turned out to be
+date-only, so `toCanonical` *succeeded* (`'2026-08-11T14:30:00+02:00' -> '2026-08-11'`) and
+`isOffsetDateTime` was never reached. There is no editable datetime property exposed on this spec —
+`preparationDate` and `creationDate` came back in `unknownFields` (IMP-18, used here as the probe for
+its own question). **So the §2 classifier is covered by unit tests only, not measured live.** It is
+the single most important thing left to verify, since it is the one guard against this change
+breaking a working call.
+
+**What the log did establish, and it is the §3 gate's premise measured rather than argued:** every
+create logged `Normalized date 'accountingDate': '10-08-2026' -> '2026-08-10'` and the same for
+`scheduledDeliveryDate` — **server-injected defaults, in `dd-MM-yyyy`, on every single call.** That is
+the population a blanket rejection would have blamed the agent for. Also across the window: **0**
+`ParseException`, and **0** `Unrecognized date format` WARN — no value reached the pass-through branch,
+because the bad ones were rejected before it.
+
+## 8. One thing to be honest about
 
 IMP-16 §6.1 gated this phase on *"once the logs show the WARN never fires on real traffic"*. **That
 gate is not satisfied.** `etendo-go-local` restarted at `2026-08-10T17:17:14Z` (the IMP-18 deploy),
 the available log window is 404 lines, and it contains **0** `Unrecognized date format` and **0**
 `Normalized date` — i.e. no date write traffic at all since the restart.
 
-The evidence is therefore **empty, not clean**. Shipping anyway is defensible for a different reason
-than the gate assumed: the two-gate design in §2–§3 means the 422 can only fire on a value that (a)
-the caller sent and (b) is not the offset family — so the population the gate was meant to protect,
-lenient-but-working calls, is exactly the population that is now excluded by construction rather than
-by observation. That is a stronger argument than an empty log, but it is an argument, not a
-measurement, and it should be re-checked against real traffic once there is any.
+The evidence was therefore **empty, not clean**. It shipped on a different argument than the gate
+assumed: the two-gate design in §2–§3 means the 422 can only fire on a value that (a) the caller sent
+and (b) is not the offset family — so the population the gate was meant to protect,
+lenient-but-working calls, is excluded by construction rather than by observation. That is a stronger
+argument than an empty log, but it is an argument, not a measurement.
+
+**§7 then produced the first real data, and it points the right way without closing the gate.** Across
+the post-deploy window there are now `Normalized date` INFO lines on every create and **0**
+`Unrecognized date format` WARN — so no value reached the pass-through branch at all, which is what
+the gate asked to see. Two caveats keep it open: the traffic is my own probe traffic rather than
+production, and it is exactly the traffic a fix's author would generate, so it cannot speak for shapes
+I did not think to send. The gate should still be re-read against real traffic.
