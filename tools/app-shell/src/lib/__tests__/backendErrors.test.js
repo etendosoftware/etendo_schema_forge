@@ -383,3 +383,40 @@ describe('translateBackendError — "shipment already invoiced" parameterized ma
     );
   });
 });
+
+// ── ETP-4831 case 2: "No hay líneas a facturar en este pedido" always in Spanish ──
+//
+// CreateDraftInvoiceHandler#createFromOrder (com.etendoerp.go) throws
+// `new OBException("No hay líneas a facturar en este pedido")` — a hardcoded
+// Spanish literal with NO AD_Message/i18n involvement at all, so it always
+// renders in Spanish even in an en_US session (the inverse symptom of case 1,
+// which always rendered in English regardless of locale).
+//
+// Unlike the parameterized messages above, this string carries no dynamic/
+// interpolated value — it's a fixed literal — so it belongs in the plain
+// exact-match BACKEND_ERROR_MAP (same style as 'A tariff marked as default
+// cannot be deactivated.' / the costing-engine entry), not a parameterized
+// matcher. Suggested key: `backendError.noLinesToInvoice`.
+//
+// EXPECTED (not yet implemented): a `BACKEND_ERROR_MAP` entry mapping the raw
+// Spanish literal to `backendError.noLinesToInvoice`. Until that lands, these
+// tests MUST fail: translateBackendError has no matching key for this message,
+// so it falls through to returning `msg` unchanged (still Spanish, even for an
+// en_US translator).
+describe('translateBackendError — "no lines to invoice" exact match (ETP-4831 case 2)', () => {
+  const RAW = 'No hay líneas a facturar en este pedido';
+
+  it('translates the raw Spanish literal to en_US', () => {
+    const t = (k) => (k === 'backendError.noLinesToInvoice'
+      ? 'There are no lines to invoice for this order.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'There are no lines to invoice for this order.');
+  });
+
+  it('translates the raw Spanish literal to es_ES (symmetry with other exact-match entries)', () => {
+    const t = (k) => (k === 'backendError.noLinesToInvoice'
+      ? 'No hay líneas a facturar en este pedido.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'No hay líneas a facturar en este pedido.');
+  });
+});
