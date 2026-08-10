@@ -197,9 +197,50 @@ export function normalizePatchFieldValues(patchEdits, fieldValues) {
 
 // ─── Field update / callout handlers ─────────────────────────────────────────
 
+/**
+ * ETP-4772 race-condition guard: returns true when a callout response for
+ * `key` is stale — i.e. the field's generation (bumped on every genuine
+ * write, whether a user edit or a previously-applied callout) has moved on
+ * since THIS specific callout request was dispatched. This means a newer
+ * edit/dispatch for `key` happened in the meantime and this older response
+ * must not clobber it.
+ *
+ * Applies uniformly regardless of whether `key` is the trigger field or a
+ * collateral update — staleness is about the field's own timeline, not
+ * about which field caused the callout.
+ *
+ * `dispatchSnapshot`/`fieldGenerationRef` are optional: callers that don't
+ * wire generation tracking (e.g. existing unit tests constructing ctx by
+ * hand) get a no-op here, preserving prior behavior.
+ */
+export function isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef) {
+  if (!dispatchSnapshot || !fieldGenerationRef) return false;
+  const dispatchGen = dispatchSnapshot[key] ?? 0;
+  const currentGen = fieldGenerationRef.current?.[key] ?? 0;
+  return dispatchGen !== currentGen;
+}
+
+/**
+ * Marks `key` as having just received a genuine new value (user edit or
+ * applied callout write), advancing its generation counter so any
+ * still-in-flight OLDER callout response targeting this field can be
+ * recognized as stale when it eventually arrives.
+ */
+export function bumpFieldGeneration(key, fieldGenerationRef) {
+  if (!fieldGenerationRef) return;
+  fieldGenerationRef.current[key] = (fieldGenerationRef.current[key] || 0) + 1;
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
-  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs } = ctx;
+  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
+    // Discard responses that arrived after a newer edit/dispatch already
+    // moved this field on — see isStaleCalloutResponse. Checked BEFORE the
+    // trigger-field-always-wins rule below: staleness is a property of the
+    // response itself, not of who triggered it.
+    if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) {
+      continue;
+    }
     // Skip empty callout values if the field already has a non-empty value
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];
@@ -209,18 +250,21 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     }
     // Protect user-touched fields from being overwritten by collateral updates
     // coming from a callout triggered by a different field. The trigger field
-    // itself always wins (it was just changed by the user).
+    // itself always wins (it was just changed by the user) — as long as the
+    // response is not stale per the check above.
     if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue) {
       continue;
     }
     appliedFields.set(key, entry.value);
     hook.handleChange(key, entry.value);
     handleEntryIdentifierChange(entry, hook, key, api, catalogs);
+    bumpFieldGeneration(key, fieldGenerationRef);
   }
 }
 
 export function applyOneComboEntry(key, combo, ctx) {
-  const { data, userTouchedRef, appliedFields, hook } = ctx;
+  const { data, userTouchedRef, appliedFields, hook, dispatchSnapshot, fieldGenerationRef } = ctx;
+  if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) return;
   let selectedVal = combo.selected;
   let selectedLabel = combo._identifier;
   // Auto-select first entry if no explicit selection (e.g., BP address combo)
@@ -238,6 +282,7 @@ export function applyOneComboEntry(key, combo, ctx) {
   if (selectedLabel) {
     hook.handleChange(key + '$_identifier', selectedLabel);
   }
+  bumpFieldGeneration(key, fieldGenerationRef);
 }
 
 export function applyCalloutComboUpdates(combos, ctx) {

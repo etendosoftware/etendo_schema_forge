@@ -32,7 +32,7 @@ import LinesBulkActionBar from './LinesBulkActionBar.jsx';
 import { evalTabReadOnly } from './evalTabReadOnly.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
-  normalizeCalloutResponse, applyQtyZeroGuard, roundAmounts,
+  normalizeCalloutResponse, applyQtyZeroGuard, resetDescriptionOnProductChange, roundAmounts,
   resolveSnapshotIdentifiers,
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
@@ -143,6 +143,7 @@ export function hasRecordForRoute(isNew, hook, recordId) {
 }
 
 export function isLoadingRecordForRoute(hook, isNew, recordId) {
+  if (isNew && hook.defaultsLoading) return true;
   return hook.loading && !hasRecordForRoute(isNew, hook, recordId);
 }
 
@@ -413,7 +414,7 @@ export function DetailView({
   labelOverrides,
   enableSecondaryRowDelete = false,
   sidebarClassName = 'w-96 shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5',
-  linesLayout = 'classic',
+  linesLayout = 'inlineEditable',
   autoSaveOnBlur = false,
   toolbarPaddingX = 'px-6',
   tabsBarPaddingX = 'px-6',
@@ -1094,11 +1095,23 @@ export function DetailView({
   // Track fields the user has manually changed in this record session — protected
   // from being overwritten by callouts triggered from other fields.
   const userTouchedRef = useRef(new Set());
+  // ETP-4772: per-field generation counter, bumped on every genuine write to a
+  // field (user edit or applied callout value). Each callout dispatch captures
+  // a snapshot of this map; when its response arrives, applyCalloutFieldUpdates/
+  // applyOneComboEntry compare that snapshot against the field's CURRENT
+  // generation to detect a response that is now stale (a newer edit/dispatch for
+  // that same field happened in between) and discard it instead of clobbering
+  // the newer value. Fixes: opening a new Purchase/Sales Order auto-fires a
+  // callout for the default warehouse; if the user changes warehouse before
+  // that default callout's response comes back, the stale response used to win
+  // unconditionally (the "trigger field always wins" rule didn't check recency).
+  const fieldGenerationRef = useRef({});
   // Reset session-scoped refs when the record context changes (new record / different existing record).
   useEffect(() => {
     userTouchedRef.current = new Set();
     calloutAppliedRef.current = new Map();
     activeCurrencyConversionRef.current = null;
+    fieldGenerationRef.current = {};
   }, [recordId]);
 
   // Mirrors hook.editing but updated SYNCHRONOUSLY on every handleChangeWithCallout call,
@@ -1396,7 +1409,13 @@ export function DetailView({
     triggers.forEach(({ field }, i) => {
       setTimeout(() => {
         const value = editingSnapshot[field];
-        if (value) executeCallout(field, value, editingSnapshot);
+        if (value) {
+          // ETP-4772: bump + snapshot BEFORE dispatch, so a manual edit that
+          // happens while this default callout is in flight (see fireCallout
+          // below) is detected as "newer" once this response comes back.
+          fieldGenerationRef.current[field] = (fieldGenerationRef.current[field] || 0) + 1;
+          executeCallout(field, value, editingSnapshot, { ...fieldGenerationRef.current });
+        }
       }, i * STAGGER_MS);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1483,9 +1502,13 @@ export function DetailView({
   // Apply callout results to the form when they arrive
   useEffect(() => {
     if (!calloutResult) return;
-    const { updates, combos, triggerField } = calloutResult;
+    const { updates, combos, triggerField, meta } = calloutResult;
     const appliedFields = new Map();
-    const ctx = { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs };
+    // ETP-4772: `meta` carries the per-field generation snapshot captured at
+    // dispatch time (see fireCallout / the default-callouts effect above) —
+    // forwarded as `dispatchSnapshot` so applyCalloutFieldUpdates/
+    // applyOneComboEntry can discard stale responses.
+    const ctx = { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot: meta, fieldGenerationRef };
 
     if (updates) {
       applyCalloutFieldUpdates(updates, ctx);
@@ -1571,11 +1594,19 @@ export function DetailView({
       }
     }
 
+    // ETP-4772: bump this field's generation right before dispatching — this is
+    // a genuine new value for it. The snapshot taken now travels with the
+    // request so the response effect can tell, on arrival, whether an even
+    // newer edit/dispatch for this field happened meanwhile (stale → discard)
+    // instead of unconditionally letting the trigger field win.
+    fieldGenerationRef.current[field] = (fieldGenerationRef.current[field] || 0) + 1;
+    const dispatchSnapshot = { ...fieldGenerationRef.current };
+
     // Trigger callout — the backend returns empty if no callout is registered.
     // Use the synchronously-updated snapshot (pendingEditingRef), not hook.editing: the
     // latter is a stale closure captured before this render's hook.handleChange commits,
     // so it always lags one change behind for the field that just triggered the callout.
-    executeCallout(field, value, pendingEditingRef.current);
+    executeCallout(field, value, pendingEditingRef.current, dispatchSnapshot);
   }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
@@ -1664,6 +1695,7 @@ export function DetailView({
       // a valid netUnitPrice instead of null/0 at save time.
       calculateNetUnitPrice(result, taxRateCacheRef, hook);
       applyQtyZeroGuard(result, rowValues);
+      resetDescriptionOnProductChange(result, field);
       // Fallback: when callout returns no lineNetAmount (e.g. SL_Invoice_Amt throws
       // PriceAdjustment exception for products without standard cost), compute qty × price.
       // Uses lineConfig fields so orders, invoices, and future window types all benefit.
@@ -1728,6 +1760,10 @@ export function DetailView({
   const handleNotesSave = useCallback(async (value) => {
     const currentId = data?.id || recordId;
     if (!currentId || isNew || !notesField) return;
+    if (value !== undefined && value.length > 255) {
+      toast.error(ui('notesMaxLengthExceeded'));
+      return;
+    }
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
