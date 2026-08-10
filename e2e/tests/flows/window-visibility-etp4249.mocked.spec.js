@@ -22,7 +22,7 @@ import { login } from '../helpers/auth.js';
  * generic /sws/** catch-all installed by login().
  */
 async function installListMock(page, spec) {
-  await page.route(`**/sws/neo/${spec}/header**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/header{/**,}**`, async (route) => {
     const req = route.request();
     if (req.method() === 'GET') {
       await route.fulfill({

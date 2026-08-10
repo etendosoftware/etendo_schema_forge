@@ -101,7 +101,7 @@ async function installMocks(page, spec) {
   }
 
   // 2. The aeatsiiCauseExemption FK selector endpoint (header form field).
-  await page.route(`**/sws/neo/${spec}/header/selectors/aeatsiiCauseExemption**`, (route) => {
+  await page.route(`**/sws/neo/${spec}/header/selectors/aeatsiiCauseExemption{/**,}**`, (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({
       status: 200,
@@ -112,7 +112,7 @@ async function installMocks(page, spec) {
 
   // 3. Header list + detail GET. The header GET intentionally omits the transient
   //    exemptionCauseWarning signal (it is not a persisted entity field).
-  await page.route(`**/sws/neo/${spec}/header**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/header{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
     // Let the selector sub-route above win (it also matches /header/...).
@@ -322,7 +322,7 @@ test.describe('SIF exemption cause — line-add warning sequence (sales-invoice)
     // 'e2e-record-id', the app navigates to that non-existent record, and the detail
     // blanks out (which is what silently closed the add-row between saves). The header
     // response never carries the transient exemptionCauseWarning signal.
-    await page.route(`**/sws/neo/${spec}/header/inv-editable**`, async (route) => {
+    await page.route(`**/sws/neo/${spec}/header/inv-editable{/**,}**`, async (route) => {
       const req = route.request();
       if (req.url().includes('/selectors/')) return route.fallback();
       return route.fulfill({
@@ -346,7 +346,7 @@ test.describe('SIF exemption cause — line-add warning sequence (sales-invoice)
     });
 
     // Lines list GET (empty — start from zero lines) and lines detail defaults.
-    await page.route(`**/sws/neo/${spec}/lines**`, async (route) => {
+    await page.route(`**/sws/neo/${spec}/lines{/**,}**`, async (route) => {
       const req = route.request();
       const url = req.url();
       const method = req.method();

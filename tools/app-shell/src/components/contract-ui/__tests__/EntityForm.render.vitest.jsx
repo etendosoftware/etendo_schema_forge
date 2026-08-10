@@ -248,6 +248,57 @@ describe('EntityForm — extended render coverage', () => {
     expect(screen.getByTestId('field-explosive')).not.toBeDisabled();
   });
 
+  // --- inputPrefix (ETP-4749) ---
+  //
+  // Fixed, non-editable chip rendered before the input (e.g. "https://" for a website
+  // field whose stored value is only the part after the scheme) — same visual pattern
+  // hand-built in OrganizationPage.jsx, now generic via decisions.json's
+  // `inputPrefix` field prop → generate-frontend.js → the field descriptor.
+
+  it('renders the prefix chip before the input when field.inputPrefix is set', () => {
+    const fields = [
+      { key: 'etgoWeb', label: 'Web', type: 'text', column: 'EM_Etgo_Web', inputPrefix: 'https://' },
+    ];
+    render(<EntityForm fields={fields} data={{ etgoWeb: 'example.com' }} onChange={vi.fn()} />);
+
+    expect(screen.getByTestId('field-etgoWeb-prefix-wrapper')).toBeInTheDocument();
+    expect(screen.getByTestId('field-etgoWeb-prefix-wrapper')).toHaveTextContent('https://');
+    expect(screen.getByTestId('field-etgoWeb')).toHaveValue('example.com');
+  });
+
+  it('does not render the prefix wrapper for a field with no inputPrefix (default, unaffected)', () => {
+    const fields = [
+      { key: 'name', label: 'Name', type: 'text', column: 'Name' },
+    ];
+    render(<EntityForm fields={fields} data={{ name: 'Acme' }} onChange={vi.fn()} />);
+
+    expect(screen.queryByTestId('field-name-prefix-wrapper')).not.toBeInTheDocument();
+    expect(screen.getByTestId('field-name')).toHaveValue('Acme');
+  });
+
+  it('commits only the raw suffix on change — the prefix text itself is never part of the value', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const fields = [
+      { key: 'etgoWeb', label: 'Web', type: 'text', column: 'EM_Etgo_Web', inputPrefix: 'https://' },
+    ];
+    render(<EntityForm fields={fields} data={{ etgoWeb: '' }} onChange={onChange} />);
+
+    await user.type(screen.getByTestId('field-etgoWeb'), 'a');
+
+    expect(onChange).toHaveBeenCalledWith('etgoWeb', 'a', 'EM_Etgo_Web');
+  });
+
+  it('keeps the prefix chip visible and still shows the value when the field is read-only', () => {
+    const fields = [
+      { key: 'etgoWeb', label: 'Web', type: 'text', column: 'EM_Etgo_Web', inputPrefix: 'https://', readOnly: true },
+    ];
+    render(<EntityForm fields={fields} data={{ etgoWeb: 'example.com' }} onChange={vi.fn()} />);
+
+    expect(screen.getByTestId('field-etgoWeb-prefix-wrapper')).toHaveTextContent('https://');
+    expect(screen.getByTestId('field-etgoWeb')).toBeDisabled();
+  });
+
   // --- displayLogic (function-based) ---
 
   it('shows a field when displayLogic function returns true', () => {

@@ -146,6 +146,51 @@ Field editability in the top section:
 - The consent-expiry date in the re-auth banner is formatted with the active locale (dd/MM/yyyy in
   Spanish).
 
+#### Reconciliation tolerances — two spellings, one field pair (ETP-4764 follow-up)
+
+**Tolerancia de fecha (días)** / **Tolerancia de importe (%)** map to the custom AD columns
+`EM_ETGO_Date_Tolerance` / `EM_ETGO_Amount_Tolerance` on `FIN_Financial_Account`. Etendo drops the
+`EM_` module prefix when deriving the DAL property, so the canonical names are **`eTGODateTolerance`
+/ `eTGOAmountTolerance`** (see the generated `FIN_FinancialAccount` entity) — *not* `eMETGO…`.
+Both are declared `editable` in `decisions.json` and reach `ETGO_SF_FIELD` with those names as their
+`java_qualifier`.
+
+The modal has to tolerate **two different key spellings** for the same pair, because the record it
+edits arrives from two different endpoints:
+
+| Opened from | Record source | Key names |
+|---|---|---|
+| Cuentas **list** (row kebab / pencil) | generic W spec `/sws/neo/financial-account/account` | `eTGODateTolerance` / `eTGOAmountTolerance` |
+| Account **detail** ("Editar" button) | legacy R spec `/sws/neo/financial-accounts-page` (`FinancialAccountsPageHandler` hand-builds the JSON) | `dateTolerance` / `amountTolerance` |
+
+`readTolerances()` in `EditAccountModal.jsx` reads the contract key first and falls back to the flat
+one. Two distinct bugs came out of ignoring this split, and both presented identically as *"no se
+persiste"*:
+
+1. **Write side** — `useAccountMutations.toDalBody()` sent `eMETGODateTolerance`/`eMETGOAmountTolerance`
+   (prefix folded in rather than dropped). The generic W spec ignores unrecognized body keys instead
+   of returning 400, so the `PUT` answered `200 OK` while silently discarding both values.
+2. **Read side** — the modal seeded its state from the flat names only, so a list-opened modal always
+   fell back to the 3/0 defaults instead of the stored values. Worse than a display bug: the dirty
+   check compares against that same wrong snapshot, so re-entering the actually-stored value counted
+   as "not dirty" and was never sent at all, while any other value did save but still redisplayed as
+   3/0 on reopen.
+
+Both inputs hold the **raw typed string**, not a number, so the box can be emptied mid-edit.
+Holding `Number(e.target.value)` made them impossible to clear: `Number('')` is `0`, so deleting the
+last character immediately re-rendered a `0` that the caret then sat behind, and every entry came
+out as `"0123"`. `toleranceValue()` recovers the number at exactly two points — the dirty check and
+the save payload (`dateToleranceValue` / `amountToleranceValue`, never the raw strings) — treating
+an empty box, and a half-typed `-`/`.`, as `0`. So an empty field still persists as 0 without that
+0 ever being forced back into the UI while typing. The dirty check compares numerically, so
+re-typing the stored value in another shape (`"03"`, `"3.0"`) correctly reads as unchanged.
+
+Regression cover: `useAccountMutations.vitest.jsx` pins the DAL property names on the write side;
+`EditAccountModal.vitest.jsx` pins seeding from either spelling, the 3/0 fallback, that a value
+edited away from a W-spec-seeded one still reaches `updateAccount`, that both boxes can be emptied,
+that typing over a cleared box does not append behind a forced `0`, and that an emptied box saves
+as `0`.
+
 ### Accounting configuration (Tab Contabilidad, ETP-4530)
 
 Backed by the `accountingConfiguration` entity of the `financial-account` spec, which maps to the
@@ -239,10 +284,72 @@ native app-shell UI; only the bank login is an external popup.
 - **Sidebar:** the "Pendientes por conciliar" card shows only "Cuentas con pendientes" (the former
   "Sugerencias listas" / "Por regla" indicators were removed).
 
+### Disconnecting: two modes (ETP-4764)
+
+Disconnecting mirrors Etendo Classic's "Permanent deletion" checkbox, as two distinct actions:
+
+| Action | `permanentDeletion` | Effect | Confirmation |
+|---|---|---|---|
+| **Desconectar** | `false` | Deactivates the connection on Salt Edge and locally. The account keeps its Salt Edge link, so it stays reconnectable and no history is lost. | `ConfirmDialog` with an explanatory body |
+| **Borrar conexión** | `true` | Deletes the connection at the provider and unlinks the account. Irreversible. | `BankConnectionDeleteConfirmModal` — the full warning cartel (consequence list + yellow warning box), carrying Classic's irreversibility text |
+
+Both are reachable from the Edit modal footer (a split button: primary "Desconectar" plus a
+chevron revealing "Borrar conexión") and from the row kebab.
+
+**Three connection states.** A soft disconnect leaves the account neither connected nor
+unconnected, so `bankConnected` alone is no longer enough. The backend also emits
+**`bankReconnectable`** — `true` when the account is not connected but still holds its Salt Edge
+link (`EM_PSD2_Salt_Edge_Account_ID` survives a soft disconnect; a permanent deletion clears it).
+It is a separate flag rather than a tri-state `bankConnected` because several SPA call sites test
+`bankConnected === true`.
+
+- connected → sync, import settings, Desconectar / Borrar conexión
+- deactivated (`bankReconnectable`) → **Reconectar** + Borrar conexión. Offering a from-scratch
+  "Conectar banco" here would create a second connection and orphan the surviving one.
+- no link → Conectar banco
+
+`disconnect` reports what actually happened (`permanent` / `reconnectable`) rather than echoing the
+request: a Salt Edge connection shared by several accounts is always unlinked, even when a soft
+disconnect was asked for, since deactivating it would break the sibling accounts. The
+`Automatic Withdrawn` restore (ETP-4406) therefore runs only on the permanent path.
+
+**Reconnect is a two-step handshake.** `reconnect` only returns the Salt Edge URL; the popup then
+redirects to the SPA callback route, which relays the connection id back to the opener. The SPA
+must follow up with **`reconnect-callback`** (`financialAccountId` + `connectionId`) to actually
+mark the connection active again and refresh the consent expiry. Classic does not need this — Salt
+Edge redirects straight into `AisConnectionCallback`, which does the same work server-side. Without
+the follow-up call the connection stays inactive and a deactivated account can never be revived.
+
 Bridge actions: `connect` (optional `financialAccountId` → provider preselect) · `accounts` ·
-`providers` · `link` · `createAndLink` · `reconnect` · `disconnect` · `sync` · `import-settings` ·
-`status`. Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
-`pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`.
+`providers` · `link` · `createAndLink` · `reconnect` · `reconnect-callback` · `disconnect`
+(optional `permanentDeletion`, default `false`) · `sync` · `import-settings` · `status` (returns
+`reconnectable`).
+Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
+`pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
+`windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
+
+### Bank logo (ETP-4764 follow-up)
+
+The connected provider's logo image is persisted rather than fetched live per row. It lives on
+`PSD2_Provider.Logo_Url` (psd2 module — `com.etendoerp.psd2.bank.integration`, a separate
+Bitbucket repo), populated from Salt Edge's `logo_url` catalog field by whichever sync path runs
+first: the scheduled `SyncBankProviders` job, Classic's `AisConnectionCallback`, or the Go
+bridge's own `resolveProvider`/`fetchAndRegisterProvider` when an account connects (so a brand-new
+provider gets its logo immediately, without waiting for the next scheduled sync). All three paths
+go through `BankIntegrationUtils.upsertProvider(code, name, maxFetchInterval, logoUrl)` — a blank
+or missing `logoUrl` leaves a previously stored logo untouched, mirroring how `maxFetchInterval`
+already behaves, so a provider lookup that doesn't carry a fresh value never blanks one out.
+
+The list and single-record read expose it as **`providerLogoUrl`** via a `LEFT JOIN` on
+`psd2_provider` (`FinancialAccountsPageHandler.ACCOUNTS_SQL`) — no live Salt Edge call, unlike the
+connect-flow bank picker (`action=providers`) and account selector (`action=accounts`), which
+already showed the logo before this but by hitting Salt Edge on every request. Blank when the
+account has no bank provider, or the provider has no logo on record yet.
+
+`AccountLogoAvatar` renders it when present, falling back to the generic per-type icon (unchanged
+default) for cash/card accounts and for any bank account without a logo — including a logo URL
+that fails to load, caught via the `<img>`'s `onError`, so a dead or 403 URL degrades to the icon
+instead of showing a broken image.
 
 ## Archive Dialog
 
@@ -930,6 +1037,7 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
   - `gridLabelKey` is excluded too → its header is translated through **`window.labelOverrides`** instead, which `resolveColumnLabel` consults at priority 3 (`translate(col.column)`), outranking the raw English `label` the virtual field carries at priority 4. Declaring `gridLabelKey` on a virtual field is silently dropped and leaves the header in English — that is how this column shipped reading "Pending" in Spanish (fixed in ETP-4658). The `financeAccountsColPending` key still exists in both locale files for the other consumers of that wording.
 
   Remove both workarounds if the whitelist ever widens.
+  - Its contract `type` is `"integer"` (it genuinely counts pending lines), but `DataTable` right-aligns header **and** cell for any column whose `type` is in its numeric set — which only ever fights the `reconcilePill` renderer, since the column never displays a raw number. `AccountsHeaderTable`'s `GRID_TYPE_OVERRIDE` map forces this one column's DataTable-facing `type` to `"string"` so it stays left-aligned like every other status cell (ETP-4764 follow-up). Presentation-only: the column stays non-sortable/non-form, so nothing about the real contract type changes.
 - Adding/removing a grid column, reordering, relabelling or changing a renderer = a `decisions.json` change, **not** a code change (a genuinely new *kind* of cell still needs a renderer added to the registry). Visibility (`editable`/`readOnly`/`system`/`discarded`) and `readOnlyLogic` also come from the contract.
 - **Column widths stay in code** (`COLUMN_CHROME` in `AccountsHeaderTable.jsx`) on purpose: `decisions.json` is a semantic contract, not a stylesheet; Tailwind arbitrary values must be static in source, so a runtime `w-[${n}px]` would never compile; and `pl-[84px]` is not a width but a mirror of `NameCell`'s 44px grip + 32px avatar + 8px padding, so it is coupled to that cell body.
 - **Two pieces of list chrome are props, not decisions**, because both are generic `ListView`/`DataTable` behaviours the retired page had and every other window may want:

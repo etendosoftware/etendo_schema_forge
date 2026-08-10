@@ -43,6 +43,13 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /specs, partnerName, movementDate, token, apiBaseUrl, ui/);
   });
 
+  // ETP-4789: optional canDownload gate, defaulting to true so the existing
+  // caller (ReturnMaterialReceiptPreview, out of scope for this ticket) keeps
+  // its current always-downloadable behavior.
+  it('accepts an optional canDownload param defaulting to true (ETP-4789)', () => {
+    assert.match(src, /canDownload = true/);
+  });
+
   it('accepts an optional onEmail param (ETP-4718 — send-email wiring)', () => {
     assert.match(src, /\bonEmail,/);
   });
@@ -67,8 +74,8 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /hasPdf=\{!!pdfBlob\}/);
   });
 
-  it('passes onDownloadPdf={handleDownload} to PreviewActionButtons', () => {
-    assert.match(src, /onDownloadPdf=\{handleDownload\}/);
+  it('passes onDownloadPdf={canDownload ? handleDownload : undefined} to PreviewActionButtons (ETP-4789)', () => {
+    assert.match(src, /onDownloadPdf=\{canDownload \? handleDownload : undefined\}/);
   });
 
   // ── tabs[0] — general tab ─────────────────────────────────────────────────

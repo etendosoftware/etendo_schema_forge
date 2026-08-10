@@ -86,3 +86,34 @@ export function useDocumentCurrency({ docCurrencyCode, orderDate, apiBaseUrl, to
 
   return { ...state, convertAmount };
 }
+
+/**
+ * Resolves the effective exchange rate and org-currency grand total for
+ * dual-currency preview panels (ETP-4717 — extracted, behavior-identical, out
+ * of OrderPreview.jsx / InvoicePreview.jsx so those components don't carry
+ * this branching in their own cognitive-complexity budget; both previously
+ * inlined the exact same three-ternary calculation).
+ *
+ * `record.eTGOCurrencyRate` is the org→doc multiplyRate (e.g. 1.20 = "1 EUR =
+ * 1.20 USD"). It's used directly as `exchangeRate` so 1.20 is displayed, not
+ * the inverse (0.8333). `orgGrandTotal` = docTotal / eTGOCurrencyRate converts
+ * doc→org.
+ *
+ * @param {object}  params
+ * @param {object}  params.record             Document record carrying `eTGOCurrencyRate` / `grandTotalAmount`.
+ * @param {boolean} params.isSameCurrency     From `useDocumentCurrency`.
+ * @param {?number} params.systemExchangeRate From `useDocumentCurrency`.
+ * @returns {{ exchangeRate: ?number, orgGrandTotal: ?number }}
+ */
+export function resolveDualCurrencyDisplay({ record, isSameCurrency, systemExchangeRate }) {
+  const etgoRate = (!isSameCurrency && record?.eTGOCurrencyRate)
+    ? parseFloat(record.eTGOCurrencyRate)
+    : null;
+  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
+    ? etgoRate
+    : systemExchangeRate;
+  const orgGrandTotal = (!isSameCurrency && exchangeRate && record?.grandTotalAmount != null)
+    ? Number(record.grandTotalAmount) / exchangeRate
+    : null;
+  return { exchangeRate, orgGrandTotal };
+}

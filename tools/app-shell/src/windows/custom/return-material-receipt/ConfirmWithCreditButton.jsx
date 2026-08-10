@@ -1,5 +1,4 @@
 import { useUI } from '@/i18n';
-import { generateReturnReceiptPdf, getReturnReceiptPdfLabels } from './useReturnReceiptPdf';
 import ConfirmWithCreditButtonBase from '../shared/ConfirmWithCreditButtonBase';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 
@@ -24,8 +23,6 @@ export default function ConfirmWithCreditButton({ data, recordId, token, apiBase
         invoiceRoute="/sales-invoice/"
         invoiceType="facturaVenta"
         invoiceCreatedTitleKey="rmrInvoiceCreatedTitle"
-        generatePdfFn={generateReturnReceiptPdf}
-        getPdfLabelsFn={getReturnReceiptPdfLabels}
         specName="return-material-receipt"
         entityName="returnMaterialReceipt"
         confirmDrLabel={ui('processReceipt')}

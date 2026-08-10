@@ -2770,6 +2770,86 @@
         }
       ]
     },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "a4caa2fe70f72073f4e3a1afe156bb3c06076d0116b575aa7cc2029c4fa01ffe",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "classname": null,
+          "column_name": "Process",
+          "mechanism": "classic_process",
+          "name": "Copy to next year",
+          "obuiapp_process_id": null,
+          "process_id": "6CCCF2729B0E42C88F22AC0AF67944E0"
+        },
+        {
+          "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Open/Close",
+          "obuiapp_process_id": null,
+          "process_id": "168"
+        },
+        {
+          "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Open/Close",
+          "obuiapp_process_id": null,
+          "process_id": "168"
+        },
+        {
+          "classname": null,
+          "column_name": "Processing",
+          "mechanism": "classic_process",
+          "name": "Open/Close All",
+          "obuiapp_process_id": null,
+          "process_id": "167"
+        },
+        {
+          "classname": null,
+          "column_name": "IsReady",
+          "mechanism": "classic_process",
+          "name": "Set as Ready",
+          "obuiapp_process_id": null,
+          "process_id": "53863D4359114ADE92133F772135AEEB"
+        },
+        {
+          "classname": "com.etendoerp.sif.general.process.AddCertificateToOrg",
+          "column_name": "EM_Etsg_Add_Certificate",
+          "mechanism": "obuiapp_process",
+          "name": "Añadir Certificado Digital a Organización",
+          "obuiapp_process_id": "77AAF82CC5344022AAD6ECBC9925E574",
+          "process_id": null
+        },
+        {
+          "classname": "OB.OpenClose.openClose",
+          "column_name": "OpenClose",
+          "mechanism": "obuiapp_process",
+          "name": "Open Close Periods",
+          "obuiapp_process_id": "A832A5DA28FB4BB391BDE883E928DFC5",
+          "process_id": null
+        },
+        {
+          "classname": "OB.OpenClose.openClose",
+          "column_name": "OpenClose",
+          "mechanism": "obuiapp_process",
+          "name": "Open Close Periods",
+          "obuiapp_process_id": "A832A5DA28FB4BB391BDE883E928DFC5",
+          "process_id": null
+        },
+        {
+          "classname": "org.openbravo.email.actionhandler.TestSmtpConnectionActionHandler",
+          "column_name": "Smtpconnectiontest",
+          "mechanism": "obuiapp_process",
+          "name": "Test SMTP Connection",
+          "obuiapp_process_id": "9AB8A39485BD4FB1B6BB38B27E707668",
+          "process_id": null
+        }
+      ]
+    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
       "checksum": "2f47e17c25eaa51b02a75cef2956f23fbec1375398c9b5abda5a454bcf461b09",
       "params": [

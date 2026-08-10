@@ -98,7 +98,7 @@ async function installInvoiceMocks(page, { headerOverride = {}, lines = [INVOICE
   const header = { ...INVOICE_HEADER_DRAFT, ...headerOverride };
 
   // Sales-invoice list endpoint (no specific ID)
-  await page.route('**/sws/neo/sales-invoice/header**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() !== 'GET') return route.continue();
@@ -121,7 +121,7 @@ async function installInvoiceMocks(page, { headerOverride = {}, lines = [INVOICE
   });
 
   // Invoice lines endpoint
-  await page.route('**/sws/neo/sales-invoice/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/lines{/**,}**', async (route) => {
     const req = route.request();
     if (req.method() !== 'GET') return route.continue();
     return route.fulfill({
@@ -132,7 +132,7 @@ async function installInvoiceMocks(page, { headerOverride = {}, lines = [INVOICE
   });
 
   // Payment plan — empty (no installments so side panel uses grandTotalAmount)
-  await page.route('**/sws/neo/sales-invoice/paymentPlan**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/paymentPlan{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     return route.fulfill({
       status: 200,
