@@ -711,6 +711,103 @@ describe('SendDocumentModal — iframe preview render path', () => {
   });
 });
 
+// ETP-4717 — subject/message must be operator-editable and, when changed
+// from their auto-derived defaults, wired into the send payload as
+// `messageEdits` (mirroring the existing `recipientEdits` opt-in pattern).
+// The label and its field are NOT linked via htmlFor/id in the current
+// markup, so tests locate the subject <input> via the label's next sibling
+// and the message <textarea> via its (unique) placeholder text.
+describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
+  function getSubjectInput() {
+    return screen.getByText('sendModalSubject').nextElementSibling;
+  }
+
+  function getMessageTextarea() {
+    return screen.getByPlaceholderText('sendModalMessagePlaceholder');
+  }
+
+  it('renders the subject input and message textarea as editable, not read-only', () => {
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+    expect(getSubjectInput()).not.toHaveAttribute('readonly');
+    expect(getMessageTextarea()).not.toHaveAttribute('readonly');
+  });
+
+  it('updates the displayed subject and message as the operator types', async () => {
+    const user = userEvent.setup();
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+
+    const subjectInput = getSubjectInput();
+    await user.clear(subjectInput);
+    await user.type(subjectInput, 'Custom subject line');
+    expect(subjectInput).toHaveValue('Custom subject line');
+
+    const messageTextarea = getMessageTextarea();
+    await user.type(messageTextarea, 'Please review this document');
+    expect(messageTextarea).toHaveValue('Please review this document');
+  });
+
+  it('includes messageEdits in the send payload when the operator edits the message', async () => {
+    const user = userEvent.setup();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT' }),
+    });
+
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        apiBaseUrl="http://localhost:8080/etendo/neo/sales-invoice"
+      />,
+    );
+
+    await user.type(getMessageTextarea(), 'Please review this document');
+    await user.click(getSendButton());
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/etendo/neo/email-contracts/sales-invoice-send/send',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.messageEdits).toBeTruthy();
+    expect(body.messageEdits.message).toBe('Please review this document');
+    // Subject was not touched — its auto-derived default is carried alongside.
+    expect(body.messageEdits.subject).toBe('Invoice #INV-001 — ACME');
+  });
+
+  it('omits messageEdits from the send payload for an untouched send (backward compatibility)', async () => {
+    // This is a regression guard, not a bug-reproduction test: it documents
+    // that a send where the operator never touched subject/message must stay
+    // byte-identical to the legacy payload shape (no messageEdits key at all).
+    const user = userEvent.setup();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT' }),
+    });
+
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        apiBaseUrl="http://localhost:8080/etendo/neo/sales-invoice"
+      />,
+    );
+
+    await user.click(getSendButton());
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/etendo/neo/email-contracts/sales-invoice-send/send',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.messageEdits).toBeUndefined();
+  });
+});
+
 describe('SendDocumentButton', () => {
   it('invokes onClick when the send-email action is clicked', async () => {
     const user = userEvent.setup();

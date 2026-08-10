@@ -99,7 +99,7 @@ function filterRowsByCriteria(rows, criteriaRaw) {
 }
 
 async function installListMock(page) {
-  await page.route('**/sws/neo/purchase-invoice/header**', async (route) => {
+  await page.route('**/sws/neo/purchase-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 

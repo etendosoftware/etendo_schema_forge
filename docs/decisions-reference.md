@@ -82,13 +82,13 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `documentPreview` | object | `null` | `{ titlePrefix: string }` | Enables the document preview button in the detail header. `titlePrefix` is shown in the preview drawer title (e.g., `"Order"`, `"Invoice"`). |
 | `breadcrumb` | string | `"{category} / {name}"` | Any string | Overrides the auto-generated breadcrumb path shown in the topbar. Useful when the default category/name combination is too verbose (e.g., `"Product"` instead of `"Reference / Product"`). |
 | `hideCreate` | boolean | `false` | — | Hides the generic Create/New button in the list toolbar. Use this when creation is handled by a window-specific action or custom component. |
-| `hidePrint` | boolean | `false` | — | Hides the print button in the detail view action bar. |
+| `hidePrint` | boolean | `false` | — | Hides the print button EVERYWHERE it appears: the detail view action bar, the list toolbar, and the list bulk-actions bar. There is no way to hide it in only one of these places with this flag — if a window needs print in the grid but not the detail (or vice versa), that requires a code-level change, not a `decisions.json` toggle. |
 | `hideMoreMenu` | boolean | `false` | — | Hides the triple-dot "more" menu in the detail view action bar. |
 | `hideStatusFilter` | boolean | `false` | — | Hides the status-filter dropdown ("All statuses") in the list toolbar, even when a `status`-typed column exists. The rest of the filter bar (date filter, Filters) is unaffected. |
 | `customListIcons` | boolean | `false` | — | Swaps the list toolbar sort/refresh icons for the shared `SortIcon` / `RefreshIcon` set (`@/components/ui/custom-icons`), matching Contacts/Warehouse. Emits `SortIconComponent` / `RefreshIconComponent` on `ListView`. |
 | `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `formCardPadding` | string | `null` | Any Tailwind padding class | Override the Tailwind padding class applied to the form card div in the detail view. When `null`, `DetailView` falls back to `p-6`. Use `"px-2 pb-2"` for tighter (8px horizontal) padding, for example on windows with dense form layouts. |
-| `hideDelete` | boolean | `false` | — | Disables the CRUD delete capability at the contract/API level — emits `apiPrediction.crud.<entity>.delete: false` in `contract.json` for the window's entities. This is an **API-level** declaration; it does not remove the detail-view **toolbar** Delete button by itself (see `hideDeleteButton` below for that). It DOES, however, remove the row-level delete icon from every list/lines rendering path — both plain `DataTable` tabs (via the `{onDeleteRow && (...)}` gate) and `linesLayout: "inlineEditable"` tabs (via `InlineLinesPanel`'s `canDelete` gate, ETP-4565) — because both derive `onDeleteRow` as `undefined` once `crud.<entity>.delete` is `false`, and both components render the trash button conditionally on that handler being present. Used for master-data windows whose records are provisioned/retired outside the app (e.g. `tax`, `tax-category`, `open-close-period-control`). |
+| `hideDelete` | boolean | `false` | — | Disables the CRUD delete capability at the contract/API level — emits `apiPrediction.crud.<entity>.delete: false` in `contract.json` for the window's entities, and — since ETP-4745 (`schema_forge_core`'s shared `resolveContractEntityMethods()`) — is also written through to `ETGO_SF_ENTITY.ISDELETE = 'N'` on push, so NEO Headless genuinely rejects `DELETE` (`405`) rather than only hiding it in the UI. **Before ETP-4745**, this flag only reached `contract.json`/the UI-derived affordance; a direct API `DELETE` call against an entity with `hideDelete: true` still succeeded — a wiring gap, not intentional. It does not remove the detail-view **toolbar** Delete button by itself (see `hideDeleteButton` below for that). It DOES, however, remove the row-level delete icon from every list/lines rendering path — both plain `DataTable` tabs (via the `{onDeleteRow && (...)}` gate) and `linesLayout: "inlineEditable"` tabs (via `InlineLinesPanel`'s `canDelete` gate, ETP-4565) — because both derive `onDeleteRow` as `undefined` once `crud.<entity>.delete` is `false`, and both components render the trash button conditionally on that handler being present. Used for master-data windows whose records are provisioned/retired outside the app (e.g. `tax`, `tax-category`, `open-close-period-control`). **Windows declared before ETP-4745 shipped need a re-push** (`make regen ONLY=<window> PUSH_TO_NEO=1` + `./gradlew export.database`) to actually close the gap in their own `ETGO_SF_ENTITY` row — see `docs/feedback.md` for the current list. |
 | `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. Gates on `window.statusField`: string status codes (e.g. `DR`/`RPAP`/`N`, see `DELETABLE_DOC_STATUSES` in `tools/app-shell/src/utils/recordActions.js`) are treated as deletable, all other codes as not. When `statusField` points to a **boolean** field instead (e.g. `processed` on `physical-inventory`/`goods-movements`), `false` (not yet processed) is deletable and `true` (processed) is not — handled automatically by `isDeleteVisibleForRecord`, no extra config needed. |
 | `hideDeleteButton` | boolean | `false` | — | **Unconditionally** hides the Delete (trash) button/icon in **both** the detail view toolbar and the list-row hover quick actions, for every record regardless of status. Distinct from `hideDelete` (which only disables the CRUD delete capability declared in `contract.json`/the API) — use `hideDeleteButton` when you also need to remove the UI affordance. Use this instead of `hideDeleteWhenComplete` when Delete should never be available, not just once the document leaves Draft; when set, `hideDeleteWhenComplete` becomes redundant (the button is always hidden). When `false`/absent, delete visibility is unchanged. |
 | `customComponents` | object | `null` | See below | Override generated components with custom ones from `artifacts/{window}/custom/`. The generator emits the correct imports and props automatically. |
@@ -614,7 +614,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `namedFilters` | array | `null` | **Hand-authored named HQL filters** the NEO Headless MCP exposes as `{ "status": "<name>" }` list filters. See below. |
 | `virtualFields` | array | `[]` | Columns with **no AD column behind them**, injected per row by the entity's NeoHandler in `afterHandle`. See below. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
-| `hideDelete` | boolean | `false` | Disables the CRUD delete capability for **this entity only** (`apiPrediction.crud.<entity>.delete: false`) — unlike `window.hideDelete`, which disables delete uniformly across every entity in the window. `DetailView`'s row-delete handler, bulk-delete bar, and delete-eligibility checks all gate directly on this same `crud.delete` flag, so setting it also removes the row-level delete icon/checkbox in the UI, not just the declared API capability — for **both** plain `DataTable` list/lines tabs and `linesLayout: "inlineEditable"` tabs (`InlineLinesPanel`, see ETP-4565: before that fix the icon still rendered — and silently no-opped on click — on `inlineEditable` tabs, since only `DataTable` gated its trash button on `onDeleteRow`). Use for a child/detail entity whose rows are exclusively managed as a side effect of the parent's own save (e.g. a NeoHandler syncing a join table from a parent field) — manual row deletion there would let a user bypass that invariant. Added ETP-4512 (`userRoles` on the `user` window). |
+| `hideDelete` | boolean | `false` | Disables the CRUD delete capability for **this entity only** (`apiPrediction.crud.<entity>.delete: false`) — unlike `window.hideDelete`, which disables delete uniformly across every entity in the window. `DetailView`'s row-delete handler, bulk-delete bar, and delete-eligibility checks all gate directly on this same `crud.delete` flag, so setting it also removes the row-level delete icon/checkbox in the UI, not just the declared API capability — for **both** plain `DataTable` list/lines tabs and `linesLayout: "inlineEditable"` tabs (`InlineLinesPanel`, see ETP-4565: before that fix the icon still rendered — and silently no-opped on click — on `inlineEditable` tabs, since only `DataTable` gated its trash button on `onDeleteRow`). Use for a child/detail entity whose rows are exclusively managed as a side effect of the parent's own save (e.g. a NeoHandler syncing a join table from a parent field) — manual row deletion there would let a user bypass that invariant. Added ETP-4512 (`userRoles` on the `user` window). **Note (ETP-4745):** the "declared API capability" language above described `contract.json` only — until ETP-4745 wired `hideDelete` through to `ETGO_SF_ENTITY.ISDELETE`, a direct API `DELETE` request against a `hideDelete: true` entity (including `userRoles`) still succeeded server-side; only the UI icon was actually gated. `userRoles` needs a re-push (`make regen ONLY=user PUSH_TO_NEO=1` + `./gradlew export.database`) once ETP-4745 ships to close that gap for real — see `docs/feedback.md`. |
 
 ### Virtual fields (`entities.{name}.virtualFields`)
 
@@ -1100,6 +1100,52 @@ instead of the default input when it detects this property.
 - If the component needs i18n, use `useUI()` from `@/i18n` and add keys to **both**
   `en_US.json` and `es_ES.json` under `genericLabels`.
 - This is a form-only feature: the grid column always uses the standard cell renderer.
+
+### Input Prefix (`inputPrefix`)
+
+Renders a fixed, non-editable chip immediately before a text input inside `EntityForm` —
+e.g. a `"https://"` scheme for a website field whose stored column value is only the part
+after the scheme. Purely visual + validation-aware; the chip's text is never part of the
+value the field reads from or writes to `data`.
+
+```json
+"etgoWeb": {
+  "visibility": "editable",
+  "form": true,
+  "inputPrefix": "https://"
+}
+```
+
+The generator emits `inputPrefix: 'https://'` verbatim into the field descriptor in the
+generated fields array. `EntityForm`'s `renderInputField` wraps the input in a chip +
+input row (same visual pattern as `OrganizationPage.jsx`'s hand-built "Sitio web" field)
+whenever `f.inputPrefix` is present; fields without it render exactly as before.
+
+**Validation:** `recipientEdits.js`'s format validators (`getEmailFieldError`,
+`getWebsiteFieldError`, `getPhoneFieldError` — wired into `useEntity.js`'s save gate)
+reconstruct the full value as `field.inputPrefix + value` before checking, so a prefixed
+field validates identically to an unprefixed one storing its full value directly. This is
+generic — not website-specific — so an email or phone field could adopt a fixed prefix
+later with zero validator code changes.
+
+**Rules:**
+- Only meaningful on text-type fields rendered via the default `<Input>`/`<DeferredInput>`
+  path in `renderInputField` — declaring it on a select/FK/checkbox field has no effect.
+- The prefix text itself is a literal string, not an i18n key — it is not expected to
+  vary by locale (e.g. `"https://"` is the same everywhere). If a locale-varying prefix
+  is ever needed, that is a new, separate feature, not a use of this property.
+- Do not confuse with `subPrefix` (`generate-frontend.js`/`listModalCells.jsx`) — an
+  unrelated concept for composite **grid-cell** rendering, not a form input.
+
+**Known limitation — legacy data:** the value shown in the input is always the raw stored
+column value, verbatim. If a field already has existing records whose stored value
+includes the scheme (e.g. `etgoWeb = "https://hola.com"` from before `inputPrefix` was
+enabled), the chip renders on top of that, showing the scheme twice (`https:// | https://hola.com`)
+until the underlying data is cleaned up — `EntityForm` does not strip a duplicated prefix
+from the displayed value. Saving without touching the field persists the value unchanged
+(no data corruption), but the visual duplication remains until fixed. Prefer enabling
+`inputPrefix` on new fields, or pair it with a data migration when adding it to a field
+that already has values stored with the scheme included.
 
 ### Logic & Behavior
 

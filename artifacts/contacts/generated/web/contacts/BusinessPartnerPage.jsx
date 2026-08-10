@@ -712,7 +712,6 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
         topbarExtra={ContactTypeToggle}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
       </>
