@@ -844,3 +844,33 @@ override needed.
 | `warehouse` | entity `accounting` |
 
 **Lesson:** a `decisions.json` flag that reaches `contract.json` is not proof it reaches the runtime. `apiPrediction.crud.<entity>.delete: false` in the contract is a *declared intent*; only `push-to-neo.js`/`neo-delta.js` actually writing `ISDELETE='N'` to `ETGO_SF_ENTITY` makes NEO Headless enforce it. When adding a new declarative flag that's supposed to restrict the live API, verify the write path (`resolveContractEntityMethods()` or equivalent), not just the contract shape — this is exactly the same class of gap ETP-4254 closed for `readOnly`/`methods`, and `hideDelete` had quietly never gotten the same treatment.
+
+---
+
+## [2026-08-10] ETP-4845 — Dimension names untranslated + User1/User2 leaking into "Dimensiones contables"
+
+**Component:** `tools/app-shell/src/windows/custom/general-ledger-configuration/mockCatalogs.js` (new `mapDimensionRows()`), wired into `useGeneralLedgerConfig.js`'s `mapPayload()`.
+
+**Symptom (two bugs, one shared cause):** (1) the "Dimensiones contables" tab always showed dimension names in English (Organization, Account, Product, Bus.Partner, Project, Cost Center) regardless of the session locale. (2) "User 1" / "User 2" appeared in the list for any client whose accounting schema has those elements — most clients do, since classic Etendo's default client-creation wizard seeds all 8 `C_AcctSchema_Element` rows; GOClient's own (GO-specific) provisioning seeds only 6, which is why this was invisible when testing against GOClient specifically.
+
+**Root cause:** `GeneralLedgerConfigurationHandler.buildDimensions` (com.etendoerp.go) sends each row's stable `type` (the `C_AcctSchema_Element.ElementType` / AD_Ref_List `181` code) but never a `labelKey` — `row.label` is the raw, untranslated `Name` DB column. `DimensionsTab.jsx` already preferred `labelKey` over `label` when rendering, but nothing on the frontend ever set it, so it silently fell back to the English name every time. Separately, nothing filtered the list by which dimension types Etendo GO actually curates as an editable field anywhere (`U1`/`U2` map to `USER1_ID`/`USER2_ID`, which no window's contract exposes with `form: true`).
+
+**Fix:** `mapDimensionRows()` derives `labelKey` from `type` via a `DIMENSION_TYPE_LABEL_KEYS` map, and drops any row whose `type` is absent from that map (currently: `U1`/`U2`) — regardless of `IsActive`. Filtering/translating by the stable AD `type` code instead of the (locale-dependent, renamable) display name was deliberate: the same "match by name" mistake is exactly what caused bug (1) in the first place. Added the missing `glc.dim.*` i18n keys to both `en_US.json` and `es_ES.json`.
+
+**Lesson:** when a backend aggregate handler returns a raw AD/DB `Name` column alongside a stable type/code, resolving the *code* to an i18n key on the frontend is safe and locale-correct; matching or filtering by the *name* is not — it breaks the moment the string is translated, renamed, or simply differs from what a test happened to see on one client. Also: a mock/seed fixture (`DIMENSIONS_SEED` here) that predates the real backend integration can quietly diverge from what production actually returns (it modeled a completely different, smaller dimension set) — don't assume the mock's shape is a reliable proxy for the real payload once a handler exists.
+
+---
+
+## [2026-08-10] ETP-4845 — Accounting-dimension fields ignored their config on any unsaved document
+
+**Component:** `tools/app-shell/src/hooks/useDisplayLogic.js` (`evaluate()`), shared by every window's header/lines display-logic resolution via `DetailView.jsx` and `useAccountingDimensionFields.js`.
+
+**Symptom:** toggling a dimension OFF in "Dimensiones contables" appeared to have no effect — a brand-new (not yet saved) document of any window kept showing the field regardless of the toggle. Once the document was saved once and reloaded, the field correctly reflected the toggle.
+
+**Root cause:** `evaluate()` unconditionally skipped calling `/evaluate-display` whenever the record had no `id` yet, with the reasoning "new records have no meaningful state to evaluate." True for genuinely record-dependent logic (e.g. a readOnly flag gated on `@Posted@='Y'` — a brand-new record obviously isn't posted). **False** for the `@ACCT_DIMENSION_DISPLAY@` macro (ETP-4529): its value depends only on GL Configuration, never on the record. With the visibility map staying empty for the whole lifetime of a new/unsaved record, `EntityForm.jsx`'s fail-open filter (only hides a field when the server explicitly says `false`) never got a chance to run — the field defaulted to visible no matter what was configured.
+
+**Fix:** the no-`id` early return now only fires when the caller has NOT declared `cacheableKeys` (the hook's own existing mechanism for marking a key as "constant across every record in this window, GL-Configuration-only"). Every current caller declares it, so this now resolves correctly even for brand-new documents. Verified live, before/after, on a freshly onboarded tenant and on GOClient — no test-suite mock, an actual running backend.
+
+**Remaining gap (NOT fixed here, tracked separately as ETP-4854):** for clients with `AD_Client.Acctdim_Centrally_Maintained='Y'` (the onboarding default for every new tenant today — verified live; GOClient is a manually-pinned exception), the toggle in "Dimensiones contables" only writes `C_AcctSchema_Element.IsActive`, but `DimensionDisplayUtility` for those clients reads a completely different set of columns (`AD_Client.<Dim>_Acctdim_IsEnable/Header/...`) that the toggle never touches — so for the majority of real tenants the toggle still has zero effect on documents even with this fix. That's a `com.etendoerp.go` architecture/data-migration fix, out of scope here.
+
+**Lesson:** an early-return guard justified by "there's no state to evaluate yet" is only as safe as the *union* of everything currently routed through that call — it takes one caller whose logic doesn't depend on record state (a GL-Configuration macro, a role-based flag, anything env/config-driven) to make the assumption wrong. When a hook grows a second class of caller with different invariants (here: `cacheableKeys` already existed as the marker for "config-only"), any blanket short-circuit written before that caller existed needs re-auditing against the new invariant — it won't fail loudly, it'll just silently under-evaluate for that one caller's window in time (record has no id yet).
