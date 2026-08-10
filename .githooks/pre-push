@@ -96,9 +96,22 @@ if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
     echo ""
     echo "   This means the git hooks were not active when those commits were made"
     echo "   (or the content changed afterwards)."
-    echo "   Fix: enable the hooks and re-create the commits, e.g."
+    # Resolve the exact base so the fix can be copy-pasted instead of derived by
+    # hand — reading it off the list above is the step people get wrong.
+    REBASE_BASE="$(hooks_rebase_base $UNVERIFIED || true)"
+    echo "   Fix: enable the hooks and re-create the commits:"
     echo "     npm install                     # sets core.hooksPath=.githooks"
-    echo "     git rebase --exec 'git commit --amend --no-edit' <base>"
+    if [ -n "$REBASE_BASE" ]; then
+      echo "     git rebase --exec 'git commit --amend --no-edit' $REBASE_BASE"
+      echo ""
+      echo "   That base is the parent of the oldest commit listed above. The rebase"
+      echo "   re-stamps every commit after it — content is untouched, but the hashes"
+      echo "   change, so only do it while the branch is unpushed or force-pushable."
+    else
+      echo "     git rebase --exec 'git commit --amend --no-edit' <base>"
+      echo "   (<base> = the parent of the oldest commit listed above; it could not be"
+      echo "    resolved automatically here.)"
+    fi
     echo "   Bypass (discouraged): HOOKS_VERIFY_SKIP=1 git push"
     exit 1
   fi
