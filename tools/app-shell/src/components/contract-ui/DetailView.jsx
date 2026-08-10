@@ -4,10 +4,9 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
+import { X, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
-import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 
 const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
@@ -64,16 +63,15 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { SummaryBar } from './SummaryBar.jsx';
-import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
-import BalanceFooterPanel from './BalanceFooterPanel.jsx';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
-import { computeBalance } from '@/lib/balanceTotals';
 import LinesSelectionBar from './LinesSelectionBar.jsx';
+import { DetailMoreActionsMenu } from './DetailMoreActionsMenu.jsx';
+import DetailSidePanel from './DetailSidePanel.jsx';
+import LinesBulkActionBar from './LinesBulkActionBar.jsx';
 import { evalTabReadOnly } from './evalTabReadOnly.js';
-import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
-  normalizeCalloutResponse, applyQtyZeroGuard, roundAmounts,
+  normalizeCalloutResponse, applyQtyZeroGuard, resetDescriptionOnProductChange, roundAmounts,
   resolveSnapshotIdentifiers,
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
@@ -95,12 +93,11 @@ import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
 
-import { cn } from '@/lib/utils.js';
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
-import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderSidePanel, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -876,6 +873,7 @@ export function hasRecordForRoute(isNew, hook, recordId) {
 }
 
 export function isLoadingRecordForRoute(hook, isNew, recordId) {
+  if (isNew && hook.defaultsLoading) return true;
   return hook.loading && !hasRecordForRoute(isNew, hook, recordId);
 }
 
@@ -1305,7 +1303,7 @@ export function DetailView({
   labelOverrides,
   enableSecondaryRowDelete = false,
   sidebarClassName = 'w-96 shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5',
-  linesLayout = 'classic',
+  linesLayout = 'inlineEditable',
   autoSaveOnBlur = false,
   toolbarPaddingX = 'px-6',
   tabsBarPaddingX = 'px-6',
@@ -1715,36 +1713,9 @@ export function DetailView({
     () => new Promise((resolve) => setPendingDeleteConfirm({ resolve })),
     [],
   );
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const moreMenuRef = useRef(null);
-  // Probe to detect whether customMenuContent actually renders anything for the
-  // current record. A custom kebab component may return null based on status
-  // (e.g. an action only valid in a given document state); without this the
-  // popover would open as an empty box. Mirrors Sales Order's menuActions
-  // behavior where the kebab opens nothing when no action applies.
-  const moreMenuProbeRef = useRef(null);
-  const [customMenuHasContent, setCustomMenuHasContent] = useState(customMenuContent ? null : false);
   const handledOpenAddLineRef = useRef(false);
   const handledOpenSecondaryLineRef = useRef(false);
 
-  useEffect(() => {
-    if (!showMoreMenu) return;
-    const handleClick = (e) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) {
-        setShowMoreMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showMoreMenu]);
-  // Keep customMenuHasContent in sync with what the hidden probe renders. Runs
-  // every render (status/data can change over the record's lifecycle) but only
-  // updates state when the value actually flips, so it never loops.
-  useEffect(() => {
-    if (!customMenuContent) return;
-    const has = !!(moreMenuProbeRef.current && moreMenuProbeRef.current.childElementCount > 0);
-    setCustomMenuHasContent(prev => (prev === has ? prev : has));
-  });
   const [directFetched, setDirectFetched] = useState(false);
   const [selectedLine, setSelectedLine] = useState(null);
   const [selectedChildRows, setSelectedChildRows] = useState([]);
@@ -2013,11 +1984,23 @@ export function DetailView({
   // Track fields the user has manually changed in this record session — protected
   // from being overwritten by callouts triggered from other fields.
   const userTouchedRef = useRef(new Set());
+  // ETP-4772: per-field generation counter, bumped on every genuine write to a
+  // field (user edit or applied callout value). Each callout dispatch captures
+  // a snapshot of this map; when its response arrives, applyCalloutFieldUpdates/
+  // applyOneComboEntry compare that snapshot against the field's CURRENT
+  // generation to detect a response that is now stale (a newer edit/dispatch for
+  // that same field happened in between) and discard it instead of clobbering
+  // the newer value. Fixes: opening a new Purchase/Sales Order auto-fires a
+  // callout for the default warehouse; if the user changes warehouse before
+  // that default callout's response comes back, the stale response used to win
+  // unconditionally (the "trigger field always wins" rule didn't check recency).
+  const fieldGenerationRef = useRef({});
   // Reset session-scoped refs when the record context changes (new record / different existing record).
   useEffect(() => {
     userTouchedRef.current = new Set();
     calloutAppliedRef.current = new Map();
     activeCurrencyConversionRef.current = null;
+    fieldGenerationRef.current = {};
   }, [recordId]);
 
   // Mirrors hook.editing but updated SYNCHRONOUSLY on every handleChangeWithCallout call,
@@ -2315,7 +2298,13 @@ export function DetailView({
     triggers.forEach(({ field }, i) => {
       setTimeout(() => {
         const value = editingSnapshot[field];
-        if (value) executeCallout(field, value, editingSnapshot);
+        if (value) {
+          // ETP-4772: bump + snapshot BEFORE dispatch, so a manual edit that
+          // happens while this default callout is in flight (see fireCallout
+          // below) is detected as "newer" once this response comes back.
+          fieldGenerationRef.current[field] = (fieldGenerationRef.current[field] || 0) + 1;
+          executeCallout(field, value, editingSnapshot, { ...fieldGenerationRef.current });
+        }
       }, i * STAGGER_MS);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2402,9 +2391,13 @@ export function DetailView({
   // Apply callout results to the form when they arrive
   useEffect(() => {
     if (!calloutResult) return;
-    const { updates, combos, triggerField } = calloutResult;
+    const { updates, combos, triggerField, meta } = calloutResult;
     const appliedFields = new Map();
-    const ctx = { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs };
+    // ETP-4772: `meta` carries the per-field generation snapshot captured at
+    // dispatch time (see fireCallout / the default-callouts effect above) —
+    // forwarded as `dispatchSnapshot` so applyCalloutFieldUpdates/
+    // applyOneComboEntry can discard stale responses.
+    const ctx = { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot: meta, fieldGenerationRef };
 
     if (updates) {
       applyCalloutFieldUpdates(updates, ctx);
@@ -2490,11 +2483,19 @@ export function DetailView({
       }
     }
 
+    // ETP-4772: bump this field's generation right before dispatching — this is
+    // a genuine new value for it. The snapshot taken now travels with the
+    // request so the response effect can tell, on arrival, whether an even
+    // newer edit/dispatch for this field happened meanwhile (stale → discard)
+    // instead of unconditionally letting the trigger field win.
+    fieldGenerationRef.current[field] = (fieldGenerationRef.current[field] || 0) + 1;
+    const dispatchSnapshot = { ...fieldGenerationRef.current };
+
     // Trigger callout — the backend returns empty if no callout is registered.
     // Use the synchronously-updated snapshot (pendingEditingRef), not hook.editing: the
     // latter is a stale closure captured before this render's hook.handleChange commits,
     // so it always lags one change behind for the field that just triggered the callout.
-    executeCallout(field, value, pendingEditingRef.current);
+    executeCallout(field, value, pendingEditingRef.current, dispatchSnapshot);
   }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
@@ -2583,6 +2584,7 @@ export function DetailView({
       // a valid netUnitPrice instead of null/0 at save time.
       calculateNetUnitPrice(result, taxRateCacheRef, hook);
       applyQtyZeroGuard(result, rowValues);
+      resetDescriptionOnProductChange(result, field);
       // Fallback: when callout returns no lineNetAmount (e.g. SL_Invoice_Amt throws
       // PriceAdjustment exception for products without standard cost), compute qty × price.
       // Uses lineConfig fields so orders, invoices, and future window types all benefit.
@@ -2647,6 +2649,10 @@ export function DetailView({
   const handleNotesSave = useCallback(async (value) => {
     const currentId = data?.id || recordId;
     if (!currentId || isNew || !notesField) return;
+    if (value !== undefined && value.length > 255) {
+      toast.error(ui('notesMaxLengthExceeded'));
+      return;
+    }
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
@@ -3026,146 +3032,22 @@ export function DetailView({
                 </button>
               )}
               {/* More actions — only render the button when there is something to show */}
-              {(() => {
-                if (resolveHideMoreMenu(hideMoreMenu, data)) return null;
-                const resolvedActions = typeof menuActions === 'function'
-                  ? menuActions({ data, status: data?.[statusField] })
-                  : menuActions;
-                const visibleActions = (Array.isArray(resolvedActions) ? resolvedActions : [])
-                  .filter(a => a.visible !== false);
-                const hasCustomContent = customMenuContent && customMenuHasContent !== false;
-                if (visibleActions.length === 0 && !hasCustomContent) return null;
-                const currentId = data?.id || recordId;
-                const runDocumentAction = async (action) => {
-                    if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
-                      const unpostResult = await neoAction.execute(currentId, 'unpost');
-                      if (!unpostResult.success) {
-                        toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
-                        return false;
-                      }
-                    }
-                    try {
-                      await docAction.execute(currentId, action.documentAction);
-                      const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
-                      toast.success(msg);
-                      hook.fetchById?.(currentId);
-                      setDocsRefreshSignal(v => v + 1);
-                    } catch (err) {
-                      toast.error(err.message);
-                    }
-                    return true;
-                  };
-                  const runNeoMenuAction = async (action) => {
-                    const result = await neoAction.execute(currentId, action.neoAction);
-                    const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
-                    if (result.success) {
-                      toast.success(msg);
-                      hook.fetchById?.(currentId);
-                      setDocsRefreshSignal(v => v + 1);
-                    } else {
-                      toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
-                    }
-                  };
-                  return (
-                    <div className="relative" ref={moreMenuRef}>
-                    <button
-                      data-testid="action-more"
-                      onClick={() => setShowMoreMenu(v => !v)}
-                      className={`${sqBtnSize} flex items-center justify-center rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors`}
-                    >
-                      <MoreVertical className="h-[15px] w-[15px]" data-testid="MoreVertical__fa3275" />
-                    </button>
-                    {customMenuContent && (() => {
-                      const ProbeContent = customMenuContent;
-                      return (
-                        <div ref={moreMenuProbeRef} aria-hidden="true" style={{ display: 'none' }}>
-                          <ProbeContent
-                            data={data}
-                            recordId={data?.id || recordId}
-                            token={token}
-                            apiBaseUrl={apiBaseUrl}
-                            onClose={() => {}}
-                            onRefresh={() => {}}
-                            data-testid="ProbeContent__fa3275" />
-                        </div>
-                      );
-                    })()}
-                    {showMoreMenu && (
-                    <div
-                      className="absolute right-0 top-full mt-1 z-50 bg-card py-2 min-w-[148px]"
-                      style={{
-                        borderRadius: '8px',
-                        boxShadow:
-                          '0px 0px 0px 1px hsl(var(--foreground) / 0.1), 0px 24px 48px hsl(var(--foreground) / 0.03), 0px 10px 18px hsl(var(--foreground) / 0.03), 0px 5px 8px hsl(var(--foreground) / 0.04), 0px 2px 4px hsl(var(--foreground) / 0.04)',
-                      }}
-                    >
-                      {visibleActions.map((action, i) => {
-                        const ActionIcon = action.icon;
-                        return (
-                          <button
-                            key={action.key || i}
-                            type="button"
-                            data-testid={`menu-action-${action.key || i}`}
-                            disabled={docAction.loading || neoAction.loading}
-                            onClick={async () => {
-                              setShowMoreMenu(false);
-                              if (action.documentAction) {
-                                await runDocumentAction(action);
-                                return;
-                              }
-                              if (action.neoAction) {
-                                await runNeoMenuAction(action);
-                                return;
-                              }
-                              if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
-                                const unpostResult = await neoAction.execute(currentId, 'unpost');
-                                if (!unpostResult.success) {
-                                  toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
-                                  return;
-                                }
-                              }
-                              if (action.columnName) {
-                                hook.handleProcess?.({ columnName: action.columnName, name: action.key });
-                              } else if (action.onClick) {
-                                action.onClick();
-                              }
-                            }}
-                            className={`w-full text-left px-2 py-1 text-sm leading-6 transition-colors flex items-center gap-2 ${action.destructive
-                              ? 'text-destructive hover:bg-destructive hover:text-destructive-foreground'
-                              : 'text-foreground hover:bg-secondary'
-                              } ${docAction.loading || neoAction.loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400 }}
-                          >
-                            {ActionIcon && (
-                              <ActionIcon
-                                className="h-4 w-4 flex-shrink-0 ml-1"
-                                style={{ color: action.destructive ? undefined : 'hsl(var(--text-disabled))' }}
-                                data-testid="ActionIcon__fa3275" />
-                            )}
-                            <span className={ActionIcon ? 'pl-1' : ''}>
-                              {action.labelKey ? ui(action.labelKey) : action.label}
-                            </span>
-                          </button>
-                        );
-                      })}
-                      {customMenuContent && (() => {
-                        const CustomMenuContent = customMenuContent;
-                        return (
-                          <CustomMenuContent
-                            data={data}
-                            recordId={data?.id || recordId}
-                            token={token}
-                            apiBaseUrl={apiBaseUrl}
-                            onClose={() => setShowMoreMenu(false)}
-                            onRefresh={() => hook.fetchById?.(data?.id || recordId)}
-                            data-testid="CustomMenuContent__fa3275" />
-                        );
-                      })()}
-                    </div>
-                    )}
-                  </div>
-                  );
-                })()}
+              <DetailMoreActionsMenu
+                apiBaseUrl={apiBaseUrl}
+                customMenuContent={customMenuContent}
+                data={data}
+                docAction={docAction}
+                hideMoreMenu={hideMoreMenu}
+                hook={hook}
+                menuActions={menuActions}
+                neoAction={neoAction}
+                recordId={recordId}
+                setDocsRefreshSignal={setDocsRefreshSignal}
+                sqBtnSize={sqBtnSize}
+                statusField={statusField}
+                token={token}
+                ui={ui}
+                data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
               {/* Save action — rendered before process buttons when saveBeforeProcesses is set (per-window opt-in) */}
@@ -3594,73 +3476,30 @@ export function DetailView({
                               <div className="flex-1 min-w-0">
                                 {/* Bulk action bar: delete + detail processes (classic only) */}
                                 {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
-                                  <div
-                                    data-testid="detail-bulk-action-bar"
-                                    className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted border border-border/40 shadow-sm">
-                                    <span className="text-sm font-medium text-foreground">
-                                      {ui('selected', { count: selectedChildRows.length })}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                      {detailProcesses.map(p => (
-                                        <button
-                                          key={p.name}
-                                          disabled={executingDetailProcess}
-                                          onClick={() => {
-                                            if (p.params?.some(param => !param.hidden)) {
-                                              setDetailParamDialogProcess({ ...p, _rows: [...selectedChildRows] });
-                                            } else {
-                                              executeDetailProcessImpl(p, {}, undefined, detailProcessDeps);
-                                            }
-                                          }}
-                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-primary text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
-                                          data-testid="Button__detail-process"
-                                        >
-                                          {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
-                                        </button>
-                                      ))}
-                                      {isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) && (
-                                      <button
-                                        disabled={deletingChildren}
-                                        onClick={async () => {
-                                          if (!(await confirmDelete())) return;
-                                          setDeletingChildren(true);
-                                          try {
-                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
-                                            // batchDelete.js); replaces the old two-independent-if
-                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
-                                            // pattern this button predates.
-                                            const { succeeded, failed } = await runBatchDelete(selectedChildRows, (row) => {
-                                              const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                                                || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                                              return fetch(childUrl, {
-                                                method: 'DELETE',
-                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                              }).then(res => {
-                                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                                                return row;
-                                              });
-                                            });
-                                            for (const row of succeeded) {
-                                              hook.handleDeleteChild(row.id);
-                                              if (selectedLine?.id === row.id) setSelectedLine(null);
-                                            }
-                                            setSelectedChildRows([]);
-                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
-                                          } catch (err) {
-                                            toast.error(err.message || ui('networkError'));
-                                          } finally {
-                                            setDeletingChildren(false);
-                                          }
-                                        }}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
-                                        data-testid="detail-bulk-delete-button"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
-                                        {getDeleteChildButtonLabel(deletingChildren, ui)}
-                                      </button>
-                                      )}
-                                    </div>
-                                  </div>
+                                  <LinesBulkActionBar
+                                    linesLayout={linesLayout}
+                                    api={api}
+                                    detailEntity={detailEntity}
+                                    isDocumentReadOnly={isDocumentReadOnly}
+                                    selectedChildRows={selectedChildRows}
+                                    detailProcesses={detailProcesses}
+                                    ui={ui}
+                                    executingDetailProcess={executingDetailProcess}
+                                    setDetailParamDialogProcess={setDetailParamDialogProcess}
+                                    executeDetailProcessImpl={executeDetailProcessImpl}
+                                    detailProcessDeps={detailProcessDeps}
+                                    tMenu={tMenu}
+                                    deletingChildren={deletingChildren}
+                                    setDeletingChildren={setDeletingChildren}
+                                    confirmDelete={confirmDelete}
+                                    apiBaseUrl={apiBaseUrl}
+                                    token={token}
+                                    hook={hook}
+                                    selectedLine={selectedLine}
+                                    setSelectedLine={setSelectedLine}
+                                    setSelectedChildRows={setSelectedChildRows}
+                                    data-testid="LinesBulkActionBar__7c75ad"
+                                  />
                                 )}
                                 <DetailTable
                                   ref={inlineLinesRef}
@@ -3875,16 +3714,8 @@ export function DetailView({
                                             // batchDelete.js); replaces the old two-independent-if
                                             // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
                                             // pattern this bar predates.
-                                            const { succeeded, failed } = await runBatchDelete(selectedChildRows, (row) => {
-                                              const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                                                || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                                              return fetch(childUrl, {
-                                                method: 'DELETE',
-                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                              }).then(res => {
-                                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                                                return row;
-                                              });
+                                            const { succeeded, failed } = await deleteSelectedChildRows({
+                                              selectedChildRows, api, detailEntity, apiBaseUrl, token,
                                             });
                                             for (const row of succeeded) {
                                               hook.handleDeleteChild(row.id);
@@ -4405,14 +4236,7 @@ export function DetailView({
                     )}
                   </div>
                 </div>
-                {sidePanel && (
-                  <div
-                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[292px] lg:border-l border-border-subtle pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
-                    style={sidePanelStyle}
-                  >
-                    {renderSidePanel(sidePanel, data, recordId, token, apiBaseUrl, api, isNew)}
-                  </div>
-                )}
+                {sidePanel && <DetailSidePanel {...{ sidePanel, sidePanelStyle, data, recordId, token, apiBaseUrl, api, isNew }} data-testid="DetailSidePanel__7c75ad" />}
               </div>
             </div>
           </div>{/* end content column wrapper */}
@@ -4599,97 +4423,6 @@ export function DetailView({
       })}
     </div>
   );
-}
-
-function applyProductCalloutPriceAdjustments(field, result, lineConfig) {
-  if (field !== 'product') return;
-  if (result.standardPrice != null && (result.listPrice == null || Number(result.listPrice) === 0)) {
-    result.listPrice = result.standardPrice;
-  }
-  if (lineConfig.discountField) {
-    result[lineConfig.discountField] = 0;
-  }
-}
-
-function applyProductCurrencyConversion(field, result, rowValues, lineConfig, activeCurrencyConversion, currencyIdentifier, computeLineGrossAmount) {
-  if (field !== 'product' || !activeCurrencyConversion) return;
-  const { rate, toCurrency } = activeCurrencyConversion;
-  result.currency = toCurrency;
-  if (currencyIdentifier) {
-    result['currency$_identifier'] = currencyIdentifier;
-  }
-  const rawPrice = parseFloat(String(result[lineConfig.priceField] ?? 0));
-  if (rawPrice > 0 && rate !== 1) {
-    const convertedPrice = parseFloat((rawPrice * rate).toFixed(2));
-    result[lineConfig.priceField] = convertedPrice;
-    if (result.standardPrice != null) result.standardPrice = convertedPrice;
-    if (result.unitPrice != null) result.unitPrice = convertedPrice;
-    if (result.listPrice != null) result.listPrice = convertedPrice;
-    // The earlier 'product' callout pass already latched result.lineNetAmount onto the
-    // UNCONVERTED price (see calculateLineNetAmount / deriveNetFromProductChange). Clear it
-    // here so computeLineGrossAmount's null-guard recomputes it from the converted price
-    // instead of silently skipping the sync (its guard only fires when lineNetAmount is
-    // null/0). Without this, lineNetAmount stays stale while grossAmount/grossField are
-    // correctly forced to the converted value — an inconsistent line that the backend
-    // persists using the stale net, producing a wrong (sometimes negative) tax total.
-    result.lineNetAmount = null;
-    computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
-      ...rowValues,
-      ...result,
-      [lineConfig.priceField]: convertedPrice,
-    });
-  }
-}
-
-function resolveTaxIdentifier(result, rowValues, hook) {
-  if (!result['tax$_identifier']) {
-    const effectiveTaxId = result.tax ?? rowValues.tax;
-    if (effectiveTaxId) {
-      const ref = (hook.children || []).find(l => l.tax === effectiveTaxId && l['tax$_identifier']);
-      if (ref) result['tax$_identifier'] = ref['tax$_identifier'];
-    }
-  }
-}
-
-function calculateLineNetAmount(result, field, lineConfig, value, rowValues) {
-  if (result.lineNetAmount == null && (field === lineConfig.qtyField || field === lineConfig.priceField || field === 'product')) {
-    const qty = field === lineConfig.qtyField ? (parseFloat(value) || 0)
-      : (parseFloat(String(rowValues[lineConfig.qtyField] ?? '')) || 0);
-    const price = field === lineConfig.priceField ? (parseFloat(value) || 0)
-      : (parseFloat(String(result[lineConfig.priceField] ?? rowValues[lineConfig.priceField] ?? '')) || 0);
-    if (qty > 0 && price > 0) result.lineNetAmount = String(qty * price);
-  }
-}
-
-function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
-  if (result.grossUnitPrice != null && result.netUnitPrice == null) {
-    const taxId = result.tax;
-    let taxFactor = null;
-    const calloutRate = parseFloat(String(result.taxRate ?? ''));
-    if (isPositiveNumeric(calloutRate)) taxFactor = 1 + calloutRate / 100;
-    if (canUseCachedTaxRate(taxFactor, taxId, taxRateCacheRef)) {
-      taxFactor = 1 + taxRateCacheRef.current[taxId] / 100;
-    }
-    if (taxFactor === null && taxId) {
-      const ref = (hook.children || []).find(l => l.tax === taxId &&
-        parseFloat(String(l.grossAmount ?? '')) > 0 &&
-        parseFloat(String(l.lineNetAmount ?? '')) > 0
-      );
-      if (ref) taxFactor = parseFloat(String(ref.grossAmount)) / parseFloat(String(ref.lineNetAmount));
-    }
-    const gross = Number(result.grossUnitPrice);
-    result.netUnitPrice = taxFactor != null && taxFactor > 1
-      ? parseFloat((gross / taxFactor).toFixed(6))
-      : gross;
-  }
-}
-
-function canUseCachedTaxRate(taxFactor, taxId, taxRateCacheRef) {
-  return taxFactor === null && taxId && taxRateCacheRef.current[taxId] != null;
-}
-
-function isPositiveNumeric(calloutRate) {
-  return !isNaN(calloutRate) && calloutRate > 0;
 }
 
 function populateIdentifierFields(api, result, detailEntity, catalogs) {

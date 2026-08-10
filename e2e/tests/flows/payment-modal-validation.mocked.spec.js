@@ -71,7 +71,7 @@ async function installInvoiceMocks(page) {
       body: JSON.stringify({ response: { data: [COMPLETED_INVOICE], totalRows: 1 } }),
     });
   });
-  await page.route('**/sws/neo/purchase-invoice/paymentPlan**', async (route) => {
+  await page.route('**/sws/neo/purchase-invoice/paymentPlan{/**,}**', async (route) => {
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({

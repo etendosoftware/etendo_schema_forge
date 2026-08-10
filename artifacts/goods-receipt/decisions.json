@@ -234,6 +234,7 @@
         },
         "orderQuantity": {
           "grid": true,
+          "gridReadOnly": true,
           "form": true,
           "visibility": "readOnly",
           "section": "principal",

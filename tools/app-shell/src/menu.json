@@ -366,6 +366,12 @@
       "section": "System",
       "items": [
         {
+          "name": "organization",
+          "label": "Organization",
+          "favname": "Organization",
+          "windowId": "110"
+        },
+        {
           "name": "price-list",
           "label": "Price List",
           "favname": "Price List",

@@ -253,6 +253,10 @@ const BASE_PROPS = {
   token: 'test-token',
   apiBaseUrl: '/api/sales-order',
   breadcrumb: 'Sales / Orders',
+  // linesLayout now defaults to 'inlineEditable' (ETP-4763) — pin 'classic'
+  // as the base so variant 1 (non-inlineEditable toolbar button) keeps
+  // testing that layout; variant 2 overrides it back to 'inlineEditable'.
+  linesLayout: 'classic',
 };
 
 function renderDetailView(props = {}) {

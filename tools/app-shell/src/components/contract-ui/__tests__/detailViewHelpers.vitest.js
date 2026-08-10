@@ -43,6 +43,7 @@ import {
   sidePanelWrapperCls,
   runAddLineAction,
   buildInitialTabs,
+  buildLineRowClickHandler,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -370,6 +371,30 @@ describe('getAddLineMenuActions', () => {
   it('keeps the raw label when the translation comes back empty', () => {
     const get = () => [{ label: 'importLines' }];
     expect(getAddLineMenuActions(get, {}, { current: null }, () => '')[0].label).toBe('importLines');
+  });
+});
+
+describe('buildLineRowClickHandler (ETP-4763 — inlineEditable default)', () => {
+  it('returns a click handler when DetailForm is set and linesLayout is classic', () => {
+    const setSelectedLine = vi.fn();
+    const handler = buildLineRowClickHandler(() => null, 'classic', setSelectedLine);
+
+    expect(typeof handler).toBe('function');
+    handler({ id: 'L1', unitPrice: 10.005 });
+    expect(setSelectedLine).toHaveBeenCalledWith(expect.objectContaining({ id: 'L1' }));
+  });
+
+  it('returns undefined for the inlineEditable layout, even with a DetailForm', () => {
+    const setSelectedLine = vi.fn();
+    const handler = buildLineRowClickHandler(() => null, 'inlineEditable', setSelectedLine);
+
+    expect(handler).toBeUndefined();
+  });
+
+  it('returns undefined when DetailForm is falsy, regardless of linesLayout', () => {
+    const setSelectedLine = vi.fn();
+    expect(buildLineRowClickHandler(null, 'classic', setSelectedLine)).toBeUndefined();
+    expect(buildLineRowClickHandler(undefined, 'classic', setSelectedLine)).toBeUndefined();
   });
 });
 

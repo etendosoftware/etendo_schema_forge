@@ -24,7 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DataTable } from '@/components/contract-ui';
 import { useUI, useLocaleSwitch } from '@/i18n';
-import { useBankConnectionActions } from '@/hooks/useBankConnectionActions.js';
+import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions.js';
 import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow.js';
 import {
   AccountsSidebar,
@@ -43,6 +43,7 @@ import { ArchiveAccountDialog } from '@/windows/custom/financial-account/Archive
 import { BankConnectionFlowUI } from '@/windows/custom/financial-account/BankConnectionFlowUI.jsx';
 import { FundsTransferModal } from '@/windows/custom/financial-account/FundsTransferModal.jsx';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
+import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -59,6 +60,19 @@ const COLUMN_CHROME = {
   type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
   currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
   pendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
+};
+
+// DataTable right-aligns any column whose `type` is in its NUMERIC_FIELD_TYPES set
+// (header AND cell, independent of `render`). `pendingCount` is typed "integer" in
+// the contract because it IS a count, but it never displays that count as a number —
+// it always renders through `reconcilePill` (the "Conciliado" / "Conciliar (N)" pill),
+// so the numeric right-align only pushed the two pill variants to inconsistent left
+// edges instead of the plain left-aligned column every other status cell uses.
+// Overriding the type here is presentation-only: the column stays non-sortable and
+// non-form (`grid`-only), so nothing about validation, editing, or the underlying
+// contract type is affected — see DataTable.jsx's NUMERIC_FIELD_TYPES / `col.type`.
+const GRID_TYPE_OVERRIDE = {
+  pendingCount: 'string',
 };
 
 /**
@@ -87,7 +101,7 @@ function buildColumns(ui, locale, handlers) {
     return {
       key: col.name,
       column: col.column,
-      type: col.type,
+      type: GRID_TYPE_OVERRIDE[col.name] ?? col.type,
       // `labels[locale]` is resolveColumnLabel's top-priority branch, so a declared
       // gridLabelKey wins over the AD dictionary. Without one, `column` lets the
       // dictionary resolve it rather than falling through to the raw field name.
@@ -176,6 +190,7 @@ export default function AccountsHeaderTable({
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [transferSource, setTransferSource] = useState(null);
   const [disconnectTarget, setDisconnectTarget] = useState(null);
+  const [deleteConnectionTarget, setDeleteConnectionTarget] = useState(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
   const reload = () => onDataMutated?.();
@@ -190,7 +205,7 @@ export default function AccountsHeaderTable({
   // `onSelectionChange`, so a local mirror would still read "selected" after a successful
   // bulk delete or a cancel, and the toolbar would never come back.
   const selectionActive = (selectedRows?.length ?? 0) > 0;
-  const { sync, disconnect } = useBankConnectionActions();
+  const { sync, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reload });
 
 
@@ -216,25 +231,66 @@ export default function AccountsHeaderTable({
       }
       return;
     }
+    if (action === 'reconnect') {
+      // Same popup handshake the edit modal's Reconectar uses — this revives the deactivated
+      // connection rather than creating a new one through the connect wizard. The follow-up
+      // `finishReconnect` is what actually reactivates it: Salt Edge redirects to an app route
+      // that only relays the connection id, so nothing else would flip it back to active.
+      try {
+        const connectionId = await launchSaltEdgePopup(() => reconnect(account.id));
+        if (!connectionId) return;
+        await finishReconnect(account.id, connectionId);
+        reload();
+        toast.success(ui('financeAccountsBankConnectionReauthDone'));
+      } catch (err) {
+        toast.error(err.message === 'BANK_CONNECTION_TIMEOUT'
+          ? ui('financeAccountsBankConnectionTimeout')
+          : err.message);
+      }
+      return;
+    }
     if (action === 'disconnect') {
       setDisconnectTarget(account);
+      return;
+    }
+    if (action === 'deleteConnection') {
+      setDeleteConnectionTarget(account);
     }
   };
 
-  const handleConfirmDisconnect = async () => {
-    if (!disconnectTarget) return;
+  /**
+   * Runs the disconnect for whichever confirmation is open. The soft path only deactivates the
+   * connection (it stays reconnectable); the permanent one deletes it at the bank provider.
+   * The success message reports what the bridge says actually happened, since a connection
+   * shared with other accounts is always unlinked even when a soft disconnect was requested.
+   */
+  const runDisconnect = async (account, permanentDeletion, clearTarget) => {
+    if (!account) return;
     setDisconnecting(true);
     try {
-      await disconnect(disconnectTarget.id);
-      toast.success(ui('financeAccountsBankConnectionDisconnectDone'));
-      setDisconnectTarget(null);
+      const res = await disconnect(account.id, { permanentDeletion });
+      const wasPermanent = res?.permanent ?? permanentDeletion;
+      toast.success(ui(wasPermanent
+        ? 'financeAccountsBankConnectionDeleteDone'
+        : 'financeAccountsBankConnectionDisconnectDone'));
+      clearTarget();
       reload();
     } catch (err) {
-      toast.error(err.message || ui('financeAccountsBankConnectionDisconnectError'));
+      toast.error(err.message || ui(permanentDeletion
+        ? 'financeAccountsBankConnectionDeleteError'
+        : 'financeAccountsBankConnectionDisconnectError'));
     } finally {
       setDisconnecting(false);
     }
   };
+
+  const handleConfirmDisconnect = () => runDisconnect(
+    disconnectTarget, false, () => setDisconnectTarget(null),
+  );
+
+  const handleConfirmDeleteConnection = () => runDisconnect(
+    deleteConnectionTarget, true, () => setDeleteConnectionTarget(null),
+  );
 
   const handlers = {
     onOpen: (account) => navigate(`/financial-account/${account.id}`),
@@ -354,16 +410,25 @@ export default function AccountsHeaderTable({
         data-testid="ArchiveAccountDialog__accthdr" />
       {/* `...DisconnectConfirm` ("Disconnect this bank connection?") is the dialog's title,
           not a button label — despite the name. `...DisconnectAction` ("Disconnect") is the
-          confirm button. There is no separate body/description key. */}
+          confirm button, and `...DisconnectBody` explains that this only deactivates the
+          connection, keeping it reconnectable. */}
       <ConfirmDialog
         open={!!disconnectTarget}
         onOpenChange={(o) => { if (!o) setDisconnectTarget(null); }}
         title={ui('financeAccountsBankConnectionDisconnectConfirm')}
+        description={ui('financeAccountsBankConnectionDisconnectBody')}
         confirmLabel={ui('financeAccountsBankConnectionDisconnectAction')}
         cancelLabel={ui('cancel')}
         loading={disconnecting}
         onConfirm={handleConfirmDisconnect}
         data-testid="ConfirmDialog__accthdr" />
+      {/* The irreversible half gets the full warning cartel, same as in the edit modal. */}
+      {deleteConnectionTarget ? (
+        <BankConnectionDeleteConfirmModal
+          onConfirm={handleConfirmDeleteConnection}
+          onClose={() => setDeleteConnectionTarget(null)}
+          data-testid="BankConnectionDeleteConfirmModal__accthdr" />
+      ) : null}
       {transferSource && (
         <FundsTransferModal
           open
