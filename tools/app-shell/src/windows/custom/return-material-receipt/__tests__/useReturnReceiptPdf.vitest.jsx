@@ -32,7 +32,6 @@ import { renderHook, waitFor } from '@testing-library/react';
 import {
   useReturnReceiptPdf,
   getReturnReceiptPdfLabels,
-  generateReturnReceiptPdf,
 } from '../useReturnReceiptPdf.js';
 
 const HEADER_STUB = {
@@ -118,35 +117,5 @@ describe('useReturnReceiptPdf', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);
     expect(result.current.pdfUrl).toBe('blob:http://localhost/test');
-  });
-});
-
-// ── generateReturnReceiptPdf ──────────────────────────────────────────────────
-
-describe('generateReturnReceiptPdf', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockFetchJson.mockResolvedValue(HEADER_STUB);
-    mockFetchAll.mockResolvedValue([]);
-    mockFetchOptionalJson.mockResolvedValue(null);
-    mockFetchLocationAddress.mockResolvedValue(null);
-    mockFetchImageDataUrl.mockResolvedValue(null);
-    mockBuildLocationAddressLines.mockReturnValue([]);
-    mockRenderPdf.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
-  });
-
-  it('calls renderPdf and returns a Blob', async () => {
-    const labels = getReturnReceiptPdfLabels((k) => k);
-    const blob = await generateReturnReceiptPdf('rmr-1', '/api/return-material-receipt', 'tok', labels);
-    expect(mockRenderPdf).toHaveBeenCalled();
-    expect(blob).toBeInstanceOf(Blob);
-  });
-
-  it('passes data fields to renderPdf', async () => {
-    const labels = getReturnReceiptPdfLabels((k) => k);
-    await generateReturnReceiptPdf('rmr-1', '/api/return-material-receipt', 'tok', labels);
-    const [, , , data] = mockRenderPdf.mock.calls[0];
-    expect(data).toHaveProperty('documentNo', 'RMR-001');
-    expect(data).toHaveProperty('labels');
   });
 });

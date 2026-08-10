@@ -84,7 +84,9 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
         <CopyIcon />
       </button>
 
-      <SendDocumentButton onClick={() => setShowSend(true)} />
+      {/* ETP-4717 — Send is available from "Bajo evaluación" (UE) onward, not
+          while still Draft (DR). Matches the grid row quick-action's gate. */}
+      {status !== 'DR' && <SendDocumentButton onClick={() => setShowSend(true)} />}
 
       <CopyRecordLinkButton recordId={recordId} windowName="sales-quotation" />
 

@@ -111,23 +111,7 @@ describe('useEntity defaults fetching logic', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('merging defaults does not overwrite user edits', () => {
-    // Simulates the merge behavior: { ...prev, ...defaults }
-    // User edits (prev) come first, then defaults merge in.
-    // But since setEditing uses prev => ({ ...prev, ...data.defaults }),
-    // defaults WILL overwrite. This is correct because handleNew starts
-    // with {} and defaults arrive before user interaction.
-    const editing = {};
-    const defaults = { documentStatus: 'DR', salesTransaction: true };
-    const merged = { ...editing, ...defaults };
-
-    assert.equal(merged.documentStatus, 'DR');
-    assert.equal(merged.salesTransaction, true);
-
-    // If user had already typed something (race condition), defaults would overwrite
-    // This is acceptable because handleNew sets {} first and defaults arrive async
-    const editingWithInput = { documentStatus: 'CO' };
-    const mergedWithInput = { ...editingWithInput, ...defaults };
-    assert.equal(mergedWithInput.documentStatus, 'DR', 'defaults overwrite initial empty state');
-  });
+  // The merge itself (ETP-4741: late defaults must not overwrite what the user
+  // already typed) is covered against the real hook in
+  // useEntity.defaultsRace.vitest.jsx, not by simulating the spread here.
 });

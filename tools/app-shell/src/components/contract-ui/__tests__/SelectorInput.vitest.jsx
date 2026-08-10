@@ -225,4 +225,33 @@ describe('SelectorInput', () => {
 
     addEventListenerSpy.mockRestore();
   });
+
+  // Regression: fetchPage's .then()/.catch() called setState with no unmount guard.
+  // If the component unmounts while a fetch is in flight (e.g. the user closes the
+  // dropdown/navigates away, or — as surfaced under the full test suite's load —
+  // the test's jsdom environment tears down before a slow mock resolves), the
+  // settled promise still ran setServerOptions/setHasMore/setFetching, which crashed
+  // with "ReferenceError: window is not defined" once `window` no longer existed.
+  it('does not throw when an in-flight fetch resolves after unmount', async () => {
+    let resolveFetch;
+    globalThis.fetch = vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; }));
+
+    const { unmount } = renderSelector({ selectorUrl: '/api/header/selectors/C_BPartner_ID' });
+    unmount();
+
+    // Reproduce the exact crash seen under the full test suite's parallel run: by the
+    // time this fetch settles, the jsdom environment itself (global `window`) is gone
+    // — not just the React component. Calling a state setter in that state makes React's
+    // dispatchSetState -> requestUpdateLane -> getCurrentEventPriority reference `window`
+    // and throw. A correctly unmount-guarded fetchPage must never reach that call.
+    const realWindow = globalThis.window;
+    delete globalThis.window;
+    try {
+      resolveFetch({ ok: true, json: async () => ({ items: [] }) });
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+    } finally {
+      globalThis.window = realWindow;
+    }
+  });
 });

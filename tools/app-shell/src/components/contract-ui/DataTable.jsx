@@ -13,6 +13,7 @@ import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
+import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
@@ -658,7 +659,7 @@ function applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap) {
   return empty;
 }
 
-const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice }, ref) {
+const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false }, ref) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -945,6 +946,12 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
 
   return (
     <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">
+      {/* ETP-4735 — matches the leading CHEVRON_COLUMN_WIDTH <col> renderLinesColgroup
+          reserves when hasDimensionsPanel. A <col> alone doesn't reserve visual space —
+          table column widths/positions are driven by the actual cells present in a row,
+          so without this empty cell every cell after it (product, movementQuantity, …)
+          renders one column-slot too far left relative to InlineLinesPanel's rows above. */}
+      {hasDimensionsPanel && <TableCell aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableCell__eb5261" />}
       {/* Saving spinner — aligned with selection checkbox column (empty when idle). */}
       {selectable && (
         <TableCell className="w-10 px-1" data-testid="TableCell__eb5261">
@@ -1275,15 +1282,21 @@ function computeActionColsWidthPx({
  * renders its own header instead (table-layout: fixed then drives widths via
  * the real <TableHead> cells). Extracted from DataTable's render body so this
  * mode's branching doesn't add nesting to the parent's complexity.
+ *
+ * ETP-4735 — when the entity has a dimensionsPanel column, InlineLinesPanel's rows
+ * reserve a leading CHEVRON_COLUMN_WIDTH slot (expand-chevron) before the checkbox.
+ * This colgroup must reserve the identical slot so the add-row's inputs land under
+ * the same columns as the rows above instead of drifting left by that width.
  */
-function renderLinesColgroup({
+export function renderLinesColgroup({
   hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
   ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
-  quickActionsEnabled, ilpHasNoAmountCol,
+  quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
 }) {
   if (!hideHeader) return null;
   return (
     <colgroup>
+      {hasDimensionsPanel && <col style={{ width: CHEVRON_COLUMN_WIDTH }} />}
       {selectable && <col style={{ width: 40 }} />}
       {visibleColumns.map((col, colIdx) => {
         const { grow, basis } = colFlexSpecs[colIdx];
@@ -1486,6 +1499,7 @@ function TableDataRow({
   entity,
   apiBaseUrl,
   token,
+  hasDimensionsPanel = false,
 }) {
   const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
   const rowDisabled = isRowSelectable && !isRowSelectable(row);
@@ -1503,6 +1517,8 @@ function TableDataRow({
         onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine, rowHoverStyle,
       })}
     >
+      {/* ETP-4735 — see the matching comment on InlineAddRow's leading cell. */}
+      {hasDimensionsPanel && <TableCell aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableCell__eb5261" />}
       {selectable && (
         <TableCell
           className="w-10 px-3"
@@ -1731,11 +1747,14 @@ function renderTableRows({
 function renderFooterRow({
   totals, showFooterTotals, selectable, visibleColumns, filteredData,
   hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
+  hasDimensionsPanel = false,
 }) {
   if (!totals || !showFooterTotals) return null;
   return (
     <TableFooter data-testid="TableFooter__eb5261">
       <TableRow className="font-medium" data-testid="TableRow__eb5261">
+        {/* ETP-4735 — see the matching comment on InlineAddRow's leading cell. */}
+        {hasDimensionsPanel && <TableCell aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableCell__eb5261" />}
         {selectable && <TableCell data-testid="TableCell__eb5261" />}
         {visibleColumns.map((col) => (
           <TableCell
@@ -1924,9 +1943,23 @@ export function DataTable({
     return map;
   }, [addRow?.fields]);
 
+  // ETP-4735 — a `dimensionsPanel` column is never a real grid column: InlineLinesPanel
+  // excludes it too and instead renders its own leading expand-chevron + sub-row UX (see
+  // hasDimensionsPanel there). DataTable previously had no equivalent exclusion, so its
+  // add-row-only companion table (rendered under InlineLinesPanel when addRow.active) rendered
+  // a real ~120px placeholder cell for it — both cluttering the row and, via
+  // growColumnWidth()'s fixedColsTotalPx, shrinking the grow column ahead of it (e.g. product),
+  // shifting every column after it (e.g. movementQuantity) out of alignment with the rows above.
+  const hasDimensionsPanel = useMemo(
+    () => (columns || []).some(c => c.type === 'dimensionsPanel'),
+    [columns]
+  );
+
   const visibleColumns = useMemo(() => {
     // Start from explicit hiddenColumns prop
     let base = hiddenColumns.length > 0 ? columns.filter(col => !hiddenColumns.includes(col.key)) : columns;
+    // ETP-4735 — never render dimensionsPanel as a normal column (see comment above).
+    base = base.filter(col => col.type !== 'dimensionsPanel');
     // Auto-hide columns whose controlling field (displayIf) is inactive in ALL
     // saved rows AND in the current add-row values.
     if (Object.keys(displayIfControllers).length > 0) {
@@ -2114,7 +2147,7 @@ export function DataTable({
           {renderLinesColgroup({
             hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
             ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
-            quickActionsEnabled, ilpHasNoAmountCol,
+            quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
           })}
           <TableHeader
             className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
@@ -2122,6 +2155,12 @@ export function DataTable({
             style={hideHeader ? { display: 'none' } : undefined}
             data-testid="TableHeader__eb5261">
             <TableRow className="border-b border-border/40" data-testid="TableRow__eb5261">
+              {/* ETP-4735 — mirrors the leading chevron cell added to InlineAddRow/TableDataRow
+                  below: keeps this table's own header self-consistent with its body whenever a
+                  dimensionsPanel column is present (only actually exercised in hideHeader mode,
+                  where InlineLinesPanel's rows are what this table's add-row must align with —
+                  see renderLinesColgroup's leading <col>). */}
+              {hasDimensionsPanel && <TableHead aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableHead__eb5261" />}
               {selectable && (
                 <TableHead
                   className="w-10 px-3 align-middle"
@@ -2149,6 +2188,7 @@ export function DataTable({
               editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
               onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
               onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,
+              hasDimensionsPanel,
             })}
             {addRow?.active && (
               <InlineAddRow
@@ -2177,12 +2217,14 @@ export function DataTable({
                 ilpHasNoAmountCol={ilpHasNoAmountCol}
                 ilpTrailing={ilpTrailing}
                 labelOverrides={labelOverrides}
+                hasDimensionsPanel={hasDimensionsPanel}
                 data-testid="InlineAddRow__eb5261" />
             )}
           </TableBody>
           {renderFooterRow({
             totals, showFooterTotals, selectable, visibleColumns, filteredData,
             hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
+            hasDimensionsPanel,
           })}
         </Table>
       </div>

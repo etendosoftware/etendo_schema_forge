@@ -25,11 +25,6 @@ vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
   default: () => <div data-testid="create-invoice-confirm-modal" />,
 }));
 
-vi.mock('../useReturnReceiptPdf', () => ({
-  generateReturnReceiptPdf: vi.fn(),
-  getReturnReceiptPdfLabels: () => ({}),
-}));
-
 import ConfirmWithCreditButton from '../ConfirmWithCreditButton.jsx';
 import { itRendersOnlyCopyLinkOutsideDrOrCo } from '../../shared/__tests__/confirmWithCreditButtonCopyLinkTest.jsx';
 
@@ -118,12 +113,12 @@ describe('ConfirmWithCreditButton', () => {
     expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
   });
 
-  it('always renders the print button regardless of status', () => {
+  it('does NOT render a print button (printing is unified in DocumentPrintDrawer)', () => {
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'DR', linesCount: 1 }} />);
-    expect(screen.getByText('print')).toBeInTheDocument();
+    expect(screen.queryByText('print')).not.toBeInTheDocument();
 
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'CO', returnInvoices: [] }} />);
-    expect(screen.getAllByText('print').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('print').length).toBe(0);
   });
 
   // ETP-4737: postConfirmButtonLabel={ui('returnReceipt.createRectificativeInvoice')}
