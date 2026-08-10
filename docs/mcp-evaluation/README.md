@@ -13,7 +13,7 @@ the registry.
 |---|---|
 | [`mcp-improvements-registry.md`](mcp-improvements-registry.md) | **The registry — single source of truth.** Every IMP-* item with status, priority, class, repo, points, cohort and evidence pointer · **MARI** (§2.1–2.3) · M5 diagnostics (§2.4) · probe surfaces (§2.5) · changelog (§4). The only file where a status may change |
 | [`mcp-comparison-holded-vs-etendo-go.md`](mcp-comparison-holded-vs-etendo-go.md) | **The baseline benchmark.** Architecture contrast, tool/spec inventories, coverage matrix, and each item's `BEFORE`/`AFTER`/`Done when:` specification. Reference material |
-| `mcp-comparison-post-audit-<date>.md` | **One run report per execution.** Live evidence rows, defects, new proposals, preference verdict, M1–M4, and the delta against the registry |
+| `mcp-comparison-post-audit-<date>.md` | **One run report per execution.** Live evidence rows, defects, new proposals, preference verdict, M1–M4, and the delta against the registry. **Must end with a closing snapshot** — current MARI broken into its four components, plus every registered item grouped Resolved / Pending P1 / Pending P2 with a one-sentence description each, so the report reads standalone. Read-only restatement of the registry; canonical example is the 2026-08-10 report §10 |
 | [`imps/`](imps/) | **One working file per improvement.** Written while the item is being worked, not before |
 
 ### Run reports
@@ -22,6 +22,7 @@ the registry.
 |---|---|---|
 | 2026-08-05 | [`mcp-comparison-post-audit-2026-08-05.md`](mcp-comparison-post-audit-2026-08-05.md) | Baseline. Registered IMP-11…IMP-15. **MARI 28** |
 | 2026-08-06 | [`mcp-comparison-post-audit-2026-08-06.md`](mcp-comparison-post-audit-2026-08-06.md) | Full-coverage run: all 6 probe surfaces closed, M1/M2 re-measured on the frozen suite, IMP-16…IMP-21 registered, quota re-based 73 → 97. **MARI 28 → 49** |
+| 2026-08-10 | [`mcp-comparison-post-audit-2026-08-10.md`](mcp-comparison-post-audit-2026-08-10.md) | IMP-15 wave verification, write-probe mode. First run where the number moved because the *product* moved: M2 40 % → 80 %, M1 2.1× → 1.4×. IMP-15 / IMP-10 / IMP-25 resolved; IMP-11 / IMP-12 / IMP-14 / IMP-16 advanced; IMP-22…IMP-25 registered, consuming the last of the quota (97/97). Two new P1s: **IMP-23** (`neo_batch` not atomic) and **IMP-24** (silent date corruption on write). Flags that the frozen suite now flatters the product (§6). **MARI 49 → 73 — KR met** |
 
 ## What the `imps/` files are for
 

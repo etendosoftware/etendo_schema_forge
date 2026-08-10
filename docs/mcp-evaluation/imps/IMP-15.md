@@ -373,3 +373,48 @@ evidence for §9.2.1.
    product-bearing line it produces a value that is guaranteed wrong whenever the product's UOM is
    not alphabetically first. `845e9363` fixes the symptom for `uOM`; the general question — which
    mandatory FKs are genuinely user-choices versus derivable — is open and worth its own item.
+
+---
+
+## 11. Closed — 2026-08-10 `/mcp-comparison` run (`etendo-go-local`, build `a4963b6b`)
+
+**Status moved ⏳ → ✅ in the registry, 0 → 5 points.** Run report:
+[`../mcp-comparison-post-audit-2026-08-10.md`](../mcp-comparison-post-audit-2026-08-10.md).
+
+Item 2 of §10 is discharged, and the run added one verification §9.6 could not: it probed the
+`a4963b6b` narrowing **from the abstaining side**. §9.6 proved the injection fires correctly on a
+transactional line; it could not prove the whitelist stops the injection where it would be wrong,
+because it never called a non-transactional entity. The 2026-08-10 run did:
+
+| Probe | Entity | Result |
+|---|---|---|
+| C6 | `sales-order/lines`, no `uOM` in body | injects → `"uOM":"100"` / `"Unit"`, no trigger 20111 |
+| C7 | `product/alternateUom`, no `uOM` in body | **abstains** → `missingFields:[{name:"uOM",column:"C_Uom_ID"}]` |
+
+C7 is the one that matters for `a4963b6b`: `M_Product_AUM` has no property in
+`TRANSACTIONAL_QUANTITY_PROPERTIES`, so `isTransactionalLine` returns false and the policy declines
+to guess rather than writing a semantically wrong UOM onto an alternate-UOM row. That is the whole
+point of the positive whitelist over blacklisting `M_Product_AUM`, and it is now evidenced.
+
+**Item 5 is now recorded as a candidate, not a defect — and stated carefully.** C7 was the obvious
+place to reproduce `tryInjectFirstFromLookup`'s alphabetical preselect on a mandatory FK, and **it
+did not reproduce**: the entity returned `missingFields` rather than a guessed `uOM`. That result
+shows the `a4963b6b` guard working; it does **not** show the general defect is absent, because the
+guard short-circuits before the preselect would be observable on this entity. The candidate is
+carried unnumbered in the run report §8.3 rather than asserted either way. The general question §10.5
+poses stands open.
+
+**Item 4 is discharged**, with two of the three §9.2 defects registered under their own numbers and
+one folded:
+
+| §9.2 defect | Disposition |
+|---|---|
+| `neo_batch` is not atomic | **IMP-23** (P1). Reproduced a fourth time, and the mechanism finally isolated: FK-resolution failures fail in the pre-pass *before* the transaction opens and so roll back cleanly, while **persist-time** failures leave prior ops committed. That discriminator explains why three earlier runs saw it intermittently — including §9.6's clean `committed:true`, which was never evidence of atomicity |
+| `view:"create"` omits required fields | Folded into **IMP-12** (its own remit), which advanced ⏳ → ⚠️ rather than resolving. `partnerAddress` is fixed; `invoiceAddress`, the line-level `orderDate` from §9.4, and the parent FK `salesOrder` are not. Sharpened: `docs(topic:"creating records")` returns a recipe that **does** list `invoiceAddress` and `salesOrder`, so the correct contract exists — the machine-readable view is the incomplete one |
+| raw line-create error outside the envelope | Folded into **IMP-5**, together with the `$ref` leak from round four. IMP-5's own named gap (raw DAL `status:-4`) **did** close here, but it stays ⚠️ because the batch envelope now differs *by failure class*: the FK-resolution path returns a flattened shape with **no `committed` key** at all |
+
+**Items 1 and 3 remain owed and are the user's**: the module's unit suite has still never been run
+against `b64af873`, `845e9363`, `f0e488de` or `a4963b6b` — including `f0e488de`'s 9-case regression
+test, whose load-bearing assertion is precisely the one that fails against all three broken fixes.
+That is a process gap, not a behavioural one, which is why it did not hold the ✅; it is recorded as a
+caveat on the registry row so the ✅ cannot be read as "verified by tests".

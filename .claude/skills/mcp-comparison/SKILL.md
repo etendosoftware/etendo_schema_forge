@@ -214,6 +214,21 @@ Two structural conventions the report relies on — do not break them:
 5. Do not open Jira tickets or PRs from this skill; report findings and let the human decide.
 6. **Never finish a run without new improvement proposals and a preference verdict** (Step 3b).
    "Everything is done, nothing to improve" is not an acceptable outcome of this skill.
+7. **Every run report MUST end with a closing snapshot section.** Non-negotiable, and the last thing
+   written. It carries:
+   - **The current MARI, broken into its four components**, with the previous run's value next to it
+     and the KR verdict. A reader must never have to open the registry to learn the headline number.
+   - **Every registered item, all of them**, in three groups — *Resolved*, *Pending P1*, *Pending P2*
+     — each with its status mark and **one sentence saying what the item is**, in plain language, not
+     its title verbatim. The point is that someone who has read nothing else can see the whole board.
+   - **What is owed by the human rather than by a run** (unrun test suites, unpushed branches,
+     decisions like re-basing the quota or amending the frozen suite).
+
+   Two rules that keep this from rotting: it is a **read-only restatement** of the registry — a
+   status or point value written only here is a drift bug, and the two must be diffable; and the
+   grouping is by **priority, not by cohort or number**, because the section exists to answer "what
+   should be worked next", which numbering does not. Canonical example:
+   [`mcp-comparison-post-audit-2026-08-10.md`](../../../docs/mcp-evaluation/mcp-comparison-post-audit-2026-08-10.md) §10.
 
 ---
 
