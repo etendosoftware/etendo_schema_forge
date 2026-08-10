@@ -638,3 +638,23 @@ available here, and independent of whether any unit test runs. What is retracted
 §9's reason 2, corrected in place above. And the practical consequence is that the guard test written to
 stop the next missing call site is not yet guarding anything: it needs one real `./gradlew test
 --tests "com.etendoerp.go.*"` to become load-bearing.
+
+### 9.3 The suite is green — 2026-08-10
+
+That run happened. `./gradlew test --tests "com.etendoerp.go.*"` now passes, so `NeoDateFormatTest`,
+`McpToolRouterSupportTest`'s date cases and `McpWriteVerbCoercionCallSiteTest` have executed for the
+first time. **The guard test is load-bearing from here on** — the §9.2 caveat above is discharged.
+
+Getting there took two fixes, both of them consequences of the same 4-day compile outage rather than
+new defects:
+
+| Failure | Cause | Fix |
+|---|---|---|
+| `UnfinishedStubbingException` ×6 in `NeoCommercialLinePolicyTest` | `mockProductWithUom()` stubs two mocks of its own and was called inside a pending `thenReturn(...)` argument (Mockito hint #3) | Hoist the helper call into a local before the outer `when()` — `com.etendoerp.go@f30cd598` |
+| `Wanted but not invoked: setSessionValue("#Date", …)` ×3 in `NeoDefaultsServiceTest` | **This IMP's own `926e4023`** removed the dead ISO `#Date` seeding from `buildVariablesSecureApp` and left the tests that verified it | Invert the two dedicated tests into `never()` + `verifyNoInteractions` guards (re-adding the seeding now fails, with the reason in the javadoc), drop the incidental assert, fix the stale javadoc — `com.etendoerp.go@0566c8c4` |
+
+The second row is the one worth remembering: a removal-without-test-update shipped inside this IMP and
+stayed invisible for four days because the suite could not compile. A broken compile does not merely
+delay feedback — it lets *unrelated* debt accumulate behind it, and every item surfaces at once when the
+door reopens. The `SessionFactoryController` NPEs and the `RuntimeException: Simulated failure` in the
+same output are deliberate error-path noise from passing tests, not failures.
