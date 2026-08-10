@@ -420,3 +420,39 @@ describe('translateBackendError — "no lines to invoice" exact match (ETP-4831 
     assert.equal(translateBackendError(RAW, t), 'No hay líneas a facturar en este pedido.');
   });
 });
+
+// ── ETP-4831 case 3: "No hay líneas pendientes de facturar en este albarán" ─────
+//
+// CreateDraftInvoiceHandler (com.etendoerp.go) has TWO throw sites —
+// capShipmentLineOverrides and the line-selection loop inside
+// createFromShipments — that both throw the IDENTICAL hardcoded Spanish literal
+// `new OBException("No hay líneas pendientes de facturar en este albarán")`,
+// same bug class as case 2 (case 2 is the order-invoicing flow, this is the
+// shipment-invoicing flow) but with no AD_Message/i18n involvement, so it
+// always renders in Spanish regardless of session locale.
+//
+// Both throw sites emit the exact same string, so ONE BACKEND_ERROR_MAP entry
+// covers both. Suggested key: `backendError.noPendingLinesToInvoiceShipment`.
+//
+// EXPECTED (not yet implemented): a `BACKEND_ERROR_MAP` entry mapping the raw
+// Spanish literal to `backendError.noPendingLinesToInvoiceShipment`. Until that
+// lands, these tests MUST fail: translateBackendError has no matching key for
+// this message, so it falls through to returning `msg` unchanged (still
+// Spanish, even for an en_US translator).
+describe('translateBackendError — "no pending lines to invoice" shipment exact match (ETP-4831 case 3)', () => {
+  const RAW = 'No hay líneas pendientes de facturar en este albarán';
+
+  it('translates the raw Spanish literal to en_US', () => {
+    const t = (k) => (k === 'backendError.noPendingLinesToInvoiceShipment'
+      ? 'There are no pending lines to invoice for this shipment.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'There are no pending lines to invoice for this shipment.');
+  });
+
+  it('translates the raw Spanish literal to es_ES (symmetry with other exact-match entries)', () => {
+    const t = (k) => (k === 'backendError.noPendingLinesToInvoiceShipment'
+      ? 'No hay líneas pendientes de facturar en este albarán.'
+      : k);
+    assert.equal(translateBackendError(RAW, t), 'No hay líneas pendientes de facturar en este albarán.');
+  });
+});
