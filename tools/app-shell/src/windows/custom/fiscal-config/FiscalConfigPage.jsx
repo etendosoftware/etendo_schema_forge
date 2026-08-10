@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Save, RefreshCw } from 'lucide-react';
+import { Save, RefreshCw, PlusCircle } from 'lucide-react';
 import OrgDropdown from './FiscalOrgDropdown.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -50,16 +50,28 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   const [resetKey, setResetKey] = useState(0);
   const [changeSifOpen, setChangeSifOpen] = useState(false);
 
+  // "Add complementary SIF" — null while idle, 'sii' or 'tbai' while adding
+  const [addingComplementary, setAddingComplementary] = useState(null);
+  const [complementaryRecord, setComplementaryRecord] = useState(null);
+  const [addingComplementaryError, setAddingComplementaryError] = useState(null);
+  const [creatingComplementary, setCreatingComplementary] = useState(false);
+  const complementaryRef = useRef(null);
+
   const {
     loading, error, profile,
     siiRecord, tbaiRecord, verifactuRecord,
-    refetch,
+    refetch, createComplementary,
   } = useFiscalConfig(orgId, apiBaseUrl);
 
   // When mock is active, bypass API result entirely
   const effectiveProfile  = mockOverride
     ? detectProfile(mockOverride.sii, mockOverride.tbai, mockOverride.verifactu)
     : profile;
+
+  // When adding a complementary SIF, switch the rendered layout to the combined profile
+  // so the page immediately looks like the sii+tbai view (two tabs).
+  // effectiveProfile is still used for canAddComplementary, canChangeSif, handleSave logic.
+  const renderProfile = addingComplementary ? 'sii+tbai' : effectiveProfile;
 
   const PROFILE_LABEL = { sii: 'SII', 'sii-navarra': 'SII', 'sii+tbai': 'SII + TBAI', tbai: 'TBAI', verifactu: 'VERI*FACTU' };
   const profileLabel = PROFILE_LABEL[effectiveProfile] ?? null;
@@ -75,12 +87,53 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   const tbaiRef      = useRef(null);
   const verifactuRef = useRef(null);
 
+  // "Add complementary SIF" — only when real API data (not mock), org selected,
+  // and profile is singly sii or tbai (not already combined or verifactu).
+  const canAddComplementary = !mockOverride && !!orgId &&
+    effectiveProfile === 'tbai';
+
+  async function handleAddComplementary() {
+    if (!orgId) return;
+    setCreatingComplementary(true);
+    setAddingComplementaryError(null);
+    try {
+      const system = effectiveProfile === 'sii' ? 'tbai' : 'sii';
+      const created = await createComplementary(system, orgId);
+      setComplementaryRecord(created);
+      setAddingComplementary(system);
+    } catch (err) {
+      setAddingComplementaryError(
+        ui('fiscal.addComplementary.err.createFailed', { error: err instanceof Error ? err.message : String(err) })
+      );
+    } finally {
+      setCreatingComplementary(false);
+    }
+  }
+
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
     setSavedOk(false);
     try {
-      if (['sii', 'sii-navarra'].includes(effectiveProfile)) {
+      if (effectiveProfile === 'sii' && addingComplementary === 'tbai') {
+        // Saving existing SII + new TBAI being added (complementaryRef holds the TBAI section)
+        const [r0, r1] = await Promise.allSettled([
+          siiRef.current?.save(),
+          complementaryRef.current?.save(),
+        ]);
+        if (r0.status === 'rejected' || r1.status === 'rejected') {
+          throw new Error(r0.reason?.message ?? r1.reason?.message ?? 'Error saving');
+        }
+      } else if (effectiveProfile === 'tbai' && addingComplementary === 'sii') {
+        // Saving existing TBAI + new SII being added (complementaryRef holds the SII section)
+        const [r0, r1] = await Promise.allSettled([
+          tbaiRef.current?.save(),
+          complementaryRef.current?.save(),
+        ]);
+        if (r0.status === 'rejected' || r1.status === 'rejected') {
+          throw new Error(r0.reason?.message ?? r1.reason?.message ?? 'Error saving');
+        }
+      } else if (['sii', 'sii-navarra'].includes(effectiveProfile)) {
         await siiRef.current?.save();
       } else if (effectiveProfile === 'tbai') {
         await tbaiRef.current?.save();
@@ -95,6 +148,8 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
           throw new Error(r0.reason?.message ?? r1.reason?.message ?? 'Error saving');
         }
       }
+      setAddingComplementary(null);
+      setComplementaryRecord(null);
       refetch();
       setResetKey(k => k + 1);
       setSavedOk(true);
@@ -163,7 +218,19 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
             data-testid="OrgDropdown__310303" />
         </div>
         <div className="flex items-center gap-2">
-          {canChangeSif && (
+          {canAddComplementary && !addingComplementary && (
+            <Button
+              variant="outline"
+              onClick={handleAddComplementary}
+              disabled={saving || creatingComplementary}
+              data-testid="FiscalConfigPage__addComplementary">
+              <PlusCircle size={14} className="mr-1.5" />
+              {creatingComplementary
+                ? ui('fiscal.addComplementary.creating')
+                : ui('fiscal.addComplementary.addSii')}
+            </Button>
+          )}
+          {canChangeSif && !addingComplementary && (
             <Button
               variant="outline"
               onClick={() => setChangeSifOpen(true)}
@@ -194,6 +261,12 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
         <div className="flex items-center justify-between px-6 py-2 bg-destructive/10 border-t border-destructive/20 text-sm text-destructive">
           <span>{saveError}</span>
           <button type="button" onClick={() => setSaveError(null)} className="ml-4 hover:opacity-70">✕</button>
+        </div>
+      )}
+      {addingComplementaryError && (
+        <div className="flex items-center justify-between px-6 py-2 bg-destructive/10 border-t border-destructive/20 text-sm text-destructive">
+          <span>{addingComplementaryError}</span>
+          <button type="button" onClick={() => setAddingComplementaryError(null)} className="ml-4 hover:opacity-70">✕</button>
         </div>
       )}
     </div>
@@ -246,7 +319,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
           </div>
         )}
 
-        {showContent && effectiveProfile === 'conflict' && (
+        {showContent && renderProfile === 'conflict' && (
           <div className="flex-1 px-6 py-8">
             <div className="rounded-lg border border-destructive bg-destructive/10 p-6">
               <h2 className="font-semibold text-destructive">{ui('fiscal.conflict.title')}</h2>
@@ -256,7 +329,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
         )}
 
         {/* SII / SII-Navarra — no tabs */}
-        {showContent && ['sii', 'sii-navarra'].includes(effectiveProfile) && (
+        {showContent && ['sii', 'sii-navarra'].includes(renderProfile) && (
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
               <SiiSection
@@ -277,8 +350,8 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
           </div>
         )}
 
-        {/* SII + TBAI — with tabs */}
-        {showContent && effectiveProfile === 'sii+tbai' && (
+        {/* SII + TBAI — with tabs (also used when adding a complementary SIF) */}
+        {showContent && renderProfile === 'sii+tbai' && (
           <>
             <TabBar
               tabs={[ui('fiscal.tab.sii'), ui('fiscal.tab.tbai')]}
@@ -290,8 +363,8 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 {activeTab === 0 && (
                   <SiiSection
                     key={`sii-${resetKey}`}
-                    ref={siiRef}
-                    record={effectiveSii}
+                    ref={addingComplementary === 'sii' ? complementaryRef : siiRef}
+                    record={addingComplementary === 'sii' ? complementaryRecord : effectiveSii}
                     apiBaseUrl={apiBaseUrl}
                     orgId={orgId}
                     onSave={() => {}}
@@ -302,8 +375,8 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 {activeTab === 1 && (
                   <TbaiSection
                     key={`tbai-${resetKey}`}
-                    ref={tbaiRef}
-                    record={effectiveTbai}
+                    ref={addingComplementary === 'tbai' ? complementaryRef : tbaiRef}
+                    record={addingComplementary === 'tbai' ? complementaryRecord : effectiveTbai}
                     apiBaseUrl={apiBaseUrl}
                     orgId={orgId}
                     onSave={() => {}}
@@ -322,7 +395,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
         )}
 
         {/* TBAI — no tabs */}
-        {showContent && effectiveProfile === 'tbai' && (
+        {showContent && renderProfile === 'tbai' && (
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
               <TbaiSection
@@ -344,7 +417,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
         )}
 
         {/* Verifactu — no tabs */}
-        {showContent && effectiveProfile === 'verifactu' && (
+        {showContent && renderProfile === 'verifactu' && (
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
               <VerifactuSection

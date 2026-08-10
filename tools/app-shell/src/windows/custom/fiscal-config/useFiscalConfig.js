@@ -4,8 +4,8 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // Confirmed from artifacts/*/contract.json → backendContract.window.primaryEntity
-const SII_ENTITY = 'siiConfiguration';
-const TBAI_ENTITY = 'header';
+const SII_ENTITY      = 'siiConfiguration';
+const TBAI_ENTITY     = 'header';
 const VERIFACTU_ENTITY = 'cabeceraDeConfiguraciónVerifactu';
 
 async function fetchRecord(apiFetch, specName, entityName, orgId) {
@@ -67,5 +67,29 @@ export function useFiscalConfig(orgId, apiBaseUrl) {
 
   useEffect(() => { load(); }, [load]);
 
-  return { ...state, refetch: load };
+  /**
+   * POSTs a minimal record for the complementary system (sii or tbai) under
+   * the current org. Returns the created record (first item in response.data).
+   * Throws on HTTP error.
+   *
+   * @param {'sii'|'tbai'} system
+   * @param {string} adOrgId
+   * @returns {Promise<object|null>}
+   */
+  async function createComplementary(system, adOrgId) {
+    // tbai-config/header  or  sii-config/siiConfiguration
+    const specPath = system === 'tbai'
+      ? `/tbai-config/${TBAI_ENTITY}`
+      : `/sii-config/${SII_ENTITY}`;
+    const res = await apiFetch(specPath, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adOrgId }),
+    });
+    if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+    const json = await res.json().catch(() => null);
+    return json?.response?.data?.[0] ?? null;
+  }
+
+  return { ...state, refetch: load, createComplementary };
 }

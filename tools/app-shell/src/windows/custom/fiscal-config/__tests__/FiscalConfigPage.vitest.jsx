@@ -32,6 +32,7 @@ vi.mock('../useFiscalConfig.js', () => ({
     tbaiRecord: null,
     verifactuRecord: null,
     refetch: vi.fn(),
+    createComplementary: vi.fn().mockResolvedValue({ id: 'new-tbai-1' }),
   })),
 }));
 
@@ -117,6 +118,7 @@ vi.mock('@/components/ui/button', () => ({
 vi.mock('lucide-react', () => ({
   Save: () => <svg data-testid="icon-save" />,
   RefreshCw: () => <svg data-testid="icon-refresh" />,
+  PlusCircle: () => <svg data-testid="icon-plus-circle" />,
 }));
 
 // --- Import under test ----------------------------------------------------
@@ -303,6 +305,11 @@ describe('FiscalConfigPage — profile: sii', () => {
     expect(screen.getByText('fiscal.cancel')).toBeInTheDocument();
     expect(screen.getByText('fiscal.save')).toBeInTheDocument();
   });
+
+  it('does not show "Add SII" button when profile is "sii"', () => {
+    renderPage();
+    expect(screen.queryByTestId('FiscalConfigPage__addComplementary')).not.toBeInTheDocument();
+  });
 });
 
 describe('FiscalConfigPage — profile: sii-navarra', () => {
@@ -376,6 +383,7 @@ describe('FiscalConfigPage — profile: tbai', () => {
       tbaiRecord: { id: 'tbai-1' },
       verifactuRecord: null,
       refetch: vi.fn(),
+      createComplementary: vi.fn().mockResolvedValue({ id: 'new-sii-1' }),
     });
   });
 
@@ -387,6 +395,31 @@ describe('FiscalConfigPage — profile: tbai', () => {
   it('does not show SiiSection for tbai profile', () => {
     renderPage();
     expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
+  });
+
+  it('shows "Add SII" button when profile is "tbai"', () => {
+    renderPage();
+    expect(screen.getByTestId('FiscalConfigPage__addComplementary')).toBeInTheDocument();
+  });
+
+  it('calls createComplementary when "Add SII" button is clicked', async () => {
+    const { useFiscalConfig: mockUseFiscalConfig } = await import('../useFiscalConfig.js');
+    const createComplementaryMock = vi.fn().mockResolvedValue({ id: 'new-sii-1' });
+    vi.mocked(mockUseFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'tbai',
+      siiRecord: null,
+      tbaiRecord: { id: 'tbai-1' },
+      verifactuRecord: null,
+      refetch: vi.fn(),
+      createComplementary: createComplementaryMock,
+    });
+    renderPage();
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__addComplementary'));
+    await waitFor(() => {
+      expect(createComplementaryMock).toHaveBeenCalledWith('sii', 'org-1');
+    });
   });
 });
 
