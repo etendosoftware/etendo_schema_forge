@@ -62,6 +62,7 @@
       "PWNC": "pagoDepositado"
     },
     "statusFieldLabel": null,
+    "saveBeforeProcesses": true,
     "toolbarBorderBottom": true
   },
   "entities": {

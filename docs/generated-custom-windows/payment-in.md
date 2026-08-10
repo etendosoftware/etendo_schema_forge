@@ -116,6 +116,54 @@ on the `FIN_Payment` window — **Importe** → **Importe esperado** (Expected A
 **Importe recibido** (Received Amount). Classic's grid does not carry an outstanding-amount column
 either; the gap between the two remaining numbers already conveys it.
 
+## Draft-state color regressions restored, Confirm button reordered — ETP-4797
+
+ETP-4554 ("Migrate Artifact/Shared Theme Styles", 4 commits, same day) mis-mapped several colors on
+this window's custom components — every case followed the same shape: a neutral gray or a bright
+literal hex got swapped for the wrong CSS variable token, and no exact-match token existed to
+tokenize to cleanly, so the literal hex was restored instead of force-fitting an approximate token.
+All of the following were verified by diffing the pre-refactor commit against the current code
+(and, for the two ambiguous cases, by sampling pixel colors from the Figma reference):
+
+- **`PaymentBottomPanel.jsx` / `PaymentOutBottomPanel.jsx`** — field labels, icons, and loading/empty
+  text were on `--status-info-*` (blue) instead of `--muted-foreground` (gray); the lines-table box
+  border and row dividers were on `--foreground`/`--card` (near-black / invisible-on-white) instead
+  of `--status-neutral-border`.
+- **`DetailView.jsx` / `detailViewHelpers.jsx`** — the `ghost-danger` Reactivar button's border was
+  diluted to `--destructive/0.3` and never pinned a hover text color, so the base `Button` outline
+  variant's `hover:text-accent-foreground` won on hover and turned the label gray instead of red.
+- **`PaymentDetailSidebarBase.jsx`** — the "confirmed" activity dot was `--status-success-fg`
+  (too dark) instead of the original `#2DCA72`; the "draft" (Borrador) activity dot was
+  `--status-warning-fg` (`#8A6100`, too dark) instead of the original `#FAAF00` (bright orange).
+- **`PaymentDraftBanner.jsx`** (payment-in and payment-out) — the panel background was
+  `hsl(var(--card))` (white, same as the page behind it — invisible) instead of `hsl(var(--muted))`;
+  the body text was `--status-info-fg` (blue) instead of `--muted-foreground`; the bold title text
+  was `hsl(var(--foreground))` (`#0F172A`, navy-tinted) instead of the original `#121217`. The
+  bold/dark portion of the banner was also widened to cover "Borrador — sin impacto en caja." as one
+  unit (previously only "Borrador —" was bold; "sin impacto en caja." was grouped with the lighter
+  sentence that follows it), matching the Figma reference. This moved text between the
+  `draftBannerTitle` and `draftBannerBodyIn`/`draftBannerBodyOut` i18n keys — no new keys were added.
+
+**Confirm button position and icon.** The header toolbar's `Confirmar` action comes from
+`processOverrides.aPRMProcessPayment` in `decisions.json` (not from `draftMode`, which this window
+does not use), so it renders through the generic AD-process button loop in `DetailView.jsx` rather
+than the Save+Confirm pair used by windows like sales-invoice. That loop rendered process buttons
+*before* the Save button by default and never drew an icon for `style: 'positive'` (only
+`ghost-danger` got one, a `Undo2`), so `Confirmar` appeared to the left of `Guardar` and without the
+check mark sales-invoice's own Confirm button has.
+
+Fixed by adding `"saveBeforeProcesses": true` to this window's `decisions.json` (and
+payment-out's), which reorders the toolbar so Save renders first and the process buttons (Confirmar,
+Reactivar) render after it, landing Confirmar as the rightmost button next to Guardar. This
+decisions.json key already existed as a `DetailView.jsx` prop (added under ETP-4542) but was never
+wired through the generator — `resolve-curated.js`'s window-key whitelist didn't include it, so
+setting it in `decisions.json` was silently dropped before reaching `contract.json`. That gap was
+closed in `schema_forge_core` (`resolve-curated.js` + `generate-frontend.js`, `feature/ETP-4797`
+branch) as part of this fix — see `docs/repo-topology.md` for the publish step required before a
+plain `make regen` (without `LOCAL_CORE=1`) picks it up for other windows. A `Check` icon was also
+added for any process button with `style: 'positive'` in `DetailView.jsx`, matching the checkmark
+already used by the `draftMode` Confirm button elsewhere in the app.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which adds the

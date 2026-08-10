@@ -197,16 +197,28 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
     {
       label: ui(isIn ? 'cobroCreado' : 'pagoCreado'),
       date: createdDate,
-      dot: isDraft ? 'var(--status-warning-fg)' : 'var(--status-success-fg)',
+      // Draft dot: before ETP-4554 this was the hardcoded #FAAF00 (bright orange, L=49%).
+      // The migration mapped it to --status-warning-fg (#8A6100, L=27%) — much darker, since
+      // that token is meant for warning TEXT (needs contrast on a light bg), not a standalone
+      // dot. No warning-family token matches #FAAF00 (border is L=76%, too pale; bg is L=96%,
+      // near-white) — same "no exact token" situation as the confirmed-dot green below, so the
+      // literal hex is restored rather than force-fit (found while verifying ETP-4797).
+      dot: isDraft ? '#FAAF00' : 'var(--status-success-fg)',
     },
     // Every confirm/reactivate ever recorded — a full cycle (confirm →
     // reactivate → confirm) shows as three separate rows, not just the
     // latest occurrence of each type.
+    // Confirmed dots are a lighter green than the "created" dot's --status-success-fg: before
+    // ETP-4554 ("Migrate shared window styles") this was the hardcoded #2DCA72 — sitting almost
+    // exactly halfway (48% lightness) between --status-success-fg (#17663A, 25%) and
+    // --status-success-border (#84E4AE, 71%), so neither existing token reproduces it. Restored
+    // the literal hex rather than force-fitting a token that's visibly too dark or too pale
+    // (found while verifying ETP-4797).
     ...events.map(ev => ({
       label: ui(eventLabelKey(ev)),
       confirmedAt: new Date(ev.at),
       date: null,
-      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : 'var(--status-success-fg)',
+      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : '#2DCA72',
     })),
     // Fallback for the rare case where the record is currently confirmed but
     // no event (live or backfilled) could be recorded — still show it once.
@@ -214,7 +226,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       label: ui(isIn ? 'cobroConfirmado' : 'pagoConfirmado'),
       confirmedAt: null,
       date: paymentDate,
-      dot: 'var(--status-success-fg)',
+      dot: '#2DCA72',
     }] : []),
     ...((!isDraft && data?.posted === 'Y') || postedAt ? [{
       label: ui('asientoContabilizado'),

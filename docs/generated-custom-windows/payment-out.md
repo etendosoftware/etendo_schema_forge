@@ -95,6 +95,16 @@ remaining two columns were renamed to match Classic's own wording on the equival
 grid — **Importe** → **Importe esperado** (Expected Amount), **Aplicado** → **Importe recibido**
 (Received Amount).
 
+## Draft-state color regressions restored, Confirm button reordered — ETP-4797
+
+Same ETP-4554 color-mapping bug and same fix as `payment-in.md`'s "Draft-state color regressions
+restored, Confirm button reordered" section (both windows share `PaymentDetailSidebarBase.jsx`,
+`DetailView.jsx`, and near-identical `PaymentOutBottomPanel.jsx` / `PaymentBottomPanel.jsx`
+components) — see that section for the full list of components and the exact hex/token values.
+This window's `decisions.json` also got `"saveBeforeProcesses": true` so `Confirmar`
+(`processOverrides.aPRMProcessPayment`) renders after `Guardar` instead of before it, and its
+`PaymentDraftBanner.jsx` got the same background/text-color and bold-text-split fix.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which places a real

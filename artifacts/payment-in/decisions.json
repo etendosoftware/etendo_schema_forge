@@ -64,6 +64,7 @@
       "PWNC": "cobroDepositado"
     },
     "statusFieldLabel": null,
+    "saveBeforeProcesses": true,
     "toolbarBorderBottom": true
   },
   "entities": {

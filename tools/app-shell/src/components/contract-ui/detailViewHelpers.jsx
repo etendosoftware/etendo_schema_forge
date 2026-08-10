@@ -666,6 +666,39 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
   return `flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`;
 }
 
+/**
+ * Tailwind classes for a header process button, keyed by `p.style` (+ `salesTheme`/`isPrimary`).
+ *
+ * `ghost-danger` (the Reactivar/Undo button): full-opacity `--destructive` border and an explicit
+ * `hover:text` pin were restored here after ETP-4554 ("Migrate shared theme styles") diluted the
+ * border to `--destructive/0.3` — the pre-token version was a solid `#FBB1C4`, not an alpha-reduced
+ * red — and never pinned a hover text color, leaving the base `Button` outline variant's own
+ * `hover:text-accent-foreground` free to win on hover and turn the label gray instead of staying
+ * red like Figma shows (found while verifying ETP-4797).
+ */
+export function getButtonClass(salesTheme, p, isPrimary) {
+  if (p.style === 'ghost-danger') {
+    return 'bg-card border-[hsl(var(--destructive))] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] hover:text-[hsl(var(--destructive))]';
+  }
+  if (salesTheme) {
+    if (p.style === 'destructive') {
+      return 'border-status-warning-border bg-status-warning text-status-warning-foreground hover:bg-status-warning';
+    } else {
+      if (isPrimary) {
+        return 'bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium';
+      } else {
+        return 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success';
+      }
+    }
+  } else {
+    if (p.style === 'destructive') {
+      return 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20';
+    } else {
+      return '';
+    }
+  }
+}
+
 export // ETP-4479 — windows where a plain header DELETE fails once the record has
 // ever been referenced (FK constraints); the NEO action reactivates and
 // removes it server-side instead. Hardcoded here (not decisions.json-driven)

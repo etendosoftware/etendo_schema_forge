@@ -275,6 +275,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         hidePrint
         hideSaveStatuses={["RDNC","RPPC","RPR","RPVOID","PWNC"]}
         toolbarBorderBottom
+        saveBeforeProcesses
         hideFormCard
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }]}
