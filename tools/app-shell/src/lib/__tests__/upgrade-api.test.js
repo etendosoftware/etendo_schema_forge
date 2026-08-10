@@ -59,6 +59,7 @@ describe('createCheckoutSession', () => {
     });
     assert.deepEqual(JSON.parse(fetchImpl.calls[0].init.body), {
       action: 'productive-tenant',
+      upgradeAction: 'create-productive',
       clientName: 'Acme Productive',
       language: 'es_ES',
     });
