@@ -47,6 +47,14 @@ export function SelectorInput({
   const loadingRef = useRef(false);
   const hasMoreRef = useRef(true);
   const offsetRef = useRef(0);
+  // Guards fetchPage's .then()/.catch() against setState after unmount — fetchPage
+  // is triggered imperatively from a callback ref (dropdown open / scroll), not from
+  // inside a useEffect, so there's no natural cleanup to cancel it. Without this, an
+  // in-flight fetch that settles after unmount still calls the state setters below,
+  // which can crash (not just warn) if the environment itself is gone by then — e.g.
+  // dispatchSetState -> getCurrentEventPriority reading `window` when it no longer exists.
+  const isMountedRef = useRef(true);
+  useEffect(() => () => { isMountedRef.current = false; }, []);
 
   // Compare selectorContext by content, not by reference. DetailView/EntityForm
   // recreate the context object on every render even when values are identical,
@@ -68,6 +76,8 @@ export function SelectorInput({
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
+        loadingRef.current = false;
+        if (!isMountedRef.current) return;
         const items = data?.items ?? data?.response?.data ?? (Array.isArray(data) ? data : null);
         if (items) {
           const mapped = items.map(i => ({ id: i.id, name: i.label ?? i.name ?? i.id }));
@@ -79,10 +89,12 @@ export function SelectorInput({
           hasMoreRef.current = false;
           if (offset === 0) setServerOptions([]);
         }
-        loadingRef.current = false;
         setFetching(false);
       })
-      .catch(() => { loadingRef.current = false; setFetching(false); });
+      .catch(() => {
+        loadingRef.current = false;
+        if (isMountedRef.current) setFetching(false);
+      });
   }, [selectorUrl, contextKey, token]);
 
   // Invalidate cached options when the URL or the selector context changes.

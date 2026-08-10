@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help generate regen dev dev-local-core dev-mock build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-tunnel-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -119,6 +119,23 @@ test-frontend: ## Run only frontend generator tests
 
 test-stripe-local: ## Start Stripe Test Mode forwarding and smoke-test hosted Checkout
 	tools/stripe-local-smoke.sh
+HOTSPOT_FILE ?= tools/app-shell/src/components/contract-ui/DetailView.jsx
+HOTSPOT_DAYS ?= 15
+HOTSPOT_LIMIT ?= 10
+BASE_REF ?= origin/main
+HOTSPOT_SINCE ?= $(shell date -v-$(HOTSPOT_DAYS)d +%Y-%m-%d 2>/dev/null || date -d '$(HOTSPOT_DAYS) days ago' +%Y-%m-%d)
+
+ast-churn-ranking: ## Show AST churn hotspots from the last N days and current-branch delta
+	@node cli/src/ast-churn-hotspot.js --file "$(HOTSPOT_FILE)" --since "$(HOTSPOT_SINCE)" --days "$(HOTSPOT_DAYS)" --base-ref "$(BASE_REF)" --limit "$(HOTSPOT_LIMIT)" --summary
+
+ast-churn-heatmap: ## Write a line-numbered HTML heatmap for the hotspot file
+	@output="$$(mktemp -t sf-ast-churn-heatmap).html"; \
+	if node cli/src/ast-churn-hotspot.js --file "$(HOTSPOT_FILE)" --since "$(HOTSPOT_SINCE)" --days "$(HOTSPOT_DAYS)" --base-ref "$(BASE_REF)" --limit "$(HOTSPOT_LIMIT)" --out-html "$$output" >/dev/null 2>/dev/null; then \
+		printf '%s\n' "$$output"; \
+	else \
+		rm -f "$$output"; \
+		exit 1; \
+	fi
 
 SCENARIO ?= double-send
 WINDOW_NAME ?= sales-order

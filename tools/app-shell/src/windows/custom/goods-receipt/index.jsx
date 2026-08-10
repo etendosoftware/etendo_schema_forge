@@ -153,6 +153,7 @@ export default function GoodsReceiptWindow(props) {
         refreshTrigger={refreshKey}
         hideLink
         bulkActions={GoodsReceiptBulkAction}
+        hideEyeCount
         renderPreview={({ row, onClose, onEdit }) => (
           <GoodsReceiptPreview
             receipt={row}
