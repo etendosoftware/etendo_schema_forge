@@ -19720,6 +19720,7 @@
     "backendError.swiftRequired": "Using the SWIFT Code for generating the Displayed Account requires to introduce a SWIFT Code and the Generic Account No.",
     "backendError.invalidAccountBpAndGroup": "Account could not be found. (Contact: {bp}, Business Partner Category: {group})",
     "backendError.invalidAccountBpOnly": "Account could not be found. (Contact: {bp})",
+    "backendError.invoiceLineAlreadyInvoiced": "Shipment {docNo} cannot be invoiced: quantity to invoice ({invoiced}) exceeds pending quantity ({pending}). It may already be invoiced in another document.",
     "backendError.matchRuleNameRequired": "Name is required",
     "backendError.matchRuleNameTooLong": "Name is too long",
     "backendError.matchRuleTextConditionInvalid": "The condition must be Contains, Starts with or Regex",
