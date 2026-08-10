@@ -140,9 +140,71 @@ project's own evidence trail.
 
 ## 6. Done when
 
-- [ ] *(pending the §4 decision — filled in when the option is chosen)*
+**Option A was chosen** (2026-08-10). B is deferred to its own item, per §5.
 
-## 7. Status
+- [x] `failureBody` receives `opResults` and returns `persisted:[{id, ok, recordId}]`
+- [x] `atomic:false` and a `hint` on **every** failure body, including the ones where nothing survived
+- [x] the `neo_batch` tool description stops promising all-or-nothing and points at `persisted`
+- [x] `docs/neo-headless.md` §4.12.4 shows the real failure shape, with a new §4.12.4.1 on why
+- [x] the tests that asserted the atomicity stop asserting it and guard the new contract instead
+- [ ] `./gradlew test` (owed — the module tests were run standalone, see §8)
+- [ ] deployed and probed live: re-run C10 and confirm the persisted order id comes back in
+      `persisted` rather than having to be hunted for in the DB
+- [ ] registry row re-scored by a `/mcp-comparison` run (not a bookkeeping edit)
 
-Investigated 2026-08-10. **No code written yet** — §4 is a decision the fix cannot be written without.
-The registry row stays ⏳ open.
+## 7. What was implemented
+
+Three surfaces, no behaviour change on the success path.
+
+**1. The response (`BatchService.java`).** `failureBody` gained a `JSONArray persisted` parameter and
+all 9 call sites pass `opResults` (the two that cannot have survivors — a null `operations` array —
+pass `null`, which becomes an empty array, not an absent key). The `hint` is written for the two
+cases separately: with survivors it says the records exist, are not rolled back, and that retrying
+the whole batch duplicates them; with none it says the endpoint is not atomic anyway and that
+`persisted` is the thing to read rather than `committed:false` the thing to infer from. **The empty
+array is emitted on purpose** — "nothing survived" and "we are not telling you" must not look alike
+to a caller, which is exactly the confusion that cost five days in §3.
+
+**2. The tool description (`ToolRegistry.java`).** The old text — *"Run a sequence of cross-spec
+create operations atomically … any failure rolls back everything (no partial writes)"* — was worse
+than saying nothing, because an agent that believes it has no reason to look for the survivors. It
+now leads with `NOT atomic`, names `persisted`, and says a plain retry duplicates.
+
+**3. The docs (`docs/neo-headless.md`).** §4.12.4's failure example updated to the real shape, plus a
+new §4.12.4.1 with the mechanism, the validation-time vs persist-time table from §1.1, and the
+recovery instruction. The stale method-gate row ("whole batch rolled back") is corrected too.
+
+The class and method javadoc in `BatchService` now state the non-atomicity as **a defect of the
+write path below, not a design choice**, and name the three suppression routes §2 ruled out — so the
+next reader does not repeat that search.
+
+## 8. Tests
+
+Rewritten rather than deleted, because the coverage they gave is real — only their *claim* was wrong.
+
+`BatchServiceRobustnessTest` asserted `verify(obDal, never()).commitAndClose()` and read it as
+all-or-nothing. That assertion **passed for a reason unrelated to atomicity**: the per-op commit
+happens inside the stubbed `NeoServletSupport.handleWithHooks` seam, so with the stub in place
+nothing downstream ever ran. It was pinning `BatchService`'s own lifecycle — which was never the
+broken part. The class javadoc now says this outright, so nobody reads those verifies as evidence
+again; only a DB-backed `OBBaseTest` could observe the leak, and this sandbox cannot boot one.
+
+| Test | Change |
+|---|---|
+| `duplicateKeyRollsBackWholeBatchAtomically` | renamed `…StopsBatchAndReportsTheSurvivingRecord`; now asserts `persisted` names the first op's record |
+| *(new)* `failureOnFirstOpReportsAnEmptyPersistedArray` | the empty-array case, so the key can never become conditional |
+| `oversizedFieldValueFails…` | its second assertion was a tautology (`400` is in `4xx`) standing in for a claim the code could not make; replaced by the claim it can make |
+| `ToolRegistryTest#testBuildBatchToolSchema` | asserted the description "must mention atomic transaction" — it did, and the claim was false. Inverted to require `not atomic` **and** `persisted`; note it would still have passed against the corrected text, which is why leaving it was not an option |
+
+Standalone: `BatchServiceRobustnessTest` 6/6, `BatchServiceTest` 10/10, `ToolRegistryTest` 12/12.
+Per IMP-16 §9.2 a standalone run is not load-bearing — `./gradlew test` is owed.
+
+## 9. Status
+
+Investigated and **option A implemented** 2026-08-10. Compiled locally; **not deployed, not probed
+live.** The registry row moves ⏳ open → ⚠️ partial and the **score stays 0 / 5**: re-scoring is a
+`/mcp-comparison` measurement, and in any case A does not make the batch atomic, so the item cannot
+reach 5 / 5 without option B.
+
+**Option B is not registered yet** — §5 recommends it as its own item, and the discovery reserve is
+consumed (registry §3's warning), so registering it is the user's call, not this file's.
