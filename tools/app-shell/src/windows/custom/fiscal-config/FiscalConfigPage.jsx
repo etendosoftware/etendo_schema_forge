@@ -23,11 +23,24 @@ import TabBar from './TabBar.jsx';
 // Profiles that represent a real, active fiscal config (i.e. "Change SIF" applies).
 const CONFIGURED_PROFILES = ['sii', 'sii-navarra', 'sii+tbai', 'tbai', 'verifactu'];
 
-// Label for the save button, reflecting the current save state.
+const PROFILE_LABEL = { sii: 'SII', 'sii-navarra': 'SII', 'sii+tbai': 'SII + TBAI', tbai: 'TBAI', verifactu: 'VERI*FACTU' };
+
+// Label and class for the save button, reflecting the current save state.
 function resolveSaveLabel(ui, saving, savedOk) {
   if (saving) return ui('fiscal.saving');
   if (savedOk) return `✓ ${ui('fiscal.save')}`;
   return ui('fiscal.save');
+}
+
+function resolveSaveClass(savedOk) {
+  return savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : '';
+}
+
+async function saveTwoRefs(ref1, ref2) {
+  const [r0, r1] = await Promise.allSettled([ref1?.save(), ref2?.save()]);
+  if (r0.status === 'rejected' || r1.status === 'rejected') {
+    throw new Error(r0.reason?.message ?? r1.reason?.message ?? 'Error saving');
+  }
 }
 
 // ── FiscalConfigPage ───────────────────────────────────────────────────────────
@@ -73,13 +86,12 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   // effectiveProfile is still used for canAddComplementary, canChangeSif, handleSave logic.
   const renderProfile = addingComplementary ? 'sii+tbai' : effectiveProfile;
 
-  const PROFILE_LABEL = { sii: 'SII', 'sii-navarra': 'SII', 'sii+tbai': 'SII + TBAI', tbai: 'TBAI', verifactu: 'VERI*FACTU' };
-  const profileLabel = PROFILE_LABEL[effectiveProfile] ?? null;
+  const profileLabel = PROFILE_LABEL[effectiveProfile];
   const pageTitle = profileLabel ? `${ui('fiscal.title')} ${profileLabel}` : ui('fiscal.title');
   useSetPageMeta({ title: pageTitle, breadcrumb: `${ui('settings')} / ${ui('fiscal.monitor.nav')} / ${pageTitle}` });
-  const effectiveSii       = mockOverride ? mockOverride.sii       : siiRecord;
-  const effectiveTbai      = mockOverride ? mockOverride.tbai      : tbaiRecord;
-  const effectiveVerifactu = mockOverride ? mockOverride.verifactu : verifactuRecord;
+  const [effectiveSii, effectiveTbai, effectiveVerifactu] = mockOverride
+    ? [mockOverride.sii, mockOverride.tbai, mockOverride.verifactu]
+    : [siiRecord, tbaiRecord, verifactuRecord];
 
   const { daysLeft: certDaysLeft } = useCertExpiry(apiBaseUrl, { mockDaysLeft: mockCertDays, orgId });
 
@@ -116,23 +128,9 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
     setSavedOk(false);
     try {
       if (effectiveProfile === 'sii' && addingComplementary === 'tbai') {
-        // Saving existing SII + new TBAI being added (complementaryRef holds the TBAI section)
-        const [r0, r1] = await Promise.allSettled([
-          siiRef.current?.save(),
-          complementaryRef.current?.save(),
-        ]);
-        if (r0.status === 'rejected' || r1.status === 'rejected') {
-          throw new Error(r0.reason?.message ?? r1.reason?.message ?? 'Error saving');
-        }
+        await saveTwoRefs(siiRef.current, complementaryRef.current);
       } else if (effectiveProfile === 'tbai' && addingComplementary === 'sii') {
-        // Saving existing TBAI + new SII being added (complementaryRef holds the SII section)
-        const [r0, r1] = await Promise.allSettled([
-          tbaiRef.current?.save(),
-          complementaryRef.current?.save(),
-        ]);
-        if (r0.status === 'rejected' || r1.status === 'rejected') {
-          throw new Error(r0.reason?.message ?? r1.reason?.message ?? 'Error saving');
-        }
+        await saveTwoRefs(tbaiRef.current, complementaryRef.current);
       } else if (['sii', 'sii-navarra'].includes(effectiveProfile)) {
         await siiRef.current?.save();
       } else if (effectiveProfile === 'tbai') {
@@ -140,13 +138,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
       } else if (effectiveProfile === 'verifactu') {
         await verifactuRef.current?.save();
       } else if (effectiveProfile === 'sii+tbai') {
-        const [r0, r1] = await Promise.allSettled([
-          siiRef.current?.save(),
-          tbaiRef.current?.save(),
-        ]);
-        if (r0.status === 'rejected' || r1.status === 'rejected') {
-          throw new Error(r0.reason?.message ?? r1.reason?.message ?? 'Error saving');
-        }
+        await saveTwoRefs(siiRef.current, tbaiRef.current);
       }
       setAddingComplementary(null);
       setComplementaryRecord(null);
@@ -181,7 +173,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   // When mock is active, skip loading/error entirely and go straight to the effective profile
   const showLoading  = !mockOverride && loading;
   const showError    = !mockOverride && !loading && error;
-  const showContent  = mockOverride || (!loading && !error);
+  const showContent  = !showLoading && !showError;
 
   // Wizard needs the full height of the card — render it without any outer wrapper.
   if ((orgId || mockOverride) && !showLoading && !showError && effectiveProfile === 'unconfigured') {
@@ -250,7 +242,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
           <Button
             onClick={handleSave}
             disabled={saving || !orgId}
-            className={savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}
+            className={resolveSaveClass(savedOk)}
             data-testid="Button__310303">
             <Save size={14} className="mr-1.5" data-testid="Save__310303" />
             {saveLabel}
