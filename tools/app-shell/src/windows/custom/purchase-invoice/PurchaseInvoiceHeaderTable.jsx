@@ -20,8 +20,8 @@ import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoice
 
 const filters = ['documentNo', 'invoiceDate', 'businessPartner', 'orderReference', 'documentStatus'];
 
-// ETP-4737: badge config keyed by the unified subtype (FAC/RECTIFICATIVA) resolved via
-// getApSubtype — NOT by the raw AD doc-type name. A hardcoded name Set silently misses any
+// ETP-4737/ETP-4738: badge config keyed by the unified subtype (FAC/RECTIFICATIVA) resolved
+// via getApSubtype — NOT by the raw AD doc-type name. A hardcoded name Set silently misses any
 // new document type sharing the same category (this is exactly how the previous version of
 // this file missed "Factura Rectificativa (compras)" until this fix).
 const SUBTYPE_BADGE = {

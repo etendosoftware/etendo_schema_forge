@@ -262,7 +262,6 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
         statusEnumLabels={{"true":"statusProcessed","false":"statusDraft"}}
         lockedAlert={{"title":"goodsMovementsLockedTitle","message":"goodsMovementsLockedMessage","actionLabel":"goodsMovementsLockedAction","navigateTo":"/physical-inventory/new"}}
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
       </>

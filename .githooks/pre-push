@@ -6,6 +6,55 @@ set -e
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
+# Execution stays local unless explicitly enabled. The value may be exported by
+# the shell or declared in the unversioned .env file.
+PREPUSH_EXECUTION="${PREPUSH_EXECUTION:-}"
+if [ -z "$PREPUSH_EXECUTION" ] && [ -f "$REPO_DIR/.env" ]; then
+  PREPUSH_EXECUTION="$(awk -F= '
+    $1 == "PREPUSH_EXECUTION" {
+      value = substr($0, index($0, "=") + 1)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]\r]+$/, "", value)
+      gsub(/^['\"']|['\"']$/, "", value)
+      print value
+      exit
+    }
+  ' "$REPO_DIR/.env")"
+fi
+
+case "$PREPUSH_EXECUTION" in
+  ""|local)
+    ;;
+  cloud)
+    # Keep credentials out of the hook environment. Only cloud-runner settings
+    # are copied from .env when the caller did not explicitly export them.
+    if [ -f "$REPO_DIR/.env" ]; then
+      for env_key in \
+        PREPUSH_KUBECONFIG PREPUSH_NPMRC PREPUSH_KUBE_CONTEXT \
+        PREPUSH_NAMESPACE PREPUSH_DEPLOYMENT PREPUSH_SONAR_ENV_FILE PREPUSH_GO_REPO; do
+        if [ -z "${!env_key:-}" ]; then
+          env_value="$(awk -F= -v key="$env_key" '
+            $1 == key {
+              value = substr($0, index($0, "=") + 1)
+              sub(/^[[:space:]]+/, "", value)
+              sub(/[[:space:]\r]+$/, "", value)
+              gsub(/^['\"']|['\"']$/, "", value)
+              print value
+              exit
+            }
+          ' "$REPO_DIR/.env")"
+          [ -n "$env_value" ] && export "$env_key=$env_value"
+        fi
+      done
+    fi
+    exec "$REPO_DIR/scripts/run-remote-prepush.sh" "$@"
+    ;;
+  *)
+    echo "ERROR: PREPUSH_EXECUTION must be 'local' or 'cloud' (found '$PREPUSH_EXECUTION')." >&2
+    exit 2
+    ;;
+esac
+
 echo "==> Running pre-push checks..."
 
 cd "$REPO_DIR"
@@ -106,6 +155,9 @@ DURATIONS_FILE="$REPO_DIR/tmp/pre-push/durations"
 # Content-addressed step cache (inert unless PRE_PUSH_CACHE=1 — see the file).
 # shellcheck source=lib/step-cache.sh
 . "$SCRIPT_DIR/lib/step-cache.sh"
+# Relevance rules shared with commit-msg (the Checks: trailer), so the two agree.
+# shellcheck source=lib/relevance.sh
+. "$SCRIPT_DIR/lib/relevance.sh"
 LAST_DURATION=0
 
 # Look up the last recorded duration (seconds) for a step key, or 0.
@@ -447,77 +499,118 @@ check_go_module_push_sync() {
 }
 
 # ----------------------------------------------------------------------------
-# Optional: Playwright E2E tests (opt-in — declining NEVER blocks the push)
+# Playwright E2E tests (MANDATORY) — mocked + integration must pass before push.
 # ----------------------------------------------------------------------------
-# Runs only AFTER the mandatory checks have passed. Prompt answers:
-#     <empty> / n / N / <60s timeout> -> skip, push proceeds
-#     y / Y                            -> run headless with the default 5 workers
-#     1..10                            -> run headless with that many workers (capped at 10)
-# Prompted ONLY on an interactive terminal — a scripted/CI push skips silently
-# (pre-push stdin holds git's ref list, so input is read from /dev/tty).
-# If you opt IN and the tests fail, the push IS blocked (you asked to gate on them).
-run_optional_playwright() {
-  if [ "$IS_TTY" != "1" ] || [ ! -e /dev/tty ]; then
+# The experimental CI no longer runs these on PRs, so they gate here. The developer
+# must ALREADY have the stack running — this hook starts nothing: the app on :3100,
+# Tomcat + Etendo backend, and PostgreSQL. A missing piece is reported and the push
+# is aborted; a failing test also blocks the push.
+# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, WORKERS. WIP bypass: git push --no-verify.
+run_playwright() {
+  local password="${E2E_PASSWORD:-12345}"
+  local workers="${WORKERS:-5}"
+  local backend_url="${E2E_BACKEND_URL:-http://localhost:8080/etendo}"
+  local st=0
+
+  # Relevance-gated (per suite). Neither relevant → nothing to run.
+  if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ]; then
+    echo "==> Playwright E2E... SKIPPED ⏭️  (no UI/spec changes relevant to these tests)"
     return 0
   fi
 
-  echo ""
-  printf "❓ Run Playwright E2E tests now? [N / y / 1-10 workers] (default N, 60s timeout): "
-  local answer=""
-  read -r -t 60 answer < /dev/tty || answer=""
-  echo ""
+  # The app on :3100 is a prerequisite for BOTH suites (this hook starts nothing).
+  if ! curl -sf -o /dev/null --max-time 5 http://localhost:3100 2>/dev/null; then
+    echo "❌ App dev server is not running on http://localhost:3100."
+    echo "   Bring your dev server up on :3100, then re-push. WIP bypass: 'git push --no-verify'."
+    exit 1
+  fi
 
-  case "$answer" in
-    ""|n|N|no|NO)
-      echo "==> Skipping Playwright E2E tests."
-      return 0
-      ;;
-  esac
-
-  local workers=5
-  if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
-    workers=5
-  elif [[ "$answer" =~ ^[0-9]+$ ]]; then
-    workers="$answer"
-    if [ "$workers" -lt 1 ]; then
-      echo "==> Invalid worker count '$answer'; skipping Playwright E2E tests."
-      return 0
-    fi
-    if [ "$workers" -gt 10 ]; then
-      workers=10
-      echo "==> Capping workers at 10."
+  # 1. Mocked specs — backend mocked at the browser level (no live backend needed).
+  if [ "$RUN_PW_MOCKED" = "1" ]; then
+    echo "==> Playwright E2E — mocked specs (${workers} workers)..."
+    set +e
+    ( cd "$REPO_DIR/e2e" && CI=true npx playwright test --project=mocked --workers="$workers" )
+    st=$?
+    set -e
+    if [ "$st" -ne 0 ]; then
+      echo "==> Playwright E2E — mocked specs... FAILED ❌ (exit $st)"
+      echo "👉 Push blocked. Fix the tests, or bypass with 'git push --no-verify' (WIP only)."
+      exit 1
     fi
   else
-    echo "==> Unrecognized answer '$answer'; skipping Playwright E2E tests."
-    return 0
+    echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (no mocked-spec / UI changes)"
   fi
 
-  # The mocked specs need the dev server on :3100. If it's down, skip gracefully
-  # (warn, don't block) — declining-to-be-able-to-run must not break the push.
-  if ! curl -sf -o /dev/null --max-time 5 http://localhost:3100 2>/dev/null; then
-    echo "⚠️  Dev server not reachable on http://localhost:3100 — skipping E2E."
-    echo "    Start it with 'make dev-mock' and re-push if you want to run them."
-    return 0
+  # 2. Integration specs — real auth against the live backend behind :3100 (mirrors CI;
+  # no BASE_URL, E2E_USE_MOCK=0). Only this suite needs the live backend, so its
+  # reachability is checked here — a mocked-only push never requires the stack.
+  # Override E2E_PASSWORD if your local admin pass differs.
+  if [ "$RUN_PW_INTEGRATION" = "1" ]; then
+    if ! curl -sf -o /dev/null --max-time 10 "$backend_url" 2>/dev/null; then
+      echo "❌ Etendo backend is not reachable at $backend_url."
+      echo "   Bring up Tomcat + PostgreSQL (set E2E_BACKEND_URL if your context path differs),"
+      echo "   then re-push. WIP bypass: 'git push --no-verify'."
+      exit 1
+    fi
+    echo "==> Playwright E2E — integration specs (${workers} workers)..."
+    set +e
+    ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$password" \
+        E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 \
+        npx playwright test --project=onboarding-setup --project=integration "integration.spec" --workers="$workers" )
+    st=$?
+    set -e
+    if [ "$st" -ne 0 ]; then
+      echo "==> Playwright E2E — integration specs... FAILED ❌ (exit $st)"
+      echo "👉 Push blocked. Fix the failing tests, or bypass with 'git push --no-verify' (WIP only)."
+      exit 1
+    fi
+  else
+    echo "==> Playwright E2E — integration specs... SKIPPED ⏭️  (no integration-spec / UI changes)"
   fi
 
-  echo "==> Running Playwright E2E tests headless with ${workers} worker(s)..."
-  set +e
-  ( cd "$REPO_DIR" && make test-e2e-headless WORKERS="$workers" )
-  local st=$?
-  set -e
-
-  if [ "$st" -eq 0 ]; then
-    echo "==> Playwright E2E tests... SUCCESS ✅"
-    return 0
-  fi
-
-  echo "==> Playwright E2E tests... FAILED ❌ (exit $st)"
-  echo "👉 You opted to run them, so the push is blocked. Re-push and decline (N),"
-  echo "   or bypass with 'git push --no-verify'."
-  exit 1
+  echo "==> Playwright E2E tests... SUCCESS ✅"
 }
 
 check_base_conflicts
+
+# ----------------------------------------------------------------------------
+# Relevance detection — run only the checks a change actually requires.
+# Same contract as com.etendoerp.go's hook:
+#   • GOLDEN RULE: when in doubt, RUN. No base ref / diff fails / a file matches
+#     no known bucket → everything runs.
+#   • The change set is INCREMENTAL: the three-dot diff ("$BASE_REF"...HEAD)
+#     compares from the merge-base (where the branch left the base) to HEAD, so
+#     the WHOLE branch delta is considered, not just the tip commit.
+#   • A skipped step is REPORTED but never blocks; the already Hooks-Verified
+#     commits stay valid.
+#
+# Classification lives in lib/relevance.sh (relevance_checks), SHARED with
+# commit-msg so the per-push `Checks:` trailer and this step selection use the exact
+# same rules. Playwright is split by suite: a mocked-only change never forces the
+# (backend-dependent) integration suite, and vice versa; a UI (app-shell/src) change
+# runs both. Generated code lives under artifacts/<window>/generated/, so
+# app-shell/src is hand-written source and does NOT trigger the regen/drift checks.
+# ----------------------------------------------------------------------------
+RUN_S0=0; RUN_S1=0; RUN_S2=0; RUN_S3=0; RUN_S4=0
+RUN_PW_MOCKED=0; RUN_PW_INTEGRATION=0
+if [ -n "$BASE_REF" ] && CHANGED_FILES="$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null)"; then
+  CHECKS="$(printf '%s\n' "$CHANGED_FILES" | relevance_checks)"
+  case " $CHECKS " in *" npm "*)            RUN_S0=1 ;; esac
+  case " $CHECKS " in *" testid "*)         RUN_S1=1 ;; esac
+  case " $CHECKS " in *" tests "*)          RUN_S2=1 ;; esac
+  case " $CHECKS " in *" regen "*)          RUN_S3=1 ;; esac
+  case " $CHECKS " in *" xml "*)            RUN_S4=1 ;; esac
+  case " $CHECKS " in *" pw-mocked "*)      RUN_PW_MOCKED=1 ;; esac
+  case " $CHECKS " in *" pw-integration "*) RUN_PW_INTEGRATION=1 ;; esac
+  n_files="$(printf '%s\n' "$CHANGED_FILES" | grep -Evc '^[[:space:]]*$' || true)"
+  b() { [ "$1" = "1" ] && printf run || printf skip; }
+  echo "==> Relevance: ${n_files} changed file(s) vs ${BASE_REF}:"
+  echo "      [0 npm]=$(b $RUN_S0)  [1 testid]=$(b $RUN_S1)  [2 tests+sonar]=$(b $RUN_S2)  [3 regen]=$(b $RUN_S3)  [4 xml]=$(b $RUN_S4)"
+  echo "      playwright: mocked=$(b $RUN_PW_MOCKED)  integration=$(b $RUN_PW_INTEGRATION)"
+else
+  RUN_S0=1; RUN_S1=1; RUN_S2=1; RUN_S3=1; RUN_S4=1; RUN_PW_MOCKED=1; RUN_PW_INTEGRATION=1
+  echo "==> Relevance: no reliable change set (base='${BASE_REF:-none}') → running ALL checks."
+fi
 
 # 0. Sync node_modules with package-lock.json (CI parity)
 #
@@ -534,6 +627,10 @@ check_base_conflicts
 # caused entirely by a stale core-package pin that only `npm ci` — not a
 # stale local install — would have caught).
 run_step_0() {
+  if [ "$RUN_S0" != "1" ]; then
+    echo "==> [0/5] Syncing npm dependencies (npm ci)... SKIPPED ⏭️  (lockfile unchanged)"
+    return 0
+  fi
   # npm ci is a pure function of the lockfile and the node major it installs for.
   local key
   key="$(step_cache_compute "node-${NODE_MAJOR}" package.json package-lock.json)"
@@ -542,6 +639,10 @@ run_step_0() {
 
 # 1. Run data-testid check (fast, runs before expensive checks)
 run_step_1() {
+  if [ "$RUN_S1" != "1" ]; then
+    echo "==> [1/5] Running data-testid check... SKIPPED ⏭️  (no app-shell/src changes)"
+    return 0
+  fi
   # The checker only ever reads the app-shell sources it scans, plus its own script.
   local key
   key="$(step_cache_compute "node-${NODE_MAJOR}" tools/app-shell/src scripts/check-add-data-testid.sh)"
@@ -560,6 +661,10 @@ run_step_1() {
 # below the base branch's — mirroring Jenkins' "Compare Coverage Results" stage,
 # which the new-code-only Quality Gate does not cover.
 run_step_2() {
+  if [ "$RUN_S2" != "1" ]; then
+    echo "==> [2/5] Running unit tests and SonarQube analysis... SKIPPED ⏭️  (no source/test/sonar-config changes)"
+    return 0
+  fi
   local sonar_cmd
   if [ -n "$BASE_REF" ]; then
     sonar_cmd="./run-sonar.sh --base-ref \"$BASE_REF\" --coverage --fail-on-gate --compare-coverage"
@@ -594,6 +699,10 @@ run_step_2() {
 # Both halves share step key "3" for the quick re-check: whichever fails, the
 # next push re-runs this whole function (regen + drift) before anything else.
 run_step_3() {
+  if [ "$RUN_S3" != "1" ]; then
+    echo "==> [3/5] Regenerating all windows from cache (UI / contract drift check)... SKIPPED ⏭️  (no artifacts/ or cli/ changes)"
+    return 0
+  fi
   local all_windows regen_all_cmd
   all_windows=$(node -e "const r=require('./cli/config/regen-windows.json');\
 process.stdout.write(r.windows.filter(w=>{\
@@ -639,6 +748,10 @@ process.stdout.write(r.windows.filter(w=>{\
 # when the sibling checkout's sourcedata isn't present — see run_step_3's
 # comment for why (b) above always runs regardless of this one).
 run_step_4() {
+  if [ "$RUN_S4" != "1" ]; then
+    echo "==> [4/5] Comparing ETGO_SF_*.xml against com.etendoerp.go... SKIPPED ⏭️  (no artifacts/ or cli/ changes)"
+    return 0
+  fi
   if [ -d "etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata" ]; then
     check_go_module_push_sync
     local regen_cmd="make regen-check FROM_CACHE=1 REGEN_CHECK_PREV_XML_DIR=etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata"
@@ -695,8 +808,8 @@ run_step_2
 run_step_3
 run_step_4
 
-# Mandatory checks passed — offer the optional Playwright E2E run before the banner.
-run_optional_playwright
+# Steps 0-4 passed — now the mandatory Playwright E2E suites (mocked + integration).
+run_playwright
 
 # Reaching here means steps 0-4 all succeeded or legitimately skipped — clear
 # any stale marker (e.g. step 4 recorded a failure, then a later run skips it

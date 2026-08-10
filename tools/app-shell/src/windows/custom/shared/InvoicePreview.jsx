@@ -17,7 +17,7 @@ import PaymentsCard from './preview-cards/PaymentsCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { fetchByCriteria, fetchById } from '@/components/related-documents';
-import { useDocumentCurrency } from './useDocumentCurrency.js';
+import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
 function isCreditNote(invoice) {
@@ -75,9 +75,9 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         <Button
           size="sm"
           variant="outline"
-          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground [&_svg]:size-5"
-          onClick={onDownloadPdf}
-          disabled={!hasPdf}
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
+          onClick={hasPdf && onDownloadPdf ? onDownloadPdf : undefined}
+          disabled={!hasPdf || !onDownloadPdf}
           data-testid="Button__cf88e6">
           <Download className="text-muted-foreground" data-testid="Download__cf88e6" />
           {ui('invoicePreviewDownloadPdf')}
@@ -216,18 +216,11 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     apiBaseUrl,
     token,
   });
-  const etgoRate = (!isSameCurrency && p.displayInvoice?.eTGOCurrencyRate)
-    ? parseFloat(p.displayInvoice.eTGOCurrencyRate)
-    : null;
-  // eTGOCurrencyRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
-  // Use it directly as exchangeRate so (1.20) is displayed, not the inverse (0.8333).
-  // orgGrandTotal = docTotal / eTGOCurrencyRate converts doc→org correctly.
-  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
-    ? etgoRate
-    : systemExchangeRate;
-  const orgGrandTotal = (!isSameCurrency && exchangeRate && p.displayInvoice?.grandTotalAmount != null)
-    ? Number(p.displayInvoice.grandTotalAmount) / exchangeRate
-    : null;
+  const { exchangeRate, orgGrandTotal } = resolveDualCurrencyDisplay({
+    record: p.displayInvoice,
+    isSameCurrency,
+    systemExchangeRate,
+  });
 
   if (!invoice) return null;
 
@@ -255,6 +248,10 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   // ── Attachment config ──────────────────────────────────────────────────────
 
   const isDraft = invoice?.documentStatus === 'DR';
+  // ETP-4717 — Send is only available once the invoice is Confirmed (CO),
+  // matching the Grid row quick-action and Form-view topbar gates. The
+  // existing purchase-invoice exclusion stays: this window never sends email.
+  const isSendable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
   const attachmentConfig = p.isSalesInvoice ? {
     documentId: invoice.id,
     specName,
@@ -298,7 +295,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           orgId={p.orgId}
           profile={p.profile}
           onAddPayment={() => p.setShowPaymentModal(true)}
-          onSend={p.openEmailModal}
+          onSend={isSendable ? p.openEmailModal : undefined}
           orgCurrencyCode={orgCurrencyCode}
           exchangeRate={exchangeRate}
           orgGrandTotal={orgGrandTotal}
@@ -331,13 +328,13 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   const actionButtons = (
     <InvoiceActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={specName !== 'purchase-invoice' ? p.openEmailModal : undefined}
+      onEmail={isSendable ? p.openEmailModal : undefined}
       canSendToSif={p.canSendToSif}
       onOpenSif={() => p.setShowSifModal(true)}
       canAddPayment={p.canAddPayment}
       onAddPayment={() => p.setShowPaymentModal(true)}
       isSalesInvoice={p.isSalesInvoice}
-      onDownloadPdf={p.handleDownloadPdf}
+      onDownloadPdf={isSendable ? p.handleDownloadPdf : undefined}
       hasPdf={!!p.pdfUrl}
       data-testid="InvoiceActionButtons__cf88e6" />
   );

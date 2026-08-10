@@ -74,7 +74,7 @@ async function installQuotationMocks(page, { onPatch } = {}) {
       body: JSON.stringify({ response: { data: [DRAFT_QUOTATION] } }),
     });
   });
-  await page.route('**/sws/neo/sales-quotation/quotationLine**', async (route) => {
+  await page.route('**/sws/neo/sales-quotation/quotationLine{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({
       status: 200, contentType: 'application/json',

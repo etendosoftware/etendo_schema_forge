@@ -136,7 +136,7 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
 
     // Product collection endpoint: list GET (criteria-aware), detail GET,
     // create POST, and the `_distinct` endpoint backing IdentifierMultiPicker.
-    await page.route('**/sws/neo/product/product**', async (route) => {
+    await page.route('**/sws/neo/product/product{/**,}**', async (route) => {
       const req = route.request();
       const url = req.url();
       const method = req.method();
@@ -237,7 +237,7 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     });
 
     // productCategory (required:true, SelectorInput — Radix Select, lazy-loaded on open).
-    await page.route('**/sws/neo/product/product/selectors/M_Product_Category_ID**', async (route) => {
+    await page.route('**/sws/neo/product/product/selectors/M_Product_Category_ID{/**,}**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -246,7 +246,7 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     });
 
     // uOM (required:true, SearchInput — free-text combobox, fetched on focus).
-    await page.route('**/sws/neo/product/product/selectors/C_UOM_ID**', async (route) => {
+    await page.route('**/sws/neo/product/product/selectors/C_UOM_ID{/**,}**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

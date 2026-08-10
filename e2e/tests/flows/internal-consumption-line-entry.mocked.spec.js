@@ -51,7 +51,7 @@ const PRODUCT_ROW = {
 
 async function installInternalConsumptionMocks(page) {
   // Header list + detail
-  await page.route(`**/sws/neo/${SPEC}/${HEADER_ENTITY}**`, async (route) => {
+  await page.route(`**/sws/neo/${SPEC}/${HEADER_ENTITY}{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() !== 'GET') return route.fallback();
@@ -73,7 +73,7 @@ async function installInternalConsumptionMocks(page) {
   });
 
   // Lines list — return empty so the inline-add row is the only candidate
-  await page.route(`**/sws/neo/${SPEC}/${LINE_ENTITY}**`, async (route) => {
+  await page.route(`**/sws/neo/${SPEC}/${LINE_ENTITY}{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
     // Let the product selector route (declared below) handle its own URL
@@ -88,7 +88,7 @@ async function installInternalConsumptionMocks(page) {
 
   // Product selector — used by the InternalConsumptionProductSearchDrawer.
   // The drawer fetches with ?limit&offset and expects `{ items, hasMore }`.
-  await page.route(`**/${LINE_ENTITY}/selectors/M_Product_ID**`, async (route) => {
+  await page.route(`**/${LINE_ENTITY}/selectors/M_Product_ID{/**,}**`, async (route) => {
     return route.fulfill({
       status: 200,
       contentType: 'application/json',

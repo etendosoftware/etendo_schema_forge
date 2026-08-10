@@ -5,9 +5,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'uOM', column: 'C_Uom_ID', type: 'selector', label: 'UOM', required: true },
   { key: 'conversionRate', column: 'Conversionrate', type: 'number', label: 'Conversion Rate', required: true },
-  { key: 'sales', column: 'Sales', type: 'enum', label: 'Sales', enumLabels: { 'P': 'Primary', 'S': 'Secondary', 'NA': 'Not Applicable' }, required: true },
-  { key: 'purchase', column: 'Purchase', type: 'enum', label: 'Purchase', enumLabels: { 'P': 'Primary', 'S': 'Secondary', 'NA': 'Not Applicable' }, required: true },
-  { key: 'logistics', column: 'Logistics', type: 'enum', label: 'Logistics', enumLabels: { 'P': 'Primary', 'S': 'Secondary', 'NA': 'Not Applicable' }, required: true },
+  { key: 'sales', column: 'Sales', type: 'enum', label: 'Sales', enumLabels: { 'P': 'salesP', 'S': 'salesS', 'NA': 'salesNa' }, required: true },
+  { key: 'purchase', column: 'Purchase', type: 'enum', label: 'Purchase', enumLabels: { 'P': 'purchaseP', 'S': 'purchaseS', 'NA': 'purchaseNa' }, required: true },
+  { key: 'logistics', column: 'Logistics', type: 'enum', label: 'Logistics', enumLabels: { 'P': 'logisticsP', 'S': 'logisticsS', 'NA': 'logisticsNa' }, required: true },
 ];
 // @sf-generated-end columns:alternateUom
 

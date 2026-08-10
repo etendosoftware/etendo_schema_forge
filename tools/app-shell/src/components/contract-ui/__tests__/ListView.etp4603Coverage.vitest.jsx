@@ -14,11 +14,12 @@
  *   - effectiveRowQuickActions' auto-injected onEmail + SendDocumentModal mount/close
  *   - fullBreadcrumb join + the favorites toggle callback
  *   - handlePreviewClose / handlePreviewEdit
- *   - selection-bar preview/print/clone buttons
+ *   - selection-bar print/clone buttons (the "Vista Previa"/eye button was
+ *     removed unconditionally in ETP-4644 — a test asserts it never renders)
  *   - view toggle (list/gallery) + gallery renderer branch
  *   - sort popover: toggle, column select, clear sort
  *   - refresh button, header print button, "New" split-button dropdown actions
- *   - ReportDrawer / DocumentPrintDrawer close callbacks
+ *   - ReportDrawer close callback
  */
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
@@ -85,11 +86,7 @@ vi.mock('../ReportDrawer.jsx', () => ({
 }));
 const printDocumentsMock = vi.fn();
 vi.mock('../DocumentPrintDrawer.jsx', () => ({
-  default: ({ open, onClose }) => (open ? (
-    <div data-testid="doc-print-drawer">
-      <button data-testid="close-doc-print" onClick={onClose}>close</button>
-    </div>
-  ) : null),
+  default: () => null,
   printDocuments: (...args) => printDocumentsMock(...args),
 }));
 vi.mock('../SendDocumentModal.jsx', () => ({
@@ -382,21 +379,18 @@ describe('ListView — ETP-4603 coverage top-up', () => {
     expect(onExternalPreviewClose).toHaveBeenCalled();
   });
 
-  // ── selection-bar buttons: preview / print / clone ──────────────────────
-  it('opens the doc-print drawer from the selection bar preview (eye) button', () => {
+  // ── selection-bar buttons: print / clone ─────────────────────────────────
+  it('never renders the "Vista Previa" (eye) button in the selection bar (ETP-4644)', () => {
     renderListView();
     fireEvent.click(screen.getByTestId('trigger-select'));
-    fireEvent.click(screen.getByText('preview').closest('button'));
-    expect(screen.getByTestId('doc-print-drawer')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('close-doc-print'));
-    expect(screen.queryByTestId('doc-print-drawer')).not.toBeInTheDocument();
+    expect(screen.queryByText('preview')).not.toBeInTheDocument();
   });
 
   it('calls printDocuments with the selected ids from the selection bar print button', () => {
     renderListView();
     fireEvent.click(screen.getByTestId('trigger-select'));
     fireEvent.click(screen.getByText(/^print/).closest('button'));
-    expect(printDocumentsMock).toHaveBeenCalledWith('sales-order', ['r1'], 'fake-token');
+    expect(printDocumentsMock).toHaveBeenCalledWith('sales-order', ['r1'], 'fake-token', expect.any(Function));
   });
 
   it('invokes onCloneRow with the selected rows from the selection-bar clone button', () => {

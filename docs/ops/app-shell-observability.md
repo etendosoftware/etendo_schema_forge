@@ -276,6 +276,12 @@ const stop = startTiming(OBSERVABILITY_EVENTS.TIME_TO_CREATE, {
 await stop({ status: 'success' });
 ```
 
+### Creation-form defaults timing (ETP-4741)
+
+| Event | When |
+|-------|------|
+| `defaults_block` | Emitted at most once per `useEntity.handleNew()` — exactly once for the session that survives to settlement (`ok`/`error`/`timeout`); sessions superseded by a newer `handleNew()` or neutralized by a record load (`handleSelect`/`fetchById`) **before they settle** emit nothing. Superseding or neutralizing a session that already settled (necessarily as `timeout`, since the gate release does not end the request) adds no second event — the timing handle is one-shot. Measures how long the creation form stayed blocked waiting for `GET /<entity>/defaults`. Properties: `entity`, `durationMs`, and `status` — `ok` (request settled successfully; the response is merged when it carries defaults), `error` (HTTP or network failure), or `timeout` (the 4s UX budget elapsed and the gate was released early — the request is *not* abandoned: it stays in flight and its response still merges when it lands, which is why no further event follows). |
+
 ## Privacy Rules
 
 Payloads are normalized before providers receive them:
