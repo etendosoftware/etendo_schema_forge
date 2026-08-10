@@ -6,6 +6,11 @@
       "windowId": "800026"
     },
     {
+      "name": "organization",
+      "windowId": "110",
+      "menuName": "Organization"
+    },
+    {
       "name": "conversion-rates",
       "windowId": "116"
     },

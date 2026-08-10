@@ -26,7 +26,7 @@ test.describe('Sales Order grid — documentStatus badge translation (ETP-4685)'
   test('grid shows the translated status badge (Completado), not the raw i18n key or English', async ({ page }) => {
     await login(page);
 
-    await page.route('**/sws/neo/sales-order/header**', async (route) => {
+    await page.route('**/sws/neo/sales-order/header{/**,}**', async (route) => {
       const url = route.request().url();
       const method = route.request().method();
       if (/\/header\/selectors\//.test(url)) return route.fallback();

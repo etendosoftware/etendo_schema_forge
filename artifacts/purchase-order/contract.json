@@ -1,8 +1,8 @@
 {
   "version": "0.44.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-30T10:37:21.763Z",
-  "checksum": "33db276aa6af6feb",
+  "updatedAt": "2026-08-07T18:34:29.803Z",
+  "checksum": "42eb532132d23855",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -12,7 +12,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "hideSaveStatuses": [
         "CO",
         "CL",
@@ -43,6 +42,13 @@
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "selectorPriceCurrency": "org"
@@ -2696,7 +2702,6 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
       "hideSaveStatuses": [
         "CO",
         "CL",
@@ -2727,6 +2732,13 @@
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
+      "rowQuickActions": {
+        "actions": {
+          "email": {
+            "visibleWhen": "@DocumentStatus@='CO'"
+          }
+        }
+      },
       "linesLayout": "inlineEditable",
       "selectorPriceCurrency": "org"
     },

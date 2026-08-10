@@ -65,7 +65,7 @@ const VENDOR_ACCOUNTING_ROW = {
 };
 
 async function installBaseMocks(page, { customerRows = [], vendorRows = [] } = {}) {
-  await page.route('**/sws/neo/contacts/businessPartner**', async (route) => {
+  await page.route('**/sws/neo/contacts/businessPartner{/**,}**', async (route) => {
     const url = route.request().url();
     const method = route.request().method();
     if (method === 'GET' && !/\/businessPartner\/[^/?]+/.test(url)) {
@@ -83,7 +83,7 @@ async function installBaseMocks(page, { customerRows = [], vendorRows = [] } = {
   // LIFO match: the `customer` glob (`**/contacts/customer**`) is a prefix of
   // `customerAccounting` and would otherwise shadow it, returning empty rows.
   for (const entity of ['contact', 'bankAccount', 'locationAddress', 'customer', 'vendorCreditor']) {
-    await page.route(`**/sws/neo/contacts/${entity}**`, async (route) => {
+    await page.route(`**/sws/neo/contacts/${entity}{/**,}**`, async (route) => {
       if (route.request().method() === 'GET') {
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [], totalRows: 0 } }) });
       }
@@ -91,14 +91,14 @@ async function installBaseMocks(page, { customerRows = [], vendorRows = [] } = {
     });
   }
 
-  await page.route('**/sws/neo/contacts/customerAccounting**', async (route) => {
+  await page.route('**/sws/neo/contacts/customerAccounting{/**,}**', async (route) => {
     const url = route.request().url();
     if (/\/customerAccounting\/selectors\//.test(url)) return route.fallback();
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: customerRows, totalRows: customerRows.length } }) });
   });
 
-  await page.route('**/sws/neo/contacts/vendorAccounting**', async (route) => {
+  await page.route('**/sws/neo/contacts/vendorAccounting{/**,}**', async (route) => {
     const url = route.request().url();
     if (/\/vendorAccounting\/selectors\//.test(url)) return route.fallback();
     if (route.request().method() !== 'GET') return route.fallback();
