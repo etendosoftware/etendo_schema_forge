@@ -319,3 +319,53 @@ describe('translateBackendError — cost not calculated exact match (ETP-4706)',
     assert.equal(translateBackendError(RAW, t), 'No se pudo calcular el costo del producto.');
   });
 });
+
+// ── ETP-4831: "shipment already invoiced" parameterized enrichment ──────────────
+//
+// com.etendoerp.go's own `ETGO_InvoiceLineAlreadyInvoiced` AD_MESSAGE ("The shipment
+// @docNo@ cannot be invoiced: quantity to invoice (@invoiced@) exceeds pending
+// quantity (@pending@). The shipment may already be invoiced in another document.")
+// has zero AD_Message_Trl rows for ANY language, because com.etendoerp.go has no
+// companion translation module (AD_MODULE.ISTRANSLATIONREQUIRED = N) — the same root
+// cause as the ETP-4706 "Account could not be found" messages above. The backend
+// always renders this with the literal docNo/invoiced/pending values substituted in
+// (never the raw `@token@` placeholders), so a matcher must parse those three values
+// back out of the rendered string via plain string slicing (same ReDoS-safe style as
+// `matchAccountNotFound` / ACCOUNT_NOT_FOUND_PREFIX above — a document number and
+// quantities are effectively free-form data, so no backtracking-prone regex).
+//
+// EXPECTED (not yet implemented): a `matchInvoiceLineAlreadyInvoiced` parameterized
+// matcher wired into `translateParameterized`, re-rendering via a new
+// `backendError.invoiceLineAlreadyInvoiced` i18n key. Until that lands, these tests
+// MUST fail: translateBackendError has no exact-match entry and no matcher for this
+// message shape, so it falls through to returning `msg` unchanged.
+describe('translateBackendError — "shipment already invoiced" parameterized match (ETP-4831)', () => {
+  const en = fakeUiTranslator({
+    'backendError.invoiceLineAlreadyInvoiced':
+      'Shipment {docNo} cannot be invoiced: quantity to invoice ({invoiced}) exceeds pending quantity ({pending}). It may already be invoiced in another document.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.invoiceLineAlreadyInvoiced':
+      'El albarán {docNo} no se puede facturar: la cantidad a facturar ({invoiced}) supera la cantidad pendiente ({pending}). Puede que ya esté facturado en otro documento.',
+  });
+  const RAW = 'The shipment 10000039 cannot be invoiced: quantity to invoice (2) exceeds pending quantity (0). The shipment may already be invoiced in another document.';
+
+  it('translates the rendered backend message to es_ES, interpolating docNo/invoiced/pending', () => {
+    assert.equal(
+      translateBackendError(RAW, es),
+      'El albarán 10000039 no se puede facturar: la cantidad a facturar (2) supera la cantidad pendiente (0). Puede que ya esté facturado en otro documento.',
+    );
+  });
+
+  it('translates the rendered backend message to en_US, interpolating docNo/invoiced/pending', () => {
+    assert.equal(
+      translateBackendError(RAW, en),
+      'Shipment 10000039 cannot be invoiced: quantity to invoice (2) exceeds pending quantity (0). It may already be invoiced in another document.',
+    );
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+    assert.equal(translateBackendError(RAW, missingT), RAW);
+  });
+});
