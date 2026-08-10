@@ -4,6 +4,7 @@
 **Scope:** every improvement item ever raised against the **Etendo GO MCP server**
 (`com.etendoerp.go/src/com/etendoerp/go/mcp/`) by the Holded-vs-Etendo-GO agentic benchmark.
 **Last updated:** 2026-08-10 · **MARI 73** (§2.1) · quota **fully consumed** at 97/97 (§2.2)
+**ACE** (context-cost companion index, §2.6): **defined, first measurement owed by the next run**
 
 ---
 
@@ -243,6 +244,56 @@ surfaces had not been looked at — which is precisely how IMP-15 survived two r
 6 of 6, the corollary applies: **Coverage cannot rise again**, so it is the one component that from
 here on can only be lost (by a surface regressing or a new surface being added by amendment). Future
 MARI movement has to come from M1, M2 and Delivery — that is, from shipping.
+
+### 2.6 ACE — Agent Context Economy *(companion index, deliberately outside MARI)*
+
+**Status: defined, not yet measured. The series starts with the first run after 2026-08-10.**
+
+M1 counts **calls**. It is blind to what each call costs: two servers can tie at 1.0× while one
+returns 400 bytes and the other 62 KB. That gap is not hypothetical — the 2026-08-10 run recorded a
+`neo_schema` full dump at **61,963 chars** and IMP-12's projection cutting one response by **−89.1 %**,
+both as asides, in a scorecard that has no place to put them. Context is the agent's scarcest
+resource: a response that does not fit is a failed call regardless of its status code.
+
+ACE has **two components that are never summed**, because the two servers pay in opposite ways:
+
+| Component | What it measures | Unit | Who is structurally favoured |
+|---|---|---|---|
+| **ACE-p** — priming | Bytes of tool catalog (names + descriptions + input schemas) loaded into the agent's context **before it does anything**. Paid once per session, unavoidable, whether one task runs or fifty | bytes, absolute per server + ratio | **Etendo GO** — ~14 generic verbs + 8 generators against Holded's ~180 explicit tools (base §3) |
+| **ACE-v** — variable | Bytes exchanged (request + response, summed) to complete one frozen-suite task, from a cold start | bytes per task + median ratio vs Holded | **Holded, probably** — Etendo GO pays introspection at runtime (`neo_discover`, `neo_schema`, `neo_defaults`) where Holded pre-paid it in ACE-p |
+
+That asymmetry **is the finding**, and a single headline number would erase it. Holded front-loads a
+large fixed cost and then runs cheap; Etendo GO starts nearly free and pays per outcome. So the two
+components produce one genuinely actionable output: **the break-even task count** — how many tasks a
+session must run before the generic-verb model stops being the cheaper one. Report it as
+`ACE-p_holded − ACE-p_etendo ÷ (ACE-v_etendo − ACE-v_holded)` per task, and state which side of the
+break-even a realistic session sits on. If the crossover is at 2 tasks, the priming saving is a
+rounding error; if it is at 60, Etendo GO's model is the right one for every real session and the
+per-call verbosity is a non-issue. Nobody currently knows which.
+
+**Measurement rules — non-negotiable, same standard as any finding:**
+
+1. **Bytes are the unit; tokens are a derived estimate.** Count bytes with `wc -c` on the response
+   saved verbatim. Never report a token count as measured — this harness does not expose per-call
+   token usage. When quoting tokens, label them estimates and state the divisor
+   (`bytes ÷ 4`, the usual English approximation; JSON is denser, so treat it as a floor).
+2. **Verbatim or not at all.** Save the payload to a file and measure the file. A byte count
+   retyped from memory is fabricated data — the one failure mode that would make this index worse
+   than not having it.
+3. **Cold start per task**, matching M1's convention: count every call the task actually needed,
+   including the discovery calls a cold agent cannot skip. Excluding them would score prior
+   knowledge as economy, exactly the trap §3 of the 2026-08-10 report caught on task 2.
+4. **Median, not mean, for the ACE-v ratio.** One 62 KB full dump would otherwise decide the index.
+5. **Both sides or neither**, per task — same rule as write probes (Step 0.1).
+6. **No retroactive figures.** The 08-05 / 08-06 / 08-10 runs did not save payloads, so they get no
+   ACE column ever. Reconstructing them would be invention.
+
+**Why it stays out of MARI** — and this is the load-bearing reason, not a formatting preference:
+**verbosity is not monotonic with quality.** IMP-5 asks for *richer* error envelopes; IMP-18 asks
+`neo_list` to *add* an `unknownFields` warning; IMP-12's whole value is a response that says more
+with less. Fold bytes into the readiness index and shipping IMP-5 would lower the score — a metric
+that punishes the fix it is meant to motivate. ACE is a **cost** measurement read *next to* MARI, and
+a rising ACE is only a defect once MARI has stopped rising with it. Keep them adjacent and separate.
 
 ---
 

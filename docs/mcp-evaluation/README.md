@@ -11,7 +11,7 @@ the registry.
 
 | Path | Role |
 |---|---|
-| [`mcp-improvements-registry.md`](mcp-improvements-registry.md) | **The registry — single source of truth.** Every IMP-* item with status, priority, class, repo, points, cohort and evidence pointer · **MARI** (§2.1–2.3) · M5 diagnostics (§2.4) · probe surfaces (§2.5) · changelog (§4). The only file where a status may change |
+| [`mcp-improvements-registry.md`](mcp-improvements-registry.md) | **The registry — single source of truth.** Every IMP-* item with status, priority, class, repo, points, cohort and evidence pointer · **MARI** (§2.1–2.3) · M5 diagnostics (§2.4) · probe surfaces (§2.5) · **ACE** context-cost index (§2.6) · changelog (§4). The only file where a status may change |
 | [`mcp-comparison-holded-vs-etendo-go.md`](mcp-comparison-holded-vs-etendo-go.md) | **The baseline benchmark.** Architecture contrast, tool/spec inventories, coverage matrix, and each item's `BEFORE`/`AFTER`/`Done when:` specification. Reference material |
 | `mcp-comparison-post-audit-<date>.md` | **One run report per execution.** Live evidence rows, defects, new proposals, preference verdict, M1–M4, and the delta against the registry. **Must end with a closing snapshot** — current MARI broken into its four components, plus every registered item grouped Resolved / Pending P1 / Pending P2 with a one-sentence description each, so the report reads standalone. Read-only restatement of the registry; canonical example is the 2026-08-10 report §10 |
 | [`imps/`](imps/) | **One working file per improvement.** Written while the item is being worked, not before |

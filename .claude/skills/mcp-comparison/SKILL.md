@@ -218,6 +218,8 @@ Two structural conventions the report relies on — do not break them:
    written. It carries:
    - **The current MARI, broken into its four components**, with the previous run's value next to it
      and the KR verdict. A reader must never have to open the registry to learn the headline number.
+   - **ACE next to it** (registry §2.6) — both components and the break-even task count, on their own
+     line, visibly *not* part of the MARI arithmetic. From the first run after 2026-08-10.
    - **Every registered item, all of them**, in three groups — *Resolved*, *Pending P1*, *Pending P2*
      — each with its status mark and **one sentence saying what the item is**, in plain language, not
      its title verbatim. The point is that someone who has read nothing else can see the whole board.
@@ -521,6 +523,33 @@ and Coverage are the activity half (40 %). If they ever disagree, **lead with M1
 M3 and M4 are **not** MARI components — they are diagnostics that explain M1 and M2. Keep recording
 them; a run where M3 jumps but M1 does not tells you the payload got leaner without removing a
 round-trip.
+
+### ACE — the context-cost companion index (MANDATORY from the first run after 2026-08-10)
+
+Defined in registry **§2.6**. Measure it every run, report it **next to MARI and never inside it**.
+
+It exists because M1 counts calls and M3 counts *field ratios* — neither sees **absolute volume**. A
+payload can be 100 % signal by M3 and still be 62 KB; a response that does not fit the agent's context
+is a failed call whatever its status code. Two components, reported separately:
+
+- **ACE-p (priming)** — bytes of the tool catalog loaded before the agent does anything. Take it from
+  the Step 1 smoke test where you already enumerate both catalogs; no extra calls.
+- **ACE-v (variable)** — bytes exchanged (request + response) per frozen-suite task, cold start,
+  counting the same calls M1 counts. Report per-task bytes plus the **median** ratio vs Holded.
+
+Then compute the one number that makes the pair actionable: **the break-even task count**, where
+Holded's larger fixed priming cost is repaid by Etendo GO's higher per-outcome cost. Say which side of
+it a realistic session falls on. Expect the two components to point in *opposite* directions — that
+asymmetry is the finding, so never average them into one figure.
+
+Four rules that keep it from becoming fabricated data:
+
+1. **Bytes measured with `wc -c` on the payload saved verbatim.** Never a count from memory.
+2. **Tokens are estimates, always labelled as such**, with the divisor stated (`bytes ÷ 4` is a floor
+   for JSON). This harness does not expose per-call token usage — do not imply it does.
+3. **No retroactive columns.** The 08-05/08-06/08-10 runs saved no payloads and get no ACE figure ever.
+4. **A rising ACE is not automatically a defect** — IMP-5 and IMP-18 both deliberately *add* bytes.
+   It is a defect only when ACE rises while MARI does not.
 
 ### The diagnostics: the M5 family
 
