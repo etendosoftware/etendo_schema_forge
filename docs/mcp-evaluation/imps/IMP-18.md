@@ -108,7 +108,7 @@ had two behaviours, and a differently-named report would have left it that way.
 - [x] Clean call adds no key — the default response is byte-identical to before
 - [x] Unit tests green (50/50 across both test classes, run standalone against the deployed jars)
 - [x] **Verified live** on `etendo-go-local` after a user-run compile + deploy — see §7
-- [ ] `./gradlew test` on the full module — **owed**, must be run by the user
+- [x] `./gradlew test` on the full module — run by the user 2026-08-10, green
 - [ ] Corpus row for `neo_list`/`neo_get` in `etendo-go-docs` mentions `unknownFields` (separate
       repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
 

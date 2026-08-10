@@ -127,7 +127,7 @@ fixing precisely because the lenient parser **succeeds** on them.
 - [x] The REST write path is byte-identical to before (§5)
 - [x] Unit tests green — 147/147 across `McpToolRouterSupportTest` + `NeoDateFormatTest`, plus 27/27 on the call-site guard and the REST coercer, run standalone against the deployed jars
 - [x] **Verified live** on `etendo-go-local` after a user-run compile + deploy — see §7
-- [ ] `./gradlew test` on the full module — **owed, must be run by the user.** After IMP-16 §9.2 a standalone run does not count as load-bearing
+- [x] `./gradlew test` on the full module — run by the user 2026-08-10, green. This is the check that counts — after IMP-16 §9.2, a standalone run does not
 - [ ] The `neo_update` call site probed live (§7, probe 6 — blocked, not run)
 - [ ] Corpus row in `etendo-go-docs` mentioning the 422 (separate repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
 
