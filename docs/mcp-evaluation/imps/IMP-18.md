@@ -107,8 +107,33 @@ had two behaviours, and a differently-named report would have left it that way.
 - [x] `fields:["<fk>$_identifier"]` returns the FK and its label (§4)
 - [x] Clean call adds no key — the default response is byte-identical to before
 - [x] Unit tests green (50/50 across both test classes, run standalone against the deployed jars)
+- [x] **Verified live** on `etendo-go-local` after a user-run compile + deploy — see §7
 - [ ] `./gradlew test` on the full module — **owed**, must be run by the user
-- [ ] Live probe on `etendo-go-local` after a user-run deploy: re-run C15
-  (`fields:["salePrice","purchasePrice","stock"]`) and confirm the three names come back reported
 - [ ] Corpus row for `neo_list`/`neo_get` in `etendo-go-docs` mentions `unknownFields` (separate
       repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
+
+## 7. Live verification (2026-08-10, after a user-run compile + deploy)
+
+Six read-only probes; no writes, so no record was touched.
+
+| # | Probe | Result |
+|---|---|---|
+| 1 | **C15** — `neo_list product/product fields:["salePrice","purchasePrice","stock"]` | `unknownFields:["purchasePrice","salePrice","stock"]`, `data:[{id}]` |
+| 2 | Empty result set — `fields:["salePrice","name"]` + a filter matching nothing | `data:[]` **and** `unknownFields:["salePrice"]`; `name` correctly not reported |
+| 3 | Alias — `sales-invoice/header fields:["dateAcct","accountingDate"]` | `unknownFields:["dateAcct"]`, `accountingDate:"2026-04-16"` returned |
+| 4 | Companion — `fields:["businessPartner$_identifier"]` | FK **and** label returned (`businessPartner` + `businessPartner$_identifier`) |
+| 5 | `neo_get` — `fields:["documentNo","grandTotalAmount","totalGross"]` | `unknownFields:["totalGross"]` — same contract as `neo_list` |
+| 6 | Clean `fields:["name"]` and `view:"summary"` | no key added; default response untouched |
+
+**Probe 3 is the one that discriminates the design, and it is why §3.2 is not a stylistic
+preference.** `dateAcct` is a *real DAL property* — a validation against `ModelProvider`'s property
+list would have accepted it in silence, leaving the agent with exactly the unanswered question this
+item exists to close, because the spec serves that column as `accountingDate`. It comes back
+reported, which demonstrates by observation that the emittable set is the spec's post-rename
+exposure rather than the model. **Probe 2 is the other one**: it is the case where a
+row-inspecting implementation goes quiet, and the only one where the typo makes an agent conclude
+"there is no data" instead of "I asked wrong".
+
+Note, not a defect: the MCP client's cached tool list still showed the pre-fix `fields` descriptions
+during this run — the client fetches the listing once at session start. The server serves the
+updated `ToolRegistry` text; it becomes visible in the next session.
