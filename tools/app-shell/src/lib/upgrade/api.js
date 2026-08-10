@@ -68,25 +68,38 @@ export async function runPaidOnboarding(fetchImpl, baseUrl, token, input, onMess
   });
   if (response.status === 401) throw buildError(UPGRADE_ERROR_CODES.sessionExpired, null, 401);
   if (!response.body?.getReader) throw buildError(UPGRADE_ERROR_CODES.checkoutCreationFailed);
-  const reader = response.body.getReader();
+  const result = await readOnboardingResult(response.body.getReader(), onMessage);
+  if (!result || result.success === false) throw buildError(UPGRADE_ERROR_CODES.checkoutCreationFailed);
+  return result;
+}
+
+async function readOnboardingResult(reader, onMessage) {
   const decoder = new TextDecoder();
   let buffer = '';
   let result = null;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: !done });
-    if (done) buffer += decoder.decode();
+  let done = false;
+  while (!done) {
+    ({ done, value: buffer } = await readStreamChunk(reader, decoder, buffer));
     const lines = buffer.split('\n');
     buffer = done ? '' : lines.pop();
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const message = JSON.parse(line);
-      onMessage?.(message);
-      if (message.type === 'result') result = message;
-    }
-    if (done) break;
+    result = consumeOnboardingLines(lines, onMessage, result);
   }
-  if (!result || result.success === false) throw buildError(UPGRADE_ERROR_CODES.checkoutCreationFailed);
+  return result;
+}
+
+async function readStreamChunk(reader, decoder, buffer) {
+  const { done, value } = await reader.read();
+  const chunk = value ? decoder.decode(value, { stream: !done }) : '';
+  return { done, value: done ? buffer + chunk + decoder.decode() : buffer + chunk };
+}
+
+function consumeOnboardingLines(lines, onMessage, result) {
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const message = JSON.parse(line);
+    onMessage?.(message);
+    if (message.type === 'result') result = message;
+  }
   return result;
 }
 
