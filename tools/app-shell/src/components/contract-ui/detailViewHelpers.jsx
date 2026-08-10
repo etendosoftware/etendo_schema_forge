@@ -685,6 +685,18 @@ const WINDOW_DELETE_CONFIRM_MODALS = {
   'payment-out': { Component: PaymentLifecycleConfirmModal, dir: 'out' },
 };
 
+export // ETP-4797 — same rationale/hardcoding constraint as WINDOW_DELETE_ACTIONS above: no
+// decisions.json field exists yet for "suppress the primary status pill for a given enum value",
+// so this stays a hardcoded windowName lookup instead. RPPC ("Payment Cleared") already gets its
+// own badge — PaymentConciliadoBadge, wired as this window's topbarExtra — which shows "Conciliado"
+// with a link to the matched bank transaction. Showing the generic status pill (e.g. "Cobro
+// depositado") next to it duplicated the same fact under two different labels; this set hides the
+// generic pill for exactly that one status so "Conciliado" is the only status indicator on screen.
+const WINDOW_HIDE_STATUS_PILL_FOR = {
+  'payment-in': new Set(['RPPC']),
+  'payment-out': new Set(['RPPC']),
+};
+
 export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu) {
   return primaryTabsVariant === 'pill' ? (
       <div className="inline-flex items-center gap-1 p-1 h-10 rounded-xl bg-muted">

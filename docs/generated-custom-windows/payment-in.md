@@ -81,6 +81,41 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - LinesTable template updated in ETP-3908 to include the inline-editable add-row alignment fix. This window uses `linesLayout: "classic"` so the new template branch is dead code here — no behavioral change.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
 
+## Write-off summary and lines column rename — ETP-4797
+
+`PaymentDetailSidebar` (`artifacts/payment-in/custom/PaymentDetailSidebar.jsx`, thin wrapper over
+the shared `PaymentDetailSidebarBase.jsx`) is the left-column panel showing **Importe del cobro**
+and the breakdown card (**Importe total** / **Aplicado a facturas** / **Sin aplicar**). It was not
+previously documented in this file.
+
+That breakdown now conditionally grows a fourth row, **Diferencia ajustada**, shown only when the
+payment's `writeoffAmount` (DAL property on `finPayment`, physical column `Writeoffamt`) is
+non-zero (`Math.abs(writeoffAmount) >= WRITEOFF_EPSILON`, the same 0.005 tolerance used everywhere
+else in the write-off feature). A payment created without the write-off toggle carries
+`writeoffAmount = 0` and the row never appears — the panel renders exactly as it did before this
+change.
+
+**What "Diferencia ajustada" means:** when this payment settled an invoice for less than its
+outstanding amount and the user turned on the "Ajustar diferencia" toggle at creation time (see
+`financial-account.md`'s reconciliation write-off section, and `sales-invoice.md` /
+`purchase-invoice.md` for the `NewPaymentEntryModal` toggle), the shortfall was not left as a
+pending balance — it was written off. This row shows that written-off amount, i.e. the part of the
+invoice the customer/vendor was released from paying because it was posted to the business
+partner group's write-off account instead. It is **not** a discount, credit, or G/L-item
+allocation — no accounting concept is chosen by the user; the destination account is resolved from
+configuration (see `financial-account.md`).
+
+`writeoffAmount` was flipped from `discarded` to `readOnly` in `decisions.json` for this reason —
+it used to be excluded from the generic W CRUD response entirely, so the frontend had no value to
+read even before this UI existed.
+
+The **Líneas de cobro** table (`PaymentBottomPanel.jsx`) also changed: the **Pendiente** column
+(a purely frontend-computed `Math.max(0, expected - amount)`, never a backend field) was removed,
+and the remaining two columns were renamed to match Classic's own wording for the equivalent grid
+on the `FIN_Payment` window — **Importe** → **Importe esperado** (Expected Amount), **Aplicado** →
+**Importe recibido** (Received Amount). Classic's grid does not carry an outstanding-amount column
+either; the gap between the two remaining numbers already conveys it.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which adds the

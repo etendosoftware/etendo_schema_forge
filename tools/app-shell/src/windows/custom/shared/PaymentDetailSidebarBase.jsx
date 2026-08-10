@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { WRITEOFF_EPSILON } from '@/components/contract-ui/writeoffMath.js';
 
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -109,6 +110,11 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const isDraft = !PAID_STATUSES.has(status);
   const totalAmount = parseFloat(data?.amount ?? 0);
   const currency = data?.['currency$_identifier'];
+  // ETP-4797: the invoice difference the payment wrote off instead of leaving pending. Only a
+  // payment created through the write-off toggle carries this — everything else keeps rendering
+  // exactly as before the toggle existed, since a zero write-off row would just be noise.
+  const writeoffAmount = parseFloat(data?.writeoffAmount ?? 0);
+  const hasWriteoff = Math.abs(writeoffAmount) >= WRITEOFF_EPSILON;
 
   useEffect(() => {
     if (!data?.id) return;
@@ -267,6 +273,15 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
               value={lines === null ? '...' : fmtAmt(unapplied, currency)}
               muted={unapplied === 0}
               data-testid="BreakdownRow__624cef" />
+            {hasWriteoff && (
+              <>
+                <Separator data-testid="Separator__624cef" />
+                <BreakdownRow
+                  label={ui('writtenOffLabel')}
+                  value={fmtAmt(writeoffAmount, currency)}
+                  data-testid="BreakdownRow__writeoff" />
+              </>
+            )}
           </div>
         </div>
       </div>

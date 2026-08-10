@@ -98,7 +98,10 @@ function DatosSection({ data, ui }) {
   );
 }
 
-const DET_COLS = '1.8fr 1fr 1fr 1fr';
+// ETP-4797: dropped the Pendiente column — it duplicated Importe minus Aplicado with no new
+// information, and Classic's own lines grid (Expected Amount / Received Amount) doesn't carry
+// it either. Renamed the remaining two to match Classic's wording.
+const DET_COLS = '1.8fr 1fr 1fr';
 
 function LineasSection({ data, token, apiBaseUrl, ui }) {
   const [lines, setLines] = useState(null);
@@ -124,7 +127,6 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
   const noLines = !data?.id || (lines !== null && lines.length === 0);
   const totalImporte = (lines || []).reduce((s, r) => s + (parseFloat(r.expected) || 0), 0);
   const totalApplied = (lines || []).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-  const totalPendiente = (lines || []).reduce((s, r) => s + Math.max(0, (parseFloat(r.expected) || 0) - (parseFloat(r.amount) || 0)), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', padding: '8px 20px 12px', gap: 16 }}>
@@ -141,16 +143,14 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
         <div style={{ border: '1px solid hsl(var(--foreground))', borderRadius: 8, overflow: 'hidden', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 40 }}>
             <div style={{ padding: '0 12px', ...thStyle }}>{ui('invoice')}</div>
-            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('amount')}</div>
-            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('applied')}</div>
-            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('pending')}</div>
+            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('paymentLineExpectedAmount')}</div>
+            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('paymentLineReceivedAmount')}</div>
           </div>
           <div style={{ borderTop: '1px solid hsl(var(--card))' }} />
 
           {lines.map((row, i) => {
             const applied = parseFloat(row.amount) || 0;
             const importe = parseFloat(row.expected) || 0;
-            const pendiente = Math.max(0, importe - applied);
             const invoiceNo = row.invoiceDocumentNo || row['documentNo$_identifier'] || fmtDate(row.dueDate) || '-';
             const dueLabel = row.invoiceDocumentNo ? fmtDate(row.dueDate) : null;
             return (
@@ -162,7 +162,6 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
                   </div>
                   <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{importe > 0 ? fmtAmt(importe) : '—'}</div>
                   <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied)}</div>
-                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(pendiente)}</div>
                 </div>
                 {i < lines.length - 1 && <div style={{ borderTop: '1px solid hsl(var(--card))' }} />}
               </div>
@@ -174,7 +173,6 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
             <div style={{ padding: '0 12px', font: '600 12px/16px Inter', color: 'hsl(var(--foreground))' }}>{ui('totalApplied')}</div>
             <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalImporte)}</div>
             <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied)}</div>
-            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalPendiente)}</div>
           </div>
         </div>
       )}
