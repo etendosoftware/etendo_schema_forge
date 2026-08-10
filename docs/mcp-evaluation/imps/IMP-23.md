@@ -186,10 +186,10 @@ project's own evidence trail.
 - [x] the `neo_batch` tool description stops promising all-or-nothing and points at `persisted`
 - [x] `docs/neo-headless.md` §4.12.4 shows the real failure shape, with a new §4.12.4.1 on why
 - [x] the tests that asserted the atomicity stop asserting it and guard the new contract instead
+- [x] deployed and probed live: C10 re-run returns the surviving order id in `persisted` (§9)
 - [ ] `./gradlew test` (owed — the module tests were run standalone, see §8)
-- [ ] deployed and probed live: re-run C10 and confirm the persisted order id comes back in
-      `persisted` rather than having to be hunted for in the DB
 - [ ] registry row re-scored by a `/mcp-comparison` run (not a bookkeeping edit)
+- [ ] option B — actual atomicity (§5.1: closes this item, does not open a new one)
 
 ## 7. What was implemented
 
@@ -238,15 +238,85 @@ again; only a DB-backed `OBBaseTest` could observe the leak, and this sandbox ca
 Standalone: `BatchServiceRobustnessTest` 6/6, `BatchServiceTest` 10/10, `ToolRegistryTest` 12/12.
 Per IMP-16 §9.2 a standalone run is not load-bearing — `./gradlew test` is owed.
 
-## 9. Status
+## 9. Live verification (2026-08-10, `etendo-go-local`)
 
-Investigated and **option A implemented** 2026-08-10. Compiled locally; **not deployed, not probed
-live.** The registry row moves ⏳ open → ⚠️ partial and the **score stays 0 / 5**: re-scoring is a
-`/mcp-comparison` measurement, and in any case A does not make the batch atomic, so the item cannot
-reach 5 / 5 without option B.
+Deployed by the user, then probed. **Two batches, both authorised as write probes, one record created
+and deleted, nothing pre-existing touched.**
+
+### 9.1 The C10 re-run — the survivor is now named
+
+Two `sales-order/header` creates: op `h0` valid, op `h1` identical but with a 281-char `description`
+against `c_order.description varchar(255)` — the C10 vector verbatim, chosen because it fails at
+**persist** time rather than validation time (§1.1's discriminator).
+
+```json
+{"committed": false, "atomic": false,
+ "persisted": [{"id": "h0", "ok": true, "recordId": "CEDA7318DE814C679F0A0EE992A0FE92"}],
+ "hint": "1 operation(s) that ran before the failure were already committed and were NOT rolled back …",
+ "failedAt": {"index": 1, "id": "h1"},
+ "error": {"status": 400, "error": "validation_error",
+           "detail": "…description: Value too long. Length 281, maximum allowed 255 …"}}
+```
+
+`neo_get` on that id returned order `1000029`, `documentStatus: "DR"`, description
+`"IMP23-PROBE op1 survivor"` — **the orphan the old response would have hidden.** It was then deleted
+with `neo_delete` using the id the failure body itself supplied, and a sweep by date returned 0 rows.
+
+**That round trip is the whole point of the fix, executed:** find the survivor from the response,
+verify it, delete it. Doing this on 2026-08-05 would have needed a DB query nobody had a reason to
+run, which is why `1000017` sat there for five days.
+
+### 9.2 The empty case was verified too, by accident, and it is the better probe
+
+The **first** attempt failed on op `h0` — `partnerAddress` omitted, so
+`c_bpartner_location_id` violated its not-null constraint — and returned `persisted: []` with the
+other branch of the hint (*"No operation persisted this time, but this endpoint is not atomic …"*).
+So both hint branches are now confirmed against the live server, not just the one the probe was
+designed for. This is the case §7 argued must never be an absent key: nothing survived here, and the
+response says so explicitly instead of staying silent.
+
+### 9.3 The tool description was stale in the client, and that limits option C
+
+The `neo_batch` schema this session received still carried the **old** text — *"Run a sequence of
+cross-spec create operations atomically … any failure rolls back everything (no partial writes)"* —
+while the server was already returning the new body. The MCP client caches the tool list from session
+start, so the descriptions do not refresh on redeploy.
+
+Worth recording because it bounds what a description fix can do: **an agent in an already-open session
+keeps reading the old promise until it reconnects.** The response body is the only channel that
+updates immediately — which is a point in favour of A having been done in the body first rather than
+in the docs alone (option C, §4).
+
+### 9.4 Secondary finding, not registered
+
+The two probes returned the same *class* of problem — a caller-supplied value the DB refuses — with
+very different quality:
+
+| Probe | Response |
+|---|---|
+| 281-char `description` | `400 validation_error`, naming the field, the length and the maximum. Clean |
+| missing `partnerAddress` | **`500 server_error`** carrying a raw Postgres not-null violation, with `detail` dumping the entire failing row — ~90 columns of internals — and `&quot;`-escaped quotes inside a JSON string |
+
+A required field the caller omitted is the caller's to fix, so it should be the `missingFields` 422
+shape IMP-24 §2 already established, not a 5xx; and the row dump is both an internals leak and a
+sizeable context cost (ACE). **Not registered here**: known scope already equals the quota (registry
+§2.2), so opening an item is the user's call, and this most likely belongs to IMP-17 (raw errors
+surfacing unmapped) rather than to a new number.
+
+## 10. Status
+
+Investigated, **option A implemented, deployed and verified live** 2026-08-10 (§9). The registry row
+moves ⏳ open → ⚠️ partial and the **score stays 0 / 5**: re-scoring is a `/mcp-comparison`
+measurement, and in any case A does not make the batch atomic, so the item cannot reach 5 / 5 without
+option B.
+
+What the live run settles and what it does not: the recovery loop works end to end — the failure body
+named the survivor, `neo_get` confirmed it, `neo_delete` removed it using that id, and both hint
+branches (survivors / none) were exercised (§9.1–§9.2). What it does not settle is atomicity, which
+was never A's claim. `./gradlew test` is still owed (§8).
 
 **Option B stays under this item** ([§5.1](#51-correction--b-does-not-need-its-own-imp-number)) — it is
 the first clause of this row's own title, so doing it closes IMP-23 rather than opening IMP-26, and
-the discovery-reserve conversation registry §2.2 demands is not triggered. It waits on A's live probe
-([§5.2](#52-why-b-waits-for-a-to-be-verified-live-rather-than-following-it-immediately)), not on a
-registry decision.
+the discovery-reserve conversation registry §2.2 demands is not triggered. Its blocker
+([§5.2](#52-why-b-waits-for-a-to-be-verified-live-rather-than-following-it-immediately)) is now
+**cleared**: A is verified, so B no longer risks stacking two unverified changes on one write path.
