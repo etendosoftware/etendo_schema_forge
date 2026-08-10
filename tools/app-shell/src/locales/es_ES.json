@@ -19984,6 +19984,7 @@
     "backendError.productCategoryCannotSetMultipleDefault": "Solo una categoría de producto puede estar marcada como valor por defecto.",
     "backendError.costNotCalculated": "No se pudo calcular el costo del producto.",
     "backendError.noLinesToInvoice": "No hay líneas a facturar en este pedido.",
+    "backendError.noPendingLinesToInvoiceShipment": "No hay líneas pendientes de facturar en este albarán.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",
     "uomTypeTime": "Tiempo",

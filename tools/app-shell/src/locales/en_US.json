@@ -19734,6 +19734,7 @@
     "backendError.productCategoryCannotSetMultipleDefault": "Only one product category can be marked as default.",
     "backendError.costNotCalculated": "The cost of the product could not be calculated.",
     "backendError.noLinesToInvoice": "There are no lines to invoice for this order.",
+    "backendError.noPendingLinesToInvoiceShipment": "There are no pending lines to invoice for this shipment.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
     "uomTypeTime": "Time",

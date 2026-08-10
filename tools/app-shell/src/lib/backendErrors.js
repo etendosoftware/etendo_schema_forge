@@ -36,6 +36,11 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
+  // CreateDraftInvoiceHandler (com.etendoerp.go) — same hardcoded-Spanish-literal bug
+  // as above, but from the shipment-invoicing flow. Two throw sites emit this exact
+  // string: capShipmentLineOverrides (~L952) and the line-selection loop inside
+  // createFromShipments (~L1123). One entry covers both (ETP-4831 case 3).
+  'No hay líneas pendientes de facturar en este albarán': 'backendError.noPendingLinesToInvoiceShipment',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
