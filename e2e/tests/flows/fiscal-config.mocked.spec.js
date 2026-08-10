@@ -658,3 +658,142 @@ test.describe('Fiscal Config — onboarding save regression (ETP-4401)', () => {
     });
   }
 });
+
+// ── Add complementary SIF flow (ETP-4785) ─────────────────────────────────────
+//
+// When a user has only TBAI configured (effectiveProfile === 'tbai'), an "Add SII"
+// button is shown. Clicking it:
+//   1. POSTs to /sws/neo/sii-config/siiConfiguration to create a new empty SII record.
+//   2. Switches renderProfile to 'sii+tbai' — two tab buttons appear (SII tab, TBAI tab).
+//   3. The user can then save (PUT) both records via the normal Save button.
+//
+// The button must NOT appear when the profile is SII-only or Verifactu.
+
+const NEW_SII_RECORD = {
+  id: 'e2e-new-sii-001',
+  acogidaAlSII: 'N',
+  entornoDeProduccin: 'N',
+  navarra: 'N',
+  guipuzcoa: 'N',
+};
+
+test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
+  test('button "Add SII" is visible when only a TBAI record exists', async ({ page }) => {
+    await loginWithOrg(page);
+    await installFiscalConfigMocks(page, { tbai: TBAI_RECORD });
+    await navigateTo(page, 'fiscal-config');
+
+    // TBAI section must load first
+    await expect(page.getByText(t('fiscal.tbai.field.enrollDate'))).toBeVisible({ timeout: 8_000 });
+
+    // The "Add SII" button is shown because canAddComplementary is true (tbai-only profile)
+    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toBeVisible();
+    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toContainText(
+      t('fiscal.addComplementary.addSii'),
+    );
+  });
+
+  test('button "Add SII" is NOT visible when only an SII record exists', async ({ page }) => {
+    await loginWithOrg(page);
+    await installFiscalConfigMocks(page, { sii: SII_RECORD });
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(t('fiscal.sii.field.enrolled'))).toBeVisible({ timeout: 8_000 });
+
+    // canAddComplementary is false for sii-only profile
+    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toHaveCount(0);
+  });
+
+  test('button "Add SII" is NOT visible when only a Verifactu record exists', async ({ page }) => {
+    await loginWithOrg(page);
+    await installFiscalConfigMocks(page, { verifactu: VERIFACTU_RECORD });
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(t('fiscal.verifactu.field.tax'))).toBeVisible({ timeout: 8_000 });
+
+    // canAddComplementary is false for verifactu profile
+    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toHaveCount(0);
+  });
+
+  test('happy path: clicking "Add SII" POSTs to sii-config and switches layout to sii+tbai', async ({ page }) => {
+    // Stateful mock: before the POST, sii-config returns empty; after, returns the
+    // newly-created record. This mirrors the real flow where createComplementary()
+    // receives the POST response and immediately mounts the new SII section without
+    // a refetch — the subsequent GET (if any) will also return the record.
+    let siiCreated = false;
+
+    await loginWithOrg(page);
+
+    // Install the TBAI mock first (existing record)
+    await page.route('**/sws/neo/tbai-config/**', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(neoOk([TBAI_RECORD])),
+      });
+    });
+
+    // Install the stateful SII mock:
+    //   GET before POST → empty list (no SII yet)
+    //   POST           → creates and returns the new SII record
+    //   GET after POST → returns the new SII record
+    await page.route('**/sws/neo/sii-config/**', async route => {
+      const req = route.request();
+      if (req.method() === 'POST') {
+        siiCreated = true;
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(neoOk([NEW_SII_RECORD])),
+        });
+      }
+      if (req.method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(neoOk(siiCreated ? [NEW_SII_RECORD] : [])),
+        });
+      }
+      return route.fallback();
+    });
+
+    // Verifactu always returns empty (not relevant to this test)
+    await page.route('**/sws/neo/verifactu-config/**', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(neoOk([])),
+      });
+    });
+
+    await navigateTo(page, 'fiscal-config');
+
+    // TBAI section loads and the "Add SII" button is shown
+    await expect(page.getByText(t('fiscal.tbai.field.enrollDate'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toBeVisible();
+
+    // Click "Add SII" — intercept the POST to sii-config
+    const [postReq] = await Promise.all([
+      page.waitForRequest(
+        req => req.method() === 'POST' && req.url().includes('/sii-config/'),
+      ),
+      page.getByTestId('FiscalConfigPage__addComplementary').click(),
+    ]);
+
+    // The POST must target the sii-config spec
+    expect(postReq.url()).toContain('/sii-config/');
+    expect(postReq.method()).toBe('POST');
+
+    // After the POST the layout switches to sii+tbai:
+    //   renderProfile becomes 'sii+tbai', which renders the TabBar with both tabs.
+    await expect(
+      page.getByRole('button', { name: t('fiscal.tab.sii') }),
+    ).toBeVisible({ timeout: 8_000 });
+    await expect(
+      page.getByRole('button', { name: t('fiscal.tab.tbai') }),
+    ).toBeVisible();
+
+    // The "Add SII" button itself disappears (addingComplementary is now set)
+    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toHaveCount(0);
+  });
+});
