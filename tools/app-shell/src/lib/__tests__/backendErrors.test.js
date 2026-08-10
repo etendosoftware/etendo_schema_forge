@@ -368,4 +368,18 @@ describe('translateBackendError — "shipment already invoiced" parameterized ma
     const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
     assert.equal(translateBackendError(RAW, missingT), RAW);
   });
+
+  // BUG-1 (QA finding, ETP-4831): the backend builds @invoiced@/@pending@ from
+  // BigDecimal#toPlainString() (AbstractInvoiceHeaderHandler.checkInoutEntryForOverInvoicing
+  // in com.etendoerp.go), so for a product with fractional UOM precision the rendered
+  // values are decimal, not just integers — e.g. "2.50" / "0.75". The matcher does plain
+  // digit-agnostic string slicing between fixed delimiters, so it must parse a decimal
+  // quantity exactly like an integer one.
+  it('translates a rendered message with decimal invoiced/pending quantities to es_ES', () => {
+    const decimalRaw = 'The shipment 10000039 cannot be invoiced: quantity to invoice (2.50) exceeds pending quantity (0.75). The shipment may already be invoiced in another document.';
+    assert.equal(
+      translateBackendError(decimalRaw, es),
+      'El albarán 10000039 no se puede facturar: la cantidad a facturar (2.50) supera la cantidad pendiente (0.75). Puede que ya esté facturado en otro documento.',
+    );
+  });
 });
