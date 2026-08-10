@@ -126,13 +126,52 @@ neither, because the response itself is what misleads.
 
 ## 5. Recommendation
 
-**A now, B as its own item.**
+**A now, B afterwards — under this same item, not a new one.**
 
 A is provably correct from §3 — the data already exists, the change is to stop discarding it — and it
 converts an unrecoverable failure into a recoverable one, which is the whole of what an agent needs.
 B is a genuine improvement and a genuine regression risk on a UI feature this item never mentioned;
-bundling it here would make a P1 agent-ergonomics fix wait on a core-fork review, and would put the
-invoice ingest path in the blast radius of a change nobody asked for.
+bundling the two into one change would make a P1 agent-ergonomics fix wait on a core-fork review, and
+would put the invoice ingest path in the blast radius of a change nobody asked for.
+
+### 5.1 Correction — B does not need its own IMP number
+
+This section originally read *"A now, B as its own item."* **That recommendation was obsolete the
+moment A was implemented, and it was wrong on the registry mechanics.**
+
+The reason it gave was scope-of-review: don't make a P1 ergonomics fix wait on a core fork. That
+reason is *satisfied*, not pending — A shipped as its own commit, reviewable on its own. What is left
+is a sequencing question, and sequencing does not need a second row.
+
+It also would have cost MARI for nothing. This item's own title is *"Make `neo_batch` atomic, **or**
+stop documenting it as atomic"* — B is the first clause. Doing it here takes this row from ⚠️ (0.5)
+to ✅ (1.0): **+2.5 earned points, known scope and quota untouched.** Registering it separately adds
+5 points of P1 scope against a known scope that already equals the quota exactly (97, registry §2.2),
+forcing a re-base to `102 × 1.20 = 122` — the same earned points against a larger denominator, so
+Delivery falls 51 → 40, MARI 73 → ~70, and the scope-closed ceiling 92 → ~88. Same code, same fix,
+three points worse, purely from where the row was filed.
+
+So: **B closes IMP-23; it does not open IMP-26.** The discovery-reserve conversation registry §2.2
+demands is therefore not triggered by this work at all.
+
+### 5.2 Why B waits for A to be verified live rather than following it immediately
+
+Not a cost argument — a verifiability one, and it is the same wall §2 hit from the other side.
+
+**No test in this repo can observe B working.** The per-op commit lives inside the
+`NeoServletSupport.handleWithHooks` seam that the unit tests must stub (§8), so a mocked test cannot
+distinguish "the batch now holds the transaction" from "nothing downstream ran" — that is the exact
+false pass that made the old atomicity assertions meaningless. Only a DB-backed `OBBaseTest` could
+see it, and it does not boot here. **B's only real verification is a live probe**, which means B ships
+blind and waits on a deploy regardless of when it is written.
+
+Given that, writing it before A is probed live would put two unverified changes on the same write
+path in one deploy, and a failure could not be attributed to either. A is verified by re-running C10;
+that has to happen first.
+
+**One limit B does not remove even done well:** a handler inside the batch can still commit behind
+it — `AbstractInvoiceHeaderHandler`'s completion path goes through `ProcessInvoiceUtil#process`, which
+commits internally by design. B makes the batch atomic for plain CRUD ops, not hermetic.
 
 **The P1 label stays.** Unlike [IMP-24](IMP-24.md), nothing here is merely cosmetic: the current
 response causes orphan records to be left behind, and that has already happened once in this
@@ -206,5 +245,8 @@ live.** The registry row moves ⏳ open → ⚠️ partial and the **score stays
 `/mcp-comparison` measurement, and in any case A does not make the batch atomic, so the item cannot
 reach 5 / 5 without option B.
 
-**Option B is not registered yet** — §5 recommends it as its own item, and the discovery reserve is
-consumed (registry §3's warning), so registering it is the user's call, not this file's.
+**Option B stays under this item** ([§5.1](#51-correction--b-does-not-need-its-own-imp-number)) — it is
+the first clause of this row's own title, so doing it closes IMP-23 rather than opening IMP-26, and
+the discovery-reserve conversation registry §2.2 demands is not triggered. It waits on A's live probe
+([§5.2](#52-why-b-waits-for-a-to-be-verified-live-rather-than-following-it-immediately)), not on a
+registry decision.
