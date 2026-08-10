@@ -1,4 +1,4 @@
-# IMP-23 — `neo_batch` is not atomic
+# IMP-23 — `neo_batch` was not atomic (options A + B implemented)
 
 | | |
 |---|---|
@@ -7,6 +7,11 @@
 | **Evidence** | **C9** (FK failure, nothing persisted — inconclusive) and **C10** (281-char description against `c_order.description varchar(255)`: `committed:false` returned **and** order `1000027` persisted) |
 | **Repo** | `com.etendoerp.go` |
 | **Registered** | 2026-08-10, after a fourth reproduction |
+
+> **Reading order.** §1–§9 describe the defect and **option A** (honest reporting), which shipped and
+> was verified live on 2026-08-10. **Option B** — the batch is now genuinely atomic — is §11, and it
+> changes what §1 and §2 describe: they are kept as the record of *why* B had to take the shape it did,
+> not as a description of current behaviour.
 
 ## 1. The mechanism, read out of the code
 
@@ -69,7 +74,8 @@ avoid that path, not configure it.
 
 What *is* available: `DefaultJsonDataService` is a plain public class and its `doPreAction` /
 `doPostAction` hooks are `protected`, so a subclass can reuse them. That is what makes §4's option B
-merely expensive rather than impossible.
+merely expensive rather than impossible. **This table is the reason B is a fork and not a flag** — it
+was re-checked line by line before B was written (§11.1), and the verdicts held.
 
 ## 3. The information the agent needs is already in memory, and is thrown away
 
@@ -179,7 +185,8 @@ project's own evidence trail.
 
 ## 6. Done when
 
-**Option A was chosen** (2026-08-10). B is deferred to its own item, per §5.
+**Option A was chosen** (2026-08-10), shipped and verified live (§9). **Option B followed the same
+day** under this item, per §5.1 (§11).
 
 - [x] `failureBody` receives `opResults` and returns `persisted:[{id, ok, recordId}]`
 - [x] `atomic:false` and a `hint` on **every** failure body, including the ones where nothing survived
@@ -187,9 +194,12 @@ project's own evidence trail.
 - [x] `docs/neo-headless.md` §4.12.4 shows the real failure shape, with a new §4.12.4.1 on why
 - [x] the tests that asserted the atomicity stop asserting it and guard the new contract instead
 - [x] deployed and probed live: C10 re-run returns the surviving order id in `persisted` (§9)
-- [ ] `./gradlew test` (owed — the module tests were run standalone, see §8)
+- [ ] `./gradlew test` (owed — the module tests were run standalone, see §8 and §11.4)
 - [ ] registry row re-scored by a `/mcp-comparison` run (not a bookkeeping edit)
-- [ ] option B — actual atomicity (§5.1: closes this item, does not open a new one)
+- [x] option B — actual atomicity (§5.1: closes this item, does not open a new one) — §11
+- [ ] **B deployed and probed live**: a 2-op batch whose op 1 fails must leave **no** survivor, i.e.
+      the same C10 vector that returned `persisted:[…]` in §9.1 must now return `persisted:[]` and
+      `atomic:true`. This is B's only real verification (§5.2) and the build/deploy is the user's
 
 ## 7. What was implemented
 
@@ -303,12 +313,12 @@ sizeable context cost (ACE). **Not registered here**: known scope already equals
 §2.2), so opening an item is the user's call, and this most likely belongs to IMP-17 (raw errors
 surfacing unmapped) rather than to a new number.
 
-## 10. Status
+## 10. Status after option A
 
-Investigated, **option A implemented, deployed and verified live** 2026-08-10 (§9). The registry row
-moves ⏳ open → ⚠️ partial and the **score stays 0 / 5**: re-scoring is a `/mcp-comparison`
-measurement, and in any case A does not make the batch atomic, so the item cannot reach 5 / 5 without
-option B.
+Investigated, **option A implemented, deployed and verified live** 2026-08-10 (§9). At that point the
+registry row moved ⏳ open → ⚠️ partial with the **score staying 0 / 5**: re-scoring is a
+`/mcp-comparison` measurement, and in any case A does not make the batch atomic, so the item could not
+reach 5 / 5 without option B.
 
 What the live run settles and what it does not: the recovery loop works end to end — the failure body
 named the survivor, `neo_get` confirmed it, `neo_delete` removed it using that id, and both hint
@@ -318,5 +328,116 @@ was never A's claim. `./gradlew test` is still owed (§8).
 **Option B stays under this item** ([§5.1](#51-correction--b-does-not-need-its-own-imp-number)) — it is
 the first clause of this row's own title, so doing it closes IMP-23 rather than opening IMP-26, and
 the discovery-reserve conversation registry §2.2 demands is not triggered. Its blocker
-([§5.2](#52-why-b-waits-for-a-to-be-verified-live-rather-than-following-it-immediately)) is now
-**cleared**: A is verified, so B no longer risks stacking two unverified changes on one write path.
+([§5.2](#52-why-b-waits-for-a-to-be-verified-live-rather-than-following-it-immediately)) was
+**cleared** by the live run: A is verified, so B no longer risks stacking two unverified changes on
+one write path. B followed the same day — §11.
+
+## 11. Option B — the batch is now atomic (2026-08-10, `7159376c`)
+
+Committed on `feature/ETP-4793` in `com.etendoerp.go`. **Not yet deployed**, so not yet verified live
+(§6, last box).
+
+### 11.1 What was re-checked before writing a line of it
+
+§2's table was re-read against the actual sources rather than trusted, because the whole cost of B
+rests on it being right:
+
+* `SessionHandler#commitAndClose(pool)` → `commitAndCloseNoCheck` → `trx.commit()`, **unconditional**
+  (`/Users/futit/Workspace/etendo_develop/src/org/openbravo/dal/core/SessionHandler.java:580–691`).
+  Note the path: this file is **not** under `modules_core`.
+* `setDoRollback` / `getDoRollback` are read **only** by `DalThreadHandler` at thread end. There is no
+  deferred-commit or nested-transaction mode to switch on.
+* `DefaultJsonDataService`'s own class javadoc sanctions the fork outright: *"This class can however
+  also be extended and instantiated directly."*
+
+So B forks the two lines that commit, and nothing else: core's `update()` success branch
+(`:1152 commitAndClose()`) and its converter-error branch (`:1060 rollbackAndClose()`).
+
+### 11.2 The three pieces of code
+
+**1. `NeoBatchJsonDataService`** (new, ~330 lines) — `extends DefaultJsonDataService`, overrides
+`update()` and reproduces core's success and converter-error branches **minus those two lines**,
+delegating to the inherited `protected doPreAction`/`doPostAction`.
+
+Two non-obvious constraints, both documented in the class javadoc because both cost a build:
+
+* **It must be a CDI bean, not `@Vetoed` + `new`.** Core injects `cachedPreference` (`:89`) and
+  `@Any Instance<JsonDataServiceExtraActions> extraActions` (`:1205`), and `doPreAction` dereferences
+  the latter — a hand-constructed instance NPEs. Making it a bean is safe because
+  `WeldUtils.getInstanceFromStaticBeanManager` matches `bean.getBeanClass() == type` **exactly**, so
+  core's own lookup cannot see the subclass and the shipped write path is untouched.
+* **Its accessor is `deferredCommitInstance()`, not `getInstance()`.** Core's `getInstance()` is
+  `public static`; a package-private override is *"attempting to assign weaker access privileges"* and
+  does not compile. It is also **lazy** — merely loading this class runs core's static initializer,
+  which resolves a bean through Weld.
+
+**2. `BatchService` — transaction ownership.** A `ThreadLocal<Boolean> CALLER_OWNS_TRANSACTION` set by
+`executeBatch` around the loop (cleared in `finally`), plus the resolver every write goes through:
+
+```java
+static DefaultJsonDataService currentJsonService() {
+  return Boolean.TRUE.equals(CALLER_OWNS_TRANSACTION.get())
+      ? NeoBatchJsonDataService.deferredCommitInstance()
+      : DefaultJsonDataService.getInstance();
+}
+```
+
+The flag and the resolver live **here, not in the subclass**, and that placement is load-bearing: with
+them on `NeoBatchJsonDataService`, simply setting the flag loaded the class and dragged core's
+Weld-dependent static initializer in — which failed the unit tests with
+`ExceptionInInitializerError` and would have been a production fragility too.
+
+**3. `NeoCrudHandler:237`** — one line, `DefaultJsonDataService jsonService = BatchService.currentJsonService();`,
+thereafter passed by parameter through `dispatchCrud` / `executePostCreate` / `executeUpdate`. That
+single injection point covering the whole create path is why B turned out cheap.
+
+### 11.3 The failure body had to change direction, not just value
+
+After B, reporting `atomic:false` with every op listed as `persisted` would be **the mirror image of
+the original bug**: it would send an agent hunting for records that were correctly rolled back. So
+`atomic` is now computed, `atomic = (survivors.length() == 0)`, with two distinct hints — *"nothing was
+persisted, fix `failedAt` and retry the whole batch"* vs *"N operation(s) were committed by a process
+running underneath this batch … retrying as-is will create duplicates"*.
+
+Survivors are detected **generically**, not from a maintained list of handlers that commit internally
+(which would rot and over-report). `commitAndClose()` closes the Hibernate session, so a new
+`TransactionTracker` compares `OBDal.getInstance().getSession()` identity after each op: a changed
+session means the transaction ended underneath the batch, and the ops completed so far are snapshotted
+as durable. **This is the one part of B a mocked test can actually observe** — the atomicity itself
+cannot be (§11.4).
+
+### 11.4 What B still does not fix, and what no test here can see
+
+* **Not hermetic.** `ProcessInvoiceUtil#process` — reached by `AbstractInvoiceHeaderHandler`'s
+  completion path (`:562`, `:591–592`) — commits internally by design. A batch op that triggers it is
+  outside B's transaction. That is exactly the case §11.3's `atomic:false` + `persisted` now reports.
+* **Two silent-drift risks**, both flagged in the class javadoc: `ADD_FLAG = "_doingAdd"` and
+  `getContentAsJSON` are duplicated from core's **private** surface. A signature change in core breaks
+  the build; a behaviour change does not. (Precedent: `SecureJsonDataService` duplicates the same two.)
+* **No test in this repo can prove the batch is atomic**, for the same reason it could not prove it was
+  not (§8): the per-op commit lives inside the stubbed `NeoServletSupport.handleWithHooks` seam, and
+  `OBBaseTest` does not boot in this sandbox. The tests were rewritten to guard the *reporting*
+  contract, which they can see:
+
+| Test | Change |
+|---|---|
+| `duplicateKeyStopsBatchAndReportsTheSurvivingRecord` | renamed `duplicateKeyRollsBackTheWholeBatchAndReportsNothingPersisted`; asserts `atomic:true`, `persisted` empty, "retry the whole batch" |
+| *(new)* `aCommitUnderneathTheBatchIsReportedWithTheSurvivingRecord` | mocks the `Session` swap — the tracker's only observable behaviour — and asserts `atomic:false` with the one surviving id |
+| `failureOnFirstOpReportsAnEmptyPersistedArray` | now asserts `atomic:true` and the "nothing was persisted" hint |
+| `ToolRegistryTest#testBuildBatchToolSchema` | this assertion has now been wrong twice in **opposite** directions, so it stopped checking the adjective and checks the caller-visible consequence: `atomically`, `'atomic':false`, `persisted` |
+
+Standalone: **19 successful, 0 failed** (`BatchServiceRobustnessTest` + `ToolRegistryTest`). Per
+IMP-16 §9.2 that is not load-bearing; `./gradlew test` remains owed.
+
+### 11.5 Blast radius, checked
+
+Nothing in `tools/app-shell/src` or `cli/src` reads the batch's `atomic` or `persisted` keys (the
+React invoice-scan ingest checks only `committed`), so no consumer breaks. That path shares
+`executeBatch` via `POST /sws/neo/batch`, so it **silently gains atomicity** — which is §1.2's wider
+blast radius closing in the same change.
+
+### 11.6 Scoring
+
+The row can now go ⚠️ partial → ✅ **5 / 5**: **+2.5 earned, known scope and quota untouched**, per
+§5.1. **Both gates apply**: the live probe in §6 must pass first, and the score change itself is a
+`/mcp-comparison` measurement, not a bookkeeping edit here.
