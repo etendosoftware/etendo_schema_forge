@@ -101,7 +101,7 @@ async function installMocks(page, hooks = {}) {
   });
 
   // Financial account transactions: movements GET + lookups + lifecycle POSTs.
-  await page.route('**/sws/neo/financial-account-transactions**', async (route) => {
+  await page.route('**/sws/neo/financial-account-transactions{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     const method = req.method();

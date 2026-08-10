@@ -149,7 +149,6 @@ export default function AssetCategoryPage({ windowName, recordId, ...props }) {
         noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "A_Asset_Group", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        linesLayout="inlineEditable"
         {...props} window={effectiveWindow}
       />
       </>

@@ -25,11 +25,6 @@ vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
   default: () => <div data-testid="create-invoice-confirm-modal" />,
 }));
 
-vi.mock('../useReturnToVendorPdf', () => ({
-  generateReturnToVendorPdf: vi.fn(),
-  getReturnToVendorPdfLabels: () => ({}),
-}));
-
 import ConfirmWithCreditButton from '../ConfirmWithCreditButton.jsx';
 import { itRendersOnlyCopyLinkOutsideDrOrCo } from '../../shared/__tests__/confirmWithCreditButtonCopyLinkTest.jsx';
 
@@ -99,9 +94,9 @@ describe('ConfirmWithCreditButton (return-to-vendor)', () => {
     expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
   });
 
-  it('always renders the print button regardless of status', () => {
+  it('does NOT render a print button (printing is unified in DocumentPrintDrawer)', () => {
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'DR', linesCount: 1 }} />);
-    expect(screen.getByText('print')).toBeInTheDocument();
+    expect(screen.queryByText('print')).not.toBeInTheDocument();
   });
 
   it('does NOT render a clone button', () => {

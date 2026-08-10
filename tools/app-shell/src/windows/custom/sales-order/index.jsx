@@ -134,7 +134,6 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
         rowQuickActions={rowQuickActions}
         token={token}
         apiBaseUrl={apiBaseUrl}
-        hidePrint
         hideLink
         bulkActions={(ctx) => (
           <>
