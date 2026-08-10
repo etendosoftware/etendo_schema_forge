@@ -226,7 +226,7 @@ test.describe('Fiscal Config — certificate upload modal', () => {
   test('clicking Subir certificado opens the cert modal for the SII section', async ({ page }) => {
     await loginWithOrg(page);
     await installFiscalConfigMocks(page, { sii: SII_RECORD });
-    await page.route('**/certificate**', async route => {
+    await page.route('**/certificate{/**,}**', async route => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -246,7 +246,7 @@ test.describe('Fiscal Config — certificate upload modal', () => {
   test('uploading a non-p12 file shows a format error', async ({ page }) => {
     await loginWithOrg(page);
     await installFiscalConfigMocks(page, { sii: SII_RECORD });
-    await page.route('**/certificate**', route =>
+    await page.route('**/certificate{/**,}**', route =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) }),
     );
     await navigateTo(page, 'fiscal-config');
@@ -265,7 +265,7 @@ test.describe('Fiscal Config — certificate upload flow', () => {
   async function setupPage(page, certGetResponse = { exists: false }) {
     await loginWithOrg(page);
     await installFiscalConfigMocks(page, { sii: SII_RECORD });
-    await page.route('**/certificate**', route => {
+    await page.route('**/certificate{/**,}**', route => {
       if (route.request().method() === 'GET') {
         return route.fulfill({
           status: 200,
@@ -282,7 +282,7 @@ test.describe('Fiscal Config — certificate upload flow', () => {
     await setupPage(page);
 
     // Intercept the POST and return a successful upload
-    await page.route('**/certificate**', async route => {
+    await page.route('**/certificate{/**,}**', async route => {
       if (route.request().method() === 'POST') {
         return route.fulfill({
           status: 200,
@@ -309,7 +309,7 @@ test.describe('Fiscal Config — certificate upload flow', () => {
     await setupPage(page);
 
     let callCount = 0;
-    await page.route('**/certificate**', async route => {
+    await page.route('**/certificate{/**,}**', async route => {
       if (route.request().method() !== 'POST') return route.fallback();
       callCount++;
       if (callCount === 1) {
@@ -346,7 +346,7 @@ test.describe('Fiscal Config — certificate upload flow', () => {
   test('NIF mismatch (422) returns to pick step with localized error', async ({ page }) => {
     await setupPage(page);
 
-    await page.route('**/certificate**', async route => {
+    await page.route('**/certificate{/**,}**', async route => {
       if (route.request().method() !== 'POST') return route.fallback();
       return route.fulfill({
         status: 422,

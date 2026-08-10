@@ -1,0 +1,21 @@
+{
+  "header": {
+    "m_inout_id": "F60718293A4B5C6D7E8F9012345678AB",
+    "documentno": "REC-DEV/2026-000045",
+    "movementdate": "2026-07-22",
+    "doc_type": "Return Material Receipt",
+    "bp_name": "Bebidas Alegres, S.L.",
+    "bp_location": "Calle Mayor 12, 28013 Madrid",
+    "description": "Devolucion de mercaderia del albaran ALB/2026-000731 por rotura de embalaje.",
+    "status": "Complete",
+    "org_name": "Etendo Demo, S.L.",
+    "org_taxid": "B12345678",
+    "org_address": "Avenida de la Innovacion 8",
+    "org_postal": "41020",
+    "org_city": "Sevilla"
+  },
+  "lines": [
+    { "line": 10, "product_name": "Agua Mineral 1,5L (caja 12)", "quantity": 15, "uom": "Caja" },
+    { "line": 20, "product_name": "Zumo de Naranja 1L (caja 6)", "quantity": 4, "uom": "Caja" }
+  ]
+}

@@ -76,17 +76,29 @@ const ROWS = [
  * these specific handlers win over the generic /sws/** stub from login().
  */
 async function installReturnReceiptMocks(page) {
-  // Lines endpoint — always empty
-  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine**', async (route) => {
+  // NOTE: two page.route() registrations per endpoint, not the `{/**,}**`
+  // brace pattern — Playwright's glob→regex compiler only treats `**` as
+  // "crosses path separators" when it is immediately followed by `/` (or the
+  // glob's end); inside a brace group the `**` right before the `,` is
+  // followed by `,`, so it silently degrades to a single-segment `[^/]*`.
+  // That matched one-segment sub-paths (e.g. `/returnMaterialReceipt/ret-001`)
+  // but NOT the two-segments-deep `/returnMaterialReceipt/<id>/action/<name>`
+  // POSTs (`documentAction`, `createReturnInvoice`), which fell through to
+  // the generic `/sws/**` stub from login() and never returned the
+  // synthetic `CO`/invoice data the confirm flow needs. See
+  // docs/e2e-testing-guide.md for the full write-up.
+  const linesHandler = async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
     });
-  });
+  };
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine/**', linesHandler);
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine**', linesHandler);
 
   // Header list + detail
-  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt**', async (route) => {
+  const headerHandler = async (route) => {
     const req = route.request();
     const url = req.url();
     const method = req.method();
@@ -145,7 +157,9 @@ async function installReturnReceiptMocks(page) {
     }
 
     route.fallback();
-  });
+  };
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt/**', headerHandler);
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt**', headerHandler);
 }
 
 // ---------------------------------------------------------------------------

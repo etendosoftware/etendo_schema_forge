@@ -1,0 +1,21 @@
+{
+  "header": {
+    "m_inout_id": "A1B2C3D4E5F60718293A4B5C6D7E8F90",
+    "documentno": "ALB-DEV/2026-000112",
+    "movementdate": "2026-07-18",
+    "doc_type": "Return to Vendor Shipment",
+    "bp_name": "Distribuciones del Sur, S.L.",
+    "bp_location": "Poligono Industrial El Manzano, 41500 Alcala de Guadaira",
+    "description": "Devolucion parcial de la recepcion REC/2026-000204 por producto defectuoso.",
+    "status": "Complete",
+    "org_name": "Etendo Demo, S.L.",
+    "org_taxid": "B12345678",
+    "org_address": "Avenida de la Innovacion 8",
+    "org_postal": "41020",
+    "org_city": "Sevilla"
+  },
+  "lines": [
+    { "line": 10, "product_name": "Agua Mineral 1,5L (caja 12)", "quantity": 20, "uom": "Caja" },
+    { "line": 20, "product_name": "Zumo de Naranja 1L (caja 6)", "quantity": 8, "uom": "Caja" }
+  ]
+}

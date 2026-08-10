@@ -1424,6 +1424,44 @@
         }
       ]
     },
+    "e3f984d13f9e21c10d9a7b0386e535f0f1cf7c4f66defcbeea46eee24316f9e8": {
+      "checksum": "0f68c9f9fa1dd24f679e489c89349ebad328dd1689e0c3281a42142ff21ffe26",
+      "params": [
+        "110"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "143",
+          "name": "ETSG_CheckLegalOrg",
+          "tab_name": "Organization",
+          "validation_code": "@SQL=SELECT 1 FROM ad_orgType WHERE ad_orgType_id=@ad_orgType_id@ AND isLegalEntity='Y'"
+        },
+        {
+          "ad_tab_id": "143",
+          "name": "INTR_ISLEGALENTITY",
+          "tab_name": "Organization",
+          "validation_code": "@SQL=SELECT islegalentity FROM ad_org, ad_orgtype WHERE ad_org.ad_orgtype_id= ad_orgtype.ad_orgtype_id AND ad_org.ad_org_id=@AD_ORG_ID@"
+        },
+        {
+          "ad_tab_id": "143",
+          "name": "ISPERIODCONTROLALLOWED_AUX",
+          "tab_name": "Organization",
+          "validation_code": "@SQL=SELECT 'Y' FROM ad_org, ad_orgtype WHERE ad_org.ad_orgtype_id= ad_orgtype.ad_orgtype_id AND ad_org.ad_org_id=@AD_ORG_ID@ AND (ISBUSINESSUNIT='Y' OR (ISLEGALENTITY='Y' AND ISACCTLEGALENTITY='Y'))"
+        },
+        {
+          "ad_tab_id": "143",
+          "name": "ShowGeneralLedger",
+          "tab_name": "Organization",
+          "validation_code": "@SQL=SELECT 'Y' FROM AD_ORGTYPE OT join ad_org o on (ot.ad_orgtype_id = o.ad_orgtype_id)\nWHERE ((IsAcctLegalEntity<>'N' or IsLegalEntity<>'Y') or (o.C_ACCTSCHEMA_ID is not null)) and o.ad_org_id=@AD_ORG_ID@"
+        },
+        {
+          "ad_tab_id": "170",
+          "name": "IsLegalEntity_AUX",
+          "tab_name": "Information",
+          "validation_code": "@SQL=SELECT 'Y' FROM ad_org, ad_orgtype WHERE ad_org.ad_orgtype_id= ad_orgtype.ad_orgtype_id AND ad_org.ad_org_id=@AD_ORG_ID@ and ad_orgtype.ISLEGALENTITY='Y'"
+        }
+      ]
+    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
       "checksum": "62b5d2a984bd97d955f628339055fc5ebb1c70a3e1dcb1c4c4e26bd179f3eb56",
       "params": [

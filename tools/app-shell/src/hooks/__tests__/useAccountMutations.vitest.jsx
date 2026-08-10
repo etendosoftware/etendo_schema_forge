@@ -197,6 +197,39 @@ describe('useAccountMutations', () => {
     expect(updated).toEqual({ id: 'acc-1', name: 'Renamed' });
   });
 
+  // ETP-4764 follow-up: a stray "eM" prefix (`eMETGODateTolerance`) used to PUT successfully
+  // — the generic W spec ignores unrecognized body keys instead of 400ing — while silently
+  // dropping both tolerances. The DAL property drops the "EM_" module prefix from the custom
+  // column name (`EM_ETGO_Date_Tolerance` → `eTGODateTolerance`), it does not fold it in.
+  it('updateAccount maps dateTolerance/amountTolerance to their real DAL property names', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { dateTolerance: 3, amountTolerance: 0 });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({
+      eTGODateTolerance: 3,
+      eTGOAmountTolerance: 0,
+    });
+  });
+
+  it('updateAccount omits both tolerance keys when neither is in the payload', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations());
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { name: 'Renamed' });
+    });
+
+    const [, init] = globalThis.fetch.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body).not.toHaveProperty('eTGODateTolerance');
+    expect(body).not.toHaveProperty('eTGOAmountTolerance');
+  });
+
   it('updateAccount URL-encodes the account id', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'x', name: 'x' }]));
 

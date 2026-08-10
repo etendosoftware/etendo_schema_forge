@@ -1,16 +1,15 @@
 /**
  * Extracted from DetailView.jsx via ast-refactor.
  */
-import React, { useState, useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/button.jsx';
+import React, {useEffect, useRef, useState} from 'react';
+import {Button} from '@/components/ui/button.jsx';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
-import { computeBalance } from '@/lib/balanceTotals';
-import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
-import { roundAmounts } from '@/lib/lineFieldChange.js';
-import { getCatalogOptions } from '@/lib/selectorCatalog.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import {computeBalance} from '@/lib/balanceTotals';
+import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
+import {roundAmounts} from '@/lib/lineFieldChange.js';
+import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
@@ -126,9 +125,50 @@ export function normalizePatchFieldValues(patchEdits, fieldValues) {
   }
 }
 
+/**
+ * ETP-4772 race-condition guard: returns true when a callout response for
+ * `key` is stale — i.e. the field's generation (bumped on every genuine
+ * write, whether a user edit or a previously-applied callout) has moved on
+ * since THIS specific callout request was dispatched. This means a newer
+ * edit/dispatch for `key` happened in the meantime and this older response
+ * must not clobber it.
+ *
+ * Applies uniformly regardless of whether `key` is the trigger field or a
+ * collateral update — staleness is about the field's own timeline, not
+ * about which field caused the callout.
+ *
+ * `dispatchSnapshot`/`fieldGenerationRef` are optional: callers that don't
+ * wire generation tracking (e.g. existing unit tests constructing ctx by
+ * hand) get a no-op here, preserving prior behavior.
+ */
+export function isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef) {
+  if (!dispatchSnapshot || !fieldGenerationRef) return false;
+  const dispatchGen = dispatchSnapshot[key] ?? 0;
+  const currentGen = fieldGenerationRef.current?.[key] ?? 0;
+  return dispatchGen !== currentGen;
+}
+
+/**
+ * Marks `key` as having just received a genuine new value (user edit or
+ * applied callout write), advancing its generation counter so any
+ * still-in-flight OLDER callout response targeting this field can be
+ * recognized as stale when it eventually arrives.
+ */
+export function bumpFieldGeneration(key, fieldGenerationRef) {
+  if (!fieldGenerationRef) return;
+  fieldGenerationRef.current[key] = (fieldGenerationRef.current[key] || 0) + 1;
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
-  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs } = ctx;
+  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
+    // Discard responses that arrived after a newer edit/dispatch already
+    // moved this field on — see isStaleCalloutResponse. Checked BEFORE the
+    // trigger-field-always-wins rule below: staleness is a property of the
+    // response itself, not of who triggered it.
+    if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) {
+      continue;
+    }
     // Skip empty callout values if the field already has a non-empty value
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];
@@ -138,18 +178,21 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     }
     // Protect user-touched fields from being overwritten by collateral updates
     // coming from a callout triggered by a different field. The trigger field
-    // itself always wins (it was just changed by the user).
+    // itself always wins (it was just changed by the user) — as long as the
+    // response is not stale per the check above.
     if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue) {
       continue;
     }
     appliedFields.set(key, entry.value);
     hook.handleChange(key, entry.value);
     handleEntryIdentifierChange(entry, hook, key, api, catalogs);
+    bumpFieldGeneration(key, fieldGenerationRef);
   }
 }
 
 export function applyOneComboEntry(key, combo, ctx) {
-  const { data, userTouchedRef, appliedFields, hook } = ctx;
+  const { data, userTouchedRef, appliedFields, hook, dispatchSnapshot, fieldGenerationRef } = ctx;
+  if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) return;
   let selectedVal = combo.selected;
   let selectedLabel = combo._identifier;
   // Auto-select first entry if no explicit selection (e.g., BP address combo)
@@ -167,6 +210,7 @@ export function applyOneComboEntry(key, combo, ctx) {
   if (selectedLabel) {
     hook.handleChange(key + '$_identifier', selectedLabel);
   }
+  bumpFieldGeneration(key, fieldGenerationRef);
 }
 
 /**
@@ -843,5 +887,96 @@ export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
         hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
       }
     }
+  }
+}
+
+export function applyProductCalloutPriceAdjustments(field, result, lineConfig) {
+  if (field !== 'product') return;
+  if (result.standardPrice != null && (result.listPrice == null || Number(result.listPrice) === 0)) {
+    result.listPrice = result.standardPrice;
+  }
+  if (lineConfig.discountField) {
+    result[lineConfig.discountField] = 0;
+  }
+}
+
+export function applyProductCurrencyConversion(field, result, rowValues, lineConfig, activeCurrencyConversion, currencyIdentifier, computeLineGrossAmount) {
+  if (field !== 'product' || !activeCurrencyConversion) return;
+  const {rate, toCurrency} = activeCurrencyConversion;
+  result.currency = toCurrency;
+  if (currencyIdentifier) {
+    result['currency$_identifier'] = currencyIdentifier;
+  }
+  const rawPrice = parseFloat(String(result[lineConfig.priceField] ?? 0));
+  if (rawPrice > 0 && rate !== 1) {
+    const convertedPrice = parseFloat((rawPrice * rate).toFixed(2));
+    result[lineConfig.priceField] = convertedPrice;
+    if (result.standardPrice != null) result.standardPrice = convertedPrice;
+    if (result.unitPrice != null) result.unitPrice = convertedPrice;
+    if (result.listPrice != null) result.listPrice = convertedPrice;
+    // The earlier 'product' callout pass already latched result.lineNetAmount onto the
+    // UNCONVERTED price (see calculateLineNetAmount / deriveNetFromProductChange). Clear it
+    // here so computeLineGrossAmount's null-guard recomputes it from the converted price
+    // instead of silently skipping the sync (its guard only fires when lineNetAmount is
+    // null/0). Without this, lineNetAmount stays stale while grossAmount/grossField are
+    // correctly forced to the converted value — an inconsistent line that the backend
+    // persists using the stale net, producing a wrong (sometimes negative) tax total.
+    result.lineNetAmount = null;
+    computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
+      ...rowValues,
+      ...result,
+      [lineConfig.priceField]: convertedPrice,
+    });
+  }
+}
+
+export function resolveTaxIdentifier(result, rowValues, hook) {
+  if (!result['tax$_identifier']) {
+    const effectiveTaxId = result.tax ?? rowValues.tax;
+    if (effectiveTaxId) {
+      const ref = (hook.children || []).find(l => l.tax === effectiveTaxId && l['tax$_identifier']);
+      if (ref) result['tax$_identifier'] = ref['tax$_identifier'];
+    }
+  }
+}
+
+export function calculateLineNetAmount(result, field, lineConfig, value, rowValues) {
+  if (result.lineNetAmount == null && (field === lineConfig.qtyField || field === lineConfig.priceField || field === 'product')) {
+    const qty = field === lineConfig.qtyField ? (parseFloat(value) || 0)
+        : (parseFloat(String(rowValues[lineConfig.qtyField] ?? '')) || 0);
+    const price = field === lineConfig.priceField ? (parseFloat(value) || 0)
+        : (parseFloat(String(result[lineConfig.priceField] ?? rowValues[lineConfig.priceField] ?? '')) || 0);
+    if (qty > 0 && price > 0) result.lineNetAmount = String(qty * price);
+  }
+}
+
+export function canUseCachedTaxRate(taxFactor, taxId, taxRateCacheRef) {
+  return taxFactor === null && taxId && taxRateCacheRef.current[taxId] != null;
+}
+
+export function isPositiveNumeric(calloutRate) {
+  return !isNaN(calloutRate) && calloutRate > 0;
+}
+
+export function calculateNetUnitPrice(result, taxRateCacheRef, hook) {
+  if (result.grossUnitPrice != null && result.netUnitPrice == null) {
+    const taxId = result.tax;
+    let taxFactor = null;
+    const calloutRate = parseFloat(String(result.taxRate ?? ''));
+    if (isPositiveNumeric(calloutRate)) taxFactor = 1 + calloutRate / 100;
+    if (canUseCachedTaxRate(taxFactor, taxId, taxRateCacheRef)) {
+      taxFactor = 1 + taxRateCacheRef.current[taxId] / 100;
+    }
+    if (taxFactor === null && taxId) {
+      const ref = (hook.children || []).find(l => l.tax === taxId &&
+          parseFloat(String(l.grossAmount ?? '')) > 0 &&
+          parseFloat(String(l.lineNetAmount ?? '')) > 0
+      );
+      if (ref) taxFactor = parseFloat(String(ref.grossAmount)) / parseFloat(String(ref.lineNetAmount));
+    }
+    const gross = Number(result.grossUnitPrice);
+    result.netUnitPrice = taxFactor != null && taxFactor > 1
+        ? parseFloat((gross / taxFactor).toFixed(6))
+        : gross;
   }
 }

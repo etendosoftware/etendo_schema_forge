@@ -50,7 +50,7 @@ const ROWS = [
  * List + detail mock for the given spec's header entity.
  */
 async function installListMock(page, spec) {
-  await page.route(`**/sws/neo/${spec}/header**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/header{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !/\/header\/[^/?]+/.test(url)) {
@@ -125,6 +125,16 @@ async function clickSendButton(page) {
 }
 
 /**
+ * Locate the message <textarea> in the send modal (ETP-4717). It has no
+ * data-testid, so match by its placeholder — resolved from
+ * `ui('sendModalMessagePlaceholder')`, either the localized copy or the raw
+ * key in mock mode.
+ */
+function getMessageTextarea(page) {
+  return page.getByPlaceholder(/mensaje personal|personal message|sendmodalmessageplaceholder/i);
+}
+
+/**
  * Assert the success toast. On SENT/DUPLICATE the modal calls toast.success(...)
  * (sonner). The toast label resolves from `ui('sendModalSentSuccess')` (locale
  * or raw key in mock mode), so we match the sonner success element rather than
@@ -177,6 +187,12 @@ for (const spec of SPECS) {
       await ccInput.press('Enter');
       await expect(page.getByTestId(`send-modal-cc-chip-${EXTRA_CC}`)).toBeVisible();
 
+      // ETP-4717 — the operator also edits the message. This must flow into
+      // the send payload as `messageEdits`, alongside `recipientEdits`.
+      const MESSAGE_TEXT = 'Please review the attached document.';
+      const messageTextarea = getMessageTextarea(page);
+      await messageTextarea.fill(MESSAGE_TEXT);
+
       // Send and wait for the captured request. Use waitForResponse (not
       // waitForRequest) so the promise resolves AFTER route.fulfill() completes
       // and captured.body is guaranteed to be set (matches the sibling test).
@@ -198,6 +214,10 @@ for (const spec of SPECS) {
       // The base contact email is unchanged → not part of to.add.
       expect(captured.body.recipientEdits.to.add).not.toContain(BASE_EMAIL);
       expect(captured.body.recipientEdits.cc.add).toContain(EXTRA_CC);
+      // ETP-4717 — the edited message travels in `messageEdits`, co-existing
+      // with `recipientEdits` on the same command.
+      expect(captured.body.messageEdits).toBeTruthy();
+      expect(captured.body.messageEdits.message).toBe(MESSAGE_TEXT);
 
       // Success UI state from the mocked 200 SENT: a success toast appears and
       // the modal auto-closes (To input detaches). The in-modal status banner is

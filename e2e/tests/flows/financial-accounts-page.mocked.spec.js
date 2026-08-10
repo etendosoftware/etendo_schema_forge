@@ -117,7 +117,7 @@ const SUMMARY = {
  * reflects the mutation.
  */
 async function installAccountsMock(page, getRows = () => ACCOUNTS) {
-  await page.route('**/sws/neo/financial-account/account**', async (route) => {
+  await page.route('**/sws/neo/financial-account/account{/**,}**', async (route) => {
     const req = route.request();
     if (req.method() === 'GET' && !/\/account\/[^/?]+/.test(req.url())) {
       const rows = getRows();

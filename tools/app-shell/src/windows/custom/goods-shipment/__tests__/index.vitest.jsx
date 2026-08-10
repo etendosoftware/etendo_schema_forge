@@ -131,6 +131,14 @@ describe('GoodsShipmentWindow', () => {
     // hideDeleteWhenComplete must not be set on the row quick actions config.
     expect(lastPageProps.rowQuickActions.hideDeleteWhenComplete).toBeUndefined();
 
+    // ETP-4717 — this window builds rowQuickActions by hand (bypassing the
+    // generated contract's rowQuickActions.actions.email.visibleWhen), so the
+    // gate must be asserted here directly. Regression: without it, the Grid
+    // "Enviar" (email) quick action shows on every row regardless of status.
+    expect(lastPageProps.rowQuickActions.actions.email).toEqual({
+      visibleWhen: "@DocumentStatus@='CO'",
+    });
+
     lastPageProps.rowQuickActions.onEdit({ id: 'ship-1' });
     expect(navigate).toHaveBeenCalledWith('/goods-shipment/ship-1');
 
