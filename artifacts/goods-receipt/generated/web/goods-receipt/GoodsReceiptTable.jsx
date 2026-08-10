@@ -7,7 +7,7 @@ const columns = [
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true },
   { key: 'orderReference', column: 'POReference', type: 'string', label: 'Order Reference' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'Closed', 'CO': 'Completed', 'DR': 'Draft', 'NA': 'Not Accepted', 'WP': 'Not Paid', 'RE': 'Re-Opened', 'TEMP': 'Temporal', 'IP': 'Under Way', '??': 'Unknown', 'VO': 'Voided' }, required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'docStatusCl', 'CO': 'docStatusCo', 'DR': 'docStatusDr', 'NA': 'docStatusNa', 'WP': 'docStatusWp', 'RE': 'docStatusRe', 'TEMP': 'docStatusTemp', 'IP': 'docStatusIp', '??': 'docStatus', 'VO': 'docStatusVo' }, required: true },
   { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'number', label: 'Invoice Status' },
 ];

@@ -4,6 +4,8 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
+import { OBSERVABILITY_EVENTS } from '@/lib/observability/events.js';
+import { startTiming } from '@/lib/observability/timing.js';
 import {
     isCompletionProcess,
     trackDocumentCompleted,
@@ -267,6 +269,13 @@ export async function extractErrorMessage(res, ui) {
 
 const BATCH_SIZE = 75;
 
+// ETP-4741 — UX budget for how long a creation form stays gated waiting for
+// GET /<entity>/defaults. On expiry the gate is released so the user can start
+// working, and nothing else: the request is NOT aborted and its session is NOT
+// invalidated, so it keeps running, stays cancellable, and its response still
+// merges when it lands. See handleNew below.
+const DEFAULTS_TIMEOUT_MS = 4000;
+
 const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
     'priceList',
     'paymentMethod',
@@ -343,6 +352,12 @@ function extractResponseMeta(data) {
 
 const EMPTY_FILTERS = {};
 const EMPTY_DEFS = {};
+
+// ETP-4751 — transient exemption-cause signals stamped by InvoiceLineHandler on the LINE-save
+// response ROOT. They are NOT persisted entity fields, so a plain header GET (refreshHeaderTotals)
+// does not return them — it must PRESERVE any value already on the client record instead of
+// dropping it, otherwise the flag is wiped before the SIF tab's toast effect can observe it.
+const EXEMPTION_SIGNAL_KEYS = ['exemptionCauseAutoFilled', 'exemptionCauseWarning'];
 
 export function parseCriteriaInto(v, out) {
     try {
@@ -421,6 +436,43 @@ export function normalizeDefaultValue(val, normalized, key) {
         // PATCH/POST API expects string values — otherwise OBDal throws a type error.
         normalized[key] = String(val);
     }
+}
+
+// Normalize a creation-defaults response (already id-stripped) from Etendo format:
+// - Dates: dd-MM-yyyy → yyyy-MM-dd (HTML date input)
+// - Booleans: "Y" → true, "N" → false (NEO defaults returns strings, not booleans)
+// Plus the contacts-window backstop: oBTIKTaxIDKey falls back to '1' (NIF) when
+// the backend sends none. Pure — returns a normalized copy, touches no state.
+export function normalizeCreationDefaults(rawDefaults, { entity, apiBaseUrl }) {
+    const normalized = { ...rawDefaults };
+    for (const [key, val] of Object.entries(normalized)) {
+        normalizeDefaultValue(val, normalized, key);
+    }
+
+    const isContactsBusinessPartner = entity === 'businessPartner'
+        && /\/contacts$/i.test(apiBaseUrl || '');
+    if (isContactsBusinessPartner && (normalized.oBTIKTaxIDKey == null || normalized.oBTIKTaxIDKey === '')) {
+        normalized.oBTIKTaxIDKey = '1';
+    }
+    return normalized;
+}
+
+// ETP-4741 merge guard: apply backend creation defaults over the editing state
+// without clobbering anything the user already typed while the request flew.
+export function mergeDefaultsPreservingUserEdits(prev, defaults, userChangedKeys) {
+    const merged = { ...prev };
+    for (const [key, val] of Object.entries(defaults)) {
+        if (userChangedKeys.has(key)) continue;
+        // A field's $_identifier companion follows its base key: if the user
+        // picked a value, its display label must not be replaced by the
+        // default's label either.
+        if (key.endsWith('$_identifier')
+            && userChangedKeys.has(key.slice(0, -'$_identifier'.length))) {
+            continue;
+        }
+        merged[key] = val;
+    }
+    return merged;
 }
 
 export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing) {
@@ -763,6 +815,9 @@ export function useEntity(entity, childEntity, {
     const [childDefaults, setChildDefaults] = useState({});
     const [childrenLoading, setChildrenLoading] = useState(false);
     const [loading, setLoading] = useState(false);
+    // ETP-4741: true while handleNew's defaults request is in flight, so the
+    // creation form can gate itself instead of letting the user race the merge.
+    const [defaultsLoading, setDefaultsLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     // ETP-4542: identifier of the header process currently running (POST in flight),
@@ -783,6 +838,14 @@ export function useEntity(entity, childEntity, {
     const backendDefaultKeysRef = useRef(new Set());
     // Fields explicitly changed by the user (via handleChange) in the current new-record session.
     const userChangedKeysRef = useRef(new Set());
+    // ETP-4741: monotonic id of the current defaults fetch. A response (or its
+    // timer) only acts while its epoch is still current — bumping the epoch is
+    // how the timeout and newer handleNew calls make in-flight responses inert,
+    // even when the underlying fetch implementation ignores the abort signal.
+    const defaultsEpochRef = useRef(0);
+    // ETP-4741: AbortController of the in-flight defaults fetch, null when none
+    // is pending. Lets record loads neutralize the /new session (see below).
+    const defaultsAbortRef = useRef(null);
     // ETP-3894: per-form snapshot of visible fields registered by each EntityForm instance.
     // Keyed by a stable formId (React.useId) so multiple EntityForms accumulate rather than
     // overwrite each other. handleSave flattens all entries to validate the complete form.
@@ -963,8 +1026,25 @@ export function useEntity(entity, childEntity, {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [apiBaseUrl, childEntity, token]);
 
+    // ETP-4741 (QA BUG-1) — loading an EXISTING record while a /new defaults
+    // request is still in flight must kill that request the same way a newer
+    // handleNew does: bump the epoch so the late response is inert, abort the
+    // fetch, and release defaultsLoading explicitly. The explicit release
+    // matters — once the epoch moves, handleNew's own finally skips its
+    // release, so relying on it would latch the gate true forever. Neutralized
+    // sessions emit no defaults_block event. No-op when nothing is pending.
+    const neutralizePendingDefaults = useCallback(() => {
+        const controller = defaultsAbortRef.current;
+        if (!controller) return;
+        defaultsAbortRef.current = null;
+        defaultsEpochRef.current += 1;
+        setDefaultsLoading(false);
+        controller.abort();
+    }, []);
+
     const fetchById = useCallback((id) => {
         if (!id) return;
+        neutralizePendingDefaults();
         setLoading(true);
         fetch(`${apiBaseUrl}/${entity}/${id}`, { headers })
             .then(res => {
@@ -979,7 +1059,7 @@ export function useEntity(entity, childEntity, {
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, [apiBaseUrl, entity, token, fetchChildren]);
+    }, [apiBaseUrl, entity, token, fetchChildren, neutralizePendingDefaults]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
@@ -994,12 +1074,27 @@ export function useEntity(entity, childEntity, {
             })
             .then(data => {
                 const row = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
-                setSelected(row);
+                // ETP-4751 — carry forward the transient exemption-cause signals: the header GET
+                // does not echo them (they are not entity fields), so a naive setSelected(row)
+                // would wipe the flag a line-save just set before the SIF toast effect runs.
+                setSelected(prev => {
+                    const next = { ...row };
+                    if (prev) {
+                        for (const key of EXEMPTION_SIGNAL_KEYS) {
+                            if (prev[key] !== undefined) next[key] = prev[key];
+                        }
+                    }
+                    return next;
+                });
                 setEditing(prev => {
                     if (!prev) return { ...row };
                     const merged = { ...prev };
                     for (const [key, val] of Object.entries(row)) {
                         if (!userChangedKeysRef.current.has(key)) merged[key] = val;
+                    }
+                    // Signal keys are transient client-only flags — never overwrite them from the GET.
+                    for (const key of EXEMPTION_SIGNAL_KEYS) {
+                        if (prev[key] !== undefined) merged[key] = prev[key];
                     }
                     return merged;
                 });
@@ -1007,6 +1102,25 @@ export function useEntity(entity, childEntity, {
             .catch(() => {
             });
     }, [apiBaseUrl, entity, headers]);
+
+    // ETP-4751 — surface the invoice-line handler's transient exemption-cause signals
+    // (exemptionCauseAutoFilled / exemptionCauseWarning) to the header state so the SIF
+    // tab can toast. The backend (InvoiceLineHandler#autoFillExemptionCauseAfterLineSave)
+    // stamps AT MOST ONE of these on the LINE-save response body; they are mutually
+    // exclusive and never real entity fields. We mirror the value into BOTH `selected`
+    // and `editing` so it never shows up as a PATCH diff (buildPatchPayload compares the
+    // two), and we ALWAYS write the resolved boolean (true when present, false when not)
+    // so the flag flips back to false between saves — that reset is what lets the SIF
+    // tab's one-shot toast guard re-arm and fire again on the next qualifying line save.
+    const applyExemptionCauseSignals = useCallback((serverLineRecord) => {
+        if (!serverLineRecord || typeof serverLineRecord !== 'object') return;
+        const patch = {};
+        for (const key of EXEMPTION_SIGNAL_KEYS) {
+            patch[key] = serverLineRecord[key] === true || serverLineRecord[key] === 'true';
+        }
+        setSelected(prev => (prev ? { ...prev, ...patch } : prev));
+        setEditing(prev => (prev ? { ...prev, ...patch } : prev));
+    }, []);
 
     // ETP-4029 — narrow escape hatch for refreshHeaderTotals's userChangedKeysRef
     // protection above, scoped to ONE known cross-surface-sync case (see call site
@@ -1043,11 +1157,12 @@ export function useEntity(entity, childEntity, {
         // user actually edits in THIS record — never legacy values inherited from a
         // previously-edited record. Safe for payloads: userChangedKeysRef only feeds
         // buildCreatePayload (new records), not the existing-record PATCH diff.
+        neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
         setSelected(row);
         setEditing(row ? { ...row } : null);
         fetchChildren(row?.id);
-    }, [fetchChildren]);
+    }, [fetchChildren, neutralizePendingDefaults]);
 
     const handleNew = useCallback(async () => {
         backendDefaultKeysRef.current = new Set();
@@ -1055,32 +1170,70 @@ export function useEntity(entity, childEntity, {
         setFieldErrors({});
         setSelected(null);
         setEditing({}); // Start with empty so UI is responsive
+
+        // ETP-4741 — the defaults GET races the user, who can already be typing
+        // into the open form. Guards: an epoch check discards any response whose
+        // session was superseded (a newer handleNew, or a record load via
+        // neutralizePendingDefaults), and the merge never touches user-changed
+        // keys.
+        //
+        // The timeout is a UX budget, NOT a correctness mechanism: it only
+        // releases the gate so the user can start working. It deliberately does
+        // not bump the epoch, drop the abort handle, or abort the request, so
+        // the response still merges when it lands and a later record load can
+        // still neutralize the session. Full rationale — including the
+        // regression that discarding the late response caused (a form with
+        // neither defaults nor initial callouts) — lives in
+        // docs/generated-custom-windows/app-shell-functional-flows.md §4.
+        const epoch = defaultsEpochRef.current + 1;
+        defaultsEpochRef.current = epoch;
+        const isCurrent = () => defaultsEpochRef.current === epoch;
+        const settleTiming = startTiming(OBSERVABILITY_EVENTS.DEFAULTS_BLOCK, {
+            properties: { entity },
+        });
+        const controller = new AbortController();
+        defaultsAbortRef.current = controller;
+        const timeoutId = setTimeout(() => {
+            if (!isCurrent()) return;
+            setDefaultsLoading(false);
+            settleTiming({ status: 'timeout' });
+        }, DEFAULTS_TIMEOUT_MS);
+
+        setDefaultsLoading(true);
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers });
+            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers, signal: controller.signal });
+            if (!isCurrent()) return;
             if (res.ok) {
                 const data = await res.json();
+                if (!isCurrent()) return;
                 if (data.defaults) {
-                    // Normalize values from Etendo format:
-                    // - Dates: dd-MM-yyyy → yyyy-MM-dd (HTML date input)
-                    // - Booleans: "Y" → true, "N" → false (NEO defaults returns strings, not booleans)
-                    const { id: _discardId, ...rest } = data.defaults;
-                    backendDefaultKeysRef.current = new Set(Object.keys(rest));
-                    const normalized = { ...rest };
-                    for (const [key, val] of Object.entries(normalized)) {
-                        normalizeDefaultValue(val, normalized, key);
-                    }
-
-                    const isContactsBusinessPartner = entity === 'businessPartner'
-                        && /\/contacts$/i.test(apiBaseUrl || '');
-                    if (isContactsBusinessPartner && (normalized.oBTIKTaxIDKey == null || normalized.oBTIKTaxIDKey === '')) {
-                        normalized.oBTIKTaxIDKey = '1';
-                    }
-
-                    setEditing(prev => ({ ...prev, ...normalized }));
+                    // backendDefaultKeysRef intentionally captures the keys BEFORE
+                    // the contacts backstop can add oBTIKTaxIDKey — a backstopped
+                    // key must not be treated as backend-provided by
+                    // shouldSkipPayloadField.
+                    const rawDefaults = { ...data.defaults };
+                    delete rawDefaults.id;
+                    backendDefaultKeysRef.current = new Set(Object.keys(rawDefaults));
+                    const normalized = normalizeCreationDefaults(rawDefaults, { entity, apiBaseUrl });
+                    setEditing(prev => mergeDefaultsPreservingUserEdits(prev, normalized, userChangedKeysRef.current));
                 }
             }
+            // Deliberately not awaited: settleTiming ends in client.track(),
+            // a real network call once Mixpanel is enabled. Awaiting it would
+            // put the gate release in `finally` behind an analytics endpoint,
+            // and a hung track() would latch the form shut forever. track()
+            // already swallows provider failures internally, so nothing here
+            // needs the result. Same below on the catch path.
+            settleTiming({ status: res.ok ? 'ok' : 'error' });
         } catch {
             // Defaults are best-effort; proceed with empty form if endpoint fails
+            if (isCurrent()) settleTiming({ status: 'error' });
+        } finally {
+            if (isCurrent()) {
+                clearTimeout(timeoutId);
+                defaultsAbortRef.current = null;
+                setDefaultsLoading(false);
+            }
         }
     }, [apiBaseUrl, entity, token, headers]);
 
@@ -1285,31 +1438,61 @@ export function useEntity(entity, childEntity, {
             // pending header edits in editing while updating server-computed fields (totals).
             fetchChildren(selected.id);
             refreshHeaderTotals(selected.id);
+            const savedLine = normalizeRecord(data?.response?.data?.[0] ?? data, childEntity);
+            // ETP-4751 — the exemption-cause signals live at the RESPONSE ROOT
+            // (InvoiceLineHandler#augmentResponseWithSignal does body.put(signalKey, true) on the
+            // full NEO response, i.e. {response:{data:[line]}, exemptionCauseWarning:true}), NOT on
+            // the nested line record. Pass the raw parsed root `data` so applyExemptionCauseSignals
+            // can read data.exemptionCauseWarning / data.exemptionCauseAutoFilled; `savedLine` is
+            // still what we return / feed to the children refresh.
+            applyExemptionCauseSignals(data);
             setSaveError(null);
             toast.success(ui('lineAdded'));
-            return normalizeRecord(data?.response?.data?.[0] ?? data, childEntity) ?? true;
+            return savedLine ?? true;
         } catch (err) {
             const msg = err?.message || 'Network error';
             setSaveError(msg);
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren, ui]);
+    }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren, ui, refreshHeaderTotals, applyExemptionCauseSignals]);
 
-    const handleUpdateChild = useCallback((childId, fieldOrObject, value) => {
+    const handleUpdateChild = useCallback((childId, fieldOrObject, value, signalSource) => {
         setChildren(prev => prev.map(c => {
             if (String(c.id) !== String(childId)) return c;
             if (typeof fieldOrObject === 'object') return { ...c, ...fieldOrObject };
             return { ...c, [fieldOrObject]: value };
         }));
+        // ETP-4751 — mirror the transient exemption-cause signals onto the header like
+        // handleAddChild does. The backend stamps them at the RESPONSE ROOT
+        // (InvoiceLineHandler#augmentResponseWithSignal), NOT on the nested line record, so the
+        // caller must pass the raw PATCH/PUT response root as `signalSource`. `fieldOrObject` is
+        // the client-side / nested-line object and never carries the flag, so fall back to it only
+        // to keep the resolved boolean flipping back to false between saves (which re-arms the
+        // one-shot toast guard). Prefer signalSource when provided; otherwise keep the original
+        // object-only behaviour so unrelated single-field (string) updates don't reset the flag.
+        if (signalSource) applyExemptionCauseSignals(signalSource);
+        else if (typeof fieldOrObject === 'object') applyExemptionCauseSignals(fieldOrObject);
         if (selected?.id) refreshHeaderTotals(selected.id);
-    }, [selected, refreshHeaderTotals]);
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
 
     const handleDeleteChild = useCallback((childId) => {
         setChildren(prev => prev.filter(c => String(c.id) !== String(childId)));
+        // ETP-4751 — reset the transient exemption-cause signals to false on line delete.
+        // The backend only stamps these flags on LINE-SAVE responses (POST/PATCH), never on
+        // a delete, so without this reset the flag keeps whatever value the last line save
+        // left it at. On an edited invoice that previously warned (flag stuck `true`),
+        // deleting all lines then re-adding an exempt line stamps `true` again with no
+        // intervening `true→false` transition, so the SIF tab's one-shot toast guard never
+        // re-arms and the warning silently fails to re-fire. Passing an empty object makes
+        // applyExemptionCauseSignals write both keys as `false` (resolved boolean), which is
+        // exactly the reset the guard needs. Ordered BEFORE refreshHeaderTotals so the false
+        // is what refreshHeaderTotals carries forward (it copies the signal keys from `prev`
+        // when the header GET returns), not overwritten by it.
+        applyExemptionCauseSignals({});
         // Refresh header to update totals after line deletion
         if (selected?.id) refreshHeaderTotals(selected.id);
-    }, [selected, refreshHeaderTotals]);
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
 
     const handleSaveAndProcess = useCallback(async (draftModeConfig) => {
         const saved = await handleSave({ silent: true });
@@ -1426,7 +1609,7 @@ export function useEntity(entity, childEntity, {
     }, []);
 
     return {
-        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
+        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
         fieldErrors, registerFields,

@@ -25,8 +25,22 @@ const IVA_DED_COLS = [
 
 // ── Shared field definitions (declared before BASE to avoid TDZ) ─────
 
-// visibleWhen shared by bank fields that only apply to devolucion/transferencia (not domiciliacion U).
-const _BANK_DVX_VW = { field: 'tipo_declaracion', in: ['D', 'V', 'X'] };
+// visibleWhen shared by 6 of the 7 bank fields (all but bank_iban, which has no
+// field-level gate of its own and relies solely on sectionVisibleWhen below).
+// NOTE: widened the same way and for the same reason as datos_bancarios.sectionVisibleWhen
+// (ETP-4456 follow-up fix). The original {D, V, X} tipo-only condition left these fields
+// hidden for a rectificativa filed under any other tipo (e.g. 'I'), even though
+// AEAT303Report's checkIsDeclarationRMandatoryParams / checkBox111MandatoryParams
+// hard-require SWIFT_BIC/BANK/BANKADDRESS/BANKCITY/COUNTRYISO/SEPA whenever a
+// rectificativa has a non-zero box 111 amount, independent of tipo_declaracion. Widening
+// sectionVisibleWhen alone made the section appear but left these 6 fields still gated
+// on the old {D, V, X} set, so the exact submission-blocking bug remained reachable for
+// every field except bank_iban. Now these fields follow the same anyOf as the section:
+// visible when tipo_declaracion is D/V/X, OR whenever 'rectificativa' is checked.
+const _BANK_DVX_VW = { anyOf: [
+  { field: 'tipo_declaracion', in: ['D', 'V', 'X'] },
+  { field: 'rectificativa', equals: true },
+] };
 
 const TIPO_DECLARACION_FIELD = {
   id: 'tipo_declaracion', labelKey: 'fm.ident.tipo_declaracion', type: 'select', readOnly: false, required: true,
@@ -69,11 +83,24 @@ const BASE = {
       sectionType: 'identificacion',
       titleKeyFrom: 'tipo_declaracion',
       titleKeyMap: {
-        D: 'fm.section.devolucion', V: 'fm.section.devolucion', X: 'fm.section.devolucion',
-        G: 'fm.section.devolucion',
-        I: 'fm.section.domiciliacion', U: 'fm.section.domiciliacion',
+        D: 'fm.section.devolucion', X: 'fm.section.devolucion',
+        U: 'fm.section.domiciliacion',
       },
-      sectionVisibleWhen: { field: 'tipo_declaracion', in: ['D', 'G', 'I', 'V', 'X', 'U'] },
+      // Only U (Domiciliación), D (Devolución) and X (Devolución transferencia
+      // extranjero) may carry IBAN per AEAT error EDID065 — see IBAN_REQUIRED_TIPOS.
+      // ALSO shown whenever 'rectificativa' is checked, regardless of tipo_declaracion:
+      // AEAT303Report's checkIsDeclarationRMandatoryParams hard-requires the bank fields
+      // (BANK/IBAN/SWIFT/SEPA/ADDRESS/CITY/COUNTRY) when a rectificativa carries a non-zero
+      // box 111 (rectificacion_importe) amount — a requirement that is independent of
+      // tipo_declaracion. Without this OR branch, e.g. tipo 'I' (Ingreso) rectificativas had
+      // no UI at all to enter the now-mandatory bank data, causing a submission-blocking
+      // backend hard-fail. Gating on "rectificativa checked" (rather than also checking the
+      // box 111 amount, which lives outside this identification map) is a deliberate,
+      // harmless UX-only over-show — see FmBoxes303's matchesSvw/anyOf support.
+      sectionVisibleWhen: { anyOf: [
+        { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
+        { field: 'rectificativa', equals: true },
+      ] },
       fieldLayout: 'aligned',
       colHeaderKeys: [],
       fields: [

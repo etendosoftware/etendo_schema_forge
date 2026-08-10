@@ -267,6 +267,40 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
+  // ETP-4685 — the generator emits a `labels` object per option (locale -> translated
+  // text) alongside the raw AD `label`, same shape the form view already resolves
+  // correctly. The add-row static-select never read it, always showing the raw
+  // English `label` regardless of locale.
+  it('resolves static-select option text through opt.labels[locale], not the raw AD label', async () => {
+    const addRow = {
+      active: true,
+      onAdd: vi.fn(async (v) => v),
+      onCancel: vi.fn(),
+      fields: [
+        {
+          key: 'status',
+          label: 'Status',
+          type: 'select',
+          options: [
+            { value: 'opt-1', label: 'Open (raw)', labels: { en_US: 'Open (translated)' } },
+          ],
+        },
+      ],
+    };
+    render(
+      <DataTable
+        entity="orderLine"
+        columns={[{ key: 'status', label: 'Status', type: 'string' }]}
+        data={[]}
+        addRow={addRow}
+      />,
+    );
+
+    await userEvent.click(screen.getByTestId('inline-add-field-status'));
+    expect(screen.getByText('Open (translated)')).toBeInTheDocument();
+    expect(screen.queryByText('Open (raw)')).not.toBeInTheDocument();
+  });
+
   // ── checkbox/boolean PillToggle add-row control ─────────────────────────
   it('toggles a checkbox add-row field via the PillToggle control and reports it through onFieldChange', async () => {
     const onFieldChange = vi.fn();

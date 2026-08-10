@@ -117,6 +117,107 @@
   CUT untouched (still equal to R9's own filename timestamp) — no CUT bump needed since no new
   `.sql` file was added.
 
+## ETP-4743 — A2c: FIN_Financial_Account_Acct / M_Warehouse_Acct backfill (2026-08-05)
+
+- **2026-08-05 — In-flight branch discovered R21 already claimed on an UNMERGED sibling
+  branch — verify against the ACTUAL checked-out branch, not just what the task brief
+  claims.** The task brief said "latest fix is R21, CUT is `2026-08-05T12:00:00Z`" (from
+  `feature/ETP-4720`, ETP-4720), but `git merge-base feature/ETP-4743 feature/ETP-4720` showed
+  `feature/ETP-4720` is ONE commit ahead of `feature/ETP-4743`'s base (both repos) — i.e. ETP-4720
+  had NOT been merged into `epic/ETP-3504` yet when Clerk branched `feature/ETP-4743` off it. On
+  the actual `feature/ETP-4743` checkout, `cli/src/data-fixes/sql/` tops out at R20
+  (`20260803T180000Z`) and `OnboardingBaselineService.ONBOARDING_PROVISIONED_THROUGH` was still
+  `2026-08-03T18:00:00Z`, not `2026-08-05T12:00:00Z`. **Apply generally:** a task brief's "here's
+  the current state" section is a snapshot from whenever it was written, not a live fact for THIS
+  branch — always re-run the orientation checklist's own verification (`ls cli/src/data-fixes/sql/`,
+  `grep ONBOARDING_PROVISIONED_THROUGH`, `git rev-list --all` for the claimed label) against the
+  actually-checked-out branch before trusting a stated CUT/latest-fix value. Chose `R22` (skipping
+  the already-claimed `R21`) and timestamp `2026-08-05T14:00:00Z` — strictly after BOTH R20 (this
+  branch's actual latest) and R21's `2026-08-05T12:00:00Z` (the sibling branch's claim) — so no
+  collision occurs regardless of which branch merges into the epic first, per the established
+  "always resolve to the later timestamp" convention for these merge conflicts (R9/R10, R19/R20).
+- **2026-08-05 — Gap confirmed corrective-only for the CUT-bump timing, not for the preventive
+  front itself.** ETP-4565 already shipped the preventive Java fix (`FIN_FINANCIAL_ACCOUNT_ACCT_SQL`
+  / `WAREHOUSE_ACCT_SQL` in `OnboardingAccountingWiringService`, called from
+  `provisionEntityPostingAccounts`) — new tenants onboarded today are already born correct. What
+  was missing was (a) the corrective `.sql` for tenants onboarded BEFORE ETP-4565 shipped, and (b)
+  the CUT bump, which ETP-4565 deliberately deferred because bumping a CUT without its matching
+  `.sql` already in the repo would silently skip the gap for legacy tenants that still need it
+  (the framework's own "never bump CUT without matching .sql" rule). This ticket is the two-fronts
+  workflow's steps 2+4 only (corrective SQL + CUT bump) — a valid, explicitly-called-out deviation
+  from "ship all three deliverables together" when the preventive front already shipped separately.
+- **2026-08-05 — Live sweep: every tenant except GOClient itself has the gap.** Query joining
+  `fin_financial_account`/`m_warehouse` against `c_acctschema` with a `NOT EXISTS` on the matching
+  `*_acct` table (see the `.sql` file's own header for the exact query) found GOClient at 0 missing
+  pairs (already correct — its rows were wired at some point outside this framework) and every
+  other real tenant with at least one missing pair. F&B International Group has an unusually large
+  count (343 financial-account pairs, 96 warehouse pairs missing) simply because it owns **26**
+  separate `c_acctschema` rows (most tenants own 1-2) — the corrective fix's per-schema join
+  (`JOIN c_acctschema s ON s.ad_client_id = :client_id`, mirroring `R7-tax-accounts`'s
+  generalization of the single-schema Java constant) is what makes it correctly cover every ledger
+  a multi-schema tenant owns, rather than just one.
+- **2026-08-05 — `m_warehouse_acct.w_differences_acct` is the ONLY `NOT NULL` target column across
+  both tables.** Verified via `\d fin_financial_account_acct` / `\d m_warehouse_acct`: every other
+  `*_acct` column on both tables is nullable, but `w_differences_acct` has no default and is
+  `NOT NULL`. On this DB every tenant's `c_acctschema_default.w_differences_acct` is already
+  populated (confirmed via a `count(*) FILTER (WHERE ... IS NULL)` sweep across all schemas, all
+  zero), so the corrective fix's defensive `d.w_differences_acct IS NOT NULL` guard is currently a
+  no-op safety net, not something actively excluding any live tenant — kept anyway so a future
+  tenant with an incomplete schema default degrades to a safe skip instead of an INSERT failure.
+- **2026-08-05 — Live-validated end-to-end on a real tenant, not just a rolled-back transaction.**
+  Ran the actual fix through the runner (`node cli/src/data-fixes/run.js --fix
+  20260805T140000Z__R22-fin-account-warehouse-acct --client D94AED60C3E0494AAFD44B8A05BB5CFC`)
+  against `acreedortest`: dry-run → `WOULD_APPLY`; real run → `APPLIED (4 rows)` (2 financial
+  accounts + 2 warehouses, its only accounting schema); re-run → `SKIPPED_NOT_NEEDED — kept prior
+  success state`, confirming idempotency against the tables' own UNIQUE constraints
+  (`fin_finacc_acct_acctschema_un` / `m_warehouse_acct_warehouse__un`). This is a REAL, committed
+  change to the shared dev DB (not rolled back) — consistent with precedent (R7/R10/R11/R12 etc.
+  were similarly applied for real against GOClient during their own validation passes) since the
+  whole point of this fix is to actually repair legacy tenants; a rolled-back transaction alone
+  would not have proven the runner's ledger-write path end-to-end.
+
+## ETP-4743 — QA rejection cycle 1 (Sentinel): @check/@apply join asymmetry (2026-08-05)
+
+- **2026-08-05 — A "theoretical, negligible-risk" REVIEW note became a proven, live bug in QA —
+  never downgrade an asymmetry between `@check` and `@apply` without actually querying for it.**
+  Alex (REVIEW) flagged that R22's `@check` financial-account branch didn't join
+  `c_acctschema_default` while `@apply`'s INSERT did, but called it theoretical/negligible. Sentinel
+  (QA) ran the actual join against the live DB and found 24 of F&B International Group's 26
+  `c_acctschema` rows have NO `c_acctschema_default` row — so `@check` was counting 343
+  "needs fix" pairs for that tenant while `@apply`'s `INNER JOIN c_acctschema_default` could only
+  ever insert 7 of them. The other 336 pairs would show `APPLIED (rows_affected≈7)` on a real run
+  (looking like full success) yet `@check` would keep matching >0 rows forever on every future
+  run — a SILENT, NON-CONVERGENT fix (never reaches `SKIPPED_NOT_NEEDED`), the worst kind of
+  idempotency bug because it looks like it worked. **Apply generally:** any time `@check` and
+  `@apply` don't join the exact same tables, actually query the live DB for a case where the
+  extra/missing join changes the result set (don't reason from the schema alone) before deciding
+  the asymmetry is safe to leave — "@check must be able to deliver at least as much as @apply
+  claims, and @apply must be able to close everything @check flags" is the correct symmetry
+  invariant, and it is cheap to verify with one query per branch.
+- **2026-08-05 — Fix: add the missing `JOIN c_acctschema_default d ON d.c_acctschema_id =
+  s.c_acctschema_id` to `@check`'s financial-account branch**, mirroring the branch's own `@apply`
+  INSERT and the warehouse branch (which was already symmetric in both `@check` and `@apply`).
+  Verified: (a) a temporary revert of just this join reproduces a test failure in the new
+  regression tests (proves the tests actually catch the regression, not just pass trivially); (b)
+  post-fix, a direct SQL count against F&B International Group confirms exactly 7
+  genuinely-fixable financial-account pairs (2 of 26 schemas have a `c_acctschema_default` row);
+  (c) `--dry-run` only against F&B International Group (per QA's explicit instruction — no writes
+  to that tenant, to keep its untouched state available for any further investigation of the new
+  A2d gap); (d) re-ran the already-applied `acreedortest` fix — still `SKIPPED_NOT_NEEDED`, so the
+  join addition caused no regression on tenants where every schema already has a default row.
+- **2026-08-05 — New prerequisite gap discovered as a byproduct of the QA fix, NOT fixed, filed as
+  A2d.** F&B International Group's 24 defaultless schemas are a real, previously-undocumented gap
+  — any fix keyed on `c_acctschema_default` (A2, A2c, and now this one) silently cannot reach them.
+  Root cause not investigated (candidates: bulk/test-data creation path that skipped the
+  accounting-setup wiring; or these schemas were never meant to post at all — F&B is a QA/demo
+  tenant with an unusually high schema count, 26 vs. 1-2 for every other tenant on this DB).
+  **Apply generally:** when a QA/regression investigation surfaces a genuine NEW gap that is
+  upstream of / a prerequisite for the ticket's own fix, the correct move is to (1) fix the ticket's
+  own bug so it degrades safely (doesn't over-claim what it can deliver), (2) document the new gap
+  with its own ID (here A2d) so it doesn't silently disappear, and (3) explicitly NOT try to fix it
+  in the same PR unless it's trivial — scope creep here would have meant investigating why 24
+  schemas on a QA tenant have no default row, a genuinely separate research task.
+
 ## c_elementvalue code structure (GOClient chart of accounts)
 
 - **2026-06-26 — Numeric codes are strictly hierarchical and 3/4/5 digits:** `issummary='Y'` rows carry 3-digit (584 rows) and 4-digit (1140 rows) group codes; `issummary='N'` rows carry 5-digit posting codes (1312 rows). Non-numeric codes (1088 rows: section labels like `A`, `PYG`, `A.B.II.1`, `P.G.D`) also exist in both element trees and must never be padded.
@@ -315,6 +416,14 @@
 - **2026-07-20 — R14 Step 5 added: delete the unused legacy asset groups ("Vehiculos"/"Otros") — three FKs reference `a_asset_group`, and a name-based delete across tenants needs a reference guard.** After consolidating every asset under "Genérico", the product owner asked to remove the two legacy groups the assets used to live in. **Delete by NAME (`name IN ('Vehiculos','Otros')`), never by id** — the old `A_ASSET_GROUP.xml` the owner provided lists GOClient-specific ids (`465220689C8743CB8EED836CC98FFC55`/`C77E2F5FD65F48278A6DCE67760F08FD`) but every tenant has its own ids for the same names. **`a_asset_group` is referenced by THREE FKs (confirmed via `pg_constraint`): `a_asset` (assets), `a_asset_group_acct` (accounting, auto-deleted by BEFORE-DELETE trigger `a_asset_group_trg2` → never blocks), and — easy to miss — `m_product_category` (`m_product_category.a_asset_group_id`, a product category can point at an amortization group).** The DELETE is double-`NOT EXISTS`-guarded (no `a_asset` AND no `m_product_category` referencing the group) so it only removes truly-orphaned groups. **This guard is what keeps a name-based cross-tenant delete safe:** F&B International Group (excluded from Steps 1–4 for lacking 282/682, so its assets never moved off "Otros"/"Vehiculos") has non-empty legacy groups → guard finds them referenced → not deleted → NO FK violation, NO chain halt. **Ordering is load-bearing:** Step 5 MUST run after Step 4 (asset reassignment) inside the same transaction, or the `a_asset` FK aborts the delete. **Validated live:** GOClient applied (2 rows = Otros+Vehiculos deleted, only "Genérico" with 6 assets remains); F&B dry-run → SKIPPED (all 4 legacy groups + assets intact); GOClient re-check → SKIPPED_NOT_NEEDED (idempotent). **Apply generally:** before shipping a name-scoped DELETE of an AD reference row across the whole tenant fleet, enumerate ALL FKs pointing at that table (`pg_constraint` `confrelid`) and guard against every one that isn't trigger-cascaded — a single overlooked referencing table turns a "cleanup" into a fleet-wide transaction abort.
 - **2026-07-20 — CORRECTION of the earlier "XML does not exist on this checkout" note + R14 BUG FIX SHIPPED.** The prior audit note (above) said `referencedata/sampledata/GOClient/A_ASSET_GROUP.xml` did not exist here and only `/Users/futit/...` had it. **That was wrong for the current working machine:** on `/Users/ivanrobledo/Documents/EtendoGO/modules/com.etendoerp.go/referencedata/sampledata/GOClient/`, both `A_ASSET_GROUP.xml` and `A_ASSET_GROUP_ACCT.xml` DO exist and ARE the canonical source of truth. Read `A_ASSET_GROUP.xml` directly (2026-07-20): the "Genérico" row is `NAME='Genérico'`, `ISOWNED='Y'`, `ISDEPRECIATED='N'`, `AMORTIZATIONTYPE='LI'`, `AMORTIZATIONCALCTYPE='PE'`, `ASSETSCHEDULE='MO'`, `IS30DAYMONTH='Y'` (no `DESCRIPTION` element → NULL) — exactly matching every correctly-wired live tenant. **Apply:** the module path is repo-relative (`modules/com.etendoerp.go/referencedata/sampledata/GOClient/`), not the schema_forge repo — a prior "file not found" was searching the wrong repo. **Fix delivered in R14:** (1) Step 1 INSERT now sets the full canonical column set (`amortizationtype='LI', amortizationcalctype='PE', assetschedule='MO', is30daymonth='Y'`); (2) a NEW guarded Step 2 UPDATE sanitizes any pre-existing "Genérico" whose 3 ONCREATEDEFAULT amortization columns were left NULL by the earlier buggy revision (accounting UPDATE renumbered to Step 3, asset reassignment to Step 4); (3) `@check` extended with a branch detecting the NULL-amortization malformation so a broken group is repaired on re-run instead of reporting SKIPPED. `is30daymonth` is `NOT NULL DEFAULT 'Y'` (confirmed via `information_schema`) so it is never left NULL and needs no sanitizing. **Validated live** on "Ivan Test" (`43B9B25213204AA487E00D9CC3C390A1`): the malformed accented "Genérico" (created 2026-07-20T15:59, `atype/acalc/asched = NULL`) was repaired to `LI/PE/MO` via `--fix` targeted run (1 row); re-check dry-run → `SKIPPED_NOT_NEEDED`; healthy GOClient dry-run → `SKIPPED_NOT_NEEDED` (no false positive). F&B consolidation and the "Generico"/"Genérico" duplicate remain DEFERRED business decisions (documented in the R14 header), not touched by this revision.
 
+## ETP-4751 — SII "Causa de Exención" catalog (AEATSII_CAUSE_EXEMPTION) missing (2026-08-03)
+
+- **2026-08-03 — Gap: the invoice SIF "Causa de Exención" selector renders empty because the client-scoped master `aeatsii_cause_exemption` has 0 rows.** Live-verified on GOClient (`802509E12436405C86BA1FD5B1DF508C`): 0 cause-exemption rows while `aeatsii_description` has 2 (Compras/Ventas). This is a provisioning gap, not a code bug — the selector is correctly wired but its source table was never seeded.
+- **2026-08-03 — SOURCE OF TRUTH: the SII module (`org.openbravo.module.sii`) ships NO seed record data for `AEATSII_CAUSE_EXEMPTION` — only the empty table + config window + event handlers.** Verified: no `AD_DATASET`/`AD_DATASET_TABLE` entry for the table, no sourcedata/referencedata dump of its rows (only `src-db/database/model/tables/AEATSII_CAUSE_EXEMPTION.xml` = the DDL). The module's own test suite (`SIIVentasBlockATest`) SKIPS its E1/E3/E4/E6 test points when `findCauseExemptionByKey` returns null, proving the data is applied by hand. The Spanish localization user guide states it outright (overview.md ~line 428): these VERIFACTU/SII dropdown values "no se asignan automáticamente desde el dataset y deben configurarse manualmente en cada caso." **Apply:** for any SII/VERIFACTU master-list gap, don't hunt for a module dataset to reuse — there isn't one; the AEAT fixed catalog is the source, and onboarding/data-fix is the delivery mechanism.
+- **2026-08-03 — Canonical catalog used (AEAT CausaExencion for IVA, keys E1-E6):** E1 art. 20, E2 art. 21, E3 art. 22, E4 arts. 23 & 24, E5 art. 25, E6 otra causa. (Superseded 2026-08-03: E1 was initially seeded `isdefault='Y'` — now ALL non-default, see the no-default note below.) `taxtype='IVA'` (column also accepts `'IGIC'`). Table shape (`AEATSII_CAUSE_EXEMPTION.xml`): PK is `AEATSII_CAUSE_EXEMPTION_KEY` (the id column), `KEY` VARCHAR(6) NOT NULL, `NAME` VARCHAR(150) NOT NULL, `ISDEFAULT` CHAR(1) default 'N', `TAXTYPE` VARCHAR(60) default 'IVA'. `key` is a non-reserved keyword in Postgres — works unquoted as a column name in the data-fix runner's inlined SQL (confirmed: `@check`/`@apply` parsed and ran clean).
+- **2026-08-03 — Precedent confirmed: seeding SII localization master data at onboarding is an established pattern.** `referencedata/sampledata/GOClient/AEATSII_DESCRIPTION.xml` already ships (2 records, Compras/Ventas), scoped to GOClient (`802509E12436405C86BA1FD5B1DF508C`) + GOOrg operative org (`61849243BE89460EB70866880A545D50`), createdby `47EAF009B7BB42BBB663C7BA1792D958`. **Apply:** the preventive twin `AEATSII_CAUSE_EXEMPTION.xml` mirrors that file's exact shape/scoping (operative org, not `'*'`).
+- **2026-08-03 — Both fronts delivered (no CUT bump needed — see below).** Preventive: `modules/com.etendoerp.go/referencedata/sampledata/GOClient/AEATSII_CAUSE_EXEMPTION.xml` (6 records, UUIDs from `make uuid`). Corrective: `cli/src/data-fixes/sql/20260803T120000Z__R17-sii-cause-exemption.sql`. `@check` fires only when the tenant is SII-configured (proxy: `EXISTS aeatsii_description` for the client) AND has 0 `aeatsii_cause_exemption` rows — so non-Spain tenants without SII setup never receive Spanish exemption causes. `@apply` inserts E1-E6, each guarded by `NOT EXISTS (ad_client_id, key)` (the natural key), org from `:org_id`, PK from `get_uuid()`. Applied live to GOClient via `--fix`: APPLIED 6 rows; re-check dry-run → SKIPPED_NOT_NEEDED (idempotent). NOTE: no `OnboardingBaselineService.ONBOARDING_PROVISIONED_THROUGH` bump was performed here — the corrective ships alone-safe (new tenants get the catalog from the sampledata, then the runner's `@check` yields SKIPPED for them). If a formal CUT bump is later wanted, set it to `20260803T120000Z` (R17's timestamp) once the sampledata is confirmed live in the onboarding path.
+- **2026-08-03 — DECISION (supersedes the earlier E1-default): ALL six exemption causes are seeded non-default (`isdefault='N'`).** Corrected in all three places consistently: the sampledata XML (`AEATSII_CAUSE_EXEMPTION.xml` — E1 flipped Y→N), the data-fix SQL (`20260803T120000Z__R17-sii-cause-exemption.sql` — E1 insert value + `@description` Background note), and the dev DB (`UPDATE aeatsii_cause_exemption SET isdefault='N' WHERE ad_client_id='802509E12436405C86BA1FD5B1DF508C' AND isdefault='Y'` → 1 row; verified all 6 keys now `N`). **Rationale:** the legally correct SII exemption cause is operation-specific and must be a conscious user choice; Go ships NO cause-exemption maintenance window, so a baked-in default could not be corrected by the user and would risk silently submitting the wrong `CausaExencion` to AEAT. With no default, the invoice shows a "should indicate an exemption cause" warning that guides the user to pick the right one. **Apply:** for SII/AEAT master catalogs where the value is legally per-operation AND there is no user-facing maintenance window, seed the catalog but pick NO default — force the conscious choice.
 ---
 
 ## ETP-4737 — "Factura Rectificativa" doc type + sequence unification (H1, 2026-07-30)
@@ -789,3 +898,170 @@
   control (here `OnboardingDatasetNormalizer`, the runtime side, since `com.etendoerp.go` owns it
   and ddlutils is core/third-party and out of reach) rather than trying to find a single literal
   that satisfies both — none may exist, and here empirically none does.
+
+---
+
+## ETP-4720 — C_BP_Group_Acct's other 11 `*_acct` columns (R21, 2026-08-05)
+
+- **2026-08-05 — `c_bp_group_trg()` (core, unmodified Postgres trigger, `C_BP_Group_Trg.sql`)
+  structurally OMITS 5 of `C_BP_Group_Acct`'s 33 columns from its own INSERT, confirmed via
+  `pg_get_functiondef(oid)` for `proname='c_bp_group_trg'`.** Its column list copies
+  `C_AcctSchema_Default` onto a new group row for: `C_Receivable_Acct`, `C_PrePayment_Acct`,
+  `V_Liability_Acct`, `V_Liability_Services_Acct`, `V_PrePayment_Acct`, `PayDiscount_Exp_Acct`,
+  `PayDiscount_Rev_Acct`, `WriteOff_Acct`, `UnRealizedGain/Loss_Acct`, `RealizedGain/Loss_Acct`,
+  `NotInvoicedReceipts_Acct`, `UnEarnedRevenue_Acct`, `NotInvoicedRevenue_Acct`,
+  `NotInvoicedReceivables_Acct` — but never mentions `WriteOff_Rev_Acct`, `DoubtfulDebt_Acct`,
+  `BadDebtExpense_Acct`, `BadDebtRevenue_Acct`, or `AllowanceForDoubtful_Acct`. This is core
+  Compiere/Openbravo code, out of reach to patch. **Apply:** never assume the trigger populates
+  every `*_acct` column just because it exists and fires reliably (per the earlier 2026-07-01 note)
+  — always diff its actual column list against the target table's full column list before trusting
+  it as a complete defaulting mechanism.
+- **2026-08-05 — `OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` (the Java fallback INSERT,
+  guarded by `NOT EXISTS` at the row level) is missing the SAME 4 columns as the trigger**
+  (`DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct`) —
+  it DOES include `WriteOff_Rev_Acct` (one more than the trigger). Because `C_BP_Group` is always
+  inserted (and the trigger fires) BEFORE this Java statement runs, the Java statement's own
+  `NOT EXISTS` finds the row already present and never executes — so in practice its column list is
+  moot; whichever path "wins," the resulting row is missing the same 4 columns, for every tenant,
+  every group, always.
+- **2026-08-05 — LIVE, ONGOING preventive gap confirmed on a 6-day-old tenant, not just legacy
+  drift.** Swept all 12 tenants on the dev DB: `DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/
+  `BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct` are NULL on **every** `C_BP_Group_Acct` row of
+  every tenant whose `C_AcctSchema_Default` already has them populated (via R11) — including
+  "Empresa E2E d5be89a8" (client `2D54A79B1B2649218C5FED9307B84DC9`), onboarded 2026-07-29 through
+  the CURRENT onboarding code, just 6 days before this was diagnosed. This directly contradicts an
+  assumption in the ETP-4720 ticket text that "onboarding already wires these correctly, this is
+  corrective-only" — it does NOT, for these 4 columns specifically. **Flagged to the
+  coordinator/user rather than silently fixed**, per the tenant-fixer rule that a found preventive
+  gap outside a ticket's stated scope needs a scope call before a Java fix ships. R21's corrective
+  `.sql` (`20260805T120000Z__R21-bp-group-acct-remaining-columns.sql`) ships covering ALL 12 tenants
+  either way; `ONBOARDING_PROVISIONED_THROUGH` was deliberately NOT bumped since no preventive fix
+  shipped alongside it.
+- **2026-08-05 — 6 of the ticket's 11 target columns are NULL on `C_AcctSchema_Default` ITSELF,
+  fleet-wide, on every tenant on this DB — an R11-adjacent gap, not this ticket's to fix. The 7th,
+  `WriteOff_Rev_Acct`, has ONE pre-existing exception — DOCS UPDATE (2026-08-05, verified live by
+  Sage during DOCS review): re-querying `c_acctschema_default` found `WriteOff_Rev_Acct` NOT NULL on
+  1 of the 14 schemas — F&B International Group's schema `732913485BB040FFA4643FF06D1AA095`
+  (`updated` 2026-07-08, `updatedby='0'`, predates R21's authoring) — the other 13 schemas are NULL
+  for it, matching the original claim.** `NotInvoicedRevenue_Acct`, `NotInvoicedReceivables_Acct`,
+  `UnEarnedRevenue_Acct`, `PayDiscount_Exp_Acct`, `PayDiscount_Rev_Acct`, `V_Liability_Services_Acct`
+  are all NULL on `C_AcctSchema_Default` for all 14 schemas checked — R11
+  (`R11-acctschema-default-completion.sql`) only ever populated 6 *different* Defaults-tab columns
+  (`DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct`/
+  `P_Def_Expense_Acct`/`P_Def_Revenue_Acct`). **Practical consequence:** because that one schema
+  already has a source value, R21's `@check` does NOT no-op for F&B today — of the 8
+  `C_BP_Group_Acct` rows tied to that schema, 2 still have `writeoff_rev_acct` NULL and WILL be
+  backfilled the first time R21 runs for F&B's client id (confirmed live, 2026-08-05). **Apply:**
+  R21's `@check` correctly excludes the other 6 columns today (nothing to source from anywhere), and
+  will self-heal them automatically per-tenant the
+  moment a future fix populates `C_AcctSchema_Default` for them — no change needed in R21 when that
+  happens. Do not confuse "R11 completed the Defaults tab" with "every Defaults-tab column is now
+  populated" — R11's own scope was 6 specific columns, not all of them.
+- **2026-08-05 — Per-partner override-column audit for the 11 target columns (queried
+  `information_schema.columns`, not assumed): only `V_Liability_Services_Acct` has a matching
+  per-partner override column, on `C_BP_Vendor_Acct` (14 columns total: `v_liability_acct`,
+  `v_liability_services_acct`, `v_prepayment_acct`, plus PK/audit). `C_BP_Customer_Acct` (13 columns)
+  has NEITHER of the 11 — only `c_receivable_acct`/`c_prepayment_acct`. Conclusion: a per-partner
+  override's existence is irrelevant to whether the GROUP-level column should be backfilled — R21
+  only ever writes `C_BP_GROUP_ACCT`, never the per-partner tables, and
+  `OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` itself fills the group-level row
+  unconditionally at row-creation time with no per-partner check — so R21 needs no extra guard
+  beyond "column still NULL, default now available," identical to every other column in the fix and
+  to R17. (Separately noted, NOT part of R21: `BP_VENDOR_ACCT_SQL` only ever inserts
+  `v_liability_acct`/`v_prepayment_acct` for a new vendor — it never seeds
+  `v_liability_services_acct` at the per-partner level at all, for any vendor, ever. That is a
+  distinct, unexplored potential gap on a different table, out of this ticket's scope.)
+- **2026-08-05 — UPDATE: preventive front landed, gap CLOSED on both fronts.** Per an explicit
+  coordinator decision, the open preventive gap above (the 4 columns actually missing live today —
+  `DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct`; the
+  Java patch also covers `WriteOff_Rev_Acct` since the core trigger omits it too — see the "DOCS
+  UPDATE" bullet above for the corrected, DB-verified state of that column's own schema default
+  [F&B International Group's schema is the one exception, populated since 2026-07-08 — NOT NULL
+  fleet-wide]) was folded into ETP-4720 rather than a separate ticket. Implemented as `OnboardingAccountingWiringService#patchBpGroupAcctMissingColumns` — a THIRD
+  entry point on that class (after `wire` and `wireBusinessPartnerAccounts`), a `COALESCE`-guarded
+  `UPDATE` mirroring R21's own SQL shape column-for-column, wired as the new LAST provisioning step in
+  `EtendoGoJwtServlet.ensureOnboardingDataset` (right before `registerBaseline`). Needed neither a
+  resolved `Client`/`AcctSchema` entity nor a specific schema id — unlike `wire()`/
+  `wireBusinessPartnerAccounts()`, it patches every schema a tenant has via one client-scoped
+  statement, exactly like its corrective twin (confirmed via a dedicated unit test that leaves
+  `clientMissing`/`ledgerMissing` seams set and shows the patch still runs regardless).
+  `ONBOARDING_PROVISIONED_THROUGH` bumped to R21's own timestamp, `2026-08-05T12:00:00Z`. Verified:
+  `OnboardingAccountingWiringServiceTest` (+4 tests) and `EtendoGoJwtServletOnboardingDatasetTest`
+  (+2 tests, wiring order + failure-short-circuits-the-chain) — 60/60 total pass via `./gradlew test
+  --tests com.etendoerp.go.onboarding.OnboardingAccountingWiringServiceTest --tests
+  com.etendoerp.go.rest.EtendoGoJwtServletOnboardingDatasetTest` (the ROOT `:test` task; the
+  per-module `:modules:com.etendoerp.go:test` task reports `NO-SOURCE` in this build — this module's
+  `src-test` is wired into the root project's `test` sourceSet by the Etendo Gradle plugin, not into a
+  per-module one — use the root task, not `:modules:com.etendoerp.go:test`, to run these tests).
+  Corrective side: `cli/test/data-fixes-r21-bp-group-acct-remaining-columns.test.js` added (59 tests,
+  static parse validation per the R17/R20 precedent — no live-DB test harness exists for data-fixes
+  in this codebase, by established convention).
+
+---
+
+## ETP-4515/H2 — Onboarding role provisioning, end-to-end verification (2026-08-06)
+
+- **2026-08-06 — `./gradlew test` NO-SOURCE for `com.etendoerp.go` is SYSTEMIC in THIS environment,
+  reproducible even for a documented, previously-passing test — not specific to any one test file
+  or to the worktree scenario already documented (2026-07-06).** Confirmed on the MAIN checkout
+  (already on `epic/ETP-3504` at the same commit as `origin/epic/ETP-3504`, no worktree involved):
+  `./gradlew :modules:com.etendoerp.go:test --tests "com.etendoerp.go.onboarding.OnboardingRoleProvisioningServiceTest"`
+  and even `--tests "com.etendoerp.go.schemaforge.email.EmailFrameworkValueObjectsTest"` (a test the
+  module's own docs, `docs/ETP-4139-local-smoke-2026-06-01.md`, document as a working `./gradlew
+  test --tests ...` invocation) both report `:modules:com.etendoerp.go:compileTestJava NO-SOURCE`.
+  An `-I <init-script>` probe (`afterEvaluate { println sourceSets.test.java.srcDirs }`) showed the
+  `test` sourceSet resolved to the Java-plugin DEFAULT `.../src/test/java` (which doesn't exist),
+  NOT `.../src-test/src` (which does, and is where the actual test files live) — the
+  `com.etendoerp.testing.gradleplugin` (v2.1.0, applied at root) that is supposed to rewire it
+  (confirmed via bytecode inspection of its `configureSourceSets` method: it does contain the
+  literal string `src-test/src` and iterates subprojects of a `:modules`/`:modules_core` root
+  project group) is either not firing for this project or firing too late relative to when Gradle
+  snapshots the source set for `compileTestJava`. Root cause NOT fully isolated (didn't chase
+  further — diminishing returns for a verification task). **Apply:** in this specific local dev
+  environment, do not trust `./gradlew test` (root-level OR `:modules:com.etendoerp.go:test`
+  scoped) as a signal either way for `com.etendoerp.go` — a `NO-SOURCE` result here means "the
+  harness didn't run," never "no tests exist" and never "tests passed." `:compileJava`/`:classes`
+  (production code only, no `src-test`) DOES work normally and is a valid compile-correctness
+  signal on its own. If this needs to be unblocked for real, the next things to try are (a) an
+  explicit `sourceSets { test { java.srcDirs = ['src-test/src'] } }` override added temporarily to
+  the module's own `build.gradle`, or (b) asking a human to run it from their own already-working
+  local setup (this may be an artifact of this specific sandboxed checkout/Gradle-cache state, not
+  a real regression in the plugin).
+- **2026-08-06 — ETP-4515 (H2 preventive front) VERIFIED END-TO-END against real onboarded tenants
+  — the acceptance criterion "verified by onboarding a fresh test tenant" is now MET, via evidence
+  discovered rather than freshly triggered.** Found 3 real tenants already onboarded through the
+  LIVE `POST /sws/go/onboarding` flow strictly AFTER PR #762 (`2d8b406b`, 2026-07-27) merged this
+  service into `epic/ETP-3504`: **`RolesPresa`** (`1803BF0F88654173A698D4D6B371F9B0`, created
+  2026-07-27T13:14 — the name itself reads as a manual smoke test of this exact feature),
+  **`Empresa E2E 91c979ac`** (`3B4B7186C83C4D8FBCE74B6AFC1B14C6`, 2026-07-27T18:42), **`Empresa E2E
+  d5be89a8`** (`2D54A79B1B2649218C5FED9307B84DC9`, 2026-07-29T12:58). All three, checked against
+  GOClient's CURRENT live state (re-verified fresh, not trusted from the 2026-07-27 R16 doc note —
+  no drift found): (1) have exactly the 4 cloned roles (Finance/Sales/Purchasing/Inventory) plus
+  their own auto-created admin role, no extras, no dupes; (2) `EM_ETGO_Show_Acct_Fields = 'Y'` for
+  Finance and `'N'` for Sales/Purchasing/Inventory on every one of the 3, matching GOClient exactly;
+  (3) `AD_Window_Access` row counts match GOClient's CURRENT counts (Finance 9, Inventory 6,
+  Purchasing 5, Sales 6 — identical to the R16 baseline, unchanged since 2026-07-27); (4) a
+  window-id + `isreadwrite`-flag set-equality check (not just counts) for all 4 roles on all 3
+  tenants against GOClient came back an EXACT match; (5) every other `AD_Role` attribute checked
+  (`userlevel`, `ismanual`, `is_client_admin`, `isadvanced`, `isrestrictbackend`, `isportal`,
+  `isportaladmin`, `iswebserviceenabled`, `istemplate`, `recalculatepermissions`, `processing`) is
+  identical across GOClient and all 3 tenants' Finance role. Also confirmed the deployed webapp on
+  the locally running Tomcat container (`etendogoclean-tomcat-1`, context `/etendogoclean`) carries
+  the exact current-source version of `OnboardingRoleProvisioningService.class` (`javap` method
+  signatures match the `.java` file byte-for-byte) — the 3 tenants above were provisioned by the
+  SAME code that's in the repo today, not a stale prior cut. **Idempotency claim ("safe to call
+  `wire()` twice") verified via the guard PRECONDITION, not a literal second live call:**
+  `ensureRoleCloned`'s guard is `resolveRoleByName(clientId, roleName) != null` → skip; confirmed
+  directly that all 4 roles are `isactive='Y'` on all 3 tenants right now, which is exactly what
+  that query selects — so a second `wire()` call today would hit "already exists" on every role and
+  perform zero writes. No literal second invocation was made (no low-risk trigger exists: the only
+  HTTP entry point, `handleOnboarding`, always creates a brand-new client — there's no "re-run
+  onboarding for an existing client" endpoint to call safely). **Net: preventive front (ETP-4515) is
+  no longer "written but unverified" — it is proven correct against 3 independent real onboardings.
+  The mocked `OnboardingRoleProvisioningServiceTest` (read, not executed — blocked by the NO-SOURCE
+  issue above) is a legitimate seam-based orchestration test (every DB-touching method is an
+  overridable `protected` seam, genuinely exercises `wire()`'s control flow: missing-role cloning,
+  skip-when-present, GOClient-template-missing failure, context capture/restore on success AND
+  failure) but it mocks away every real DAL/native-SQL call, so it was never going to catch a live
+  DB-shape issue — the live-tenant DB comparison above is the evidence that actually closes the gap,
+  not the unit test.**

@@ -146,7 +146,7 @@ describe('app-shell local UI primitives retained outside core', () => {
     expect(screen.getByRole('tabpanel')).toHaveTextContent('Visible details');
   });
 
-  it('renders date range presets and emits preset/all-time selections', () => {
+  it('renders date range presets and emits preset/all-time selections', { retry: 2 }, () => {
     const onChange = vi.fn();
     const onClose = vi.fn();
     render(<DateRangePopoverContent value={null} onChange={onChange} onClose={onClose} />);

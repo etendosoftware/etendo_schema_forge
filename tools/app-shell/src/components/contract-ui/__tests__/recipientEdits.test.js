@@ -126,6 +126,14 @@ describe('getEmailFieldError', () => {
   it('returns null for a well-formed value', () => {
     assert.equal(getEmailFieldError(emailField, 'user@example.com'), null);
   });
+
+  // ETP-4749: field.inputPrefix (generic fixed-chip mechanism) reconstructed before
+  // checking format — no email window uses this today, but the mechanism must not be
+  // website-specific.
+  it('reconstructs field.inputPrefix before validating, when present', () => {
+    const prefixed = { ...emailField, inputPrefix: 'mailto:' };
+    assert.equal(getEmailFieldError(prefixed, 'user@example.com'), 'sendModalInvalidEmail');
+  });
 });
 
 describe('isSecureUrl', () => {
@@ -220,6 +228,32 @@ describe('getWebsiteFieldError', () => {
   it('returns null for a valid https URL with a host', () => {
     assert.equal(getWebsiteFieldError(webField, 'https://example.com'), null);
   });
+
+  // ETP-4749: field.inputPrefix — a fixed "https://" chip rendered before the input
+  // (EntityForm) means the STORED value only holds the part after the scheme (same
+  // pattern OrganizationPage.jsx hand-builds for its own "Sitio web" field). Must
+  // reconstruct the full URL before checking, not validate the bare suffix.
+  describe('with inputPrefix (fixed "https://" chip, ETP-4749)', () => {
+    const prefixedWebField = { ...webField, inputPrefix: 'https://' };
+
+    it('validates the RECONSTRUCTED value, not the bare stored suffix', () => {
+      // "example.com" alone is not a secure URL, but "https://" + "example.com" is —
+      // proves the prefix is actually being prepended, not ignored.
+      assert.equal(getWebsiteFieldError(prefixedWebField, 'example.com'), null);
+    });
+
+    it('still rejects a value that stays malformed after reconstruction', () => {
+      // A leading space in the stored suffix survives "https://" + value (isSecureUrl
+      // only trims the OUTER edges of the full string, not whitespace right after the
+      // scheme) — a real, reachable malformed case despite the prefix always being there.
+      assert.equal(getWebsiteFieldError(prefixedWebField, ' example.com'), 'websiteInsecureUrl');
+    });
+
+    it('still treats an empty stored value as optional (no reconstruction needed)', () => {
+      assert.equal(getWebsiteFieldError(prefixedWebField, ''), null);
+      assert.equal(getWebsiteFieldError(prefixedWebField, '   '), null);
+    });
+  });
 });
 
 describe('isValidPhone', () => {
@@ -304,6 +338,14 @@ describe('getPhoneFieldError', () => {
 
   it('returns null for a valid phone number', () => {
     assert.equal(getPhoneFieldError(phoneField, '+34 (600) 12-34'), null);
+  });
+
+  // ETP-4749: same generic field.inputPrefix reconstruction as email/website — no
+  // phone window uses this today, but the mechanism is not website-specific.
+  it('reconstructs field.inputPrefix before validating, when present', () => {
+    const prefixed = { ...phoneField, inputPrefix: '+34 ' };
+    assert.equal(getPhoneFieldError(prefixed, '600 123 456'), null);
+    assert.equal(getPhoneFieldError({ ...phoneField, inputPrefix: 'ext.' }, '600'), 'phoneInvalidChars');
   });
 });
 

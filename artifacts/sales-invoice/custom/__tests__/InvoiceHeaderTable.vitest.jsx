@@ -68,7 +68,11 @@ vi.mock('@/lib/invoiceDueDate', () => ({
 }));
 
 vi.mock('../invoiceSubtype', () => ({
+  // Mirrors the real getArSubtype contract (artifacts/sales-invoice/custom/invoiceSubtype.js):
+  // server-injected arInvoiceSubtype takes priority; only falls back to the
+  // doc-type-identifier check when it is absent (ETP-4738).
   getArSubtype: (row) => {
+    if (row?.arInvoiceSubtype) return row.arInvoiceSubtype;
     const doc = row?.['transactionDocument$_identifier'];
     if (doc === 'ARCreditMemo') return 'NC';
     if (doc === 'ARReturn') return 'DEV';
@@ -149,6 +153,30 @@ const MOCK_ROWS = [
     documentStatus: 'CO',
     'currency$_identifier': 'GBP',
     'transactionDocument$_identifier': 'ARCreditMemo',
+    aeatsiiEstado: null,
+  },
+  // ETP-4738: Factura Rectificativa — arInvoiceSubtype: 'NC' server-injected,
+  // but the doc-type identifier is NOT one the fallback regex recognizes
+  // (no "credit"/"memo"/"crédito"/"return"/"devoluci" substring).
+  {
+    eTGODueDate: '2026-04-01',
+    outstandingAmount: '-8.40',
+    grandTotalAmount: '-8.40',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'Factura Rectificativa',
+    arInvoiceSubtype: 'NC',
+    aeatsiiEstado: null,
+  },
+  // Same doc type, fully consumed.
+  {
+    eTGODueDate: '2026-04-15',
+    outstandingAmount: '0',
+    grandTotalAmount: '-8.40',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'Factura Rectificativa',
+    arInvoiceSubtype: 'NC',
     aeatsiiEstado: null,
   },
 ];
@@ -301,7 +329,9 @@ describe('InvoiceHeaderTable — outstandingAmount credit-note/return badge (ETP
 
   it('fully-applied credit note still shows the green "Aplicada" badge (unchanged)', () => {
     render(<InvoiceHeaderTable {...BASE_PROPS} />);
-    expect(screen.getByText('Aplicada')).toBeInTheDocument();
+    // Two rows are fully-applied credit instruments now (the ARCreditMemo row
+    // and the ETP-4738 Factura Rectificativa row below) — assert at least one.
+    expect(screen.getAllByText('Aplicada').length).toBeGreaterThan(0);
   });
 
   it('regular invoice with partial payment still shows the amber pending badge, unaffected', () => {
@@ -311,5 +341,29 @@ describe('InvoiceHeaderTable — outstandingAmount credit-note/return badge (ETP
     const pendingButton = pendingBadge.closest('button');
     expect(pendingButton).toHaveAttribute('aria-label', 'addCobro');
     expect(pendingButton.textContent).not.toMatch(/Saldo a favor/);
+  });
+});
+
+// ── ETP-4738: Factura Rectificativa recognized via arInvoiceSubtype ────────────
+// SalesInvoiceHeaderHandler already injected arInvoiceSubtype on every list row
+// before ETP-4738 — only the reclassification logic (FAC->NC for rectificative
+// + negative total) is new. This proves the grid already renders "Saldo a
+// favor"/"Aplicada" correctly for a doc-type name ("Factura Rectificativa")
+// that getArSubtype's identifier fallback would never recognize on its own.
+describe('InvoiceHeaderTable — arInvoiceSubtype recognizes Factura Rectificativa (ETP-4738)', () => {
+  it('shows "Saldo a favor" for a Factura Rectificativa row with arInvoiceSubtype NC and a nonzero balance', () => {
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    expect(screen.getByText(/Saldo a favor · 8\.4:EUR/)).toBeInTheDocument();
+  });
+
+  it('shows the green "Aplicada" pill once the Factura Rectificativa balance is fully consumed', () => {
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    const aplicadaBadges = screen.getAllByText('Aplicada');
+    expect(aplicadaBadges.length).toBeGreaterThan(0);
+  });
+
+  it('renders the credit-note doc-type badge for Factura Rectificativa via arInvoiceSubtype (not the identifier)', () => {
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('creditNotesTab');
   });
 });

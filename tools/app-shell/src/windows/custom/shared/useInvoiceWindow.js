@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 
 export function getInvoiceDraftMode(ui, options = {}) {
   const { showVerifactuProcessingModal = false } = options;
@@ -28,7 +29,8 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     actions: {
       edit: { show: true },
       duplicate: { show: true },
-      email: { show: showEmail },
+      // ETP-4717 — see sendActionVisibility.js
+      email: { show: showEmail, ...(showEmail ? { visibleWhen: SEND_VISIBLE_WHEN_CONFIRMED } : {}) },
       delete: { show: true },
     },
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),

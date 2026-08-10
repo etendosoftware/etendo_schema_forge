@@ -69,7 +69,7 @@ async function installOrderMocks(page, {
 
   // validate-exchange-rate endpoint
   if (validateRateResult !== null) {
-    await page.route(`**/sws/neo/validate-exchange-rate**`, async (route) => {
+    await page.route(`**/sws/neo/validate-exchange-rate{/**,}**`, async (route) => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
           status: 200,
@@ -132,7 +132,7 @@ async function installOrderMocks(page, {
   });
 
   // Lines endpoint
-  await page.route(`**/sws/neo/sales-order/lines**`, async (route) => {
+  await page.route(`**/sws/neo/sales-order/lines{/**,}**`, async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,

@@ -27,7 +27,7 @@ function classifyInstallment(inst) {
 const BADGE_STYLES = {
   paid:    { bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)', dot: 'var(--status-success-fg)', accent: 'var(--status-success-fg)' },
   partial: { bg: 'var(--status-info-bg)', color: 'var(--status-info-fg)', dot: 'var(--status-info-border)', accent: 'var(--status-info-border)' },
-  overdue: { bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive))', dot: 'hsl(var(--destructive))', accent: 'hsl(var(--destructive))' },
+  overdue: { bg: 'var(--status-destructive-bg)', color: 'var(--status-destructive-fg)', dot: 'var(--status-destructive-fg)', accent: 'var(--status-destructive-fg)' },
   pending: { bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', dot: 'var(--status-warning-border)', accent: 'var(--status-warning-border)' },
 };
 
@@ -203,27 +203,12 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
 
   if (!data?.documentStatus) return null;
 
-  // Draft — only show Send button
+  // ETP-4717 — Draft: nothing to show. Send is only available once the
+  // invoice is Completed (CO), matching the grid row quick-action's status
+  // gate; it used to render unconditionally here, which was the bug.
   if (isDraft) {
     return (
-      <>
-        <SendDocumentButton onClick={() => setShowSendModal(true)} />
-        {showSendModal && (
-          <SendDocumentModal
-            documentType={tMenu('Sales Invoice')}
-            documentNo={data?.documentNo}
-            bpName={data?.['businessPartner$_identifier']}
-            bPartnerId={data?.businessPartner}
-            apiBaseUrl={apiBaseUrl}
-            documentId={data?.id}
-            windowName="sales-invoice"
-            token={token}
-            pdfBlobUrl={pdfUrl}
-            pdfBlobLoading={pdfLoading}
-            onClose={() => setShowSendModal(false)}
-          />
-        )}
-      </>
+      <></>
     );
   }
 
@@ -252,7 +237,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       return (
         <span
           className="inline-flex items-center gap-1.5 text-[13px] font-medium h-9"
-          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'hsl(var(--card))', color: 'var(--status-success-bg)' }}
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
         >
           {ui('cpCreditFullyApplied')}
         </span>
@@ -265,7 +250,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           data-testid="payment-status-badge"
           onClick={() => setShowPaymentsModal(true)}
           className="inline-flex items-center gap-1.5 text-[13px] font-semibold hover:opacity-80 cursor-pointer h-9"
-          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'hsl(var(--card))', border: '1px solid var(--status-info-bg)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
           {ui('cpFavorBadge')} · {fmt(outstandingAbs, currency)}
@@ -364,7 +349,10 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         status={data?.documentStatus}
       />
 
-      <SendDocumentButton onClick={() => setShowSendModal(true)} />
+      {/* ETP-4717 — explicit Completed gate, matching the grid row
+          quick-action's status rule (this branch is only reached once
+          installments exist, which in practice already implies CO). */}
+      {isCompleted && <SendDocumentButton onClick={() => setShowSendModal(true)} />}
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (
@@ -412,7 +400,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
                 type="button"
                 disabled={shipmentCreating}
                 onClick={() => setShowShipmentDialog(false)}
-                style={{ padding: '8px 16px', borderRadius: 8, border: '0.5px solid hsl(var(--card))', background: 'transparent', fontSize: 13, fontWeight: 500, color: 'var(--status-info-bg)', cursor: 'pointer' }}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '0.5px solid hsl(var(--border-subtle))', background: 'transparent', fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', cursor: 'pointer' }}
               >
                 {ui('skipShipment')}
               </button>

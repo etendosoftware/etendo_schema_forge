@@ -5,6 +5,7 @@ import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
 import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import PurchaseInvoiceHeaderTable from './PurchaseInvoiceHeaderTable.jsx';
@@ -87,10 +88,16 @@ const LABEL_OVERRIDES = {
 
 function PurchaseInvoiceBulkAction(props) {
   return (
-    <BulkDocumentAction
-      {...props}
-      labelKey="confirmBulk"
-      data-testid="BulkDocumentAction__c20e53" />
+    <>
+      <BulkDocumentAction
+        {...props}
+        labelKey="confirmBulk"
+        data-testid="BulkDocumentAction__c20e53" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__c20e53" />
+    </>
   );
 }
 
@@ -224,7 +231,10 @@ export default function PurchaseInvoiceWindow(props) {
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         rowQuickActions={rowQuickActions}
         sendDocument={{ enabled: false, allowEmail: false }}
+        hideLink
         bulkActions={PurchaseInvoiceBulkAction}
+        hidePrint
+        hideEyeCount
         refreshTrigger={refreshKey}
         renderPreview={({ row, onClose, onEdit }) => (
           <InvoicePreview
