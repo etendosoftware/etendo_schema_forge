@@ -35,6 +35,25 @@ export function isEmailField(field) {
   return /email/i.test(key) || /email/i.test(col);
 }
 
+// ETP-4749: when a field declares `inputPrefix` (a fixed, non-editable chip rendered
+// before the input — e.g. "https://" — whose text is NOT part of the stored value),
+// the stored `value` only holds the part after the chip. Reconstructs the full value
+// before format-checking so a prefixed field validates identically to an unprefixed
+// one that stores its full value directly. Generic on purpose — not website-specific —
+// so any future email/phone field that adopts a fixed prefix gets this for free.
+//
+// Deliberately takes the RAW value (not the caller's already-trimmed copy): the
+// downstream isValidEmailAddress/isSecureUrl/isValidPhone each trim their own input
+// anyway, but ONLY at the outer edges of the string they receive. A stray leading
+// space in the STORED suffix (e.g. " example.com") would sit in the middle of the
+// reconstructed string ("https:// example.com") — trimming `value` here first before
+// prepending the prefix would silently swallow that space and hide a real malformed
+// value. Passing raw `value` keeps that edge reachable while staying byte-identical
+// for fields with no inputPrefix (the trim happens downstream exactly as before).
+function withInputPrefix(field, value) {
+  return field?.inputPrefix ? field.inputPrefix + String(value ?? '') : value;
+}
+
 // Returns the i18n KEY of the email error for a field+value, or null if valid.
 // Non-email field → null. Empty/whitespace value → null (empty is valid, email
 // is optional). Non-empty malformed value → 'sendModalInvalidEmail'.
@@ -45,7 +64,7 @@ export function getEmailFieldError(field, value) {
   if (!isEmailField(field)) return null;
   const s = String(value ?? '').trim();
   if (s === '') return null;
-  return isValidEmailAddress(s) ? null : 'sendModalInvalidEmail';
+  return isValidEmailAddress(withInputPrefix(field, value)) ? null : 'sendModalInvalidEmail';
 }
 
 // True when the value is a secure URL: starts with the https:// scheme and has a
@@ -85,7 +104,7 @@ export function getWebsiteFieldError(field, value) {
   if (!isWebsiteField(field)) return null;
   const s = String(value ?? '').trim();
   if (s === '') return null;
-  return isSecureUrl(s) ? null : 'websiteInsecureUrl';
+  return isSecureUrl(withInputPrefix(field, value)) ? null : 'websiteInsecureUrl';
 }
 
 // True when the trimmed value is a plausible phone number: only digits and the
@@ -116,7 +135,7 @@ export function getPhoneFieldError(field, value) {
   if (!isPhoneField(field)) return null;
   const s = String(value ?? '').trim();
   if (s === '') return null;
-  return isValidPhone(s) ? null : 'phoneInvalidChars';
+  return isValidPhone(withInputPrefix(field, value)) ? null : 'phoneInvalidChars';
 }
 
 export function normalizeRecipientList(values) {

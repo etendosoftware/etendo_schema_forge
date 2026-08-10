@@ -113,6 +113,10 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
 
   if (!shipment) return null;
 
+  // ETP-4717 — Send is only available once the shipment is Confirmed (CO),
+  // matching the Grid row quick-action and Form-view topbar gates.
+  const isSendable = shipment.documentStatus === 'CO';
+
   // ── Left panel ──────────────────────────────────────────────────────────────
 
   const leftPanel = (
@@ -149,20 +153,22 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
 
   const actionButtons = (
     <>
-      <Button
-        size="sm"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
-        onClick={openEmailModal}
-        data-testid="Button__5d626b">
-        <Mail data-testid="Mail__5d626b" />
-        {ui('invoicePreviewSend')}
-      </Button>
+      {isSendable && (
+        <Button
+          size="sm"
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
+          onClick={openEmailModal}
+          data-testid="Button__5d626b">
+          <Mail data-testid="Mail__5d626b" />
+          {ui('invoicePreviewSend')}
+        </Button>
+      )}
       <Button
         size="sm"
         variant="outline"
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
-        disabled={!pdfBlob}
-        onClick={pdfBlob ? handleDownload : undefined}
+        disabled={!pdfBlob || !isSendable}
+        onClick={pdfBlob && isSendable ? handleDownload : undefined}
         data-testid="Button__5d626b">
         <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__5d626b" />
         {ui('invoicePreviewDownloadPdf')}
@@ -193,7 +199,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
             movementDate={movementDate}
             ui={ui}
             data-testid="ShipmentStatsPanel__5d626b" />
-          <EmailsCard onSend={openEmailModal} data-testid="EmailsCard__5d626b" />
+          <EmailsCard onSend={isSendable ? openEmailModal : undefined} data-testid="EmailsCard__5d626b" />
           <RelatedDocumentsCard
             documentId={shipment.id}
             token={token}

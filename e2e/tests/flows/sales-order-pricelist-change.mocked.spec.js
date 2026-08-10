@@ -59,7 +59,7 @@ const SAMPLE_LINE = {
  * pick from when a test needs to change the value. Must run AFTER login().
  */
 async function installPriceListSelectorMock(page) {
-  await page.route(`**/sws/neo/sales-order/header/selectors/M_PriceList_ID**`, async (route) => {
+  await page.route(`**/sws/neo/sales-order/header/selectors/M_PriceList_ID{/**,}**`, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -116,7 +116,7 @@ async function installOrderMocks(page, { returnOrder = ORDER } = {}) {
   });
 
   // Lines endpoint — always return one saved line
-  await page.route(`**/sws/neo/sales-order/lines**`, async (route) => {
+  await page.route(`**/sws/neo/sales-order/lines{/**,}**`, async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,
