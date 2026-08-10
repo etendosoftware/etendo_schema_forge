@@ -526,8 +526,14 @@ Two things made this invisible for a full wave:
    a copy that never gained it, and its Javadoc still claimed the two were *"identical"*. The REST
    update path is protected by that accident; the MCP one was not protected by anything.
 2. **Unit tests could not see it.** `NeoTypeCoercionHelperTest` and `McpToolRouterSupportTest` both
-   assert `06-08-2026 → 2026-08-06`, and both passed the entire time `neo_update` was writing year
-   0015. The defect was a **missing call site**, a class of bug no test of the callee can reach.
+   assert `06-08-2026 → 2026-08-06`, and neither could ever have failed on this: the defect was a
+   **missing call site**, a class of bug no test of the callee can reach.
+
+   **Correction, 2026-08-10 —** an earlier version of this point said those tests *"passed the entire
+   time `neo_update` was writing year 0015"*. They did not pass. They never ran. See §9.2: the date
+   assertions have never executed under Gradle even once, so the sentence claimed evidence that does
+   not exist. The argument it was making survives the correction — a passing test of the callee could
+   not have caught a missing caller either — but it was being made with a fact that was wrong.
 
 ### What changed
 
@@ -591,3 +597,44 @@ Coercing *before* the hook is what makes that true — the reverse order would h
 Checks 1, 2 and 4 of §7 (the `neo_defaults` diff over ~8 windows, the React-form round trip, and their
 log) remain unrun. They cover the **read/emit** half, which the 2026-08-10 run had already credited
 behaviourally; the write half is what this section closes.
+
+### 9.2 The date tests have never run — 2026-08-10
+
+Found while answering a different question ("is the UI still fine?"), from the user spotting
+`when(prop.is.isTimestamp())` in an editor. The stray `.is` was a local slip, but the method underneath
+it was the real finding: **`Property` has no `isTimestamp()`.** `TimestampDomainType` is reached through
+`Property#isTime()` (`Property.java:1115`).
+
+Four places named the method that does not exist — `NeoDateFormatTest`,
+`NeoTypeCoercionHelperTest`, `McpToolRouterSupportTest`, and a `{@link}` in `NeoDateFormat`'s javadoc —
+all introduced together in `fdac3a9b` (2026-08-06 17:12). Three of them are in `src-test`, so
+**`compileTestJava` has failed since that commit**, which means the whole `com.etendoerp.go.*` suite has
+been unrunnable for four days, not just the date cases.
+
+The evidence, from `build/test-results/test`:
+
+| Observation | Value |
+|---|---|
+| Newest JUnit result | 2026-08-06 **09:40** — seven and a half hours *before* `fdac3a9b` |
+| `NeoDateFormatTest` results | **none.** The class has never produced a result file |
+| Surviving `CoerceField` / `CoercePrimitiveFieldValue` cases | boolean, long, BigDecimal, integer — **zero date cases** |
+
+So **no date test of IMP-16 has ever executed under Gradle**, and neither has
+`McpWriteVerbCoercionCallSiteTest`. Fixed in `com.etendoerp.go@6a311a65` (`isTimestamp()` → `isTime()`
+in all four places; the domain type named in the docs was already right, so no gate behaviour changes).
+The inverse was checked too — every other `prop.*` call across `src/` and `src-test/` resolves to a real
+`Property` member, so this was the only fabricated one.
+
+**Why the wrong name survived a "28/28" verification.** `fdac3a9b`'s commit message reports *"Verified
+out-of-container on openjdk-11: 28/28"*. That is a hand-rolled harness against a stub `Property`, and a
+stub cannot refuse a method the real class lacks — it is exactly as green either way. The out-of-container
+trick is what made this investigation fast, and it has one blind spot, now known: **it cannot validate an
+API surface.** Anything asserting against a core Openbravo type needs the real classpath before it
+counts.
+
+**What this does and does not change about §9.1.** Nothing in §9.1 is weakened: those results are live
+probes against the deployed module, in the database and in the server log — the strongest evidence class
+available here, and independent of whether any unit test runs. What is retracted is one *sentence* of
+§9's reason 2, corrected in place above. And the practical consequence is that the guard test written to
+stop the next missing call site is not yet guarding anything: it needs one real `./gradlew test
+--tests "com.etendoerp.go.*"` to become load-bearing.
