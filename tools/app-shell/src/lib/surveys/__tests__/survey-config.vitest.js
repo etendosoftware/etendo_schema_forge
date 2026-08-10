@@ -7,6 +7,7 @@ import {
   isSurveyTypeEnabled,
   getRemoteCannedResponses,
   loadRemoteSurveyConfig,
+  submitSurveyResponse,
   DEFAULT_SURVEY_GLOBAL_COOLDOWN_DAYS,
   DEFAULT_SURVEY_DISMISSED_COOLDOWN_DAYS,
   DEFAULT_SURVEY_MAX_PER_MONTH,
@@ -274,5 +275,102 @@ describe('loadRemoteSurveyConfig', () => {
       expect.any(Error),
     );
     expect(getSurveyConfig({}).maxPerMonth).toBe(DEFAULT_SURVEY_MAX_PER_MONTH);
+  });
+});
+
+describe('submitSurveyResponse', () => {
+  it('does nothing when apiBaseUrl is null/undefined, token is missing, or surveyKey is missing', async () => {
+    const fetchImpl = vi.fn();
+    await submitSurveyResponse({ apiBaseUrl: null, token: 'tok', surveyKey: 'nps', fetchImpl });
+    await submitSurveyResponse({ apiBaseUrl: undefined, token: 'tok', surveyKey: 'nps', fetchImpl });
+    await submitSurveyResponse({ apiBaseUrl: '/etendo', token: null, surveyKey: 'nps', fetchImpl });
+    await submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: null, fetchImpl });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('posts the survey response with a Bearer token, JSON content type, and full body', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
+
+    await submitSurveyResponse({
+      apiBaseUrl: '/etendo',
+      token: 'tok-123',
+      surveyKey: 'nps',
+      score: 9,
+      feedback: '  great product  ',
+      tags: ['fast', 'reliable'],
+      fetchImpl,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/response', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer tok-123',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        surveyKey: 'nps',
+        score: 9,
+        feedback: 'great product',
+        tags: ['fast', 'reliable'],
+      }),
+    });
+  });
+
+  it('still fetches when apiBaseUrl is an empty string (the real dev-mode value from getApiBase())', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
+
+    await submitSurveyResponse({ apiBaseUrl: '', token: 'tok', surveyKey: 'nps', fetchImpl });
+
+    expect(fetchImpl).toHaveBeenCalledWith('/sws/survey-config/response', expect.objectContaining({
+      method: 'POST',
+    }));
+  });
+
+  it('omits score, feedback, and tags from the body when not provided', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
+
+    await submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: 'csat_invoicing', fetchImpl });
+
+    expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/response', expect.objectContaining({
+      body: JSON.stringify({ surveyKey: 'csat_invoicing' }),
+    }));
+  });
+
+  it('omits feedback when it is only whitespace, and omits tags when the array is empty', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
+
+    await submitSurveyResponse({
+      apiBaseUrl: '/etendo',
+      token: 'tok',
+      surveyKey: 'nps',
+      feedback: '   ',
+      tags: [],
+      fetchImpl,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/response', expect.objectContaining({
+      body: JSON.stringify({ surveyKey: 'nps' }),
+    }));
+  });
+
+  it('logs a warning (and does not throw) when the response is not ok', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    const logger = { warn: vi.fn() };
+
+    await submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: 'nps', fetchImpl, logger });
+
+    expect(logger.warn).toHaveBeenCalledWith('[surveys] Failed to persist survey response', 500);
+  });
+
+  it('logs a warning (and does not throw) when fetchImpl rejects', async () => {
+    const error = new Error('network down');
+    const fetchImpl = vi.fn().mockRejectedValue(error);
+    const logger = { warn: vi.fn() };
+
+    await expect(
+      submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: 'nps', fetchImpl, logger }),
+    ).resolves.toBeUndefined();
+
+    expect(logger.warn).toHaveBeenCalledWith('[surveys] Failed to persist survey response', error);
   });
 });

@@ -549,6 +549,71 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
     assert.equal(storage.size, 0);
   });
 
+  it('treats a throwing storage.getItem as "not reset yet" and still attempts the reset (harmless retry)', async () => {
+    const calls = [];
+    const throwingStorage = {
+      getItem() {
+        throw new Error('storage inaccessible (private mode)');
+      },
+      setItem(key, value) {
+        calls.push(['setItem', key, value]);
+      },
+    };
+    const provider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage: throwingStorage,
+      loader: async () => ({
+        default: {
+          init() {},
+          reset() {
+            calls.push(['reset']);
+          },
+        },
+      }),
+    });
+
+    await assert.doesNotReject(() => provider.init());
+
+    // readResetFlag() swallowing the throw (returning null) is what let the reset
+    // proceed at all — reset() firing (and the flag write attempt after it) is the
+    // observable proof of that "not reset yet" fallback.
+    assert.deepEqual(calls.filter(c => c[0] === 'reset'), [['reset']]);
+    assert.equal(calls.filter(c => c[0] === 'setItem').length, 1);
+  });
+
+  it('swallows a throwing storage.setItem silently: reset still runs, no exception propagates', async () => {
+    const calls = [];
+    const throwingStorage = {
+      getItem() {
+        return null;
+      },
+      setItem() {
+        throw new Error('storage full / disabled cookies');
+      },
+    };
+    const provider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage: throwingStorage,
+      loader: async () => ({
+        default: {
+          init() {},
+          reset() {
+            calls.push(['reset']);
+          },
+        },
+      }),
+    });
+
+    await assert.doesNotReject(() => provider.init());
+
+    // The reset itself succeeded; only persisting the flag afterwards failed and
+    // was swallowed by writeResetFlag()'s own try/catch — no warning is logged for
+    // this path (unlike a failing client.reset(), which does warn).
+    assert.deepEqual(calls, [['reset']]);
+  });
+
   it('is skipped entirely when the provider is disabled: SDK never loaded, no flag set', async () => {
     const storage = createFakeStorage();
     let loadCount = 0;
