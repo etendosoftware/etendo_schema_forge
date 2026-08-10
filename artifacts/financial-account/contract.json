@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.20.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-05T11:53:18.060Z",
-  "checksum": "a9520b6d9bac12e3",
+  "updatedAt": "2026-08-07T17:40:05.883Z",
+  "checksum": "1f334a7cc764367e",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -247,6 +247,25 @@
             },
             "displayLogic": {
               "raw": "@Type@='B'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "writeofflimit",
+            "apiKey": "writeofflimit",
+            "column": "Writeofflimit",
+            "label": "Write-off Limit",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 2
+            },
+            "displayLogic": {
+              "raw": "@WriteOffLimitPreference@='Y' ",
               "evaluable": true
             }
           },
@@ -2743,7 +2762,7 @@
             "apiKey": "writeofflimit",
             "column": "Writeofflimit",
             "type": "amount",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -5251,6 +5270,14 @@
         "description": "Display logic for 'swiftCode' in account should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-account-writeofflimit",
+        "category": "displaylogic-evaluable",
+        "entity": "account",
+        "field": "writeofflimit",
+        "runner": "node",
+        "description": "Display logic for 'writeofflimit' in account should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-accountingConfiguration-fINAssetAcct",
         "category": "displaylogic-evaluable",
         "entity": "accountingConfiguration",
@@ -5609,6 +5636,14 @@
         "field": "swiftCode",
         "runner": "node",
         "description": "Display logic for 'swiftCode' in account should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-account-writeofflimit",
+        "category": "displaylogic-valid",
+        "entity": "account",
+        "field": "writeofflimit",
+        "runner": "node",
+        "description": "Display logic for 'writeofflimit' in account should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-accountingConfiguration-fINAssetAcct",
@@ -6057,6 +6092,14 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should be present in account"
+      },
+      {
+        "id": "t-field-presence-account-writeofflimit",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "writeofflimit",
+        "runner": "node",
+        "description": "Field 'writeofflimit' should be present in account"
       },
       {
         "id": "t-field-presence-accountingConfiguration-fINAssetAcct",
@@ -6665,6 +6708,14 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should have type 'string' in account"
+      },
+      {
+        "id": "t-field-type-account-writeofflimit",
+        "category": "field-type",
+        "entity": "account",
+        "field": "writeofflimit",
+        "runner": "node",
+        "description": "Field 'writeofflimit' should have type 'number' in account"
       },
       {
         "id": "t-field-type-accountingConfiguration-fINAssetAcct",
@@ -9378,14 +9429,6 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for account"
       },
       {
-        "id": "t-system-field-account-writeofflimit",
-        "category": "system-field",
-        "entity": "account",
-        "field": "writeofflimit",
-        "runner": "node",
-        "description": "System field 'writeofflimit' should exist in backend but not frontend for account"
-      },
-      {
         "id": "t-system-field-accountingConfiguration-account",
         "category": "system-field",
         "entity": "accountingConfiguration",
@@ -10094,24 +10137,24 @@
       }
     ],
     "summary": {
-      "total": 712,
+      "total": 715,
       "byCategory": {
         "action-endpoint": 21,
         "crud-flags": 5,
         "default-value-type": 29,
-        "displaylogic-evaluable": 45,
-        "displaylogic-valid": 45,
-        "field-presence": 76,
-        "field-type": 76,
+        "displaylogic-evaluable": 46,
+        "displaylogic-valid": 46,
+        "field-presence": 77,
+        "field-type": 77,
         "readonlylogic-evaluable": 29,
         "readonlylogic-valid": 29,
         "rule-declared": 225,
         "selector-endpoint": 16,
-        "system-field": 111,
+        "system-field": 110,
         "visibility": 5
       },
       "byRunner": {
-        "node": 712,
+        "node": 715,
         "junit": 0
       }
     }

@@ -57,7 +57,7 @@
         "country": { "visibility": "system" },
         "bankFormat": { "visibility": "discarded" },
         "typewriteoff": { "visibility": "discarded" },
-        "writeofflimit": { "visibility": "discarded" },
+        "writeofflimit": { "visibility": "editable" },
         "bankDigitcontrol": { "visibility": "discarded" },
         "accountDigitcontrol": { "visibility": "discarded" },
         "routingNo": { "visibility": "discarded" },

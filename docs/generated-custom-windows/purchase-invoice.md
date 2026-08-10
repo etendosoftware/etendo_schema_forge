@@ -911,3 +911,32 @@ This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including th
 line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
+
+### Write off the invoice difference (ETP-4797)
+
+When the amount entered covers **less** than the invoice outstanding, the modal now offers an
+`Ajustar diferencia de X €` toggle directly under the balance strip (which already spells the
+gap out, so no separate breakdown is repeated). Turning it on settles the invoice in full and stores
+the shortfall as `writeoffAmount`; leaving it alone is the previous behaviour — the invoice keeps the
+difference outstanding. **Off by default.**
+
+The control is `WriteoffToggleRow` from `components/contract-ui/WriteoffAdjustment.jsx`, shared with
+the bank-reconciliation payment-method modal so both entry points produce the same outcome — the
+whole point of the ticket. Its copy is direction-aware ("quedará pagada" for payments).
+
+Three constraints worth knowing:
+
+- **Native write-off, not a G/L item.** The amount lands on the `FIN_PaymentScheduleDetail` and its
+  `FIN_PaymentDetail` and posts against the business partner group's write-off account. There is no
+  accounting-concept selector and the copy deliberately does not mention one.
+- **Hidden while editing a draft.** An edited draft reconciles its already-linked PSD through
+  `PaymentDraftEditService.reapplyLinkedInstallmentPSD`, a Core call with no write-off input, so
+  offering the toggle there would promise something the backend cannot honour.
+- **Capped by the account's write-off limit.** `FIN_Financial_Account.Writeofflimit` disables the
+  toggle with an explanatory caption when the difference exceeds it; the backend re-checks. An unset
+  or zero limit means *no limit* — a deliberate divergence from Classic, documented in
+  `financial-account.md`.
+
+The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
+**not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
+different endpoint (`AddPaymentService`), and this modal never used it.

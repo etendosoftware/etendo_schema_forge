@@ -46,6 +46,12 @@ function toDalBody(payload) {
   // Reconciliation tolerance fields (only sent when explicitly changed in the edit modal).
   if ('dateTolerance' in payload) body.eMETGODateTolerance = payload.dateTolerance;
   if ('amountTolerance' in payload) body.eMETGOAmountTolerance = payload.amountTolerance;
+  // Write-off limit (ETP-4797). A physical AD column, so no EM_ prefix. An empty box is sent as
+  // null, not 0: null means "no limit", while 0 would forbid every write-off.
+  if ('writeoffLimit' in payload) {
+    const raw = payload.writeoffLimit;
+    body.writeofflimit = (raw === '' || raw == null) ? null : Number(raw);
+  }
   return body;
 }
 

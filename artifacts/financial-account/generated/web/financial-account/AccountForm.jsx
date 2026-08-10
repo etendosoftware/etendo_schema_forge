@@ -11,6 +11,7 @@ const fields = [
   { key: 'currentBalance', column: 'Currentbalance', type: 'number', label: 'Current Balance', required: true, readOnly: true, section: 'other', defaultValue: '0' },
   { key: 'iBAN', column: 'Iban', type: 'text', label: 'IBAN', section: 'other' },
   { key: 'swiftCode', column: 'Swiftcode', type: 'text', label: 'SWIFT Code', section: 'other' },
+  { key: 'writeofflimit', column: 'Writeofflimit', type: 'number', label: 'Write-off Limit', section: 'other' },
   { key: 'bankCode', column: 'Codebank', type: 'text', label: 'Bank Code', section: 'other' },
   { key: 'branchCode', column: 'Codebranch', type: 'text', label: 'Branch Code', section: 'other' },
   { key: 'partialAccountNo', column: 'Codeaccount', type: 'text', label: 'Partial Account No.', section: 'other' },

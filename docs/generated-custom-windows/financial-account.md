@@ -509,6 +509,47 @@ its own currency while booking the bank transaction(s) in the account currency:
   ETP-4503) is rejected with a clear error instead of a cryptic Core failure.
 - **Same currency:** unchanged — rate ONE, standard flow.
 
+#### Write off the invoice difference (ETP-4797)
+
+When the statement line settles an invoice for **less** than its outstanding amount — a 12,50 €
+invoice paid by a 12,00 € line — the invoice is normally left dragging 0,50 €. The payment-method
+modal now offers to write that shortfall off so the invoice is settled in full. **Opt-in and off by
+default**: leaving it alone reproduces the previous behaviour exactly.
+
+The modal grows two blocks below the method picker, rendered only when there is a gap: a three-row
+breakdown (`Importe del extracto` · `Factura {docNo} · {BP}` · `Diferencia`) and the
+`Ajustar diferencia de X €` toggle. Both come from
+`components/contract-ui/WriteoffAdjustment.jsx`, shared with `NewPaymentEntryModal` so the two
+entry points cannot drift; the decision logic is the pure `writeoffMath.js` beside it.
+
+Four things are non-obvious:
+
+- **It is Etendo's native write-off, NOT a G/L item.** The difference is stored as `writeoffAmount`
+  on the `FIN_PaymentScheduleDetail` and its `FIN_PaymentDetail`, and posts against the business
+  partner group's write-off account (`C_BP_GROUP_ACCT.WRITEOFF_ACCT`, falling back to
+  `C_ACCTSCHEMA_DEFAULT.WRITEOFF_ACCT`; resolved in Core's `DocFINPayment`). No accounting concept
+  is involved, so there is no selector — the toggle's "on" copy names the destination generically
+  ("se llevará a una cuenta contable") without implying a pick, which is accurate: the amount does
+  land in a real GL account, just one resolved from configuration rather than chosen here.
+- **Only offered for a single selected invoice.** `createInvoicePayments` allocates the line
+  greedily (`remaining.min(outstandingBase)` per invoice, stopping when it runs out), so with
+  several invoices only the boundary one is settled partially and the invoices past the cut receive
+  no payment at all. The "Σ invoices − line" figure would therefore overstate what actually gets
+  written off, so the blocks stay hidden and the modal behaves as before.
+- **Core does the work.** The whole backend change is threading a boolean into
+  `PaymentRegistrationService.linkPSDsToPayment`, which had the flag hardcoded to `false`; it reaches
+  `FIN_AddPayment.updatePaymentDetail`, whose create path either duplicates the schedule detail for
+  the difference (off) or stores it as `writeoffAmount` (on). The flag rides the `reconcileGroup`
+  payload as top-level `writeoffDifference`.
+- **The limit diverges from Classic on purpose.** `FIN_Financial_Account.Writeofflimit` (now
+  editable, surfaced in Edit account → reconciliation settings) caps the write-off, enforced both in
+  the UI and server-side in `ReconciliationHandler.assertWithinWriteoffLimit`. Classic only applies
+  it when the `WriteOffLimitPreference` preference is `'Y'`, and its comparison treats an unset or
+  zero limit as "block everything". The column has no default, is not mandatory, and the preference
+  does not exist in this instance — copying that literally would disable the feature on every
+  unconfigured account. Here **null or 0 means no limit**, and only a configured positive value can
+  reject.
+
 #### Partial-match display (ETP-4502 iteration 4)
 
 A statement line matched against less than its full amount (a single partial invoice, per above, or

@@ -99,6 +99,8 @@ async function persistAccountEdits({
   if (fields.currencyDirty) updates.currencyId = fields.currencyId;
   if (reconciliation?.dateDirty) updates.dateTolerance = reconciliation.dateTolerance;
   if (reconciliation?.amountDirty) updates.amountTolerance = reconciliation.amountTolerance;
+  // '' clears the limit back to "unset"; the mutation maps it to null.
+  if (reconciliation?.writeoffDirty) updates.writeoffLimit = reconciliation.writeoffLimit;
   if (Object.keys(updates).length > 0) {
     await updateAccount(account.id, updates);
   }
@@ -300,21 +302,34 @@ function useBankConnection(open, account, bankConnected, onSaved, onClose) {
 function useReconciliationSettings(open, account) {
   const [dateTolerance, setDateTolerance] = useState(3);
   const [amountTolerance, setAmountTolerance] = useState(0);
-  const [snapshot, setSnapshot] = useState({ dateTolerance: 3, amountTolerance: 0 });
+  // ETP-4797. Kept as a STRING so the box can be emptied: '' means "no limit", which is a real,
+  // distinct value from a configured 0 (which would forbid every write-off). Coercing to a number
+  // here would collapse the two.
+  const [writeoffLimit, setWriteoffLimit] = useState('');
+  const [snapshot, setSnapshot] = useState({
+    dateTolerance: 3, amountTolerance: 0, writeoffLimit: '',
+  });
 
   useEffect(() => {
     if (!open || !account) return;
     const dt = account.dateTolerance ?? 3;
     const at = Number(account.amountTolerance ?? 0);
+    const wl = account.writeoffLimit == null ? '' : String(account.writeoffLimit);
     setDateTolerance(dt);
     setAmountTolerance(at);
-    setSnapshot({ dateTolerance: dt, amountTolerance: at });
+    setWriteoffLimit(wl);
+    setSnapshot({ dateTolerance: dt, amountTolerance: at, writeoffLimit: wl });
   }, [open, account]);
 
   const dateDirty = dateTolerance !== snapshot.dateTolerance;
   const amountDirty = Number(amountTolerance) !== Number(snapshot.amountTolerance);
-  const dirty = dateDirty || amountDirty;
-  return { dateTolerance, setDateTolerance, amountTolerance, setAmountTolerance, dateDirty, amountDirty, dirty };
+  const writeoffDirty = String(writeoffLimit) !== String(snapshot.writeoffLimit);
+  const dirty = dateDirty || amountDirty || writeoffDirty;
+  return {
+    dateTolerance, setDateTolerance, amountTolerance, setAmountTolerance,
+    writeoffLimit, setWriteoffLimit,
+    dateDirty, amountDirty, writeoffDirty, dirty,
+  };
 }
 
 function ReconciliationSettingsSection({ ui, recon }) {
@@ -350,6 +365,22 @@ function ReconciliationSettingsSection({ ui, recon }) {
             className={FIELD_INPUT}
             data-testid="recon-amount-tolerance-input"
           />
+        </Field>
+        <Field
+          label={ui('writeoffAccountLimitLabel')}
+          data-testid="Field__writeoff-limit">
+          <Input
+            type="number"
+            min={0}
+            step={0.01}
+            value={recon.writeoffLimit}
+            onChange={(e) => recon.setWriteoffLimit(e.target.value)}
+            className={FIELD_INPUT}
+            data-testid="recon-writeoff-limit-input"
+          />
+          <p className="text-xs text-[hsl(var(--text-disabled))]">
+            {ui('writeoffAccountLimitHint')}
+          </p>
         </Field>
       </div>
     </div>
