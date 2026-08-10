@@ -62,4 +62,25 @@ describe('mapDimensionRows', () => {
       labelKey: 'glc.dim.project',
     });
   });
+
+  // QA edge case (ETP-4845): the filter/map guards both branch on `!row.type` (a
+  // falsiness check on the VALUE), not on whether the row actually HAS a `type`
+  // property. A row with a real backend `type: ''` (present, but empty string —
+  // as opposed to the mock-seed rows, which never carry a `type` key at all) is
+  // therefore indistinguishable from "no type property" and is passed through
+  // completely unchanged: kept in the list (not dropped like every other
+  // unrecognized/unsupported code such as 'ZZ'), and with no `labelKey` derived.
+  // If the real aggregate GET ever emits `type: ''` for a row (e.g. a malformed
+  // or not-yet-populated AD_Ref_List value), this row would render its raw
+  // (untranslated) `label` and would NOT be filtered out — reproducing bug 1's
+  // untranslated-name symptom for that one row, via a path bug 1's own fix does
+  // not cover. Documents current behavior; does not assert what SHOULD happen.
+  it('treats an empty-string type identically to "no type property" — passes through unfiltered, unmapped (documents a gap, not a fix)', () => {
+    const rows = [{ id: 'row-empty-type', type: '', label: 'Some Raw AD Label', active: true, mandatory: false }];
+    const mapped = mapDimensionRows(rows);
+    expect(mapped).toHaveLength(1);
+    expect(mapped[0]).toBe(rows[0]);
+    expect(mapped[0].labelKey).toBeUndefined();
+    expect(mapped[0].label).toBe('Some Raw AD Label');
+  });
 });
