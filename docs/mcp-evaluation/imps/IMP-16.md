@@ -496,3 +496,59 @@ over two months, not a record this investigation created.
 What is **not** established: nothing has been compiled against the Etendo classpath, and the two
 safety arguments in §3.7 are read from source rather than observed. §7 is the list of checks that
 must run after the build before any of this is credited.
+
+## 9. The write half, closed — 2026-08-10
+
+The 2026-08-10 run credited the read/emit half and reported the write half as *"worse than the item
+specified"*: `neo_update orderDate:"09-08-2026"` returned `status: 0` and stored `0015-02-16` (C11).
+It registered that as a new P1, IMP-24, on the reading that the emit-side mechanism had shipped and
+the write side needed a different fix.
+
+**That reading was wrong, and the correction is the whole content of this section: the write-side
+mechanism had shipped too. It was unreachable.**
+
+| Persist path | Coercion pass | Before 2026-08-10 |
+|---|---|---|
+| `POST /crud` (React form; every `neo_batch` op, via `BatchService` → `NeoCrudHandler#handleDefault`) | `coerceTypes` at `NeoCrudHandler:521` | ✅ |
+| `PUT`/`PATCH /crud` | `NeoTypeCoercionHelper.wrapForSmartclient` → `coerceTypes` | ✅ (via the wrapper, not the handler) |
+| `neo_create` | `coerceFieldTypes` at `McpToolRouter:499` | ✅ |
+| **`neo_update`** | — | ❌ **none** |
+
+`handleUpdate` mapped fields, resolved FK names, wrapped and called `jsonService.update`. Its own
+comment said so in as many words — *"handleUpdate has no other coercion pass"* — written about the FK
+resolver, and true of the date branch as well. So `"09-08-2026"` reached the lenient DAL parser
+untouched, and §2.1's arithmetic did the rest.
+
+Two things made this invisible for a full wave:
+
+1. **The two `wrapForSmartclient` implementations had drifted.** `NeoTypeCoercionHelper`'s calls
+   `coerceTypes` internally, so on REST the wrap doubles as a safety net; `McpToolRouterSupport`'s is
+   a copy that never gained it, and its Javadoc still claimed the two were *"identical"*. The REST
+   update path is protected by that accident; the MCP one was not protected by anything.
+2. **Unit tests could not see it.** `NeoTypeCoercionHelperTest` and `McpToolRouterSupportTest` both
+   assert `06-08-2026 → 2026-08-06`, and both passed the entire time `neo_update` was writing year
+   0015. The defect was a **missing call site**, a class of bug no test of the callee can reach.
+
+### What changed
+
+| File | Change |
+|---|---|
+| `mcp/McpToolRouter.java` | `handleUpdate` now calls `coerceFieldTypes(filteredBody, dalEntity)`, before the `NeoHandler` pre-hook — the same position `handleCreate` uses, so a hook that mirrors a date field (e.g. `mirrorAccountingDate`) copies an already-canonical value |
+| `mcp/McpToolRouterSupport.java` | the `wrapForSmartclient` Javadoc states that this wrapper does **not** coerce, that its REST twin does, and that the fix for a future gap is the missing call site — not adding a second pass here, which would give `neo_create` two and hide the next one |
+| `src-test/…/mcp/McpWriteVerbCoercionCallSiteTest.java` | **new.** Source-reading guard: any `McpToolRouter` method reaching `jsonService.add`/`update` must also call `coerceFieldTypes`. Fails on the pre-fix source (`violations: [handleUpdate]`), clean on the fixed one — both verified by running the extractor on a JDK against the real file, before and after. Asserts ≥ 2 persisting methods so a refactor cannot make it pass vacuously |
+| `docs/neo-headless.md` §4.3.1 | the per-path invocation table above, the pre-hook ordering rule, and the hook-must-emit-ISO corollary |
+
+**What this does not fix, deliberately:** an unparseable shape is still passed through with a `WARN`
+rather than refused (§6.1's phase 2). Rejecting loudly with an IMP-5-style 422 — Holded's HTTP 400 is
+the target shape — remains IMP-24's remit, and is now IMP-24's *whole* remit: the corruption vector
+the 2026-08-10 run measured is closed by a call site, not by a parser change.
+
+### Verification owed after the build
+
+§7's four checks stand. Add:
+
+| # | Check | Accepts |
+|---|---|---|
+| 5 | `neo_update` on a `sales-order` header with `orderDate: "09-08-2026"` | stored `2026-08-09` — **and** `accountingDate` unchanged unless a hook mirrored it, in which case also `2026-08-09`. This is C11 re-run; it is the one probe that decides IMP-24's status |
+| 6 | `neo_update` with `orderDate: "06/08/2026"` | the value is refused or errors loudly; nothing is stored in the first century. Confirms the `WARN`-and-pass-through boundary is where §6.1 says it is |
+| 7 | Server log during 5–6 | `[MCP] Normalized date 'orderDate': '09-08-2026' -> '2026-08-09'` on 5; a single `Unrecognized date format` `WARN` on 6 |
