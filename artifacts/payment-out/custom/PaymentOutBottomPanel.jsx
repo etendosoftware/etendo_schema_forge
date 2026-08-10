@@ -59,12 +59,12 @@ const METHOD_ICONS = {
 
 // ETP-4554 ("Migrate Artifact Theme Styles") swapped every neutral gray here (labels, field
 // icons, loading/empty text) for the `--status-info-*` (blue) token family instead of
-// `--muted-foreground` — the icons in particular went to `--status-info-bg` (#EFF6FF, near-white),
-// nearly invisible on a light card. `--status-success-fg` (the deposited-amount green) was mapped
-// correctly in the same commit, so this was a mis-mapping of the neutral grays specifically, not a
-// deliberate palette change. Restored to `--muted-foreground`, matching the original #6C6C89/#555B6D
-// and the sibling PaymentDetailSidebarBase.jsx, which already used it correctly for the same kind of
-// label text (found while verifying ETP-4797).
+// `--muted-foreground` — the icons in particular went to `--status-info-bg`, a near-white pale
+// blue, nearly invisible on a light card. `--status-success-fg` (the deposited-amount green) was
+// mapped correctly in the same commit, so this was a mis-mapping of the neutral grays
+// specifically, not a deliberate palette change. Restored to `--muted-foreground`, matching the
+// original mid-gray label/icon colors and the sibling PaymentDetailSidebarBase.jsx, which already
+// used it correctly for the same kind of label text (found while verifying ETP-4797).
 function FieldItem({ label, children, icon }) {
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
@@ -150,7 +150,7 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
       ) : (
         /* ETP-4554 mapped this box's border to hsl(var(--foreground)) (near-black) and the
            row dividers below to hsl(var(--card)) (white-on-white, invisible) — both were
-           originally the same light-gray #E8EAEF, which var(--status-neutral-border) matches
+           originally the same light neutral gray, which var(--status-neutral-border) matches
            exactly (found while verifying ETP-4797). */
         <div style={{ border: '1px solid var(--status-neutral-border)', borderRadius: 8, overflow: 'hidden', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 40 }}>

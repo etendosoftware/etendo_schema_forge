@@ -197,23 +197,25 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
     {
       label: ui(isIn ? 'cobroCreado' : 'pagoCreado'),
       date: createdDate,
-      // Draft dot: before ETP-4554 this was the hardcoded #FAAF00 (bright orange, L=49%).
-      // The migration mapped it to --status-warning-fg (#8A6100, L=27%) — much darker, since
-      // that token is meant for warning TEXT (needs contrast on a light bg), not a standalone
-      // dot. No warning-family token matches #FAAF00 (border is L=76%, too pale; bg is L=96%,
-      // near-white) — same "no exact token" situation as the confirmed-dot green below, so the
-      // literal hex is restored rather than force-fit (found while verifying ETP-4797).
+      // Draft dot: before ETP-4554 this was a bright, vivid orange (~49% lightness). The
+      // migration mapped it to --status-warning-fg, a much darker amber-brown (~27% lightness),
+      // since that token is meant for warning TEXT (needs contrast on a light bg), not a
+      // standalone dot. No warning-family token matches the original brightness (the border
+      // token is too pale, the bg token near-white) — same "no exact token" situation as the
+      // confirmed-dot green below, so the literal color is restored rather than force-fit
+      // (allowlisted in semanticThemeUsage.test.js; found while verifying ETP-4797).
       dot: isDraft ? '#FAAF00' : 'var(--status-success-fg)',
     },
     // Every confirm/reactivate ever recorded — a full cycle (confirm →
     // reactivate → confirm) shows as three separate rows, not just the
     // latest occurrence of each type.
-    // Confirmed dots are a lighter green than the "created" dot's --status-success-fg: before
-    // ETP-4554 ("Migrate shared window styles") this was the hardcoded #2DCA72 — sitting almost
-    // exactly halfway (48% lightness) between --status-success-fg (#17663A, 25%) and
-    // --status-success-border (#84E4AE, 71%), so neither existing token reproduces it. Restored
-    // the literal hex rather than force-fitting a token that's visibly too dark or too pale
-    // (found while verifying ETP-4797).
+    // Confirmed dots are a lighter, brighter green than the "created" dot's
+    // --status-success-fg: before ETP-4554 ("Migrate shared window styles") this was a
+    // mid-lightness green sitting almost exactly halfway between --status-success-fg (dark
+    // forest green, ~25% lightness) and --status-success-border (pale mint, ~71% lightness), so
+    // neither existing token reproduces it. Restored the literal color rather than force-fitting
+    // a token that's visibly too dark or too pale (allowlisted in semanticThemeUsage.test.js;
+    // found while verifying ETP-4797).
     ...events.map(ev => ({
       label: ui(eventLabelKey(ev)),
       confirmedAt: new Date(ev.at),

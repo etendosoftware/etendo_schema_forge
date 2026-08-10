@@ -671,8 +671,8 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
  *
  * `ghost-danger` (the Reactivar/Undo button): full-opacity `--destructive` border and an explicit
  * `hover:text` pin were restored here after ETP-4554 ("Migrate shared theme styles") diluted the
- * border to `--destructive/0.3` — the pre-token version was a solid `#FBB1C4`, not an alpha-reduced
- * red — and never pinned a hover text color, leaving the base `Button` outline variant's own
+ * border to `--destructive/0.3` — the pre-token version was a solid light pink-red, not an
+ * alpha-reduced one — and never pinned a hover text color, leaving the base `Button` outline variant's own
  * `hover:text-accent-foreground` free to win on hover and turn the label gray instead of staying
  * red like Figma shows (found while verifying ETP-4797).
  */
