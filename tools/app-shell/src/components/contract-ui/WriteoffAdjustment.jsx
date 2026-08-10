@@ -110,9 +110,10 @@ export function WriteoffToggleRow({ checked, onCheckedChange, amount, currency,
   const ui = useUI();
   const money = formatCurrency(currency, amount);
   const direction = isReceipt ? 'Receipt' : 'Payment';
+  const captionKey = checked ? `writeoffAdjustOn${direction}` : `writeoffAdjustOff${direction}`;
   const caption = blocked
     ? ui('writeoffAdjustLimitExceeded', { limit: formatCurrency(currency, Number(limit) || 0) })
-    : ui(checked ? `writeoffAdjustOn${direction}` : `writeoffAdjustOff${direction}`, { amount: money });
+    : ui(captionKey, { amount: money });
 
   return (
     <div
