@@ -34,6 +34,19 @@ Both servers were connected in Claude Code and driven with live calls:
 
 14 live calls back the findings (full log in §11). Out of scope: latency benchmarking, and any evaluation of the underlying products beyond what each MCP surfaces. No records were mutated in either tenant — every call was read-only or an intentional error probe.
 
+### 2.1 Context cost — measured from the first run after 2026-08-10
+
+This benchmark originally counted **calls** and scored **field ratios**, and neither sees how much of the agent's context a server consumes. That was a gap, not a scoping decision: a response can be 100 % signal by the §7.2 measure and still be the 61,963-char `neo_schema` dump, and a payload that does not fit the context window is a failed call whatever its status code. Context cost is therefore **in scope**, measured as **ACE** (registry §2.6) and reported beside MARI, never inside it — verbosity is not monotonic with quality, so an index that penalised bytes would penalise IMP-5's richer error envelopes and IMP-18's added warning.
+
+What is measured, per run, on both servers:
+
+- **ACE-p** — bytes of tool catalog (names, descriptions, input schemas) entering the context before the agent acts. A fixed, unavoidable, once-per-session cost. Structurally favours Etendo GO's ~14 generic verbs over Holded's ~180 explicit tools (§3).
+- **ACE-v** — bytes exchanged (request + response) to complete each frozen-suite task from a cold start, counting the same calls M1 counts. Reported per task plus the **median** ratio, so a single full dump cannot decide the index. Structurally favours Holded, which pre-paid in ACE-p the introspection Etendo GO performs at runtime.
+
+The two are **never summed**: they point in opposite directions, and that asymmetry is the finding. The pair's actual output is the **break-even task count** — how many tasks a session must run before the generic-verb model stops being the cheaper one — together with a statement of which side of it a realistic session falls on.
+
+Measurement discipline, because the failure mode here is fabricated precision: bytes come from `wc -c` on a payload saved verbatim, never from a count recalled from memory. **Token figures are estimates and are always labelled as such**, with the divisor stated (`bytes ÷ 4` as a floor for JSON) — this harness exposes no per-call token usage, and a number presented as measured when it was derived would be worse than no number. The 2026-08-05, 08-06 and 08-10 runs saved no payloads and therefore carry **no ACE figure ever**; reconstructing them would be invention.
+
 ---
 
 ## 3. Architecture Contrast
