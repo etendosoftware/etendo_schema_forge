@@ -1,8 +1,8 @@
 {
-  "version": "0.36.0",
+  "version": "0.44.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-07-14T01:05:39.068Z",
-  "contractChecksum": "0fbe017944ec853e",
+  "updatedAt": "2026-07-22T10:47:48.420Z",
+  "contractChecksum": "33db276aa6af6feb",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -1039,7 +1039,8 @@
         "C_BPartner_ID": "Contacto",
         "DatePromised": "Fecha de entrega esperada",
         "DeliveryStatusPurchase": "Estado de recepción",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -1180,12 +1181,6 @@
           "etgoTotalDiscount": {
             "defaultValue": "0"
           },
-          "accountingDate": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
-            "defaultValue": "@#Date@"
-          },
           "deliveryTerms": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'",
@@ -1308,6 +1303,7 @@
             "readOnlyLogic": "@Posted@='Y'"
           },
           "currency": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "@C_Currency_ID@"
           }
@@ -1444,8 +1440,7 @@
         "listPrice",
         "tax",
         "unitPrice",
-        "lineNetAmount",
-        "currency"
+        "lineNetAmount"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -1643,8 +1638,7 @@
           "listPrice",
           "tax",
           "unitPrice",
-          "lineNetAmount",
-          "currency"
+          "lineNetAmount"
         ]
       },
       {
@@ -1660,5 +1654,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "22a0a614e6b084ac"
+  "checksum": "144e611cb49c001c"
 }

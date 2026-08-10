@@ -4,6 +4,7 @@
     "category": "inventory",
     "name": "Physical Inventory",
     "statusField": "processed",
+    "hideDeleteWhenComplete": true,
     "processOverrides": {
       "processNow": {
         "requiresLines": true
@@ -70,6 +71,7 @@
   "entities": {
     "header": {
       "name": "inventory",
+      "javaQualifier": "inventory",
       "fields": {
         "warehouse": {
           "grid": true,
@@ -111,7 +113,9 @@
           ]
         },
         "project": {
-          "form": false
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "processNow": {
           "visibility": "system"
@@ -126,7 +130,9 @@
           "visibility": "discarded"
         },
         "costCenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "posted": {
           "visibility": "readOnly",
@@ -180,6 +186,16 @@
           "label": "User Count",
           "grid": true,
           "gridOrder": 4,
+          "grow": true,
+          "columnWidth": 192,
+          "readOnlyLogic": null
+        },
+        "etgoQtydiff": {
+          "visibility": "readOnly",
+          "label": "Difference",
+          "columnType": "signedDelta",
+          "grid": true,
+          "gridOrder": 5,
           "grow": true,
           "columnWidth": 192,
           "readOnlyLogic": null

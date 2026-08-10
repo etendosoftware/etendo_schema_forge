@@ -3,7 +3,7 @@ const TITLE_STYLE = {
   fontWeight: 600,
   lineHeight: '28px',
   textAlign: 'center',
-  color: '#121217',
+  color: 'hsl(var(--foreground))',
 };
 
 const SUBTITLE_STYLE = {
@@ -11,7 +11,7 @@ const SUBTITLE_STYLE = {
   fontWeight: 400,
   lineHeight: '16px',
   textAlign: 'center',
-  color: '#282833',
+  color: 'hsl(var(--foreground))',
 };
 
 const BTN_BASE = {
@@ -25,18 +25,18 @@ const BTN_BASE = {
 const BTN_VARIANTS = {
   secondary: {
     ...BTN_BASE,
-    background: '#FFFFFF',
-    border: '1px solid #D1D4DB',
-    boxShadow: '0px 1px 2px rgba(18,18,23,0.05)',
-    color: '#121217',
-    iconColor: '#828FA3',
+    background: 'hsl(var(--card))',
+    border: '1px solid hsl(var(--border-control))',
+    boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
+    color: 'hsl(var(--foreground))',
+    iconColor: 'hsl(var(--text-disabled))',
   },
   primary: {
     ...BTN_BASE,
-    background: '#121217',
+    background: 'hsl(var(--foreground))',
     border: 'none',
-    color: '#FFFFFF',
-    iconColor: 'rgba(255,255,255,0.9)',
+    color: 'hsl(var(--card))',
+    iconColor: 'hsl(var(--background) / 0.9)',
   },
 };
 

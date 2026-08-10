@@ -10,6 +10,8 @@ How to extend, customize, and hook into NEO Headless endpoints without modifying
 
 NEO Headless is metadata-driven: three DB tables (`ETGO_SF_SPEC`, `ETGO_SF_ENTITY`, `ETGO_SF_FIELD`) control what is exposed and how. For most use cases, configuration alone is enough. When configuration isn't sufficient, the **NeoHandler CDI hook** system lets you inject custom Java logic at any endpoint.
 
+**Not what you're looking for?** This guide covers hooking into *existing* CRUD/process/report specs (pre/post-hooks on entities already backed by `ETGO_SF_SPEC`). If you're instead adding a brand-new, standalone Etendo-GO-authored webhook (like `SFListMenu`/`SFWindowAccessMap`/`SFRolesOverview`), see `com.etendoerp.go/docs/neo-headless.md` §4.10–4.11 for the **NEO pseudo-spec bridge** pattern — a different extension point, unrelated to `NeoHandler`, that avoids the Webhooks module's `SMFWHE_DEFINEDWEBHOOK_ROLE` grant table (wiped by `update.database`).
+
 ```
 Configuration-only          Code-based
 (zero Java)                 (NeoHandler)
@@ -89,6 +91,72 @@ FK selectors are auto-detected from AD_Reference types (TableDir `19`, Table `18
 - `@AD_Org_ID@`, `@AD_Client_ID@`, `@AD_User_ID@`, `@AD_Role_ID@` — resolved from session
 - Any other `@param@` — passed as query parameters from the frontend
 
+### 1.5 Process Precondition Validation
+
+Some legacy processes (PL/pgSQL / classic) only validate their requirements **after** they start running, returning late, opaque errors. Example: "Create Amortization" (AD_Process `800125`, `Processed` button on `A_Asset`) fails inside `A_ASSET_POST` with `Period not defined.` (missing usable life) or `The Currency field must be defined...` (missing currency), without telling you which field to fix.
+
+**Precondition Validation** is a **generic, declarative** choke-point in `NeoProcessService.executeProcess` that runs right after `validateMandatoryParams` and **before** the process executes. If any precondition is unmet it returns a structured `400` **before** firing the legacy process, listing the missing NEO fields.
+
+**There is no per-window logic in Java** — everything is declared as data in `ETGO_SF_ENTITY.PRECONDITIONS`. The validator (`NeoProcessPreconditionValidator`) is static and pure; the condition evaluator (`PreconditionConditionEvaluator`) is a dedicated server-side evaluator (NOT the browser's `DynamicExpressionParser`, which emits JavaScript).
+
+#### JSON shape (`ETGO_SF_ENTITY.PRECONDITIONS`)
+
+Keyed by `AD_Process_ID`. Each rule: `field` (required), `requiredWhen` (optional), `message` (optional).
+
+```json
+{
+  "800125": [
+    { "field": "usableLifeMonths", "requiredWhen": "@calculateType@ != 'PE' && @amortize@ != 'YE'" },
+    { "field": "usableLifeYears",  "requiredWhen": "@amortize@ == 'YE'" },
+    { "field": "currency" }
+  ]
+}
+```
+
+- `field` — NEO field identifier (camelCase DAL property), not the raw DB column.
+- `requiredWhen` — optional condition; if absent the precondition is unconditional; if present and it evaluates to `false`, the rule is skipped.
+- `message` — **reserved / not yet surfaced.** Accepted for forward-compatibility but the runtime returns only a single generic `"Preconditions not met"` message plus the `missing` field list; this per-rule value is not read or emitted.
+
+> **Assets mapping (verified against `Asset.java`):** `@amortize@` = DB `Assetschedule` (values `YE`/`MO`, "Amortize"). It is NOT `depreciationType` (that is a different column, `Amortizationtype`). `@calculateType@` = DB `amortizationcalctype` (values `PE`/`TI`).
+
+#### `requiredWhen` syntax
+
+References record fields with `@prop@`, quoted literals, and operators `==`, `!=`, `&&`/`&` (AND), `||` (OR). String-based comparison; a null field is never equal to a non-null literal.
+
+#### Response when preconditions are unmet
+
+```json
+{
+  "error": {
+    "code": "PRECONDITIONS_UNMET",
+    "status": 400,
+    "message": "Preconditions not met",
+    "missing": ["usableLifeMonths", "currency"]
+  }
+}
+```
+
+#### Behavior (no-op / fail-open)
+
+- No tab context (`inpTabId`), no `SFEntity` matching that tab, or no resolvable record → **no-op** (continues; standalone process-specs already use `validateMandatoryParams`).
+- The record is resolved by `params.recordId` / `inpRecordId` / the table's key column.
+- Any unexpected validator error is swallowed (**fail-open**): the process runs and the legacy guards remain the backstop — execution is never blocked by a validator bug.
+
+#### How it is declared (reusable)
+
+The declaration is written to the column via the Schema Forge pipeline (`decisions.json` → `push-to-neo.js`), so any window can declare preconditions without touching Java. Assets is the **first consumer**, not a special case in code.
+
+#### When to declare preconditions (scope)
+
+Preconditions fit a **narrow** case: a field that is **conditionally required but NOT AD-mandatory** — the record saves fine without it, yet a specific process needs it (e.g. an asset's `usableLifeMonths` / `currency` for Create Amortization). Do **not** use them for:
+
+- **AD-mandatory fields** — they can never reach the process null, so there is nothing to check.
+- **Failures that are not about a missing record field** — `no lines`, `already processed`, `period closed`, `business partner blocked`, org/doctype config, stock. These are line/state/environment checks **outside** this model.
+
+A review of the NEO-exposed PL processes (Process Order / Invoice / Shipment, period open-close, movements, amortization posting, BOM explode) found that **Create Amortization is essentially the only good fit** — every other process fails on the out-of-model conditions above. Surfacing those up front would require extending the model with new check types (child-rows-exist, document-status, related-state), which is not implemented.
+
+> **Cross-reference:** for genuinely custom process logic (beyond validating declarative preconditions) use the `NeoHandler` pattern (`@Named` qualifier on `ETGO_SF_ENTITY.JAVA_QUALIFIER`) described in [§2. NeoHandler: CDI Hook System](#2-neohandler-cdi-hook-system).
+
 ---
 
 ## 2. NeoHandler: CDI Hook System
@@ -152,6 +220,31 @@ matches by `@Named` value — no servlet restart needed (just compile + deploy).
 > Points" for the general shape of the fix this handler implements.
 
 Place handlers in: `src/com/etendoerp/go/schemaforge/handlers/` (one class per window/entity).
+
+> **⚠️ `Java_Qualifier` must be declared in TWO places, not one — both are required (ETP-4670).**
+> Setting it only in the DB (or only via a one-off `SFUpsertEntity`/SQL `UPDATE`) is not durable. It
+> must ALSO be declared in the artifact's `decisions.json`, or the next `push-to-neo.js` run silently
+> wipes it:
+> 1. **`artifacts/<window>/decisions.json`** — `"javaQualifier": "<name>"` at the entity level
+>    (`entities.<entity>.javaQualifier`). `push-to-neo.js` regenerates the `ETGO_SF_ENTITY` rows for
+>    the whole spec from the artifact; a `javaQualifier` not present there is not written, clearing
+>    whatever the DB had.
+> 2. **`src-db/database/sourcedata/ETGO_SF_ENTITY.xml`** (the module's own DB seed) —
+>    `<JAVA_QUALIFIER><![CDATA[<name>]]></JAVA_QUALIFIER>` on that entity's row. `update.database`
+>    reimports this seed and overwrites the live DB row, so a qualifier missing from the seed is
+>    lost on the next database sync even if `decisions.json` has it.
+>
+> **Symptoms when only one of the two is set (or neither):** the handler stops running with **no
+> error and no log line** — the request is served exactly as if no hook existed at all. The
+> `java_qualifier` column on `etgo_sf_entity` for that row reads empty/`NULL`. This is easy to miss
+> because nothing fails loudly; it just silently regresses to default CRUD behavior.
+>
+> `decisions.json` already supports `javaQualifier` for detail/child entities — e.g. `price`,
+> `stock`, and `accounting` on the Product window (`docs/generated-custom-windows/product.md`) all
+> declare it. The trap is specifically forgetting it on the **header** entity (e.g. `product`,
+> `productCategory`), since header entities are edited less often and it's easy to add a handler,
+> wire the DB row by hand, verify it works, and never circle back to add the `decisions.json` +
+> `ETGO_SF_ENTITY.xml` seed entries — until the next regen or `update.database` erases it.
 
 ### 2.3 Hook Dispatch Flow
 
@@ -361,6 +454,112 @@ public NeoResponse afterHandle(NeoContext ctx) {
 }
 ```
 
+### Post-hook: Sync a Related Entity from a Parent Field
+
+**Trigger condition:** suspect this problem whenever a single-value column on the saved entity
+is meant to drive rows in a *different* table that real backend logic actually reads (login,
+access checks, reporting), but the Go SPA can only sensibly expose a single-select control for
+it — the target table's own selector may be unusable for populating that control (e.g.
+restricted to values that already exist, useless for assigning a *new* one).
+
+**Example (ETP-4512):** `AD_User.Default_Ad_Role_ID` is the only column the Go SPA's
+single-role-per-user dropdown can write to, but real login/window-access checks read
+`AD_User_Roles`, not `Default_Ad_Role_ID`. `UserRoleAssignmentHandler` (`@Named("user")`)
+deletes any existing `AD_User_Roles` row(s) for the saved user and inserts exactly one new row
+for the role currently in `Default_Ad_Role_ID`, keeping the two in sync and enforcing at most
+one active role:
+
+```java
+@Override
+public NeoResponse afterHandle(NeoContext context) {
+  if (context.getEndpointType() != NeoEndpointType.CRUD) return null;
+  String method = context.getHttpMethod();
+  if (!"PUT".equalsIgnoreCase(method) && !"PATCH".equalsIgnoreCase(method)) return null;
+  String userId = context.getRecordId();
+  if (userId == null) return null;
+  try {
+    OBContext.setAdminMode(true);
+    try {
+      syncUserRole(userId); // delete existing AD_User_Roles rows, insert one for defaultRole
+    } finally {
+      OBContext.restorePreviousMode();
+    }
+  } catch (Exception e) {
+    log.warn("sync error for user {}: {}", userId, e.getMessage(), e);
+  }
+  return null; // side effect only, never replaces the response
+}
+```
+
+Real implementation: `UserRoleAssignmentHandler` (ETP-4512, `AD_User_Roles` from
+`Default_Ad_Role_ID`). Never fail the parent request over this side effect — log and swallow,
+same as `TbaiConfigSequenceHandler`'s sequence-assignment pattern.
+
+### Post-hook: Guard a Field Against Callout Cross-Updates
+
+**Trigger condition:** suspect this problem whenever a field must be *independent* from another
+field on the same document, but a classic Etendo callout on that other field auto-fills it as a
+side effect. `NeoCalloutService` re-executes the same classic callout server-side that Classic UI
+runs client-side, so the coupling reproduces in NEO even though the frontend never asked for it —
+editing field A silently overwrites field B's value (or the user's own prior edit to it) the next
+time A's callout fires.
+
+This was first solved narrowly for currency (ETP-4029, `blockCalloutCurrencyUpdate`: block a
+callout-driven currency change unless the user edited currency directly) and generalized into a
+reusable, field-name-parameterized helper in ETP-4531 to decouple `accountingDate` (`DateAcct`)
+from each document's own date (`invoiceDate`/`movementDate`/etc.) on Sales Invoice, Purchase
+Invoice, Goods Receipt, and Goods Shipment — four unrelated classic callouts
+(`SifInvoiceOperationDateCallout`/`SE_Invoice_AccountingDate`, `SL_InOut_AccountingDate`, ...) all
+carrying the exact same anti-pattern on every postable-document table.
+
+**The guard, generalized:** `NeoHandlerUtils.blockCalloutFieldUpdate(updates, triggerField,
+fieldName)` removes a callout-driven update to `fieldName` from the callout response's `updates`
+map, *unless* `fieldName` is itself the field that triggered the callout (in which case the user
+edited it directly and the update must pass through). Call it from your handler's `afterCallout()`:
+
+```java
+@Override
+public NeoResponse afterCallout(NeoContext context) {
+  NeoHandlerUtils.CalloutFields fields = NeoHandlerUtils.extractCalloutFields(context);
+  if (fields == null) return null;
+  NeoHandlerUtils.blockCalloutFieldUpdate(fields.updates(), fields.triggerField(), "accountingDate");
+  return null; // keep the (mutated) previous result
+}
+```
+
+**⚠️ One guard point is not enough — the same classic callout also fires outside the interactive
+callout endpoint.** `afterCallout()` only covers `POST /{spec}/{entity}/callout` (the per-field
+interactive callout). Two other paths execute the identical classic callout and are *not* routed
+through any `NeoHandler` hook:
+- `GET /{spec}/{entity}/defaults` (new-record form bootstrap) — `NeoDefaultsService` runs the
+  callout cascade to resolve field defaults before the form ever renders.
+- `POST` create — the callout cascade re-runs during record creation, and relying on "the field
+  survives if it was already a body key" is not a real guarantee.
+
+Both paths funnel through the single choke point `NeoDefaultsCascadeHelper.processCalloutForField`,
+so the fix is a second call to the *same* `blockCalloutFieldUpdate` helper there — a table/property-name
+check, not a per-window branch, alongside the other cross-cutting invariants already hardcoded in
+that helper family (PK/audit-column skips, `AD_Reference_ID` literals). Guarding only `afterCallout()`
+and skipping `processCalloutForField` leaves the GET `/defaults` and POST create paths silently
+unprotected — cover all three entry points for any field-independence guard of this shape.
+
+Real implementations: `AbstractInvoiceHeaderHandler#blockCalloutCurrencyUpdate` (ETP-4029, currency).
+
+**⚠️ Superseded (2026-07-17):** the `accountingDate` implementation of this pattern —
+`AbstractInvoiceHeaderHandler#afterCallout` (shared by `SalesInvoiceHeaderHandler` and
+`PurchaseInvoiceHeaderHandler`), `GoodsReceiptHeaderHandler#afterCallout`,
+`GoodsShipmentHeaderHandler#afterCallout`, and the `accountingDate` call into
+`NeoDefaultsCascadeHelper#processCalloutForField` — is being removed. ETP-4531 was redefined from
+"keep document date and accounting date independent" to "unify them: show a single visible date,
+write it to both columns internally." The native classic-AD callout cascade
+(`SE_Invoice_AccountingDate` / `SL_InOut_AccountingDate`) is now intentionally left unguarded so it
+flows through on save. See `docs/feedback.md` ("[2026-07-17] ETP-4531 — Scope redefinition...") and
+the frontend-side change (`accountingDate` → `visibility: system` in
+`sales-invoice`/`purchase-invoice`/`goods-shipment`/`goods-receipt`/`purchase-order`'s
+`decisions.json`, in `etendo_schema_forge`). The generic `blockCalloutFieldUpdate` helper and its
+three-entry-point coverage requirement above remain valid guidance for the next field-independence
+guard (e.g., currency, ETP-4029) — only the `accountingDate` application of it is obsolete.
+
 ### Pre-hook: Intercept Completion to Preserve Classic Hooks/Extension Points
 
 **Trigger condition:** suspect this problem whenever a document's `DocAction` column is backed by
@@ -427,6 +626,55 @@ public NeoResponse handle(NeoContext ctx) {
 Real implementations: `GlJournalHeaderHandler#completeJournal` (ETP-4244),
 `AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` (ETP-4388, shared by
 `SalesInvoiceHeaderHandler` and `PurchaseInvoiceHeaderHandler`).
+
+### Pre-hook: Fill AD-Mandatory Columns the Window Does Not Expose
+
+**Trigger condition:** a column is mandatory in the Application Dictionary but the window has
+no editable field for it, so a create built only from the visible fields fails validation.
+This is the shape that most often tempts a client-side workaround — the front-end knows the
+values it is about to send, so it is trivially easy to patch the payload there. Don't: the
+app-shell is metadata-driven and must stay entity-agnostic, and a client-side fix covers only
+the path that goes through the form (never `/batch` imports, MCP, or any other API caller).
+
+Before writing a handler, check whether `NeoHiddenMandatoryDefaultsResolver` already covers
+the case. It resolves mandatory AD columns automatically, but only when **both** hold:
+
+- the column is **not** exposed as a Schema Forge field (`ETGO_SF_FIELD`), and
+- the column has an AD default value to resolve.
+
+Anything derived from *other values in the same request* is out of its reach — it runs on the
+`/defaults` (pre-fill) path, before the user has typed anything. That derivation belongs in a
+`handle()` pre-hook, which mutates `ctx.getRequestBody()` and returns `null` so the default
+CRUD path still runs:
+
+```java
+@Named("contactHandler")   // ETGO_SF_ENTITY.Java_Qualifier of the contacts spec's `contact`
+public class ContactHandler implements NeoHandler {
+  @Override
+  public NeoResponse handle(NeoContext ctx) {
+    JSONObject body = ctx.getRequestBody();
+    if (body == null || !isWrite(ctx.getHttpMethod())) return null;
+    deriveName(ctx, body);                                     // AD_User.Name
+    if ("POST".equals(ctx.getHttpMethod())) deriveUsername(body); // AD_User.Username
+    return null;                                               // continue to default CRUD
+  }
+}
+```
+
+Two rules this recipe encodes:
+
+- **Truncate to the column length.** The derived value can exceed the target column even when
+  its source fits — `C_BPartner.Value` is `VARCHAR(40)` while `Name` is 60, so using the name
+  verbatim as a placeholder search key fails with *"Value too long. Length 48, maximum
+  allowed 40"*.
+- **Derive on POST only, unless the update genuinely needs it.** Rewriting a derived column on
+  every update can silently reassign a value other systems depend on — `AD_User.Username` is
+  unique and is the login identifier, so `ContactHandler` never touches it on PATCH/PUT.
+
+Real implementations (ETP-4156): `ContactHandler` (`AD_User.Name` / `AD_User.Username` for the
+contacts spec), `BusinessPartnerHandler#deriveNameFromPerson` + its placeholder `searchKey`
+(`C_BPartner`). Both replaced hardcoded entity-name branches in the app-shell's generic
+`useEntity` hook.
 
 ---
 

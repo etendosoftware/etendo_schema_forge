@@ -19,7 +19,9 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   CLIENT: 'client',
   COUNT: 'count',
   DURATION_MS: 'durationMs',
+  ENABLED: 'enabled',
   ENTITY: 'entity',
+  FLAG_KEY: 'flagKey',
   HAS_COMMENT: 'hasComment',
   OPERATION: 'operation',
   POSITION: 'position',
@@ -32,7 +34,9 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   STEP: 'step',
   SUPPORT_REQUESTED: 'supportRequested',
   TYPE: 'type',
+  USERNAME: 'username',
   VALUE: 'value',
+  VARIANT: 'variant',
 });
 
 function defineEvent(name, { channels = [], properties = [] } = {}) {
@@ -66,6 +70,18 @@ export const OBSERVABILITY_PROPERTY_KEYS = OBSERVABILITY_PROPERTY_VALUES;
 export const OBSERVABILITY_EVENTS = Object.freeze({
   APP_STARTED: defineEvent('app_started', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  // Feature-flag exposure, emitted once per flag/value per session so a variant
+  // can be correlated with the funnel that follows it.
+  FEATURE_FLAG_EVALUATED: defineEvent('feature_flag_evaluated', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.FLAG_KEY,
+      OBSERVABILITY_PROPERTY_KEYS.ENABLED,
+      OBSERVABILITY_PROPERTY_KEYS.VARIANT,
+      OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
+      OBSERVABILITY_PROPERTY_KEYS.USERNAME,
+    ],
   }),
   WINDOW_OPENED: defineEvent('window_opened', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],

@@ -11,18 +11,21 @@ import { login } from '../helpers/auth.js';
  * pre-select EUR) and the create POST against the `account` entity.
  *
  * Mock mode only: installs the `financial-account` selector/defaults/create
- * handlers and the `financial-accounts-page` list AFTER the generic /sws/**
- * stub seeded by login() so the specific handlers win (Playwright matches
- * routes in reverse registration order). Within installCreateMocks the POST
- * route is registered FIRST so the more specific selectors/defaults routes
- * (registered later) take priority over it.
+ * handlers and the `account` list AFTER the generic /sws/** stub seeded by
+ * login() so the specific handlers win (Playwright matches routes in reverse
+ * registration order). Within installCreateMocks the POST route is registered
+ * FIRST so the more specific selectors/defaults routes (registered later) take
+ * priority over it.
+ *
+ * ETP-4658: the wizard is now reached from the `financial-account` WINDOW list
+ * (`/financial-account` → generated ListView + the AccountsHeaderTable slot), not
+ * from the retired `/finance/accounts` page. So the list rows come from
+ * `GET /sws/neo/financial-account/account?…` (the same W spec the create POST
+ * targets, hence the query-string RegExp route to keep the two apart) and carry
+ * the generic DataTable `row-{id}` testids instead of `account-row-{id}`.
  *
  * Default app locale is es_ES (see useLocaleState.DEFAULT_LOCALE), so the copy
  * assertions target the Spanish strings.
- *
- * Status: authored to follow the existing mocked-spec patterns; run with
- *   cd e2e && npm test -- tests/flows/financial-account-create.mocked.spec.js
- * (requires the same dev server the sibling financial-account specs use).
  */
 
 const ACCOUNTS = [
@@ -36,7 +39,7 @@ const ACCOUNTS = [
     iban: 'ES1212340000000000000001',
     isDefault: true,
     pendingCount: 0,
-    psd2Connected: false,
+    bankConnected: false,
   },
 ];
 
@@ -109,12 +112,16 @@ async function installCreateMocks(page, onCreate) {
     });
   });
 
-  // List endpoint — used by the Cuentas page (and re-fetched after create).
-  await page.route('**/sws/neo/financial-accounts-page', async (route) => {
+  // List endpoint — the window list's own useEntity fetch (and its refresh after a create).
+  // Matched by RegExp on the query string so it never swallows the POST to the same path.
+  await page.route(/\/sws\/neo\/financial-account\/account\?/, async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ response: { data: { accounts: ACCOUNTS, summary: SUMMARY } } }),
+      body: JSON.stringify({
+        response: { data: ACCOUNTS, totalRows: ACCOUNTS.length, summary: SUMMARY },
+      }),
     });
   });
 }
@@ -130,7 +137,7 @@ test.describe('Financial Account Create (T2) — mocked', () => {
       created = true;
     });
 
-    await page.goto('/finance/accounts');
+    await page.goto('/financial-account');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     // Open the wizard from the Cuentas toolbar.
@@ -177,7 +184,7 @@ test.describe('Financial Account Create (T2) — mocked', () => {
   test('blocks submit and shows the IBAN error for an invalid IBAN', async ({ page }) => {
     await installCreateMocks(page);
 
-    await page.goto('/finance/accounts');
+    await page.goto('/financial-account');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     await page.getByTestId('cuentas-new-account-button').click();
@@ -198,7 +205,7 @@ test.describe('Financial Account Create (T2) — mocked', () => {
   test('Caja type goes straight to the cash form (no IBAN)', async ({ page }) => {
     await installCreateMocks(page);
 
-    await page.goto('/finance/accounts');
+    await page.goto('/financial-account');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     await page.getByTestId('cuentas-new-account-button').click();
@@ -229,7 +236,7 @@ test.describe('Financial Account Create (T2) — mocked', () => {
       iban: 'ES9121000418450200051332',
       isDefault: false,
       pendingCount: 0,
-      psd2Connected: false,
+      bankConnected: false,
     };
 
     // create POST → 201; capture the body for assertion. Registered FIRST so
@@ -264,24 +271,26 @@ test.describe('Financial Account Create (T2) — mocked', () => {
       });
     });
 
-    // list endpoint → first call returns the original accounts; subsequent calls
-    // include the new account, simulating the backend reload after creation.
-    await page.route('**/sws/neo/financial-accounts-page', async (route) => {
+    // list endpoint → first call returns the original accounts; subsequent calls include
+    // the new account, simulating the backend reload after creation. RegExp on the query
+    // string so this never swallows the POST to the same path.
+    await page.route(/\/sws\/neo\/financial-account\/account\?/, async (route) => {
+      if (route.request().method() !== 'GET') { await route.fallback(); return; }
       listFetchCount++;
       const accounts = listFetchCount > 1 ? [...ACCOUNTS, newAccount] : ACCOUNTS;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ response: { data: { accounts, summary: SUMMARY } } }),
+        body: JSON.stringify({ response: { data: accounts, totalRows: accounts.length, summary: SUMMARY } }),
       });
     });
 
-    await page.goto('/finance/accounts');
+    await page.goto('/financial-account');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     // Initial state: existing account is there, new one is not.
-    await expect(page.getByTestId('account-row-acc-1')).toBeVisible();
-    await expect(page.getByTestId('account-row-acc-new')).toHaveCount(0);
+    await expect(page.getByTestId('row-acc-1')).toBeVisible();
+    await expect(page.getByTestId('row-acc-new')).toHaveCount(0);
 
     // ── Step 1: open wizard and pick Bank ──────────────────────────────────
     await page.getByTestId('cuentas-new-account-button').click();
@@ -333,6 +342,6 @@ test.describe('Financial Account Create (T2) — mocked', () => {
     await expect(page.getByTestId('new-account-wizard')).toHaveCount(0);
 
     // 4. The list reloaded and the new account row is now visible.
-    await expect(page.getByTestId('account-row-acc-new')).toBeVisible();
+    await expect(page.getByTestId('row-acc-new')).toBeVisible();
   });
 });

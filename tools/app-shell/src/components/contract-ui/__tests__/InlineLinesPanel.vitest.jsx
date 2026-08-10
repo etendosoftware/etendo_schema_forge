@@ -19,10 +19,6 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (v, cur) => (v != null ? `${Number(v).toFixed(2)}${cur ? ` ${cur}` : ''}` : '—'),
-}));
-
 vi.mock('@/lib/resolveIdentifier.js', () => ({
   resolveIdentifier: (row, key) => {
     const idKey = `${key}$_identifier`;
@@ -52,6 +48,30 @@ vi.mock('../InlineSearchCombo.jsx', () => ({
 }));
 vi.mock('../SelectorInput.jsx', () => ({
   SelectorInput: () => <span data-testid="selector-input" />,
+  // DimensionsPanel.jsx's DimensionGrid imports this as a default export — needed
+  // once a test actually expands the dimensions sub-row (see the "Add dimensions"
+  // hover-action tests below), not just checks the collapsed summary/toggle.
+  // ETP-4610 live-transition tests drive real field edits through this stub's
+  // "set"/"clear" buttons, which call `onChange` exactly like a real selector
+  // picking (or clearing) a value would.
+  default: ({ field, onChange }) => (
+    <div data-testid={`dimension-field-${field.key}`}>
+      <button
+        type="button"
+        data-testid={`dimension-field-${field.key}-set`}
+        onClick={() => onChange('NEWVAL', 'New Value')}
+      >
+        set
+      </button>
+      <button
+        type="button"
+        data-testid={`dimension-field-${field.key}-clear`}
+        onClick={() => onChange('', '')}
+      >
+        clear
+      </button>
+    </div>
+  ),
 }));
 vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
@@ -121,11 +141,12 @@ describe('InlineLinesPanel', () => {
     expect(screen.getByText('Gadget')).toBeInTheDocument();
   });
 
-  it('formats amount columns', () => {
+  it('formats amount columns in es-ES locale (comma decimal, no currency symbol)', () => {
     renderPanel();
-    // formatAmount mock returns "50.00" for lineNetAmount=50
-    expect(screen.getByText('50.00')).toBeInTheDocument();
-    expect(screen.getByText('60.00')).toBeInTheDocument();
+    // Real formatCurrency(undefined, value) — no currency code available at this column,
+    // falls back to plain es-ES number formatting: comma decimal, no symbol/code shown.
+    expect(screen.getByText('50,00')).toBeInTheDocument();
+    expect(screen.getByText('60,00')).toBeInTheDocument();
   });
 
   it('shows edit and delete actions on hover', async () => {
@@ -166,6 +187,77 @@ describe('InlineLinesPanel', () => {
     ];
     renderPanel({ columns: cols });
     expect(screen.queryByTestId('column-header-secret')).toBeNull();
+  });
+
+  // --- ETP-4543: dynamic `hiddenColumns` prop (displayLogic-driven visibility) ---
+  //
+  // Mirrors DataTable's `hiddenColumns` filter: a list of column keys to
+  // exclude on top of the static `col.hidden` flag. Used by DetailView to
+  // hide config-gated accounting-dimension columns (project/costcenter)
+  // when the @ACCT_DIMENSION_DISPLAY@ toggle resolves to hidden.
+
+  it('does not render a column header whose key is listed in hiddenColumns', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    renderPanel({ columns: cols, hiddenColumns: ['costcenter'] });
+    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+  });
+
+  it('does not render body cells for a column listed in hiddenColumns', () => {
+    const cols = [
+      { key: 'product', label: 'Product', type: 'string', column: 'M_Product_ID' },
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    const rows = [{ id: 'HC1', product: 'P1', costcenter: 'CC1', 'costcenter$_identifier': 'HQ' }];
+    renderPanel({ columns: cols, data: rows, hiddenColumns: ['costcenter'] });
+    expect(screen.queryByText('HQ')).toBeNull();
+  });
+
+  it('still renders columns that are NOT listed in hiddenColumns', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'project', label: 'Project', type: 'selector', column: 'C_Project_ID' },
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    renderPanel({ columns: cols, hiddenColumns: ['costcenter'] });
+    // project is NOT in hiddenColumns — stays visible.
+    expect(screen.getByTestId('column-header-project')).toBeInTheDocument();
+    // Pre-existing columns are unaffected.
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    // costcenter IS in hiddenColumns — hidden.
+    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+  });
+
+  it('defaults hiddenColumns to [] — omitting the prop behaves identically to before this change', () => {
+    // No `hiddenColumns` prop passed at all (not even an empty array) —
+    // every existing caller that predates ETP-4543 must render unaffected.
+    renderPanel();
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-quantity')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-unitPrice')).toBeInTheDocument();
+    expect(screen.getByTestId('line-row-L1')).toBeInTheDocument();
+    expect(screen.getByTestId('line-row-L2')).toBeInTheDocument();
+  });
+
+  it('passing an explicit empty hiddenColumns=[] behaves identically to omitting it', () => {
+    renderPanel({ hiddenColumns: [] });
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-quantity')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-unitPrice')).toBeInTheDocument();
+  });
+
+  it('combines static col.hidden AND dynamic hiddenColumns filtering', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'secret', label: 'Secret', type: 'string', hidden: true },
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    renderPanel({ columns: cols, hiddenColumns: ['costcenter'] });
+    expect(screen.queryByTestId('column-header-secret')).toBeNull();
+    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
   });
 
   it('exposes imperative ref with flushPendingEdits and clearSelection', () => {
@@ -224,6 +316,35 @@ describe('InlineLinesPanel', () => {
       await userEvent.click(trashBtn);
     });
     expect(onDeleteRow).toHaveBeenCalledWith(ROWS[0]);
+  });
+
+  // ETP-4565 — regression: `hideDelete: true` windows (e.g. product-category's
+  // Contabilidad tab) resolve `onDeleteRow` to undefined all the way up from the
+  // contract's `apiPrediction.crud.<entity>.delete: false`. DataTable already gates
+  // its own trash button on `onDeleteRow` (see DataTable.jsx ~1450); InlineLinesPanel
+  // did not, so the icon rendered anyway and silently no-opped on click. This asserts
+  // the icon itself is absent — not just inert — when no delete handler is provided.
+  it('does not render the delete (trash) icon when onDeleteRow is not provided (ETP-4565)', async () => {
+    renderPanel({ onDeleteRow: undefined });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    // Edit (pencil) must still render — only delete is gated.
+    expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeInTheDocument();
+    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeNull();
+    expect(within(actions).queryByRole('button', { name: /delete/i })).toBeNull();
+  });
+
+  it('still renders the delete (trash) icon when onDeleteRow IS provided (no regression)', async () => {
+    renderPanel();
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeInTheDocument();
   });
 
   it('numeric column headers are right-aligned', () => {
@@ -311,6 +432,88 @@ describe('InlineLinesPanel', () => {
       />,
     );
     expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('renders signedDelta column in read mode: negative value with negative color', () => {
+    const columns = [
+      { key: 'etgoQtydiff', label: 'Difference', type: 'signedDelta' },
+    ];
+    const rows = [
+      { id: 'S1', etgoQtydiff: -8 },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const cell = screen.getByText('-8');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('hsl(var(--destructive))');
+    expect(cell.style.fontWeight).toBe('600');
+  });
+
+  it('renders signedDelta column in read mode: exactly-zero as "±0" with neutral color', () => {
+    const columns = [
+      { key: 'etgoQtydiff', label: 'Difference', type: 'signedDelta' },
+    ];
+    const rows = [
+      { id: 'S2', etgoQtydiff: 0 },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const cell = screen.getByText('±0');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('hsl(var(--foreground))');
+  });
+
+  it('renders signedDelta column in read mode: positive value with positive color', () => {
+    const columns = [
+      { key: 'etgoQtydiff', label: 'Difference', type: 'signedDelta' },
+    ];
+    const rows = [
+      { id: 'S3', etgoQtydiff: 5 },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const cell = screen.getByText('+5');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('var(--status-success-fg)');
   });
 
   it('commitField skips when value is unchanged (onUpdateRow NOT called)', async () => {
@@ -788,8 +991,8 @@ describe('InlineLinesPanel', () => {
         onDeleteRow={vi.fn().mockResolvedValue()}
       />,
     );
-    // formatAmount mock returns "99.10"
-    expect(screen.getByText('99.10')).toBeInTheDocument();
+    // es-ES comma decimal, no currency symbol (no currency code passed at this column).
+    expect(screen.getByText('99,10')).toBeInTheDocument();
   });
 
   it('selector column shows InlineSearchCombo in edit mode', async () => {
@@ -979,7 +1182,7 @@ describe('InlineLinesPanel', () => {
         onDeleteRow={vi.fn().mockResolvedValue()}
       />,
     );
-    // formatAmount mock returns '—' for null
+    // formatCurrency mock returns '—' for null
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
@@ -1142,7 +1345,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('100.00')).toBeInTheDocument();
+    expect(screen.getByText('100,00')).toBeInTheDocument();
   });
 
   it('readOnly column is not editable', () => {
@@ -1166,7 +1369,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('50.00')).toBeInTheDocument();
+    expect(screen.getByText('50,00')).toBeInTheDocument();
   });
 
   it('column with custom render function uses it', () => {
@@ -1233,7 +1436,7 @@ describe('InlineLinesPanel', () => {
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()}
         isDocumentReadOnly={true} />,
     );
-    expect(container.textContent).toContain('5.00');
+    expect(container.textContent).toContain('5,00');
   });
 
   it('renders multiple rows with alternating row IDs', () => {
@@ -1263,7 +1466,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('250.00')).toBeInTheDocument();
+    expect(screen.getByText('250,00')).toBeInTheDocument();
   });
 
   it('renders string column with identifier fallback', () => {
@@ -1475,6 +1678,232 @@ describe('InlineLinesPanel', () => {
       expect(onUpdateRow).toHaveBeenCalledWith(
         PHONE_ROWS[0], 'name', 'abc def', expect.objectContaining({ column: 'Name' }),
       );
+    });
+  });
+
+  // ETP-4529 follow-up: dimensionFields (project/costcenter/...) is a list nested INSIDE
+  // the single top-level 'dimensions' column, so the existing hiddenColumns filter (which
+  // only matches top-level column keys) never reached it — a dimension disabled in GL
+  // Configuration kept rendering inside the expand panel even after the SAME visibility
+  // signal correctly hid it from the header. Reproduces the live bug (Cost Center
+  // deactivated but still shown in the sales-invoice lines expand panel) and confirms the
+  // fix: dimensionFields is now filtered by hiddenColumns too, and the whole column drops
+  // out when every candidate ends up hidden.
+  //
+  // ETP-4610 — the `dimensionsPanel` column NEVER renders as a fixed grid column anymore
+  // (no `column-header-dimensions`, no badges in the row). The entry point moved to a
+  // hover action ("Add dimensions") next to Pencil/Trash, plus the existing leading
+  // expand-chevron. Both are still gated on `hiddenColumns` filtering out every candidate.
+  describe('dimensionsPanel column — hiddenColumns filters nested dimensionFields', () => {
+    const dimensionColumns = [
+      {
+        key: 'dimensions',
+        type: 'dimensionsPanel',
+        label: 'Dimensions',
+        dimensionFields: [
+          { key: 'project', column: 'C_Project_ID' },
+          { key: 'costcenter', column: 'C_Costcenter_ID' },
+        ],
+      },
+    ];
+    const dimensionRows = [{
+      id: 'L1',
+      project: 'PRJ1', 'project$_identifier': 'Project Alpha',
+      costcenter: 'CC1', 'costcenter$_identifier': 'HQ',
+    }];
+
+    function renderDimensionsPanel(hiddenColumns, extraProps = {}) {
+      return render(
+        <InlineLinesPanel
+          columns={dimensionColumns}
+          data={dimensionRows}
+          hiddenColumns={hiddenColumns}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+          {...extraProps}
+        />,
+      );
+    }
+
+    it('never renders the dimensions column header, regardless of hiddenColumns', () => {
+      renderDimensionsPanel([]);
+      expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
+      renderDimensionsPanel(['costcenter']);
+      expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
+    });
+
+    it('keeps the expand chevron when at least one candidate is visible', () => {
+      renderDimensionsPanel(['costcenter']);
+      expect(screen.getByTestId('dimensions-panel-toggle')).toBeInTheDocument();
+    });
+
+    // Live-UX-review follow-up (ETP-4610): the chevron previously sat flush against the
+    // row's left border. It now gets the same `px-2` breathing room the selection
+    // checkbox column already has, in a widened 44px column (28px button + 8px padding
+    // each side) instead of the old bare 32px.
+    it('gives the chevron column the same left padding convention as the checkbox column', () => {
+      renderDimensionsPanel(['costcenter']);
+      const toggle = screen.getByTestId('dimensions-panel-toggle');
+      const chevronColumn = toggle.parentElement;
+      expect(chevronColumn).toHaveClass('px-2');
+      expect(chevronColumn.style.width).toBe('44px');
+    });
+
+    // Live-UX-review follow-up (ETP-4610): the expanded dimensions sub-row's first field
+    // must start at the same x position as the first real grid column above it (chevron
+    // column + checkbox column + the first cell's own leading padding), not the flat
+    // 40px it used before.
+    it('indents the dimensions sub-row so its first field aligns with the first grid column', async () => {
+      renderDimensionsPanel(['costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => {
+        await userEvent.click(within(row).getByTestId('dimensions-panel-toggle'));
+      });
+      const subRow = screen.getByTestId('dimensions-panel-L1');
+      // 44px chevron column + 40px checkbox column + 12px first-cell padding.
+      expect(subRow.style.paddingLeft).toBe('96px');
+    });
+
+    it('drops the expand chevron entirely when every candidate is hidden', () => {
+      renderDimensionsPanel(['project', 'costcenter']);
+      expect(screen.queryByTestId('dimensions-panel-toggle')).toBeNull();
+    });
+
+    it('shows the "Add dimensions" hover action only when at least one candidate is visible', async () => {
+      renderDimensionsPanel(['costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).getByTestId('line-action-add-dimensions')).toBeInTheDocument();
+    });
+
+    it('hides the "Add dimensions" hover action when every candidate is hidden (negative case)', async () => {
+      renderDimensionsPanel(['project', 'costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).queryByTestId('line-action-add-dimensions')).toBeNull();
+    });
+
+    it('hides the "Add dimensions" hover action for a table with no dimensionsPanel column at all', async () => {
+      renderPanel();
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).queryByTestId('line-action-add-dimensions')).toBeNull();
+    });
+
+    it('clicking the "Add dimensions" hover action expands the same sub-row the chevron toggles', async () => {
+      renderDimensionsPanel(['costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(screen.queryByTestId('dimensions-panel-L1')).toBeNull();
+      await act(async () => {
+        await userEvent.click(within(row).getByTestId('line-action-add-dimensions'));
+      });
+      expect(screen.getByTestId('dimensions-panel-L1')).toBeInTheDocument();
+    });
+
+    // ETP-4610 follow-up — the hover action's icon/tooltip are static (always `Layers` /
+    // "Edit dimensions"), regardless of whether the line already has dimension values
+    // set. An earlier adaptive Add/Edit variant swapped icon+tooltip based on
+    // `hasFilledDimensionValues()`, but its "edit" state (Pencil icon) sat right next to
+    // the row's own Edit action and read as a duplicate button — dropped in favor of one
+    // unconditional icon/tooltip (see docs/feedback.md).
+    it('always shows the "editDimensionsTooltip" tooltip, whether the line is filled or empty', async () => {
+      // dimensionRows[0] has both project and costcenter filled.
+      renderDimensionsPanel([]);
+      const filledRow = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(filledRow); });
+      const filledAction = within(filledRow).getByTestId('line-action-add-dimensions');
+      expect(filledAction).toHaveAttribute('title', 'editDimensionsTooltip');
+      expect(filledAction).toHaveAttribute('aria-label', 'editDimensionsTooltip');
+
+      const emptyRows = [{ id: 'L2' }];
+      render(
+        <InlineLinesPanel
+          columns={dimensionColumns}
+          data={emptyRows}
+          hiddenColumns={[]}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const emptyRow = screen.getByTestId('line-row-L2');
+      await act(async () => { await userEvent.hover(emptyRow); });
+      const emptyAction = within(emptyRow).getByTestId('line-action-add-dimensions');
+      expect(emptyAction).toHaveAttribute('title', 'editDimensionsTooltip');
+    });
+  });
+
+  // ETP-4610 — generic hover-action extension slot (`rowActions` prop). Verifies the
+  // mechanism itself (not the dimensions use case): any caller can inject extra hover
+  // actions, each with its own per-row conditional visibility, through the exact same
+  // `renderRowActionStrip` code path the built-in "Add dimensions" action uses.
+  describe('rowActions — generic hover-action extension slot', () => {
+    it('renders a caller-supplied action in the hover strip', async () => {
+      const onClick = vi.fn();
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: () => <span />, tooltip: 'Archive', onClick, testId: 'line-action-archive' }],
+      });
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      const btn = within(row).getByTestId('line-action-archive');
+      expect(btn).toBeInTheDocument();
+      await act(async () => { await userEvent.click(btn); });
+      expect(onClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'L1' }));
+    });
+
+    it('supports a boolean `show` to hide an action unconditionally', async () => {
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: () => <span />, tooltip: 'Archive', onClick: vi.fn(), show: false }],
+      });
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).queryByTestId('line-action-archive')).toBeNull();
+    });
+
+    it('supports a per-row `show` function so the action can condition its own visibility', async () => {
+      renderPanel({
+        rowActions: [{
+          key: 'archive',
+          icon: () => <span />,
+          tooltip: 'Archive',
+          onClick: vi.fn(),
+          show: (row) => row.id === 'L2',
+        }],
+      });
+      const rowL1 = screen.getByTestId('line-row-L1');
+      const rowL2 = screen.getByTestId('line-row-L2');
+      await act(async () => { await userEvent.hover(rowL1); });
+      expect(within(rowL1).queryByTestId('line-action-archive')).toBeNull();
+      await act(async () => { await userEvent.hover(rowL2); });
+      expect(within(rowL2).getByTestId('line-action-archive')).toBeInTheDocument();
+    });
+
+    it('renders multiple extra actions ahead of the built-in Pencil/Trash pair', async () => {
+      renderPanel({
+        rowActions: [
+          { key: 'first', icon: () => <span />, tooltip: 'First', onClick: vi.fn() },
+          { key: 'second', icon: () => <span />, tooltip: 'Second', onClick: vi.fn() },
+        ],
+      });
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const buttons = within(actions).getAllByRole('button');
+      // The two extra actions render first, in declared order, ahead of the
+      // built-in Pencil/Trash pair (4 buttons total).
+      expect(buttons).toHaveLength(4);
+      expect(buttons[0]).toHaveAttribute('data-testid', 'line-action-first');
+      expect(buttons[1]).toHaveAttribute('data-testid', 'line-action-second');
     });
   });
 });

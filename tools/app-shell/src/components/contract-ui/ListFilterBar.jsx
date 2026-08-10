@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ChevronDown, CalendarDays, Filter, Loader2 } from 'lucide-react';
 import { useLocale, useUI } from '@etendosoftware/app-shell-core';
 import { useDistinctValues } from '@/hooks/useDistinctValues.js';
+import { compareStatusCodes, statusLabel } from '@/lib/statusBadge.js';
 import { AdvancedFilterBuilder } from './AdvancedFilterBuilder.jsx';
 import { DistinctValuesList } from './DistinctValuesList.jsx';
 import { DateRangePopoverContent } from '@/components/ui/date-range-popover.jsx';
@@ -63,26 +64,14 @@ export function ListFilterBar({
   const activeStatus = columnFilters?.[statusCol?.key]?.value;
   const activeStatusCode = Array.isArray(activeStatus) ? activeStatus[0] : null;
 
-  // Label resolution map: enum labels from the column definition when present,
-  // otherwise fall back to the shared status dictionary. Used for both the
-  // active-status badge and the dropdown items.
-  const statusLabelMap = useMemo(() => {
-    if (!statusCol) return {};
-    if (statusCol.enumLabels && Object.keys(statusCol.enumLabels).length > 0) {
-      return { ...statusCol.enumLabels };
-    }
-    return Object.fromEntries(
-      Object.entries(dictionary?.statuses || {})
-        .filter(([code]) => /^[A-Z][A-Z0-9_]*$/.test(code))
-        .map(([code, entry]) => [code, entry?.label || code]),
-    );
-  }, [statusCol, dictionary]);
-
-  const labelForStatus = (code) => {
-    const enumLabel = statusCol?.enumLabels?.[code];
-    if (enumLabel !== undefined) return ui(enumLabel) || enumLabel;
-    return dictionary?.statuses?.[code]?.label || code;
-  };
+  // Delegates to the same statusLabel() resolution used by the grid cells
+  // (DataTable.cellRenderers.jsx) so the dropdown and the column never
+  // diverge: DB-sourced translation (dictionary.statuses) first, then the
+  // shared i18n-key MAP, then the ui() translate function, before falling
+  // back to a literal AD label. Fixes ETP-4696 Problem 2 (statuses like
+  // "Booked"/"Voided"/"Not Accepted" showing untranslated in the filter
+  // dropdown while the grid cell translated them correctly).
+  const labelForStatus = (code) => statusLabel(code, dictionary, ui, statusCol?.enumLabels);
 
   // In-memory distinct codes from the rows currently loaded — shown instantly
   // so the dropdown is never empty while the backend fetch is in-flight.
@@ -168,8 +157,12 @@ export function ListFilterBar({
     onFilterChange?.(typeCol.key, parsed);
   };
 
-  // Merge backend + in-memory + currently-active code. Backend order is kept
-  // (already sorted alphabetically server-side), in-memory extras are appended.
+  // Merge backend + in-memory + currently-active code, then sort by the fixed
+  // business-flow order (compareStatusCodes) so the dropdown order never
+  // changes between renders — regardless of whether it paints from in-memory
+  // rows first or reorders once the (uncached) backend distinct-values fetch
+  // resolves. Without this, the two sources arrive in different orders and
+  // the user sees the options visibly reshuffle on every open.
   // Local search also filters client-side so in-memory-only codes are hidden
   // when they don't match what the user typed.
   const normalizeCode = (c) => {
@@ -197,13 +190,13 @@ export function ListFilterBar({
       seen.add(activeStatusCode);
       out.push(activeStatusCode);
     }
-    return out;
-  }, [statusCol, statusDistinct.values, statusDistinct.search, inMemoryStatusCodes, activeStatusCode, statusLabelMap, dictionary]);
+    return out.slice().sort(compareStatusCodes);
+  }, [statusCol, statusDistinct.values, statusDistinct.search, inMemoryStatusCodes, activeStatusCode, dictionary]);
 
   const activeStatusLabel = useMemo(() => {
     if (!activeStatusCode) return ui('allStatuses');
     return labelForStatus(activeStatusCode);
-  }, [activeStatusCode, statusLabelMap, dictionary, ui]);
+  }, [activeStatusCode, dictionary, ui]);
 
   const handleStatusSelect = (code) => {
     if (!statusCol) return;
@@ -335,7 +328,7 @@ export function ListFilterBar({
               variant="outline"
               size="sm"
               className={[
-                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-white',
+                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-card',
                 activeStatusCode ? 'text-foreground border-primary/40' : 'text-muted-foreground',
               ].join(' ')}
             >
@@ -375,7 +368,7 @@ export function ListFilterBar({
               variant="outline"
               size="sm"
               className={[
-                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-white',
+                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-card',
                 activeTypeCode ? 'text-foreground border-primary/40' : 'text-muted-foreground',
               ].join(' ')}
             >
@@ -415,7 +408,7 @@ export function ListFilterBar({
               variant="outline"
               size="sm"
               className={[
-                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-white',
+                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-card',
                 hasActiveDate ? 'text-foreground border-primary/40' : 'text-muted-foreground',
               ].join(' ')}
             >
@@ -441,12 +434,12 @@ export function ListFilterBar({
           <button
             type="button"
             data-testid="filter-advanced"
-            className="relative inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-medium text-foreground transition-colors hover:bg-[#F5F7F9]"
+            className="relative inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-[hsl(var(--muted))]"
           >
             <Filter className="h-4 w-4 text-muted-foreground" data-testid="Filter__6d5e90" />
             <span>{ui('filters')}</span>
             {hasActiveAdvancedFilter && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#121217] text-white text-[10px] font-semibold leading-none">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[hsl(var(--foreground))] text-primary-foreground text-[10px] font-semibold leading-none">
                 {advancedFilter.conditions.length}
               </span>
             )}

@@ -2,36 +2,34 @@
  * Design tokens for the Cuentas (Financial Accounts) page.
  * Extracted from the Figma frame `3012:25602` in file `UqMboGO6t73CwmFhVnDmuB`.
  *
- * Tokens are exposed as Tailwind-friendly hex strings so call sites can use
- * arbitrary-value classes (e.g. `bg-[${COLORS.bgGray50}]`) when no named token
- * exists in the global theme.
+ * Tokens are semantic CSS values supplied by the active app-shell theme.
  */
 
 export const COLORS = {
-  textPrimary: '#121217',
-  textGray700: '#3f3f50',
-  textSecondary: '#6c6c89',
-  placeholder: '#8a8aa3',
+  textPrimary: 'hsl(var(--foreground))',
+  textGray700: 'hsl(var(--muted-foreground))',
+  textSecondary: 'hsl(var(--muted-foreground))',
+  placeholder: 'hsl(var(--text-disabled))',
 
-  bgWhite: '#ffffff',
-  bgGray50: '#f5f7f9',
-  divider: '#e8eaef',
-  outline: '#d1d4db',
+  bgWhite: 'hsl(var(--card))',
+  bgGray50: 'hsl(var(--muted))',
+  divider: 'hsl(var(--border-subtle))',
+  outline: 'hsl(var(--border-control))',
 
-  redStrong: '#d50b3e',
-  redBright: '#f3164e',
-  greenStrong: '#26a95f',
-  greenText: '#17663a',
-  greenSoftBg: '#eefbf4',
-  yellow: '#faaf00',
-  purple: '#7047eb',
+  redStrong: 'hsl(var(--destructive))',
+  redBright: 'hsl(var(--destructive))',
+  greenStrong: 'var(--status-success-fg)',
+  greenText: 'var(--status-success-fg)',
+  greenSoftBg: 'var(--status-success-bg)',
+  yellow: 'var(--status-warning-fg)',
+  purple: 'hsl(var(--primary))',
 
-  brand: '#ffd500',
-  onBrand: '#3e3505',
+  brand: 'hsl(var(--primary))',
+  onBrand: 'hsl(var(--primary-foreground))',
 };
 
 export const SHADOWS = {
-  xs: '0 1px 2px rgba(18, 18, 23, 0.05)',
+  xs: '0 1px 2px hsl(var(--foreground) / 0.05)',
 };
 
 export const RADII = {
@@ -53,6 +51,7 @@ export const ACCOUNT_TYPE_ORDER = [ACCOUNT_TYPE.BANK, ACCOUNT_TYPE.CASH, ACCOUNT
 // Backend search_keys — do NOT rename these; they must match FIN_Payment.Status values.
 // Follow-up: once /sws/neo/reference/payment-status exists, these can be fetched dynamically.
 export const MOVEMENT_STATUS_FAMILY = {
+  DRAFT: 'draft',
   PENDING: 'pending',
   VOIDED: 'voided',
   CLEARED: 'cleared',
@@ -62,10 +61,11 @@ export const MOVEMENT_STATUS_FAMILY = {
 };
 
 export const MOVEMENT_STATUS_TONE = {
-  pending:      { bg: '#FFF7E0', text: '#7A5A00', border: '#FAAF00' },
-  voided:       { bg: '#F5F7F9', text: '#6C6C89', border: '#D1D4DB' },
-  cleared:      { bg: '#EEFBF4', text: '#17663A', border: '#26A95F' },
-  inTransit:    { bg: '#FFF1D6', text: '#8C5A00', border: '#E68A00' },
-  executed:     { bg: '#EFEAFE', text: '#3D2D8E', border: '#7047EB' },
-  unreconciled: { bg: '#F5F7F9', text: '#6C6C89', border: '#D1D4DB' },
+  draft:        { bg: 'var(--status-neutral-bg)', text: 'var(--status-neutral-fg)', border: 'var(--status-neutral-border)' },
+  pending:      { bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)', border: 'var(--status-warning-border)' },
+  voided:       { bg: 'hsl(var(--muted))', text: 'hsl(var(--muted-foreground))', border: 'hsl(var(--border-control))' },
+  cleared:      { bg: 'var(--status-success-bg)', text: 'var(--status-success-fg)', border: 'var(--status-success-border)' },
+  inTransit:    { bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)', border: 'var(--status-warning-border)' },
+  executed:     { bg: 'var(--status-info-bg)', text: 'var(--status-info-fg)', border: 'var(--status-info-border)' },
+  unreconciled: { bg: 'hsl(var(--muted))', text: 'hsl(var(--muted-foreground))', border: 'hsl(var(--border-control))' },
 };

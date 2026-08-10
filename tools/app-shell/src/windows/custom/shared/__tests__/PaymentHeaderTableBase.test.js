@@ -24,12 +24,11 @@ describe('PaymentHeaderTableBase', () => {
 
   // ── Amount formatting ──────────────────────────────────────────────────────
 
-  it('uses Intl.NumberFormat for amount formatting', () => {
-    assert.match(src, /new Intl\.NumberFormat/);
-  });
-
-  it('has currencySymbol helper function', () => {
-    assert.match(src, /function currencySymbol/);
+  it('delegates amount formatting to the shared formatCurrency() (not a hand-rolled Intl.NumberFormat/currencySymbol duplicate)', () => {
+    assert.match(src, /import\s*\{\s*formatCurrency\s*\}\s*from\s*['"]@\/lib\/formatCurrency\.js['"]/);
+    assert.match(src, /formatCurrency\(/);
+    assert.doesNotMatch(src, /new Intl\.NumberFormat/);
+    assert.doesNotMatch(src, /function currencySymbol/);
   });
 
   it('renders sign and amount for in/out direction', () => {
@@ -55,11 +54,11 @@ describe('PaymentHeaderTableBase', () => {
     assert.match(src, /useUI\(\)/);
   });
 
-  // ── Reactivar integration ──────────────────────────────────────────────────
+  // ── Reactivar/Eliminar integration (ETP-4500 — unified cartel) ─────────────
 
-  it('imports and renders ReactivarModal', () => {
-    assert.match(src, /import ReactivarModal from/);
-    assert.match(src, /<ReactivarModal/);
+  it('imports and renders PaymentLifecycleConfirmModal for Reactivar/Eliminar', () => {
+    assert.match(src, /import PaymentLifecycleConfirmModal from/);
+    assert.match(src, /<PaymentLifecycleConfirmModal/);
   });
 
   it('dispatches neo:processSuccess after reactivation', () => {
@@ -88,8 +87,7 @@ describe('PaymentHeaderTableBase', () => {
     // applied to the payment (FIN_PaymentDetail/ScheduleDetail) — the removal
     // process handles reactivate-if-needed + cleanup + invoice update safely,
     // for both drafts and deposited payments alike.
-    assert.match(src, /import.*useRowDelete.*from '@\/hooks\/useRowDelete\.jsx'/);
-    assert.match(src, /eTPRRemovePayment/);
+    assert.match(src, /action\/eTPRRemovePayment/);
     assert.doesNotMatch(src, /method:\s*'DELETE'/);
   });
 

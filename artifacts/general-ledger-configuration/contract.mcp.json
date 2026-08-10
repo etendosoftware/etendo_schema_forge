@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
   "updatedAt": "2026-07-07T19:23:48.530Z",
-  "contractChecksum": "2f98160e6139a75d",
+  "contractChecksum": "46ac01d9fae4b6af",
   "apiPrediction": {
     "specName": "general-ledger-configuration",
     "baseUrl": "/sws/neo/general-ledger-configuration",

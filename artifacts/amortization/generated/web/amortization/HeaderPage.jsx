@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useState, useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import HeaderTable from './HeaderTable';
 import HeaderForm from './HeaderForm';
@@ -104,6 +106,14 @@ export const api = {
       "reference": "Currency",
       "inputMode": "selector",
       "url": "/sws/neo/amortization/header/selectors/currency"
+    },
+    {
+      "entity": "header",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "selector",
+      "url": "/sws/neo/amortization/header/selectors/project"
     },
     {
       "entity": "lines",
@@ -228,8 +238,15 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:HeaderPage
 export default function HeaderPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('800026');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const draftModeWithConfirm = { ...draftMode, onConfirm: () => setShowConfirmModal(true) };
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="800026" />;
+  }
   if (recordId) {
     return (
       <>
@@ -265,7 +282,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         titleField="name"
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        {...props}
+        {...props} window={effectiveWindow}
       />
 
       {showConfirmModal && (
@@ -299,7 +316,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{"hideDeleteButton":true}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

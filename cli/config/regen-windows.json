@@ -6,6 +6,14 @@
       "windowId": "800026"
     },
     {
+      "name": "conversion-rates",
+      "windowId": "116"
+    },
+    {
+      "name": "conversion-rate-downloader-log",
+      "windowId": "6FEBA130CDE24CC09041FFA6117ADFA9"
+    },
+    {
       "name": "asset-group",
       "windowId": "252",
       "menuName": "Asset Group"
@@ -51,6 +59,11 @@
     {
       "name": "internal-consumption",
       "windowId": "800076"
+    },
+    {
+      "name": "match-rule",
+      "windowId": "24963D64E83B4543A7F6BD248CF944EE",
+      "menuName": "Match Rule"
     },
     {
       "name": "monitor-verifactu",
@@ -153,6 +166,10 @@
       "name": "tbai-facturas-enviadas",
       "windowId": "71F24BF89DE748B483BE87594747D6FB",
       "menuName": "TBAI Facturas Enviadas"
+    },
+    {
+      "name": "transaction-type",
+      "windowId": "82922976BB524D1BAA3CF8462B9219FE"
     },
     {
       "name": "unit-of-measure",

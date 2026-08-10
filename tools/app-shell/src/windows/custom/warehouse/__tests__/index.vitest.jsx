@@ -33,6 +33,14 @@ vi.mock('../WarehouseCustomTable', () => ({
   default: () => <div data-testid="warehouse-custom-table" />,
 }));
 
+vi.mock('@generated/warehouse/generated/web/warehouse/AccountingTable', () => ({
+  default: () => <div data-testid="accounting-table" />,
+}));
+
+vi.mock('@generated/warehouse/generated/web/warehouse/AccountingForm', () => ({
+  default: () => <div data-testid="accounting-form" />,
+}));
+
 let lastWarehousePageProps;
 vi.mock('@generated/warehouse/generated/web/warehouse/WarehousePage', () => ({
   default: (props) => {
@@ -71,11 +79,19 @@ describe('WarehouseWindow', () => {
     expect(lastWarehousePageProps.secondaryTabs.map((tab) => tab.key)).toEqual([
       'products',
       'productTransactions',
+      'accounting',
     ]);
     expect(lastWarehousePageProps.secondaryTabs.map((tab) => tab.label)).toEqual([
       'warehouseProductsTab',
       'warehouseTransactionsTab',
+      'warehouseAccountingTab',
     ]);
+    expect(lastWarehousePageProps.secondaryTabs[2]).toMatchObject({
+      key: 'accounting',
+      Table: expect.any(Function),
+      Form: expect.any(Function),
+    });
+    expect(lastWarehousePageProps.secondaryTabs[2].Panel).toBeUndefined();
     expect(lastWarehousePageProps).toMatchObject({
       sidebarAboveTabsOnly: true,
       hidePrint: true,
@@ -95,7 +111,7 @@ describe('WarehouseWindow', () => {
       { token: 'ctx-token', apiBaseUrl: '/ctx-api' },
     );
 
-    expect(fetch).toHaveBeenCalledWith('/ctx-api/sws/neo/warehouse/storageBin', {
+    expect(fetch).toHaveBeenCalledWith('/ctx-api/storageBin', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer ctx-token',
@@ -110,9 +126,23 @@ describe('WarehouseWindow', () => {
         levelZ: '0',
         relativePriority: 50,
         default: true,
+        inventoryStatus: '2',
       }),
     });
     expect(toastWarning).not.toHaveBeenCalled();
+  });
+
+  it('sets inventoryStatus to "2" (Available) on the default storage bin', async () => {
+    render(<WarehouseWindow token="tkn" apiBaseUrl="/api" />);
+
+    await lastWarehousePageProps.onAfterCreate(
+      { id: 'wh-1', organization: 'org-1', searchKey: 'MAIN' },
+      { token: 'ctx-token', apiBaseUrl: '/ctx-api' },
+    );
+
+    const [, requestInit] = fetch.mock.calls[0];
+    const body = JSON.parse(requestInit.body);
+    expect(body.inventoryStatus).toBe('2');
   });
 
   it('shows a warning when default storage bin creation fails', async () => {

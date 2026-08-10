@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { ArrowLeft, ChevronDown, Plus, RefreshCw, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
@@ -6,6 +6,7 @@ import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterBut
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { StatementStatusFilter } from './StatementStatusFilter';
 import { buildStatementFilterColumns } from './statementAdvancedFilter';
+import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 
 /**
  * Split-button: a primary "Importar extracto" action plus a ▾ trigger that
@@ -13,20 +14,7 @@ import { buildStatementFilterColumns } from './statementAdvancedFilter';
  * SplitImport. Closes on outside click / Escape.
  */
 function ImportSplitButton({ ui, onImportClick, onManualClick }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  const { open, setOpen, ref } = useSplitButtonDropdown();
 
   return (
     <div ref={ref} className="relative flex items-stretch">
@@ -34,7 +22,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         type="button"
         data-testid="statements-import-button"
         onClick={onImportClick}
-        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[#121217] px-3 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217]"
+        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
       >
         <Upload className="h-4 w-4" data-testid="Upload__8a428c" />
         {ui('financeAccountStatementsImport')}
@@ -46,7 +34,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         aria-expanded={open}
         data-testid="statements-import-split"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-10 w-9 items-center justify-center rounded-r-lg border-l border-white/20 bg-[#121217] text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217]"
+        className="inline-flex h-10 w-9 items-center justify-center rounded-r-lg border-l border-inverse-border/20 bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
       >
         <ChevronDown
           className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -55,17 +43,17 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-11 z-50 w-[229px] overflow-hidden rounded-lg border border-[#E8EAEF] bg-white py-2 shadow-lg"
+          className="absolute right-0 top-11 z-50 w-[229px] overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))] bg-card py-2 shadow-lg"
         >
           <button
             type="button"
             role="menuitem"
             data-testid="statements-manual-create"
             onClick={() => { setOpen(false); onManualClick(); }}
-            className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-[#F5F7F9]"
+            className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-[hsl(var(--muted))]"
           >
-            <Plus className="h-6 w-6 shrink-0 text-[#828FA3]" data-testid="Plus__8a428c" />
-            <span className="text-sm text-[#121217]">
+            <Plus className="h-6 w-6 shrink-0 text-[hsl(var(--text-disabled))]" data-testid="Plus__8a428c" />
+            <span className="text-sm text-[hsl(var(--foreground))]">
               {ui('financeAccountStatementsManualMenuItem')}
             </span>
           </button>
@@ -76,23 +64,23 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
 }
 
 /**
- * Replaces the import split-button for PSD2-synced accounts: statements come only from Salt Edge,
- * so manual import / manual creation are not offered — instead this single action runs the PSD2
+ * Replaces the import split-button for bank-synced accounts: statements come only from Salt Edge,
+ * so manual import / manual creation are not offered — instead this single action runs the bank
  * statement fetch (the Etendo Go equivalent of Classic's "Get Bank Statement" button).
  */
 function SyncStatementsButton({ ui, onClick, syncing }) {
   return (
     <button
       type="button"
-      data-testid="statements-psd2-sync-button"
+      data-testid="statements-bank-sync-button"
       onClick={onClick}
       disabled={syncing}
-      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#121217] px-3 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
     >
       <RefreshCw
         className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`}
         data-testid="RefreshCw__8a428c" />
-      {ui('financeAccountStatementsPsd2Sync')}
+      {ui('financeAccountStatementsBankConnectionSync')}
     </button>
   );
 }
@@ -112,7 +100,7 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
  *   rows?: Array<object>;
  *   onImportClick: () => void;
  *   onManualClick: () => void;
- *   psd2Synced?: boolean;
+ *   bankConnectionSynced?: boolean;
  *   onSyncClick?: () => void;
  *   syncing?: boolean;
  * }} props
@@ -129,7 +117,7 @@ export function StatementsToolbar({
   rows = [],
   onImportClick,
   onManualClick,
-  psd2Synced = false,
+  bankConnectionSynced = false,
   onSyncClick,
   syncing = false,
 }) {
@@ -145,7 +133,7 @@ export function StatementsToolbar({
         aria-label={ui('financeAccountDetailBack')}
         data-testid="statements-toolbar-back"
         onClick={() => navigate(-1)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-colors hover:bg-[#F5F7F9] hover:text-foreground"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__8a428c" />
       </button>
@@ -178,12 +166,12 @@ export function StatementsToolbar({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           data-testid="statements-search-input"
-          className="h-10 w-48 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1"
+          className="h-10 w-48 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
         />
       </div>
-      {/* PSD2-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the
+      {/* bank-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the
           manual import / manual create split-button. */}
-      {psd2Synced ? (
+      {bankConnectionSynced ? (
         <SyncStatementsButton
           ui={ui}
           onClick={onSyncClick}

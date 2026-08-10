@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ReturnToVendorShipmentTable from './ReturnToVendorShipmentTable';
 import ReturnToVendorShipmentForm from './ReturnToVendorShipmentForm';
 import ReturnToVendorShipmentLineTable from './ReturnToVendorShipmentLineTable';
@@ -281,6 +283,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:ReturnToVendorShipmentPage
 export default function ReturnToVendorShipmentPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('273673D2ED914C399A6C51DB758BE0F9');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="273673D2ED914C399A6C51DB758BE0F9" />;
+  }
   if (recordId) {
     return (
       <>
@@ -313,7 +322,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -331,7 +340,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument={{"enabled":false}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

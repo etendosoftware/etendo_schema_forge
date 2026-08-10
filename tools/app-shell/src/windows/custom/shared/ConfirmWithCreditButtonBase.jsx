@@ -14,6 +14,7 @@ export default function ConfirmWithCreditButtonBase({
   specName, entityName,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
+  postConfirmButtonLabel,
   cardTitle: cardTitleProp,
   cardDesc: cardDescProp,
   extraActions,
@@ -40,14 +41,14 @@ export default function ConfirmWithCreditButtonBase({
         <button type="button" data-testid="action-confirm-with-credit"
           onClick={() => !confirmDisabled && setShowModal(true)}
           disabled={confirmDisabled}
-          style={{ fontSize: 14, fontWeight: 500, padding: '8px 18px', borderRadius: 8, background: confirmDisabled ? '#9ca3af' : '#18181b', color: '#fff', border: 'none', cursor: confirmDisabled ? 'not-allowed' : 'pointer', lineHeight: 1.4, opacity: confirmDisabled ? 0.6 : 1 }}>
+          style={{ fontSize: 14, fontWeight: 500, padding: '8px 18px', borderRadius: 8, background: confirmDisabled ? 'hsl(var(--text-disabled))' : 'hsl(var(--foreground))', color: 'hsl(var(--card))', border: 'none', cursor: confirmDisabled ? 'not-allowed' : 'pointer', lineHeight: 1.4, opacity: confirmDisabled ? 0.6 : 1 }}>
           {confirmDrLabel}
         </button>
       )}
       {status === 'CO' && !hasReturnInvoice && (
         <button type="button" data-testid="action-create-return-invoice" onClick={() => setShowModal(true)}
-          style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: '#185FA5', color: '#fff', fontWeight: 500, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          {ui('createReturnInvoice')}
+          style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          {postConfirmButtonLabel ?? ui('createReturnInvoice')}
         </button>
       )}
       {extraActions}

@@ -55,7 +55,8 @@ Depreciate (checkbox)
 | `calculateType` | `Amortizationcalctype` | select | Yes | `depreciate` is on | `PE` = Percentage, `TI` = Time |
 | `annualDepreciation` | `Annualamortizationpercentage` | number | No | `depreciate` on **and** `calculateType === 'PE'` | — |
 | `amortize` | `Assetschedule` | select | Yes | `depreciate` on **and** `calculateType === 'TI'` | `MO` = Monthly, `YE` = Yearly |
-| `usableLifeMonths` | `UseLifeMonths` | number | No | `depreciate` on **and** `calculateType === 'TI'` | — |
+| `usableLifeYears` | `UseLifeYears` | number | No | `depreciate` on, `calculateType === 'TI'` **and** `amortize === 'YE'` | `min: 1`, integer |
+| `usableLifeMonths` | `UseLifeMonths` | number | No | `depreciate` on, `calculateType === 'TI'` **and** `amortize !== 'YE'` | `min: 1`, integer |
 
 ### How conditional visibility is wired — `displayLogicJs`
 
@@ -84,7 +85,7 @@ Each conditional field declares a `displayLogicJs` property in `decisions.json` 
 
 ### Backend-only (`system`) fields
 
-The remaining depreciation columns stay `system` — present in the backend contract (NEO persists them with their DAL-supplied defaults) but never shown in the form: `usableLifeYears`, `everyMonthIs30Days`, `owned`, and `helpComment`. All standard audit/identity fields are also `system`: `client`, `organization`, `id`, `active`, `creationDate`, `createdBy`, `updated`, `updatedBy`.
+The remaining depreciation columns stay `system` — present in the backend contract (NEO persists them with their DAL-supplied defaults) but never shown in the form: `everyMonthIs30Days`, `owned`, and `helpComment`. All standard audit/identity fields are also `system`: `client`, `organization`, `id`, `active`, `creationDate`, `createdBy`, `updated`, `updatedBy`. (Since ETP-4542, `usableLifeYears` is `editable` and shown conditionally when `amortize === 'YE'` — see [Header fields](#header-fields-assetcategory-entity).)
 
 The `depreciate` field (`IsDepreciated`) uses `defaultExpr: "N"`, so new categories are created with depreciation OFF and the conditional fields collapsed until the user opts in.
 
@@ -158,7 +159,7 @@ The generated page uses `entityLabel="Asset Category"` (for the detail title) an
 
 A field marked `system` is present in the `backendContract` and NEO persists it normally. It is absent from the `frontendContract` — the UI never sees or sends it. A field marked `discarded` is dropped from both contracts entirely.
 
-For `asset-group`, the depreciation-policy fields that the form does not expose stay `system` (`usableLifeYears`, `everyMonthIs30Days`, `owned`, `helpComment`), not `discarded`. This is the correct choice for a master-data window whose mandatory columns must round-trip through NEO without user intervention. If they were `discarded`, NEO would omit them from insert/update payloads and Etendo would reject records that require non-null values on those columns. (The fields now exposed conditionally on the form — `depreciationType`, `calculateType`, `annualDepreciation`, `amortize`, `usableLifeMonths` — are `editable`, not `system`.)
+For `asset-group`, the depreciation-policy fields that the form does not expose stay `system` (`everyMonthIs30Days`, `owned`, `helpComment`), not `discarded`. This is the correct choice for a master-data window whose mandatory columns must round-trip through NEO without user intervention. If they were `discarded`, NEO would omit them from insert/update payloads and Etendo would reject records that require non-null values on those columns. (The fields exposed conditionally on the form — `depreciationType`, `calculateType`, `annualDepreciation`, `amortize`, `usableLifeYears`, `usableLifeMonths` — are `editable`, not `system`.)
 
 ### `section: "principal"` must be set explicitly for fields 5+ (MAX_PRINCIPAL = 4)
 
@@ -217,6 +218,75 @@ node cli/src/push-to-neo.js asset-group
 
 An earlier iteration built a dedicated `AssetCategoryDepreciationPanel.jsx` custom toggle-card panel for the depreciation configuration. It was reverted in favor of the generated inline conditional fields driven by `displayLogicJs`, which keep the configuration in `decisions.json` and survive pipeline re-runs. The custom panel no longer exists and is not part of the current window.
 
+## ETP-4542 — Generic declarative numeric validation, applied to Usable Life - Months
+
+Usable-Life fields ("Usable Life - Months" / "Usable Life - Years") accepted zero, negative,
+or decimal values in the form, even though the backend already rejected them (Etendo silently
+truncated `2.5` to `2`, and `-4` was not blocked at all). They rely on the **generic**
+declarative numeric-validation mechanism (`"min": 1, "integer": true` in `decisions.json` →
+contract → `getNumericFieldError`; full design write-up in `docs/generated-custom-windows/assets.md`).
+
+**Why it was broken on this window (and the real fix):** `assets` validates because it renders
+through *custom* panels (`AssetsDetailPanel.jsx` / `AssetsConfigPanel.jsx`) whose field arrays are
+hand-written and carry `min`/`integer`. `asset-group` is a **generic** window — its form fields
+are baked by the frontend generator (`generateFormComponent` in
+`schema_forge_core/cli/src/generate-frontend.js`), which was **dropping** `min`/`integer` and
+emitting only `type: 'number'`. So declaring the flags in `decisions.json` (and in the contract)
+was not enough — they never reached the generated `AssetCategoryForm.jsx`, so `getNumericFieldError`
+saw no constraints. The fix is in the **generator**: it now passes `min` and `integer` straight
+through to the emitted `FieldDef` (only when defined, so fields declaring neither stay
+byte-for-byte identical). `type` is deliberately left as `'number'` — the validator reads
+`min`/`integer`, not `type`, and `EntityForm.getInputType` only recognizes `'number'`. This fix
+applies to **every** generic window, not just `asset-group`.
+
+`usableLifeYears` was previously `"visibility": "system"` (hidden). It is now `editable` and shown
+conditionally when `amortize === 'YE'` (Yearly), mirroring `assets`: Years for Yearly schedules,
+Months for everything else. Both carry `min: 1, integer: true`.
+
+Verified in `artifacts/asset-group/contract.json` and the regenerated
+`artifacts/asset-group/generated/web/asset-group/AssetCategoryForm.jsx`: both `usableLifeYears`
+and `usableLifeMonths` carry `min: 1, integer: true` with their amortize-based `displayLogic`.
+
+**Files changed:**
+- `schema_forge_core/cli/src/generate-frontend.js` — `generateFormComponent` now propagates `min`/`integer` to the emitted field literal (generic fix, all windows)
+- `schema_forge_core/cli/test/generate-frontend.test.js` — regression tests for the `min`/`integer` passthrough
+- `artifacts/asset-group/decisions.json` — `usableLifeYears` → editable + `min: 1, integer: true` + amortize `=== 'YE'` displayLogic; `usableLifeMonths` displayLogic gains amortize `!== 'YE'`
+
+### Manual verification (ETP-4542)
+
+1. Open an Asset Category with **Depreciate** enabled and **Calculate Type** = "Time" (`TI`) so
+   **Usable Life - Months** is visible.
+2. Type `0`, a negative number, or a decimal like `5.5`, then click away (blur). Confirm a toast
+   error appears ("Value must be at least 1" or "Value must be a whole number", or the Spanish
+   equivalents).
+3. Click **Save** with the field still invalid — confirm the save is blocked.
+4. Type a valid positive integer (e.g. `12`), blur — confirm no toast appears — then Save.
+   Confirm the save succeeds.
+
+## ETP-4542 (Bloque 1) — extended to Annual Depreciation %
+
+Same generic mechanism (see above), extended to `annualDepreciation` ("Annual Depreciation %"),
+visible when **Depreciate** is on and **Calculate Type** = "Percentage" (`PE`). It declares
+**only `min: 1`** in `artifacts/asset-group/decisions.json` — **no `integer: true`** — because
+it is a percentage and decimals are valid business input (e.g. `12.5%`). This is a
+**generic** window, so the `generate-frontend.js` fix from the section above (min/integer
+passthrough to the emitted `FieldDef`) already covers it — no generator change was needed
+for this extension, only the `decisions.json` declaration + regeneration.
+
+Verified in `artifacts/asset-group/contract.json` and the regenerated
+`AssetCategoryForm.jsx`: `annualDepreciation` carries `min: 1` with no `integer` key.
+
+**Files changed:**
+- `artifacts/asset-group/decisions.json` (`annualDepreciation` → `min: 1`)
+
+### Manual verification (ETP-4542, Bloque 1)
+
+1. Set **Calculate Type** = "Percentage" so **Annual Depreciation %** is visible.
+2. Type `0` or a negative number, then blur. Confirm the "Value must be at least 1" toast
+   appears (or the Spanish equivalent).
+3. Type a decimal like `12.5`, blur — confirm **no** toast appears (decimals are valid for a
+   percentage) — then Save. Confirm the save succeeds.
+
 ## Manual verification
 
 1. Open the Finance menu and confirm **Asset Category** appears after Assets.
@@ -226,7 +296,7 @@ An earlier iteration built a dedicated `AssetCategoryDepreciationPanel.jsx` cust
 5. Open the created record and confirm the header form shows Name, Description (wider, single-row), and Depreciate on the top row, with no border/card around the fields.
 6. Check **Depreciate** and confirm **Depreciation Type** (Linear) and **Calculate Type** (Percentage / Time) appear, both required.
 7. Set **Calculate Type** to *Percentage* and confirm **Annual Depreciation %** appears (and Amortize / Usable Life - Months do not).
-8. Set **Calculate Type** to *Time* and confirm **Amortize** (Monthly / Yearly) and **Usable Life - Months** appear (and Annual Depreciation % does not).
+8. Set **Calculate Type** to *Time* and confirm **Amortize** (Monthly / Yearly) appears (and Annual Depreciation % does not). With **Amortize** = *Yearly* confirm **Usable Life - Years** appears (and Months does not); with any other Amortize value confirm **Usable Life - Months** appears (and Years does not).
 9. Uncheck **Depreciate** and confirm all depreciation-policy fields disappear.
 10. Confirm none of these fields appear in a hidden "Others" tab — they must all render in the main form.
 11. Confirm the **Accounting** tab is present and shows one row per accounting schema.
@@ -238,3 +308,7 @@ An earlier iteration built a dedicated `AssetCategoryDepreciationPanel.jsx` cust
 17. Confirm the **Attachments** tab appears after the Accounting tab (not before it).
 18. Upload a file in the Attachments tab and confirm it persists. Download it and delete it.
 19. Confirm no Print button or share/link icon appears anywhere in the window.
+
+## ETP-4565 — Accounting tab: non-deletable record
+
+**`entities.accounting.hideDelete: true`** added — the Accounting tab's row can no longer be deleted (`apiPrediction.crud.accounting.delete: false`); confirmed this gates the `SecondaryTableTab` delete affordance in `DetailView.jsx` the same way it does for `product`'s `secondaryTabs.accounting`. **Resolved (follow-up pass):** the Accounting tab is now capped at one record via `window.secondaryTabs.accounting.maxDetailLines: 1` — the same generic `secondaryTabs`-pattern capability added for `product`/`contacts` (see `product.md` for the full mechanism). Note this window's Accounting tab declares no `addLineFields` at all (unlike `product`'s), so there is no manual add trigger in the SPA today regardless — the cap is declared anyway for forward-compatibility (if `addLineFields` is ever added, the "registro único" requirement is already enforced) and for consistency with the sibling windows. Regenerated via `make regen ONLY=asset-group`; `sf-validate-pipeline --scope=asset-group` reports 0 violations. Regression tests: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` (decisions.json assertion) and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.secondaryTabsMaxLines.vitest.jsx` (behavioral, shared across the family).

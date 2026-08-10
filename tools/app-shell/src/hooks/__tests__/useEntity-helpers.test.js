@@ -52,6 +52,18 @@ registerHooks({
     const isAppShellCore = url.startsWith(APP_SHELL_CORE_URL);
     if (url.endsWith('.jsx') || ((isWorkspace || isAppShellCore) && url.endsWith('.js'))) {
       const source = readFileSync(fileURLToPath(url), 'utf8');
+      // Only pay for the esbuild transform when the module actually needs it:
+      // JSX syntax, or the Vite-only `import.meta.env` / `import.meta.glob`.
+      // A plain ESM `.js` module is handed to node verbatim (just tagged as a
+      // module, which is the other reason this hook exists). Transforming it
+      // anyway would strip its comments, and the resulting line shift makes
+      // V8 emit a SECOND coverage record for the same file path whose 0-hit
+      // function ranges bleed onto unrelated lines of the real file — which
+      // silently deflates that file's reported line coverage.
+      const needsTransform = url.endsWith('.jsx') || /import\.meta\.(env|glob)/.test(source);
+      if (!needsTransform) {
+        return { format: 'module', shortCircuit: true, source };
+      }
       const { code } = transformSync(source, {
         loader: url.endsWith('.jsx') ? 'jsx' : 'js',
         format: 'esm',
@@ -113,8 +125,6 @@ if (typeof globalThis.document === 'undefined') {
 const {
   pickMessage,
   pickMessageFromObject,
-  applyContactNameDefaults,
-  applyContactsRequiredFields,
   parseCriteriaInto,
   normalizeDefaultValue,
   shouldSkipPayloadField,
@@ -129,7 +139,16 @@ const {
   reportMissingRequiredFields,
   showSaveSuccessToast,
   handleSaveErrorResponse,
+  getNumericFieldViolation,
+  reportInvalidFormatField,
+  extractErrorMessage,
 } = await import('../useEntity.js');
+
+// `sonner`'s `toast` export is a plain mutable object (Object.assign(basicToast,
+// {...})), so its methods can be monkeypatched for the duration of a test
+// without a module mock — no ESM mock loader is wired up for third-party
+// packages in this file (only `@/` workspace specifiers are intercepted).
+const { toast } = await import('sonner');
 
 describe('pickMessage', () => {
   it('returns the trimmed string for a string input', () => {
@@ -216,126 +235,6 @@ describe('pickMessageFromObject', () => {
 
   it('returns null for an empty object', () => {
     assert.equal(pickMessageFromObject({}), null);
-  });
-});
-
-describe('applyContactNameDefaults', () => {
-  it('derives name from payload firstName/lastName', () => {
-    const payload = { firstName: 'John', lastName: 'Doe' };
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.name, 'John Doe');
-  });
-
-  it('falls back to source firstName/lastName when payload lacks them', () => {
-    const payload = {};
-    applyContactNameDefaults(payload, { firstName: 'Jane', lastName: 'Roe' });
-    assert.equal(payload.name, 'Jane Roe');
-  });
-
-  it('prefers payload names over source names', () => {
-    const payload = { firstName: 'Pay' };
-    applyContactNameDefaults(payload, { firstName: 'Src', lastName: 'Last' });
-    assert.equal(payload.name, 'Pay Last');
-  });
-
-  it('does NOT overwrite an existing name', () => {
-    const payload = { name: 'Existing', firstName: 'John', lastName: 'Doe' };
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.name, 'Existing');
-  });
-
-  it('sets username from name', () => {
-    const payload = { firstName: 'John', lastName: 'Doe' };
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.username, 'John Doe');
-  });
-
-  it('does not set username when name is absent', () => {
-    const payload = {};
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.name, undefined);
-    assert.equal(payload.username, undefined);
-  });
-
-  it('does not overwrite an existing username', () => {
-    const payload = { name: 'Some Name', username: 'keepme' };
-    applyContactNameDefaults(payload, {});
-    assert.equal(payload.username, 'keepme');
-  });
-
-  it('slices a long derived name to 60 chars (name and username)', () => {
-    const longFirst = 'a'.repeat(40);
-    const longLast = 'b'.repeat(40);
-    const payload = { firstName: longFirst, lastName: longLast };
-    applyContactNameDefaults(payload, {});
-    // "aaa... aaa bbb...": joined with a space then sliced to 60
-    const expected = `${longFirst} ${longLast}`.slice(0, 60);
-    assert.equal(payload.name, expected);
-    assert.equal(payload.name.length, 60);
-    assert.equal(payload.username, expected.slice(0, 60));
-    assert.equal(payload.username.length, 60);
-  });
-});
-
-describe('applyContactsRequiredFields', () => {
-  it('applies contact name defaults for a "contact" entity', () => {
-    const payload = { firstName: 'John', lastName: 'Doe' };
-    applyContactsRequiredFields('contact', payload, {});
-    assert.equal(payload.name, 'John Doe');
-  });
-
-  it('falls back businessPartner.name to source.name when payload lacks it', () => {
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
-    assert.equal(payload.name, 'Acme Corp');
-  });
-
-  it('defaults businessPartner.searchKey from source.name when absent', () => {
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
-    assert.equal(payload.searchKey, 'Acme Corp');
-  });
-
-  it('does NOT overwrite an existing searchKey', () => {
-    const payload = { searchKey: 'EXISTING' };
-    applyContactsRequiredFields('businessPartner', payload, { name: 'Acme Corp' });
-    assert.equal(payload.searchKey, 'EXISTING');
-  });
-
-  it('regression: truncates a long derived searchKey to 40 chars (C_BPartner.Value AD column limit)', () => {
-    // Reproduced via a real create with a 48-char commercial name:
-    // "Value too long. Length 48, maximum allowed 40".
-    const longName = 'a'.repeat(48);
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { name: longName });
-    assert.equal(payload.searchKey, longName.slice(0, 40));
-    assert.equal(payload.searchKey.length, 40);
-  });
-
-  it('regression: does not truncate payload.name itself (only searchKey), Name has more headroom (60)', () => {
-    const longName = 'b'.repeat(48);
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { name: longName });
-    assert.equal(payload.name, longName);
-    assert.equal(payload.name.length, 48);
-  });
-
-  it('truncates the source.searchKey fallback too (not just source.name)', () => {
-    const longSearchKey = 'c'.repeat(45);
-    const payload = {};
-    applyContactsRequiredFields('businessPartner', payload, { searchKey: longSearchKey, name: 'Short Name' });
-    assert.equal(payload.searchKey, longSearchKey.slice(0, 40));
-    assert.equal(payload.searchKey.length, 40);
-  });
-
-  it('leaves payload untouched for entities that are not contact/businessPartner', () => {
-    const payload = { name: 'Product X' };
-    const result = applyContactsRequiredFields('product', payload, {});
-    assert.deepEqual(result, { name: 'Product X' });
-  });
-
-  it('returns payload unchanged for non-object input', () => {
-    assert.equal(applyContactsRequiredFields('businessPartner', null, {}), null);
   });
 });
 
@@ -609,38 +508,38 @@ describe('buildPatchPayload', () => {
   it('includes only changed fields and skips the id key', () => {
     const editing = { id: '1', name: 'New', description: 'Same', qty: 5 };
     const selected = { id: '1', name: 'Old', description: 'Same', qty: 5 };
-    const result = buildPatchPayload(editing, selected, 'product');
+    const result = buildPatchPayload(editing, selected);
     assert.deepEqual(result, { name: 'New' });
   });
 
   it('returns an empty object when nothing changed (id ignored)', () => {
     const editing = { id: '1', name: 'Same' };
     const selected = { id: '1', name: 'Same' };
-    const result = buildPatchPayload(editing, selected, 'product');
+    const result = buildPatchPayload(editing, selected);
     assert.deepEqual(result, {});
   });
 
   it('includes a field present in editing but absent from selected', () => {
     const editing = { id: '1', extra: 'value' };
     const selected = { id: '1' };
-    const result = buildPatchPayload(editing, selected, 'product');
+    const result = buildPatchPayload(editing, selected);
     assert.deepEqual(result, { extra: 'value' });
   });
 
-  it('applies contact name defaults for a contact entity', () => {
+  // ETP-4156: a contact PATCH now carries only the changed fields. Deriving `name` from
+  // firstName/lastName is the backend's job (ContactHandler), so the payload must stay
+  // free of entity-specific extras.
+  it('does not inject entity-specific derived fields for a contact entity', () => {
     const editing = { id: '1', firstName: 'John', lastName: 'Doe' };
     const selected = { id: '1' };
-    const result = buildPatchPayload(editing, selected, 'contact');
-    assert.equal(result.firstName, 'John');
-    assert.equal(result.lastName, 'Doe');
-    assert.equal(result.name, 'John Doe');
-    assert.equal(result.username, 'John Doe');
+    const result = buildPatchPayload(editing, selected);
+    assert.deepEqual(result, { firstName: 'John', lastName: 'Doe' });
   });
 
   it('returns a fresh object, not the editing reference', () => {
     const editing = { id: '1', name: 'New' };
     const selected = { id: '1', name: 'Old' };
-    const result = buildPatchPayload(editing, selected, 'product');
+    const result = buildPatchPayload(editing, selected);
     assert.deepEqual(result, { name: 'New' });
     assert.notEqual(result, editing);
   });
@@ -760,6 +659,149 @@ describe('showSaveSuccessToast', () => {
   });
 });
 
+describe('getNumericFieldViolation (ETP-4542 — generic min/integer save block)', () => {
+  // Assets usableLife contract: min 1, integer, conditional visibility.
+  const USABLE_LIFE_FIELDS = [
+    {
+      key: 'usableLifeMonths',
+      min: 1,
+      integer: true,
+      displayLogic: (record) => record.calculateType === 'TI' && record.amortize !== 'YE',
+    },
+    {
+      key: 'usableLifeYears',
+      min: 1,
+      integer: true,
+      displayLogic: (record) => record.calculateType === 'TI' && record.amortize === 'YE',
+    },
+  ];
+
+  it('blocks save with fieldMinValueError (min param) when a visible min-constrained field is zero', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: 0 };
+    assert.deepEqual(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), {
+      key: 'usableLifeMonths', errorKey: 'fieldMinValueError', errorParams: { min: 1 },
+    });
+  });
+
+  it('blocks save with fieldMinValueError when the value is negative', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: -3 };
+    assert.deepEqual(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), {
+      key: 'usableLifeMonths', errorKey: 'fieldMinValueError', errorParams: { min: 1 },
+    });
+  });
+
+  it('blocks save with fieldIntegerError (no params) when the value is decimal', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: 5.5 };
+    assert.deepEqual(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), {
+      key: 'usableLifeMonths', errorKey: 'fieldIntegerError', errorParams: {},
+    });
+  });
+
+  it('blocks save on the years field when it is the visible one', () => {
+    const editing = { calculateType: 'TI', amortize: 'YE', usableLifeYears: 0 };
+    assert.deepEqual(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), {
+      key: 'usableLifeYears', errorKey: 'fieldMinValueError', errorParams: { min: 1 },
+    });
+  });
+
+  it('does NOT block on an empty value (required mechanism owns emptiness)', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: '' };
+    assert.equal(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), null);
+  });
+
+  it('allows save when the value is a valid positive integer', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: 12 };
+    assert.equal(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), null);
+  });
+
+  it('does NOT block when the invalid field is hidden by displayLogic', () => {
+    const editing = { calculateType: 'TI', amortize: 'MO', usableLifeMonths: 12, usableLifeYears: -1 };
+    assert.equal(getNumericFieldViolation(USABLE_LIFE_FIELDS, editing), null);
+  });
+
+  it('does NOT block when the field is read-only (completed document)', () => {
+    const fields = [{
+      key: 'usableLifeMonths',
+      min: 1,
+      integer: true,
+      readOnlyLogic: (record) => record.processed === true,
+      displayLogic: () => true,
+    }];
+    const editing = { processed: true, usableLifeMonths: -5 };
+    assert.equal(getNumericFieldViolation(fields, editing), null);
+  });
+
+  it('accepts a decimal on a field that declares min but NOT integer (default allows decimals)', () => {
+    const fields = [{ key: 'discount', min: 0, displayLogic: () => true }];
+    assert.equal(getNumericFieldViolation(fields, { discount: 2.5 }), null);
+  });
+
+  it('is a no-op for windows whose fields declare neither min nor integer', () => {
+    const fields = [{ key: 'businessPartner' }, { key: 'orderDate' }];
+    const editing = { businessPartner: '', orderDate: -5 };
+    assert.equal(getNumericFieldViolation(fields, editing), null);
+  });
+
+  it('is a no-op on an empty fields array', () => {
+    assert.equal(getNumericFieldViolation([], {}), null);
+  });
+});
+
+describe('reportInvalidFormatField (ETP-4542, bug 2/3 — toast dedup id)', () => {
+  const ui = (key, params = {}) => `${key}:${JSON.stringify(params)}`;
+  const noop = () => {};
+
+  // Monkeypatch toast.error around each test, restoring the original after —
+  // toast is a real sonner instance here (no mock loader for node_modules),
+  // and its methods are plain mutable object properties.
+  const withCapturedToastError = (fn) => {
+    const original = toast.error;
+    const calls = [];
+    toast.error = (...args) => calls.push(args);
+    try {
+      fn(calls);
+    } finally {
+      toast.error = original;
+    }
+  };
+
+  it('passes { id: toastId } to toast.error when a toastId is given', () => {
+    withCapturedToastError((calls) => {
+      reportInvalidFormatField('fieldMinValueError', ui, noop, noop, 'numeric-field-qty', { min: 1 });
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0], [ui('fieldMinValueError', { min: 1 }), { id: 'numeric-field-qty' }]);
+    });
+  });
+
+  it('calls toast.error with a single arg when no toastId is given (email/website/phone gates, unchanged)', () => {
+    withCapturedToastError((calls) => {
+      reportInvalidFormatField('sendModalInvalidEmail', ui, noop, noop);
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0], [ui('sendModalInvalidEmail', {})]);
+    });
+  });
+
+  it('returns null and flips isSaving to false regardless of toastId', () => {
+    const isSavingCalls = [];
+    let result;
+    withCapturedToastError(() => {
+      result = reportInvalidFormatField('fieldMinValueError', ui, noop, (v) => isSavingCalls.push(v), 'numeric-field-qty', { min: 1 });
+    });
+    assert.equal(result, null);
+    assert.deepEqual(isSavingCalls, [false]);
+  });
+
+  it('the id derived from getNumericFieldViolation.key matches EntityForm\'s numericFieldToastId for the same field', async () => {
+    // Cross-file contract: EntityForm's blur toast and this save-gate toast
+    // MUST compute the identical id for the same field key so sonner dedupes
+    // a near-simultaneous blur+click into a single toast instead of stacking.
+    const { numericFieldToastId } = await import('../../lib/numericValidation.js');
+    const fields = [{ key: 'usableLifeMonths', min: 1, integer: true, displayLogic: () => true }];
+    const violation = getNumericFieldViolation(fields, { usableLifeMonths: 0 });
+    assert.equal(numericFieldToastId(violation.key), 'numeric-field-usableLifeMonths');
+  });
+});
+
 describe('handleSaveErrorResponse', () => {
   const ui = (key) => key;
 
@@ -815,5 +857,59 @@ describe('handleSaveErrorResponse', () => {
     assert.equal(result, undefined);
     assert.equal(fieldErrorsCalled, false);
     assert.deepEqual(saveErrorCalls, ['bad']);
+  });
+});
+
+describe('extractErrorMessage — AD-translated duplicate-identifier error (ETP-4597)', () => {
+  // Bug: Etendo AD's backend core sometimes already rewrites a raw Postgres
+  // unique-constraint violation into a human-readable-but-still-technical
+  // sentence that names the AD entity's technical field group — e.g. (in
+  // Spanish) "Ya existe un/a Categoría del producto con el mismo (Entidad,
+  // Organización, Identificador). (Entidad, Organización, Identificador) debe
+  // ser único. Cambie los valores introducidos" — or the English equivalent
+  // naming (Client, Organization, Identifier). normalizeServerError (private
+  // to useEntity.js, exercised here through the exported extractErrorMessage)
+  // only recognizes the RAW Postgres wording ("duplicate key value violates
+  // unique constraint"); this AD-translated sentence falls through untouched
+  // to the raw-message passthrough, so the technical field names leak to the
+  // end user.
+  //
+  // Contract asserted here (the eventual fix must satisfy this test, not the
+  // other way around): extractErrorMessage(res, ui) must rewrite this sentence
+  // into a short, generic, user-friendly message, and it must never leak
+  // "Entidad/Organización/Identificador" (or the EN equivalents
+  // Client/Organization/Identifier). The Spanish copy the end user actually
+  // sees lives in es_ES.json under the validationDuplicateIdentifier key (per
+  // the project i18n policy); this test exercises the untranslated code-level
+  // fallback default, which follows the English convention used by every
+  // sibling translate() call in this same function (validationRequiredField,
+  // validationRequiredGeneric, validationDuplicateRecord).
+  //
+  // `ui` is mocked as identity (i.e. "no translation available"), same
+  // convention already used by the handleSaveErrorResponse tests above.
+  const ui = (key) => key;
+  const FRIENDLY_MESSAGE = 'A record with the same identifier already exists. Please enter a different one.';
+  const AD_MESSAGE_ES = 'Ya existe un/a Categoría del producto con el mismo (Entidad, Organización, Identificador). '
+    + '(Entidad, Organización, Identificador) debe ser único. Cambie los valores introducidos';
+
+  const fakeResponse = (body, status = 400) => ({
+    status,
+    json: async () => body,
+  });
+
+  it('rewrites the AD-translated unique-constraint sentence into a generic friendly message', async () => {
+    const res = fakeResponse({ error: { message: AD_MESSAGE_ES } });
+
+    const result = await extractErrorMessage(res, ui);
+
+    assert.equal(result, FRIENDLY_MESSAGE);
+    // Guards against leaking the AD's technical field-group fingerprint
+    // (the parenthesized listing, e.g. "(Entidad, Organización, Identificador)"
+    // or "(Client, Organization, Identifier)") — not the word "identificador"
+    // in natural prose, which the mandated friendly message itself contains.
+    assert.doesNotMatch(
+      result,
+      /\(Entidad[,)]|\(Organizaci[oó]n[,)]|\(Client[,)]|\(Organization[,)]/i,
+    );
   });
 });

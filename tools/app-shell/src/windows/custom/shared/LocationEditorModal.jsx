@@ -40,7 +40,7 @@ async function fetchSelectorPage(url, headers) {
 }
 
 function PickerMessage({text}) {
-    return <div className="px-4 py-6 text-center text-sm text-gray-500">{text}</div>;
+    return <div className="px-4 py-6 text-center text-sm text-muted-foreground">{text}</div>;
 }
 
 function renderCountryPickerBody(isLoading, loadingText, hasLoadFailed, loadErrorText, filteredCountries, emptyText, renderCountryRow) {
@@ -71,29 +71,29 @@ function CountryPicker({
                        }) {
     return (
         <div
-            className="fixed inset-0 z-[160] flex items-center justify-center bg-black/30 p-4"
+            className="fixed inset-0 z-[160] flex items-center justify-center bg-foreground/30 p-4"
             onMouseDown={onClose}
         >
             <div
-                className="w-full max-w-md max-h-[540px] bg-white rounded-xl shadow-2xl flex flex-col"
+                className="w-full max-w-md max-h-[540px] bg-card rounded-xl shadow-2xl flex flex-col"
                 onMouseDown={onContentMouseDown}
             >
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+                    <h3 className="text-sm font-semibold text-foreground">{title}</h3>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-muted-foreground hover:text-muted-foreground transition-colors"
                         aria-label={closeAriaLabel}
                     >
                         <X size={16} data-testid="X__927831" />
                     </button>
                 </div>
-                <div className="px-4 py-3 border-b border-gray-100">
+                <div className="px-4 py-3 border-b border-border-subtle">
                     <div className="relative">
                         <Search
                             size={14}
-                            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                             data-testid="Search__927831" />
                         <input
                             ref={searchInputRef}
@@ -101,7 +101,7 @@ function CountryPicker({
                             value={searchValue}
                             onChange={onSearchChange}
                             placeholder={searchPlaceholder}
-                            className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-border-control rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring"
                         />
                     </div>
                 </div>
@@ -111,7 +111,7 @@ function CountryPicker({
                         <div ref={loadMoreRef} className="flex justify-center py-2">
                             {isLoadingMore ? <Loader2
                                 size={14}
-                                className="animate-spin text-gray-400"
+                                className="animate-spin text-muted-foreground"
                                 data-testid="Loader2__927831" /> :
                                 <span className="h-3"/>}
                         </div>
@@ -131,7 +131,7 @@ function renderRegionPickerBody(regionsLoading, ui, regionsLoadFailed, filteredR
             key={region.id}
             type="button"
             onClick={() => handleRegionSelect(region.id)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.region === region.id ? '#F5F7F9' : '#fff', color: form.region === region.id ? '#121217' : '#374151', fontWeight: form.region === region.id ? 600 : 400 }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.region === region.id ? 'hsl(var(--muted))' : 'hsl(var(--card))', color: form.region === region.id ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight: form.region === region.id ? 600 : 400 }}
         >
             <span style={{ width: 16, flexShrink: 0 }}>
                 {form.region === region.id ? <Check size={13} data-testid="Check__927831" /> : null}
@@ -154,9 +154,17 @@ function renderRegionPickerBody(regionsLoading, ui, regionsLoadFailed, filteredR
  *   onClose         — () => void
  *   onSaved         — () => void: called after successful save; caller re-fetches address state
  *   onParentRefresh — () => void: called when backend indicates the parent record changed (e.g. tax key auto-updated)
- *   rowId           — string|null: C_BPartner_Location_ID of existing record (null = create)
- *   bpId            — string: parent Business Partner ID (required for create)
- *   apiBase         — string: e.g. "/sws/neo/contacts"
+ *   rowId           — string|null: existing record id (C_BPartner_Location_ID in 'bpartner'
+ *                     mode, C_Location_ID in 'location' mode). null = create.
+ *   bpId            — string: parent Business Partner ID (required for create in 'bpartner' mode)
+ *   apiBase         — string: NEO base for this window, e.g. "/sws/neo/contacts" or "/sws/neo/warehouse"
+ *   saveMode        — 'bpartner' (default) | 'location':
+ *                       'bpartner' → CRUD through {apiBase}/locationAddress, creates C_Location +
+ *                                    C_BPartner_Location (requires bpId on create). Contacts behaviour.
+ *                       'location' → CRUD through {apiBase}/location, plain C_Location only, returns
+ *                                    the C_Location id. Used by Warehouse's Location field.
+ *   showAddressTypeCheckboxes — boolean (default true): render the Shipping/Invoicing Address checks.
+ *                     Set false for windows (e.g. Warehouse) where address type does not apply.
  */
 export default function LocationEditorModal({
                                                 open,
@@ -167,7 +175,11 @@ export default function LocationEditorModal({
                                                 bpId,
                                                 apiBase: contactsApiBase,
                                                 selectorContext = {},
+                                                saveMode = 'bpartner',
+                                                showAddressTypeCheckboxes = true,
                                             }) {
+    // Entity segment of the NEO path: 'locationAddress' (BP-linked) or 'location' (plain C_Location).
+    const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
     const ui = useUI();
     const t = useLabel();
     const {token} = useAuth();
@@ -296,6 +308,8 @@ export default function LocationEditorModal({
         const loadCountries = async () => {
             setCountriesLoading(true);
             const selectorBases = [
+                `${contactsApiBase}/${entityPath}/selectors/C_Country_ID`,
+                `${contactsApiBase}/${entityPath}/selectors/country`,
                 `${contactsApiBase}/locationAddress/selectors/C_Country_ID`,
                 `${contactsApiBase}/intrastatAdquisitions/selectors/country`,
                 `${contactsApiBase}/locationAddress/selectors/country`,
@@ -348,8 +362,9 @@ export default function LocationEditorModal({
         // Populate form when editing an existing record
         if (bplLinkId) {
             setInitialLoading(true);
-            // ContactsLocationAddressHandler enriches the GET-by-ID response with C_Location fields.
-            fetch(`${contactsApiBase}/locationAddress/${bplLinkId}`, {headers: authHeader})
+            // The handler enriches the GET-by-ID response with C_Location fields
+            // (ContactsLocationAddressHandler for 'bpartner', the plain location handler for 'location').
+            fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {headers: authHeader})
                 .then(r => (r.ok ? r.json() : null))
                 .then(d => {
                     const rec = d?.response?.data?.[0] ?? d;
@@ -409,6 +424,8 @@ export default function LocationEditorModal({
             regionLoadingMoreRef.current = false;
 
             const selectorBases = [
+                `${contactsApiBase}/${entityPath}/selectors/C_Region_ID`,
+                `${contactsApiBase}/${entityPath}/selectors/region`,
                 `${contactsApiBase}/locationAddress/selectors/C_Region_ID`,
                 `${contactsApiBase}/intrastatAdquisitions/selectors/C_Region_ID`,
                 `${contactsApiBase}/bankAccount/selectors/C_Region_ID`,
@@ -676,31 +693,46 @@ export default function LocationEditorModal({
                 cityName: form.city || null,
                 country: form.country || null,
                 region: form.region || null,
-                shipToAddress: form.shipToAddress ? 'Y' : 'N',
-                invoiceToAddress: form.invoiceToAddress ? 'Y' : 'N',
             };
+            // Address-type flags only exist in 'bpartner' mode (C_BPartner_Location);
+            // omit them entirely when the checkboxes are hidden (e.g. Warehouse).
+            if (showAddressTypeCheckboxes) {
+                payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
+                payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
+            }
             const postHeaders = {...authHeader, 'Content-Type': 'application/json'};
 
             if (bplLinkId) {
-                // EDIT: ContactsLocationAddressHandler updates C_Location + C_BPartner_Location atomically
-                const res = await fetch(`${contactsApiBase}/locationAddress/${bplLinkId}`, {
+                // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
+                // 'location' updates the plain C_Location.
+                const res = await fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {
                     method: 'PUT',
                     headers: postHeaders,
                     body: JSON.stringify(payload),
                 });
                 if (res.ok) {
                     const data = await res.json().catch(() => null);
-                    showBackendMessages(data?.response?.data?.[0]?.messages);
-                    onSaved?.();
+                    const rec = data?.response?.data?.[0] ?? null;
+                    showBackendMessages(rec?.messages);
+                    // Return id/name so a single-FK field (Warehouse) can refresh its display.
+                    onSaved?.(rec?.id ?? bplLinkId, rec?.name ?? name);
                 }
                 return;
             }
 
-            // CREATE: ContactsLocationAddressHandler creates C_Location + C_BPartner_Location atomically
-            const res = await fetch(`${contactsApiBase}/locationAddress?parentId=${bpId}`, {
+            // CREATE:
+            //   'bpartner' → creates C_Location + C_BPartner_Location atomically (needs parentId/bpId)
+            //   'location' → creates a plain C_Location, no business partner link
+            const createUrl = saveMode === 'location'
+                ? `${contactsApiBase}/${entityPath}`
+                : `${contactsApiBase}/locationAddress?parentId=${bpId}`;
+            const createBody = saveMode === 'location'
+                ? payload
+                : {...payload, businessPartner: bpId};
+            const res = await fetch(createUrl, {
                 method: 'POST',
                 headers: postHeaders,
-                body: JSON.stringify({...payload, businessPartner: bpId}),
+                body: JSON.stringify(createBody),
             });
 
             if (!res.ok) {
@@ -726,45 +758,45 @@ export default function LocationEditorModal({
 
     const INPUT = {
         width: '100%', fontSize: 14, padding: '8px 12px',
-        border: '1px solid #D1D4DB', borderRadius: 8, height: 40,
-        boxSizing: 'border-box', color: '#121217', outline: 'none', background: '#fff',
+        border: '1px solid hsl(var(--border-control))', borderRadius: 8, height: 40,
+        boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none', background: 'hsl(var(--card))',
     };
 
-    const FIELD_LABEL = { fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 };
+    const FIELD_LABEL = { fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 };
 
     const PICKER_BTN = {
         ...INPUT, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        cursor: 'pointer', gap: 8, background: '#fff',
+        cursor: 'pointer', gap: 8, background: 'hsl(var(--card))',
     };
 
     const PICKER_MODAL = {
         position: 'fixed', inset: 0, zIndex: 160,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(18,18,23,.35)',
+        background: 'hsl(var(--foreground) / .35)',
     };
 
     const PICKER_CONTENT = {
-        background: '#fff', borderRadius: 16, width: '100%', maxWidth: 440,
+        background: 'hsl(var(--card))', borderRadius: 16, width: '100%', maxWidth: 440,
         maxHeight: 520, margin: 16, display: 'flex', flexDirection: 'column',
-        boxShadow: '0 8px 40px rgba(18,18,23,.18)',
+        boxShadow: '0 8px 40px hsl(var(--foreground) / .18)',
         animation: 'fm-modal-in .2s cubic-bezier(.4,0,.2,1)',
     };
 
     return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(18,18,23,.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 8px 40px rgba(18,18,23,.18)', width: '100%', maxWidth: 560, margin: 16, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 64px)', animation: 'fm-modal-in .2s cubic-bezier(.4,0,.2,1)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'hsl(var(--foreground) / .35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ background: 'hsl(var(--card))', borderRadius: 16, boxShadow: '0 8px 40px hsl(var(--foreground) / .18)', width: '100%', maxWidth: 560, margin: 16, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 64px)', animation: 'fm-modal-in .2s cubic-bezier(.4,0,.2,1)' }}>
 
                 {/* Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 20px 0', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ font: '700 20px/28px system-ui', color: '#121217' }}>
+                        <div style={{ font: '700 20px/28px system-ui', color: 'hsl(var(--foreground))' }}>
                             {ui('locationSelectorTitle')}
                         </div>
                     </div>
                     <button
                         onClick={onClose}
                         aria-label={ui('close')}
-                        style={{ width: 28, height: 28, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'none', color: '#828FA3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}
+                        style={{ width: 28, height: 28, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'none', color: 'hsl(var(--text-disabled))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}
                     >
                         ✕
                     </button>
@@ -776,7 +808,7 @@ export default function LocationEditorModal({
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0' }}>
                             <Loader2
                                 size={20}
-                                style={{ animation: 'spin 1s linear infinite', color: '#828FA3' }}
+                                style={{ animation: 'spin 1s linear infinite', color: 'hsl(var(--text-disabled))' }}
                                 data-testid="Loader2__927831" />
                         </div>
                     ) : (
@@ -816,12 +848,12 @@ export default function LocationEditorModal({
                                     aria-expanded={countryPickerOpen}
                                     style={PICKER_BTN}
                                 >
-                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: form.country ? '#121217' : '#828FA3' }}>
+                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: form.country ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}>
                                         {selectedCountryLabel}
                                     </span>
                                     <ChevronDown
                                         size={15}
-                                        style={{ color: '#828FA3', flexShrink: 0 }}
+                                        style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0 }}
                                         data-testid="ChevronDown__927831" />
                                 </button>
                             </div>
@@ -837,17 +869,18 @@ export default function LocationEditorModal({
                                     aria-expanded={regionPickerOpen}
                                     style={{ ...PICKER_BTN, opacity: form.country ? 1 : 0.5, cursor: form.country ? 'pointer' : 'not-allowed' }}
                                 >
-                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: form.region ? '#121217' : '#828FA3' }}>
+                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: form.region ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}>
                                         {!form.country ? ui('selectCountryFirst') : selectedRegionLabel}
                                     </span>
                                     <ChevronDown
                                         size={15}
-                                        style={{ color: '#828FA3', flexShrink: 0 }}
+                                        style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0 }}
                                         data-testid="ChevronDown__927831" />
                                 </button>
                             </div>
 
-                            {/* Checkboxes */}
+                            {/* Checkboxes — only for BPartner locations (Contacts), not plain C_Location */}
+                            {showAddressTypeCheckboxes && (
                             <div style={{ display: 'flex', gap: 24, paddingTop: 4 }}>
                                 <SquareCheckbox
                                     label={t('IsShipTo') || 'Shipping Address'}
@@ -860,16 +893,17 @@ export default function LocationEditorModal({
                                     onChange={val => setField('invoiceToAddress', val)}
                                     data-testid="SquareCheckbox__location-invoicing" />
                             </div>
+                            )}
 
                         </div>
                     )}
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: '14px 20px', borderTop: '1px solid #E8EAEF', display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: '14px 20px', borderTop: '1px solid hsl(var(--border-subtle))', display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
                     <button
                         onClick={onClose}
-                        style={{ font: '400 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid #D1D4DB', cursor: 'pointer', background: '#fff', color: '#121217' }}
+                        style={{ font: '400 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--border-control))', cursor: 'pointer', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
                     >
                         {ui('cancel')}
                     </button>
@@ -877,7 +911,7 @@ export default function LocationEditorModal({
                         <button
                             onClick={handleSave}
                             disabled={saving || initialLoading}
-                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid #121217', cursor: 'pointer', background: '#121217', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: (saving || initialLoading) ? 0.5 : 1 }}
+                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--foreground))', cursor: 'pointer', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: (saving || initialLoading) ? 0.5 : 1 }}
                         >
                             {saving && <Loader2
                                 size={13}
@@ -894,26 +928,26 @@ export default function LocationEditorModal({
             {countryPickerOpen && (
                 <div style={PICKER_MODAL} onMouseDown={() => setCountryPickerOpen(false)}>
                     <div style={PICKER_CONTENT} onMouseDown={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #E8EAEF' }}>
-                            <span style={{ font: '600 16px/22px system-ui', color: '#121217' }}>{ui('countryLabel')}</span>
-                            <button onClick={() => setCountryPickerOpen(false)} aria-label={ui('cancel')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#828FA3', fontSize: 16 }}>✕</button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
+                            <span style={{ font: '600 16px/22px system-ui', color: 'hsl(var(--foreground))' }}>{ui('countryLabel')}</span>
+                            <button onClick={() => setCountryPickerOpen(false)} aria-label={ui('cancel')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))', fontSize: 16 }}>✕</button>
                         </div>
-                        <div style={{ padding: '12px 20px', borderBottom: '1px solid #F5F7F9' }}>
+                        <div style={{ padding: '12px 20px', borderBottom: '1px solid hsl(var(--muted))' }}>
                             <div style={{ position: 'relative' }}>
                                 <Search
                                     size={14}
-                                    style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#828FA3' }}
+                                    style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--text-disabled))' }}
                                     data-testid="Search__927831" />
                                 <input ref={countrySearchRef} type="text" value={countryQuery} onChange={e => setCountryQuery(e.target.value)} placeholder={ui('countrySearchPlaceholder')} style={{ ...INPUT, paddingLeft: 36 }} />
                             </div>
                         </div>
                         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-                            {countriesLoading && <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 14, color: '#828FA3' }}>{ui('loading')}</div>}
-                            {countriesLoadFailed && <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 14, color: '#828FA3' }}>{ui('countryLoadError')}</div>}
-                            {!countriesLoading && !countriesLoadFailed && filteredCountries.length === 0 && <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 14, color: '#828FA3' }}>{ui('noResults')}</div>}
+                            {countriesLoading && <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 14, color: 'hsl(var(--text-disabled))' }}>{ui('loading')}</div>}
+                            {countriesLoadFailed && <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 14, color: 'hsl(var(--text-disabled))' }}>{ui('countryLoadError')}</div>}
+                            {!countriesLoading && !countriesLoadFailed && filteredCountries.length === 0 && <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 14, color: 'hsl(var(--text-disabled))' }}>{ui('noResults')}</div>}
                             {filteredCountries.map(country => (
                                 <button key={country.id} type="button" onClick={() => handleCountrySelect(country.id)}
-                                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.country === country.id ? '#F5F7F9' : '#fff', color: form.country === country.id ? '#121217' : '#374151', fontWeight: form.country === country.id ? 600 : 400 }}>
+                                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.country === country.id ? 'hsl(var(--muted))' : 'hsl(var(--card))', color: form.country === country.id ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight: form.country === country.id ? 600 : 400 }}>
                                     <span style={{ width: 16, flexShrink: 0 }}>{form.country === country.id && <Check size={13} data-testid="Check__927831" />}</span>
                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{country.label}</span>
                                 </button>
@@ -921,7 +955,7 @@ export default function LocationEditorModal({
                             <div ref={countryLoadMoreRef} style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
                                 {countryLoadingMore && <Loader2
                                     size={14}
-                                    style={{ animation: 'spin 1s linear infinite', color: '#828FA3' }}
+                                    style={{ animation: 'spin 1s linear infinite', color: 'hsl(var(--text-disabled))' }}
                                     data-testid="Loader2__927831" />}
                             </div>
                         </div>
@@ -932,15 +966,15 @@ export default function LocationEditorModal({
             {regionPickerOpen && (
                 <div style={PICKER_MODAL} onMouseDown={() => setRegionPickerOpen(false)}>
                     <div style={PICKER_CONTENT} onMouseDown={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #E8EAEF' }}>
-                            <span style={{ font: '600 16px/22px system-ui', color: '#121217' }}>{ui('regionLabel')}</span>
-                            <button onClick={() => setRegionPickerOpen(false)} aria-label={ui('cancel')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#828FA3', fontSize: 16 }}>✕</button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
+                            <span style={{ font: '600 16px/22px system-ui', color: 'hsl(var(--foreground))' }}>{ui('regionLabel')}</span>
+                            <button onClick={() => setRegionPickerOpen(false)} aria-label={ui('cancel')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))', fontSize: 16 }}>✕</button>
                         </div>
-                        <div style={{ padding: '12px 20px', borderBottom: '1px solid #F5F7F9' }}>
+                        <div style={{ padding: '12px 20px', borderBottom: '1px solid hsl(var(--muted))' }}>
                             <div style={{ position: 'relative' }}>
                                 <Search
                                     size={14}
-                                    style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#828FA3' }}
+                                    style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--text-disabled))' }}
                                     data-testid="Search__927831" />
                                 <input ref={regionSearchRef} type="text" value={regionQuery} onChange={e => setRegionQuery(e.target.value)} placeholder={ui('regionSearchPlaceholder')} style={{ ...INPUT, paddingLeft: 36 }} />
                             </div>
@@ -950,7 +984,7 @@ export default function LocationEditorModal({
                             <div ref={regionLoadMoreRef} style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
                                 {regionLoadingMore && <Loader2
                                     size={14}
-                                    style={{ animation: 'spin 1s linear infinite', color: '#828FA3' }}
+                                    style={{ animation: 'spin 1s linear infinite', color: 'hsl(var(--text-disabled))' }}
                                     data-testid="Loader2__927831" />}
                             </div>
                         </div>

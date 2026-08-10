@@ -57,13 +57,13 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   return (
     <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey((k) => k + 1)}>
       {assets.length === 0 && !loading ? (
-        <div className="text-sm text-gray-500 px-2 py-3">{ui('noLinkedAssets')}</div>
+        <div className="text-sm text-muted-foreground px-2 py-3">{ui('noLinkedAssets')}</div>
       ) : (
         assets.map((asset) => (
           <DocChip
             key={asset.id}
             icon={ASSET_ICON}
-            iconColor="text-indigo-600"
+            iconColor="text-primary-foreground"
             title={asset['name'] || asset['searchKey'] || asset.id}
             statusLabel={asset['assetCategory$_identifier']}
             onClick={() => navigate(`/assets/${asset.id}`)}

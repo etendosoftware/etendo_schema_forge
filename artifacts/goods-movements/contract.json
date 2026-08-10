@@ -1,14 +1,14 @@
 {
-  "version": "0.16.0",
-  "generatedAt": "2026-04-29T19:05:48.778Z",
-  "updatedAt": "2026-07-16T12:52:39.736Z",
-  "checksum": "0775f50ac7a8954b",
+  "version": "0.18.0",
+  "generatedAt": "2026-07-29T14:51:09.206Z",
+  "checksum": "adbcca35cb666fa1",
   "frontendContract": {
     "window": {
       "id": "170",
       "name": "Goods Movements",
       "primaryEntity": "movement",
       "category": "inventory",
+      "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
       "customComponents": {
@@ -111,6 +111,10 @@
             },
             "defaultValue": "@#Date@",
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -136,6 +140,10 @@
             "defaultValue": "@#Date@",
             "gridOrder": 2,
             "dot": false,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -152,30 +160,67 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
-            "name": "documentNo",
-            "apiKey": "documentNo",
-            "column": "DocumentNo",
-            "label": "Document No.",
-            "type": "string",
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false,
-            "grid": true,
+            "grid": false,
             "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "sequence",
-              "source": "documentType.sequence"
-            },
+            "reference": "Project",
+            "inputMode": "search",
             "section": "principal",
-            "gridOrder": 3,
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
+              "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "record['posted'] === 'Y'"
+            }
+          },
+          {
+            "name": "costCenter",
+            "apiKey": "costCenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === 'Y'"
             }
           },
           {
@@ -205,7 +250,38 @@
                 "name": "statusDraft"
               }
             ],
-            "gridOrder": 4
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "label": "Document No.",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
+            },
+            "section": "principal",
+            "gridOrder": 3,
+            "validation": {
+              "maxLength": 30
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
           }
         ],
         "searchableFields": [
@@ -228,17 +304,17 @@
             }
           },
           {
-            "name": "documentNo",
-            "derivation": {
-              "type": "sequence",
-              "source": "documentType.sequence"
-            }
-          },
-          {
             "name": "processed",
             "derivation": {
               "type": "computed",
               "source": "false"
+            }
+          },
+          {
+            "name": "documentNo",
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
             }
           }
         ],
@@ -277,6 +353,10 @@
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_MovementLine WHERE M_Movement_ID=@M_Movement_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_MovementLine WHERE M_Movement_ID=@M_Movement_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -312,6 +392,10 @@
               }
             ],
             "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Movement_Product"
             },
@@ -333,6 +417,9 @@
             "grid": false,
             "form": true,
             "section": "other",
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -358,6 +445,10 @@
             "defaultValue": "1",
             "gridOrder": 5,
             "columnWidth": 160,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
@@ -378,7 +469,11 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
-            "gridOrder": 2
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "storageBin",
@@ -395,6 +490,10 @@
             "reference": "Locator",
             "inputMode": "selector",
             "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -417,6 +516,10 @@
             "inputMode": "selector",
             "excludeValueOf": "storageBin",
             "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -442,7 +545,8 @@
               "source": "1"
             }
           }
-        ]
+        ],
+        "javaQualifier": "goodsMovementLineHandler"
       }
     }
   },
@@ -452,6 +556,7 @@
       "name": "Goods Movements",
       "primaryEntity": "movement",
       "category": "inventory",
+      "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
       "customComponents": {
@@ -599,6 +704,22 @@
             "required": true
           },
           {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
             "name": "trxOrganization",
             "apiKey": "trxOrganization",
             "column": "AD_OrgTrx_ID",
@@ -611,7 +732,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -619,7 +740,7 @@
             "apiKey": "costCenter",
             "column": "C_Costcenter_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -663,19 +784,11 @@
             "required": false
           },
           {
-            "name": "documentNo",
-            "apiKey": "documentNo",
-            "column": "DocumentNo",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "processed",
-            "apiKey": "processed",
-            "column": "Processed",
-            "type": "boolean",
-            "visibility": "readOnly",
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": true
           },
           {
@@ -687,12 +800,20 @@
             "required": true
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
+          },
+          {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
           },
           {
             "name": "creationDate",
@@ -724,22 +845,6 @@
             "column": "UpdatedBy",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "etblkpAccountingstatus",
-            "apiKey": "etblkpAccountingstatus",
-            "column": "EM_Etblkp_Accountingstatus",
-            "type": "enum",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "etblkpBulkposting",
-            "apiKey": "etblkpBulkposting",
-            "column": "EM_Etblkp_Bulkposting",
-            "type": "button",
-            "visibility": "discarded",
             "required": true
           }
         ],
@@ -879,6 +984,14 @@
             "required": true
           },
           {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "movement",
             "apiKey": "movement",
             "column": "M_Movement_ID",
@@ -891,14 +1004,6 @@
             "apiKey": "id",
             "column": "M_MovementLine_ID",
             "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
@@ -934,7 +1039,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "goodsMovementLineHandler"
       }
     },
     "endpoints": [
@@ -1039,6 +1145,22 @@
       }
     },
     "selectors": [
+      {
+        "entity": "movement",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-movements/movement/selectors/project"
+      },
+      {
+        "entity": "movement",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-movements/movement/selectors/costCenter"
+      },
       {
         "entity": "movementLine",
         "field": "product",
@@ -1216,6 +1338,46 @@
         "description": "Default value for 'movementQuantity' in movementLine should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-movement-costCenter",
+        "category": "displaylogic-evaluable",
+        "entity": "movement",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Display logic for 'costCenter' in movement should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-movement-project",
+        "category": "displaylogic-evaluable",
+        "entity": "movement",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in movement should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-movement-costCenter",
+        "category": "displaylogic-valid",
+        "entity": "movement",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Display logic for 'costCenter' in movement should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-movement-project",
+        "category": "displaylogic-valid",
+        "entity": "movement",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in movement should be valid JS"
+      },
+      {
+        "id": "t-field-presence-movement-costCenter",
+        "category": "field-presence",
+        "entity": "movement",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Field 'costCenter' should be present in movement"
+      },
+      {
         "id": "t-field-presence-movement-description",
         "category": "field-presence",
         "entity": "movement",
@@ -1254,6 +1416,14 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should be present in movement"
+      },
+      {
+        "id": "t-field-presence-movement-project",
+        "category": "field-presence",
+        "entity": "movement",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in movement"
       },
       {
         "id": "t-field-presence-movementLine-description",
@@ -1312,6 +1482,14 @@
         "description": "Field 'uOM' should be present in movementLine"
       },
       {
+        "id": "t-field-type-movement-costCenter",
+        "category": "field-type",
+        "entity": "movement",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Field 'costCenter' should have type 'string' in movement"
+      },
+      {
         "id": "t-field-type-movement-description",
         "category": "field-type",
         "entity": "movement",
@@ -1350,6 +1528,14 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should have type 'boolean' in movement"
+      },
+      {
+        "id": "t-field-type-movement-project",
+        "category": "field-type",
+        "entity": "movement",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in movement"
       },
       {
         "id": "t-field-type-movementLine-description",
@@ -1408,6 +1594,14 @@
         "description": "Field 'uOM' should have type 'string' in movementLine"
       },
       {
+        "id": "t-readonlylogic-evaluable-movement-costCenter",
+        "category": "readonlylogic-evaluable",
+        "entity": "movement",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costCenter' in movement should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-movement-documentNo",
         "category": "readonlylogic-evaluable",
         "entity": "movement",
@@ -1430,6 +1624,14 @@
         "field": "name",
         "runner": "node",
         "description": "Read-only logic for 'name' in movement should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-movement-project",
+        "category": "readonlylogic-evaluable",
+        "entity": "movement",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in movement should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-movementLine-description",
@@ -1480,6 +1682,14 @@
         "description": "Read-only logic for 'storageBin' in movementLine should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-valid-movement-costCenter",
+        "category": "readonlylogic-valid",
+        "entity": "movement",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costCenter' in movement should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-movement-documentNo",
         "category": "readonlylogic-valid",
         "entity": "movement",
@@ -1502,6 +1712,14 @@
         "field": "name",
         "runner": "node",
         "description": "Read-only logic for 'name' in movement should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-movement-project",
+        "category": "readonlylogic-valid",
+        "entity": "movement",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in movement should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-movementLine-description",
@@ -1660,6 +1878,22 @@
         "description": "Field 'product' should be a supported filter for movementLine"
       },
       {
+        "id": "t-selector-endpoint-movement-costCenter",
+        "category": "selector-endpoint",
+        "entity": "movement",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costCenter' in movement should exist"
+      },
+      {
+        "id": "t-selector-endpoint-movement-project",
+        "category": "selector-endpoint",
+        "entity": "movement",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in movement should exist"
+      },
+      {
         "id": "t-selector-endpoint-movementLine-newStorageBin",
         "category": "selector-endpoint",
         "entity": "movementLine",
@@ -1722,14 +1956,6 @@
         "field": "client",
         "runner": "node",
         "description": "System field 'client' should exist in backend but not frontend for movement"
-      },
-      {
-        "id": "t-system-field-movement-costCenter",
-        "category": "system-field",
-        "entity": "movement",
-        "field": "costCenter",
-        "runner": "node",
-        "description": "System field 'costCenter' should exist in backend but not frontend for movement"
       },
       {
         "id": "t-system-field-movement-createdBy",
@@ -1810,14 +2036,6 @@
         "field": "processNow",
         "runner": "node",
         "description": "System field 'processNow' should exist in backend but not frontend for movement"
-      },
-      {
-        "id": "t-system-field-movement-project",
-        "category": "system-field",
-        "entity": "movement",
-        "field": "project",
-        "runner": "node",
-        "description": "System field 'project' should exist in backend but not frontend for movement"
       },
       {
         "id": "t-system-field-movement-salesCampaign",
@@ -2003,23 +2221,25 @@
       }
     ],
     "summary": {
-      "total": 110,
+      "total": 122,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
         "default-value-type": 4,
-        "field-presence": 12,
-        "field-type": 12,
-        "readonlylogic-evaluable": 9,
-        "readonlylogic-valid": 9,
+        "displaylogic-evaluable": 2,
+        "displaylogic-valid": 2,
+        "field-presence": 14,
+        "field-type": 14,
+        "readonlylogic-evaluable": 11,
+        "readonlylogic-valid": 11,
         "rule-declared": 12,
         "searchable-filters": 3,
-        "selector-endpoint": 4,
-        "system-field": 37,
+        "selector-endpoint": 6,
+        "system-field": 35,
         "visibility": 2
       },
       "byRunner": {
-        "node": 110,
+        "node": 122,
         "junit": 0
       }
     }

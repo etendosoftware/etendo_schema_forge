@@ -368,6 +368,57 @@ describe('useEntity', () => {
       expect(result.current.selected).toEqual({ ...existing, name: 'Updated', serverValue: 'computed' });
     });
 
+    it('refetches children after a PATCH on an existing record with a childEntity (ETP-4512)', async () => {
+      // Guards against a real bug: a backend NeoHandler side effect on the header's
+      // own save (e.g. syncing a join table from a header field) is invisible to the
+      // frontend — nothing tells the already-loaded child list to refresh unless
+      // handleSave itself triggers it. Children must NOT go stale after a plain
+      // update, the same way the existing justSaved fast-path already covers create.
+      // The children endpoint returns DIFFERENT data on each call — role-a-row from
+      // handleSelect's own initial fetchChildren, then role-b-row — so this only
+      // passes if handleSave ALSO calls fetchChildren after the PATCH; if it doesn't,
+      // `children` would incorrectly stay stale at role-a-row.
+      const existing = { id: 'ex-1', name: 'Original', defaultRole: 'role-a' };
+      let childrenFetchCount = 0;
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/lines?parentId=ex-1')) {
+          childrenFetchCount += 1;
+          const row = childrenFetchCount === 1
+            ? { id: 'role-a-row', role: 'role-a' }
+            : { id: 'role-b-row', role: 'role-b' };
+          return { ok: true, json: async () => ({ response: { data: [row] } }) };
+        }
+        if (opts?.method === 'PATCH') {
+          return { ok: true, json: async () => ({ response: { data: [{ ...existing, defaultRole: 'role-b' }] } }) };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+
+      act(() => {
+        result.current.handleSelect(existing);
+      });
+
+      await waitFor(() => {
+        expect(result.current.children).toEqual([{ id: 'role-a-row', role: 'role-a' }]);
+      });
+
+      act(() => {
+        result.current.handleChange('defaultRole', 'role-b');
+      });
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(result.current.children).toEqual([{ id: 'role-b-row', role: 'role-b' }]);
+      });
+      expect(childrenFetchCount).toBe(2);
+    });
+
     it('returns null and sets error on non-ok response', async () => {
       let postCalled = false;
       globalThis.fetch.mockImplementation(async (url, opts) => {
@@ -484,8 +535,9 @@ describe('useEntity', () => {
         json: async () => ({ response: { data: [] } }),
       });
 
+      let outcome;
       await act(async () => {
-        await result.current.handleDelete();
+        outcome = await result.current.handleDelete();
       });
 
       const deleteCall = globalThis.fetch.mock.calls.find(c => c[1]?.method === 'DELETE');
@@ -493,18 +545,73 @@ describe('useEntity', () => {
       expect(deleteCall[0]).toBe('http://localhost/api/header/del-1');
       expect(result.current.selected).toBeNull();
       expect(result.current.editing).toBeNull();
+      // ETP-4656 — callers (DetailView's confirmHeaderDelete) navigate away
+      // only when this resolves true.
+      expect(outcome).toBe(true);
     });
 
     it('does nothing when no record selected', async () => {
       const { result } = renderEntity('header', null, { skipListFetch: true });
 
+      let outcome;
       await act(async () => {
-        await result.current.handleDelete();
+        outcome = await result.current.handleDelete();
       });
 
       // No fetch calls for DELETE
       const deleteCall = globalThis.fetch.mock.calls.find(c => c[1]?.method === 'DELETE');
       expect(deleteCall).toBeUndefined();
+      expect(outcome).toBe(false);
+    });
+
+    // ETP-4656 — standardized delete UX: handleDelete must return false (not
+    // just swallow the error) on a failed DELETE, so callers know not to
+    // navigate away as if the record were gone.
+    it('returns false and toasts an error on a failed DELETE (does not clear selection)', async () => {
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      const selectedRecord = { id: 'del-2', name: 'Referenced Record' };
+      act(() => { result.current.handleSelect(selectedRecord); });
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          error: { message: 'violates foreign key constraint "fk_x" on table "y"' },
+        }),
+      });
+
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.handleDelete();
+      });
+
+      expect(outcome).toBe(false);
+      expect(toast.error).toHaveBeenCalled();
+      // Selection/edit state must be left untouched on failure — the record
+      // was NOT actually deleted.
+      expect(result.current.selected).toEqual(selectedRecord);
+      expect(result.current.editing).toEqual(selectedRecord);
+    });
+
+    it('returns false and toasts an error when the DELETE request throws (network error)', async () => {
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      act(() => { result.current.handleSelect({ id: 'del-3', name: 'Offline Record' }); });
+
+      globalThis.fetch.mockRejectedValueOnce(new Error('Network error'));
+
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.handleDelete();
+      });
+
+      expect(outcome).toBe(false);
+      expect(toast.error).toHaveBeenCalledWith('Network error');
     });
   });
 

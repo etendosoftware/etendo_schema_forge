@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import GeneratedApp from '@generated/purchase-order/generated/web/purchase-order/index.jsx';
 import HeaderTable from '@generated/purchase-order/generated/web/purchase-order/HeaderTable';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import BulkPurchaseOrderMoreMenu from '@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu';
 import { ConfirmModal as PoConfirmModal, PoConfirmResultModal, ManageDocsLauncher as PoManageDocsLauncher } from '@generated/purchase-order/custom/PurchaseOrderActions';
-import { ListView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
@@ -15,11 +16,11 @@ import { useOrderWindow } from '../shared/useOrderWindow.jsx';
 import { usePurchaseOrderPdf } from '../shared/usePurchaseOrderPdf.js';
 
 const LIST_COLUMNS = [
-  { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Order Date', dot: false },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount' },
+  { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Order Date', dot: false, required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent', label: 'Invoice Status' },
   { key: 'deliveryStatusPurchase', column: 'DeliveryStatusPurchase', type: 'percent', label: 'Reception Status' },
 ];
@@ -104,6 +105,22 @@ export default function PurchaseOrderWindow(props) {
     documentType: tMenu('Purchase Order'),
   });
 
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('181');
+  // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
+  // ListView below never picked up the read-only tier either, unlike GeneratedApp
+  // (which already forces window.readOnly internally for the detail branch).
+  // Computed unconditionally, before the early return below, so hook order stays
+  // stable across renders regardless of windowAccessTier.
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="181" data-testid="WindowAccessGuard__b7ace5" />;
+  }
+
   if (recordId) {
     return (
       <CreateContactContext.Provider value={createContactCtxValue}>
@@ -135,6 +152,7 @@ export default function PurchaseOrderWindow(props) {
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
         {...props}
+        window={effectiveWindow}
         data-testid="ListView__b7ace5" />
       {deleteDialog}
       {cloneTargets && createPortal(

@@ -31,6 +31,10 @@ import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
  *
  * NOTE: this component is generic — every prop is optional and gates behavior
  * gracefully. It is safe to mount on every list row regardless of window config.
+ *
+ * `readOnly` (window.readOnly): when true, the mutating actions (Edit, Clone, Delete)
+ * are hidden so a view-only window (e.g. Conversion Rates in GO) cannot be edited from
+ * the list. Row click still navigates to the read-only detail.
  */
 export default function RowQuickActions({
   row,
@@ -72,6 +76,12 @@ export default function RowQuickActions({
   // for canonical buttons are still derived from the existing props (documentPreview, statusField,
   // hideDeleteWhenComplete) — `actionsConfig` only refines visibility further.
   actionsConfig = null,
+  // View-only window (decisions.json → window.readOnly, threaded via ListView →
+  // DataTable). When true the write actions (Edit, Clone, Delete) are suppressed so
+  // a GO tenant cannot mutate the record from the list; row click still opens the
+  // read-only detail for viewing. Non-mutating affordances (Email/Send, kebab
+  // menu actions) stay gated by their own config. Defaults to false → unchanged.
+  readOnly = false,
 }) {
   const ui = useUI();
   const [showMenu, setShowMenu] = useState(false);
@@ -144,7 +154,7 @@ export default function RowQuickActions({
   // Same gate as DetailView's edit toolbar — centralized in utils/recordActions.js.
   // `hideDeleteButton` short-circuits before the status-based gate: it's an
   // unconditional opt-out, not a conditional one.
-  const showDelete = !hideDeleteButton && isDeleteVisibleForRecord({
+  const showDelete = !readOnly && !hideDeleteButton && isDeleteVisibleForRecord({
     record: row,
     statusField,
     hideDeleteWhenComplete,
@@ -166,11 +176,11 @@ export default function RowQuickActions({
     ));
 
   // ETP-3504 — Figma exact colors:
-  // - Neutral icons (Edit, Clone, Email, More): #828FA3
-  // - Delete: #D50B3E
+  // - Neutral icons (Edit, Clone, Email, More): hsl(var(--text-disabled))
+  // - Delete: hsl(var(--destructive))
   // Hover darkens slightly: neutrals → text-foreground; delete → red-700.
-  const neutralBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[#828FA3] hover:text-foreground hover:bg-muted/60 transition-colors';
-  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 transition-colors';
+  const neutralBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60 transition-colors';
+  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive transition-colors';
 
   const handleMenuActionClick = useCallback(async (action) => {
     setShowMenu(false);
@@ -215,8 +225,8 @@ export default function RowQuickActions({
       data-testid="row-quick-actions"
       onClick={stop}
     >
-      {/* Edit */}
-      {passesVisibleWhen('edit') && (
+      {/* Edit — suppressed on read-only windows (row click still opens the view). */}
+      {!readOnly && passesVisibleWhen('edit') && (
         <button
           type="button"
           onClick={(e) => { stop(e); runWithInFlight('edit', onEdit)(row); }}
@@ -229,8 +239,8 @@ export default function RowQuickActions({
           {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Pencil className="h-5 w-5" data-testid="Pencil__ec6673" />}
         </button>
       )}
-      {/* Clone — only when host wires onClone (no generic default exists). */}
-      {onClone && passesVisibleWhen('duplicate') && (
+      {/* Clone — only when host wires onClone (no generic default exists); never on read-only. */}
+      {!readOnly && onClone && passesVisibleWhen('duplicate') && (
         <button
           type="button"
           onClick={(e) => { stop(e); runWithInFlight('duplicate', onClone)(row); }}
@@ -283,12 +293,12 @@ export default function RowQuickActions({
               <div className="fixed inset-0 z-[60]" aria-hidden="true" />
             <div
               ref={menuRef}
-              className="fixed z-[61] bg-white py-2 min-w-[160px] rounded-lg"
+              className="fixed z-[61] bg-card py-2 min-w-[160px] rounded-lg"
               style={{
                 top: menuPos.top,
                 right: menuPos.right,
                 boxShadow:
-                  '0px 0px 0px 1px rgba(18,18,23,0.1), 0px 24px 48px rgba(18,18,23,0.03), 0px 10px 18px rgba(18,18,23,0.03), 0px 5px 8px rgba(18,18,23,0.04), 0px 2px 4px rgba(18,18,23,0.04)',
+                  '0px 0px 0px 1px hsl(var(--foreground) / 0.1), 0px 24px 48px hsl(var(--foreground) / 0.03), 0px 10px 18px hsl(var(--foreground) / 0.03), 0px 5px 8px hsl(var(--foreground) / 0.04), 0px 2px 4px hsl(var(--foreground) / 0.04)',
               }}
             >
               {visibleMenuActions.map((action, i) => {
@@ -305,7 +315,7 @@ export default function RowQuickActions({
                     onClick={(e) => { stop(e); handleMenuActionClick(action); }}
                     className={[
                       'w-full text-left px-3 py-1.5 text-sm leading-6 transition-colors flex items-center gap-2',
-                      action.destructive ? 'text-red-600 hover:bg-red-50' : 'text-foreground hover:bg-secondary',
+                      action.destructive ? 'text-destructive hover:bg-destructive' : 'text-foreground hover:bg-secondary',
                       (pending || docAction.loading) ? 'opacity-50 cursor-not-allowed' : '',
                     ].filter(Boolean).join(' ')}
                   >
@@ -316,7 +326,7 @@ export default function RowQuickActions({
                     ) : ActionIcon && (
                       <ActionIcon
                         className="h-4 w-4 flex-shrink-0"
-                        style={{ color: action.destructive ? undefined : '#828FA3' }}
+                        style={{ color: action.destructive ? undefined : 'hsl(var(--text-disabled))' }}
                         data-testid="ActionIcon__ec6673" />
                     )}
                     <span>{label}</span>

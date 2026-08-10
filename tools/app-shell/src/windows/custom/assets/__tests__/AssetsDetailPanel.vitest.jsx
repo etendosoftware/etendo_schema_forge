@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // ── mock heavy children so we exercise AssetsDetailPanel's own logic ──
@@ -14,6 +14,17 @@ vi.mock('@/components/contract-ui', () => ({
   ),
 }));
 
+// ETP-4529 — AssetsDetailPanel resolves dimension visibility via
+// useAccountingDimensionFields, a thin wrapper around useDisplayLogic (the same
+// evaluate-display evaluator DetailView uses — see DetailView.*.vitest.jsx for the
+// established `vi.mock('@/hooks/useDisplayLogic', ...)` convention this reuses).
+// Defaulting to `{ visibility: {} }` reproduces the evaluator's fail-open behavior
+// (a field the server never mentions stays visible), matching production defaults.
+vi.mock('@/hooks/useDisplayLogic', () => ({
+  useDisplayLogic: vi.fn(() => ({ readOnly: {}, visibility: {} })),
+}));
+
+import { useDisplayLogic } from '@/hooks/useDisplayLogic';
 import AssetsDetailPanel from '../AssetsDetailPanel.jsx';
 
 const BASE_PROPS = {
@@ -30,40 +41,88 @@ function formsByFields(container) {
     .map(el => el.getAttribute('data-fields'));
 }
 
+beforeEach(() => {
+  useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: {} });
+});
+
 describe('AssetsDetailPanel — depreciation off', () => {
-  it('hides financial, depreciation fields, dates and dimensions when depreciate is off', () => {
+  it('hides financial (except assetValue), depreciation fields, dates and dimensions when depreciate is off', () => {
     const { container } = render(
       <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'N' }} />,
     );
     const forms = formsByFields(container);
     // Only Group 1 (Asset Info) form is rendered.
     expect(forms.some(f => f.includes('searchKey'))).toBe(true);
+    // Product is "Siempre" (ETP-4529 corrected matrix) — a plain Asset Info field,
+    // always shown regardless of depreciate state or GL Configuration.
+    expect(forms.some(f => f.includes('product'))).toBe(true);
     // No dimensions / dates / financial forms.
     expect(forms.some(f => f.includes('project'))).toBe(false);
     expect(forms.some(f => f.includes('purchaseDate'))).toBe(false);
-    expect(forms.some(f => f.includes('assetValue'))).toBe(false);
+    // assetValue moved to the always-visible main group (ETP-4539) — present even
+    // when depreciate is off.
+    expect(forms.some(f => f.includes('assetValue'))).toBe(true);
     // Disabled hint shown.
     expect(screen.getByText('assetsDepreciationDisabledHint')).toBeInTheDocument();
+  });
+
+  it('keeps assetValue visible regardless of the depreciate flag (ETP-4539)', () => {
+    const { container: containerOff } = render(
+      <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'N' }} />,
+    );
+    expect(formsByFields(containerOff).some(f => f.includes('assetValue'))).toBe(true);
+
+    const { container: containerOn } = render(
+      <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
+    );
+    expect(formsByFields(containerOn).some(f => f.includes('assetValue'))).toBe(true);
   });
 });
 
 describe('AssetsDetailPanel — depreciation on', () => {
-  it('renders the accounting dimensions form with only the 4 kept dimension fields', () => {
+  it('renders the accounting dimensions form with only the Project candidate (ETP-4529)', () => {
+    // ETP-4529 — Contacto/Producto/Centro de costo are "Nunca" for Activo and are no
+    // longer candidates at all; Project is the only "Por config" dimension left, and
+    // the evaluator (mocked here as visible-by-default) lets it through.
     const { container } = render(
       <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
     );
-    const dimForm = formsByFields(container).find(f => f.includes('project') && f.includes('eTADASCostCenter'));
+    const dimForm = formsByFields(container).find(f => f.includes('project'));
     expect(dimForm).toBeDefined();
-    // Only Proyecto, Centro de coste, Contacto, Producto remain.
-    expect(dimForm.split(',')).toEqual([
-      'project', 'eTADASCostCenter', 'businessPartner', 'product',
-    ]);
-    // The 5 out-of-scope accounting dimensions were removed from the panel.
+    expect(dimForm.split(',')).toEqual(['project']);
+    // The 3 dropped-candidate dimensions and the 5 out-of-scope ones never appear.
     for (const key of [
+      'eTADASCostCenter', 'businessPartner', 'product',
       'eTADASUser1', 'eTADASUser2', 'eTADASSalesRegion', 'eTADASActivity', 'eTADASSalesCampaign',
     ]) {
       expect(dimForm).not.toContain(key);
     }
+  });
+
+  it('hides the whole dimensions section when the evaluator marks Project not visible (ETP-4529)', () => {
+    // NEW behavior under test: before ETP-4529 the dimensions section always rendered
+    // whenever depreciate was on, regardless of any config. Now useAccountingDimensionFields
+    // calls the same evaluate-display evaluator DetailView uses, and when it explicitly
+    // returns visibility.project === false, the candidate is filtered out — and since
+    // Project is the only candidate for Assets, the section (title + form) disappears
+    // entirely instead of rendering an empty grid.
+    useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: { project: false } });
+    const { container } = render(
+      <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
+    );
+    expect(formsByFields(container).some(f => f.includes('project'))).toBe(false);
+    expect(screen.queryByText('assetsGroupDimensionsTitle')).not.toBeInTheDocument();
+  });
+
+  it('shows the dimensions section when the evaluator leaves Project visible (ETP-4529)', () => {
+    // Explicit visibility.project === true (config enables the dimension for this
+    // client) — same observable result as the fail-open default, proven separately.
+    useDisplayLogic.mockReturnValue({ readOnly: {}, visibility: { project: true } });
+    const { container } = render(
+      <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
+    );
+    expect(formsByFields(container).some(f => f.includes('project'))).toBe(true);
+    expect(screen.getByText('assetsGroupDimensionsTitle')).toBeInTheDocument();
   });
 
   it('renders the dimensions section after the dates section', () => {

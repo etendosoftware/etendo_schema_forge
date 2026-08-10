@@ -1,6 +1,6 @@
 import AssetCategoryPage, { api } from './AssetCategoryPage';
 
-const windowMeta = { category: 'finance', name: 'Asset Group' };
+const windowMeta = { category: 'finance', name: 'Asset Group', id: '252' };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {

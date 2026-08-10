@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ReturnMaterialReceiptTable from './ReturnMaterialReceiptTable';
 import ReturnMaterialReceiptForm from './ReturnMaterialReceiptForm';
 import ReturnMaterialReceiptLineTable from './ReturnMaterialReceiptLineTable';
@@ -288,6 +290,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:ReturnMaterialReceiptPage
 export default function ReturnMaterialReceiptPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('123271B9AD60469BAE8A924841456B63');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="123271B9AD60469BAE8A924841456B63" />;
+  }
   if (recordId) {
     return (
       <>
@@ -320,7 +329,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument={{"enabled":false}}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -338,7 +347,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument={{"enabled":false}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

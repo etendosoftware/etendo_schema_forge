@@ -1,7 +1,8 @@
 {
-  "version": "0.40.0",
-  "generatedAt": "2026-07-07T21:53:25.883Z",
-  "contractChecksum": "306c342d2b869af1",
+  "version": "0.46.0",
+  "generatedAt": "2026-07-31T19:26:59.736Z",
+  "updatedAt": "2026-08-04T16:33:19.885Z",
+  "contractChecksum": "88066a93bb4490da",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",
@@ -36,7 +37,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/customerAccounting",
         "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
         "supportedFilters": []
@@ -69,7 +70,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/vendorAccounting",
         "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
         "supportedFilters": []
@@ -263,19 +264,19 @@
       },
       {
         "entity": "businessPartner",
-        "field": "pOPaymentMethod",
-        "column": "PO_Paymentmethod_ID",
-        "reference": "PaymentMethod",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
-      },
-      {
-        "entity": "businessPartner",
         "field": "pOPaymentTerms",
         "column": "PO_PaymentTerm_ID",
         "reference": "PaymentTerm",
         "inputMode": "selector",
         "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentTerms"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "pOPaymentMethod",
+        "column": "PO_Paymentmethod_ID",
+        "reference": "PaymentMethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
       },
       {
         "entity": "businessPartner",
@@ -684,7 +685,8 @@
         "PO_Financial_Account_ID": "Expense Account",
         "EM_Etgo_Web": "Website",
         "EM_Etgo_Firstname": "First Name",
-        "EM_Etgo_Lastname": "Last Name"
+        "EM_Etgo_Lastname": "Last Name",
+        "C_BP_Group_ID": "Contact Category"
       },
       "es_ES": {
         "Name": "Razón Social",
@@ -693,7 +695,8 @@
         "PO_Financial_Account_ID": "Cuenta contable de gastos",
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
-        "EM_Etgo_Lastname": "Apellidos"
+        "EM_Etgo_Lastname": "Apellidos",
+        "C_BP_Group_ID": "Categoría de contacto"
       }
     }
   },
@@ -710,6 +713,10 @@
           "name": {
             "required": true
           },
+          "businessPartnerCategory": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+          },
           "etgoFirstname": {
             "required": true
           },
@@ -722,7 +729,8 @@
           },
           "taxID": {},
           "oBTIKVIESStatus": {
-            "readOnly": true
+            "readOnly": true,
+            "defaultValue": "P"
           },
           "etgoWeb": {},
           "etgoEmail": {},
@@ -730,10 +738,6 @@
           "etgoIsperson": {
             "required": true,
             "defaultValue": "N"
-          },
-          "businessPartnerCategory": {
-            "required": true,
-            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
           },
           "name2": {},
           "description": {},
@@ -784,9 +788,6 @@
             "required": true,
             "defaultValue": "N"
           },
-          "eTGOLocation": {
-            "readOnly": true
-          },
           "account": {},
           "paymentMethod": {},
           "isSalesRepresentative": {
@@ -794,12 +795,15 @@
           },
           "priceList": {},
           "pOFinancialAccount": {},
-          "pOPaymentMethod": {},
           "pOPaymentTerms": {},
+          "pOPaymentMethod": {},
           "purchasePricelist": {},
           "vendorBlocking": {
             "required": true,
             "defaultValue": "N"
+          },
+          "eTGOLocation": {
+            "readOnly": true
           }
         }
       },
@@ -1116,11 +1120,11 @@
       "headerFields": [
         "searchKey",
         "name",
+        "businessPartnerCategory",
         "etgoFirstname",
         "etgoLastname",
         "oBTIKTaxIDKey",
         "etgoIsperson",
-        "businessPartnerCategory",
         "customer",
         "vendor",
         "employee",
@@ -1226,11 +1230,11 @@
         "fields": [
           "searchKey",
           "name",
+          "businessPartnerCategory",
           "etgoFirstname",
           "etgoLastname",
           "oBTIKTaxIDKey",
           "etgoIsperson",
-          "businessPartnerCategory",
           "customer",
           "vendor",
           "employee",
@@ -1244,7 +1248,8 @@
     ],
     "warnings": [],
     "knownLimitations": [],
-    "dangerousOperations": []
+    "dangerousOperations": [],
+    "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead."
   },
-  "checksum": "5f071bb50c23a960"
+  "checksum": "90debdaa28d4b368"
 }

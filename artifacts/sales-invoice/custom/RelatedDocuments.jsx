@@ -17,6 +17,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const [order, setOrder] = useState(null);
   const [shipments, setShipments] = useState([]);
   const [originalInvoices, setOriginalInvoices] = useState([]);
+  const [originInvoice, setOriginInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
@@ -26,7 +27,6 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     if (!recordId || !data) { setLoading(false); return; }
     setLoading(true);
     const orderId = data.salesOrder;
-    const isDevInvoice = getArSubtype(data) === 'DEV';
     const promises = [];
 
     if (orderId) {
@@ -40,30 +40,48 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         })()
       );
 
-      // For DEV invoices, salesOrder points to the original order whose shipments are
-      // outgoing deliveries — not returns. Skip to avoid a misleading "envío" chip.
-      if (!isDevInvoice) {
-        promises.push(
-          fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', orderId, token, apiBaseUrl)
-            .then(d => setShipments(d))
-        );
-      }
-
-      // If this is a credit note, fetch original invoices from the same order
-      const isCreditNote = data['transactionDocument$_identifier']?.toLowerCase().includes('credit');
-      if (isCreditNote) {
+      // If this is a rectificative invoice (ETP-4737: unified subtype, formerly
+      // separate NC/DEV), fetch original invoices from the same order. Uses
+      // getArSubtype (server-injected arInvoiceSubtype, with an identifier-based
+      // fallback) rather than a raw identifier substring match — the new unified
+      // "Factura Rectificativa" doc type never contains "credit" in its name, so
+      // a plain `.includes('credit')` check would silently miss it.
+      const isRectificativa = getArSubtype(data) === 'RECTIFICATIVA';
+      if (isRectificativa) {
         promises.push(
           fetchByCriteria('sales-invoice', 'header', 'salesOrder', orderId, token, apiBaseUrl)
             .then(d => setOriginalInvoices(d.filter(inv => inv.id !== recordId)))
         );
       }
     } else {
-      // No linked sales order — show shipments linked directly via invoice line → shipment line.
-      // The backend enriches linkedShipments on every detail GET from m_inoutline_id joins.
-      const linked = Array.isArray(data.linkedShipments) ? data.linkedShipments : [];
-      if (linked.length > 0) {
-        setShipments(linked);
-      }
+      setOrder(null);
+    }
+
+    // Linked shipments/returns are resolved server-side (SalesInvoiceHeaderHandler#
+    // enrichLinkedShipments) from each invoice line's own `goodsShipmentLine` (M_InOutLine_ID),
+    // covering BOTH normal deliveries and customer returns — `isReturn` (from a C_DocType join,
+    // not `movementType`) on each entry tells which. `M_InOut.MovementType` is NOT usable as a
+    // return discriminator: per the DB trigger M_INOUT_TRG_PROV.xml it only ever takes 'C-' for
+    // every sales-side movement (shipments AND returns alike) or 'V+' for purchase-side, never
+    // branching on C_DocType.IsReturn (ETP-4534). This must be read unconditionally, never
+    // derived from `salesOrder`: a DEV (return) invoice's `salesOrder`, when set, still points at
+    // the ORIGINAL sales order, whose own shipments are outgoing deliveries, not the return that
+    // generated this invoice. Deriving the chip from an order-scoped shipment lookup (as this
+    // file used to) is what produced the wrong "Envío" chip/link for return invoices (ETP-4534).
+    const linked = Array.isArray(data.linkedShipments) ? data.linkedShipments : [];
+    setShipments(linked);
+
+    // ETP-4737: `originInvoice` is set when this rectificativa was created via the
+    // "Import from Source Invoice" popup (manual correction) — distinct from
+    // `sourceInvoice` above, which only covers the auto-generated-from-return case.
+    // Server injects just the id (+ _identifier), not the full record, so fetch it here.
+    if (data.originInvoice) {
+      promises.push(
+        fetchById('sales-invoice', 'header', data.originInvoice, token, apiBaseUrl)
+          .then(inv => setOriginInvoice(inv))
+      );
+    } else {
+      setOriginInvoice(null);
     }
 
     if (promises.length === 0) { setLoading(false); return; }
@@ -90,24 +108,12 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   }
 
   for (const s of shipments) {
-    const isReturn = s.movementType === 'C+';
-    chips.push(isReturn
-      ? (
-        <DocChip
-          key={`ship-${s.id}`}
-          {...docChipProps({ type: 'return-material-receipt', doc: s, ui, navigate })}
-        />
-      ) : (
-        <DocChip
-          key={`ship-${s.id}`}
-          icon={CHIP_ICONS.shipment}
-          iconColor={CHIP_COLORS.shipment}
-          title={ui('shipmentDoc', { number: s.documentNo })}
-          status={s.documentStatus}
-          statusLabel={ui(STATUS_KEYS[s.documentStatus] || s.documentStatus)}
-          onClick={() => navigate(`/goods-shipment/${s.id}`)}
-        />
-      )
+    const isReturn = s.isReturn === true;
+    chips.push(
+      <DocChip
+        key={`ship-${s.id}`}
+        {...docChipProps({ type: isReturn ? 'return-material-receipt' : 'shipment', doc: s, ui, navigate })}
+      />
     );
   }
 
@@ -127,20 +133,28 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     );
   }
 
-  if (data?.sourceReturnReceipt) {
-    chips.push(
-      <DocChip
-        key="source-return-receipt"
-        {...docChipProps({ type: 'return-material-receipt', doc: data.sourceReturnReceipt, ui, navigate })}
-      />
-    );
-  }
-
+  // sourceInvoice is injected server-side (SalesInvoiceHeaderHandler#enrichSourceInvoice) only
+  // for genuine return-invoice lines whose M_InOutLine carries Canceled_Inoutline_ID — i.e. only
+  // when this invoice traces back through a return to an original invoice being reversed. It is
+  // additive to the `shipments` chip above (which already shows the return receipt itself via
+  // movementType), never a duplicate of it.
   if (data?.sourceInvoice) {
     chips.push(
       <DocChip
         key="source-invoice"
         {...docChipProps({ type: 'sales-invoice', doc: data.sourceInvoice, ui, navigate })}
+      />
+    );
+  }
+
+  // ETP-4737: the manually-linked source invoice (via "Import from Source Invoice"),
+  // additive to sourceInvoice above — the two are mutually exclusive in practice
+  // (auto-generated-from-return vs. manual correction) but not enforced as such here.
+  if (originInvoice) {
+    chips.push(
+      <DocChip
+        key="origin-invoice"
+        {...docChipProps({ type: 'sales-invoice', doc: originInvoice, ui, navigate })}
       />
     );
   }

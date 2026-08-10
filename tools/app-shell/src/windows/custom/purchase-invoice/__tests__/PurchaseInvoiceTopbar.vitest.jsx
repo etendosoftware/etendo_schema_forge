@@ -142,6 +142,28 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
   });
 
+  // ETP-4737: the new doc type didn't match any hardcoded name/category check
+  // before this fix, so it fell through to the regular (non-credit) badge logic.
+  it('shows the remaining "saldo a favor" badge for the new Factura Rectificativa (compras) doc type', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...defaultProps}
+        data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }}
+      />,
+    );
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+  });
+
+  it('prefers the server-injected apInvoiceSubtype over the identifier string', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...defaultProps}
+        data={{ ...BASE_DATA, apInvoiceSubtype: 'RECTIFICATIVA', 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }}
+      />,
+    );
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+  });
+
   it('shows the fully-applied badge when a credit note has no remaining balance', () => {
     render(
       <PurchaseInvoiceTopbar
@@ -287,6 +309,20 @@ describe('PurchaseInvoiceTopbar', () => {
       />,
     );
     // outstanding = grandTotal (1000), grandTotal (1000) => not fully paid (outstanding > 0)
+    expect(screen.getByText('statusPending')).toBeInTheDocument();
+  });
+
+  // ETP-4404: the backend enriches invoices with hasRectifications; the topbar
+  // must simply tolerate the extra field (there is no badge for it by design —
+  // the Nota de Crédito doc-type badge already conveys rectificative)
+  it('renders cleanly with the hasRectifications enrichment field present', () => {
+    const { container } = render(
+      <PurchaseInvoiceTopbar
+        {...defaultProps}
+        data={{ ...BASE_DATA, hasRectifications: true }}
+      />,
+    );
+    expect(container.firstChild).not.toBeNull();
     expect(screen.getByText('statusPending')).toBeInTheDocument();
   });
 });

@@ -168,9 +168,9 @@ export default function CloneOrderModal({
         {phase === 'done' ? (
           /* ── STATE 2: Done ── */
           (<>
-            <div style={{ ...modalHeader, background: '#f0fdf4' }}>
+            <div style={{ ...modalHeader, background: 'var(--status-success-bg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ ...iconBox, background: '#dcfce7', color: '#16a34a' }}>
+                <div style={{ ...iconBox, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}>
                   <CheckIcon size={18} data-testid="CheckIcon__66b049" />
                 </div>
                 <div>
@@ -190,19 +190,19 @@ export default function CloneOrderModal({
                   onMouseLeave={() => setHoveredId(null)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px',
-                    borderBottom: '1px solid #F3F4F6', cursor: 'pointer',
-                    background: hoveredId === rec.id ? '#F9FAFB' : '#fff',
+                    borderBottom: '1px solid hsl(var(--muted))', cursor: 'pointer',
+                    background: hoveredId === rec.id ? 'hsl(var(--muted))' : 'hsl(var(--card))',
                     transition: 'background 0.12s',
                   }}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#185FA5', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--status-info-fg)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {rec.documentNo || rec.id}
                   </span>
-                  <span style={{ fontSize: 13, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 13, color: 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {rec['businessPartner$_identifier'] || ''}
                   </span>
                   <DocStatusTag status="DR" dictionary={dictionary} data-testid="DocStatusTag__66b049" />
-                  <span style={{ color: '#9CA3AF', opacity: hoveredId === rec.id ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
+                  <span style={{ color: 'hsl(var(--text-disabled))', opacity: hoveredId === rec.id ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
                     <ArrowRightIcon data-testid="ArrowRightIcon__66b049" />
                   </span>
                 </div>
@@ -212,9 +212,9 @@ export default function CloneOrderModal({
         ) : (
           /* ── STATE 1: Confirm ── */
           (<>
-            <div style={{ ...modalHeader, background: '#eff6ff' }}>
+            <div style={{ ...modalHeader, background: 'var(--status-info-bg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ ...iconBox, background: '#dbeafe', color: '#185FA5' }}>
+                <div style={{ ...iconBox, background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
                   <CloneIcon size={18} data-testid="CloneIcon__66b049" />
                 </div>
                 <div>
@@ -225,13 +225,13 @@ export default function CloneOrderModal({
               <button type="button" onClick={onClose} style={closeBtn} disabled={phase === 'cloning'}>×</button>
             </div>
             {/* Document list */}
-            <div style={{ overflowY: 'auto', maxHeight: 240, borderBottom: '1px solid #F3F4F6' }}>
+            <div style={{ overflowY: 'auto', maxHeight: 240, borderBottom: '1px solid hsl(var(--muted))' }}>
               {items.map((item) => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px', borderBottom: '1px solid #F3F4F6', background: '#fff' }}>
-                  <span style={{ fontSize: 12, color: '#6B7280', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px', borderBottom: '1px solid hsl(var(--muted))', background: 'hsl(var(--card))' }}>
+                  <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {item.documentNo || item.id}
                   </span>
-                  <span style={{ fontSize: 13, color: '#111827', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 13, color: 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item['businessPartner$_identifier'] || ''}
                   </span>
                   {item.documentStatus && <DocStatusTag
@@ -243,12 +243,12 @@ export default function CloneOrderModal({
             </div>
             <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* Info banner */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
-                <span style={{ color: '#185FA5', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
-                <span style={{ fontSize: 12, color: '#1e40af', lineHeight: 1.5 }}>{ui('cloneInfoBanner')}</span>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-info-bg)', borderRadius: 8, border: '1px solid var(--status-info-border)' }}>
+                <span style={{ color: 'var(--status-info-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
+                <span style={{ fontSize: 12, color: 'var(--status-info-fg)', lineHeight: 1.5 }}>{ui('cloneInfoBanner')}</span>
               </div>
 
-              {error && <div style={{ color: '#ef4444', fontSize: 12 }}>{error}</div>}
+              {error && <div style={{ color: 'hsl(var(--destructive))', fontSize: 12 }}>{error}</div>}
 
               {/* Clone button */}
               <button
@@ -273,13 +273,13 @@ export default function CloneOrderModal({
 const overlay = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: 'rgba(0,0,0,0.3)',
+  backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
 const card = {
   width: 460, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB',
+  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 const modalHeader = {
@@ -292,15 +292,15 @@ const iconBox = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
 };
 
-const titleStyle = { fontWeight: 600, fontSize: 15, color: '#111827' };
-const subtitleStyle = { fontSize: 12, color: '#6B7280', marginTop: 2 };
+const titleStyle = { fontWeight: 600, fontSize: 15, color: 'hsl(var(--foreground))' };
+const subtitleStyle = { fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 };
 
 const btnPrimary = {
   padding: '9px 16px', borderRadius: 7, border: 'none',
-  background: '#185FA5', color: '#fff', fontWeight: 500, fontSize: 13,
+  background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
 };
 
 const closeBtn = {
   fontSize: 20, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-  background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', flexShrink: 0,
+  background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))', flexShrink: 0,
 };

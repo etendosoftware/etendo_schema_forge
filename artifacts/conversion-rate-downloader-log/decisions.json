@@ -3,7 +3,8 @@
   "window": {
     "category": "settings",
     "name": "Conversion Rate Downloader Log",
-    "detailEntity": null
+    "detailEntity": null,
+    "readOnly": true
   },
   "entities": {
     "header": {

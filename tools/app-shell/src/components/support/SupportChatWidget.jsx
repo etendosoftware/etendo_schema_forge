@@ -36,8 +36,8 @@ function InicioTab({ onStartChat, onSwitchTab, onClose }) {
             <div className="sc-e-sub">{ui('supportTeamHelpDesc')}</div>
           </div>
           <div className="sc-avatars">
-            <div className="sc-av" style={{ background: '#F4F1FD', color: '#4316CA' }}>J</div>
-            <div className="sc-av" style={{ background: '#FFF2EE', color: '#EB3A00' }}>L</div>
+            <div className="sc-av" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>J</div>
+            <div className="sc-av" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' }}>L</div>
             <div className="sc-av bot"><ValerIATile size={20} radius={4} data-testid="ValerIATile__4d85ab" /></div>
           </div>
         </div>
@@ -235,6 +235,25 @@ function AyudaTab({ onClose }) {
 // ---- MENSAJES tab wrapper -------------------------------------------------
 function MensajesTab({ conversations, activeConversationId, isLoading, onSelect, onStartChat, onClose, unreadCount }) {
   const ui = useUI();
+  const [searchQuery, setSearchQuery] = React.useState('');
+
+  const filteredConversations = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((conv) => {
+      const subject = (conv.subject || ui('supportDefaultSubject')).toLowerCase();
+      const preview = (conv.lastMessage || conv.preview || '').toLowerCase();
+      // Customers now get the Jira ticket key (e.g. "EGS-165") via the JSM notification email,
+      // so they may search for it directly instead of remembering the chat's own subject/preview.
+      const ticketKey = (conv.jiraTicketKey || '').toLowerCase();
+      return subject.includes(q) || preview.includes(q) || ticketKey.includes(q);
+    });
+  }, [conversations, searchQuery, ui]);
+
+  const hasNoSearchResults = searchQuery.trim().length > 0
+    && conversations.length > 0
+    && filteredConversations.length === 0;
+
   return (
     <>
       <div className="sc-head" style={{ paddingBottom: 12 }}>
@@ -245,13 +264,35 @@ function MensajesTab({ conversations, activeConversationId, isLoading, onSelect,
           <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__4d85ab" /></button>
         </div>
       </div>
-      <TicketList
-        conversations={conversations}
-        activeConversationId={activeConversationId}
-        isLoading={isLoading}
-        onSelect={onSelect}
-        onStartChat={onStartChat}
-        data-testid="TicketList__4d85ab" />
+      {conversations.length > 0 && (
+        <div className="sc-msg-search">
+          <div className="sc-msg-search-inner">
+            <Search size={16} data-testid="Search__4d85ab" />
+            <input
+              placeholder={ui('supportSearchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+      {hasNoSearchResults ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--sc-fg-3)' }}>
+            <div style={{ fontSize: 13, lineHeight: '18px' }}>
+              {ui('supportNoSearchResults')}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <TicketList
+          conversations={filteredConversations}
+          activeConversationId={activeConversationId}
+          isLoading={isLoading}
+          onSelect={onSelect}
+          onStartChat={onStartChat}
+          data-testid="TicketList__4d85ab" />
+      )}
     </>
   );
 }
@@ -324,7 +365,13 @@ export function SupportChatWidget() {
   };
 
   const handleReopenConversation = () => {
-    handleStartChat();
+    // Reopen the SAME conversation (same thread, same ADK session — the agent keeps the prior
+    // context automatically) via the backend's /reopen endpoint. This used to just call
+    // handleStartChat(), which opened an unrelated brand-new conversation instead — the whole
+    // point of "Hacer seguimiento" is continuity, not a fresh start.
+    if (activeConversationId && activeConversationId !== 'new') {
+      actions.reopenConversation(activeConversationId);
+    }
   };
 
   const showConversation = activeConversationId !== null;
@@ -354,6 +401,7 @@ export function SupportChatWidget() {
         onReopenConversation={handleReopenConversation}
         isExpanded={isExpanded}
         onToggleExpand={() => setIsExpanded((v) => !v)}
+        getLocalImageUrl={actions.getLocalImageUrl}
         data-testid="ConversationView__4d85ab" />
     );
   } else if (activeTab === 'inicio') {

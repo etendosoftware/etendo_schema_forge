@@ -29,7 +29,7 @@ function ToggleSwitch({ checked, onChange, disabled }) {
       style={{
         position: 'relative', width: 40, height: 22,
         borderRadius: 11, border: 'none', cursor: disabled ? 'default' : 'pointer',
-        background: checked ? '#0f172a' : '#d1d5db',
+        background: checked ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))',
         transition: 'background .15s', padding: 0, flexShrink: 0,
       }}
     >
@@ -37,9 +37,9 @@ function ToggleSwitch({ checked, onChange, disabled }) {
         position: 'absolute', top: 2,
         left: checked ? 20 : 2,
         width: 18, height: 18,
-        borderRadius: '50%', background: '#fff',
+        borderRadius: '50%', background: 'hsl(var(--card))',
         transition: 'left .15s',
-        boxShadow: '0 1px 2px rgba(0,0,0,.2)',
+        boxShadow: '0 1px 2px hsl(var(--foreground) / .2)',
       }} />
     </button>
   );
@@ -75,8 +75,8 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
             <span style={{
               display: 'inline-flex', alignItems: 'center',
               padding: '4px 8px', borderRadius: 8,
-              background: '#F5F7F9', border: '1px solid #D1D4DB',
-              fontSize: 12, color: '#3F3F50', fontWeight: 400, lineHeight: '16px',
+              background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
+              fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
             }}>
               {CATALOG.length}
             </span>
@@ -119,7 +119,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
               </div>
               <div className="fm-catalog-card__actions" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 {isLocked ? (
-                  <span style={{ fontSize: 13, color: '#828FA3', fontWeight: 400, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', fontWeight: 400, whiteSpace: 'nowrap' }}>
                     {t('fm.catalog.coming_soon') ?? 'Próximamente'}
                   </span>
                 ) : (

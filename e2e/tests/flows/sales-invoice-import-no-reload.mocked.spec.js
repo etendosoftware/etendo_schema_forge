@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { clickLastCheckbox } from '../helpers/selectors.js';
 
 /**
  * Sales Invoice — Import from Shipment: no page-reload after success (mocked).
@@ -129,7 +130,7 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     await expect(lineRow).toBeVisible({ timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await page.getByRole('checkbox').last().click();
+    await clickLastCheckbox(page);
 
     // Click the import button
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
@@ -185,7 +186,7 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     await expect(page.getByText(/Cerveza/i).first()).toBeVisible({ timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await page.getByRole('checkbox').last().click();
+    await clickLastCheckbox(page);
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
@@ -292,7 +293,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
     await expect(page.getByText(/Cerveza/i).first()).toBeVisible({ timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
-    await page.getByRole('checkbox').last().click();
+    await clickLastCheckbox(page);
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
@@ -308,5 +309,251 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
     expect(Number(posted.etgoDiscount)).toBe(10);
     // The POST must also include the salesOrderLine reference so re-import detection works.
     expect(posted.cOrderlineId).toBe(ORDER_LINE_ID);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-4737: Import from Source Invoice — negative quantity, already-imported
+// detection, and the originInvoice link-back PATCH.
+// ---------------------------------------------------------------------------
+
+const SRC_INVOICE_ID2 = 'mock-inv-src-001';
+const SOURCE_INVOICE_ID = 'src-inv-001';
+const SRC_LINE_1_ID = 'src-line-imported-1';
+const SRC_LINE_2_ID = 'src-line-importable-2';
+
+// A RECTIFICATIVA-subtype draft invoice — required for the "Import from Source
+// Invoice" empty-state button to render (see InvoiceBottomPanel.jsx's isRectificativa gate).
+const SRC_INVOICE_HEADER = {
+  id: SRC_INVOICE_ID2,
+  documentNo: 'INV-SRC-001',
+  documentStatus: 'DR',
+  'documentStatus$_identifier': 'Borrador',
+  transactionDocument: 'doctype-rect-001',
+  'transactionDocument$_identifier': 'AR Rectificativa',
+  arInvoiceSubtype: 'RECTIFICATIVA',
+  businessPartner: BP_ID,
+  'businessPartner$_identifier': 'Test Client',
+  partnerAddress: 'addr-mock-001',
+  invoiceDate: '2026-05-01',
+  paymentTerms: 'pt-mock-001',
+  paymentMethod: 'pm-mock-001',
+  priceList: 'pl-mock-001',
+  grandTotalAmount: 0,
+  summedLineAmount: 0,
+  currency: 'eur-1',
+  'currency$_identifier': 'EUR',
+};
+
+const SOURCE_INVOICE_DOC = {
+  id: SOURCE_INVOICE_ID,
+  documentNo: 'SRC-INV-001',
+  documentStatus: 'CO',
+  businessPartner: BP_ID,
+  'businessPartner$_identifier': 'Test Client',
+  invoiceDate: '2026-04-01',
+  currency: 'eur-1',
+};
+
+// Already imported into SRC_INVOICE_HEADER — must appear grayed out in the picker.
+const SOURCE_LINE_1_IMPORTED = {
+  id: SRC_LINE_1_ID,
+  product: 'prod-a',
+  'product$_identifier': 'Producto Origen A',
+  invoicedQuantity: 2,
+  unitPrice: 10,
+  lineNetAmount: 20,
+};
+
+// Not yet imported — selectable, and used to assert the negative quantity stepper.
+const SOURCE_LINE_2_AVAILABLE = {
+  id: SRC_LINE_2_ID,
+  product: 'prod-b',
+  'product$_identifier': 'Producto Origen B',
+  invoicedQuantity: 3,
+  unitPrice: 15,
+  lineNetAmount: 45,
+};
+
+// Current invoice's own existing line — its sourceInvoiceLineId points back at
+// SRC_LINE_1_ID, which is how fetchDocuments builds the alreadyImported set.
+const EXISTING_LINE_LINKING_SOURCE_1 = {
+  id: 'existing-line-1',
+  product: 'prod-a',
+  sourceInvoiceLineId: SRC_LINE_1_ID,
+  invoicedQuantity: -2,
+};
+
+// Classifies a `.../{entity}/header...` request URL as the plain 'detail' GET/PATCH
+// (`/header/{id}`, nothing after), the plain 'list' query (`/header` with only a
+// querystring, no extra path segments), or `null` for anything else (selectors,
+// actions, evaluate-display, etc.) — those must fall through to the generic /sws/**
+// catch-all instead of being answered with the wrong response shape. A route pattern
+// broad enough to match `/header**` also matches these unrelated sub-paths, and
+// answering them incorrectly silently breaks unrelated UI state (confirmed empirically:
+// intercepting `/header/{id}/action/currencyOptions` or `/header/selectors/...` with a
+// header-shaped body made the whole "add line" area fail to render).
+function classifyHeaderRequest(url, id) {
+  const { pathname } = new URL(url);
+  const idx = pathname.indexOf('/header');
+  if (idx === -1) return null;
+  const remainder = pathname.slice(idx + '/header'.length);
+  if (remainder === '') return 'list';
+  const segs = remainder.split('/').filter(Boolean);
+  return (segs.length === 1 && segs[0] === id) ? 'detail' : null;
+}
+
+// Same idea for `.../{entity}/lines...` — isolates the plain create (POST `/lines`)
+// and list (GET `/lines?parentId=...`) endpoints from `/lines/defaults`,
+// `/lines/evaluate-display`, `/lines/callout`, etc.
+function isPlainLinesPath(url) {
+  const { pathname } = new URL(url);
+  const idx = pathname.indexOf('/lines');
+  if (idx === -1) return false;
+  return pathname.slice(idx + '/lines'.length) === '';
+}
+
+async function installSourceInvoiceMocks(page, state) {
+  // Header: detail GET, currency-lookup GET (same URL), candidate-list GET, and the
+  // afterImport PATCH that links originInvoice back to the source invoice.
+  await page.route('**/sws/neo/sales-invoice/header**', async (route) => {
+    const req = route.request();
+    const url = req.url();
+    const kind = classifyHeaderRequest(url, SRC_INVOICE_ID2);
+    if (req.method() === 'PATCH') {
+      if (kind !== 'detail') return route.fallback();
+      const body = req.postData() ? JSON.parse(req.postData()) : {};
+      state.patchBodies.push(body);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ ...SRC_INVOICE_HEADER, ...body }] } }),
+      });
+      return;
+    }
+    if (req.method() !== 'GET') return route.fallback();
+    if (kind === 'detail') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [SRC_INVOICE_HEADER] } }),
+      });
+      return;
+    }
+    if (kind === 'list') {
+      // fetchDocuments' candidate-invoices lookup.
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [SOURCE_INVOICE_DOC] } }),
+      });
+      return;
+    }
+    route.fallback();
+  });
+
+  // Lines: detail view's own (empty) fetch, modal fetchDocuments' own-lines lookup
+  // (for alreadyImported detection), the source invoice's own lines (fetchLines), and POST.
+  await page.route('**/sws/neo/sales-invoice/lines**', async (route) => {
+    const req = route.request();
+    const url = req.url();
+    if (!isPlainLinesPath(url)) return route.fallback();
+    if (req.method() === 'POST') {
+      const body = req.postData() ? JSON.parse(req.postData()) : {};
+      state.postBodies.push(body);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ id: `new-line-${Date.now()}`, ...body }] } }),
+      });
+      return;
+    }
+    if (req.method() !== 'GET') return route.fallback();
+    if (url.includes(`parentId=${SOURCE_INVOICE_ID}`)) {
+      // fetchLines(docId=SOURCE_INVOICE_ID) — the source invoice's own lines.
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [SOURCE_LINE_1_IMPORTED, SOURCE_LINE_2_AVAILABLE] } }),
+      });
+      return;
+    }
+    if (url.includes(`parentId=${SRC_INVOICE_ID2}`)) {
+      if (url.includes('_endRow=200')) {
+        // Modal fetchDocuments' own-lines lookup — builds alreadyImportedSourceLineIds.
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [EXISTING_LINE_LINKING_SOURCE_1] } }),
+        });
+        return;
+      }
+      // Detail view's own lines fetch — empty so LinesEmptyState (and its import button) renders.
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [] } }),
+      });
+      return;
+    }
+    route.fallback();
+  });
+}
+
+test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
+  test('shows negative quantity, blocks re-import of an already-imported line, and links originInvoice on success', async ({ page }) => {
+    const state = { postBodies: [], patchBodies: [] };
+
+    await login(page);
+    await installSourceInvoiceMocks(page, state);
+
+    await page.goto(`/sales-invoice/${SRC_INVOICE_ID2}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const importBtn = page.getByText(/Import.*Source Invoice|Importar.*factura origen/i).first();
+    await expect(importBtn).toBeVisible({ timeout: 8_000 });
+    await importBtn.click();
+
+    const sourceDocRow = page.getByText('SRC-INV-001').first();
+    await expect(sourceDocRow).toBeVisible({ timeout: 5_000 });
+    await sourceDocRow.click();
+
+    await expect(page.getByText('Producto Origen A').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Producto Origen B').first()).toBeVisible({ timeout: 5_000 });
+
+    // Assertion: the already-imported source line is grayed out / cannot be re-selected.
+    await expect(page.getByText(/already imported|ya importado/i)).toBeVisible();
+    const checkboxes = page.getByRole('checkbox');
+    // nth(0) = document-level checkbox, nth(1) = line 1 (already imported), nth(2) = line 2.
+    await expect(checkboxes.nth(1)).toBeDisabled();
+
+    // Assertion: the quantity stepper displays a NEGATIVE value (negativeQuantity prop),
+    // not a positive magnitude — checked on the selectable line (invoicedQuantity=3 → -3).
+    const qtyInputs = page.locator('input[type="number"]');
+    await expect(qtyInputs.nth(1)).toHaveValue('-3', { timeout: 5_000 });
+
+    // Select the selectable line and import it. Uses a native evaluate()-click (same
+    // as the shared clickLastCheckbox() helper) instead of Playwright's actionability
+    // click — the Checkbox's 1px visual target is frequently occluded by its own
+    // decorative wrapper div, which fails Playwright's pointer-events hit test.
+    await checkboxes.nth(2).evaluate((el) => el.click());
+    const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
+    await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
+    await importSelectedBtn.click();
+
+    // The imported line's POST body must carry a negative invoicedQuantity.
+    await expect.poll(() => state.postBodies.length, { timeout: 5_000 }).toBeGreaterThan(0);
+    expect(Number(state.postBodies[0].invoicedQuantity)).toBeLessThan(0);
+
+    // Assertion: after a successful import, afterImport PATCHes the header's originInvoice
+    // virtual field with the source invoice's id. Other unrelated PATCHes to the same header
+    // (e.g. autosave) may also fire, so find the one that actually carries originInvoice
+    // rather than assuming it is the first captured PATCH.
+    await expect.poll(
+      () => state.patchBodies.some((b) => b.originInvoice !== undefined),
+      { timeout: 5_000 },
+    ).toBe(true);
+    const originInvoicePatch = state.patchBodies.find((b) => b.originInvoice !== undefined);
+    expect(originInvoicePatch.originInvoice).toBe(SOURCE_INVOICE_ID);
   });
 });

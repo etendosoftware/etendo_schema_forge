@@ -4,6 +4,15 @@
 
 This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.
 
+## Theme roles
+
+Purchase-order actions, confirmation dialogs, document-result feedback and
+selection controls consume the shared semantic theme. Structural surfaces use
+the active foreground, card and border roles; receipt/invoice outcomes use
+success, warning, information and destructive roles. The window does not
+declare a local palette, so appearance remains consistent when the app theme
+changes.
+
 The current evidence shows a purchase-order-specific experience rather than a generic generated order screen: the list is narrowed to purchasing signals, the detail page keeps the generated master-child layout, and the top bar adds procurement actions and follow-up status cues.
 
 ## What this window should allow
@@ -40,6 +49,7 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 - `warehouse` is declared with `inputMode: "search"` in `decisions.json` (matching sales-order), so it renders as a searchable FK field (`SearchInput`) rather than a plain dropdown (`SelectorInput`). This matters for the vendor-driven default: when picking the Contact triggers a callout that auto-fills `warehouse` with an ID that has no `$_identifier` companion, `SearchInput` resolves the record label on-demand via the selector `?id=` endpoint and shows the warehouse **name** ("Almacen GO") immediately. A plain `selector` dropdown defers its option fetch until the user opens it, so it would display the raw ID until then — the symptom that made purchase-order differ from sales-order (which already used `inputMode: "search"`).
 - User-touched field protection on the header form: when the user manually changes an FK field after a callout has already set it (typical case: `paymentTerms` set to "30 días" by the `businessPartner` callout, then changed by the user), follow-up callouts triggered by other fields cannot overwrite that value. The guard lives in `DetailView.jsx` (`userTouchedRef`) and resets when `recordId` changes, so each new or freshly loaded record starts clean. The current callout's trigger field still wins because it represents the user's most recent action.
 - POST-create cascade no longer overwrites user-set FK values: `NeoCrudHandler.executePostCreate` snapshots the keys submitted in the request body before `injectMandatoryDefaults` runs, and passes them as `protectedFields` into the post-create callout cascade. The cascade can still refine missing/derived fields, but it no longer flips `paymentTerms` (or any other user-set field) back to the vendor default during the initial save.
+- Unified document/accounting date (ETP-4531, redefined 2026-07-17): `accountingDate` (`DateAcct`) is `visibility: system` — fully hidden from the UI, not present in `frontendContract.entities.header.fields` at all. Previously it was `visibility: readOnly` with `form: false`, which already suppressed rendering (no form, no grid) but still left the field listed in `frontendContract.entities.header.fields` as inert metadata. Switched to `system` to match `sales-order`'s `accountingDate` (raw AD visibility is already `system` there, no override needed) and the invoice/shipment/receipt windows touched by the same ticket, so all six windows now express "hidden, unified with the document date" the same way. `orderDate` remains the single visible date field.
 - Header defaults are partially evidenced in the contract: `orderDate` and `scheduledDeliveryDate` default to the current date, while `currency` is derived from context. The lines entity also derives `scheduledDeliveryDate`, `partnerAddress`, and `currency` from the parent context.
 - Line defaults are also explicit in the contract: new lines start with ordered quantity `1`, discount `0`, and line gross amount `0` before the user edits values.
 - The line surface mixes editable commercial inputs with read-only results. The user-facing editable fields are `orderedQuantity`, `listPrice` (Net List Price, PriceList column), `discount`, and `tax`; `lineGrossAmount` is read-only and computed client-side. `unitPrice` (PriceActual) is hidden — it is derived at POST/PATCH time as `listPrice × (1 − discount/100)` and sent to the server as a write-only field. Pricing reacts to line edits via the `SL_Order_Amt` callout chain wired in the contract and client-side computation in `useLineGrossAmount` (see `docs/line-pricing-model.md`).
@@ -98,7 +108,12 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 
 ### Inline line validation (min: 0 constraint)
 
-Fields with a `min: 0` constraint — `orderedQuantity` and `discount` — now show a red border when the user types a negative value during inline edit. The row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
+The `discount` field keeps a `min: 0` constraint and shows a red border when the user types a negative value during inline edit; the row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
+
+### Negative quantity/price and price-list label — ETP-4567
+
+- `orderedQuantity` and `listPrice` no longer declare `min: 0` in `decisions.json`. Both the add-line row and inline grid edit now accept negative values — needed for returns and credit adjustments modeled as negative-quantity or negative-price order lines. `discount` is unaffected and keeps its `min: 0, max: 100` range.
+- The `listPrice` (AD `PriceList` column) label is now overridden to **"Precio"** in Spanish via `window.labelOverrides.es_ES.PriceList` in `decisions.json` (English label unchanged). Same declarative mechanism already used for `C_BPartner_ID`, `DatePromised`, `DeliveryStatusPurchase`, and `InvoiceStatus` on this window.
 
 See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for behaviors common to all document windows (required field validation, single confirmation toast, callout message sanitization).
 
@@ -203,3 +218,25 @@ Schema Forge extracts from AD, that column surfaces in this window's contract as
 frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
 this note only records why the contract was regenerated when the PSD2 dependency
 was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## MCP document actions (agents)
+
+The header's `documentAction` button is what an AI agent uses to move this order through its
+workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+active AD list of the `C_Order.DocAction` reference) and `actionParameter: "docAction"`; its
+`agentPrompt` — defined in `decisions.json` -> `entities.header.fields.documentAction.agentPrompt`
+— states which transitions are legal and their preconditions.
+
+Booking a draft order over MCP:
+
+    neo_action { spec: "purchase-order", entity: "header", id: "<orderId>",
+                 action: "documentAction", parameters: { docAction: "CO" } }
+
+Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> CL` closes pending
+quantities. **This window has no Reactivate menu action** (`menuActions: []`), so the prompt
+tells the agent not to assume `RE` is available here — unlike `sales-order`.
+
+This runs `PurchaseOrderHeaderHandler` exactly as the UI does — including the pre-CO
+total-discount line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285).
+If you change this window's workflow rules, update the `agentPrompt` in the same change: it is
+the only thing telling the agent what is legal.

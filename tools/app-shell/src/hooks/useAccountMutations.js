@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
+import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
 
 /**
  * Write operations against the `financial-account` NEO spec.
@@ -26,26 +27,6 @@ import { getApiBase } from '@/hooks/useNeoResource.js';
 const BASE_PATH = '/sws/neo/financial-account';
 const ENTITY_PATH = `${BASE_PATH}/account`;
 
-function authHeaders(token) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
-
-async function readErrorMessage(res) {
-  try {
-    const json = await res.json();
-    return json?.error?.message || `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
-
-async function throwHttpError(res) {
-  const message = await readErrorMessage(res);
-  const error = new Error(message);
-  error.status = res.status;
-  throw error;
-}
-
 /**
  * Map the SPA form payload to the DAL property names of FIN_Financial_Account.
  * Only keys present in the input are emitted, so a PUT that omits `swiftCode`
@@ -59,7 +40,7 @@ function toDalBody(payload) {
   if ('iban' in payload) body.iBAN = payload.iban;
   if ('swiftCode' in payload) body.swiftCode = payload.swiftCode;
   // Optional Salt Edge provider chosen at offline creation — the backend upserts it and links it
-  // to the account so a later PSD2 connect can preselect that bank.
+  // to the account so a later bank connect can preselect that bank.
   if (payload.providerCode) body.providerCode = payload.providerCode;
   if (payload.providerName) body.providerName = payload.providerName;
   // Reconciliation tolerance fields (only sent when explicitly changed in the edit modal).

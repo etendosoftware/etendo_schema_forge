@@ -1,8 +1,8 @@
 {
-  "version": "0.56.0",
+  "version": "0.67.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-14T17:20:33.951Z",
-  "contractChecksum": "ce52ffa31fc41ef0",
+  "updatedAt": "2026-07-28T13:29:09.420Z",
+  "contractChecksum": "210294a3c27703e7",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -46,6 +46,17 @@
         "delete": true,
         "listUrl": "/sws/neo/sales-invoice/paymentPlan",
         "detailUrl": "/sws/neo/sales-invoice/paymentPlan/{id}",
+        "supportedFilters": []
+      },
+      "reversedInvoices": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/sales-invoice/reversedInvoices",
+        "detailUrl": "/sws/neo/sales-invoice/reversedInvoices/{id}",
         "supportedFilters": []
       },
       "exchangeRates": {
@@ -144,6 +155,35 @@
       },
       {
         "entity": "header",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/header/selectors/project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
+      },
+      {
+        "entity": "header",
         "field": "aeatsiiDescription",
         "column": "EM_Aeatsii_Description_ID",
         "reference": "aeatsii_description",
@@ -210,6 +250,22 @@
         }
       },
       {
+        "entity": "lines",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/lines/selectors/project"
+      },
+      {
+        "entity": "lines",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/lines/selectors/costcenter"
+      },
+      {
         "entity": "paymentPlan",
         "field": "finPaymentmethodID",
         "column": "Fin_Paymentmethod_ID",
@@ -224,6 +280,22 @@
         "reference": "Currency",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/paymentPlan/selectors/currency"
+      },
+      {
+        "entity": "reversedInvoices",
+        "field": "reversedInvoice",
+        "column": "Reversed_C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/reversedInvoices/selectors/reversedInvoice"
+      },
+      {
+        "entity": "reversedInvoices",
+        "field": "aEAT349CYear",
+        "column": "EM_AEAT349_C_Year_ID",
+        "reference": "Year",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/reversedInvoices/selectors/aEAT349CYear"
       },
       {
         "entity": "exchangeRates",
@@ -921,7 +993,8 @@
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de entrega",
-        "C_DocTypeTarget_ID": "Tipo de documento"
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",
@@ -1004,6 +1077,12 @@
           "priceList": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
           },
           "etsgDateOperation": {
             "readOnlyLogic": "@processed@='Y'",
@@ -1121,6 +1200,12 @@
           "grossAmount": {
             "readOnly": true,
             "defaultValue": "0"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
           }
         }
       },
@@ -1172,6 +1257,29 @@
           }
         }
       },
+      "reversedInvoices": {
+        "fields": {
+          "reversedInvoice": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349IsCorrective": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349CYear": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349Period": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349BPBaseAmount": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349BPBaseAmountS": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          }
+        }
+      },
       "exchangeRates": {
         "fields": {
           "currency": {
@@ -1180,6 +1288,7 @@
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
           "toCurrency": {
+            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
           },
@@ -1223,7 +1332,7 @@
         "listPrice",
         "unitPrice",
         "expectedDate",
-        "toCurrency",
+        "reversedInvoice",
         "foreignAmount"
       ],
       "recommendedOrder": [
@@ -1265,6 +1374,23 @@
             {
               "param": "isSOTrx",
               "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
             }
           ]
         }
@@ -1362,7 +1488,7 @@
           "listPrice",
           "unitPrice",
           "expectedDate",
-          "toCurrency",
+          "reversedInvoice",
           "foreignAmount"
         ]
       },
@@ -1378,5 +1504,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "0218b231e4638ca5"
+  "checksum": "5a0f196cff4d2e9b"
 }

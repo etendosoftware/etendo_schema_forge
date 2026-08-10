@@ -1,3 +1,14 @@
+/**
+ * gridQuery.test.js — node:test coverage for the display/filter/sort utilities.
+ *
+ * gridQuery.js is a pure-function module (no React, no DOM, no network), so the
+ * node test runner can exercise the whole public surface directly.
+ *
+ * Emphasis is on the *round trips* a real user performs — type text into a
+ * column filter (parseUserFilter) and have it become a backend criteria array
+ * (buildBackendFilter) — plus the advanced-filter builder path
+ * (buildAdvancedFilterCriteria), which is where the operator/mode matrix lives.
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -15,75 +26,155 @@ import {
 // ---------------------------------------------------------------------------
 
 describe('getDisplayText', () => {
-  describe('selector / FK columns', () => {
-    it('returns $\_identifier when present', () => {
-      const row = { businessPartner: 'some-uuid', 'businessPartner$_identifier': 'A. Datum Corp' };
-      const col = { key: 'businessPartner', type: 'selector' };
-      assert.equal(getDisplayText(row, col), 'A. Datum Corp');
-    });
-
-    it('falls back to row[key].name for mock object-shaped data', () => {
-      const row = { businessPartner: { id: '1', name: 'Acme' } };
-      const col = { key: 'businessPartner', type: 'selector' };
-      assert.equal(getDisplayText(row, col), 'Acme');
-    });
-
-    it('falls back to raw string when no identifier', () => {
-      const row = { businessPartner: 'some-uuid' };
-      const col = { key: 'businessPartner', type: 'selector' };
-      assert.equal(getDisplayText(row, col), 'some-uuid');
-    });
+  it('prefers the $_identifier sibling field for selector columns', () => {
+    // The grid shows the BP display name, never the UUID stored in the raw key.
+    const row = { businessPartner: 'A1B2C3', businessPartner$_identifier: 'Juan Perez' };
+    assert.equal(getDisplayText(row, { key: 'businessPartner', type: 'selector' }), 'Juan Perez');
   });
 
-  describe('status / enum columns', () => {
+  it('falls back to the nested object name when no $_identifier is present', () => {
+    // Some NEO payloads embed the referenced entity instead of flattening it.
+    const row = { businessPartner: { id: 'A1', name: 'Acme SA' } };
+    assert.equal(getDisplayText(row, { key: 'businessPartner', type: 'selector' }), 'Acme SA');
+  });
+
+  it('falls back to the raw value when a selector object carries no name', () => {
+    // Guards the `return null` tail of trySelectorText: without a name there is
+    // nothing display-worthy, so the generic String(raw) path must take over.
+    const row = { businessPartner: { id: 'A1' } };
+    assert.equal(getDisplayText(row, { key: 'businessPartner', type: 'selector' }), '[object Object]');
+  });
+
+  it('uses filterMode=identifier as an alias for the selector display rule', () => {
+    // Columns can opt into identifier semantics without declaring type=selector.
+    const row = { owner: 'ID9', owner$_identifier: 'Warehouse 1' };
+    assert.equal(getDisplayText(row, { key: 'owner', filterMode: 'identifier' }), 'Warehouse 1');
+  });
+
+  it('maps a raw enum code through enumLabels', () => {
+    const col = { key: 'docStatus', type: 'status', enumLabels: { DR: 'Borrador', CO: 'Completado' } };
+    assert.equal(getDisplayText({ docStatus: 'CO' }, col), 'Completado');
+  });
+
+  it('shows the raw code when enumLabels has no entry for it', () => {
+    // An unmapped status must stay visible (debuggable) rather than blank out.
+    const col = { key: 'docStatus', type: 'status', enumLabels: { DR: 'Borrador' } };
+    assert.equal(getDisplayText({ docStatus: 'XX' }, col), 'XX');
+  });
+
+  it('ignores enum mapping when the column declares no enumLabels', () => {
+    assert.equal(getDisplayText({ docStatus: 'CO' }, { key: 'docStatus', type: 'status' }), 'CO');
+  });
+
+  it('maps NEO Y/N and JS booleans through badgeLabels', () => {
+    // NEO returns 'Y'/'N' chars for AD button/boolean columns; both plus a real
+    // JS boolean must land on the same badge.
+    const col = { key: 'posted', type: 'boolean', badgeLabels: { true: 'Contabilizado', false: 'Pendiente' } };
+    assert.equal(getDisplayText({ posted: 'Y' }, col), 'Contabilizado');
+    assert.equal(getDisplayText({ posted: true }, col), 'Contabilizado');
+    assert.equal(getDisplayText({ posted: 'true' }, col), 'Contabilizado');
+    assert.equal(getDisplayText({ posted: 'N' }, col), 'Pendiente');
+    assert.equal(getDisplayText({ posted: false }, col), 'Pendiente');
+  });
+
+  it('picks es_ES first from a per-locale badgeLabels object', () => {
+    // badgeLabels may arrive as { es_ES, en_US }; the cell must render a string,
+    // never "[object Object]".
     const col = {
-      key: 'documentStatus',
-      type: 'status',
-      enumLabels: { DR: 'Draft', CO: 'Completed', IP: 'In Process' },
+      key: 'active', type: 'boolean',
+      badgeLabels: { true: { es_ES: 'Activo', en_US: 'Active' }, false: { es_ES: 'Inactivo' } },
     };
-    it('maps raw code to visible label', () => {
-      assert.equal(getDisplayText({ documentStatus: 'CO' }, col), 'Completed');
-    });
-    it('maps another code', () => {
-      assert.equal(getDisplayText({ documentStatus: 'DR' }, col), 'Draft');
-    });
-    it('returns raw code when not in map', () => {
-      assert.equal(getDisplayText({ documentStatus: 'XX' }, col), 'XX');
-    });
+    assert.equal(getDisplayText({ active: true }, col), 'Activo');
+    assert.equal(getDisplayText({ active: false }, col), 'Inactivo');
   });
 
-  describe('boolean columns', () => {
-    const col = {
-      key: 'processed',
-      type: 'boolean',
-      badgeLabels: { true: 'Complete', false: 'In Process' },
-    };
-    it('maps true to badge true label', () => {
-      assert.equal(getDisplayText({ processed: true }, col), 'Complete');
-    });
-    it('maps false to badge false label', () => {
-      assert.equal(getDisplayText({ processed: false }, col), 'In Process');
-    });
-    it('maps string "true"', () => {
-      assert.equal(getDisplayText({ processed: 'true' }, col), 'Complete');
-    });
-    it('maps string "Y"', () => {
-      assert.equal(getDisplayText({ processed: 'Y' }, col), 'Complete');
-    });
+  it('falls back to en_US, then to any locale value, then to empty string', () => {
+    const enOnly = { key: 'f', type: 'boolean', badgeLabels: { true: { en_US: 'Yes' } } };
+    assert.equal(getDisplayText({ f: true }, enOnly), 'Yes');
+
+    const otherLocale = { key: 'f', type: 'boolean', badgeLabels: { true: { fr_FR: 'Oui' } } };
+    assert.equal(getDisplayText({ f: true }, otherLocale), 'Oui');
+
+    const emptyObj = { key: 'f', type: 'boolean', badgeLabels: { true: {} } };
+    assert.equal(getDisplayText({ f: true }, emptyObj), '');
   });
 
-  describe('string columns', () => {
-    it('returns raw string value', () => {
-      const row = { name: 'Sales Order 001' };
-      const col = { key: 'name', type: 'string' };
-      assert.equal(getDisplayText(row, col), 'Sales Order 001');
-    });
-    it('returns empty string for null', () => {
-      assert.equal(getDisplayText({ name: null }, { key: 'name' }), '');
-    });
-    it('returns empty string when row is null', () => {
-      assert.equal(getDisplayText(null, { key: 'name' }), '');
-    });
+  it('falls through to the raw value when the matching badge label is absent', () => {
+    // badgeLabels.false missing → tryBooleanText returns null → String(raw).
+    const col = { key: 'posted', type: 'boolean', badgeLabels: { true: 'Si' } };
+    assert.equal(getDisplayText({ posted: 'N' }, col), 'N');
+  });
+
+  it('returns empty string for a missing row, a missing col.key, or a nullish value', () => {
+    assert.equal(getDisplayText(null, { key: 'x' }), '');
+    assert.equal(getDisplayText({ x: 1 }, null), '');
+    assert.equal(getDisplayText({ x: 1 }, {}), '');
+    assert.equal(getDisplayText({ x: null }, { key: 'x' }), '');
+    assert.equal(getDisplayText({}, { key: 'x' }), '');
+  });
+
+  it('coerces non-string scalars to their string form', () => {
+    assert.equal(getDisplayText({ n: 1234.5 }, { key: 'n', type: 'amount' }), '1234.5');
+    assert.equal(getDisplayText({ n: 0 }, { key: 'n', type: 'number' }), '0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveFilterMode / inferFilterMode  (the function ETP-4681 changed)
+// ---------------------------------------------------------------------------
+
+describe('resolveFilterMode', () => {
+  it('returns text for a nullish column', () => {
+    assert.equal(resolveFilterMode(null), 'text');
+    assert.equal(resolveFilterMode(undefined), 'text');
+  });
+
+  it('lets an explicit filterMode win over every inference step', () => {
+    // ETP-4681: a `custom` cell hides its real data type, so declaring
+    // filterMode explicitly is the only way to get numeric/date operators.
+    assert.equal(resolveFilterMode({ key: 'a', type: 'custom', filterMode: 'numeric' }), 'numeric');
+    assert.equal(resolveFilterMode({ key: 'a', type: 'custom', filterMode: 'date' }), 'date');
+    // Even against a type that would otherwise infer something else, and
+    // against the _ID foreign-key heuristic.
+    assert.equal(resolveFilterMode({ key: 'a', type: 'date', filterMode: 'text' }), 'text');
+    assert.equal(resolveFilterMode({ key: 'a', column: 'C_BPartner_ID', filterMode: 'text' }), 'text');
+  });
+
+  it('infers a mode from every recognized column type', () => {
+    const expected = {
+      date: 'date',
+      selector: 'identifier',
+      status: 'enumLabel',
+      enum: 'enumLabel',
+      boolean: 'booleanLabel',
+      number: 'numeric',
+      amount: 'numeric',
+      percent: 'numeric',
+      signedDelta: 'numeric',
+    };
+    for (const [type, mode] of Object.entries(expected)) {
+      assert.equal(resolveFilterMode({ key: 'a', type }), mode, `type=${type}`);
+    }
+  });
+
+  it('applies the _ID foreign-key heuristic to unrecognized types', () => {
+    // A `custom` cell over C_BPartner_ID must filter the display label, not the
+    // UUID — so "jua" matches "Juan Perez".
+    assert.equal(resolveFilterMode({ key: 'bp', type: 'custom', column: 'C_BPartner_ID' }), 'identifier');
+    // Case-insensitive, and applies with no type at all.
+    assert.equal(resolveFilterMode({ key: 'bp', column: 'c_bpartner_id' }), 'identifier');
+  });
+
+  it('falls back to text when nothing identifies the column', () => {
+    // This is inferFilterMode's `default` arm — the single new uncovered line on
+    // the ETP-4681 branch. Reached by an unrecognized type, by a plain column
+    // name, and by no type at all.
+    assert.equal(resolveFilterMode({ key: 'a', type: 'custom' }), 'text');
+    assert.equal(resolveFilterMode({ key: 'a', type: 'custom', column: 'Description' }), 'text');
+    assert.equal(resolveFilterMode({ key: 'a', type: 'string' }), 'text');
+    assert.equal(resolveFilterMode({ key: 'a' }), 'text');
+    // A non-string `column` must not blow up the regex test.
+    assert.equal(resolveFilterMode({ key: 'a', column: 42 }), 'text');
   });
 });
 
@@ -92,155 +183,176 @@ describe('getDisplayText', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseUserFilter', () => {
-  describe('text mode (default)', () => {
-    const col = { key: 'name', type: 'string' };
-    it('returns text filter for plain input', () => {
-      const result = parseUserFilter(col, 'datum');
-      assert.deepEqual(result, { mode: 'text', value: 'datum', originalValue: 'datum' });
-    });
-    it('returns null for empty string', () => {
-      assert.equal(parseUserFilter(col, ''), null);
-    });
-    it('returns null for whitespace', () => {
-      assert.equal(parseUserFilter(col, '   '), null);
-    });
+  it('returns null for empty, blank or null input', () => {
+    const col = { key: 'x' };
+    assert.equal(parseUserFilter(col, ''), null);
+    assert.equal(parseUserFilter(col, '   '), null);
+    assert.equal(parseUserFilter(col, '\t\n'), null);
+    assert.equal(parseUserFilter(col, null), null);
+  });
+
+  it('trims the value but keeps the untrimmed input as originalValue', () => {
+    // originalValue is what gets echoed back into the filter input, so it must
+    // survive verbatim while the query uses the trimmed form.
+    const parsed = parseUserFilter({ key: 'name', type: 'string' }, '  acme  ');
+    assert.deepEqual(parsed, { mode: 'text', value: 'acme', originalValue: '  acme  ' });
   });
 
   describe('date mode', () => {
-    const col = { key: 'orderDate', type: 'date', filterMode: 'date' };
+    const col = { key: 'orderDate', type: 'date' };
 
-    it('parses dd/mm/yyyy as exact date', () => {
-      const result = parseUserFilter(col, '14/04/2026');
-      assert.deepEqual(result, { mode: 'date', op: '=', value: '2026-04-14', originalValue: '14/04/2026' });
+    it('accepts every supported locale separator as dd/mm/yyyy', () => {
+      for (const input of ['14/04/2026', '14-04-2026', '14.04.2026']) {
+        assert.deepEqual(
+          parseUserFilter(col, input),
+          { mode: 'date', op: '=', value: '2026-04-14', originalValue: input },
+          input,
+        );
+      }
     });
 
-    it('parses ISO yyyy-mm-dd as exact date', () => {
-      const result = parseUserFilter(col, '2026-04-14');
-      assert.deepEqual(result, { mode: 'date', op: '=', value: '2026-04-14', originalValue: '2026-04-14' });
+    it('accepts ISO yyyy-mm-dd and truncates an ISO datetime', () => {
+      assert.equal(parseUserFilter(col, '2026-04-14').value, '2026-04-14');
+      assert.equal(parseUserFilter(col, '2026-04-14T18:30:00Z').value, '2026-04-14');
     });
 
-    it('parses year-only as year range', () => {
-      const result = parseUserFilter(col, '2026');
-      assert.deepEqual(result, { mode: 'date', op: 'year', value: '2026', originalValue: '2026' });
+    it('accepts yyyy/mm/dd and yyyy.mm.dd (year-first, zero-pads parts)', () => {
+      assert.equal(parseUserFilter(col, '2026/4/9').value, '2026-04-09');
+      assert.equal(parseUserFilter(col, '2026.4.9').value, '2026-04-09');
     });
 
-    it('parses > operator', () => {
-      const result = parseUserFilter(col, '>14/04/2026');
-      assert.deepEqual(result, { mode: 'date', op: '>', value: '2026-04-14', originalValue: '>14/04/2026' });
+    it('zero-pads single-digit day/month in the dd/mm/yyyy form', () => {
+      assert.equal(parseUserFilter(col, '9/4/2026').value, '2026-04-09');
     });
 
-    it('parses < operator', () => {
-      const result = parseUserFilter(col, '<01/05/2026');
-      assert.deepEqual(result, { mode: 'date', op: '<', value: '2026-05-01', originalValue: '<01/05/2026' });
+    it('parses a ".." range, including dot-separated dates on both sides', () => {
+      assert.deepEqual(parseUserFilter(col, '01/04/2026..15/04/2026').value, ['2026-04-01', '2026-04-15']);
+      assert.deepEqual(parseUserFilter(col, '14.04.2026..15.04.2026').value, ['2026-04-14', '2026-04-15']);
+      assert.equal(parseUserFilter(col, '01/04/2026..15/04/2026').op, 'range');
     });
 
-    it('parses >= operator', () => {
-      const result = parseUserFilter(col, '>=14/04/2026');
-      assert.deepEqual(result, { mode: 'date', op: '>=', value: '2026-04-14', originalValue: '>=14/04/2026' });
+    it('parses each comparison operator prefix', () => {
+      for (const op of ['>=', '<=', '>', '<', '=']) {
+        const parsed = parseUserFilter(col, `${op}2026-04-01`);
+        assert.equal(parsed.op, op);
+        assert.equal(parsed.value, '2026-04-01');
+      }
     });
 
-    it('parses date range with ..', () => {
-      const result = parseUserFilter(col, '01/04/2026..15/04/2026');
-      assert.deepEqual(result, { mode: 'date', op: 'range', value: ['2026-04-01', '2026-04-15'], originalValue: '01/04/2026..15/04/2026' });
+    it('treats a bare 4-digit input as a whole-year filter', () => {
+      assert.deepEqual(
+        parseUserFilter(col, '2026'),
+        { mode: 'date', op: 'year', value: '2026', originalValue: '2026' },
+      );
     });
 
-    it('parses ISO date range', () => {
-      const result = parseUserFilter(col, '2026-04-01..2026-04-15');
-      assert.deepEqual(result, { mode: 'date', op: 'range', value: ['2026-04-01', '2026-04-15'], originalValue: '2026-04-01..2026-04-15' });
-    });
-
-    it('returns null for range with invalid dates', () => {
-      assert.equal(parseUserFilter(col, 'abc..def'), null);
+    it('returns null for input that is not a date', () => {
+      assert.equal(parseUserFilter(col, 'abc'), null);          // unparseable plain
+      assert.equal(parseUserFilter(col, '>abc'), null);         // unparseable with operator
+      assert.equal(parseUserFilter(col, 'abc..def'), null);     // unparseable range
+      assert.equal(parseUserFilter(col, '14/04'), null);        // only two parts
+      assert.equal(parseUserFilter(col, '1/2/3'), null);        // no part looks like a year
+      assert.equal(parseUserFilter(col, 'a/b/2026'), null);     // NaN parts
     });
   });
 
   describe('enumLabel mode', () => {
     const col = {
-      key: 'documentStatus',
-      type: 'status',
-      filterMode: 'enumLabel',
-      enumLabels: { DR: 'Draft', CO: 'Completed', IP: 'In Process' },
+      key: 'docStatus', type: 'status',
+      enumLabels: { DR: 'Borrador', CO: 'Completado', CL: 'Cerrado' },
     };
 
-    it('matches full label (case-insensitive)', () => {
-      const result = parseUserFilter(col, 'completed');
-      assert.deepEqual(result, { mode: 'enumLabel', value: ['CO'], originalValue: 'completed' });
+    it('accepts a raw code committed from a dropdown', () => {
+      assert.deepEqual(parseUserFilter(col, 'CO').value, ['CO']);
     });
 
-    it('matches partial label', () => {
-      const result = parseUserFilter(col, 'comp');
-      assert.deepEqual(result, { mode: 'enumLabel', value: ['CO'], originalValue: 'comp' });
+    it('matches labels case-insensitively by substring', () => {
+      assert.deepEqual(parseUserFilter(col, 'borra').value, ['DR']);
+      assert.deepEqual(parseUserFilter(col, 'BORRADOR').value, ['DR']);
     });
 
-    it('matches multiple labels that share the substring', () => {
-      const result = parseUserFilter(col, 'dra');
-      assert.deepEqual(result, { mode: 'enumLabel', value: ['DR'], originalValue: 'dra' });
+    it('collects every label matching the typed fragment', () => {
+      // "c" hits both "Completado" and "Cerrado" → an inSet query downstream.
+      assert.deepEqual(parseUserFilter(col, 'rad').value, ['DR', 'CL']);
     });
 
-    it('returns null when no label matches', () => {
+    it('returns null when nothing matches', () => {
       assert.equal(parseUserFilter(col, 'zzz'), null);
+    });
+
+    it('returns null when enumLabels is missing or not an object', () => {
+      assert.equal(parseUserFilter({ key: 's', type: 'status' }, 'CO'), null);
+      assert.equal(parseUserFilter({ key: 's', type: 'status', enumLabels: null }, 'CO'), null);
+      assert.equal(parseUserFilter({ key: 's', type: 'status', enumLabels: 'nope' }, 'CO'), null);
     });
   });
 
   describe('booleanLabel mode', () => {
-    const col = {
-      key: 'processed',
-      type: 'boolean',
-      filterMode: 'booleanLabel',
-      badgeLabels: { true: 'Complete', false: 'In Process' },
-    };
+    const col = { key: 'posted', type: 'boolean', badgeLabels: { true: 'Contabilizado', false: 'Pendiente' } };
 
-    it('matches generic "yes" → true', () => {
-      assert.deepEqual(parseUserFilter(col, 'yes'), { mode: 'booleanLabel', value: true, originalValue: 'yes' });
+    it('accepts the generic truthy keywords in both languages', () => {
+      for (const input of ['true', 'yes', 'si', 'sí', '1', 'y', 'SI', 'Y']) {
+        assert.equal(parseUserFilter(col, input).value, true, input);
+      }
     });
 
-    it('matches generic "no" → false', () => {
-      assert.deepEqual(parseUserFilter(col, 'no'), { mode: 'booleanLabel', value: false, originalValue: 'no' });
+    it('accepts the generic falsy keywords', () => {
+      for (const input of ['false', 'no', '0', 'n', 'NO']) {
+        assert.equal(parseUserFilter(col, input).value, false, input);
+      }
     });
 
-    it('matches badge true label', () => {
-      assert.deepEqual(parseUserFilter(col, 'comp'), { mode: 'booleanLabel', value: true, originalValue: 'comp' });
+    it('matches the column badge labels by substring', () => {
+      assert.equal(parseUserFilter(col, 'contab').value, true);
+      assert.equal(parseUserFilter(col, 'pend').value, false);
     });
 
-    it('matches badge false label (partial)', () => {
-      assert.deepEqual(parseUserFilter(col, 'in proc'), { mode: 'booleanLabel', value: false, originalValue: 'in proc' });
-    });
-
-    it('returns null when no match', () => {
-      assert.equal(parseUserFilter(col, 'unknown'), null);
+    it('returns null for unrecognized input, with or without badgeLabels', () => {
+      assert.equal(parseUserFilter(col, 'maybe'), null);
+      assert.equal(parseUserFilter({ key: 'p', type: 'boolean' }, 'maybe'), null);
     });
   });
 
   describe('numeric mode', () => {
-    const col = { key: 'grandTotal', type: 'amount', filterMode: 'numeric' };
+    const col = { key: 'total', type: 'amount' };
 
-    it('parses plain number as equality', () => {
-      assert.deepEqual(parseUserFilter(col, '1234.5'), { mode: 'numeric', op: '=', value: 1234.5, originalValue: '1234.5' });
+    it('defaults a bare number to equality', () => {
+      assert.deepEqual(
+        parseUserFilter(col, '100.5'),
+        { mode: 'numeric', op: '=', value: 100.5, originalValue: '100.5' },
+      );
     });
 
-    it('parses localized number (comma thousands separator)', () => {
-      assert.deepEqual(parseUserFilter(col, '1,234.5'), { mode: 'numeric', op: '=', value: 1234.5, originalValue: '1,234.5' });
+    it('parses each operator prefix', () => {
+      const expected = { '>=': 'gte', '<=': 'lte', '>': 'gt', '<': 'lt', '=': 'eq' };
+      for (const op of Object.keys(expected)) {
+        const parsed = parseUserFilter(col, `${op}42`);
+        assert.equal(parsed.op, op);
+        assert.equal(parsed.value, 42);
+      }
     });
 
-    it('parses > operator', () => {
-      assert.deepEqual(parseUserFilter(col, '>1000'), { mode: 'numeric', op: '>', value: 1000, originalValue: '>1000' });
+    it('strips thousands separators, with and without an operator', () => {
+      assert.equal(parseUserFilter(col, '1,234.56').value, 1234.56);
+      assert.equal(parseUserFilter(col, '>=1,000').value, 1000);
     });
 
-    it('parses < operator', () => {
-      assert.deepEqual(parseUserFilter(col, '<5000'), { mode: 'numeric', op: '<', value: 5000, originalValue: '<5000' });
+    it('parses negative values', () => {
+      assert.equal(parseUserFilter(col, '-50').value, -50);
+      assert.equal(parseUserFilter(col, '<-50').value, -50);
     });
 
-    it('returns null for non-numeric input', () => {
+    it('returns null for non-numeric text', () => {
       assert.equal(parseUserFilter(col, 'abc'), null);
     });
   });
 
-  describe('identifier mode (selector)', () => {
-    const col = { key: 'businessPartner', type: 'selector', filterMode: 'identifier' };
-
-    it('returns identifier filter', () => {
-      assert.deepEqual(parseUserFilter(col, 'datum'), { mode: 'identifier', value: 'datum', originalValue: 'datum' });
-    });
+  it('produces an identifier filter for selector columns and _ID heuristics', () => {
+    assert.deepEqual(
+      parseUserFilter({ key: 'businessPartner', type: 'selector' }, 'jua'),
+      { mode: 'identifier', value: 'jua', originalValue: 'jua' },
+    );
+    assert.equal(parseUserFilter({ key: 'bp', column: 'C_BPartner_ID' }, 'jua').mode, 'identifier');
   });
 });
 
@@ -249,214 +361,161 @@ describe('parseUserFilter', () => {
 // ---------------------------------------------------------------------------
 
 describe('resolveBackendSort', () => {
-  it('uses backendSortKey when explicitly defined (identifier uses minus-prefix for desc)', () => {
-    const col = { key: 'bp', type: 'selector', backendSortKey: 'bp$_identifier' };
-    assert.equal(resolveBackendSort(col, 'asc'), 'bp$_identifier');
-    assert.equal(resolveBackendSort(col, 'desc'), '-bp$_identifier');
-  });
-
-  it('infers $\_identifier sort for selector type (no backendSortKey)', () => {
+  it('emits a bare token / minus-prefixed token for identifier sorts', () => {
+    // OpenBravo's AdvancedQueryBuilder only detects an identifier sort when the
+    // token ENDS in `._identifier`; a trailing " asc"/" desc" breaks it (500).
     const col = { key: 'businessPartner', type: 'selector' };
     assert.equal(resolveBackendSort(col, 'asc'), 'businessPartner$_identifier');
     assert.equal(resolveBackendSort(col, 'desc'), '-businessPartner$_identifier');
   });
 
-  it('uses raw column for string type', () => {
-    const col = { key: 'name', type: 'string' };
-    assert.equal(resolveBackendSort(col, 'asc'), 'name asc');
+  it('treats an explicit backendSortKey as an identifier sort (no direction suffix)', () => {
+    const col = { key: 'bp', backendSortKey: 'businessPartner$name' };
+    assert.equal(resolveBackendSort(col, 'asc'), 'businessPartner$name');
+    assert.equal(resolveBackendSort(col, 'desc'), '-businessPartner$name');
   });
 
-  it('uses raw column for date type', () => {
-    const col = { key: 'orderDate', type: 'date' };
-    assert.equal(resolveBackendSort(col, 'desc'), 'orderDate desc');
+  it('honors an explicit sortMode=identifier over the column type', () => {
+    assert.equal(resolveBackendSort({ key: 'code', type: 'string', sortMode: 'identifier' }, 'asc'), 'code$_identifier');
   });
 
-  it('uses raw column for amount type', () => {
-    const col = { key: 'grandTotal', type: 'amount' };
-    assert.equal(resolveBackendSort(col, 'asc'), 'grandTotal asc');
+  it('emits "<key> <dir>" for raw sorts', () => {
+    assert.equal(resolveBackendSort({ key: 'orderDate', type: 'date' }, 'desc'), 'orderDate desc');
+    assert.equal(resolveBackendSort({ key: 'total', type: 'amount' }, 'asc'), 'total asc');
+    assert.equal(resolveBackendSort({ key: 'name' }, 'asc'), 'name asc');
   });
 
-  it('uses raw column for status type (enum backend sort fallback)', () => {
-    const col = {
-      key: 'documentStatus',
-      type: 'status',
-      enumLabels: { DR: 'Draft', CO: 'Completed' },
-    };
-    assert.equal(resolveBackendSort(col, 'asc'), 'documentStatus asc');
+  it('sorts enum and boolean columns on the raw key, not the label', () => {
+    // enumLabel/booleanLabel are not identifier sorts, so the direction suffix
+    // form is correct for them.
+    assert.equal(resolveBackendSort({ key: 'docStatus', type: 'status' }, 'asc'), 'docStatus asc');
+    assert.equal(resolveBackendSort({ key: 'posted', type: 'boolean' }, 'desc'), 'posted desc');
+    assert.equal(resolveBackendSort({ key: 's', enumLabels: { A: 'a' } }, 'asc'), 's asc');
+    assert.equal(resolveBackendSort({ key: 'b', badgeLabels: { true: 'x' } }, 'asc'), 'b asc');
   });
 
-  it('uses raw column for boolean type', () => {
-    const col = {
-      key: 'processed',
-      type: 'boolean',
-      badgeLabels: { true: 'Complete', false: 'In Process' },
-    };
-    assert.equal(resolveBackendSort(col, 'desc'), 'processed desc');
+  it('coerces any non-"desc" direction to asc', () => {
+    assert.equal(resolveBackendSort({ key: 'n' }, 'ASC'), 'n asc');
+    assert.equal(resolveBackendSort({ key: 'n' }, 'bogus'), 'n asc');
+    assert.equal(resolveBackendSort({ key: 'n' }, undefined), 'n asc');
   });
 
-  it('handles null col gracefully (raw fallback)', () => {
+  it('does not throw on a nullish column', () => {
     assert.equal(resolveBackendSort(null, 'asc'), ' asc');
-  });
-
-  it('handles missing type gracefully (raw fallback)', () => {
-    const col = { key: 'someField' };
-    assert.equal(resolveBackendSort(col, 'asc'), 'someField asc');
-  });
-
-  it('does not depend on sample row presence', () => {
-    const col = { key: 'businessPartner', type: 'selector' };
-    // No sampleRow involved — pure metadata
-    const result = resolveBackendSort(col, 'asc');
-    assert.equal(result, 'businessPartner$_identifier');
+    assert.equal(resolveBackendSort(undefined, 'desc'), ' desc');
   });
 });
 
 // ---------------------------------------------------------------------------
-// buildBackendFilter
+// buildBackendFilter  (and the parse → build round trip)
 // ---------------------------------------------------------------------------
 
 describe('buildBackendFilter', () => {
-  it('returns null for null parsed input', () => {
-    assert.equal(buildBackendFilter({ key: 'name' }, null), null);
+  it('returns null without a parsed filter or without a column key', () => {
+    assert.equal(buildBackendFilter({ key: 'x' }, null), null);
+    assert.equal(buildBackendFilter({ key: 'x' }, undefined), null);
+    assert.equal(buildBackendFilter({}, { mode: 'text', value: 'y' }), null);
+    assert.equal(buildBackendFilter(null, { mode: 'text', value: 'y' }), null);
   });
 
-  it('returns null when col is missing key', () => {
-    assert.equal(buildBackendFilter({}, { mode: 'text', value: 'x' }), null);
+  it('builds a case-insensitive contains filter for text', () => {
+    assert.deepEqual(
+      buildBackendFilter({ key: 'documentNo' }, { mode: 'text', value: 'INV' }),
+      [{ fieldName: 'documentNo', operator: 'iContains', value: 'INV' }],
+    );
   });
 
-  describe('text mode', () => {
-    it('produces iContains criterion', () => {
-      const result = buildBackendFilter({ key: 'name' }, { mode: 'text', value: 'datum' });
-      assert.deepEqual(result, [{ fieldName: 'name', operator: 'iContains', value: 'datum' }]);
-    });
+  it('falls back to iContains for an unknown mode', () => {
+    assert.deepEqual(
+      buildBackendFilter({ key: 'x' }, { mode: 'somethingNew', value: 'v' }),
+      [{ fieldName: 'x', operator: 'iContains', value: 'v' }],
+    );
   });
 
-  describe('identifier mode', () => {
-    it('appends $\_identifier with iContains by default', () => {
-      const col = { key: 'businessPartner', type: 'selector' };
-      const parsed = { mode: 'identifier', value: 'datum' };
-      assert.deepEqual(buildBackendFilter(col, parsed), [
-        { fieldName: 'businessPartner$_identifier', operator: 'iContains', value: 'datum' },
-      ]);
-    });
-
-    it('respects explicit backendFilterKey', () => {
-      const col = { key: 'bp', backendFilterKey: 'bp$name' };
-      const parsed = { mode: 'identifier', value: 'acme' };
-      assert.deepEqual(buildBackendFilter(col, parsed), [
-        { fieldName: 'bp$name', operator: 'iContains', value: 'acme' },
-      ]);
-    });
+  it('filters identifier columns against $_identifier', () => {
+    assert.deepEqual(
+      buildBackendFilter({ key: 'businessPartner' }, { mode: 'identifier', value: 'jua' }),
+      [{ fieldName: 'businessPartner$_identifier', operator: 'iContains', value: 'jua' }],
+    );
   });
 
-  describe('enumLabel mode', () => {
-    const col = { key: 'documentStatus' };
-
-    it('produces equals criterion for single code', () => {
-      const parsed = { mode: 'enumLabel', value: ['CO'] };
-      assert.deepEqual(buildBackendFilter(col, parsed), [
-        { fieldName: 'documentStatus', operator: 'equals', value: 'CO' },
-      ]);
-    });
-
-    it('produces inSet criterion for multiple codes', () => {
-      const parsed = { mode: 'enumLabel', value: ['CO', 'IP'] };
-      assert.deepEqual(buildBackendFilter(col, parsed), [
-        { fieldName: 'documentStatus', operator: 'inSet', value: 'CO,IP' },
-      ]);
-    });
+  it('uses equals for one enum code and inSet for several', () => {
+    assert.deepEqual(
+      buildBackendFilter({ key: 'docStatus' }, { mode: 'enumLabel', value: ['CO'] }),
+      [{ fieldName: 'docStatus', operator: 'equals', value: 'CO' }],
+    );
+    assert.deepEqual(
+      buildBackendFilter({ key: 'docStatus' }, { mode: 'enumLabel', value: ['CO', 'CL'] }),
+      [{ fieldName: 'docStatus', operator: 'inSet', value: 'CO,CL' }],
+    );
   });
 
-  describe('booleanLabel mode', () => {
-    const col = { key: 'processed' };
-
-    it('produces equals true criterion', () => {
-      assert.deepEqual(buildBackendFilter(col, { mode: 'booleanLabel', value: true }), [
-        { fieldName: 'processed', operator: 'equals', value: true },
-      ]);
-    });
-
-    it('produces equals false criterion', () => {
-      assert.deepEqual(buildBackendFilter(col, { mode: 'booleanLabel', value: false }), [
-        { fieldName: 'processed', operator: 'equals', value: false },
-      ]);
-    });
+  it('serializes booleans to the backend Y/N chars (never a JS boolean)', () => {
+    // Verified against NEO: `posted=true` returns 0 rows, `posted='Y'` matches.
+    assert.deepEqual(
+      buildBackendFilter({ key: 'posted' }, { mode: 'booleanLabel', value: true }),
+      [{ fieldName: 'posted', operator: 'equals', value: 'Y' }],
+    );
+    assert.deepEqual(
+      buildBackendFilter({ key: 'posted' }, { mode: 'booleanLabel', value: false }),
+      [{ fieldName: 'posted', operator: 'equals', value: 'N' }],
+    );
   });
 
-  describe('numeric mode', () => {
-    const col = { key: 'grandTotal' };
-
-    it('produces equals criterion', () => {
-      assert.deepEqual(buildBackendFilter(col, { mode: 'numeric', op: '=', value: 1234 }), [
-        { fieldName: 'grandTotal', operator: 'equals', value: 1234 },
-      ]);
-    });
-
-    it('produces greaterThan criterion', () => {
-      assert.deepEqual(buildBackendFilter(col, { mode: 'numeric', op: '>', value: 1000 }), [
-        { fieldName: 'grandTotal', operator: 'greaterThan', value: 1000 },
-      ]);
-    });
-
-    it('produces lessThan criterion', () => {
-      assert.deepEqual(buildBackendFilter(col, { mode: 'numeric', op: '<', value: 5000 }), [
-        { fieldName: 'grandTotal', operator: 'lessThan', value: 5000 },
-      ]);
-    });
+  it('maps every numeric operator, defaulting an unknown one to equals', () => {
+    const cases = [
+      ['=', 'equals'], ['>', 'greaterThan'], ['<', 'lessThan'],
+      ['>=', 'greaterOrEqual'], ['<=', 'lessOrEqual'],
+    ];
+    for (const [op, operator] of cases) {
+      assert.deepEqual(
+        buildBackendFilter({ key: 'total' }, { mode: 'numeric', op, value: 10 }),
+        [{ fieldName: 'total', operator, value: 10 }], op,
+      );
+    }
+    assert.deepEqual(
+      buildBackendFilter({ key: 'total' }, { mode: 'numeric', op: '!=', value: 10 }),
+      [{ fieldName: 'total', operator: 'equals', value: 10 }],
+    );
   });
 
-  describe('date mode', () => {
+  it('honors backendFilterKey for every mode', () => {
+    const col = { key: 'bp', backendFilterKey: 'businessPartner$name' };
+    const modes = [
+      { mode: 'text', value: 'x' },
+      { mode: 'identifier', value: 'x' },
+      { mode: 'enumLabel', value: ['A'] },
+      { mode: 'booleanLabel', value: true },
+      { mode: 'numeric', op: '=', value: 1 },
+      { mode: 'date', op: '>=', value: '2026-01-01' },
+    ];
+    for (const parsed of modes) {
+      const [first] = buildBackendFilter(col, parsed);
+      assert.equal(first.fieldName, 'businessPartner$name', parsed.mode);
+    }
+  });
+
+  describe('date day-level range semantics', () => {
+    // The backend column is a datetime, so every date comparison has to be
+    // expressed as an inclusive day boundary or rows on the boundary day are
+    // silently dropped.
     const col = { key: 'orderDate' };
 
-    it('produces full-day range criterion for exact date', () => {
-      assert.deepEqual(
-        buildBackendFilter(col, { mode: 'date', op: '=', value: '2026-04-14' }),
-        [
-          { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-04-14' },
-          { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-04-14' },
-        ],
-      );
+    it('expands an exact date to a greaterOrEqual + lessOrEqual pair', () => {
+      assert.deepEqual(buildBackendFilter(col, { mode: 'date', op: '=', value: '2026-04-14' }), [
+        { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-04-14' },
+        { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-04-14' },
+      ]);
     });
 
-    it('produces greaterOrEqual + lessOrEqual criteria for year range', () => {
-      assert.deepEqual(
-        buildBackendFilter(col, { mode: 'date', op: 'year', value: '2026' }),
-        [
-          { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-01-01' },
-          { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-12-31' },
-        ],
-      );
+    it('expands a year to its first and last day', () => {
+      assert.deepEqual(buildBackendFilter(col, { mode: 'date', op: 'year', value: '2026' }), [
+        { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-01-01' },
+        { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-12-31' },
+      ]);
     });
 
-    it('produces greaterOrEqual on next day for strict >', () => {
-      assert.deepEqual(
-        buildBackendFilter(col, { mode: 'date', op: '>', value: '2026-04-14' }),
-        [{ fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-04-15' }],
-      );
-    });
-
-    it('produces lessOrEqual on previous day for strict <', () => {
-      assert.deepEqual(
-        buildBackendFilter(col, { mode: 'date', op: '<', value: '2026-04-15' }),
-        [{ fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-04-14' }],
-      );
-    });
-
-    it('produces greaterOrEqual as-is for >=', () => {
-      assert.deepEqual(
-        buildBackendFilter(col, { mode: 'date', op: '>=', value: '2026-04-14' }),
-        [{ fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-04-14' }],
-      );
-    });
-
-    it('produces lessOrEqual as-is for <=', () => {
-      assert.deepEqual(
-        buildBackendFilter(col, { mode: 'date', op: '<=', value: '2026-04-15' }),
-        [{ fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-04-15' }],
-      );
-    });
-
-    it('produces greaterOrEqual + lessOrEqual for date range', () => {
+    it('maps a range to its inclusive bounds', () => {
       assert.deepEqual(
         buildBackendFilter(col, { mode: 'date', op: 'range', value: ['2026-04-01', '2026-04-15'] }),
         [
@@ -466,842 +525,387 @@ describe('buildBackendFilter', () => {
       );
     });
 
-    it('respects explicit backendFilterKey', () => {
-      const col2 = { key: 'orderDate', backendFilterKey: 'c_order.dateordered' };
-      assert.deepEqual(
-        buildBackendFilter(col2, { mode: 'date', op: '=', value: '2026-04-14' }),
-        [
-          { fieldName: 'c_order.dateordered', operator: 'greaterOrEqual', value: '2026-04-14' },
-          { fieldName: 'c_order.dateordered', operator: 'lessOrEqual', value: '2026-04-14' },
-        ],
+    it('shifts the boundary day by one for the strict < and > operators', () => {
+      assert.deepEqual(buildBackendFilter(col, { mode: 'date', op: '<', value: '2026-04-14' }), [
+        { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-04-13' },
+      ]);
+      assert.deepEqual(buildBackendFilter(col, { mode: 'date', op: '>', value: '2026-04-14' }), [
+        { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-04-15' },
+      ]);
+    });
+
+    it('crosses month and year boundaries when shifting', () => {
+      // Regression guard for naive string arithmetic on the day component.
+      assert.equal(
+        buildBackendFilter(col, { mode: 'date', op: '<', value: '2026-05-01' })[0].value,
+        '2026-04-30',
       );
+      assert.equal(
+        buildBackendFilter(col, { mode: 'date', op: '>', value: '2026-12-31' })[0].value,
+        '2027-01-01',
+      );
+      // 2028 is a leap year: 28 Feb + 1 day = 29 Feb, not 1 Mar.
+      assert.equal(
+        buildBackendFilter(col, { mode: 'date', op: '>', value: '2028-02-28' })[0].value,
+        '2028-02-29',
+      );
+    });
+
+    it('keeps the boundary day for the inclusive <= and >= operators', () => {
+      assert.deepEqual(buildBackendFilter(col, { mode: 'date', op: '>=', value: '2026-04-14' }), [
+        { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-04-14' },
+      ]);
+      assert.deepEqual(buildBackendFilter(col, { mode: 'date', op: '<=', value: '2026-04-14' }), [
+        { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-04-14' },
+      ]);
+    });
+  });
+
+  describe('round trip: user input → backend criteria', () => {
+    // This is the real code path behind a column filter box; asserting it
+    // end-to-end catches mismatches between the parser and the builder that
+    // per-function tests can miss.
+    const build = (col, input) => buildBackendFilter(col, parseUserFilter(col, input));
+
+    it('a locale date typed by the user becomes an inclusive day range', () => {
+      assert.deepEqual(build({ key: 'orderDate', type: 'date' }, '14/04/2026'), [
+        { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-04-14' },
+        { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-04-14' },
+      ]);
+    });
+
+    it('a Spanish status label becomes an equals on the raw code', () => {
+      const col = { key: 'docStatus', type: 'status', enumLabels: { DR: 'Borrador', CO: 'Completado' } };
+      assert.deepEqual(build(col, 'borra'), [
+        { fieldName: 'docStatus', operator: 'equals', value: 'DR' },
+      ]);
+    });
+
+    it('an ambiguous status fragment becomes an inSet', () => {
+      const col = { key: 'docStatus', type: 'status', enumLabels: { DR: 'Borrador', CO: 'Cerrado' } };
+      assert.deepEqual(build(col, 'rad'), [
+        { fieldName: 'docStatus', operator: 'inSet', value: 'DR,CO' },
+      ]);
+    });
+
+    it('"si" on a boolean column becomes equals Y', () => {
+      const col = { key: 'posted', type: 'boolean', badgeLabels: { true: 'Contabilizado', false: 'Pendiente' } };
+      assert.deepEqual(build(col, 'si'), [{ fieldName: 'posted', operator: 'equals', value: 'Y' }]);
+    });
+
+    it('a thousands-separated amount expression becomes a numeric comparison', () => {
+      assert.deepEqual(build({ key: 'total', type: 'amount' }, '>=1,000.50'), [
+        { fieldName: 'total', operator: 'greaterOrEqual', value: 1000.5 },
+      ]);
+    });
+
+    it('free text on a foreign-key column filters the display label', () => {
+      assert.deepEqual(build({ key: 'bp', column: 'C_BPartner_ID' }, 'jua'), [
+        { fieldName: 'bp$_identifier', operator: 'iContains', value: 'jua' },
+      ]);
+    });
+
+    it('unparseable input yields no criteria at all', () => {
+      assert.equal(build({ key: 'orderDate', type: 'date' }, 'nope'), null);
+      assert.equal(build({ key: 'total', type: 'amount' }, 'nope'), null);
     });
   });
 });
 
 // ---------------------------------------------------------------------------
-// resolveFilterMode
-// ---------------------------------------------------------------------------
-
-describe('resolveFilterMode', () => {
-  it('maps percent type to numeric mode', () => {
-    assert.equal(resolveFilterMode({ key: 'deliveryStatus', type: 'percent' }), 'numeric');
-  });
-
-  it('maps number type to numeric mode', () => {
-    assert.equal(resolveFilterMode({ key: 'qty', type: 'number' }), 'numeric');
-  });
-
-  it('maps amount type to numeric mode', () => {
-    assert.equal(resolveFilterMode({ key: 'total', type: 'amount' }), 'numeric');
-  });
-
-  it('maps status type to enumLabel mode', () => {
-    assert.equal(resolveFilterMode({ key: 'docStatus', type: 'status' }), 'enumLabel');
-  });
-
-  it('maps date type to date mode', () => {
-    assert.equal(resolveFilterMode({ key: 'orderDate', type: 'date' }), 'date');
-  });
-
-  it('maps selector type to identifier mode', () => {
-    assert.equal(resolveFilterMode({ key: 'bp', type: 'selector' }), 'identifier');
-  });
-
-  it('defaults to text for unknown type', () => {
-    assert.equal(resolveFilterMode({ key: 'field', type: 'custom' }), 'text');
-  });
-
-  it('returns text when col is null', () => {
-    assert.equal(resolveFilterMode(null), 'text');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// buildAdvancedFilterCriteria
+// buildAdvancedFilterCriteria (+ the per-row criteria matrix)
 // ---------------------------------------------------------------------------
 
 describe('buildAdvancedFilterCriteria', () => {
-  const columns = [
-    { key: 'documentStatus', column: 'DocStatus', type: 'status' },
-    { key: 'deliveryStatusPurchase', column: 'DeliveryStatusPurchase', type: 'percent' },
-    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-    { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  ];
-
-  it('returns null when advancedFilter is null', () => {
-    assert.equal(buildAdvancedFilterCriteria(null, columns), null);
-  });
-
-  it('returns null when conditions array is empty', () => {
-    assert.equal(buildAdvancedFilterCriteria({ rowOperator: 'and', conditions: [] }, columns), null);
-  });
-
-  it('returns null when tableColumns is empty (no column definitions resolved)', () => {
-    const filter = { rowOperator: 'and', conditions: [{ field: 'documentStatus', operator: 'equals', value: 'CO' }] };
-    assert.equal(buildAdvancedFilterCriteria(filter, []), null);
-  });
-
-  it('serializes equals condition on status column', () => {
-    const filter = { rowOperator: 'and', conditions: [{ field: 'documentStatus', operator: 'equals', value: 'CO' }] };
-    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
-      { fieldName: 'documentStatus', operator: 'equals', value: 'CO' },
-    ]);
-  });
-
-  it('serializes lessThan condition on percent column as numeric', () => {
-    const filter = { rowOperator: 'and', conditions: [{ field: 'deliveryStatusPurchase', operator: 'lessThan', value: 100 }] };
-    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
-      { fieldName: 'deliveryStatusPurchase', operator: 'lessThan', value: 100 },
-    ]);
-  });
-
-  it('uses notEqual operator (no trailing s) for negation on status column', () => {
-    const filter = { rowOperator: 'and', conditions: [{ field: 'documentStatus', operator: 'notEqual', value: 'DR' }] };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'documentStatus', operator: 'notEqual', value: 'DR' }]);
-  });
-
-  it('combines two AND conditions into a flat array (pendingDelivery filter shape)', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [
-        { field: 'documentStatus', operator: 'equals', value: 'CO' },
-        { field: 'deliveryStatusPurchase', operator: 'lessThan', value: 100 },
-      ],
-    };
-    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
-      { fieldName: 'documentStatus', operator: 'equals', value: 'CO' },
-      { fieldName: 'deliveryStatusPurchase', operator: 'lessThan', value: 100 },
-    ]);
-  });
-
-  it('wraps OR conditions in an AdvancedCriteria envelope', () => {
-    const filter = {
-      rowOperator: 'or',
-      conditions: [
-        { field: 'documentStatus', operator: 'equals', value: 'CO' },
-        { field: 'documentStatus', operator: 'equals', value: 'DR' },
-      ],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.equal(result.length, 1);
-    assert.equal(result[0]._constructor, 'AdvancedCriteria');
-    assert.equal(result[0].operator, 'or');
-    assert.equal(result[0].criteria.length, 2);
-  });
-
-  it('skips conditions whose field key is not in columns', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [
-        { field: 'documentStatus', operator: 'equals', value: 'CO' },
-        { field: 'unknownField', operator: 'equals', value: 'X' },
-      ],
-    };
-    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
-      { fieldName: 'documentStatus', operator: 'equals', value: 'CO' },
-    ]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// buildAdvancedFilterCriteria — buildCriteria hook
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — buildCriteria hook (ETP-3660)', () => {
-  // The __contactType virtual column uses buildCriteria to map enum values
-  // to real backend boolean fields. Test that buildAdvancedFilterCriteria
-  // calls col.buildCriteria(row) and uses its result instead of the default logic.
-
-  const virtualCol = {
-    key: '__contactType',
-    type: 'enum',
-    filterable: true,
-    buildCriteria: (condition) => {
-      const { operator, value } = condition;
-      if (operator === 'equals') {
-        if (value === 'customer') return [{ fieldName: 'customer', operator: 'equals', value: true }];
-        if (value === 'vendor')   return [{ fieldName: 'vendor',   operator: 'equals', value: true }];
-      }
-      if (operator === 'notEqual') {
-        if (value === 'customer') return [{ fieldName: 'customer', operator: 'equals', value: false }];
-        if (value === 'vendor')   return [{ fieldName: 'vendor',   operator: 'equals', value: false }];
-      }
-      return null;
-    },
-  };
-
-  it('operator=equals, value=customer → customer=true', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: '__contactType', operator: 'equals', value: 'customer' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, [virtualCol]);
-    assert.deepEqual(result, [{ fieldName: 'customer', operator: 'equals', value: true }]);
-  });
-
-  it('operator=equals, value=vendor → vendor=true', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: '__contactType', operator: 'equals', value: 'vendor' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, [virtualCol]);
-    assert.deepEqual(result, [{ fieldName: 'vendor', operator: 'equals', value: true }]);
-  });
-
-  it('operator=notEqual, value=customer → customer=false', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: '__contactType', operator: 'notEqual', value: 'customer' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, [virtualCol]);
-    assert.deepEqual(result, [{ fieldName: 'customer', operator: 'equals', value: false }]);
-  });
-
-  it('operator=notEqual, value=vendor → vendor=false', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: '__contactType', operator: 'notEqual', value: 'vendor' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, [virtualCol]);
-    assert.deepEqual(result, [{ fieldName: 'vendor', operator: 'equals', value: false }]);
-  });
-
-  it('buildCriteria returning null causes the condition to be skipped', () => {
-    // operator 'iContains' is not handled by the virtual col's buildCriteria → returns null
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: '__contactType', operator: 'iContains', value: 'cust' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, [virtualCol]);
-    // All conditions skipped → null
-    assert.equal(result, null);
-  });
-
-  it('buildCriteria is preferred over default logic for string-type columns with buildCriteria', () => {
-    // A column declared as type='string' but with buildCriteria should still use buildCriteria
-    const customStringCol = {
-      key: 'myField',
-      type: 'string',
-      buildCriteria: () => [{ fieldName: 'overridden', operator: 'equals', value: 'custom' }],
-    };
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'myField', operator: 'iContains', value: 'anything' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, [customStringCol]);
-    // Default string logic would produce iContains on 'myField'; buildCriteria overrides it
-    assert.deepEqual(result, [{ fieldName: 'overridden', operator: 'equals', value: 'custom' }]);
-  });
-
-  it('mixes virtual col result with a regular column in the same AND filter', () => {
-    const regularCol = { key: 'documentNo', type: 'string' };
-    const filter = {
-      rowOperator: 'and',
-      conditions: [
-        { field: '__contactType', operator: 'equals', value: 'customer' },
-        { field: 'documentNo', operator: 'iContains', value: 'ORD' },
-      ],
-    };
-    const result = buildAdvancedFilterCriteria(filter, [virtualCol, regularCol]);
-    assert.deepEqual(result, [
-      { fieldName: 'customer', operator: 'equals', value: true },
-      { fieldName: 'documentNo', operator: 'iContains', value: 'ORD' },
-    ]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: parseDateString — yyyy/mm/dd branch (lines 68-73)
-// ---------------------------------------------------------------------------
-
-describe('parseUserFilter — parseDateString yyyy/mm/dd (slash/dot) branch', () => {
-  const col = { key: 'orderDate', type: 'date', filterMode: 'date' };
-
-  it('parses yyyy/mm/dd format', () => {
-    const result = parseUserFilter(col, '2026/04/14');
-    assert.deepEqual(result, { mode: 'date', op: '=', value: '2026-04-14', originalValue: '2026/04/14' });
-  });
-
-  it('parses yyyy.mm.dd format', () => {
-    const result = parseUserFilter(col, '2026.04.14');
-    assert.deepEqual(result, { mode: 'date', op: '=', value: '2026-04-14', originalValue: '2026.04.14' });
-  });
-
-  it('pads single-digit month and day in yyyy/mm/dd', () => {
-    const result = parseUserFilter(col, '2026/1/5');
-    assert.deepEqual(result, { mode: 'date', op: '=', value: '2026-01-05', originalValue: '2026/1/5' });
-  });
-
-  it('returns null for three-part date where no part > 999 (e.g. 12/04/99)', () => {
-    assert.equal(parseUserFilter(col, '12/04/99'), null);
-  });
-
-  it('returns null for three-part date with NaN parts', () => {
-    assert.equal(parseUserFilter(col, 'ab/cd/ef'), null);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: parseEnumLabelFilter — direct code match (line 227-228)
-// ---------------------------------------------------------------------------
-
-describe('parseUserFilter — enumLabel direct code match', () => {
-  const col = {
-    key: 'documentStatus',
-    type: 'status',
-    filterMode: 'enumLabel',
-    enumLabels: { DR: 'Draft', CO: 'Completed', IP: 'In Process' },
-  };
-
-  it('returns direct code match when input is an exact raw key', () => {
-    const result = parseUserFilter(col, 'DR');
-    assert.deepEqual(result, { mode: 'enumLabel', value: ['DR'], originalValue: 'DR' });
-  });
-
-  it('returns direct code match for CO', () => {
-    const result = parseUserFilter(col, 'CO');
-    assert.deepEqual(result, { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — isNull / isNotNull (lines 461-462, 504-506)
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — isNull / isNotNull', () => {
-  const columns = [
-    { key: 'name', type: 'string' },
+  const COLUMNS = [
+    { key: 'documentNo', type: 'string' },
+    { key: 'orderDate', type: 'date' },
+    { key: 'total', type: 'amount' },
+    { key: 'posted', type: 'boolean', badgeLabels: { true: 'Si', false: 'No' } },
     { key: 'businessPartner', type: 'selector' },
   ];
+  const build = (advancedFilter, columns = COLUMNS) => buildAdvancedFilterCriteria(advancedFilter, columns);
 
-  it('generates isNull criterion', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'isNull', value: null }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'name', operator: 'isNull' }]);
+  describe('guards', () => {
+    it('returns null for a missing, empty or malformed filter', () => {
+      assert.equal(build(null), null);
+      assert.equal(build({}), null);
+      assert.equal(build({ conditions: [] }), null);
+      assert.equal(build({ conditions: null }), null);
+    });
+
+    it('returns null when columns is not an array', () => {
+      const filter = { conditions: [{ field: 'documentNo', operator: 'iContains', value: 'A' }] };
+      assert.equal(build(filter, null), null);
+      assert.equal(build(filter, 'documentNo'), null);
+      assert.equal(build(filter, { documentNo: {} }), null);
+    });
+
+    it('skips conditions whose field is not a known column', () => {
+      const result = build({
+        conditions: [
+          { field: 'ghost', operator: 'iContains', value: 'A' },
+          { field: 'documentNo', operator: 'iContains', value: 'B' },
+        ],
+      });
+      assert.deepEqual(result, [{ fieldName: 'documentNo', operator: 'iContains', value: 'B' }]);
+    });
+
+    it('returns null when every condition is unusable', () => {
+      assert.equal(build({ conditions: [{ field: 'ghost', operator: 'iContains', value: 'A' }] }), null);
+      // No operator picked yet in the builder UI.
+      assert.equal(build({ conditions: [{ field: 'documentNo', value: 'A' }] }), null);
+      // Value cleared.
+      assert.equal(build({ conditions: [{ field: 'documentNo', operator: 'iContains', value: '' }] }), null);
+      assert.equal(build({ conditions: [{ field: 'documentNo', operator: 'iContains', value: null }] }), null);
+      assert.equal(build({ conditions: [{ field: 'documentNo', operator: 'iContains' }] }), null);
+    });
   });
 
-  it('generates notNull criterion for isNotNull', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'isNotNull', value: null }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'name', operator: 'notNull' }]);
-  });
-});
+  describe('row composition', () => {
+    it('emits AND rows flat so they compose with the surrounding AND layer', () => {
+      const result = build({
+        rowOperator: 'and',
+        conditions: [
+          { field: 'documentNo', operator: 'iContains', value: 'INV' },
+          { field: 'total', operator: 'greaterThan', value: '100' },
+        ],
+      });
+      assert.deepEqual(result, [
+        { fieldName: 'documentNo', operator: 'iContains', value: 'INV' },
+        { fieldName: 'total', operator: 'greaterThan', value: 100 },
+      ]);
+    });
 
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — between (lines 467-478)
-// ---------------------------------------------------------------------------
+    it('wraps OR rows in a single AdvancedCriteria object', () => {
+      // The outer merge treats the whole advanced block as one AND-level item.
+      const result = build({
+        rowOperator: 'or',
+        conditions: [
+          { field: 'documentNo', operator: 'iContains', value: 'INV' },
+          { field: 'documentNo', operator: 'iContains', value: 'ORD' },
+        ],
+      });
+      assert.deepEqual(result, [{
+        _constructor: 'AdvancedCriteria',
+        operator: 'or',
+        criteria: [
+          { fieldName: 'documentNo', operator: 'iContains', value: 'INV' },
+          { fieldName: 'documentNo', operator: 'iContains', value: 'ORD' },
+        ],
+      }]);
+    });
 
-describe('buildAdvancedFilterCriteria — between operator', () => {
-  const columns = [
-    { key: 'grandTotal', type: 'amount' },
-    { key: 'orderDate', type: 'date' },
-    { key: 'name', type: 'string' },
-  ];
-
-  it('produces greaterOrEqual + lessOrEqual for numeric between', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'grandTotal', operator: 'between', value: ['100', '500'] }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [
-      { fieldName: 'grandTotal', operator: 'greaterOrEqual', value: 100 },
-      { fieldName: 'grandTotal', operator: 'lessOrEqual', value: 500 },
-    ]);
-  });
-
-  it('produces greaterOrEqual + lessOrEqual for date between (no numeric coercion)', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'orderDate', operator: 'between', value: ['2026-01-01', '2026-12-31'] }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [
-      { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-01-01' },
-      { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-12-31' },
-    ]);
+    it('does not wrap an OR filter that produced a single criterion', () => {
+      const result = build({
+        rowOperator: 'or',
+        conditions: [{ field: 'documentNo', operator: 'iContains', value: 'INV' }],
+      });
+      assert.deepEqual(result, [{ fieldName: 'documentNo', operator: 'iContains', value: 'INV' }]);
+    });
   });
 
-  it('returns null for between with non-array value', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'grandTotal', operator: 'between', value: '100' }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  describe('operators', () => {
+    it('maps isNull / isNotNull to isNull / notNull with no value', () => {
+      assert.deepEqual(
+        build({ conditions: [{ field: 'businessPartner', operator: 'isNull' }] }),
+        [{ fieldName: 'businessPartner', operator: 'isNull' }],
+      );
+      assert.deepEqual(
+        build({ conditions: [{ field: 'businessPartner', operator: 'isNotNull' }] }),
+        [{ fieldName: 'businessPartner', operator: 'notNull' }],
+      );
+    });
+
+    it('expands "between" into an inclusive pair, coercing numerics', () => {
+      assert.deepEqual(
+        build({ conditions: [{ field: 'total', operator: 'between', value: ['1,000', '2000'] }] }),
+        [
+          { fieldName: 'total', operator: 'greaterOrEqual', value: 1000 },
+          { fieldName: 'total', operator: 'lessOrEqual', value: 2000 },
+        ],
+      );
+    });
+
+    it('leaves non-numeric "between" bounds untouched (dates stay ISO strings)', () => {
+      assert.deepEqual(
+        build({ conditions: [{ field: 'orderDate', operator: 'between', value: ['2026-01-01', '2026-12-31'] }] }),
+        [
+          { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-01-01' },
+          { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-12-31' },
+        ],
+      );
+    });
+
+    it('returns null for an incomplete or invalid "between"', () => {
+      const between = (value) => build({ conditions: [{ field: 'total', operator: 'between', value }] });
+      assert.equal(between('2026-01-01'), null);        // not an array
+      assert.equal(between(['', '2000']), null);        // empty from
+      assert.equal(between(['1000', '']), null);        // empty to
+      assert.equal(between([null, '2000']), null);      // null from
+      assert.equal(between(['1000', null]), null);      // null to
+      assert.equal(between(['abc', '2000']), null);     // from not coercible
+      assert.equal(between(['1000', 'abc']), null);     // to not coercible
+    });
+
+    it('turns inSet into OR-composed iEquals clauses', () => {
+      const result = build({
+        conditions: [{ field: 'documentNo', operator: 'inSet', value: ['A', 'B'] }],
+      });
+      assert.deepEqual(result, [{
+        _constructor: 'AdvancedCriteria',
+        operator: 'or',
+        criteria: [
+          { fieldName: 'documentNo', operator: 'iEquals', value: 'A' },
+          { fieldName: 'documentNo', operator: 'iEquals', value: 'B' },
+        ],
+      }]);
+    });
+
+    it('accepts a comma-separated string for inSet and trims each item', () => {
+      const result = build({
+        conditions: [{ field: 'documentNo', operator: 'inSet', value: ' A , B ,C ' }],
+      });
+      assert.deepEqual(result[0].criteria.map((c) => c.value), ['A', 'B', 'C']);
+    });
+
+    it('does not OR-wrap an inSet that resolves to one item', () => {
+      assert.deepEqual(
+        build({ conditions: [{ field: 'documentNo', operator: 'inSet', value: ['A'] }] }),
+        [{ fieldName: 'documentNo', operator: 'iEquals', value: 'A' }],
+      );
+      assert.deepEqual(
+        build({ conditions: [{ field: 'documentNo', operator: 'inSet', value: 'A' }] }),
+        [{ fieldName: 'documentNo', operator: 'iEquals', value: 'A' }],
+      );
+    });
+
+    it('drops blank and nullish inSet items, and returns null when none survive', () => {
+      const result = build({
+        conditions: [{ field: 'documentNo', operator: 'inSet', value: ['A', '', null, undefined, 'B'] }],
+      });
+      assert.deepEqual(result[0].criteria.map((c) => c.value), ['A', 'B']);
+      assert.equal(build({ conditions: [{ field: 'documentNo', operator: 'inSet', value: [] }] }), null);
+      assert.equal(build({ conditions: [{ field: 'documentNo', operator: 'inSet', value: ['', null] }] }), null);
+      assert.equal(build({ conditions: [{ field: 'documentNo', operator: 'inSet', value: ',' }] }), null);
+    });
+
+    it('OR-composes the picked operator across a multi-value array', () => {
+      // Multi-select checkbox popover: same operator, several values.
+      const result = build({
+        conditions: [{ field: 'documentNo', operator: 'iNotContains', value: ['A', 'B'] }],
+      });
+      assert.deepEqual(result, [{
+        _constructor: 'AdvancedCriteria',
+        operator: 'or',
+        criteria: [
+          { fieldName: 'documentNo', operator: 'iNotContains', value: 'A' },
+          { fieldName: 'documentNo', operator: 'iNotContains', value: 'B' },
+        ],
+      }]);
+      // Single-element arrays stay flat, and an all-blank array yields nothing.
+      assert.deepEqual(
+        build({ conditions: [{ field: 'documentNo', operator: 'equals', value: ['A'] }] }),
+        [{ fieldName: 'documentNo', operator: 'equals', value: 'A' }],
+      );
+      assert.equal(build({ conditions: [{ field: 'documentNo', operator: 'equals', value: ['', null] }] }), null);
+    });
   });
 
-  it('returns null for between with empty from', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'grandTotal', operator: 'between', value: ['', '500'] }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  describe('mode-specific value handling', () => {
+    it('coerces numeric-mode values, and drops the row when coercion fails', () => {
+      assert.deepEqual(
+        build({ conditions: [{ field: 'total', operator: 'greaterThan', value: '1,500.25' }] }),
+        [{ fieldName: 'total', operator: 'greaterThan', value: 1500.25 }],
+      );
+      assert.deepEqual(
+        build({ conditions: [{ field: 'total', operator: 'equals', value: 42 }] }),
+        [{ fieldName: 'total', operator: 'equals', value: 42 }],
+      );
+      assert.equal(build({ conditions: [{ field: 'total', operator: 'equals', value: 'abc' }] }), null);
+    });
+
+    it('serializes booleanLabel-mode values to Y/N', () => {
+      const bool = (value) => build({ conditions: [{ field: 'posted', operator: 'equals', value }] });
+      assert.deepEqual(bool(true), [{ fieldName: 'posted', operator: 'equals', value: 'Y' }]);
+      assert.deepEqual(bool('Y'), [{ fieldName: 'posted', operator: 'equals', value: 'Y' }]);
+      assert.deepEqual(bool('true'), [{ fieldName: 'posted', operator: 'equals', value: 'Y' }]);
+      assert.deepEqual(bool(false), [{ fieldName: 'posted', operator: 'equals', value: 'N' }]);
+      assert.deepEqual(bool('N'), [{ fieldName: 'posted', operator: 'equals', value: 'N' }]);
+    });
+
+    it('routes identifier columns to $_identifier only for textual operators', () => {
+      // Free text typed by the user matches the BP display name; a value picked
+      // from the checkbox popover is a UUID and must hit the raw FK column.
+      const bp = (operator, value = 'x') => build({ conditions: [{ field: 'businessPartner', operator, value }] });
+      for (const op of ['iContains', 'iNotContains', 'iEquals', 'iNotEqual']) {
+        assert.equal(bp(op)[0].fieldName, 'businessPartner$_identifier', op);
+      }
+      for (const op of ['equals', 'notEqual']) {
+        assert.equal(bp(op)[0].fieldName, 'businessPartner', op);
+      }
+    });
+
+    it('honors backendFilterKey over the identifier routing', () => {
+      const columns = [{ key: 'bp', type: 'selector', backendFilterKey: 'bp$name' }];
+      const result = build({ conditions: [{ field: 'bp', operator: 'iContains', value: 'jua' }] }, columns);
+      assert.deepEqual(result, [{ fieldName: 'bp$name', operator: 'iContains', value: 'jua' }]);
+    });
+
+    it('gives a custom column with an explicit numeric filterMode numeric semantics', () => {
+      // ETP-4681: without the explicit filterMode a `custom` cell would fall
+      // back to text and the value would stay a string.
+      const columns = [{ key: 'daysOverdue', type: 'custom', filterMode: 'numeric' }];
+      const result = build({
+        conditions: [{ field: 'daysOverdue', operator: 'greaterThan', value: '30' }],
+      }, columns);
+      assert.deepEqual(result, [{ fieldName: 'daysOverdue', operator: 'greaterThan', value: 30 }]);
+    });
   });
 
-  it('returns null for between with null from', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'grandTotal', operator: 'between', value: [null, '500'] }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
+  describe('column-supplied buildCriteria override', () => {
+    it('delegates entirely to col.buildCriteria when present', () => {
+      const columns = [{
+        key: 'aging',
+        type: 'custom',
+        buildCriteria: (row) => [{ fieldName: 'daysDue', operator: row.operator, value: Number(row.value) }],
+      }];
+      const result = build({ conditions: [{ field: 'aging', operator: 'greaterThan', value: '30' }] }, columns);
+      assert.deepEqual(result, [{ fieldName: 'daysDue', operator: 'greaterThan', value: 30 }]);
+    });
 
-  it('returns null for between with null to', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'grandTotal', operator: 'between', value: ['100', null] }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
+    it('normalizes an undefined buildCriteria result to null and skips the row', () => {
+      const columns = [
+        { key: 'aging', type: 'custom', buildCriteria: () => undefined },
+        { key: 'documentNo', type: 'string' },
+      ];
+      assert.equal(build({ conditions: [{ field: 'aging', operator: 'equals', value: '1' }] }, columns), null);
 
-  it('returns null for between with empty to', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'grandTotal', operator: 'between', value: ['100', ''] }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-
-  it('returns null when numeric coercion fails on from', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'grandTotal', operator: 'between', value: ['abc', '500'] }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-
-  it('returns null when numeric coercion fails on to', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'grandTotal', operator: 'between', value: ['100', 'xyz'] }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-
-  it('handles between with number values directly', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'grandTotal', operator: 'between', value: [10, 50] }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [
-      { fieldName: 'grandTotal', operator: 'greaterOrEqual', value: 10 },
-      { fieldName: 'grandTotal', operator: 'lessOrEqual', value: 50 },
-    ]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — inSet (lines 481-483, 508-520)
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — inSet operator', () => {
-  const columns = [{ key: 'name', type: 'string' }];
-
-  it('produces inSet criterion for array with multiple values', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'inSet', value: ['a', 'b', 'c'] }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'name', operator: 'inSet', value: 'a,b,c' }]);
-  });
-
-  it('produces equals criterion for array with single value', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'inSet', value: ['only'] }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'name', operator: 'equals', value: 'only' }]);
-  });
-
-  it('returns null for inSet with empty array', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'inSet', value: [] }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-
-  it('handles inSet with string value (comma-separated)', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'inSet', value: 'a, b, c' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'name', operator: 'inSet', value: 'a,b,c' }]);
-  });
-
-  it('handles inSet with single string value (no comma)', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'inSet', value: 'solo' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'name', operator: 'equals', value: 'solo' }]);
-  });
-
-  it('filters out null and empty values from inSet array', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'inSet', value: [null, '', 'valid'] }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'name', operator: 'equals', value: 'valid' }]);
-  });
-
-  it('returns null for inSet array with only null/empty values', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'inSet', value: [null, '', undefined] }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — multi-value array OR (lines 487-488, 522-535)
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — multi-value array OR composition', () => {
-  const columns = [{ key: 'name', type: 'string' }];
-
-  it('wraps multiple values in AdvancedCriteria OR', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'equals', value: ['x', 'y'] }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.equal(result.length, 1);
-    assert.equal(result[0]._constructor, 'AdvancedCriteria');
-    assert.equal(result[0].operator, 'or');
-    assert.equal(result[0].criteria.length, 2);
-    assert.deepEqual(result[0].criteria[0], { fieldName: 'name', operator: 'equals', value: 'x' });
-    assert.deepEqual(result[0].criteria[1], { fieldName: 'name', operator: 'equals', value: 'y' });
-  });
-
-  it('produces single criterion for array with one value (no OR wrap)', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'equals', value: ['only'] }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'name', operator: 'equals', value: 'only' }]);
-  });
-
-  it('returns null for array with only empty/null values', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'equals', value: ['', null] }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — numeric mode in buildRowCriteria (lines 492-498)
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — numeric mode (buildRowCriteria)', () => {
-  const columns = [{ key: 'qty', type: 'number' }];
-
-  it('coerces string value to number for numeric column', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'qty', operator: 'greaterThan', value: '42.5' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'qty', operator: 'greaterThan', value: 42.5 }]);
-  });
-
-  it('handles actual number value for numeric column', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'qty', operator: 'equals', value: 100 }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'qty', operator: 'equals', value: 100 }]);
-  });
-
-  it('returns null for non-numeric string value in numeric column', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'qty', operator: 'equals', value: 'abc' }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-
-  it('coerces comma-formatted string to number', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'qty', operator: 'equals', value: '1,234' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'qty', operator: 'equals', value: 1234 }]);
+      const mixed = build({
+        conditions: [
+          { field: 'aging', operator: 'equals', value: '1' },
+          { field: 'documentNo', operator: 'iContains', value: 'INV' },
+        ],
+      }, columns);
+      assert.deepEqual(mixed, [{ fieldName: 'documentNo', operator: 'iContains', value: 'INV' }]);
+    });
   });
 });
 
 // ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — booleanLabel mode (line 497-499)
+// getFilteredKey — cross-checked here against the mode returned by
+// resolveFilterMode, which is how buildRowCriteria actually calls it.
+// (Its standalone unit tests live in getFilteredKey.test.js.)
 // ---------------------------------------------------------------------------
 
-describe('buildAdvancedFilterCriteria — booleanLabel mode (buildRowCriteria)', () => {
-  const columns = [{ key: 'active', type: 'boolean' }];
-
-  it('maps string "true" to boolean true', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'active', operator: 'equals', value: 'true' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'active', operator: 'equals', value: true }]);
+describe('getFilteredKey composed with resolveFilterMode', () => {
+  it('routes a selector column to $_identifier for a textual operator', () => {
+    const col = { key: 'businessPartner', type: 'selector' };
+    assert.equal(getFilteredKey(col, resolveFilterMode(col), 'iContains'), 'businessPartner$_identifier');
   });
 
-  it('maps boolean true to true', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'active', operator: 'equals', value: true }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'active', operator: 'equals', value: true }]);
-  });
-
-  it('maps false to false', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'active', operator: 'equals', value: false }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'active', operator: 'equals', value: false }]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — empty/null/undefined value (line 490)
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — empty/null/undefined value edge cases', () => {
-  const columns = [{ key: 'name', type: 'string' }];
-
-  it('returns null for empty string value', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'iContains', value: '' }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-
-  it('returns null for null value with non-null operator', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'equals', value: null }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-
-  it('returns null for undefined value', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: 'iContains', value: undefined }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-
-  it('returns null when operator is missing', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'name', operator: null, value: 'x' }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — identifier column textual vs discrete ops
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — identifier column ops', () => {
-  const columns = [{ key: 'businessPartner', type: 'selector' }];
-
-  it('uses $_identifier for iContains on selector column', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'businessPartner', operator: 'iContains', value: 'acme' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [
-      { fieldName: 'businessPartner$_identifier', operator: 'iContains', value: 'acme' },
-    ]);
-  });
-
-  it('uses $_identifier for iNotContains on selector column', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'businessPartner', operator: 'iNotContains', value: 'acme' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [
-      { fieldName: 'businessPartner$_identifier', operator: 'iNotContains', value: 'acme' },
-    ]);
-  });
-
-  it('uses $_identifier for iEquals on selector column', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'businessPartner', operator: 'iEquals', value: 'Acme Corp' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [
-      { fieldName: 'businessPartner$_identifier', operator: 'iEquals', value: 'Acme Corp' },
-    ]);
-  });
-
-  it('uses $_identifier for iNotEqual on selector column', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'businessPartner', operator: 'iNotEqual', value: 'Acme' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [
-      { fieldName: 'businessPartner$_identifier', operator: 'iNotEqual', value: 'Acme' },
-    ]);
-  });
-
-  it('uses raw key for equals (discrete op) on selector column', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'businessPartner', operator: 'equals', value: 'uuid-1' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [
-      { fieldName: 'businessPartner', operator: 'equals', value: 'uuid-1' },
-    ]);
-  });
-
-  it('uses raw key for notEqual (discrete op) on selector column', () => {
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'businessPartner', operator: 'notEqual', value: 'uuid-1' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [
-      { fieldName: 'businessPartner', operator: 'notEqual', value: 'uuid-1' },
-    ]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — buildCriteria returning null
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — buildCriteria hook coverage', () => {
-  it('skips condition when buildCriteria returns null', () => {
-    const col = { key: 'virtual', type: 'string', buildCriteria: () => null };
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'virtual', operator: 'equals', value: 'test' }],
-    };
-    assert.equal(buildAdvancedFilterCriteria(filter, [col]), null);
-  });
-
-  it('uses buildCriteria result instead of default logic', () => {
-    const col = {
-      key: 'custom',
-      type: 'string',
-      buildCriteria: (row) => [{ fieldName: 'overridden', operator: 'equals', value: row.value }],
-    };
-    const filter = {
-      rowOperator: 'and',
-      conditions: [{ field: 'custom', operator: 'iContains', value: 'anything' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, [col]);
-    assert.deepEqual(result, [{ fieldName: 'overridden', operator: 'equals', value: 'anything' }]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — OR with single criterion
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — OR single criterion', () => {
-  const columns = [{ key: 'name', type: 'string' }];
-
-  it('does not wrap OR when only one criterion exists', () => {
-    const filter = {
-      rowOperator: 'or',
-      conditions: [{ field: 'name', operator: 'iContains', value: 'single' }],
-    };
-    const result = buildAdvancedFilterCriteria(filter, columns);
-    assert.deepEqual(result, [{ fieldName: 'name', operator: 'iContains', value: 'single' }]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: buildAdvancedFilterCriteria — invalid columns parameter
-// ---------------------------------------------------------------------------
-
-describe('buildAdvancedFilterCriteria — invalid columns', () => {
-  it('returns null when columns is null', () => {
-    const filter = { conditions: [{ field: 'x', operator: 'equals', value: 'y' }] };
-    assert.equal(buildAdvancedFilterCriteria(filter, null), null);
-  });
-
-  it('returns null when columns is not an array', () => {
-    const filter = { conditions: [{ field: 'x', operator: 'equals', value: 'y' }] };
-    assert.equal(buildAdvancedFilterCriteria(filter, 'not-array'), null);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Coverage: getFilteredKey (lines 543-548)
-// ---------------------------------------------------------------------------
-
-describe('getFilteredKey', () => {
-  it('returns backendFilterKey when provided', () => {
-    const col = { key: 'bp', backendFilterKey: 'bp$name' };
-    assert.equal(getFilteredKey(col, 'identifier', 'iContains'), 'bp$name');
-  });
-
-  it('returns $_identifier for identifier mode with iContains', () => {
-    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iContains'), 'bp$_identifier');
-  });
-
-  it('returns $_identifier for identifier mode with iNotContains', () => {
-    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iNotContains'), 'bp$_identifier');
-  });
-
-  it('returns $_identifier for identifier mode with iEquals', () => {
-    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iEquals'), 'bp$_identifier');
-  });
-
-  it('returns $_identifier for identifier mode with iNotEqual', () => {
-    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iNotEqual'), 'bp$_identifier');
-  });
-
-  it('returns raw key for identifier mode with discrete op equals', () => {
-    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'equals'), 'bp');
-  });
-
-  it('returns raw key for identifier mode with discrete op notEqual', () => {
-    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'notEqual'), 'bp');
-  });
-
-  it('returns raw key for identifier mode with inSet op', () => {
-    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'inSet'), 'bp');
-  });
-
-  it('returns raw key for non-identifier modes', () => {
-    assert.equal(getFilteredKey({ key: 'name' }, 'text', 'iContains'), 'name');
-    assert.equal(getFilteredKey({ key: 'n' }, 'numeric', 'equals'), 'n');
-    assert.equal(getFilteredKey({ key: 'd' }, 'date', 'greaterThan'), 'd');
+  it('leaves a text column on its raw key even for a textual operator', () => {
+    const col = { key: 'documentNo', type: 'string' };
+    assert.equal(getFilteredKey(col, resolveFilterMode(col), 'iContains'), 'documentNo');
   });
 });

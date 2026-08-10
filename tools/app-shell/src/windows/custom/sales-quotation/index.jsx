@@ -41,7 +41,7 @@ const customMenuActions = ({ status }) => [
     icon: XCircle,
     // The XCircle icon already carries the destructive cue; the Figma
     // (Screenshot 2026-04-30 11-38-53) renders both icon and label in the
-    // neutral dark-gray (#121217), not the legacy red text.
+    // neutral dark-gray (hsl(var(--foreground))), not the legacy red text.
     visible: status === 'UE',
     onClick: () => window.dispatchEvent(new CustomEvent('sales-quotation:open-reject-modal')),
   },
@@ -49,10 +49,10 @@ const customMenuActions = ({ status }) => [
 
 function buildQuotationColumns(ui) {
   return [
-    { key: 'orderDate', column: 'DateOrdered', type: 'date', dot: false },
-    { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-    { key: 'documentStatus', column: 'DocStatus', type: 'status', enumLabels: {
+    { key: 'orderDate', column: 'DateOrdered', type: 'date', dot: false, required: true },
+    { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
+    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+    { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true, enumLabels: {
       AE: ui('quotationStatus.AE'),
       CO: ui('quotationStatus.CO'),
       CL: ui('quotationStatus.CL'),
@@ -71,7 +71,7 @@ function buildQuotationColumns(ui) {
       VO: ui('quotationStatus.VO'),
     } },
     { key: 'validUntil', column: 'validuntil', type: 'date' },
-    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
+    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', required: true },
   ];
 }
 

@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import InventoryTable from './InventoryTable';
 import InventoryForm from './InventoryForm';
@@ -113,6 +115,14 @@ export const api = {
       "url": "/sws/neo/physical-inventory/inventory/selectors/project"
     },
     {
+      "entity": "inventory",
+      "field": "costCenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/physical-inventory/inventory/selectors/costCenter"
+    },
+    {
       "entity": "inventoryLine",
       "field": "product",
       "column": "M_Product_ID",
@@ -210,6 +220,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:InventoryPage
 export default function InventoryPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('168');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="168" />;
+  }
   if (recordId) {
     return (
       <>
@@ -231,6 +248,7 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteWhenComplete
         hidePrint
         noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Inventory", config: {} } }]}
@@ -245,7 +263,7 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
         lockedAlert={{"title":"goodsMovementsLockedTitle","message":"goodsMovementsLockedMessage","actionLabel":"goodsMovementsLockedAction","navigateTo":"/physical-inventory/new"}}
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -265,7 +283,7 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

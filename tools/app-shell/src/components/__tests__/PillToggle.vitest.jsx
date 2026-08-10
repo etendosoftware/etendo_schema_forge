@@ -50,12 +50,12 @@ describe('PillToggle', () => {
 
   it('applies on style when checked', () => {
     const { container } = render(<PillToggle checked={true} onCheckedChange={() => {}} />);
-    expect(container.firstChild.className).toContain('bg-[#121217]');
+    expect(container.firstChild.className).toContain('bg-[hsl(var(--foreground))]');
   });
 
   it('applies off style when unchecked', () => {
     const { container } = render(<PillToggle checked={false} onCheckedChange={() => {}} />);
-    expect(container.firstChild.className).toContain('bg-[#D1D1DB]');
+    expect(container.firstChild.className).toContain('bg-[hsl(var(--border-control))]');
   });
 
   it('applies disabled opacity when disabled', () => {

@@ -1,8 +1,8 @@
 {
-  "version": "0.36.0",
+  "version": "0.39.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-07-16T15:04:16.418Z",
-  "checksum": "6fa3fb426053dcc9",
+  "updatedAt": "2026-07-29T15:55:48.402Z",
+  "checksum": "5c6eb250a2f5391d",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -122,6 +122,10 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -141,6 +145,9 @@
             "form": true,
             "section": "principal",
             "seq": 50,
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -162,6 +169,10 @@
             "section": "principal",
             "seq": 20,
             "dot": false,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -182,6 +193,9 @@
             "section": "principal",
             "seq": 30,
             "dot": false,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -202,6 +216,9 @@
             "columnType": "amount",
             "seq": 40,
             "summable": true,
+            "validation": {
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -224,6 +241,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 35,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -258,7 +279,11 @@
               }
             ],
             "defaultValue": "N",
-            "filterOnly": true
+            "filterOnly": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "posted",
@@ -293,11 +318,44 @@
               "true": "green",
               "false": "orange"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
               "reason": "session-preference",
               "js": null
+            }
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 12
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
             }
           }
         ],
@@ -352,6 +410,9 @@
             "reference": "Asset",
             "inputMode": "selector",
             "grow": true,
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -370,6 +431,9 @@
             "grid": true,
             "form": true,
             "grow": true,
+            "validation": {
+              "maxLength": 6
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -388,6 +452,10 @@
             "grid": true,
             "form": true,
             "noTrailing": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -407,6 +475,9 @@
             "form": false,
             "reference": "Currency",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -428,6 +499,9 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 4,
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -455,6 +529,15 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 5,
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -476,6 +559,15 @@
             "inputMode": "selector",
             "lookup": true,
             "gridOrder": 8,
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@$Element_BP@='Y'",
+              "evaluable": false,
+              "reason": "accounting-dimension",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
@@ -676,7 +768,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1095,6 +1187,14 @@
         "url": "/sws/neo/amortization/header/selectors/currency"
       },
       {
+        "entity": "header",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "selector",
+        "url": "/sws/neo/amortization/header/selectors/project"
+      },
+      {
         "entity": "lines",
         "field": "asset",
         "column": "A_Asset_ID",
@@ -1269,6 +1369,30 @@
         "description": "Display logic for 'posted' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-project",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-lines-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-lines-eTADASBpartner",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "eTADASBpartner",
+        "runner": "node",
+        "description": "Display logic for 'eTADASBpartner' in lines should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-lines-project",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -1283,6 +1407,30 @@
         "field": "posted",
         "runner": "node",
         "description": "Display logic for 'posted' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-project",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-lines-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in lines should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-lines-eTADASBpartner",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "eTADASBpartner",
+        "runner": "node",
+        "description": "Display logic for 'eTADASBpartner' in lines should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-lines-project",
@@ -1339,6 +1487,14 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-project",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in header"
       },
       {
         "id": "t-field-presence-header-startingDate",
@@ -1461,6 +1617,14 @@
         "description": "Field 'processed' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-project",
+        "category": "field-type",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-startingDate",
         "category": "field-type",
         "entity": "header",
@@ -1565,6 +1729,14 @@
         "description": "Read-only logic for 'name' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-project",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-startingDate",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -1667,6 +1839,14 @@
         "field": "name",
         "runner": "node",
         "description": "Read-only logic for 'name' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-project",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-startingDate",
@@ -2214,6 +2394,14 @@
         "description": "Selector endpoint for 'currency' in header should exist"
       },
       {
+        "id": "t-selector-endpoint-header-project",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in header should exist"
+      },
+      {
         "id": "t-selector-endpoint-lines-asset",
         "category": "selector-endpoint",
         "entity": "lines",
@@ -2348,14 +2536,6 @@
         "field": "processNow",
         "runner": "node",
         "description": "System field 'processNow' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-project",
-        "category": "system-field",
-        "entity": "header",
-        "field": "project",
-        "runner": "node",
-        "description": "System field 'project' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-salesCampaign",
@@ -2533,25 +2713,25 @@
       }
     ],
     "summary": {
-      "total": 173,
+      "total": 183,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 2,
         "default-value-type": 2,
-        "displaylogic-evaluable": 2,
-        "displaylogic-valid": 2,
-        "field-presence": 15,
-        "field-type": 15,
-        "readonlylogic-evaluable": 13,
-        "readonlylogic-valid": 13,
+        "displaylogic-evaluable": 5,
+        "displaylogic-valid": 5,
+        "field-presence": 16,
+        "field-type": 16,
+        "readonlylogic-evaluable": 14,
+        "readonlylogic-valid": 14,
         "rule-declared": 63,
         "searchable-filters": 3,
-        "selector-endpoint": 6,
-        "system-field": 33,
+        "selector-endpoint": 7,
+        "system-field": 32,
         "visibility": 2
       },
       "byRunner": {
-        "node": 173,
+        "node": 183,
         "junit": 0
       }
     }

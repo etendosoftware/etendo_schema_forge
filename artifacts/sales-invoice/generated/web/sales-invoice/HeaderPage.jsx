@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import { INVOICE_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
 import HeaderTable from '../../../custom/InvoiceHeaderTable';
@@ -11,6 +13,7 @@ import ExchangeRatesForm from './ExchangeRatesForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
+import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx';
 import InvoiceBottomPanel from '../../../custom/InvoiceBottomPanel';
 import InvoiceTopbarExtra from '../../../custom/InvoiceTopbarExtra';
 import catalogs from './mockCatalogs';
@@ -31,7 +34,7 @@ const statusField = 'documentStatus';
 
 // @sf-generated-start extraBadges:header
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:header
 
@@ -59,10 +62,12 @@ const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', forceCalloutFields: ["listPrice","unitPrice","tax","uOM","grossUnitPrice"] },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
-    { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', required: true, label: 'Invoiced Quantity', defaultValue: 1, min: 0 },
-    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price', min: 0 },
+    { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', required: true, label: 'Invoiced Quantity', defaultValue: 1 },
+    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price' },
     { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineNetAmount"] },
+    { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'Costcenter', inputMode: 'selector' },
   ],
   derived: [
 
@@ -116,6 +121,17 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/sales-invoice/paymentPlan",
       "detailUrl": "/sws/neo/sales-invoice/paymentPlan/{id}",
+      "supportedFilters": []
+    },
+    "reversedInvoices": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/sales-invoice/reversedInvoices",
+      "detailUrl": "/sws/neo/sales-invoice/reversedInvoices/{id}",
       "supportedFilters": []
     },
     "exchangeRates": {
@@ -214,6 +230,35 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/sales-invoice/header/selectors/project",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
+    },
+    {
+      "entity": "header",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
+    },
+    {
+      "entity": "header",
       "field": "aeatsiiDescription",
       "column": "EM_Aeatsii_Description_ID",
       "reference": "aeatsii_description",
@@ -280,6 +325,22 @@ export const api = {
       }
     },
     {
+      "entity": "lines",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/sales-invoice/lines/selectors/project"
+    },
+    {
+      "entity": "lines",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/lines/selectors/costcenter"
+    },
+    {
       "entity": "paymentPlan",
       "field": "finPaymentmethodID",
       "column": "Fin_Paymentmethod_ID",
@@ -294,6 +355,22 @@ export const api = {
       "reference": "Currency",
       "inputMode": "selector",
       "url": "/sws/neo/sales-invoice/paymentPlan/selectors/currency"
+    },
+    {
+      "entity": "reversedInvoices",
+      "field": "reversedInvoice",
+      "column": "Reversed_C_Invoice_ID",
+      "reference": "Invoice",
+      "inputMode": "search",
+      "url": "/sws/neo/sales-invoice/reversedInvoices/selectors/reversedInvoice"
+    },
+    {
+      "entity": "reversedInvoices",
+      "field": "aEAT349CYear",
+      "column": "EM_AEAT349_C_Year_ID",
+      "reference": "Year",
+      "inputMode": "search",
+      "url": "/sws/neo/sales-invoice/reversedInvoices/selectors/aEAT349CYear"
     },
     {
       "entity": "exchangeRates",
@@ -541,7 +618,8 @@ export const api = {
       "OutstandingAmt": "Pendiente de pago",
       "EM_Etgo_Due_Date": "Vencimiento",
       "em_etgo_delivery_status": "Estado de entrega",
-      "C_DocTypeTarget_ID": "Tipo de documento"
+      "C_DocTypeTarget_ID": "Tipo de documento",
+      "PriceList": "Precio"
     },
     "en_US": {
       "OutstandingAmt": "Pending Payment",
@@ -556,6 +634,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:HeaderPage
 export default function HeaderPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('167');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="167" />;
+  }
   if (recordId) {
     return (
       <>
@@ -578,17 +663,14 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, addLineFields: { entry: [
-          { key: 'toCurrency', column: 'C_Currency_Id_To', type: 'search', required: true, label: 'To Currency', reference: 'Currency', inputMode: 'search', excludeValueOf: 'currency' },
-          { key: 'rate', column: 'Rate', type: 'text', label: 'Rate' },
-          { key: 'foreignAmount', column: 'Foreign_Amount', type: 'number', required: true, label: 'Foreign  Amount', defaultValue: '0' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true, readOnlyLogic: (record) => record['documentStatus'] !== 'DR' },
+          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' },
         ]}
         hideDeleteWhenComplete
         hidePrint
         noHeaderBorder
         notesField="description"
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }]}
+        dimensionsPanelFieldKeys={["project","costcenter"]}
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' }]}
         bottomSection={InvoiceBottomPanel}
         topbarRight={InvoiceTopbarExtra}
         menuActions={({ data, status }) => [
@@ -603,7 +685,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         lineConfig={INVOICE_LINE_CONFIG}
         linesLayout="inlineEditable"
         sendDocument
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -617,13 +699,13 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      subsetFilters={[{"label":"allTab"},{"label":"invoicesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"},{"label":"creditNotesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D"},{"label":"returnsTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D"}]}
+      subsetFilters={[{"label":"allTab"},{"label":"invoicesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D","_note":"ETP-4737: plain invoices only. Excludes the new unified 'Factura Rectificativa' doc type, which shares the ARI category with plain invoices but is distinguished via the etsgIsRectificative flag on C_DocType (see rectificativeInvoicesTab below for the full discriminator rationale)."},{"label":"rectificativeInvoicesTab","filter":"criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D","_note":"ETP-4737: merges the former separate creditNotesTab (ARC) and returnsTab (ARI_RM) into one 'Facturas rectificativas' tab, OR'd with the new unified rectificative doc type. The new 'Factura Rectificativa' doc type (EM_Etsg_Isrectificative='Y' on C_DocType) shares the plain-invoice ARI category, so documentCategory alone cannot discriminate it — confirmed empirically against the dev DB (GOClient tenant): 3 active ARI-category doc types exist there ('AR Invoice', 'Reversed Sales Invoice', 'Factura Rectificativa'), only the last has etsgIsRectificative='Y'. etsgIsRectificative is a real Hibernate-mapped boolean property on DocumentType (confirmed via C_DocType.EM_Etsg_Isrectificative / DocumentType#isEtsgIsRectificative() in com.etendoerp.go), reached here via the same 'transactionDocument$<property>' nested-criteria mechanism already proven for documentCategory in this exact subsetFilters block — this is a plain backend list-query filter, not the GET-by-ID-only 'arInvoiceSubtype' enrichment, so it is expected to work at list-query time. No live invoice yet carries the new doc type in the dev DB to smoke-test end-to-end through the running app; recommend a manual list-view check once an invoice uses it."}]}
       dateFilterKey="invoiceDate"
       hidePrint
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       sendDocument
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

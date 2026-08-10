@@ -1,3 +1,5 @@
+import { formatCurrency } from '../../../lib/formatCurrency.js';
+
 // ── Box computation ──────────────────────────────────────────────────
 // Returns { boxes, summary } from GET /neo/fiscal303/boxes?year=&period=.
 // Falls back to hardcoded GOOrg mock data when token/apiBaseUrl are absent or the request fails.
@@ -194,8 +196,7 @@ export function formatPeriod(period) {
 }
 
 export function formatAmount(amount) {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+  return formatCurrency('EUR', amount);
 }
 
 export function formatPercent(value) {
@@ -432,7 +433,8 @@ export async function generate349File(decl, { token, apiBaseUrl, phone, contact 
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = objectUrl;
-    a.download = `349_${decl.period}_${decl.year}.349`;
+    // .txt to match the Etendo classic Tax Report Launcher output extension
+    a.download = `349_${decl.period}_${decl.year}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

@@ -72,15 +72,15 @@ export default function ContactsWindow(props) {
       <>
         <button
           onClick={() => setPendingBulkDelete({ rows: selectedRows, clearSelection, onDataMutated, apiBaseUrl, token })}
-          className="h-9 w-9 flex items-center justify-center rounded-lg border border-[#FBB1C4] bg-white shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#FFF0F4] transition-colors"
+          className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--destructive) / 0.3)] bg-card shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[var(--status-destructive-bg)] transition-colors"
         >
-          <Trash2 className="h-4 w-4 text-[#F3164E]" data-testid="Trash2__ef097c" />
+          <Trash2 className="h-4 w-4 text-[hsl(var(--destructive))]" data-testid="Trash2__ef097c" />
         </button>
         <button
           onClick={clearSelection}
-          className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-[#F5F7F9] transition-colors"
+          className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] transition-colors"
         >
-          <X className="h-4 w-4 text-[#828FA3]" data-testid="X__ef097c" />
+          <X className="h-4 w-4 text-[hsl(var(--text-disabled))]" data-testid="X__ef097c" />
         </button>
       </>
     ),
@@ -98,6 +98,16 @@ export default function ContactsWindow(props) {
            {...props}
            Form={ContactsBusinessPartnerForm}
            subsetFilters={SUBSET_FILTERS}
+           // ETP-4656 — this window renders its own delete affordance via
+           // `selectionBarRightActions` below (trash + X buttons), so it must opt out of
+           // ListView's generic "Delete selected" toolbar action explicitly via
+           // `hideBulkDelete` (no more implicit inference from selectionBarRightActions'
+           // mere presence). NOTE: this whole object REPLACES — not merges with — the
+           // generated page's own `listViewOptions={{hidePrint,hideEye,hideCounter,hideLink}}`
+           // (same last-prop-wins JSX precedence SUBSET_FILTERS above relies on), so it must
+           // keep repeating those flags — keep this in sync if BusinessPartnerPage's
+           // generated defaults ever change.
+           listViewOptions={{ hidePrint: true, hideEye: true, hideCounter: true, hideLink: true, hideBulkDelete: true }}
            enableSecondaryRowDelete={true}
            tabsBarAfter={ContactsPeriodButton}
            headerContent={renderContactsHeaderSummary}
@@ -108,7 +118,7 @@ export default function ContactsWindow(props) {
            listbarPaddingX="px-2"
            SortIconComponent={SortIcon}
            RefreshIconComponent={RefreshIcon}
-           iconButtonHover="hover:bg-[#F5F7F9]"
+           iconButtonHover="hover:bg-[hsl(var(--muted))]"
            tablePaddingX="px-2"
            selectionBarSize="default"
            selectionBarRightActions={selectionBarRightActions}

@@ -2,19 +2,20 @@ import { useEffect, useRef } from 'react';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { useUI } from '@/i18n';
+import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
 
 function GroupHead({ title, description }) {
   return (
     <div>
-      <div className="text-sm font-semibold text-[#121217] mb-4">{title}</div>
-      {description && <div className="text-xs text-[#6C6C89] -mt-2 mb-4">{description}</div>}
+      <div className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">{title}</div>
+      {description && <div className="text-xs text-[hsl(var(--muted-foreground))] -mt-2 mb-4">{description}</div>}
     </div>
   );
 }
 
 function GroupDivider({ title, description }) {
   return (
-    <div className="mt-5 border-t border-[#E8E8ED] pt-5">
+    <div className="mt-5 border-t border-[hsl(var(--border-subtle))] pt-5">
       <GroupHead title={title} description={description} data-testid="GroupHead__8e32ca" />
     </div>
   );
@@ -29,10 +30,10 @@ function ToggleCard({ label, description, fieldKey, value, onChange, editing }) 
   }
 
   return (
-    <div className="flex items-center justify-between rounded-xl border border-[#D1D1DB] bg-white p-4">
+    <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--border-control))] bg-card p-4">
       <div>
-        <div className="text-sm font-medium text-[#121217]">{label}</div>
-        {description && <div className="text-xs text-[#6C6C89] mt-0.5">{description}</div>}
+        <div className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</div>
+        {description && <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{description}</div>}
       </div>
       <PillToggle
         checked={isOn}
@@ -91,7 +92,7 @@ export function computeAssetAmounts(field, asset, residual, amort) {
   return { assetValue: round2(a), residualAssetValue: round2(r), depreciationAmt: round2(m) };
 }
 
-export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange, onLocalChange }) {
+export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange, onLocalChange, registerFields, fieldErrors }) {
   const ui = useUI();
   const d = data ?? {};
   const depreciate = isDepreciate(d);
@@ -155,7 +156,12 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     }
   }, [isNewRecord, d?.currency]);
 
-  const common = { data: d, onChange, catalogs, api, token, apiBaseUrl, entity: 'assets', layout: 'horizontal' };
+  // registerFields/fieldErrors are threaded through from DetailView (hook.registerFields /
+  // hook.fieldErrors) so the EntityForms rendered here — in particular deprecFields below,
+  // which carries usableLifeMonths/usableLifeYears — register into useEntity's formFieldsRef.
+  // Without this, handleSave's generic numeric gate (getNumericFieldViolation) never sees these
+  // fields and the hard save-block is a no-op (blur toast fired but save still went through).
+  const common = { data: d, onChange, catalogs, api, token, apiBaseUrl, entity: 'assets', layout: 'horizontal', registerFields, fieldErrors };
 
   const readOnlyAll = !editing ? { readOnly: Object.fromEntries([
     'searchKey','name','assetCategory','description',
@@ -169,13 +175,43 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   const group1Fields = [
     { key: 'searchKey', column: 'Value', type: 'text', label: ui('Search Key'), required: true, section: 'principal' },
     { key: 'name', column: 'Name', type: 'text', label: ui('Name'), required: true, section: 'principal' },
-    { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: ui('Asset Category'), required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector' },
+    // TEMPORARY opt-out (searchSelect: false) — keeps this field on the OLD plain
+    // SelectorInput instead of ETP-4600's unified CreatableSearchSelect. The unified
+    // component's interaction timing exposes a pre-existing DetailView save→refetch/
+    // callout race: selecting a category, toggling "Depreciar" ON, then saving persists
+    // the asset with `depreciate = false`, so AssetsDetailPanel's `depreciate &&` gate
+    // never renders the "Crear Amortización" button (integration Cases 5/6/7). Remove
+    // this opt-out once the DetailView race has its own fix (tracked as a separate
+    // ticket) — this is NOT masking a bug in the unified selector itself.
+    { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: ui('Asset Category'), required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector', searchSelect: false },
+    // ETP-4529 — per the corrected accounting-dimension matrix, Producto is "Siempre"
+    // for Activo (Amortizaciones) Cabecera: always visible regardless of GL Configuration.
+    // It is a plain business field (which product this asset represents), not a
+    // config-gated accounting dimension — see dimensionFieldCandidates below. Placed
+    // right after Asset Category (its natural raw-AD position).
+    { key: 'product', column: 'M_Product_ID', type: 'search', label: ui('product'), lookup: true, reference: 'Product', inputMode: 'search', section: 'principal' },
+    // Moved out of the Financial Info group (ETP-4539) — "Valor del activo" is now always
+    // visible in the main header section, regardless of whether depreciation/amortization is
+    // enabled. calloutOn: 'blur' + handleAmountChange (passed as this form's onChange below)
+    // keep the ETP-4333 local-recompute behavior intact.
+    // Column order (per ETP-4539 follow-up): Identificador, Nombre, Grupo Activo, Producto,
+    // Valor del Activo, Descripcion — assetValue must render BEFORE description.
+    { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'description', column: 'Description', type: 'textarea', label: ui('Description'), section: 'other' },
   ];
 
   const group2Fields = [
-    { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: ui('assetsCurrencyLabel'), section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: (record) => Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0, requiredVisual: true },
-    // The Asset amount triple (AssetValue, ResidualAssetValue, DepreciationAmt). ETP-4333:
+    // Currency is ALWAYS read-only (ETP-4539) — but MUST use a `readOnlyLogic` function
+    // (always returning true), NOT a static field-level `readOnly: true`. EntityForm's
+    // horizontal-layout-without-`section` render path (this call has no `section` prop)
+    // filters `displayFields = visibleBaseFields.filter(f => !f.readOnly)` — any field with
+    // a truthy static `f.readOnly` is stripped from the form ENTIRELY, not just disabled.
+    // That regression made "Moneda" disappear instead of just becoming non-editable.
+    // `readOnlyLogic` is not checked by that filter — it only feeds `evalReadOnlyLogic()`,
+    // which correctly disables the input (see `isReadOnly` in `renderField`) while keeping
+    // the field visible. Do NOT replace this with a static `readOnly: true`.
+    { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: ui('assetsCurrencyLabel'), section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: () => true },
+    // The remaining Asset amount pair (ResidualAssetValue, DepreciationAmt). ETP-4333:
     //  • calloutOn: 'blur' — EntityForm renders these via DeferredInput: typing only updates a
     //    local buffer; on blur a single onChange commits the value. The deferral-to-blur UX
     //    stays; only the commit TARGET changed — see handleAmountChange below.
@@ -183,7 +219,6 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     //    onChange) replicates the SL_Assets arithmetic LOCALLY and synchronously
     //    (computeAssetAmounts) and writes the recomputed triple via onLocalChange. Deterministic,
     //    no async round-trip to race. The Java remains the source of truth (see computeAssetAmounts).
-    { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'number', label: ui('assetsResidualValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: ui('assetsDepreciationAmtLabel'), section: 'principal', calloutOn: 'blur', requiredVisual: true },
     { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'number', label: ui('assetsPrevDepreciatedLabel'), section: 'principal', defaultValue: '0' },
@@ -192,10 +227,19 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   const deprecFields = [
     { key: 'depreciationType', column: 'Amortizationtype', type: 'select', label: ui('assetsOptLinear'), required: true, section: 'principal', options: [{ value: 'LI', label: ui('assetsOptLinear') }] },
     { key: 'calculateType', column: 'Amortizationcalctype', type: 'select', required: true, section: 'principal', options: [{ value: 'PE', label: ui('assetsOptPercentage') }, { value: 'TI', label: ui('assetsOptTime') }] },
-    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI', requiredVisual: true },
+    // Annual Depreciation % must be a positive value (backend "Create Amortization"
+    // rejects empty/zero/negative). Decimals ARE allowed here — it's a percentage
+    // (e.g. 12.5% is valid) — so only `min: 1` is set, no `integer`. Drives the
+    // generic numeric validation in EntityForm (on-blur toast) and the useEntity
+    // save-block gate — no window-specific code. ETP-4542.
+    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', min: 1, displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI', requiredVisual: true },
     { key: 'amortize', column: 'Assetschedule', type: 'select', required: true, section: 'principal', options: [{ value: 'MO', label: ui('assetsOptMonthly') }, { value: 'YE', label: ui('assetsOptYearly') }], displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' },
-    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE', requiredVisual: true },
-    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE', requiredVisual: true },
+    // Usable Life must be a positive whole number (backend "Create Amortization"
+    // rejects empty/zero/negative/decimal). `min: 1` + `integer: true` drive the
+    // generic numeric validation in EntityForm (on-blur toast) and the useEntity
+    // save-block gate — no window-specific code. ETP-4542.
+    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'principal', min: 1, integer: true, displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE', requiredVisual: true },
+    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'principal', min: 1, integer: true, displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE', requiredVisual: true },
   ];
 
   function makeDisplayLogic(fields) {
@@ -209,12 +253,20 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     return { readOnly, visibility };
   }
 
-  const dimensionFields = [
+  // ETP-4529 — per the accounting-dimension matrix, only Proyecto is "Por config"
+  // (config-gated) for Activo (Amortizaciones); Contacto and Centro de costo are
+  // "Nunca" (never applicable) and are intentionally NOT candidates here at all —
+  // see decisions.json (businessPartner/eTADASCostCenter are discarded) and
+  // docs/generated-custom-windows/assets.md. Producto is "Siempre" (always visible,
+  // rendered unconditionally in group1Fields above) — it is not a GL-config-gated
+  // dimension, so it is deliberately excluded from this candidates list too.
+  const dimensionFieldCandidates = [
     { key: 'project', column: 'C_Project_ID', type: 'selector', section: 'principal', reference: 'Project', inputMode: 'selector' },
-    { key: 'eTADASCostCenter', column: 'EM_Etadas_Costcenter_ID', type: 'selector', section: 'principal', reference: 'Costcenter', inputMode: 'selector' },
-    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', section: 'principal', reference: 'BPartner', inputMode: 'selector' },
-    { key: 'product', column: 'M_Product_ID', type: 'selector', section: 'principal', reference: 'Product', inputMode: 'selector' },
   ];
+  // Config-driven visibility via the shared evaluate-display evaluator (was: always
+  // shown whenever depreciate === true, regardless of the client's accounting-
+  // dimension configuration).
+  const dimensionFields = useAccountingDimensionFields('assets', d, dimensionFieldCandidates, { token, apiBaseUrl });
 
   const dateFields = [
     { key: 'purchaseDate', column: 'Datepurchased', type: 'date', label: ui('assetsPurchaseDateLabel'), section: 'principal' },
@@ -224,12 +276,16 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   ];
 
   return (
-    <div className="p-2 pb-6 bg-white overflow-y-auto max-h-[380px] [&_input]:bg-white [&_textarea]:bg-white [&_textarea:disabled]:!bg-white [&_textarea:disabled]:opacity-50">
-      {/* Group 1 — Asset Info (no subtitle) */}
+    <div className="p-2 pb-6 bg-card overflow-y-auto max-h-[380px] [&_input]:bg-card [&_textarea]:bg-card [&_textarea:disabled]:!bg-card [&_textarea:disabled]:opacity-50">
+      {/* Group 1 — Asset Info (no subtitle). onChange goes through handleAmountChange so
+          "Valor del activo" keeps the ETP-4333 local-recompute behavior now that it lives
+          here instead of the Financial Info group; handleAmountChange forwards non-amount
+          fields (searchKey, name, assetCategory, description) to the plain onChange untouched. */}
       <div className="mb-5">
         <EntityForm
           fields={group1Fields}
           {...common}
+          onChange={handleAmountChange}
           displayLogic={readOnlyAll}
           data-testid="EntityForm__8e32ca" />
       </div>
@@ -278,7 +334,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
               data-testid="EntityForm__8e32ca" />
           </>
         ) : (
-          <p className="text-xs text-[#6C6C89]">{ui('assetsDepreciationDisabledHint')}</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">{ui('assetsDepreciationDisabledHint')}</p>
         )}
       </div>
       {/* Group 4 — Dates */}
@@ -292,14 +348,16 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
           displayLogic={readOnlyAll}
           data-testid="EntityForm__8e32ca" />
       )}
-      {/* Group 5 — Accounting dimensions (optional, last section) */}
-      {depreciate && (
+      {/* Group 5 — Accounting dimensions (optional, last section). Hidden entirely
+          when the config-driven dimensionFields list resolves to empty (e.g. Project
+          disabled for this client's accounting-dimension configuration). */}
+      {depreciate && dimensionFields.length > 0 && (
         <GroupDivider
           title={ui('assetsGroupDimensionsTitle')}
           data-testid="GroupDivider__8e32ca" />
       )}
-      {depreciate && (
-        <div className="[&_button[role=combobox]]:!bg-white [&_input]:!bg-white">
+      {depreciate && dimensionFields.length > 0 && (
+        <div className="[&_button[role=combobox]]:!bg-card [&_input]:!bg-card">
           <EntityForm
             fields={dimensionFields}
             {...common}

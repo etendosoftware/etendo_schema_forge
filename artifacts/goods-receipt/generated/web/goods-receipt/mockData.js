@@ -8,7 +8,6 @@ export const goodsReceipt = [
     "businessPartner": "Acme Corp",
     "partnerAddress": "Acme Corp",
     "movementDate": "2026-01-15",
-    "accountingDate": "2026-01-15",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Standard order for Q1 delivery",
@@ -20,7 +19,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "DR",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-002",
@@ -29,7 +29,6 @@ export const goodsReceipt = [
     "businessPartner": "TechFlow Inc",
     "partnerAddress": "TechFlow Inc",
     "movementDate": "2026-01-16",
-    "accountingDate": "2026-01-16",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Rush order - priority shipping required",
@@ -41,7 +40,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "CO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-003",
@@ -50,7 +50,6 @@ export const goodsReceipt = [
     "businessPartner": "Global Trade Ltd",
     "partnerAddress": "Global Trade Ltd",
     "movementDate": "2026-01-17",
-    "accountingDate": "2026-01-17",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Bulk purchase for warehouse restocking",
@@ -62,7 +61,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "VO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsReceipt-004",
@@ -71,7 +71,6 @@ export const goodsReceipt = [
     "businessPartner": "Summit Industries",
     "partnerAddress": "Summit Industries",
     "movementDate": "2026-01-18",
-    "accountingDate": "2026-01-18",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Sample order for client evaluation",
@@ -83,7 +82,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "IP",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-005",
@@ -92,7 +92,6 @@ export const goodsReceipt = [
     "businessPartner": "Pacific Partners",
     "partnerAddress": "Pacific Partners",
     "movementDate": "2026-01-19",
-    "accountingDate": "2026-01-19",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Recurring monthly supply order",
@@ -104,7 +103,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "DR",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-006",
@@ -113,7 +113,6 @@ export const goodsReceipt = [
     "businessPartner": "Alpine Solutions",
     "partnerAddress": "Alpine Solutions",
     "movementDate": "2026-01-20",
-    "accountingDate": "2026-01-20",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Special pricing agreement applies",
@@ -125,7 +124,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "CO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsReceipt-007",
@@ -134,7 +134,6 @@ export const goodsReceipt = [
     "businessPartner": "Meridian Group",
     "partnerAddress": "Meridian Group",
     "movementDate": "2026-01-21",
-    "accountingDate": "2026-01-21",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Consolidated order from multiple requests",
@@ -146,7 +145,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "VO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-008",
@@ -155,7 +155,6 @@ export const goodsReceipt = [
     "businessPartner": "Vertex Systems",
     "partnerAddress": "Vertex Systems",
     "movementDate": "2026-01-22",
-    "accountingDate": "2026-01-22",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Trial order for new product line",
@@ -167,7 +166,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "IP",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-009",
@@ -176,7 +176,6 @@ export const goodsReceipt = [
     "businessPartner": "Atlas Manufacturing",
     "partnerAddress": "Atlas Manufacturing",
     "movementDate": "2026-01-23",
-    "accountingDate": "2026-01-23",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Replacement for damaged goods",
@@ -188,7 +187,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "DR",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsReceipt-010",
@@ -197,7 +197,6 @@ export const goodsReceipt = [
     "businessPartner": "Nova Enterprises",
     "partnerAddress": "Nova Enterprises",
     "movementDate": "2026-01-24",
-    "accountingDate": "2026-01-24",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Pre-season inventory build-up",
@@ -209,7 +208,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "CO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsReceipt-011",
@@ -218,7 +218,6 @@ export const goodsReceipt = [
     "businessPartner": "Pinnacle Services",
     "partnerAddress": "Pinnacle Services",
     "movementDate": "2026-01-25",
-    "accountingDate": "2026-01-25",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Customer-specific configuration",
@@ -230,7 +229,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "VO",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsReceipt-012",
@@ -239,7 +239,6 @@ export const goodsReceipt = [
     "businessPartner": "Horizon Labs",
     "partnerAddress": "Horizon Labs",
     "movementDate": "2026-01-26",
-    "accountingDate": "2026-01-26",
     "salesOrder": "Sample salesOrder",
     "orderReference": "Sample orderReference",
     "description": "Government contract fulfillment",
@@ -251,7 +250,8 @@ export const goodsReceipt = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "invoiceStatus": "IP",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   }
 ];
 
@@ -269,7 +269,6 @@ export const goodsReceiptLine = [
     "description": "Standard order for Q1 delivery",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 402,
-    "businessPartner": "Acme Corp",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -291,7 +290,6 @@ export const goodsReceiptLine = [
     "description": "Rush order - priority shipping required",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 54,
-    "businessPartner": "TechFlow Inc",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -313,7 +311,6 @@ export const goodsReceiptLine = [
     "description": "Bulk purchase for warehouse restocking",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 150,
-    "businessPartner": "Global Trade Ltd",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -335,7 +332,6 @@ export const goodsReceiptLine = [
     "description": "Sample order for client evaluation",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 97,
-    "businessPartner": "Summit Industries",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -357,7 +353,6 @@ export const goodsReceiptLine = [
     "description": "Recurring monthly supply order",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 311,
-    "businessPartner": "Pacific Partners",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -379,7 +374,6 @@ export const goodsReceiptLine = [
     "description": "Special pricing agreement applies",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 451,
-    "businessPartner": "Alpine Solutions",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -401,7 +395,6 @@ export const goodsReceiptLine = [
     "description": "Consolidated order from multiple requests",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 496,
-    "businessPartner": "Meridian Group",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -423,7 +416,6 @@ export const goodsReceiptLine = [
     "description": "Trial order for new product line",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 284,
-    "businessPartner": "Vertex Systems",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -445,7 +437,6 @@ export const goodsReceiptLine = [
     "description": "Replacement for damaged goods",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 225,
-    "businessPartner": "Atlas Manufacturing",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -467,7 +458,6 @@ export const goodsReceiptLine = [
     "description": "Pre-season inventory build-up",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 479,
-    "businessPartner": "Nova Enterprises",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -489,7 +479,6 @@ export const goodsReceiptLine = [
     "description": "Customer-specific configuration",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 123,
-    "businessPartner": "Pinnacle Services",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
@@ -511,7 +500,6 @@ export const goodsReceiptLine = [
     "description": "Government contract fulfillment",
     "salesOrderLine": "Sample salesOrderLine",
     "orderQuantity": 337,
-    "businessPartner": "Horizon Labs",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",

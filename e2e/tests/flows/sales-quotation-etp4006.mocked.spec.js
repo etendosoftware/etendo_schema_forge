@@ -242,7 +242,10 @@ test.describe('Sales Quotation — ETP-4006 regressions (mocked)', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await expect(page.getByText(CLONED_QUOTE.documentNo, { exact: true })).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByTestId('field-priceList')).toContainText(CLONED_QUOTE['priceList$_identifier']);
+    // ETP-4600: a field with a committed value renders as a chip
+    // (`field-priceList-chip`) — the plain input testid is not in the DOM
+    // while a value is set. The chip's <span> holds the value label.
+    await expect(page.getByTestId('field-priceList-chip')).toContainText(CLONED_QUOTE['priceList$_identifier']);
 
     await openQuotationConfirmModal(page);
     await expect(page.getByTestId('confirm-summary-total')).toHaveText(/90([.,])00/, { timeout: 5_000 });

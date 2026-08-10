@@ -28,7 +28,7 @@ function IconBtn({ label, onClick, disabled, children }) {
         style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           width: 32, height: 32, borderRadius: 6, flexShrink: 0,
-          border: '0.5px solid #E5E7EB', background: '#fff', color: '#374151',
+          border: '0.5px solid hsl(var(--card))', background: 'hsl(var(--card))', color: 'var(--status-info-bg)',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
         }}
@@ -41,7 +41,7 @@ function IconBtn({ label, onClick, disabled, children }) {
           top: rect.bottom + 6,
           left: rect.left + rect.width / 2,
           transform: 'translateX(-50%)',
-          background: '#1f2937', color: '#fff',
+          background: 'var(--status-info-bg)', color: 'hsl(var(--card))',
           fontSize: 12, padding: '4px 8px', borderRadius: 4,
           whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 50,
         }}>

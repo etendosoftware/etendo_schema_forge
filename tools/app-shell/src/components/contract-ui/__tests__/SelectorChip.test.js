@@ -38,13 +38,13 @@ describe('SelectorChip (ETP-4000 Figma chip)', () => {
     assert.match(src, /<X[\s\S]/);
   });
 
-  it('uses the Figma chip background #F5F7F9 and label color #3F3F50', () => {
-    assert.match(src, /bg-\[#F5F7F9\]/);
-    assert.match(src, /text-\[#3F3F50\]/);
+  it('uses the semantic muted-foreground label token and a transparent background (the gray fill lives on the field wrapper hover, not the chip)', () => {
+    assert.match(src, /text-\[hsl\(var\(--muted-foreground\)\)\]/);
+    assert.match(src, /bg-transparent/);
   });
 
-  it('paints the X icon in the Figma muted color #828FA3', () => {
-    assert.match(src, /text-\[#828FA3\]/);
+  it('paints the X icon with the semantic muted foreground', () => {
+    assert.match(src, /text-\[hsl\(var\(--text-disabled\)\)\]/);
   });
 
   it('triggers clear on click and on Enter / Space keypress for accessibility', () => {

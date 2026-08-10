@@ -195,7 +195,7 @@ export const WipBadge = ({ inline = false }) => {
       <TooltipProvider delayDuration={600} data-testid="TooltipProvider__29f91c">
         <Tooltip data-testid="Tooltip__29f91c">
           <TooltipTrigger asChild data-testid="TooltipTrigger__29f91c">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300 cursor-default select-none">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-status-warning text-status-warning-foreground border border-status-warning-border cursor-default select-none">
               <TriangleAlert size={12} strokeWidth={2} data-testid="TriangleAlert__29f91c" /> {ui('fiscal.wip.badge')}
             </span>
           </TooltipTrigger>

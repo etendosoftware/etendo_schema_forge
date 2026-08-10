@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
+
   addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
   expectSaveResponse, waitForConfirmResponse, dismissSuccessModal, safeReload,
   readDocumentTotals, verifyTotalsConsistency,
@@ -195,15 +196,37 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
 
     await selectVendorBP(page);
 
+    // The BP callout is debounced — in CI the test can reach saveDraft()
+    // before the callout finishes populating the form fields, causing a
+    // "required fields" validation error. Wait for all callout network
+    // activity to settle before saving.
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await page.waitForTimeout(3_000);
+
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 12: Save invoice as draft
     // ═══════════════════════════════════════════════════════════════════════
 
     await saveDraft(page);
 
+    // The save may succeed but the frontend redirect from /new to /{id} can be
+    // slow. First give it a generous window to land on the record URL.
+    const saved = await page.waitForURL(
+      /\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/,
+      { timeout: 20_000 },
+    ).then(() => true).catch(() => false);
+
+    // If we're still on /new the save genuinely failed (callout arrived late,
+    // required-field validation). Wait for callouts to settle and retry once.
+    if (!saved && page.url().endsWith('/new')) {
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+      await page.waitForTimeout(3_000);
+      await saveDraft(page);
+    }
+
     await expect(page,
       'After saving draft, URL should include the invoice record ID',
-    ).toHaveURL(/\/purchase-invoice\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+    ).toHaveURL(/\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/, { timeout: 15_000 });
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await waitForDetailReady(page);
 

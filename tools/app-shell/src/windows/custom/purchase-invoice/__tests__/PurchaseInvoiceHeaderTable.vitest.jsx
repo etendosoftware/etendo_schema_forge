@@ -13,7 +13,7 @@ vi.mock('@/i18n', () => ({
       pagada: 'pagada',
       addPago: 'addPago',
       invoicesTab: 'invoicesTab',
-      creditNotesTab: 'creditNotesTab',
+      rectificativeInvoicesTab: 'rectificativeInvoicesTab',
       returnInvoiceTab: 'returnInvoiceTab',
       'invoiceList.col.siiStatus': 'SII Status',
     },
@@ -59,8 +59,9 @@ vi.mock('@/lib/invoiceDueDate', () => ({
   getDueDateTextStyle: () => ({ color: 'red' }),
 }));
 
-vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (amount, currency) => `${amount}:${currency}`,
+vi.mock('@/lib/formatCurrency.js', () => ({
+  // Source calls `formatCurrency(currency, amount)` — currency first, amount second.
+  formatCurrency: (currency, amount) => `${amount}:${currency}`,
 }));
 
 // DataTable mock that calls each column's render with multiple representative rows
@@ -159,25 +160,34 @@ const MOCK_ROWS = [
   },
 ];
 
+// Hoisted holder so the DataTable mock (below) can stash the `columns` prop it
+// received, and tests can later read it back to assert on the raw column
+// metadata (e.g. filterMode) — not just what the render() callback outputs.
+const capturedColumnsHolder = vi.hoisted(() => ({ value: null }));
+
 vi.mock('@/components/contract-ui', () => ({
-  DataTable: ({ columns, 'data-testid': testId }) => (
-    <div data-testid={testId || 'data-table'}>
-      {(columns || []).map((col) =>
-        col.render ? (
-          <div key={col.key} data-testid={`col-render-${col.key}`}>
-            {MOCK_ROWS.map((row, i) => (
-              <div key={i}>{col.render(row)}</div>
-            ))}
-          </div>
-        ) : null,
-      )}
-    </div>
-  ),
+  DataTable: ({ columns, 'data-testid': testId }) => {
+    capturedColumnsHolder.value = columns;
+    return (
+      <div data-testid={testId || 'data-table'}>
+        {(columns || []).map((col) =>
+          col.render ? (
+            <div key={col.key} data-testid={`col-render-${col.key}`}>
+              {MOCK_ROWS.map((row, i) => (
+                <div key={i}>{col.render(row)}</div>
+              ))}
+            </div>
+          ) : null,
+        )}
+      </div>
+    );
+  },
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { resolveFilterMode } from '@/lib/gridQuery';
 import PurchaseInvoiceHeaderTable from '../PurchaseInvoiceHeaderTable.jsx';
 
 const BASE_PROPS = {
@@ -279,7 +289,7 @@ describe('PurchaseInvoiceHeaderTable', () => {
   it('renders transactionDocument column with credit note badge for AP CreditMemo', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     // The column container renders multiple rows including the NC row (AP CreditMemo)
-    expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('creditNotesTab');
+    expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('rectificativeInvoicesTab');
   });
 
   it('renders transactionDocument column with dash for unknown doc type', () => {
@@ -288,7 +298,7 @@ describe('PurchaseInvoiceHeaderTable', () => {
     // The column container includes multiple rows so check via textContent
     const col = screen.getByTestId('col-render-transactionDocument');
     expect(col.textContent).toContain('invoicesTab');
-    expect(col.textContent).toContain('creditNotesTab');
+    expect(col.textContent).toContain('rectificativeInvoicesTab');
   });
 
   it('does not show SII column when showSii is false', () => {
@@ -437,7 +447,7 @@ describe('PurchaseInvoiceHeaderTable — column render branches (inline)', () =>
     const renderFn = getColRender('grandTotalAmount');
     if (!renderFn) return;
     const { container } = render(<>{renderFn(NC_ROW)}</>);
-    // isNcOrReturn → -Math.abs(1000) = -1000, formatAmount mock: "-1000:EUR"
+    // isNcOrReturn → -Math.abs(1000) = -1000, formatCurrency mock: "-1000:EUR"
     expect(container.textContent).toContain('-1000');
   });
 
@@ -481,5 +491,57 @@ describe('PurchaseInvoiceHeaderTable — outstandingAmount credit-note/return ba
     const pendingButton = pendingBadge.closest('button');
     expect(pendingButton).toHaveAttribute('aria-label', 'addPago');
     expect(pendingButton.textContent).not.toMatch(/Saldo a favor/);
+  });
+});
+
+// ── Regression: advanced filter mode for custom-render columns (ETP-4705) ──
+// `type: 'custom'` is required on these columns to drive their badge/button
+// cell render, but resolveFilterMode() falls back to 'text' for any type it
+// doesn't recognize — silently turning the advanced filter's date picker /
+// identifier picker / numeric input into a free-text box. Each affected
+// column must carry an explicit `filterMode` hint that resolveFilterMode()
+// honors before ever looking at `type`. This locks the fix in: removing any
+// of these `filterMode` values must fail this test.
+describe('PurchaseInvoiceHeaderTable — advanced filter mode for custom columns (ETP-4705 regression)', () => {
+  beforeEach(() => {
+    capturedColumnsHolder.value = null;
+  });
+
+  function getColumn(key) {
+    const col = (capturedColumnsHolder.value || []).find((c) => c.key === key);
+    expect(col, `expected column "${key}" to be captured from DataTable props`).toBeTruthy();
+    return col;
+  }
+
+  it('invoiceDate (plain date column) resolves to the date filter mode', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(resolveFilterMode(getColumn('invoiceDate'))).toBe('date');
+  });
+
+  it('eTGODueDate (custom-render date column) resolves to the date filter mode', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(resolveFilterMode(getColumn('eTGODueDate'))).toBe('date');
+  });
+
+  it('transactionDocument (custom-render FK badge column) resolves to the identifier filter mode', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(resolveFilterMode(getColumn('transactionDocument'))).toBe('identifier');
+  });
+
+  it('grandTotalAmount (custom-render amount column) resolves to the numeric filter mode', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(resolveFilterMode(getColumn('grandTotalAmount'))).toBe('numeric');
+  });
+
+  it('outstandingAmount (custom-render amount column) resolves to the numeric filter mode', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(resolveFilterMode(getColumn('outstandingAmount'))).toBe('numeric');
+  });
+
+  it('bug repro: without the filterMode hint, a custom-render column falls back to text', () => {
+    // Documents WHY the fix is needed: a bare `type: 'custom'` column with no
+    // filterMode hint resolves to 'text' via resolveFilterMode's default case —
+    // this is the exact regression the fix above prevents on the real columns.
+    expect(resolveFilterMode({ key: 'eTGODueDate', type: 'custom' })).toBe('text');
   });
 });

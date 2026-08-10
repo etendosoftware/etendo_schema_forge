@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import BusinessPartnerTable from '@/windows/custom/contacts/ContactsTable';
 import BusinessPartnerForm from './BusinessPartnerForm';
 import ContactTable from './ContactTable';
@@ -46,7 +48,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:businessPartner
 
 // @sf-generated-start requiredHeaderFields:businessPartner
-const requiredHeaderFields = ['name', 'etgoFirstname', 'etgoLastname', 'oBTIKTaxIDKey', 'setNewCurrency', 'creditLimit'];
+const requiredHeaderFields = ['name', 'businessPartnerCategory', 'etgoFirstname', 'etgoLastname', 'oBTIKTaxIDKey', 'setNewCurrency', 'creditLimit'];
 // @sf-generated-end requiredHeaderFields:businessPartner
 
 
@@ -85,7 +87,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/contacts/customerAccounting",
       "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
       "supportedFilters": []
@@ -118,7 +120,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/contacts/vendorAccounting",
       "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
       "supportedFilters": []
@@ -312,19 +314,19 @@ export const api = {
     },
     {
       "entity": "businessPartner",
-      "field": "pOPaymentMethod",
-      "column": "PO_Paymentmethod_ID",
-      "reference": "PaymentMethod",
-      "inputMode": "selector",
-      "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
-    },
-    {
-      "entity": "businessPartner",
       "field": "pOPaymentTerms",
       "column": "PO_PaymentTerm_ID",
       "reference": "PaymentTerm",
       "inputMode": "selector",
       "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentTerms"
+    },
+    {
+      "entity": "businessPartner",
+      "field": "pOPaymentMethod",
+      "column": "PO_Paymentmethod_ID",
+      "reference": "PaymentMethod",
+      "inputMode": "selector",
+      "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
     },
     {
       "entity": "businessPartner",
@@ -631,7 +633,8 @@ export const api = {
       "PO_Financial_Account_ID": "Expense Account",
       "EM_Etgo_Web": "Website",
       "EM_Etgo_Firstname": "First Name",
-      "EM_Etgo_Lastname": "Last Name"
+      "EM_Etgo_Lastname": "Last Name",
+      "C_BP_Group_ID": "Contact Category"
     },
     "es_ES": {
       "Name": "Razón Social",
@@ -640,7 +643,8 @@ export const api = {
       "PO_Financial_Account_ID": "Cuenta contable de gastos",
       "EM_Etgo_Web": "Página web",
       "EM_Etgo_Firstname": "Nombre",
-      "EM_Etgo_Lastname": "Apellidos"
+      "EM_Etgo_Lastname": "Apellidos",
+      "C_BP_Group_ID": "Categoría de contacto"
     }
   }
 };
@@ -649,6 +653,13 @@ export const api = {
 const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:BusinessPartnerPage
 export default function BusinessPartnerPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('123');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="123" />;
+  }
   if (recordId) {
     return (
       <>
@@ -685,11 +696,11 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           { key: 'customerAccounting', label: 'Customer Accounting', Table: CustomerAccountingTable, Form: CustomerAccountingForm, addLineFields: { entry: [
           { key: 'customerReceivablesNo', column: 'C_Receivable_Acct', type: 'selector', required: true, label: 'Customer Receivables No.', labels: {"en_US":"Receivables Account","es_ES":"Cuenta a Cobrar"}, reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'customerPrepayment', column: 'C_Prepayment_Acct', type: 'selector', label: 'Customer Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1 },
           { key: 'vendorAccounting', label: 'Vendor Accounting', Table: VendorAccountingTable, Form: VendorAccountingForm, addLineFields: { entry: [
           { key: 'vendorLiability', column: 'V_Liability_Acct', type: 'selector', required: true, label: 'Vendor Liability', labels: {"en_US":"Liability Account","es_ES":"Cuenta a Pagar"}, reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'vendorPrepayment', column: 'V_Prepayment_Acct', type: 'selector', label: 'Vendor Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1 },
         ]}
         primaryTabs={[
           { key: 'general', label: 'General' },
@@ -702,7 +713,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -724,7 +735,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       import={{"enabled":true,"spec":"contacts","entity":"businessPartner","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["etgoEmail"]},"descriptor":"contacts","fields":[{"target":"name","aliases":["nombre comercial","razon social"],"label":"Commercial Name","required":true,"type":"string"},{"target":"etgoFirstname","aliases":["nombre"],"label":"First Name (Company)","required":true,"type":"string"},{"target":"etgoLastname","aliases":["apellido","apellidos"],"label":"Last Name (Company)","required":true,"type":"string"},{"target":"etgoEmail","aliases":["email","correo","e-mail"],"isEmail":true,"label":"Email (Company)","required":false,"type":"string"},{"target":"etgoPhone","aliases":["telefono","teléfono"],"label":"Phone (Company)","required":false,"type":"string"},{"target":"email","aliases":["email de contacto"],"isEmail":true,"label":"Email (Contact)","required":false,"type":"string"},{"target":"firstName","aliases":["nombre de contacto"],"label":"First Name (Contact)","required":false,"type":"string"},{"target":"lastName","aliases":["apellido de contacto"],"label":"Last Name (Contact)","required":false,"type":"string"},{"target":"phone","aliases":["telefono de contacto"],"label":"Phone (Contact)","required":false,"type":"string"},{"target":"position","aliases":["cargo"],"label":"Position","required":false,"type":"string"},{"required":false,"type":"string","target":"address","aliases":["direccion","dirección"],"label":"Address"},{"required":false,"type":"string","target":"city","aliases":["ciudad"],"label":"City"},{"required":false,"type":"string","target":"postal","aliases":["codigo postal","código postal","cp"],"label":"Postal Code"},{"target":"country","aliases":["pais","país"],"label":"Country","matchEntity":"Country","required":false,"type":"foreignKey","reference":"Country"},{"required":false,"type":"string","target":"region","aliases":["provincia","region","región"],"label":"Region"}]}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -8,6 +8,7 @@ Physical Inventory should let a warehouse user create an inventory count session
 - Classify the count as a Normal, Opening Inventory, or Closing Inventory session, with Normal as the visible default in current contract evidence.
 - Open a saved header and work with its child inventory lines.
 - Generate a count list from the header through a dedicated more-menu action that filters by product search key, optional product category, and inventory-quantity range.
+- Generate lines automatically for the current warehouse via a 3-field modal (product category, inventory-quantity comparison, optional book-quantity reset), available both from the empty-state and from the "+ Add line" menu.
 - Capture user-entered counted quantities on each line while keeping the system count visible as read-only reference data.
 - Refresh list system counts before final processing.
 - Process the inventory count only when the record still has `processed = false` and at least one line exists.
@@ -26,6 +27,15 @@ Physical Inventory should let a warehouse user create an inventory count session
 - Status-driven actions: the window uses `draftMode` (`processField: processNow`, `label: confirm`, `disableWhenEmpty: true`). The toolbar shows a **Save** button (floppy disk icon, saves draft) and a **Confirm** button (checkmark icon, saves and processes). The Confirm button is disabled when there are no lines and hidden once the record is processed (`isProcessed = processed === true`). When processed, a locked alert banner appears (`lockedAlert`) with the message and a "Create new inventory" link to `/physical-inventory/new`, matching goods-movements exactly. `processNow` is `visibility: discarded` so the legacy process button is suppressed.
 - Count-list generation: the custom more menu exposes `Create Inventory Count List`, which opens a modal rendered over the page. The modal defaults Product Search Key to `%`, loads Product Category options on mount, defaults Inventory Quantity to `N` (`not 0`), and submits `generateList` to the header action endpoint with `ProductValue`, `QtyRange`, and optional `M_Product_Category_ID`. Cancel, close-icon, and backdrop click all dismiss the modal. While the request is running, the Generate button is disabled. On success, the UI closes the modal, shows a success toast, and reloads the page.
 - System-count refresh: the same menu exposes `Update List System Count`, which POSTs an empty JSON body to `updateQuantities`, disables the button while the request is in flight, shows a success toast, and reloads the page after success.
+- Generate lines automatically (ETP-4528): a second, independent line-generation action, distinct from the more-menu "Create Inventory Count List" above. It surfaces in two places that both open the same `GenerateLinesModal`:
+  - **Empty state** (no lines yet): a secondary "Generate lines automatically" button next to the primary "+ Add line" button in `LinesEmptyState`, wired via `PhysicalInventoryBottomPanel.linesEmptyState`.
+  - **"+ Add line" dropdown** (lines already exist): a "Generate lines automatically" item in the split-button menu, wired via `PhysicalInventoryBottomPanel.lineMenuActions`, which opens the modal through a `forwardRef` host (`PhysicalInventoryBottomPanel.detailExtraActions`) exposing `openGenerateLinesModal()`.
+
+  The modal has exactly 3 fields: **Product Category** (DB-backed selector fetched from `/product/product/selectors/M_Product_Category_ID`; leaving it unset means all categories), **Inventory Quantity** (fixed enum `< 0` / `> 0` / `= 0` / `not 0`, mapped to backend codes `<`, `>`, `=`, `N`; default `not 0`), and **Set Book Quantity to zero** (checkbox, sent as `regularization: 'Y'|'N'`). Submitting POSTs to `/inventory/{recordId}/action/generateLines`; on success it toasts (`linesGeneratedAutomatically`) and calls `onRefresh` to reload only the lines list (no full page reload); on error the modal stays open and shows the server message or a generic fallback (`errorGeneratingList`).
+
+  The backend action is implemented by `InventoryHandler`, a `NeoHandler` registered as `@Named("inventory")` (matches `javaQualifier: "inventory"` on the header entity in `decisions.json`). It forwards the request to the core Etendo AD Process 105 (`M_Inventory_ListCreate`, "Generar líneas automáticamente") via `NeoProcessService.executeProcess`, mapping the exposed fields to the process parameters `M_Product_Category_ID`, `QtyRange`, and `regularization`, and forcing `ProductValue = "%"` (Storage Bin and ABC class are not exposed and stay unset). Two correctness rules are load-bearing and must not regress:
+  1. **Warehouse is resolved server-side** from `inventory.getWarehouse()` and sent as `M_Warehouse_ID` — NEO does not resolve the classic `@M_Warehouse_ID@` window token, so omitting this parameter would make the process scan every warehouse instead of the current one.
+  2. **"All categories" must omit `M_Product_Category_ID` entirely** — never send `"0"` or the literal string `"null"`. The process filters with `v_Product_Category_ID IS NULL OR p.M_Product_Category_ID = v_Product_Category_ID`, so any non-null placeholder matches zero products. The frontend omits the key when no category is chosen; the handler's `resolveProductCategory` additionally treats a blank value or the literal `"null"` (a Jettison `optString` quirk when a JSON `null` is sent) as "no filter", as defense in depth.
 - Child selector context: `DetailView` now passes selector context for `inventoryLine` through `parentId`, and both the line table and line form consume that context. That is the current source-level evidence behind the selector-context fix merged on `origin/develop`: the frontend now supplies saved-parent context instead of relying only on unsaved header state.
 - Line-entry behavior: the Lines tab shows columns Product → UOM → System Count → User Count (all `grow: true`, `columnWidth: 192` on the number columns for equal flex distribution). `Line No.` is not a visible grid column (`grid: false`). `UOM` is `gridReadOnly: true` so it is non-editable in both display and inline-edit modes; it is auto-populated by the product callout. `System Count` is read-only. The `InlineLinesPanel` and the add-row `DataTable` both use the same column flex-basis (192px) to stay aligned. Quick add-line entry fields: Product, Description, User Count.
 
@@ -46,6 +56,9 @@ Physical Inventory should let a warehouse user create an inventory count session
 7. Confirm the **Confirm** button (draftMode) is absent until at least one line exists. Click it — confirm the processed status badge turns green and the locked alert banner appears. Confirm Save and Confirm buttons are no longer visible.
 8. Confirm the ⋮ button is absent on a new (unsaved) header. After saving, confirm it appears. After processing, confirm it disappears again.
 9. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+10. On a header with no lines yet, confirm the empty state shows both "+ Add line" and "Generate lines automatically". Click the latter, confirm the modal shows Product Category (default "All categories"), Inventory Quantity (default `not 0`), and "Set Book Quantity to zero" (unchecked). Submit and confirm lines are generated for the header's warehouse only, a success toast appears, and the modal closes without a full page reload.
+11. On a header with existing lines, open the "+ Add line" dropdown and confirm "Generate lines automatically" is listed; confirm it opens the same modal.
+12. In the modal, pick a specific Product Category and confirm only products in that category are generated. Leave it on "All categories" and confirm products across categories are generated (i.e. the request omits `M_Product_Category_ID` rather than sending a placeholder).
 
 ## Automated evidence
 - `docs/generated-custom-windows/app-shell-functional-flows.md` documents the shared generated-window routing model for `/:windowName` and `/:windowName/:recordId`.
@@ -61,6 +74,10 @@ Physical Inventory should let a warehouse user create an inventory count session
 - `artifacts/physical-inventory/custom/__tests__/InventoryMenuContent.test.js` verifies the custom menu wiring, create-list entry, update-system-count entry, update endpoint, modal launch, `warehouseId` handoff, and the two visibility guards (`recordId === 'new'` and `data?.processed`).
 - `artifacts/physical-inventory/custom/__tests__/InventoryCreateListModal.test.js` verifies the generation endpoint, quantity-range options, category loading, wildcard default for product search key, success callback, and disabled submit state.
 - The generated `InventoryPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_Inventory` AD table.
+- `artifacts/physical-inventory/custom/GenerateLinesModal.jsx` implements the "Generate lines automatically" modal: the 3-field form, the category selector fetch, the `M_Product_Category_ID` omission rule, and the `generateLines` POST.
+- `artifacts/physical-inventory/custom/PhysicalInventoryBottomPanel.jsx` implements both seams that open `GenerateLinesModal` — the empty-state secondary action (`linesEmptyState`) and the "+ Add line" dropdown item (`lineMenuActions` + `detailExtraActions` forwardRef host) — and reuses the shared `LinesEmptyState` component with `margin="0" padding="16px"` overrides local to this window.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/InventoryHandler.java` implements the `@Named("inventory")` NeoHandler backing `generateLines`: reads the header's warehouse, forwards it as `M_Warehouse_ID`, resolves the optional product category (treating blank/`"null"` as "all categories"), and invokes AD Process 105 (`M_Inventory_ListCreate`) via `NeoProcessService`.
+- `tools/app-shell/src/locales/en_US.json`, `es_ES.json`, and `es_AR.json` include the i18n keys for this feature: `generateLinesAutomatically`, `addLinesManuallyOrGenerateAutomatically`, `setBookQuantityToZero`, `linesGeneratedAutomatically`.
 
 ## Design changes — ETP-4270
 
@@ -76,9 +93,80 @@ Physical Inventory should let a warehouse user create an inventory count session
 - Lines tab redesign: Line No. hidden from grid; columns reordered to Product → UOM → System Count → User Count; all columns `grow: true` with `columnWidth: 192` on number columns for equal flex-basis and alignment between `InlineLinesPanel` and the add-row `DataTable`; UOM marked `gridReadOnly: true` to prevent inline editing.
 - Replaced process button with `draftMode` (`processField: processNow`, `label: confirm`, `disableWhenEmpty: true`): Save button gets a floppy disk icon; Confirm button (dark, checkmark) is disabled without lines and hidden when processed. `processNow` set to `visibility: discarded` to suppress the legacy process button from the `processes` array.
 - Added `lockedAlert` (reusing `goodsMovementsLockedTitle/Message/Action` i18n keys) that shows when processed, with a "Create new inventory" link to `/physical-inventory/new`.
+- "Difference" column (`etgoQtydiff`) rendered with the new declarative `columnType: "signedDelta"` (`decisions.json`): shows `-N`/`±0`/`+N` in `#D50B3E`/`#121217`/`#1E874C` at Inter 600, tabular-nums, right-aligned, in both `InlineLinesPanel` and the main `DataTable`. See `docs/decisions-reference.md` § "Signed delta column rendering".
+
+## Design changes — ETP-4528
+
+- Added the "Generate lines automatically" feature: a new `GenerateLinesModal` (Product Category, Inventory Quantity, Set Book Quantity to zero) reachable from the lines empty-state and from the "+ Add line" dropdown, both wired through `PhysicalInventoryBottomPanel`.
+- Added the `inventory` NeoHandler (`InventoryHandler.java`, `@Named("inventory")`) that drives core AD Process 105 (`M_Inventory_ListCreate`) from NEO Headless — the first backend handler for this window's header entity.
+
+## Design changes — ETP-4656
+
+- Set `hideDeleteWhenComplete: true` in `decisions.json` so the Form-view toolbar delete icon is hidden once the record is processed ("Solo Borrador" per the delete-UX design doc). `statusField` here is `processed`, a **boolean** field (not a string status code) — the shared gate `isDeleteVisibleForRecord` (`tools/app-shell/src/utils/recordActions.js`) was extended to treat `false` as deletable and `true` as not when the status value is a JS boolean, ahead of the existing `DELETABLE_DOC_STATUSES` string-code check. Grid hover/multi-select delete is untouched by this change (no `RowQuickActions` wired for this window's list).
 
 ## Merge refresh notes
 - This guide was refreshed against `origin/develop` after the `epic/ETP-3504` merge by re-reading the current Physical Inventory window code rather than relying on older guide text.
 - The create-list and update-system-count flow comes from `e5876cec` (`Feature ETP-3585: Physical inventory - add actions to kebab menu`) plus the current `InventoryMenuContent.jsx` and `InventoryCreateListModal.jsx` on `origin/develop`.
 - The line-required process visibility comes from `3766a7f5` (`Hotfix ETP-3585: Hide process button when no lines exist`) plus the current `DetailView.jsx` process filter on `origin/develop`.
 - The selector-context and saved-parent fixes come from `f26c171b` (`Feature ETP-3585: Fix physical inventory selector context`) plus the current `DetailView.jsx`, `InventoryPage.jsx`, and `InventoryLineForm.jsx` on `origin/develop`.
+
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — no such field on the header | **Nunca** — no such field on the lines tab |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously `form: false`) | **N/A** — `M_InventoryLine` has no `project` column; the matrix's "Por config" cell cannot be implemented via `decisions.json` (would require an AD Application Dictionary change to expose the column on this tab) |
+| `costCenter` | **Por config** — same fix as `project` (previously discarded) | **N/A** — same AD-level limitation as `project` |
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).** Three generic bugs (the `EntityForm.jsx`
+visibility filter never actually consulting the evaluate-display result, the `principal` section
+hardcoding empty visibility, and no lines-scoped `useDisplayLogic` call existing at all) were
+found and fixed — full write-up in `sales-invoice.md`. `header.project`/`header.costCenter` are
+now genuinely config-gated at runtime. This window has no dimension fields on the lines tab at
+all, so the lines-scoped part of the fix and the ETP-4543 fix (non-grid line fields invisible
+under `inlineEditable` line layout, resolved for `sales-invoice`/`purchase-invoice`/
+`goods-shipment`/`goods-receipt` — see `sales-invoice.md`, Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`) don't apply here — there is no such field in this
+window's `lines` entity for that fix to affect in the first place (see the "N/A" cells above),
+so the header fix is the whole story for this window.
+
+### Header section placement fix (ETP-4529 follow-up)
+
+`header.project` and `header.costCenter` (both already present and config-gated, confirmed —
+no AD-level gap) had `"section": "other"` instead of `"section": "principal"`, making them
+render in the secondary/collapsed area instead of the main visible form. Fixed by changing
+`section` to `"principal"` for both fields in `decisions.json` and regenerating; confirmed in
+`contract.json` (`section: "principal"`) and in the generated `InventoryForm.jsx`.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.
+
+## Advanced-filter mode on rich cells — ETP-4681
+
+Two columns of this window were resolving to the wrong advanced-filter mode:
+
+| Column | Where | Real type | Was | Now |
+|--------|-------|-----------|-----|-----|
+| `warehouse` (`M_Warehouse_ID`) | `tools/app-shell/src/windows/custom/physical-inventory/index.jsx` — `type: 'custom'` | foreign key | `text` (matched against the raw UUID) | `identifier` |
+| `etgoQtydiff` (`EM_Etgo_Qtydiff`) | generated `InventoryLineTable.jsx`, emitted as `type: 'signedDelta'` from `"columnType": "signedDelta"` in `decisions.json` | numeric | `text` | `numeric` |
+
+Neither needed a per-column annotation — both were fixed generically in
+`resolveFilterMode` / `inferFilterMode` (`tools/app-shell/src/lib/gridQuery.js`):
+
+- `signedDelta` is now mapped to `numeric` by `inferFilterMode`, so the difference
+  column offers `=, ≠, >, ≥, <, ≤, Entre` and a numeric input.
+- Unrecognized column types (`custom` among them) no longer short-circuit the
+  inference chain, so they reach the `_ID` foreign-key heuristic — which is what
+  restores `identifier` mode on `warehouse` and makes it match the visible
+  warehouse name instead of the UUID.
+
+Manual check: open the list, filter by **Almacén** and confirm typing part of a
+warehouse name narrows the rows; filter by the difference column and confirm the
+numeric operators are offered. Full reference:
+[`list-filters.md`](../list-filters.md).

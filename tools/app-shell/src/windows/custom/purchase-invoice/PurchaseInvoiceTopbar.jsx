@@ -8,6 +8,7 @@ import CloneButton from '../shared/CloneButton.jsx';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
+import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoiceSubtype.js';
 
 export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUrl, onProcess, onRefresh }) {
   const navigate = useNavigate();
@@ -31,8 +32,11 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
   const totalPaid = grandTotal - outstanding;
   const isFullyPaid = data.paymentComplete === true || data.paymentComplete === 'Y' || outstanding <= 0;
   const isCompleted = docStatus === 'CO';
-  const docType = data['transactionDocument$_identifier'];
-  const isCreditType = docType === 'Nota de Crédito' || docType === 'AP CreditMemo';
+  // ETP-4737: resolved via getApSubtype — NOT a hardcoded doc-type-name check. A
+  // fixed name Set silently misses any new document type sharing the same
+  // category (this is exactly how this badge missed "Factura Rectificativa
+  // (compras)" until this fix; see PurchaseInvoiceHeaderTable.jsx for the same fix).
+  const isCreditType = getApSubtype(data) === 'RECTIFICATIVA';
 
   const handleBadgeClick = () => {
     if (isCompleted) setShowPaymentModal(true);
@@ -89,7 +93,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
             return (
               <span
                 className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-                style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#d1fae5', color: '#065f46' }}
+                style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
               >
                 {ui('cpCreditFullyApplied')}
               </span>
@@ -98,11 +102,11 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           return (
             <span
               className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#ede9fe', color: '#4c1d95', cursor: 'pointer' }}
+              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', cursor: 'pointer' }}
               data-testid="payment-status-badge"
               onClick={handleBadgeClick}
             >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#7c3aed' }} />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-info-fg)' }} />
               {ui('cpFavorBadge')}
               <span style={{ opacity: 0.4 }}>&middot;</span>
               <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', outstandingAbs)}</span>
@@ -113,11 +117,11 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           return (
             <span
               className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#d1fae5', color: '#065f46', cursor: 'pointer' }}
+              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)', cursor: 'pointer' }}
               data-testid="payment-status-badge"
             onClick={handleBadgeClick}
             >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#10b981' }} />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-success-fg)' }} />
               {ui('statusPaid')}
               <span style={{ opacity: 0.4 }}>&middot;</span>
               <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', totalPaid)}</span>
@@ -127,11 +131,11 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
         return (
           <span
             className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-            style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#fef3c7', color: '#78350f', cursor: 'pointer' }}
+            style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', cursor: 'pointer' }}
             data-testid="payment-status-badge"
             onClick={handleBadgeClick}
           >
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#f59e0b' }} />
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-warning-fg)' }} />
             {ui('statusPending')}
             <span style={{ opacity: 0.4 }}>&middot;</span>
             <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', outstanding)}</span>

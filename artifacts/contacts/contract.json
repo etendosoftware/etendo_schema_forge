@@ -1,14 +1,15 @@
 {
-  "version": "0.40.0",
-  "generatedAt": "2026-07-07T21:53:25.883Z",
-  "updatedAt": "2026-07-08T15:05:31.449Z",
-  "checksum": "306c342d2b869af1",
+  "version": "0.46.0",
+  "generatedAt": "2026-07-31T19:26:59.736Z",
+  "updatedAt": "2026-08-04T16:33:19.885Z",
+  "checksum": "88066a93bb4490da",
   "frontendContract": {
     "window": {
       "id": "123",
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -65,7 +66,8 @@
             "customerReceivablesNo",
             "customerPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         },
         "vendorAccounting": {
           "tabMode": "table-form",
@@ -76,7 +78,8 @@
             "vendorLiability",
             "vendorPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -88,7 +91,8 @@
           "PO_Financial_Account_ID": "Expense Account",
           "EM_Etgo_Web": "Website",
           "EM_Etgo_Firstname": "First Name",
-          "EM_Etgo_Lastname": "Last Name"
+          "EM_Etgo_Lastname": "Last Name",
+          "C_BP_Group_ID": "Contact Category"
         },
         "es_ES": {
           "Name": "Razón Social",
@@ -97,7 +101,8 @@
           "PO_Financial_Account_ID": "Cuenta contable de gastos",
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
-          "EM_Etgo_Lastname": "Apellidos"
+          "EM_Etgo_Lastname": "Apellidos",
+          "C_BP_Group_ID": "Categoría de contacto"
         }
       },
       "primaryTabs": [
@@ -324,7 +329,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "searchKey",
@@ -338,7 +346,11 @@
             "grid": false,
             "form": false,
             "sourceRequired": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -352,7 +364,36 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "businessPartnerCategory",
+            "apiKey": "businessPartnerCategory",
+            "column": "C_BP_Group_ID",
+            "label": "Contact Category",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+            },
+            "reference": "BusinessPartnerCategory",
+            "inputMode": "selector",
+            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@",
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "etgoFirstname",
@@ -366,6 +407,10 @@
             "grid": false,
             "form": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
               "evaluable": true
@@ -383,6 +428,10 @@
             "grid": false,
             "form": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
               "evaluable": true
@@ -455,7 +504,11 @@
                 }
               }
             ],
-            "defaultValue": "'1'"
+            "defaultValue": "'1'",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "taxID",
@@ -468,7 +521,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "oBTIKVIESStatus",
@@ -481,6 +537,10 @@
             "required": false,
             "grid": false,
             "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "P"
+            },
             "enumValues": [
               {
                 "value": "P",
@@ -504,7 +564,11 @@
                 }
               }
             ],
+            "defaultValue": "P",
             "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "record.oBTIKTaxIDKey === '2'",
               "evaluable": true,
@@ -522,7 +586,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "etgoEmail",
@@ -535,7 +602,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "etgoPhone",
@@ -548,7 +618,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "etgoIsperson",
@@ -566,28 +639,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
-          },
-          {
-            "name": "businessPartnerCategory",
-            "apiKey": "businessPartnerCategory",
-            "column": "C_BP_Group_ID",
-            "label": "Business Partner Category",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
-            },
-            "reference": "BusinessPartnerCategory",
-            "inputMode": "selector",
-            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@",
-            "section": "principal"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "name2",
@@ -599,7 +655,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -612,7 +671,10 @@
             "required": false,
             "grid": false,
             "form": false,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "uRL",
@@ -624,7 +686,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 120
+            }
           },
           {
             "name": "referenceNo",
@@ -636,7 +701,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "consumptionDays",
@@ -653,7 +721,10 @@
               "type": "computed",
               "source": "1000"
             },
-            "defaultValue": "1000"
+            "defaultValue": "1000",
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "active",
@@ -672,7 +743,11 @@
               "source": "true"
             },
             "defaultValue": "Y",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "greeting",
@@ -686,7 +761,10 @@
             "grid": false,
             "form": false,
             "reference": "Greeting",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "customer",
@@ -706,6 +784,10 @@
             },
             "defaultValue": "Y",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -725,6 +807,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -743,6 +829,10 @@
             "grid": false,
             "form": false,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -765,7 +855,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "creditLimit",
@@ -780,6 +874,10 @@
             "form": true,
             "sourceRequired": true,
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y' | @IsVendor@='Y'",
               "evaluable": true
@@ -798,6 +896,9 @@
             "form": false,
             "reference": "Currency",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y' | @IsVendor@='Y'",
               "evaluable": true
@@ -818,7 +919,10 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "operator",
@@ -835,7 +939,10 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "creditUsed",
@@ -850,6 +957,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y' | @IsVendor@='Y'",
               "evaluable": true
@@ -869,6 +980,9 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -887,7 +1001,10 @@
             "grid": false,
             "form": false,
             "reference": "Salary_Category",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "customerBlocking",
@@ -907,23 +1024,15 @@
             },
             "defaultValue": "N",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
               "js": "record.customer"
             }
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "label": "em_etgo_location",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false
           },
           {
             "name": "account",
@@ -939,6 +1048,9 @@
             "reference": "FIN_Financial_Account",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
               "contextParams": [],
@@ -966,6 +1078,9 @@
             "reference": "PaymentMethod",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -993,7 +1108,11 @@
             "required": true,
             "grid": false,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "priceList",
@@ -1009,6 +1128,9 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -1029,42 +1151,15 @@
             "reference": "FIN_Financial_Account",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
               "contextParams": [],
               "cascadeParams": [
                 "PO_Paymentmethod_ID"
               ]
-            },
-            "displayLogic": {
-              "raw": "record.vendor",
-              "evaluable": true,
-              "js": "record.vendor"
-            }
-          },
-          {
-            "name": "pOPaymentMethod",
-            "apiKey": "pOPaymentMethod",
-            "column": "PO_Paymentmethod_ID",
-            "label": "PO_Paymentmethod_ID",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "PaymentMethod",
-            "inputMode": "selector",
-            "section": "principal",
-            "validationRule": {
-              "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
-              "contextParams": [],
-              "cascadeParams": [
-                "FIN_ISRECEIPT"
-              ]
-            },
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_PaymentMethod_FinAccount"
             },
             "displayLogic": {
               "raw": "record.vendor",
@@ -1086,6 +1181,42 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
+            "displayLogic": {
+              "raw": "record.vendor",
+              "evaluable": true,
+              "js": "record.vendor"
+            }
+          },
+          {
+            "name": "pOPaymentMethod",
+            "apiKey": "pOPaymentMethod",
+            "column": "PO_Paymentmethod_ID",
+            "label": "PO_Paymentmethod_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "reference": "PaymentMethod",
+            "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
+            "validationRule": {
+              "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+              "contextParams": [],
+              "cascadeParams": [
+                "FIN_ISRECEIPT"
+              ]
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_PaymentMethod_FinAccount"
+            },
             "displayLogic": {
               "raw": "record.vendor",
               "evaluable": true,
@@ -1106,6 +1237,9 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.vendor",
               "evaluable": true,
@@ -1130,10 +1264,29 @@
             },
             "defaultValue": "N",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "record.vendor",
               "evaluable": true,
               "js": "record.vendor"
+            }
+          },
+          {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "label": "em_etgo_location",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 0
             }
           }
         ],
@@ -1142,6 +1295,13 @@
         ],
         "computedFields": [
           {
+            "name": "businessPartnerCategory",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+            }
+          },
+          {
             "name": "oBTIKTaxIDKey",
             "derivation": {
               "type": "computed",
@@ -1149,17 +1309,17 @@
             }
           },
           {
+            "name": "oBTIKVIESStatus",
+            "derivation": {
+              "type": "computed",
+              "source": "P"
+            }
+          },
+          {
             "name": "etgoIsperson",
             "derivation": {
               "type": "computed",
               "source": "N"
-            }
-          },
-          {
-            "name": "businessPartnerCategory",
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
             }
           },
           {
@@ -1243,7 +1403,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "priceList",
@@ -1258,6 +1422,9 @@
             "form": true,
             "reference": "PriceList",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1276,6 +1443,9 @@
             "form": true,
             "reference": "PaymentMethod",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -1304,6 +1474,9 @@
             "form": true,
             "reference": "PaymentTerm",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1322,6 +1495,9 @@
             "form": true,
             "reference": "Financial_Account",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
               "contextParams": [],
@@ -1347,6 +1523,9 @@
             "form": true,
             "reference": "BPartner",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1405,6 +1584,9 @@
               }
             ],
             "defaultValue": "I",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1423,6 +1605,9 @@
             "form": true,
             "reference": "InvoiceSchedule",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'&@InvoiceRule@='S'",
               "evaluable": true
@@ -1439,6 +1624,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1461,6 +1649,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1483,6 +1675,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1505,6 +1701,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1527,6 +1727,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1549,6 +1753,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1567,6 +1775,9 @@
             "form": true,
             "reference": "BP_TaxCategory",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1583,6 +1794,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1599,6 +1815,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1615,6 +1836,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1630,7 +1856,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 19
+            }
           },
           {
             "name": "birthPlace",
@@ -1642,7 +1871,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "aeatsiiDefaultsiikey",
@@ -1660,7 +1892,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "aeatsiiSiikeylist",
@@ -1708,6 +1944,9 @@
               }
             ],
             "defaultValue": "F1",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@EM_Aeatsii_Defaultsiikey@='Y'",
               "evaluable": true
@@ -1805,6 +2044,10 @@
             "labels": {
               "en_US": "Receivables Account",
               "es_ES": "Cuenta a Cobrar"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 32
             }
           },
           {
@@ -1824,12 +2067,16 @@
             "labels": {
               "en_US": "Prepayment Account",
               "es_ES": "Cuenta de Anticipos"
+            },
+            "validation": {
+              "maxLength": 32
             }
           }
         ],
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "customerAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -1853,7 +2100,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "BPartner",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "sOTransportationType",
@@ -1923,7 +2174,10 @@
                   "es_ES": "Transporte marítimo"
                 }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "port",
@@ -2351,6 +2605,9 @@
                 }
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@SO_Transportation_Type@='1' | @SO_Transportation_Type@='4'",
               "evaluable": true
@@ -2366,7 +2623,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "privateCustomer",
@@ -2384,7 +2644,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -2415,7 +2679,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "purchasePricelist",
@@ -2430,6 +2698,9 @@
             "form": true,
             "reference": "PriceList",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2448,6 +2719,9 @@
             "form": true,
             "reference": "PaymentMethod",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -2476,6 +2750,9 @@
             "form": true,
             "reference": "PaymentTerm",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2494,6 +2771,9 @@
             "form": true,
             "reference": "Financial_Account",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
               "contextParams": [],
@@ -2517,6 +2797,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2533,6 +2818,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2549,6 +2839,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2567,6 +2862,9 @@
             "form": true,
             "reference": "BP_TaxCategory",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2589,6 +2887,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2611,6 +2913,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2633,6 +2939,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2655,6 +2965,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2677,6 +2991,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2699,6 +3017,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2775,6 +3097,10 @@
             "labels": {
               "en_US": "Liability Account",
               "es_ES": "Cuenta a Pagar"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 32
             }
           },
           {
@@ -2794,12 +3120,16 @@
             "labels": {
               "en_US": "Prepayment Account",
               "es_ES": "Cuenta de Anticipos"
+            },
+            "validation": {
+              "maxLength": 32
             }
           }
         ],
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "vendorAccountingHandler",
+        "hideDelete": true,
         "addLineHiddenFromSibling": [
           "accountingSchema"
         ]
@@ -2823,7 +3153,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "BPartner",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "country",
@@ -2837,7 +3171,10 @@
             "grid": false,
             "form": true,
             "reference": "Country",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "transportationType",
@@ -2907,7 +3244,10 @@
                   "es_ES": "Transporte marítimo"
                 }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "portAirport",
@@ -3335,6 +3675,9 @@
                 }
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@PO_Transportation_Type@='1' | @PO_Transportation_Type@='4'",
               "evaluable": true
@@ -3350,7 +3693,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [],
@@ -3373,7 +3719,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "isSalesRepresentative",
@@ -3386,7 +3736,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "operator",
@@ -3404,6 +3758,9 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsEmployee@='Y' & @showMRPandProductionFields@='Y'",
               "evaluable": true
@@ -3422,6 +3779,9 @@
             "form": true,
             "reference": "Salary_Category",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsEmployee@='Y'",
               "evaluable": true
@@ -3458,7 +3818,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "AcctSchema",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [],
@@ -3481,7 +3845,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "salaryCategory",
@@ -3496,7 +3864,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Salary_Category",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -3519,7 +3891,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 50
+            }
           },
           {
             "name": "country",
@@ -3539,7 +3914,10 @@
             "reference": "Country",
             "inputMode": "selector",
             "defaultValue": "@COUNTRYDEF@",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "userContact",
@@ -3554,6 +3932,9 @@
             "form": true,
             "reference": "User",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
               "contextParams": [],
@@ -3615,6 +3996,10 @@
               "es_ES": "Formato"
             },
             "columnWidth": 320,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "UPPER(Value)<>'SPANISH'",
               "contextParams": [],
@@ -3633,7 +4018,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "columnWidth": 360
+            "columnWidth": 360,
+            "validation": {
+              "maxLength": 100
+            }
           },
           {
             "name": "iBAN",
@@ -3647,7 +4035,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "columnWidth": 400
+            "columnWidth": 400,
+            "validation": {
+              "maxLength": 34
+            }
           },
           {
             "name": "swiftCode",
@@ -3660,7 +4051,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "displayedAccount",
@@ -3673,7 +4067,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 120
+            }
           }
         ],
         "searchableFields": [],
@@ -3735,6 +4132,10 @@
                 }
               }
             ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.BusinessPartnerDocTypeValidation"
             }
@@ -3756,6 +4157,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.BusinessPartnerDocTypeValidation"
             }
@@ -3773,7 +4178,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "DocType",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "active",
@@ -3791,7 +4200,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -3832,6 +4245,10 @@
             "sourceRequired": true,
             "reference": "Location",
             "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 120
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_BPartnerLocation"
             }
@@ -3847,7 +4264,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "alternativePhone",
@@ -3859,7 +4279,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -3882,6 +4305,10 @@
             "labels": {
               "en_US": "Location / Address",
               "es_ES": "Dirección"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
             }
           },
           {
@@ -3894,7 +4321,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "shipToAddress",
@@ -3917,6 +4347,10 @@
             "labels": {
               "en_US": "Shipping Address",
               "es_ES": "Dir.envíos"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -3940,6 +4374,10 @@
             "labels": {
               "en_US": "Invoicing Address",
               "es_ES": "Dir.factura"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -3958,7 +4396,11 @@
               "type": "computed",
               "source": "true"
             },
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "taxLocation",
@@ -3977,6 +4419,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_BPartnerLocation"
             }
@@ -4042,6 +4488,9 @@
             "grid": true,
             "form": true,
             "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -4058,6 +4507,9 @@
             "grid": true,
             "form": true,
             "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -4075,6 +4527,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -4091,7 +4547,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "columnWidth": 320
+            "columnWidth": 320,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "phone",
@@ -4104,7 +4563,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "alternativePhone",
@@ -4117,7 +4579,10 @@
             "required": false,
             "grid": false,
             "form": false,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "position",
@@ -4130,7 +4595,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "comments",
@@ -4142,7 +4610,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "active",
@@ -4160,7 +4631,11 @@
               "type": "computed",
               "source": "true"
             },
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "isdefaultfordocs",
@@ -4179,7 +4654,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "grantPortalAccess",
@@ -4198,6 +4677,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@isPortalRolePresent@!0",
               "evaluable": true
@@ -4220,7 +4703,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "viasms",
@@ -4240,6 +4727,10 @@
             },
             "defaultValue": "N",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Commercialauth@='Y'",
               "evaluable": true
@@ -4263,6 +4754,10 @@
             },
             "defaultValue": "N",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Commercialauth@='Y'",
               "evaluable": true
@@ -4316,7 +4811,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "javaQualifier": "contactHandler"
       },
       "basicDiscount": {
         "tableName": "C_BPartner_Discount",
@@ -4341,7 +4837,11 @@
               "source": "SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_BPARTNER_DISCOUNT WHERE C_BPARTNER_ID=@C_BPARTNER_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_BPARTNER_DISCOUNT WHERE C_BPARTNER_ID=@C_BPARTNER_ID@",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "discount",
@@ -4357,7 +4857,11 @@
             "sourceRequired": true,
             "reference": "Discount",
             "inputMode": "selector",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "customer",
@@ -4376,7 +4880,11 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "vendor",
@@ -4395,7 +4903,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "applyInOrder",
@@ -4413,7 +4925,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "cascade",
@@ -4431,7 +4947,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -4481,6 +5001,7 @@
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -4537,7 +5058,8 @@
             "customerReceivablesNo",
             "customerPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         },
         "vendorAccounting": {
           "tabMode": "table-form",
@@ -4548,7 +5070,8 @@
             "vendorLiability",
             "vendorPrepayment"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -4560,7 +5083,8 @@
           "PO_Financial_Account_ID": "Expense Account",
           "EM_Etgo_Web": "Website",
           "EM_Etgo_Firstname": "First Name",
-          "EM_Etgo_Lastname": "Last Name"
+          "EM_Etgo_Lastname": "Last Name",
+          "C_BP_Group_ID": "Contact Category"
         },
         "es_ES": {
           "Name": "Razón Social",
@@ -4569,7 +5093,8 @@
           "PO_Financial_Account_ID": "Cuenta contable de gastos",
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
-          "EM_Etgo_Lastname": "Apellidos"
+          "EM_Etgo_Lastname": "Apellidos",
+          "C_BP_Group_ID": "Categoría de contacto"
         }
       },
       "primaryTabs": [
@@ -4789,7 +5314,8 @@
             "column": "EM_Etgo_Identifier",
             "type": "string",
             "visibility": "readOnly",
-            "required": false
+            "required": false,
+            "order": 0
           },
           {
             "name": "searchKey",
@@ -4797,7 +5323,8 @@
             "column": "Value",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 1
           },
           {
             "name": "name",
@@ -4805,7 +5332,17 @@
             "column": "Name",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 2
+          },
+          {
+            "name": "businessPartnerCategory",
+            "apiKey": "businessPartnerCategory",
+            "column": "C_BP_Group_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true,
+            "order": 3
           },
           {
             "name": "etgoFirstname",
@@ -4813,7 +5350,8 @@
             "column": "EM_Etgo_Firstname",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "etgoLastname",
@@ -4821,7 +5359,8 @@
             "column": "EM_Etgo_Lastname",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 5
           },
           {
             "name": "oBTIKTaxIDKey",
@@ -4829,7 +5368,8 @@
             "column": "EM_OBTIK_Tax_ID_Key",
             "type": "enum",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 6
           },
           {
             "name": "taxID",
@@ -4837,7 +5377,8 @@
             "column": "TaxID",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 7
           },
           {
             "name": "oBTIKVIESStatus",
@@ -4845,7 +5386,8 @@
             "column": "EM_OBTIK_VIESStatus",
             "type": "enum",
             "visibility": "readOnly",
-            "required": false
+            "required": false,
+            "order": 8
           },
           {
             "name": "etgoWeb",
@@ -4853,7 +5395,8 @@
             "column": "EM_Etgo_Web",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 9
           },
           {
             "name": "etgoEmail",
@@ -4861,7 +5404,8 @@
             "column": "EM_Etgo_Email",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 10
           },
           {
             "name": "etgoPhone",
@@ -4869,7 +5413,8 @@
             "column": "EM_Etgo_Phone",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 11
           },
           {
             "name": "organization",
@@ -4884,14 +5429,6 @@
             "apiKey": "etgoIsperson",
             "column": "EM_Etgo_Isperson",
             "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "businessPartnerCategory",
-            "apiKey": "businessPartnerCategory",
-            "column": "C_BP_Group_ID",
-            "type": "foreignKey",
             "visibility": "editable",
             "required": true
           },
@@ -5240,6 +5777,14 @@
             "required": false
           },
           {
+            "name": "partnerParent",
+            "apiKey": "partnerParent",
+            "column": "BPartner_Parent_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "birthDay",
             "apiKey": "birthDay",
             "column": "Birthday",
@@ -5252,14 +5797,6 @@
             "apiKey": "birthPlace",
             "column": "Birthplace",
             "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "partnerParent",
-            "apiKey": "partnerParent",
-            "column": "BPartner_Parent_ID",
-            "type": "id",
             "visibility": "system",
             "required": false
           },
@@ -5280,6 +5817,14 @@
             "required": false
           },
           {
+            "name": "salaryCategory",
+            "apiKey": "salaryCategory",
+            "column": "C_Salary_Category_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -5294,14 +5839,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "salaryCategory",
-            "apiKey": "salaryCategory",
-            "column": "C_Salary_Category_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
           },
           {
             "name": "customerBlocking",
@@ -5349,14 +5886,6 @@
             "column": "EM_Aeatsii_Siikeylist",
             "type": "enum",
             "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "type": "string",
-            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5408,14 +5937,6 @@
             "required": false
           },
           {
-            "name": "cashVAT",
-            "apiKey": "cashVAT",
-            "column": "Iscashvat",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "printDiscount",
             "apiKey": "printDiscount",
             "column": "IsDiscountPrinted",
@@ -5440,6 +5961,14 @@
             "required": false
           },
           {
+            "name": "cashVAT",
+            "apiKey": "cashVAT",
+            "column": "Iscashvat",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "priceList",
             "apiKey": "priceList",
             "column": "M_PriceList_ID",
@@ -5448,26 +5977,10 @@
             "required": false
           },
           {
-            "name": "formOfPayment",
-            "apiKey": "formOfPayment",
-            "column": "PaymentRule",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "pOFormOfPayment",
-            "apiKey": "pOFormOfPayment",
-            "column": "PaymentRulePO",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "bankAccount",
-            "apiKey": "bankAccount",
-            "column": "PO_Bankaccount_ID",
-            "type": "foreignKey",
+            "name": "orderReference",
+            "apiKey": "orderReference",
+            "column": "POReference",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -5475,6 +5988,14 @@
             "name": "taxCategory",
             "apiKey": "taxCategory",
             "column": "PO_BP_TaxCategory_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "bankAccount",
+            "apiKey": "bankAccount",
+            "column": "PO_Bankaccount_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -5544,6 +6065,14 @@
             "required": true
           },
           {
+            "name": "pOPaymentTerms",
+            "apiKey": "pOPaymentTerms",
+            "column": "PO_PaymentTerm_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
             "name": "paymentOut",
             "apiKey": "paymentOut",
             "column": "PO_Payment_Blocking",
@@ -5560,14 +6089,6 @@
             "required": false
           },
           {
-            "name": "pOPaymentTerms",
-            "apiKey": "pOPaymentTerms",
-            "column": "PO_PaymentTerm_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
             "name": "purchasePricelist",
             "apiKey": "purchasePricelist",
             "column": "PO_PriceList_ID",
@@ -5576,18 +6097,18 @@
             "required": false
           },
           {
-            "name": "orderReference",
-            "apiKey": "orderReference",
-            "column": "POReference",
-            "type": "string",
+            "name": "formOfPayment",
+            "apiKey": "formOfPayment",
+            "column": "PaymentRule",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "salesRepresentative",
-            "apiKey": "salesRepresentative",
-            "column": "SalesRep_ID",
-            "type": "foreignKey",
+            "name": "pOFormOfPayment",
+            "apiKey": "pOFormOfPayment",
+            "column": "PaymentRulePO",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
@@ -5656,6 +6177,14 @@
             "required": true
           },
           {
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "updated",
             "apiKey": "updated",
             "column": "Updated",
@@ -5678,6 +6207,14 @@
             "type": "boolean",
             "visibility": "editable",
             "required": true
+          },
+          {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "businessPartnerHandler"
@@ -6016,22 +6553,6 @@
             "required": false
           },
           {
-            "name": "acquisitionCost",
-            "apiKey": "acquisitionCost",
-            "column": "AcqusitionCost",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "lifetimeRevenueToDate",
-            "apiKey": "lifetimeRevenueToDate",
-            "column": "ActualLifeTimeValue",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "forcedOrg",
             "apiKey": "forcedOrg",
             "column": "AD_Forced_Org_ID",
@@ -6048,10 +6569,18 @@
             "required": false
           },
           {
-            "name": "partnerParent",
-            "apiKey": "partnerParent",
-            "column": "BPartner_Parent_ID",
-            "type": "id",
+            "name": "acquisitionCost",
+            "apiKey": "acquisitionCost",
+            "column": "AcqusitionCost",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "lifetimeRevenueToDate",
+            "apiKey": "lifetimeRevenueToDate",
+            "column": "ActualLifeTimeValue",
+            "type": "amount",
             "visibility": "system",
             "required": false
           },
@@ -6060,6 +6589,14 @@
             "apiKey": "bPCurrencyID",
             "column": "BP_Currency_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "partnerParent",
+            "apiKey": "partnerParent",
+            "column": "BPartner_Parent_ID",
+            "type": "id",
             "visibility": "system",
             "required": false
           },
@@ -6075,6 +6612,14 @@
             "name": "greeting",
             "apiKey": "greeting",
             "column": "C_Greeting_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salaryCategory",
+            "apiKey": "salaryCategory",
+            "column": "C_Salary_Category_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -6096,10 +6641,10 @@
             "required": true
           },
           {
-            "name": "salaryCategory",
-            "apiKey": "salaryCategory",
-            "column": "C_Salary_Category_ID",
-            "type": "foreignKey",
+            "name": "dUNS",
+            "apiKey": "dUNS",
+            "column": "DUNS",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -6107,14 +6652,6 @@
             "name": "description",
             "apiKey": "description",
             "column": "Description",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "dUNS",
-            "apiKey": "dUNS",
-            "column": "DUNS",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -6171,14 +6708,6 @@
             "name": "etgoLastname",
             "apiKey": "etgoLastname",
             "column": "EM_Etgo_Lastname",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -6248,36 +6777,12 @@
             "required": false
           },
           {
-            "name": "cashVAT",
-            "apiKey": "cashVAT",
-            "column": "Iscashvat",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "isCustomerConsent",
-            "apiKey": "isCustomerConsent",
-            "column": "Is_Customer_Consent",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "employee",
             "apiKey": "employee",
             "column": "IsEmployee",
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "isofiscalcode",
-            "apiKey": "isofiscalcode",
-            "column": "Isofiscalcode",
-            "type": "string",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "oneTimeTransaction",
@@ -6320,6 +6825,30 @@
             "required": true
           },
           {
+            "name": "isCustomerConsent",
+            "apiKey": "isCustomerConsent",
+            "column": "Is_Customer_Consent",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "cashVAT",
+            "apiKey": "cashVAT",
+            "column": "Iscashvat",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "isofiscalcode",
+            "apiKey": "isofiscalcode",
+            "column": "Isofiscalcode",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "operator",
             "apiKey": "operator",
             "column": "Isworker",
@@ -6360,10 +6889,10 @@
             "required": false
           },
           {
-            "name": "pOFormOfPayment",
-            "apiKey": "pOFormOfPayment",
-            "column": "PaymentRulePO",
-            "type": "enum",
+            "name": "taxCategory",
+            "apiKey": "taxCategory",
+            "column": "PO_BP_TaxCategory_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -6371,14 +6900,6 @@
             "name": "bankAccount",
             "apiKey": "bankAccount",
             "column": "PO_Bankaccount_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "taxCategory",
-            "apiKey": "taxCategory",
-            "column": "PO_BP_TaxCategory_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -6440,6 +6961,14 @@
             "required": true
           },
           {
+            "name": "pOPaymentTerms",
+            "apiKey": "pOPaymentTerms",
+            "column": "PO_PaymentTerm_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "paymentOut",
             "apiKey": "paymentOut",
             "column": "PO_Payment_Blocking",
@@ -6456,18 +6985,18 @@
             "required": false
           },
           {
-            "name": "pOPaymentTerms",
-            "apiKey": "pOPaymentTerms",
-            "column": "PO_PaymentTerm_ID",
+            "name": "purchasePricelist",
+            "apiKey": "purchasePricelist",
+            "column": "PO_PriceList_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "purchasePricelist",
-            "apiKey": "purchasePricelist",
-            "column": "PO_PriceList_ID",
-            "type": "foreignKey",
+            "name": "pOFormOfPayment",
+            "apiKey": "pOFormOfPayment",
+            "column": "PaymentRulePO",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
@@ -6496,6 +7025,14 @@
             "required": false
           },
           {
+            "name": "creditStatus",
+            "apiKey": "creditStatus",
+            "column": "SOCreditStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "volumeOfSales",
             "apiKey": "volumeOfSales",
             "column": "SalesVolume",
@@ -6520,14 +7057,6 @@
             "required": true
           },
           {
-            "name": "creditStatus",
-            "apiKey": "creditStatus",
-            "column": "SOCreditStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "taxID",
             "apiKey": "taxID",
             "column": "TaxID",
@@ -6539,6 +7068,14 @@
             "name": "uPCEAN",
             "apiKey": "uPCEAN",
             "column": "UPC",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uRL",
+            "apiKey": "uRL",
+            "column": "URL",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -6568,20 +7105,20 @@
             "required": true
           },
           {
-            "name": "uRL",
-            "apiKey": "uRL",
-            "column": "URL",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "vendorBlocking",
             "apiKey": "vendorBlocking",
             "column": "Vendor_Blocking",
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "system",
+            "required": false
           }
         ]
       },
@@ -7046,22 +7583,6 @@
             "required": false
           },
           {
-            "name": "acquisitionCost",
-            "apiKey": "acquisitionCost",
-            "column": "AcqusitionCost",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "lifetimeRevenueToDate",
-            "apiKey": "lifetimeRevenueToDate",
-            "column": "ActualLifeTimeValue",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "forcedOrg",
             "apiKey": "forcedOrg",
             "column": "AD_Forced_Org_ID",
@@ -7078,18 +7599,26 @@
             "required": false
           },
           {
-            "name": "birthDay",
-            "apiKey": "birthDay",
-            "column": "Birthday",
-            "type": "date",
+            "name": "acquisitionCost",
+            "apiKey": "acquisitionCost",
+            "column": "AcqusitionCost",
+            "type": "amount",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "birthPlace",
-            "apiKey": "birthPlace",
-            "column": "Birthplace",
-            "type": "string",
+            "name": "lifetimeRevenueToDate",
+            "apiKey": "lifetimeRevenueToDate",
+            "column": "ActualLifeTimeValue",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "bPCurrencyID",
+            "apiKey": "bPCurrencyID",
+            "column": "BP_Currency_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -7102,10 +7631,18 @@
             "required": false
           },
           {
-            "name": "bPCurrencyID",
-            "apiKey": "bPCurrencyID",
-            "column": "BP_Currency_ID",
-            "type": "foreignKey",
+            "name": "birthDay",
+            "apiKey": "birthDay",
+            "column": "Birthday",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "birthPlace",
+            "apiKey": "birthPlace",
+            "column": "Birthplace",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -7142,6 +7679,14 @@
             "required": false
           },
           {
+            "name": "salaryCategory",
+            "apiKey": "salaryCategory",
+            "column": "C_Salary_Category_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -7158,20 +7703,20 @@
             "required": true
           },
           {
-            "name": "salaryCategory",
-            "apiKey": "salaryCategory",
-            "column": "C_Salary_Category_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "customerBlocking",
             "apiKey": "customerBlocking",
             "column": "Customer_Blocking",
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "dUNS",
+            "apiKey": "dUNS",
+            "column": "DUNS",
+            "type": "string",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "deliveryTerms",
@@ -7202,14 +7747,6 @@
             "apiKey": "numberOfCopies",
             "column": "DocumentCopies",
             "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "dUNS",
-            "apiKey": "dUNS",
-            "column": "DUNS",
-            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -7281,14 +7818,6 @@
             "name": "etgoLastname",
             "apiKey": "etgoLastname",
             "column": "EM_Etgo_Lastname",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -7390,9 +7919,9 @@
             "required": false
           },
           {
-            "name": "invoiceGrouping",
-            "apiKey": "invoiceGrouping",
-            "column": "Invoicegrouping",
+            "name": "invoiceTerms",
+            "apiKey": "invoiceTerms",
+            "column": "InvoiceRule",
             "type": "enum",
             "visibility": "system",
             "required": false
@@ -7406,9 +7935,9 @@
             "required": false
           },
           {
-            "name": "invoiceTerms",
-            "apiKey": "invoiceTerms",
-            "column": "InvoiceRule",
+            "name": "invoiceGrouping",
+            "apiKey": "invoiceGrouping",
+            "column": "Invoicegrouping",
             "type": "enum",
             "visibility": "system",
             "required": false
@@ -7420,14 +7949,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "isCustomerConsent",
-            "apiKey": "isCustomerConsent",
-            "column": "Is_Customer_Consent",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "printDiscount",
@@ -7444,14 +7965,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "isofiscalcode",
-            "apiKey": "isofiscalcode",
-            "column": "Isofiscalcode",
-            "type": "string",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "oneTimeTransaction",
@@ -7490,6 +8003,22 @@
             "apiKey": "taxExempt",
             "column": "IsTaxExempt",
             "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "isCustomerConsent",
+            "apiKey": "isCustomerConsent",
+            "column": "Is_Customer_Consent",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "isofiscalcode",
+            "apiKey": "isofiscalcode",
+            "column": "Isofiscalcode",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -7542,18 +8071,18 @@
             "required": false
           },
           {
-            "name": "formOfPayment",
-            "apiKey": "formOfPayment",
-            "column": "PaymentRule",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "orderReference",
             "apiKey": "orderReference",
             "column": "POReference",
             "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "formOfPayment",
+            "apiKey": "formOfPayment",
+            "column": "PaymentRule",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
@@ -7582,36 +8111,12 @@
             "required": false
           },
           {
-            "name": "salesRepresentative",
-            "apiKey": "salesRepresentative",
-            "column": "SalesRep_ID",
-            "type": "foreignKey",
+            "name": "creditStatus",
+            "apiKey": "creditStatus",
+            "column": "SOCreditStatus",
+            "type": "enum",
             "visibility": "system",
             "required": false
-          },
-          {
-            "name": "volumeOfSales",
-            "apiKey": "volumeOfSales",
-            "column": "SalesVolume",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "share",
-            "apiKey": "share",
-            "column": "ShareOfCustomer",
-            "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "pricesShownInOrder",
-            "apiKey": "pricesShownInOrder",
-            "column": "ShowPriceInOrder",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "transactionalBankAccount",
@@ -7636,14 +8141,6 @@
             "type": "amount",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "creditStatus",
-            "apiKey": "creditStatus",
-            "column": "SOCreditStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "creditUsed",
@@ -7694,6 +8191,38 @@
             "required": true
           },
           {
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "volumeOfSales",
+            "apiKey": "volumeOfSales",
+            "column": "SalesVolume",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "share",
+            "apiKey": "share",
+            "column": "ShareOfCustomer",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "pricesShownInOrder",
+            "apiKey": "pricesShownInOrder",
+            "column": "ShowPriceInOrder",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "taxID",
             "apiKey": "taxID",
             "column": "TaxID",
@@ -7705,6 +8234,14 @@
             "name": "uPCEAN",
             "apiKey": "uPCEAN",
             "column": "UPC",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uRL",
+            "apiKey": "uRL",
+            "column": "URL",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -7734,9 +8271,9 @@
             "required": true
           },
           {
-            "name": "uRL",
-            "apiKey": "uRL",
-            "column": "URL",
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -8092,22 +8629,6 @@
             "required": true
           },
           {
-            "name": "acquisitionCost",
-            "apiKey": "acquisitionCost",
-            "column": "AcqusitionCost",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "lifetimeRevenueToDate",
-            "apiKey": "lifetimeRevenueToDate",
-            "column": "ActualLifeTimeValue",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "forcedOrg",
             "apiKey": "forcedOrg",
             "column": "AD_Forced_Org_ID",
@@ -8124,18 +8645,26 @@
             "required": false
           },
           {
-            "name": "birthDay",
-            "apiKey": "birthDay",
-            "column": "Birthday",
-            "type": "date",
+            "name": "acquisitionCost",
+            "apiKey": "acquisitionCost",
+            "column": "AcqusitionCost",
+            "type": "amount",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "birthPlace",
-            "apiKey": "birthPlace",
-            "column": "Birthplace",
-            "type": "string",
+            "name": "lifetimeRevenueToDate",
+            "apiKey": "lifetimeRevenueToDate",
+            "column": "ActualLifeTimeValue",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "bPCurrencyID",
+            "apiKey": "bPCurrencyID",
+            "column": "BP_Currency_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -8148,10 +8677,18 @@
             "required": false
           },
           {
-            "name": "bPCurrencyID",
-            "apiKey": "bPCurrencyID",
-            "column": "BP_Currency_ID",
-            "type": "foreignKey",
+            "name": "birthDay",
+            "apiKey": "birthDay",
+            "column": "Birthday",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "birthPlace",
+            "apiKey": "birthPlace",
+            "column": "Birthplace",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -8212,6 +8749,14 @@
             "required": true
           },
           {
+            "name": "dUNS",
+            "apiKey": "dUNS",
+            "column": "DUNS",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "deliveryTerms",
             "apiKey": "deliveryTerms",
             "column": "DeliveryRule",
@@ -8240,14 +8785,6 @@
             "apiKey": "numberOfCopies",
             "column": "DocumentCopies",
             "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "dUNS",
-            "apiKey": "dUNS",
-            "column": "DUNS",
-            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -8319,14 +8856,6 @@
             "name": "etgoLastname",
             "apiKey": "etgoLastname",
             "column": "EM_Etgo_Lastname",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -8428,9 +8957,9 @@
             "required": false
           },
           {
-            "name": "invoiceGrouping",
-            "apiKey": "invoiceGrouping",
-            "column": "Invoicegrouping",
+            "name": "invoiceTerms",
+            "apiKey": "invoiceTerms",
+            "column": "InvoiceRule",
             "type": "enum",
             "visibility": "system",
             "required": false
@@ -8444,20 +8973,12 @@
             "required": false
           },
           {
-            "name": "invoiceTerms",
-            "apiKey": "invoiceTerms",
-            "column": "InvoiceRule",
+            "name": "invoiceGrouping",
+            "apiKey": "invoiceGrouping",
+            "column": "Invoicegrouping",
             "type": "enum",
             "visibility": "system",
             "required": false
-          },
-          {
-            "name": "cashVAT",
-            "apiKey": "cashVAT",
-            "column": "Iscashvat",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "customer",
@@ -8468,26 +8989,10 @@
             "required": true
           },
           {
-            "name": "isCustomerConsent",
-            "apiKey": "isCustomerConsent",
-            "column": "Is_Customer_Consent",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "printDiscount",
             "apiKey": "printDiscount",
             "column": "IsDiscountPrinted",
             "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "isofiscalcode",
-            "apiKey": "isofiscalcode",
-            "column": "Isofiscalcode",
-            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -8532,6 +9037,30 @@
             "required": true
           },
           {
+            "name": "isCustomerConsent",
+            "apiKey": "isCustomerConsent",
+            "column": "Is_Customer_Consent",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "cashVAT",
+            "apiKey": "cashVAT",
+            "column": "Iscashvat",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "isofiscalcode",
+            "apiKey": "isofiscalcode",
+            "column": "Isofiscalcode",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "consumptionDays",
             "apiKey": "consumptionDays",
             "column": "Last_Days",
@@ -8572,26 +9101,10 @@
             "required": false
           },
           {
-            "name": "formOfPayment",
-            "apiKey": "formOfPayment",
-            "column": "PaymentRule",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "pOFormOfPayment",
-            "apiKey": "pOFormOfPayment",
-            "column": "PaymentRulePO",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "bankAccount",
-            "apiKey": "bankAccount",
-            "column": "PO_Bankaccount_ID",
-            "type": "foreignKey",
+            "name": "orderReference",
+            "apiKey": "orderReference",
+            "column": "POReference",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -8599,6 +9112,14 @@
             "name": "taxCategory",
             "apiKey": "taxCategory",
             "column": "PO_BP_TaxCategory_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "bankAccount",
+            "apiKey": "bankAccount",
+            "column": "PO_Bankaccount_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -8668,6 +9189,14 @@
             "required": true
           },
           {
+            "name": "pOPaymentTerms",
+            "apiKey": "pOPaymentTerms",
+            "column": "PO_PaymentTerm_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "paymentOut",
             "apiKey": "paymentOut",
             "column": "PO_Payment_Blocking",
@@ -8684,14 +9213,6 @@
             "required": false
           },
           {
-            "name": "pOPaymentTerms",
-            "apiKey": "pOPaymentTerms",
-            "column": "PO_PaymentTerm_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "purchasePricelist",
             "apiKey": "purchasePricelist",
             "column": "PO_PriceList_ID",
@@ -8700,10 +9221,18 @@
             "required": false
           },
           {
-            "name": "orderReference",
-            "apiKey": "orderReference",
-            "column": "POReference",
-            "type": "string",
+            "name": "formOfPayment",
+            "apiKey": "formOfPayment",
+            "column": "PaymentRule",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "pOFormOfPayment",
+            "apiKey": "pOFormOfPayment",
+            "column": "PaymentRulePO",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
@@ -8732,36 +9261,12 @@
             "required": false
           },
           {
-            "name": "salesRepresentative",
-            "apiKey": "salesRepresentative",
-            "column": "SalesRep_ID",
-            "type": "foreignKey",
+            "name": "creditStatus",
+            "apiKey": "creditStatus",
+            "column": "SOCreditStatus",
+            "type": "enum",
             "visibility": "system",
             "required": false
-          },
-          {
-            "name": "volumeOfSales",
-            "apiKey": "volumeOfSales",
-            "column": "SalesVolume",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "share",
-            "apiKey": "share",
-            "column": "ShareOfCustomer",
-            "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "pricesShownInOrder",
-            "apiKey": "pricesShownInOrder",
-            "column": "ShowPriceInOrder",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "transactionalBankAccount",
@@ -8794,14 +9299,6 @@
             "type": "amount",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "creditStatus",
-            "apiKey": "creditStatus",
-            "column": "SOCreditStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "creditUsed",
@@ -8852,6 +9349,38 @@
             "required": true
           },
           {
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "volumeOfSales",
+            "apiKey": "volumeOfSales",
+            "column": "SalesVolume",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "share",
+            "apiKey": "share",
+            "column": "ShareOfCustomer",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "pricesShownInOrder",
+            "apiKey": "pricesShownInOrder",
+            "column": "ShowPriceInOrder",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "taxID",
             "apiKey": "taxID",
             "column": "TaxID",
@@ -8863,6 +9392,14 @@
             "name": "uPCEAN",
             "apiKey": "uPCEAN",
             "column": "UPC",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uRL",
+            "apiKey": "uRL",
+            "column": "URL",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -8892,20 +9429,20 @@
             "required": true
           },
           {
-            "name": "uRL",
-            "apiKey": "uRL",
-            "column": "URL",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "vendorBlocking",
             "apiKey": "vendorBlocking",
             "column": "Vendor_Blocking",
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "system",
+            "required": false
           }
         ]
       },
@@ -9991,20 +10528,20 @@
             "required": false
           },
           {
-            "name": "isPasswordExpired",
-            "apiKey": "isPasswordExpired",
-            "column": "Isexpiredpassword",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "locked",
             "apiKey": "locked",
             "column": "IsLocked",
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "isPasswordExpired",
+            "apiKey": "isPasswordExpired",
+            "column": "Isexpiredpassword",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "lastPasswordUpdate",
@@ -10038,7 +10575,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "contactHandler"
       },
       "basicDiscount": {
         "tableName": "C_BPartner_Discount",
@@ -10663,7 +11201,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/customerAccounting",
         "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
         "supportedFilters": []
@@ -10696,7 +11234,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/vendorAccounting",
         "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
         "supportedFilters": []
@@ -10890,19 +11428,19 @@
       },
       {
         "entity": "businessPartner",
-        "field": "pOPaymentMethod",
-        "column": "PO_Paymentmethod_ID",
-        "reference": "PaymentMethod",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
-      },
-      {
-        "entity": "businessPartner",
         "field": "pOPaymentTerms",
         "column": "PO_PaymentTerm_ID",
         "reference": "PaymentTerm",
         "inputMode": "selector",
         "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentTerms"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "pOPaymentMethod",
+        "column": "PO_Paymentmethod_ID",
+        "reference": "PaymentMethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
       },
       {
         "entity": "businessPartner",
@@ -11209,7 +11747,8 @@
         "PO_Financial_Account_ID": "Expense Account",
         "EM_Etgo_Web": "Website",
         "EM_Etgo_Firstname": "First Name",
-        "EM_Etgo_Lastname": "Last Name"
+        "EM_Etgo_Lastname": "Last Name",
+        "C_BP_Group_ID": "Contact Category"
       },
       "es_ES": {
         "Name": "Razón Social",
@@ -11218,7 +11757,8 @@
         "PO_Financial_Account_ID": "Cuenta contable de gastos",
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
-        "EM_Etgo_Lastname": "Apellidos"
+        "EM_Etgo_Lastname": "Apellidos",
+        "C_BP_Group_ID": "Categoría de contacto"
       }
     }
   },
@@ -11496,6 +12036,14 @@
         "field": "oBTIKTaxIDKey",
         "runner": "node",
         "description": "Default value for 'oBTIKTaxIDKey' in businessPartner should be a string"
+      },
+      {
+        "id": "t-default-value-type-businessPartner-oBTIKVIESStatus",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Default value for 'oBTIKVIESStatus' in businessPartner should be a string"
       },
       {
         "id": "t-default-value-type-businessPartner-operator",
@@ -20260,11 +20808,11 @@
       }
     ],
     "summary": {
-      "total": 1146,
+      "total": 1147,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
-        "default-value-type": 46,
+        "default-value-type": 47,
         "displaylogic-evaluable": 58,
         "displaylogic-valid": 58,
         "field-presence": 141,
@@ -20276,7 +20824,7 @@
         "visibility": 15
       },
       "byRunner": {
-        "node": 1146,
+        "node": 1147,
         "junit": 0
       }
     }

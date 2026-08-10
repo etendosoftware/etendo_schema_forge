@@ -1,7 +1,6 @@
 // --- Hoisted spies/state shared between mock factories and test bodies ---
 
 const dataTableSpy = vi.hoisted(() => ({ current: null }));
-const rowDeleteSpy = vi.hoisted(() => ({ options: null }));
 
 // --- Mocks (before imports) ---
 
@@ -53,21 +52,17 @@ vi.mock('@/components/contract-ui', () => ({
   },
 }));
 
-vi.mock('@/hooks/useRowDelete.jsx', () => ({
-  useRowDelete: (opts) => {
-    rowDeleteSpy.options = opts;
-    return {
-      requestDelete: vi.fn(),
-      deleteDialog: <div data-testid="delete-dialog-stub" />,
-    };
-  },
-}));
-
-vi.mock('../ReactivarModal', () => ({
-  default: ({ dir, onConfirm, onClose }) => (
-    <div data-testid="ReactivarModal__stub" data-dir={dir}>
-      <button data-testid="reactivar-confirm" onClick={onConfirm}>confirm</button>
-      <button data-testid="reactivar-close" onClick={onClose}>close</button>
+vi.mock('../PaymentLifecycleConfirmModal', () => ({
+  default: ({ dir, action, data, onConfirm, onClose }) => (
+    <div
+      data-testid="PaymentLifecycleConfirmModal__stub"
+      data-dir={dir}
+      data-action={action}
+      data-status={data?.status}
+      data-posted={data?.posted}
+    >
+      <button data-testid="confirm-accept" onClick={onConfirm}>confirm</button>
+      <button data-testid="confirm-close" onClick={onClose}>close</button>
     </div>
   ),
 }));
@@ -86,24 +81,27 @@ vi.mock('../ConfirmPaymentModal', () => ({
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import PaymentHeaderTableBase from '../PaymentHeaderTableBase.jsx';
 
-// --- Helpers (mirror the private formatting logic in the source, so
-// expectations stay correct regardless of the host's ICU data) ---
-
-function currencySymbol(curr) {
-  const code = curr || 'EUR';
-  try {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: code })
-      .formatToParts(0).find((p) => p.type === 'currency')?.value ?? code;
-  } catch {
-    return code;
-  }
-}
-const AMOUNT_FMT = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// The source now delegates straight to the shared formatCurrency() — build
+// expectations from the SAME real function instead of a hand-rolled mirror,
+// so this test can never drift from the actual centralized implementation.
+// formatCurrency() embeds a real NBSP (U+00A0) before the symbol (how es-ES
+// Intl actually renders it). toHaveTextContent()/getByText() normalize the
+// RENDERED DOM's whitespace (NBSP collapses to a regular space) but do NOT
+// normalize the expected string passed in — so the expected value here must
+// use a regular space to match what the normalized DOM text looks like.
 function fmtAmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  return (n < 0 ? '-' : '') + AMOUNT_FMT.format(Math.abs(n)) + ' ' + currencySymbol(curr);
+  return formatCurrency(curr || 'EUR', n);
+}
+// toHaveTextContent()/getByText() normalize the rendered DOM's whitespace
+// (NBSP collapses to a regular space) but do not normalize the expected
+// string — use this variant for those assertions; use fmtAmt() as-is for
+// direct .textContent comparisons, which see the real NBSP on both sides.
+function fmtAmtNorm(val, curr) {
+  return fmtAmt(val, curr).replace(/\u00a0/g, ' ');
 }
 
 function thisMonthDate(day = '05') {
@@ -121,7 +119,6 @@ const BASE_PROPS = {
 beforeEach(() => {
   vi.clearAllMocks();
   dataTableSpy.current = null;
-  rowDeleteSpy.options = null;
   globalThis.fetch = vi.fn();
 });
 
@@ -150,16 +147,28 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
 
     // Hero: only p1 counts towards "this month" (p2's date is out of range).
-    expect(sidebar.getByText(`+ ${fmtAmt(120.5, 'EUR')}`)).toBeInTheDocument();
+    expect(sidebar.getByText(`+ ${fmtAmtNorm(120.5, 'EUR')}`)).toBeInTheDocument();
 
     // Pending bucket = every non-deposited row (p3 + p4) = 85.
     expect(sidebar.getByText(`2 porVencer`)).toBeInTheDocument();
-    expect(sidebar.getByText(fmtAmt(85, 'EUR'))).toBeInTheDocument();
+    expect(sidebar.getByText(fmtAmtNorm(85, 'EUR'))).toBeInTheDocument();
 
     // Per-method breakdown only includes deposited rows.
     expect(sidebar.getByText('Transferencia')).toBeInTheDocument();
     expect(sidebar.getByText('Efectivo')).toBeInTheDocument();
-    expect(sidebar.getByText(fmtAmt(30, 'EUR'))).toBeInTheDocument();
+    expect(sidebar.getByText(fmtAmtNorm(30, 'EUR'))).toBeInTheDocument();
+  });
+
+  it('groups thousands in the hero amount (1000-9999 range silently drops the separator without explicit useGrouping) — hardcoded literal, not the self-referential fmtAmt() helper', () => {
+    const rows = [
+      { id: 'p1', status: 'RPR', amount: '1500.5', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
+    ];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
+    // Hardcoded literal — the local fmtAmt() test helper above shares the SAME
+    // missing-useGrouping bug as production, so it can never catch this regression.
+    expect(sidebar.getByText('+ 1.500,50 €')).toBeInTheDocument();
+    expect(sidebar.queryByText('+ 1500,50 €')).not.toBeInTheDocument();
   });
 
   it('uses the "pagado" hero label and no method breakdown for dir="out" with no deposited rows (zero amount renders without a sign)', () => {
@@ -167,8 +176,8 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     // No deposited rows this month → thisMonth is 0 → the hero renders sign-less, not "− 0,00 €".
-    expect(sidebar.getByText(fmtAmt(0, 'EUR'))).toBeInTheDocument();
-    expect(sidebar.queryByText(`− ${fmtAmt(0, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.getByText(fmtAmtNorm(0, 'EUR'))).toBeInTheDocument();
+    expect(sidebar.queryByText(`− ${fmtAmtNorm(0, 'EUR')}`)).not.toBeInTheDocument();
     // No deposited rows → no per-method breakdown section rendered.
     expect(sidebar.queryByText('porMetodo')).not.toBeInTheDocument();
   });
@@ -179,7 +188,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     ];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    expect(sidebar.getByText(`− ${fmtAmt(40, 'EUR')}`)).toBeInTheDocument();
+    expect(sidebar.getByText(`− ${fmtAmtNorm(40, 'EUR')}`)).toBeInTheDocument();
   });
 
   it('renders the hero amount with a single sign (not a doubled "− -") when this month\'s deposited total is negative (dir="out")', () => {
@@ -192,8 +201,8 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     // Both the hero amount AND the per-method breakdown (single "other" method,
     // same -40 total) must render the sign-less single form.
-    expect(sidebar.getAllByText(fmtAmt(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
-    expect(sidebar.queryByText(`− ${fmtAmt(-40, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.getAllByText(fmtAmtNorm(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
+    expect(sidebar.queryByText(`− ${fmtAmtNorm(-40, 'EUR')}`)).not.toBeInTheDocument();
   });
 
   it('renders the hero amount with a single sign (not a doubled "+ -") when this month\'s deposited total is negative (dir="in")', () => {
@@ -202,25 +211,27 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     ];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    expect(sidebar.getAllByText(fmtAmt(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
-    expect(sidebar.queryByText(`+ ${fmtAmt(-40, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.getAllByText(fmtAmtNorm(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
+    expect(sidebar.queryByText(`+ ${fmtAmtNorm(-40, 'EUR')}`)).not.toBeInTheDocument();
   });
 
   it('renders the hero amount without a +/- sign when this month\'s total is exactly zero (dir="in")', () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     // Both the hero amount and the "sinDepositar" widget count render as a sign-less zero.
-    expect(sidebar.getAllByText(fmtAmt(0, 'EUR'))).toHaveLength(2);
-    expect(sidebar.queryByText(`+ ${fmtAmt(0, 'EUR')}`)).not.toBeInTheDocument();
-    expect(sidebar.queryByText(`− ${fmtAmt(0, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.getAllByText(fmtAmtNorm(0, 'EUR'))).toHaveLength(2);
+    expect(sidebar.queryByText(`+ ${fmtAmtNorm(0, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.queryByText(`− ${fmtAmtNorm(0, 'EUR')}`)).not.toBeInTheDocument();
   });
 
-  it('falls back to the raw currency code when Intl cannot resolve a currency symbol', () => {
+  it('falls back to a plain grouped number (no currency suffix) when the currency code is invalid', () => {
     const rows = [{ id: 'p1', status: 'RPR', amount: '10', 'currency$_identifier': '1', paymentDate: thisMonthDate() }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    // currencySymbol() catches the RangeError from Intl.NumberFormat and returns the raw code.
-    expect(sidebar.getByText('+ 10,00 1')).toBeInTheDocument();
+    // formatCurrency()'s catch branch (Intl throws on an invalid ISO code) falls
+    // back to a plain es-ES grouped number — no raw-code suffix, matching the
+    // same contract every other formatCurrency() call site in the app relies on.
+    expect(sidebar.getByText(fmtAmtNorm(10, '1'))).toBeInTheDocument();
   });
 
   it('renders zeroed widgets for an empty data array', () => {
@@ -228,7 +239,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     expect(sidebar.getByText('0 porVencer')).toBeInTheDocument();
     // Both the sign-less hero amount and the "sinDepositar" widget count read "0,00 €".
-    expect(sidebar.getAllByText(fmtAmt(0, 'EUR')).length).toBeGreaterThanOrEqual(2);
+    expect(sidebar.getAllByText(fmtAmtNorm(0, 'EUR')).length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -265,31 +276,31 @@ describe('PaymentHeaderTableBase — columns', () => {
     expect(statusCol.enumLabels.RPAE).toBe('pagoDepositado');
   });
 
-  it('renders the amount column with a + sign and green color for a deposited row (dir="in")', () => {
+  it('renders the amount column with a + sign and semantic success color for a deposited row (dir="in")', () => {
     const rows = [{ id: 'p1', status: 'RPR', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p1');
-    expect(cell).toHaveTextContent(`+ ${fmtAmt(50, 'EUR')}`);
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'rgb(23, 102, 58)' });
+    expect(cell).toHaveTextContent(`+ ${fmtAmtNorm(50, 'EUR')}`);
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
-  it('renders the amount column with a + sign and green color for an RPAE (Awaiting Execution) row (dir="in")', () => {
+  it('renders the amount column with a + sign and semantic success color for an RPAE (Awaiting Execution) row (dir="in")', () => {
     // Regression test: RPAE was previously treated as NOT deposited (amber),
     // creating an inconsistency with the "Cobro depositado" DB label. It must
-    // now render exactly like RPR — green amount, deposited status.
+    // now render exactly like RPR — semantic success amount, deposited status.
     const rows = [{ id: 'p12', status: 'RPAE', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p12');
-    expect(cell).toHaveTextContent(`+ ${fmtAmt(50, 'EUR')}`);
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'rgb(23, 102, 58)' });
+    expect(cell).toHaveTextContent(`+ ${fmtAmtNorm(50, 'EUR')}`);
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
-  it('renders the amount column with a − sign and dark color for a non-deposited row (dir="out")', () => {
+  it('renders the amount column with a − sign and semantic foreground color for a non-deposited row (dir="out")', () => {
     const rows = [{ id: 'p2', status: 'RPAP', amount: '20', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p2');
-    expect(cell).toHaveTextContent(`− ${fmtAmt(20, 'EUR')}`);
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'rgb(18, 18, 23)' });
+    expect(cell).toHaveTextContent(`− ${fmtAmtNorm(20, 'EUR')}`);
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 
   it('renders the amount column with a single sign (not a doubled "− -") for a negative amount (dir="out")', () => {
@@ -434,9 +445,12 @@ describe('PaymentHeaderTableBase — reactivate flow (dir="out")', () => {
 
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={onDataMutated} />);
     await userEvent.click(screen.getByTestId('menu-action-etprReactivatePayment-p9'));
-    expect(screen.getByTestId('ReactivarModal__stub')).toHaveAttribute('data-dir', 'out');
+    const stub = screen.getByTestId('PaymentLifecycleConfirmModal__stub');
+    expect(stub).toHaveAttribute('data-dir', 'out');
+    expect(stub).toHaveAttribute('data-action', 'reactivate');
+    expect(stub).toHaveAttribute('data-status', 'PPM');
 
-    await userEvent.click(screen.getByTestId('reactivar-confirm'));
+    await userEvent.click(screen.getByTestId('confirm-accept'));
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('pagoReactivadoOk'));
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -444,85 +458,120 @@ describe('PaymentHeaderTableBase — reactivate flow (dir="out")', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     expect(onDataMutated).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId('ReactivarModal__stub')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('PaymentLifecycleConfirmModal__stub')).not.toBeInTheDocument();
   });
 
-  it('toasts pagoReactivadoError and keeps the modal open on failure', async () => {
+  it('toasts pagoReactivadoError on failure — and per handleReactivate\'s unconditional setConfirm(null), the modal closes anyway', async () => {
     globalThis.fetch.mockResolvedValue({ ok: false, json: async () => ({}) });
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
 
     await userEvent.click(screen.getByTestId('menu-action-etprReactivatePayment-p9'));
-    await userEvent.click(screen.getByTestId('reactivar-confirm'));
+    await userEvent.click(screen.getByTestId('confirm-accept'));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('pagoReactivadoError'));
-    expect(screen.getByTestId('ReactivarModal__stub')).toBeInTheDocument();
+    // handleReactivate calls setConfirm(null) unconditionally at the end
+    // (regardless of runAction's success/failure) — this is the intentional
+    // behavior change called out in the refactor: the modal always closes,
+    // the toast alone carries success/failure feedback to the user.
+    expect(screen.queryByTestId('PaymentLifecycleConfirmModal__stub')).not.toBeInTheDocument();
   });
 
   it('closes the modal via onClose without calling the action', async () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     await userEvent.click(screen.getByTestId('menu-action-etprReactivatePayment-p9'));
-    await userEvent.click(screen.getByTestId('reactivar-close'));
-    expect(screen.queryByTestId('ReactivarModal__stub')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByTestId('confirm-close'));
+    expect(screen.queryByTestId('PaymentLifecycleConfirmModal__stub')).not.toBeInTheDocument();
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
 
-describe('PaymentHeaderTableBase — row deletion (useRowDelete wiring)', () => {
-  it('wires useRowDelete with the entity resolved from specName and forwards apiBaseUrl/token', () => {
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
-    expect(rowDeleteSpy.options).toMatchObject({ apiBaseUrl: '/sws/neo', entity: 'finPayment', token: 'tok-1' });
-    expect(typeof rowDeleteSpy.options.deleteFn).toBe('function');
+describe('PaymentHeaderTableBase — delete flow', () => {
+  it('opening delete via the DataTable\'s own delete trigger sets confirm to {action: "delete", row}', async () => {
+    const rows = [{ id: 'p8', status: 'RPAP', amount: '5' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    await userEvent.click(screen.getByTestId('delete-p8'));
+
+    const stub = screen.getByTestId('PaymentLifecycleConfirmModal__stub');
+    expect(stub).toHaveAttribute('data-action', 'delete');
+    expect(stub).toHaveAttribute('data-dir', 'in');
   });
 
-  it('resolves the "header" entity for payment-out', () => {
-    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={[]} onDataMutated={vi.fn()} />);
-    expect(rowDeleteSpy.options.entity).toBe('header');
-  });
-
-  it('onSuccess dispatches neo:processSuccess and calls onDataMutated', () => {
+  it('confirming POSTs to the eTPRRemovePayment action, toasts recordDeleted, dispatches neo:processSuccess and calls onDataMutated on success', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
     const onDataMutated = vi.fn();
     const listener = vi.fn();
     window.addEventListener('neo:processSuccess', listener);
 
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={onDataMutated} />);
-    rowDeleteSpy.options.onSuccess();
+    const rows = [{ id: 'p5', status: 'RPAP', amount: '5' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={onDataMutated} />);
+    await userEvent.click(screen.getByTestId('delete-p5'));
+    await userEvent.click(screen.getByTestId('confirm-accept'));
 
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(onDataMutated).toHaveBeenCalledTimes(1);
-    window.removeEventListener('neo:processSuccess', listener);
-  });
-
-  it('deleteFn resolves via the eTPRRemovePayment action when the request succeeds', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
-
-    await expect(rowDeleteSpy.options.deleteFn({ id: 'p5' })).resolves.toBeUndefined();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('recordDeleted'));
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/sws/neo/finPayment/p5/action/eTPRRemovePayment',
       expect.objectContaining({ method: 'POST' }),
     );
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(onDataMutated).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('PaymentLifecycleConfirmModal__stub')).not.toBeInTheDocument();
+
+    window.removeEventListener('neo:processSuccess', listener);
   });
 
-  it('deleteFn throws with the server message when the request fails', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: false, status: 400, statusText: 'Bad Request', json: async () => ({ message: 'boom' }) });
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
+  it('resolves the "header" entity for payment-out deletes', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const rows = [{ id: 'p9', status: 'RPAP', amount: '5' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
+    await userEvent.click(screen.getByTestId('delete-p9'));
+    await userEvent.click(screen.getByTestId('confirm-accept'));
 
-    await expect(rowDeleteSpy.options.deleteFn({ id: 'p6' })).rejects.toThrow('boom');
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/neo/header/p9/action/eTPRRemovePayment',
+      expect.objectContaining({ method: 'POST' }),
+    ));
   });
 
-  it('deleteFn falls back to status/statusText when the error body cannot be parsed', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: false, status: 409, statusText: 'Conflict', json: async () => { throw new Error('bad json'); } });
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
-
-    await expect(rowDeleteSpy.options.deleteFn({ id: 'p7' })).rejects.toThrow('409 Conflict');
-  });
-
-  it('the DataTable delete button routes through requestDelete', async () => {
-    const rows = [{ id: 'p8', status: 'RPAP', amount: '5' }];
+  it('toasts the server\'s message/error on a non-ok response and still closes the modal', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, json: async () => ({ message: 'Cannot delete' }) });
+    const rows = [{ id: 'p6', status: 'RPAP', amount: '5' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
-    await userEvent.click(screen.getByTestId('delete-p8'));
-    expect(rowDeleteSpy.options).toBeTruthy();
-    expect(dataTableSpy.current.rowQuickActions.onDelete).toBeInstanceOf(Function);
+    await userEvent.click(screen.getByTestId('delete-p6'));
+    await userEvent.click(screen.getByTestId('confirm-accept'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Cannot delete'));
+    expect(screen.queryByTestId('PaymentLifecycleConfirmModal__stub')).not.toBeInTheDocument();
+  });
+
+  it('falls back to ui("networkError") when the non-ok response has no message/error', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, json: async () => ({}) });
+    const rows = [{ id: 'p7', status: 'RPAP', amount: '5' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    await userEvent.click(screen.getByTestId('delete-p7'));
+    await userEvent.click(screen.getByTestId('confirm-accept'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('networkError'));
+  });
+
+  it('toasts ui("networkError") and still closes the modal when the request throws', async () => {
+    globalThis.fetch.mockRejectedValue(new Error('network down'));
+    const rows = [{ id: 'p10', status: 'RPAP', amount: '5' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    await userEvent.click(screen.getByTestId('delete-p10'));
+    await userEvent.click(screen.getByTestId('confirm-accept'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('networkError'));
+    expect(screen.queryByTestId('PaymentLifecycleConfirmModal__stub')).not.toBeInTheDocument();
+  });
+
+  it('closes the modal via onClose without calling fetch', async () => {
+    const rows = [{ id: 'p11', status: 'RPAP', amount: '5' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    await userEvent.click(screen.getByTestId('delete-p11'));
+    await userEvent.click(screen.getByTestId('confirm-close'));
+
+    expect(screen.queryByTestId('PaymentLifecycleConfirmModal__stub')).not.toBeInTheDocument();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
 

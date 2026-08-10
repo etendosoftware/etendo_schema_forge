@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.22.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
-  "updatedAt": "2026-07-01T13:00:18.950Z",
-  "contractChecksum": "4475b6afd622023a",
+  "updatedAt": "2026-07-30T17:29:30.175Z",
+  "contractChecksum": "c1f1462e22d5c7bf",
   "apiPrediction": {
     "specName": "warehouse",
     "baseUrl": "/sws/neo/warehouse",
@@ -52,6 +52,17 @@
         "delete": true,
         "listUrl": "/sws/neo/warehouse/binContents",
         "detailUrl": "/sws/neo/warehouse/binContents/{id}",
+        "supportedFilters": []
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/warehouse/accounting",
+        "detailUrl": "/sws/neo/warehouse/accounting/{id}",
         "supportedFilters": []
       }
     },
@@ -151,6 +162,14 @@
         "reference": "RefInventory",
         "inputMode": "selector",
         "url": "/sws/neo/warehouse/binContents/selectors/referencedInventory"
+      },
+      {
+        "entity": "accounting",
+        "field": "warehouseDifferences",
+        "column": "W_Differences_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/warehouse/accounting/selectors/warehouseDifferences"
       }
     ],
     "actions": [
@@ -340,6 +359,13 @@
             "readOnly": true
           }
         }
+      },
+      "accounting": {
+        "fields": {
+          "warehouseDifferences": {
+            "required": true
+          }
+        }
       }
     },
     "requiredSessionVariables": [],
@@ -365,7 +391,8 @@
         "default",
         "changeStatus",
         "product",
-        "uOM"
+        "uOM",
+        "warehouseDifferences"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -408,7 +435,8 @@
           "default",
           "changeStatus",
           "product",
-          "uOM"
+          "uOM",
+          "warehouseDifferences"
         ]
       }
     ],
@@ -419,5 +447,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "8f0fb4bf9b358cd6"
+  "checksum": "9fedcbbf05e3b0a9"
 }

@@ -33,7 +33,8 @@
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "DeliveryStatus": "Estado de entrega",
-        "InvoiceStatus": "Estado de facturación"
+        "InvoiceStatus": "Estado de facturación",
+        "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -77,7 +78,8 @@
         },
         "documentAction": {
           "visibility": "system",
-          "displayLogic": null
+          "displayLogic": null,
+          "agentPrompt": "Document workflow action for this sales order. Fire it with neo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO books the order — it validates the lines, reserves stock and makes the order shippable and invoiceable; VO voids it. From documentStatus=CO (Booked): RE reactivates it back to DR, but only while the order has no linked documents (no shipment or invoice generated from it) — the UI hides Reactivate in that case and the process will reject it. CL closes the pending quantities. Preconditions for CO: at least one line, a business partner with payment terms and a price list, and an open period for the accounting date. Read documentStatus with neo_get before acting — CO on an order that is already CO is an error. Booking recalculates the total-discount line automatically; never create that line by hand. The remaining values offered in actionValues (AP, PO, PR, RA, RC, RJ, XL) come from the shared AD list and are not part of this window's flow."
         },
         "processed": {
           "visibility": "readOnly",
@@ -330,7 +332,7 @@
           "section": "principal",
           "order": 3,
           "gridOrder": 3,
-          "min": 0
+          "min": false
         },
         "operativeQuantity": {
           "visibility": "discarded"
@@ -378,7 +380,7 @@
           "order": 4,
           "gridOrder": 4,
           "columnType": "amount",
-          "min": 0
+          "min": false
         },
         "discount": {
           "grid": true,
@@ -478,7 +480,7 @@
           "visibility": "discarded"
         },
         "currency": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": false,
           "form": false
         }

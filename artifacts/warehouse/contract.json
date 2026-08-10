@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.22.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
-  "updatedAt": "2026-07-01T13:03:42.485Z",
-  "checksum": "4475b6afd622023a",
+  "updatedAt": "2026-07-30T17:29:30.175Z",
+  "checksum": "c1f1462e22d5c7bf",
   "frontendContract": {
     "window": {
       "id": "139",
@@ -13,8 +13,13 @@
       "hideLink": true,
       "secondaryTabs": {
         "productTransactions": {
+          "tabOrder": 1,
           "label": "Transactions",
           "customPanel": "WarehouseTransactionsTable"
+        },
+        "accounting": {
+          "tabOrder": 2,
+          "label": "Accounting"
         }
       },
       "detailEntity": null,
@@ -41,7 +46,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -55,7 +64,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "seq": 2
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -70,7 +83,10 @@
             "form": true,
             "seq": 4,
             "span": 4,
-            "rows": 1
+            "rows": 1,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "locationAddress",
@@ -86,8 +102,13 @@
             "sourceRequired": true,
             "reference": "Location",
             "inputMode": "search",
+            "editModal": "location",
             "seq": 3,
-            "span": 2
+            "span": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 120
+            }
           }
         ],
         "searchableFields": [
@@ -114,7 +135,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "rowX",
@@ -127,7 +152,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "stackY",
@@ -140,7 +169,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "levelZ",
@@ -153,7 +186,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "relativePriority",
@@ -171,7 +208,11 @@
               "type": "computed",
               "source": "50"
             },
-            "defaultValue": "50"
+            "defaultValue": "50",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "barcode",
@@ -183,7 +224,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 30
+            }
           },
           {
             "name": "inventoryStatus",
@@ -203,7 +247,11 @@
             },
             "reference": "InventoryStatus",
             "inputMode": "selector",
-            "defaultValue": "7B3DC15A20234C418D26EECDC5D59003"
+            "defaultValue": "7B3DC15A20234C418D26EECDC5D59003",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "default",
@@ -216,7 +264,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "changeStatus",
@@ -235,6 +287,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Isvirtual@='N'",
               "evaluable": true
@@ -285,7 +341,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Product",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "attributeSetValue",
@@ -299,6 +359,10 @@
             "grid": false,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0')",
               "evaluable": true
@@ -315,7 +379,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "movementDate",
@@ -328,7 +396,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "movementType",
@@ -413,7 +485,11 @@
                   "es_ES": "Consumo Interno +"
                 }
               }
-            ]
+            ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "goodsShipmentLine",
@@ -427,7 +503,10 @@
             "grid": false,
             "form": true,
             "reference": "InOutLine",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "physicalInventoryLine",
@@ -441,7 +520,10 @@
             "grid": false,
             "form": true,
             "reference": "InventoryLine",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "movementLine",
@@ -455,7 +537,10 @@
             "grid": false,
             "form": true,
             "reference": "MovementLine",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "productionLine",
@@ -469,7 +554,10 @@
             "grid": false,
             "form": true,
             "reference": "ProductionLine",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "projectIssue",
@@ -483,7 +571,10 @@
             "grid": false,
             "form": true,
             "reference": "ProjectIssue",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [],
@@ -509,7 +600,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Product",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "attributeSetValue",
@@ -522,6 +617,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0')",
               "evaluable": true
@@ -537,7 +635,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "uOM",
@@ -552,7 +653,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "UOM",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "orderUOM",
@@ -566,7 +671,10 @@
             "grid": false,
             "form": true,
             "reference": "Product_Uom",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "quantityOnHand",
@@ -579,7 +687,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "onHandOrderQuanity",
@@ -591,7 +703,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "quantityInDraftTransactions",
@@ -603,7 +718,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "quantityOrderInDraftTransactions",
@@ -615,7 +733,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "referencedInventory",
@@ -629,7 +750,10 @@
             "grid": false,
             "form": true,
             "reference": "RefInventory",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "etgoValuation",
@@ -641,7 +765,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "etgoCost",
@@ -653,12 +780,48 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 10
+            }
           }
         ],
         "searchableFields": [],
         "computedFields": [],
         "javaQualifier": "binContentsHandler"
+      },
+      "accounting": {
+        "tableName": "M_Warehouse_Acct",
+        "tabId": "209",
+        "tabName": "Accounting",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "warehouseDifferences",
+            "apiKey": "warehouseDifferences",
+            "column": "W_Differences_Acct",
+            "label": "Warehouse Differences",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "lookup": true,
+            "seq": 1,
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [],
+        "hideDelete": true
       }
     }
   },
@@ -672,8 +835,13 @@
       "hideLink": true,
       "secondaryTabs": {
         "productTransactions": {
+          "tabOrder": 1,
           "label": "Transactions",
           "customPanel": "WarehouseTransactionsTable"
+        },
+        "accounting": {
+          "tabOrder": 2,
+          "label": "Accounting"
         }
       },
       "detailEntity": null,
@@ -1502,6 +1670,125 @@
           }
         ],
         "javaQualifier": "binContentsHandler"
+      },
+      "accounting": {
+        "tableName": "M_Warehouse_Acct",
+        "tabId": "209",
+        "tabName": "Accounting",
+        "fields": [
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "warehouseDifferences",
+            "apiKey": "warehouseDifferences",
+            "column": "W_Differences_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "warehouseInventory",
+            "apiKey": "warehouseInventory",
+            "column": "W_Inventory_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "inventoryRevaluation",
+            "apiKey": "inventoryRevaluation",
+            "column": "W_Revaluation_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "inventoryAdjustment",
+            "apiKey": "inventoryAdjustment",
+            "column": "W_InvActualAdjust_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "warehouse",
+            "apiKey": "warehouse",
+            "column": "M_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Warehouse_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
       }
     },
     "endpoints": [
@@ -1627,6 +1914,36 @@
         "path": "/binContents/:id",
         "entity": "binContents",
         "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
       }
     ],
     "processEndpoints": []
@@ -1680,6 +1997,17 @@
         "delete": true,
         "listUrl": "/sws/neo/warehouse/binContents",
         "detailUrl": "/sws/neo/warehouse/binContents/{id}",
+        "supportedFilters": []
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/warehouse/accounting",
+        "detailUrl": "/sws/neo/warehouse/accounting/{id}",
         "supportedFilters": []
       }
     },
@@ -1779,6 +2107,14 @@
         "reference": "RefInventory",
         "inputMode": "selector",
         "url": "/sws/neo/warehouse/binContents/selectors/referencedInventory"
+      },
+      {
+        "entity": "accounting",
+        "field": "warehouseDifferences",
+        "column": "W_Differences_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/warehouse/accounting/selectors/warehouseDifferences"
       }
     ],
     "actions": [
@@ -1833,6 +2169,13 @@
         "field": "changeStatus",
         "runner": "node",
         "description": "Action endpoint for 'changeStatus' in storageBin should exist"
+      },
+      {
+        "id": "t-crud-flags-accounting",
+        "category": "crud-flags",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "CRUD flags for 'accounting' should all be booleans"
       },
       {
         "id": "t-crud-flags-binContents",
@@ -1933,6 +2276,14 @@
         "field": "changeStatus",
         "runner": "node",
         "description": "Display logic for 'changeStatus' in storageBin should be valid JS"
+      },
+      {
+        "id": "t-field-presence-accounting-warehouseDifferences",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "warehouseDifferences",
+        "runner": "node",
+        "description": "Field 'warehouseDifferences' should be present in accounting"
       },
       {
         "id": "t-field-presence-binContents-attributeSetValue",
@@ -2213,6 +2564,14 @@
         "field": "searchKey",
         "runner": "node",
         "description": "Field 'searchKey' should be present in warehouse"
+      },
+      {
+        "id": "t-field-type-accounting-warehouseDifferences",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "warehouseDifferences",
+        "runner": "node",
+        "description": "Field 'warehouseDifferences' should have type 'string' in accounting"
       },
       {
         "id": "t-field-type-binContents-attributeSetValue",
@@ -2588,6 +2947,14 @@
         "description": "Field 'searchKey' should be a supported filter for warehouse"
       },
       {
+        "id": "t-selector-endpoint-accounting-warehouseDifferences",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "warehouseDifferences",
+        "runner": "node",
+        "description": "Selector endpoint for 'warehouseDifferences' in accounting should exist"
+      },
+      {
         "id": "t-selector-endpoint-binContents-orderUOM",
         "category": "selector-endpoint",
         "entity": "binContents",
@@ -2682,6 +3049,110 @@
         "field": "locationAddress",
         "runner": "node",
         "description": "Selector endpoint for 'locationAddress' in warehouse should exist"
+      },
+      {
+        "id": "t-system-field-accounting-accountingSchema",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-active",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-client",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-createdBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-creationDate",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-id",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-inventoryAdjustment",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "inventoryAdjustment",
+        "runner": "node",
+        "description": "System field 'inventoryAdjustment' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-inventoryRevaluation",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "inventoryRevaluation",
+        "runner": "node",
+        "description": "System field 'inventoryRevaluation' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-organization",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updated",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updatedBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-warehouse",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "System field 'warehouse' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-warehouseInventory",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "warehouseInventory",
+        "runner": "node",
+        "description": "System field 'warehouseInventory' should exist in backend but not frontend for accounting"
       },
       {
         "id": "t-system-field-binContents-active",
@@ -3196,6 +3667,13 @@
         "description": "System field 'warehouseRule' should exist in backend but not frontend for warehouse"
       },
       {
+        "id": "t-visibility-accounting",
+        "category": "visibility",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "Entity 'accounting' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-binContents",
         "category": "visibility",
         "entity": "binContents",
@@ -3225,23 +3703,23 @@
       }
     ],
     "summary": {
-      "total": 178,
+      "total": 196,
       "byCategory": {
         "action-endpoint": 2,
-        "crud-flags": 4,
+        "crud-flags": 5,
         "default-value-type": 3,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 35,
-        "field-type": 35,
+        "field-presence": 36,
+        "field-type": 36,
         "rule-declared": 11,
         "searchable-filters": 2,
-        "selector-endpoint": 12,
-        "system-field": 64,
-        "visibility": 4
+        "selector-endpoint": 13,
+        "system-field": 77,
+        "visibility": 5
       },
       "byRunner": {
-        "node": 178,
+        "node": 196,
         "junit": 0
       }
     }

@@ -81,6 +81,42 @@ vi.mock('../ImportedStatementsTab.jsx', () => ({
   }),
 }));
 
+// ETP-4530: Edit modal entry point — stubbed like the other child components above so this suite
+// stays isolated from EditAccountModal's own dependencies (i18n locale switch, account mutations,
+// bank connection actions, accounting configuration). EditAccountModal has its own dedicated test suite.
+vi.mock('../EditAccountModal.jsx', () => ({
+  EditAccountModal: ({ open, account }) => (
+    <div data-testid="edit-account-modal-stub" data-open={String(open)} data-account={account?.name ?? ''} />
+  ),
+}));
+vi.mock('../ArchiveAccountDialog.jsx', () => ({
+  ArchiveAccountDialog: ({ open }) => (
+    <div data-testid="archive-account-dialog-stub" data-open={String(open)} />
+  ),
+}));
+// ETP-4530: index.jsx now runs useBankConnectionFlow (→ useBankConnectionActions → useAuth) itself so the Edit
+// modal's "Connect bank" button works from this entry point too. Stubbed here for the same
+// isolation reason as the two mocks above.
+vi.mock('../BankConnectionFlowUI.jsx', () => ({
+  BankConnectionFlowUI: ({ flow }) => (
+    <div data-testid="bank-connection-flow-ui-stub" data-connecting={String(!!flow?.connecting)} />
+  ),
+}));
+vi.mock('@/hooks/useBankConnectionFlow', () => ({
+  useBankConnectionFlow: () => ({
+    startConnect: vi.fn(), startCreate: vi.fn(), connecting: false,
+    selection: null, confirmSelection: vi.fn(), cancelSelection: vi.fn(),
+  }),
+}));
+
+// ETP-4658: FinancialAccountWindow is now gated by useWindowAccess — default to 'full' so this
+// suite keeps exercising the window as before.
+let currentWindowAccessTier = 'full';
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useWindowAccess: () => currentWindowAccessTier,
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
+}));
+
 import FinancialAccountWindow from '../index.jsx';
 
 function setHooks({ account = { id: 'acc-1', name: 'BBVA', pendingCount: 4 }, movements = [], totals = { balance: 0, inflows: 0, outflows: 0, currency: 'EUR' }, loading = false, statements = [] } = {}) {

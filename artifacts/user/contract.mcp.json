@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.18.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-05-26T18:48:57.355Z",
-  "contractChecksum": "1f2437953a5289b4",
+  "updatedAt": "2026-07-21T17:54:51.519Z",
+  "contractChecksum": "89f16e235abaf513",
   "apiPrediction": {
     "specName": "user",
     "baseUrl": "/sws/neo/user",
@@ -28,7 +28,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/user/userRoles",
         "detailUrl": "/sws/neo/user/userRoles/{id}",
         "supportedFilters": [
@@ -71,7 +71,7 @@
         "field": "defaultRole",
         "column": "Default_Ad_Role_ID",
         "reference": "Role",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/user/user/selectors/defaultRole"
       },
       {
@@ -271,7 +271,9 @@
           "position": {},
           "phone": {},
           "supervisor": {},
-          "defaultRole": {},
+          "defaultRole": {
+            "readOnly": true
+          },
           "defaultLanguage": {},
           "defaultClient": {},
           "defaultOrganization": {},
@@ -286,9 +288,11 @@
       "userRoles": {
         "fields": {
           "role": {
+            "readOnly": true,
             "required": true
           },
           "roleAdmin": {
+            "readOnly": true,
             "required": true,
             "defaultValue": "N"
           }
@@ -353,8 +357,6 @@
         "username"
       ],
       "lineFields": [
-        "role",
-        "roleAdmin",
         "active",
         "smtpServer",
         "sMTPAuthentification",
@@ -435,5 +437,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "e91bff420dc8c5c0"
+  "checksum": "efac84e97f78bde2"
 }

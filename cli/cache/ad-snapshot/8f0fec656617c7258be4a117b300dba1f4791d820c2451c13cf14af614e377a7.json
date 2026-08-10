@@ -1,8 +1,136 @@
 {
   "sql": "SELECT DISTINCT c.ad_table_id, c.ad_column_id, c.columnname, c.position FROM ad_column c JOIN ad_tab t ON t.ad_table_id = c.ad_table_id WHERE t.ad_window_id = $1 AND t.isactive = 'Y' AND c.isactive = 'Y' ORDER BY c.ad_table_id, c.position, c.columnname, c.ad_column_id",
   "versions": {
+    "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
+      "checksum": "dc0ee8d67bb6200dc314819a37fd240b92f0417924f898a2a94dd8bd3fc636f4",
+      "params": [
+        "24963D64E83B4543A7F6BD248CF944EE"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "302ADF1EE4E646AEB10C1B75C29BA08D",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Etgo_Match_Rule_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "1D3BD26E085A45C5B2CF6861BBF64D50",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "D015E8D9767C40DBA63BE6D5055A1281",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "91BB3F93843D4202880D970F388561F3",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "19C372C60402414FB0ABBB9AB1E7D26E",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "25E87F98E4824C2188CF852E2F1E51B5",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "45E47933F5F349CEA791F77D9CAB0974",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "CC7D45C92F59421C8D41CF0733F907D8",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "D334DD9D2541424793C93689C746409F",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Name",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "E151104B60534052A2B55FD57FA06FB3",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "Priority",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "3BA0FD6AD11E4DBDA784B8B4CF9D7D4D",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "TextPattern",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "3B463B3E57C54F348866483C6335E58B",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "MatchCount",
+          "position": "16"
+        },
+        {
+          "ad_column_id": "E63DB12CE0FB4AE4994420BECAFD2851",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "C_BPartner_ID",
+          "position": "17"
+        },
+        {
+          "ad_column_id": "F87D895E8A904F989A6303AD4AA26A68",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "FIN_Financial_Account_ID",
+          "position": "18"
+        },
+        {
+          "ad_column_id": "B4EF6BE74E3D42839DCFD069CCB9ACFD",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "C_Project_ID",
+          "position": "19"
+        },
+        {
+          "ad_column_id": "389FFE7C00ED449B987F9A544E3C765F",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "C_Costcenter_ID",
+          "position": "20"
+        },
+        {
+          "ad_column_id": "6C9F1DAD941A46D4BB0E4073C5232DEE",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "TextCondition",
+          "position": "26"
+        },
+        {
+          "ad_column_id": "161CE4F72CD240329EB4048BDC447C43",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "ETGO_Transaction_Type_ID",
+          "position": "27"
+        },
+        {
+          "ad_column_id": "32938B1474734B7DAC81979D13296F48",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "C_GLItem_ID",
+          "position": null
+        },
+        {
+          "ad_column_id": "0ED5786547374C808877009443251681",
+          "ad_table_id": "7D208B86542A41BFB359CD0BB83D9828",
+          "columnname": "M_Product_ID",
+          "position": null
+        }
+      ]
+    },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "8dd1dcdca1ea2248e09cfca510c615c360847a2f45b6266ce3b9a6a42ee11af3",
+      "checksum": "1864c281b44ef12d694bf1df133ac8467940d0acec39b76ec2b5d4c292f6b8ae",
       "params": [
         "144"
       ],
@@ -738,6 +866,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "2020",
@@ -4204,7 +4350,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "61df14f821a9efaf3da564281ade2bef64bc27f30ca8d3c9c28f324bb2784f06",
+      "checksum": "9e7a8583ba06546c00a3f65a26b837da86bc47332af2dcf08bf63968ff7fca34",
       "params": [
         "143"
       ],
@@ -4924,16 +5070,46 @@
           "position": "86"
         },
         {
+          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
+          "ad_table_id": "259",
+          "columnname": "Confirmcancelandreplace",
+          "position": "87"
+        },
+        {
+          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
+          "ad_table_id": "259",
+          "columnname": "Cancelledorder_id",
+          "position": "88"
+        },
+        {
+          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
+          "ad_table_id": "259",
+          "columnname": "Replacedorder_id",
+          "position": "89"
+        },
+        {
+          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
+          "ad_table_id": "259",
+          "columnname": "Iscancelled",
+          "position": "90"
+        },
+        {
+          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
+          "ad_table_id": "259",
+          "columnname": "Replacementorder_ID",
+          "position": "91"
+        },
+        {
+          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
+          "ad_table_id": "259",
+          "columnname": "BPartner_ExtRef",
+          "position": "92"
+        },
+        {
           "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Fecha_Operacion",
           "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
         },
         {
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
@@ -4954,21 +5130,9 @@
           "position": "96"
         },
         {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
           "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
           "ad_table_id": "259",
           "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
           "position": "98"
         },
         {
@@ -4976,24 +5140,6 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -6830,7 +6976,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "3ed2d2cf5599c3d052dda2f640b8ed8dceae2d2adaed5f999636158f1d63fbf9",
+      "checksum": "24de5d37e92e16ef3d88c124f01dc9bda8cf8cecace327fef4be2ddb427c8085",
       "params": [
         "167"
       ],
@@ -8568,6 +8714,12 @@
           "ad_table_id": "333",
           "columnname": "EM_Etgo_Discount",
           "position": "58"
+        },
+        {
+          "ad_column_id": "2A62D8630504493E97A5932B16CCACAB",
+          "ad_table_id": "333",
+          "columnname": "EM_Etgo_Source_Invoiceline_ID",
+          "position": null
         },
         {
           "ad_column_id": "3850",
@@ -11220,7 +11372,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "9fb061595d7923f55f80258216d2ec7a6634f5b3eaa4cb28d700576eafc6f43f",
+      "checksum": "331fd87c9748cb13714049df1bc3e38ab053a7f6290f9d211f8496a8feeec748",
       "params": [
         "183"
       ],
@@ -12958,6 +13110,12 @@
           "ad_table_id": "333",
           "columnname": "EM_Etgo_Discount",
           "position": "58"
+        },
+        {
+          "ad_column_id": "2A62D8630504493E97A5932B16CCACAB",
+          "ad_table_id": "333",
+          "columnname": "EM_Etgo_Source_Invoiceline_ID",
+          "position": null
         },
         {
           "ad_column_id": "3850",
@@ -14758,7 +14916,7 @@
       ]
     },
     "4e4b0d1c19b4dc9eb29dc45dd545b5060c06c718866acfa62c0cdf829eebc965": {
-      "checksum": "0a8d338026083b712e8bcc18f04b8267fca958cdd101452353dae0b7be8d4528",
+      "checksum": "36a9d73b8a07fa1fd62916ba1aafa054dd80b9be35bcae6aa8ea2f44ab113087",
       "params": [
         "C327DE215AC945F69363905840118177"
       ],
@@ -14848,16 +15006,28 @@
           "position": "14"
         },
         {
-          "ad_column_id": "98DB7C41F42443AB87DF3639A898591D",
-          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
-          "columnname": "ETSG_SIF_Territory",
-          "position": "16"
-        },
-        {
           "ad_column_id": "25EA4B325FAE4219A589874ED6D31B59",
           "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
           "columnname": "Validate_Previous_Invoice",
-          "position": "16"
+          "position": "15"
+        },
+        {
+          "ad_column_id": "98DB7C41F42443AB87DF3639A898591D",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "columnname": "ETSG_SIF_Territory",
+          "position": "23"
+        },
+        {
+          "ad_column_id": "09481933730649FBAD9409C9FCCBB6DA",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "columnname": "Email_User",
+          "position": "24"
+        },
+        {
+          "ad_column_id": "4CAC02DA1612475F831D1B6B7FD1E2EE",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "columnname": "Email_Password",
+          "position": "25"
         }
       ]
     },
@@ -15230,7 +15400,7 @@
       ]
     },
     "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
-      "checksum": "7edcc6ae86857d38aca146669195b626ba5ad9bc132e40f20e2c28b6786d0799",
+      "checksum": "bb20a65d408c7235d83070a0b04b66535a4e21caf42932621fa600af13c6d0b4",
       "params": [
         "184"
       ],
@@ -15960,6 +16130,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
@@ -19021,1676 +19197,6 @@
         }
       ]
     },
-    "815e23e49d7d45ef28d64a769100a5fa1e1aec24b8c6f25a101070342ebeaeb1": {
-      "checksum": "fd4e0919dc28096c02b8a00b9cc58598d598f899a7678b43dd175f11af2db708",
-      "params": [
-        "C50A8AEE6F044825B5EF54FAAE76826F"
-      ],
-      "rows": [
-        {
-          "ad_column_id": "1011100000",
-          "ad_table_id": "1011100000",
-          "columnname": "C_Order_Discount_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "1011100001",
-          "ad_table_id": "1011100000",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "1011100002",
-          "ad_table_id": "1011100000",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "1011100003",
-          "ad_table_id": "1011100000",
-          "columnname": "Isactive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "1011100004",
-          "ad_table_id": "1011100000",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "1011100005",
-          "ad_table_id": "1011100000",
-          "columnname": "Createdby",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "1011100006",
-          "ad_table_id": "1011100000",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "1011100007",
-          "ad_table_id": "1011100000",
-          "columnname": "Updatedby",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "1011100008",
-          "ad_table_id": "1011100000",
-          "columnname": "C_Order_ID",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "1011100009",
-          "ad_table_id": "1011100000",
-          "columnname": "C_Discount_ID",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "1011100010",
-          "ad_table_id": "1011100000",
-          "columnname": "Line",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "1011100011",
-          "ad_table_id": "1011100000",
-          "columnname": "Cascade",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "2161",
-          "ad_table_id": "259",
-          "columnname": "C_Order_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "2162",
-          "ad_table_id": "259",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "2163",
-          "ad_table_id": "259",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "2164",
-          "ad_table_id": "259",
-          "columnname": "IsActive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "2165",
-          "ad_table_id": "259",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "2166",
-          "ad_table_id": "259",
-          "columnname": "CreatedBy",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "2167",
-          "ad_table_id": "259",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "2168",
-          "ad_table_id": "259",
-          "columnname": "UpdatedBy",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "3718",
-          "ad_table_id": "259",
-          "columnname": "IsSOTrx",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "2169",
-          "ad_table_id": "259",
-          "columnname": "DocumentNo",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "2170",
-          "ad_table_id": "259",
-          "columnname": "DocStatus",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "2171",
-          "ad_table_id": "259",
-          "columnname": "DocAction",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "2453",
-          "ad_table_id": "259",
-          "columnname": "Processing",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "3398",
-          "ad_table_id": "259",
-          "columnname": "Processed",
-          "position": "14"
-        },
-        {
-          "ad_column_id": "2172",
-          "ad_table_id": "259",
-          "columnname": "C_DocType_ID",
-          "position": "15"
-        },
-        {
-          "ad_column_id": "2173",
-          "ad_table_id": "259",
-          "columnname": "C_DocTypeTarget_ID",
-          "position": "16"
-        },
-        {
-          "ad_column_id": "2174",
-          "ad_table_id": "259",
-          "columnname": "Description",
-          "position": "17"
-        },
-        {
-          "ad_column_id": "2177",
-          "ad_table_id": "259",
-          "columnname": "IsDelivered",
-          "position": "18"
-        },
-        {
-          "ad_column_id": "2178",
-          "ad_table_id": "259",
-          "columnname": "IsInvoiced",
-          "position": "19"
-        },
-        {
-          "ad_column_id": "2179",
-          "ad_table_id": "259",
-          "columnname": "IsPrinted",
-          "position": "20"
-        },
-        {
-          "ad_column_id": "4699",
-          "ad_table_id": "259",
-          "columnname": "IsSelected",
-          "position": "21"
-        },
-        {
-          "ad_column_id": "2186",
-          "ad_table_id": "259",
-          "columnname": "SalesRep_ID",
-          "position": "22"
-        },
-        {
-          "ad_column_id": "2181",
-          "ad_table_id": "259",
-          "columnname": "DateOrdered",
-          "position": "23"
-        },
-        {
-          "ad_column_id": "2182",
-          "ad_table_id": "259",
-          "columnname": "DatePromised",
-          "position": "24"
-        },
-        {
-          "ad_column_id": "3719",
-          "ad_table_id": "259",
-          "columnname": "DatePrinted",
-          "position": "25"
-        },
-        {
-          "ad_column_id": "2183",
-          "ad_table_id": "259",
-          "columnname": "DateAcct",
-          "position": "26"
-        },
-        {
-          "ad_column_id": "2762",
-          "ad_table_id": "259",
-          "columnname": "C_BPartner_ID",
-          "position": "27"
-        },
-        {
-          "ad_column_id": "2189",
-          "ad_table_id": "259",
-          "columnname": "BillTo_ID",
-          "position": "28"
-        },
-        {
-          "ad_column_id": "3400",
-          "ad_table_id": "259",
-          "columnname": "C_BPartner_Location_ID",
-          "position": "29"
-        },
-        {
-          "ad_column_id": "3045",
-          "ad_table_id": "259",
-          "columnname": "POReference",
-          "position": "30"
-        },
-        {
-          "ad_column_id": "4298",
-          "ad_table_id": "259",
-          "columnname": "IsDiscountPrinted",
-          "position": "31"
-        },
-        {
-          "ad_column_id": "2191",
-          "ad_table_id": "259",
-          "columnname": "C_Currency_ID",
-          "position": "32"
-        },
-        {
-          "ad_column_id": "4019",
-          "ad_table_id": "259",
-          "columnname": "PaymentRule",
-          "position": "33"
-        },
-        {
-          "ad_column_id": "2187",
-          "ad_table_id": "259",
-          "columnname": "C_PaymentTerm_ID",
-          "position": "34"
-        },
-        {
-          "ad_column_id": "2192",
-          "ad_table_id": "259",
-          "columnname": "InvoiceRule",
-          "position": "35"
-        },
-        {
-          "ad_column_id": "3721",
-          "ad_table_id": "259",
-          "columnname": "DeliveryRule",
-          "position": "36"
-        },
-        {
-          "ad_column_id": "3722",
-          "ad_table_id": "259",
-          "columnname": "FreightCostRule",
-          "position": "37"
-        },
-        {
-          "ad_column_id": "2195",
-          "ad_table_id": "259",
-          "columnname": "FreightAmt",
-          "position": "38"
-        },
-        {
-          "ad_column_id": "2196",
-          "ad_table_id": "259",
-          "columnname": "DeliveryViaRule",
-          "position": "39"
-        },
-        {
-          "ad_column_id": "2197",
-          "ad_table_id": "259",
-          "columnname": "M_Shipper_ID",
-          "position": "40"
-        },
-        {
-          "ad_column_id": "3046",
-          "ad_table_id": "259",
-          "columnname": "C_Charge_ID",
-          "position": "41"
-        },
-        {
-          "ad_column_id": "3047",
-          "ad_table_id": "259",
-          "columnname": "ChargeAmt",
-          "position": "42"
-        },
-        {
-          "ad_column_id": "E5F6A7B8C9DA490030F5A6B7C8D9E0F1",
-          "ad_table_id": "259",
-          "columnname": "EM_Psd2_Generate_Bank_Payment",
-          "position": "42"
-        },
-        {
-          "ad_column_id": "2198",
-          "ad_table_id": "259",
-          "columnname": "PriorityRule",
-          "position": "43"
-        },
-        {
-          "ad_column_id": "2200",
-          "ad_table_id": "259",
-          "columnname": "TotalLines",
-          "position": "44"
-        },
-        {
-          "ad_column_id": "2201",
-          "ad_table_id": "259",
-          "columnname": "GrandTotal",
-          "position": "45"
-        },
-        {
-          "ad_column_id": "2202",
-          "ad_table_id": "259",
-          "columnname": "M_Warehouse_ID",
-          "position": "46"
-        },
-        {
-          "ad_column_id": "2204",
-          "ad_table_id": "259",
-          "columnname": "M_PriceList_ID",
-          "position": "47"
-        },
-        {
-          "ad_column_id": "4651",
-          "ad_table_id": "259",
-          "columnname": "IsTaxIncluded",
-          "position": "48"
-        },
-        {
-          "ad_column_id": "2454",
-          "ad_table_id": "259",
-          "columnname": "C_Campaign_ID",
-          "position": "49"
-        },
-        {
-          "ad_column_id": "3402",
-          "ad_table_id": "259",
-          "columnname": "C_Project_ID",
-          "position": "50"
-        },
-        {
-          "ad_column_id": "3403",
-          "ad_table_id": "259",
-          "columnname": "C_Activity_ID",
-          "position": "51"
-        },
-        {
-          "ad_column_id": "4650",
-          "ad_table_id": "259",
-          "columnname": "Posted",
-          "position": "52"
-        },
-        {
-          "ad_column_id": "2763",
-          "ad_table_id": "259",
-          "columnname": "AD_User_ID",
-          "position": "53"
-        },
-        {
-          "ad_column_id": "8765",
-          "ad_table_id": "259",
-          "columnname": "CopyFrom",
-          "position": "54"
-        },
-        {
-          "ad_column_id": "8764",
-          "ad_table_id": "259",
-          "columnname": "DropShip_BPartner_ID",
-          "position": "55"
-        },
-        {
-          "ad_column_id": "8766",
-          "ad_table_id": "259",
-          "columnname": "DropShip_Location_ID",
-          "position": "56"
-        },
-        {
-          "ad_column_id": "8763",
-          "ad_table_id": "259",
-          "columnname": "DropShip_User_ID",
-          "position": "57"
-        },
-        {
-          "ad_column_id": "8832",
-          "ad_table_id": "259",
-          "columnname": "IsSelfService",
-          "position": "58"
-        },
-        {
-          "ad_column_id": "9331",
-          "ad_table_id": "259",
-          "columnname": "AD_OrgTrx_ID",
-          "position": "59"
-        },
-        {
-          "ad_column_id": "9569",
-          "ad_table_id": "259",
-          "columnname": "User1_ID",
-          "position": "60"
-        },
-        {
-          "ad_column_id": "9568",
-          "ad_table_id": "259",
-          "columnname": "User2_ID",
-          "position": "61"
-        },
-        {
-          "ad_column_id": "800139",
-          "ad_table_id": "259",
-          "columnname": "Deliverynotes",
-          "position": "62"
-        },
-        {
-          "ad_column_id": "800140",
-          "ad_table_id": "259",
-          "columnname": "C_Incoterms_ID",
-          "position": "63"
-        },
-        {
-          "ad_column_id": "800141",
-          "ad_table_id": "259",
-          "columnname": "Incotermsdescription",
-          "position": "64"
-        },
-        {
-          "ad_column_id": "800274",
-          "ad_table_id": "259",
-          "columnname": "Generatetemplate",
-          "position": "65"
-        },
-        {
-          "ad_column_id": "802485",
-          "ad_table_id": "259",
-          "columnname": "Delivery_Location_ID",
-          "position": "66"
-        },
-        {
-          "ad_column_id": "803711",
-          "ad_table_id": "259",
-          "columnname": "CopyFromPO",
-          "position": "67"
-        },
-        {
-          "ad_column_id": "828EE0AE802C5FA1E040007F010067C7",
-          "ad_table_id": "259",
-          "columnname": "FIN_Paymentmethod_ID",
-          "position": "68"
-        },
-        {
-          "ad_column_id": "831B272EE4364C208EFA70098EDF29B4",
-          "ad_table_id": "259",
-          "columnname": "FIN_Payment_Priority_ID",
-          "position": "69"
-        },
-        {
-          "ad_column_id": "AF2B81F2F6CBCDB5E040007F01006F02",
-          "ad_table_id": "259",
-          "columnname": "RM_PickFromShipment",
-          "position": "70"
-        },
-        {
-          "ad_column_id": "AF2B81F2F6CDCDB5E040007F01006F02",
-          "ad_table_id": "259",
-          "columnname": "RM_ReceiveMaterials",
-          "position": "71"
-        },
-        {
-          "ad_column_id": "AF2B81F2F6CECDB5E040007F01006F02",
-          "ad_table_id": "259",
-          "columnname": "RM_CreateInvoice",
-          "position": "72"
-        },
-        {
-          "ad_column_id": "C66674DA045E47D1A50B3C5805326AB9",
-          "ad_table_id": "259",
-          "columnname": "C_Return_Reason_ID",
-          "position": "73"
-        },
-        {
-          "ad_column_id": "CCB0DDDAF34E4415B9DBEB51B4C36A33",
-          "ad_table_id": "259",
-          "columnname": "RM_AddOrphanLine",
-          "position": "74"
-        },
-        {
-          "ad_column_id": "1E2CDC6A59BF4277B0E0A5EA45332EE9",
-          "ad_table_id": "259",
-          "columnname": "A_Asset_ID",
-          "position": "75"
-        },
-        {
-          "ad_column_id": "98ADA80EF26D40C6A8FDB4FD9AFA6763",
-          "ad_table_id": "259",
-          "columnname": "Calculate_Promotions",
-          "position": "76"
-        },
-        {
-          "ad_column_id": "6CF3E69515CE4C3595538750AE208570",
-          "ad_table_id": "259",
-          "columnname": "C_Costcenter_ID",
-          "position": "77"
-        },
-        {
-          "ad_column_id": "154B76A81BCB4CD2AE569E0CC25A12FD",
-          "ad_table_id": "259",
-          "columnname": "Convertquotation",
-          "position": "78"
-        },
-        {
-          "ad_column_id": "E59D4BB7F1C342619CB4131FE4888FFA",
-          "ad_table_id": "259",
-          "columnname": "C_Reject_Reason_ID",
-          "position": "79"
-        },
-        {
-          "ad_column_id": "1E2AD60A472147B38A1C52F8CE473F19",
-          "ad_table_id": "259",
-          "columnname": "validuntil",
-          "position": "80"
-        },
-        {
-          "ad_column_id": "367DCAA9CF4442ADB9A76F6539102217",
-          "ad_table_id": "259",
-          "columnname": "Quotation_ID",
-          "position": "81"
-        },
-        {
-          "ad_column_id": "CE4E26D99C2EC060E040007F010027BD",
-          "ad_table_id": "259",
-          "columnname": "SO_Res_Status",
-          "position": "82"
-        },
-        {
-          "ad_column_id": "E071B334E376EEEBE040007F010016FA",
-          "ad_table_id": "259",
-          "columnname": "Create_POLines",
-          "position": "83"
-        },
-        {
-          "ad_column_id": "EBF93239BAC24CF19609CD1766D7B56C",
-          "ad_table_id": "259",
-          "columnname": "Iscashvat",
-          "position": "84"
-        },
-        {
-          "ad_column_id": "B22C83F80E9748D0B2E096984736918E",
-          "ad_table_id": "259",
-          "columnname": "RM_Pickfromreceipt",
-          "position": "85"
-        },
-        {
-          "ad_column_id": "9AEBE3623CCD4E6F820A2EB70F2F243D",
-          "ad_table_id": "259",
-          "columnname": "Cancelandreplace",
-          "position": "86"
-        },
-        {
-          "ad_column_id": "F8F6A13C5682DC4DE040007F01000363",
-          "ad_table_id": "259",
-          "columnname": "EM_APRM_AddPayment",
-          "position": "86"
-        },
-        {
-          "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
-          "ad_table_id": "259",
-          "columnname": "EM_Aeatsii_Fecha_Operacion",
-          "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
-        },
-        {
-          "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
-          "ad_table_id": "259",
-          "columnname": "EM_Aeatsii_Descripcion_Sii",
-          "position": "94"
-        },
-        {
-          "ad_column_id": "23CE6F2B4A694AD2836DB4636F783983",
-          "ad_table_id": "259",
-          "columnname": "EM_Etpr_Remove_Payment",
-          "position": "94"
-        },
-        {
-          "ad_column_id": "B51A586E40F64085806027AE460C27B5",
-          "ad_table_id": "259",
-          "columnname": "EM_Etvfac_Reversed_Invoice",
-          "position": "96"
-        },
-        {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
-          "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
-          "ad_table_id": "259",
-          "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "E01F12C1B9CE4539B145357B931F49FD",
-          "ad_table_id": "259",
-          "columnname": "EM_ETGO_Currency_Rate",
-          "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
-        },
-        {
-          "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
-          "ad_table_id": "259",
-          "columnname": "DeliveryStatus",
-          "position": null
-        },
-        {
-          "ad_column_id": "9B350DD4248848A7ACC12061D151E92D",
-          "ad_table_id": "259",
-          "columnname": "DeliveryStatusPurchase",
-          "position": null
-        },
-        {
-          "ad_column_id": "B5B203AE8D674B8DABC6669419815CA7",
-          "ad_table_id": "259",
-          "columnname": "InvoiceStatus",
-          "position": null
-        },
-        {
-          "ad_column_id": "9F1044EB393B4D60895532DB5D568BEE",
-          "ad_table_id": "259",
-          "columnname": "PaymentStatus",
-          "position": null
-        },
-        {
-          "ad_column_id": "2205",
-          "ad_table_id": "260",
-          "columnname": "C_OrderLine_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "2206",
-          "ad_table_id": "260",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "2207",
-          "ad_table_id": "260",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "2208",
-          "ad_table_id": "260",
-          "columnname": "IsActive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "2209",
-          "ad_table_id": "260",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "2210",
-          "ad_table_id": "260",
-          "columnname": "CreatedBy",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "2211",
-          "ad_table_id": "260",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "2212",
-          "ad_table_id": "260",
-          "columnname": "UpdatedBy",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "2213",
-          "ad_table_id": "260",
-          "columnname": "C_Order_ID",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "2214",
-          "ad_table_id": "260",
-          "columnname": "Line",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "2764",
-          "ad_table_id": "260",
-          "columnname": "C_BPartner_ID",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "3404",
-          "ad_table_id": "260",
-          "columnname": "C_BPartner_Location_ID",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "2216",
-          "ad_table_id": "260",
-          "columnname": "DateOrdered",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "2217",
-          "ad_table_id": "260",
-          "columnname": "DatePromised",
-          "position": "14"
-        },
-        {
-          "ad_column_id": "2218",
-          "ad_table_id": "260",
-          "columnname": "DateDelivered",
-          "position": "15"
-        },
-        {
-          "ad_column_id": "2219",
-          "ad_table_id": "260",
-          "columnname": "DateInvoiced",
-          "position": "16"
-        },
-        {
-          "ad_column_id": "2220",
-          "ad_table_id": "260",
-          "columnname": "Description",
-          "position": "17"
-        },
-        {
-          "ad_column_id": "2221",
-          "ad_table_id": "260",
-          "columnname": "M_Product_ID",
-          "position": "18"
-        },
-        {
-          "ad_column_id": "2223",
-          "ad_table_id": "260",
-          "columnname": "M_Warehouse_ID",
-          "position": "19"
-        },
-        {
-          "ad_column_id": "3048",
-          "ad_table_id": "260",
-          "columnname": "DirectShip",
-          "position": "20"
-        },
-        {
-          "ad_column_id": "2222",
-          "ad_table_id": "260",
-          "columnname": "C_UOM_ID",
-          "position": "21"
-        },
-        {
-          "ad_column_id": "2224",
-          "ad_table_id": "260",
-          "columnname": "QtyOrdered",
-          "position": "22"
-        },
-        {
-          "ad_column_id": "2225",
-          "ad_table_id": "260",
-          "columnname": "QtyReserved",
-          "position": "23"
-        },
-        {
-          "ad_column_id": "2226",
-          "ad_table_id": "260",
-          "columnname": "QtyDelivered",
-          "position": "24"
-        },
-        {
-          "ad_column_id": "2227",
-          "ad_table_id": "260",
-          "columnname": "QtyInvoiced",
-          "position": "25"
-        },
-        {
-          "ad_column_id": "2229",
-          "ad_table_id": "260",
-          "columnname": "M_Shipper_ID",
-          "position": "26"
-        },
-        {
-          "ad_column_id": "2230",
-          "ad_table_id": "260",
-          "columnname": "C_Currency_ID",
-          "position": "27"
-        },
-        {
-          "ad_column_id": "2231",
-          "ad_table_id": "260",
-          "columnname": "PriceList",
-          "position": "28"
-        },
-        {
-          "ad_column_id": "2232",
-          "ad_table_id": "260",
-          "columnname": "PriceActual",
-          "position": "29"
-        },
-        {
-          "ad_column_id": "4022",
-          "ad_table_id": "260",
-          "columnname": "PriceLimit",
-          "position": "30"
-        },
-        {
-          "ad_column_id": "3723",
-          "ad_table_id": "260",
-          "columnname": "LineNetAmt",
-          "position": "31"
-        },
-        {
-          "ad_column_id": "4031",
-          "ad_table_id": "260",
-          "columnname": "Discount",
-          "position": "32"
-        },
-        {
-          "ad_column_id": "3049",
-          "ad_table_id": "260",
-          "columnname": "FreightAmt",
-          "position": "33"
-        },
-        {
-          "ad_column_id": "3050",
-          "ad_table_id": "260",
-          "columnname": "C_Charge_ID",
-          "position": "34"
-        },
-        {
-          "ad_column_id": "3051",
-          "ad_table_id": "260",
-          "columnname": "ChargeAmt",
-          "position": "35"
-        },
-        {
-          "ad_column_id": "2235",
-          "ad_table_id": "260",
-          "columnname": "C_Tax_ID",
-          "position": "36"
-        },
-        {
-          "ad_column_id": "6775",
-          "ad_table_id": "260",
-          "columnname": "S_ResourceAssignment_ID",
-          "position": "37"
-        },
-        {
-          "ad_column_id": "7812",
-          "ad_table_id": "260",
-          "columnname": "Ref_OrderLine_ID",
-          "position": "38"
-        },
-        {
-          "ad_column_id": "8767",
-          "ad_table_id": "260",
-          "columnname": "M_AttributeSetInstance_ID",
-          "position": "39"
-        },
-        {
-          "ad_column_id": "9868",
-          "ad_table_id": "260",
-          "columnname": "IsDescription",
-          "position": "40"
-        },
-        {
-          "ad_column_id": "800004",
-          "ad_table_id": "260",
-          "columnname": "QuantityOrder",
-          "position": "41"
-        },
-        {
-          "ad_column_id": "800003",
-          "ad_table_id": "260",
-          "columnname": "M_Product_Uom_Id",
-          "position": "42"
-        },
-        {
-          "ad_column_id": "801165",
-          "ad_table_id": "260",
-          "columnname": "M_Offer_ID",
-          "position": "43"
-        },
-        {
-          "ad_column_id": "801166",
-          "ad_table_id": "260",
-          "columnname": "PriceStd",
-          "position": "44"
-        },
-        {
-          "ad_column_id": "14814F507BF440C1A7A3A64D9066C49F",
-          "ad_table_id": "260",
-          "columnname": "CANCELPRICEAD",
-          "position": "45"
-        },
-        {
-          "ad_column_id": "68142DE975336AAFE040007F01012F8D",
-          "ad_table_id": "260",
-          "columnname": "C_Order_Discount_ID",
-          "position": "46"
-        },
-        {
-          "ad_column_id": "7E011D1981B2E366E040007F01013030",
-          "ad_table_id": "260",
-          "columnname": "Iseditlinenetamt",
-          "position": "47"
-        },
-        {
-          "ad_column_id": "7E28A3F0EA09F997E040007F01006F15",
-          "ad_table_id": "260",
-          "columnname": "Taxbaseamt",
-          "position": "48"
-        },
-        {
-          "ad_column_id": "AF2B81C4FC82B807E040007F01006F3D",
-          "ad_table_id": "260",
-          "columnname": "M_Inoutline_ID",
-          "position": "49"
-        },
-        {
-          "ad_column_id": "6769A5EF62DF47F3A68B04AF8298AA5A",
-          "ad_table_id": "260",
-          "columnname": "C_Return_Reason_ID",
-          "position": "50"
-        },
-        {
-          "ad_column_id": "EB0B8E4554EF4A9CA512B9C5FF4FFABF",
-          "ad_table_id": "260",
-          "columnname": "Gross_Unit_Price",
-          "position": "51"
-        },
-        {
-          "ad_column_id": "025E1896618449A4B30FE9CC729CC615",
-          "ad_table_id": "260",
-          "columnname": "Line_Gross_Amount",
-          "position": "52"
-        },
-        {
-          "ad_column_id": "C4EEB8D909C48483E040007F01001710",
-          "ad_table_id": "260",
-          "columnname": "GrossPriceList",
-          "position": "53"
-        },
-        {
-          "ad_column_id": "4BDAB25F4E75423DBF487DA8533282BD",
-          "ad_table_id": "260",
-          "columnname": "C_Costcenter_ID",
-          "position": "54"
-        },
-        {
-          "ad_column_id": "9E7E0CF74B80471094024EE8181BD14B",
-          "ad_table_id": "260",
-          "columnname": "grosspricestd",
-          "position": "55"
-        },
-        {
-          "ad_column_id": "6B6445E10CA84681A0C1B25C299F9CBA",
-          "ad_table_id": "260",
-          "columnname": "A_Asset_ID",
-          "position": "56"
-        },
-        {
-          "ad_column_id": "CB9E308EE8DFDCBAE040007F010001E7",
-          "ad_table_id": "260",
-          "columnname": "M_Warehouse_Rule_ID",
-          "position": "57"
-        },
-        {
-          "ad_column_id": "8CAD7261EEDA4B9399990094D1D285FB",
-          "ad_table_id": "260",
-          "columnname": "User1_ID",
-          "position": "58"
-        },
-        {
-          "ad_column_id": "E9612846B6F5472A8F64CF729E0B25AE",
-          "ad_table_id": "260",
-          "columnname": "Quotationline_ID",
-          "position": "59"
-        },
-        {
-          "ad_column_id": "69EFBAC452404EDCA43212FA04D9464D",
-          "ad_table_id": "260",
-          "columnname": "User2_ID",
-          "position": "60"
-        },
-        {
-          "ad_column_id": "CCCD60BB98EDDFF7E040007F01006A5A",
-          "ad_table_id": "260",
-          "columnname": "Create_Reservation",
-          "position": "61"
-        },
-        {
-          "ad_column_id": "B2023461A08649D58E5D144D4FC2C507",
-          "ad_table_id": "260",
-          "columnname": "C_Project_ID",
-          "position": "62"
-        },
-        {
-          "ad_column_id": "CE4DBA92A2E80C3CE040007F0100316C",
-          "ad_table_id": "260",
-          "columnname": "SO_Res_Status",
-          "position": "63"
-        },
-        {
-          "ad_column_id": "CE612A71B701D54AE040007F01001500",
-          "ad_table_id": "260",
-          "columnname": "Manage_Reservation",
-          "position": "64"
-        },
-        {
-          "ad_column_id": "CE87A0172A66C01CE040007F01003234",
-          "ad_table_id": "260",
-          "columnname": "Manage_Prereservation",
-          "position": "65"
-        },
-        {
-          "ad_column_id": "A8DDAF547BE745EEAB8967F47308486B",
-          "ad_table_id": "260",
-          "columnname": "Explode",
-          "position": "66"
-        },
-        {
-          "ad_column_id": "9E6D689864154F91B98ACB746EB9C507",
-          "ad_table_id": "260",
-          "columnname": "BOM_Parent_ID",
-          "position": "67"
-        },
-        {
-          "ad_column_id": "C724ECE5B05848489719C64111425FDB",
-          "ad_table_id": "260",
-          "columnname": "Replacedorderline_id",
-          "position": "68"
-        },
-        {
-          "ad_column_id": "4EA73125B044436198DB81CFF08E94D6",
-          "ad_table_id": "260",
-          "columnname": "Print_Description",
-          "position": "69"
-        },
-        {
-          "ad_column_id": "71F11E61216A4BD8A165B892D5904848",
-          "ad_table_id": "260",
-          "columnname": "Overdue_Return_Days",
-          "position": "70"
-        },
-        {
-          "ad_column_id": "33EFF29653024C0E99CAB3E79F01F205",
-          "ad_table_id": "260",
-          "columnname": "Relate_Orderline",
-          "position": "71"
-        },
-        {
-          "ad_column_id": "986686B366B044BD8C1E27B729EF9ABB",
-          "ad_table_id": "260",
-          "columnname": "C_Aum",
-          "position": "72"
-        },
-        {
-          "ad_column_id": "BAA3518A49E842DFB007FC6C2BDDCE64",
-          "ad_table_id": "260",
-          "columnname": "Aumqty",
-          "position": "73"
-        },
-        {
-          "ad_column_id": "E1D1BA1B8B0B43BBB14BEAF0C72EEA5D",
-          "ad_table_id": "260",
-          "columnname": "Returnline",
-          "position": "79"
-        },
-        {
-          "ad_column_id": "521F8231190A6C29E040007F01001B31",
-          "ad_table_id": "314",
-          "columnname": "C_OrderTax_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "3355",
-          "ad_table_id": "314",
-          "columnname": "C_Order_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "3356",
-          "ad_table_id": "314",
-          "columnname": "C_Tax_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "3348",
-          "ad_table_id": "314",
-          "columnname": "AD_Client_ID",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "3349",
-          "ad_table_id": "314",
-          "columnname": "AD_Org_ID",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "3350",
-          "ad_table_id": "314",
-          "columnname": "IsActive",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "3351",
-          "ad_table_id": "314",
-          "columnname": "Created",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "3352",
-          "ad_table_id": "314",
-          "columnname": "CreatedBy",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "3353",
-          "ad_table_id": "314",
-          "columnname": "Updated",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "3354",
-          "ad_table_id": "314",
-          "columnname": "UpdatedBy",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "3766",
-          "ad_table_id": "314",
-          "columnname": "TaxBaseAmt",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "3767",
-          "ad_table_id": "314",
-          "columnname": "TaxAmt",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "803239",
-          "ad_table_id": "314",
-          "columnname": "Line",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "802DBB308CF6C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Fin_Payment_Sched_Ord_V_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "802DBB308CF7C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "802DBB308CF8C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "802DBB308CF9C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Isactive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "802DBB308CFAC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "802DBB308CFBC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Createdby",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "802DBB308CFCC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "802DBB308CFDC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Updatedby",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "802DBB308CFEC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "C_Invoice_ID",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "802DBB308CFFC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "C_Order_ID",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "802DBB308D00C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Duedate",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "802DBB308D01C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "FIN_Paymentmethod_ID",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "802DBB308D02C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Expected",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "802DBB308D03C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Received",
-          "position": "14"
-        },
-        {
-          "ad_column_id": "802DBB308D04C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Outstanding",
-          "position": "15"
-        },
-        {
-          "ad_column_id": "802DBB308D05C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "C_Currency_ID",
-          "position": "16"
-        },
-        {
-          "ad_column_id": "802DBB308D06C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Lastpayment",
-          "position": "17"
-        },
-        {
-          "ad_column_id": "802DBB308D07C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Numberofpayments",
-          "position": "18"
-        },
-        {
-          "ad_column_id": "51459B51FC494A6D90DF9D9CE5A89653",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "FIN_Payment_Priority_ID",
-          "position": "19"
-        },
-        {
-          "ad_column_id": "81C4432CDC76416896A6421BA60A2324",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Update_Payment_Plan",
-          "position": "20"
-        },
-        {
-          "ad_column_id": "78D16B5B1787661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Fin_Payment_Detail_V_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "78D16B5B1788661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "78D16B5B1789661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "78D16B5B178A661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Isactive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "78D16B5B178B661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "78D16B5B178C661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Createdby",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "78D16B5B178D661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "78D16B5B178E661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Updatedby",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "7FF2234748E8844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Fin_Payment_Sched_Ord_V_Id",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "F20FDC4004064C7CB665BD655B0F307D",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "FIN_Payment_Sched_Inv_ID",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "5050E5D10E5B4D94BF36BEF4E578313B",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "FIN_Payment_Sched_Ord_ID",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "7FF2234748E9844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Invoiceno",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "7FF2234748EA844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Orderno",
-          "position": "14"
-        },
-        {
-          "ad_column_id": "7FF2234748EB844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Paymentno",
-          "position": "15"
-        },
-        {
-          "ad_column_id": "7FF2234748EC844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "FIN_Payment_ID",
-          "position": "16"
-        },
-        {
-          "ad_column_id": "7FF2234748ED844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Duedate",
-          "position": "17"
-        },
-        {
-          "ad_column_id": "7FF2234748EE844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Invoicedamt",
-          "position": "18"
-        },
-        {
-          "ad_column_id": "7FF2234748EF844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Expected",
-          "position": "19"
-        },
-        {
-          "ad_column_id": "7FF2234748F0844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Paidamt",
-          "position": "20"
-        },
-        {
-          "ad_column_id": "7FF2234748F1844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Bpartner_ID",
-          "position": "21"
-        },
-        {
-          "ad_column_id": "7DC34559B3F7B45BE040007F0100784A",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Fin_Paymentmethod_ID",
-          "position": "22"
-        },
-        {
-          "ad_column_id": "7FF2234748F2844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Fin_Financial_Account_ID",
-          "position": "23"
-        },
-        {
-          "ad_column_id": "E94E132EFCCC422CA9DB4E98BB648E92",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Currency_ID",
-          "position": "24"
-        },
-        {
-          "ad_column_id": "78D16B5B178F661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Paymentdate",
-          "position": "25"
-        },
-        {
-          "ad_column_id": "84BE5A55A365CEFEE040007F01000402",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Glitemname",
-          "position": "26"
-        },
-        {
-          "ad_column_id": "8D6169322485477F8D53E2E246723D3A",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Writeoffamt",
-          "position": "27"
-        },
-        {
-          "ad_column_id": "3DFAB9DBB8D143A3951271CBE02C224F",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Finacc_Currency_ID",
-          "position": "28"
-        },
-        {
-          "ad_column_id": "85072D35A21C4487A9B16A210878D3C8",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Finacc_Txn_Convert_Rate",
-          "position": "29"
-        },
-        {
-          "ad_column_id": "8DF9D8A154DC4353ACD4F91DA30CA06E",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "PaidConverted",
-          "position": "30"
-        },
-        {
-          "ad_column_id": "91375A8F85DF48FFA962C940E9BAF889",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "ExpectedConverted",
-          "position": "31"
-        },
-        {
-          "ad_column_id": "7299BF93D2984DF8932FE2800DA0ED2A",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Iscanceled",
-          "position": "32"
-        },
-        {
-          "ad_column_id": "20217D869BFD41938E250F7F7528E06F",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Bpartner_Id_Dim",
-          "position": "33"
-        },
-        {
-          "ad_column_id": "9C7C878101214039A2BEAE25ED564B4B",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Activity_ID",
-          "position": "34"
-        },
-        {
-          "ad_column_id": "29292D14E1CA4C2E9F1219D50AF35491",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "M_Product_ID",
-          "position": "35"
-        },
-        {
-          "ad_column_id": "9FFD173571C74908A5F48C4C44C5E8C1",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Campaign_ID",
-          "position": "36"
-        },
-        {
-          "ad_column_id": "1C30BBC88DEA4E40831C616E1D34973B",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Project_ID",
-          "position": "37"
-        },
-        {
-          "ad_column_id": "A58DFDE11BF342779F8FAF40B84E8899",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Salesregion_ID",
-          "position": "38"
-        },
-        {
-          "ad_column_id": "C1DE4479A025001AE040007F01000C7E",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Status",
-          "position": "39"
-        },
-        {
-          "ad_column_id": "C8B98FF8B51C43F7B12E8C448B0A2725",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "EM_APRM_Displayed_Paymmeth_ID",
-          "position": "40"
-        },
-        {
-          "ad_column_id": "47DC39551EA14F5E861296054B731B26",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "EM_APRM_Displayed_Acc_ID",
-          "position": "41"
-        },
-        {
-          "ad_column_id": "7E562C34A0496EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "C_Orderlinetax_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "7E562C34A04A6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "C_Orderline_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "7E562C34A04B6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "C_Tax_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "7E562C34A04C6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "AD_Client_ID",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "7E562C34A04D6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "AD_Org_ID",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "7E562C34A04E6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Isactive",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "7E562C34A04F6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Created",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "7E562C34A0506EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Createdby",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "7E562C34A0516EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Updated",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "7E562C34A0526EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Updatedby",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "7E562C34A0536EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Taxbaseamt",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "7E562C34A0546EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Taxamt",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "7E562C34A0556EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Line",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "7E55E529C694721EE040007F01002C65",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "C_Order_ID",
-          "position": "14"
-        }
-      ]
-    },
     "81933096771953c6cf094e465f86e91738157acf5f9d32e9a078c92c5281ca5e": {
       "checksum": "e577ced972aa9d0c7a0dcdcd4916c3e9f4d5f1f547e4c8db354113bf28a4c552",
       "params": [
@@ -22045,6 +20551,110 @@
         }
       ]
     },
+    "88ad8a1f069401e3146d7f655acfc6a28ca92062200daae9b33395feed8061f1": {
+      "checksum": "5aa1325b31e694a9e531c904547efe279dbf96f9da9fc4b1403e2f64ef2ef361",
+      "params": [
+        "116"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "778",
+          "ad_table_id": "140",
+          "columnname": "C_Conversion_Rate_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "779",
+          "ad_table_id": "140",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "780",
+          "ad_table_id": "140",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "781",
+          "ad_table_id": "140",
+          "columnname": "IsActive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "782",
+          "ad_table_id": "140",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "783",
+          "ad_table_id": "140",
+          "columnname": "CreatedBy",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "784",
+          "ad_table_id": "140",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "785",
+          "ad_table_id": "140",
+          "columnname": "UpdatedBy",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "786",
+          "ad_table_id": "140",
+          "columnname": "C_Currency_ID",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "787",
+          "ad_table_id": "140",
+          "columnname": "C_Currency_ID_To",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "453",
+          "ad_table_id": "140",
+          "columnname": "ValidFrom",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "454",
+          "ad_table_id": "140",
+          "columnname": "ValidTo",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "788",
+          "ad_table_id": "140",
+          "columnname": "ConversionRateType",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "455",
+          "ad_table_id": "140",
+          "columnname": "MultiplyRate",
+          "position": "14"
+        },
+        {
+          "ad_column_id": "456",
+          "ad_table_id": "140",
+          "columnname": "DivideRate",
+          "position": "15"
+        },
+        {
+          "ad_column_id": "8552BAB04A1A4F779EF4875B78C4D5BB",
+          "ad_table_id": "140",
+          "columnname": "EM_SMFCR_Is_Synced",
+          "position": null
+        }
+      ]
+    },
     "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
       "checksum": "4f870dc09fc1ee3d2c2dbb68e375f28045646215a7cea32d40b8266280dca6a3",
       "params": [
@@ -23152,7 +21762,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "a39d01a97b89ab267902eef515a809185e065ee2ad3169723f9a1b78bef101ae",
+      "checksum": "13a0bd7468d92cb91b628baa09efae3d25682328f9fd62d18fdff34101553735",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -23758,16 +22368,46 @@
           "position": "86"
         },
         {
+          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
+          "ad_table_id": "259",
+          "columnname": "Confirmcancelandreplace",
+          "position": "87"
+        },
+        {
+          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
+          "ad_table_id": "259",
+          "columnname": "Cancelledorder_id",
+          "position": "88"
+        },
+        {
+          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
+          "ad_table_id": "259",
+          "columnname": "Replacedorder_id",
+          "position": "89"
+        },
+        {
+          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
+          "ad_table_id": "259",
+          "columnname": "Iscancelled",
+          "position": "90"
+        },
+        {
+          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
+          "ad_table_id": "259",
+          "columnname": "Replacementorder_ID",
+          "position": "91"
+        },
+        {
+          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
+          "ad_table_id": "259",
+          "columnname": "BPartner_ExtRef",
+          "position": "92"
+        },
+        {
           "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Fecha_Operacion",
           "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
         },
         {
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
@@ -23788,21 +22428,9 @@
           "position": "96"
         },
         {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
           "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
           "ad_table_id": "259",
           "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
           "position": "98"
         },
         {
@@ -23810,24 +22438,6 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -24461,8 +23071,100 @@
         }
       ]
     },
+    "99c77d72fc6f49da80e9db85826999d4bdb48df40b9db4d4c619f80ac282732a": {
+      "checksum": "bc86913da409ca77671de0aa57b019c008590b6fad68e1d27d13aba1ac718bb4",
+      "params": [
+        "6FEBA130CDE24CC09041FFA6117ADFA9"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "53000F063FF44374BBD1F5A5EF47C43B",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Smfcr_Sync_Log_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "A96BB81DA60240CCAAC613968946D87B",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "72C907AB07B546A2A51A24CC4AEC8D1E",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "F9BE9B3C7D0F4756960C08124BFC9C1C",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "FCF2258A70FF4B8B939E095FBDFBBC2D",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "2D6D0A497F5E4714863434296821E553",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "B9BBE78BD82A48D6866D3718BB3B0E61",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "1B7BBCA597E64C1CBE3C5179D94B3EA9",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "406F84B0A2BD46CE857B3AE320996193",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "sync_date",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "F0D3B88D5B894E7D811B3A97A7984E53",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "pairs_updated",
+          "position": "10"
+        },
+        {
+          "ad_column_id": "3E732F6D5450485199A5D0D45CD9571C",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "pairs_failed",
+          "position": "11"
+        },
+        {
+          "ad_column_id": "64CEED0F225341728BADB3203E870076",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "error_detail",
+          "position": "12"
+        },
+        {
+          "ad_column_id": "D0DAD836EFF44CE7A427CD27EC0FE61B",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "duration_ms",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "47CC432AFEBE4A1B8A962F82EC267A30",
+          "ad_table_id": "BA820F5D8A194AB69D508BE4A83DE42F",
+          "columnname": "status",
+          "position": "15"
+        }
+      ]
+    },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
-      "checksum": "12ec7e2f05f32988b1ca4f26074a209f525459ee15b90e993b7ae541750a2016",
+      "checksum": "8e8857a5c7dcc6cd076a5b1cb4a61d1803b32c713ee47ecfc0da1a1c2c65211f",
       "params": [
         "273673D2ED914C399A6C51DB758BE0F9"
       ],
@@ -24880,6 +23582,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
@@ -26546,7 +25254,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "50a22294cb954a339dfa045493a2f37fd31e9edbbff706a885c729b62b65e278",
+      "checksum": "661844af84cab59c035c5fde7fd88202736f86ea3307f14ab7dcf383d8c24872",
       "params": [
         "140"
       ],
@@ -27360,6 +26068,24 @@
           "ad_table_id": "208",
           "columnname": "Copyservicemodifytaxconfig",
           "position": "128"
+        },
+        {
+          "ad_column_id": "E307979CE47A48BAAA63F411BDBD0A29",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Sale_Price",
+          "position": "990"
+        },
+        {
+          "ad_column_id": "4E5E594900C84D10B02E12D254388499",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Purchase_Price",
+          "position": "991"
+        },
+        {
+          "ad_column_id": "8FC9A2CD267543C994F4F8F8BF8A02CC",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Stock",
+          "position": "992"
         },
         {
           "ad_column_id": "521F823119706C29E040007F01001B31",
@@ -29688,7 +28414,7 @@
       ]
     },
     "d762ff016bca659cec9b3ea6091e7975b8e08865bfb35fdd621af88fa1f69d14": {
-      "checksum": "cb0856ffef88ea4d03b581423f32e7891354d25eba5a8c596a2a6eb0decaa9fd",
+      "checksum": "7acb52d683512f4725b1dea971a7ca9bae795a00ed2700ed9aa72c2af9003007",
       "params": [
         "146"
       ],
@@ -29884,6 +28610,12 @@
           "ad_table_id": "255",
           "columnname": "Costbased",
           "position": "17"
+        },
+        {
+          "ad_column_id": "DC10157FBF74473F8ABE3281AB85301D",
+          "ad_table_id": "255",
+          "columnname": "EM_Etgo_Productcount",
+          "position": "19"
         },
         {
           "ad_column_id": "2987",
@@ -31325,1804 +30057,8 @@
         }
       ]
     },
-    "dc3625edf6e3b3ba3d373862af247d21be277872e900727c4a4025b968fa702b": {
-      "checksum": "60374bb88402e721f97103b2afec243e0e1ac68224d09555a1d5cee62ecbbaa8",
-      "params": [
-        "FF808081330213E60133021822E40007"
-      ],
-      "rows": [
-        {
-          "ad_column_id": "1011100000",
-          "ad_table_id": "1011100000",
-          "columnname": "C_Order_Discount_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "1011100001",
-          "ad_table_id": "1011100000",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "1011100002",
-          "ad_table_id": "1011100000",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "1011100003",
-          "ad_table_id": "1011100000",
-          "columnname": "Isactive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "1011100004",
-          "ad_table_id": "1011100000",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "1011100005",
-          "ad_table_id": "1011100000",
-          "columnname": "Createdby",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "1011100006",
-          "ad_table_id": "1011100000",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "1011100007",
-          "ad_table_id": "1011100000",
-          "columnname": "Updatedby",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "1011100008",
-          "ad_table_id": "1011100000",
-          "columnname": "C_Order_ID",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "1011100009",
-          "ad_table_id": "1011100000",
-          "columnname": "C_Discount_ID",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "1011100010",
-          "ad_table_id": "1011100000",
-          "columnname": "Line",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "1011100011",
-          "ad_table_id": "1011100000",
-          "columnname": "Cascade",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "D1F957E287C34F52BFFC24149058FDA4",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "columnname": "amount",
-          "position": null
-        },
-        {
-          "ad_column_id": "74D9CD13EC8E47AF9322EA857DEE3BBA",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "columnname": "attributeSetValue",
-          "position": null
-        },
-        {
-          "ad_column_id": "6395A97EC1AB49A087A2EF98268EEE91",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "columnname": "documentNo",
-          "position": null
-        },
-        {
-          "ad_column_id": "167E9E75670F4921964F3EB928B3C92E",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "columnname": "id",
-          "position": null
-        },
-        {
-          "ad_column_id": "F2E3FEB60A004EB6A237CFE7F32C1262",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "columnname": "lineNo",
-          "position": null
-        },
-        {
-          "ad_column_id": "12F5170C647C493E9ABE51BB256EDBC2",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "columnname": "orderlineRelated",
-          "position": null
-        },
-        {
-          "ad_column_id": "12ABCD6B91A348CBB09D4629CA6E707A",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "columnname": "product",
-          "position": null
-        },
-        {
-          "ad_column_id": "7449A65E0066477697162F6A84E92342",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "columnname": "quantity",
-          "position": null
-        },
-        {
-          "ad_column_id": "6C64380C32C24FD2BC24DD16A323E4A4",
-          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
-          "columnname": "salesOrderLine",
-          "position": null
-        },
-        {
-          "ad_column_id": "2161",
-          "ad_table_id": "259",
-          "columnname": "C_Order_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "2162",
-          "ad_table_id": "259",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "2163",
-          "ad_table_id": "259",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "2164",
-          "ad_table_id": "259",
-          "columnname": "IsActive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "2165",
-          "ad_table_id": "259",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "2166",
-          "ad_table_id": "259",
-          "columnname": "CreatedBy",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "2167",
-          "ad_table_id": "259",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "2168",
-          "ad_table_id": "259",
-          "columnname": "UpdatedBy",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "3718",
-          "ad_table_id": "259",
-          "columnname": "IsSOTrx",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "2169",
-          "ad_table_id": "259",
-          "columnname": "DocumentNo",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "2170",
-          "ad_table_id": "259",
-          "columnname": "DocStatus",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "2171",
-          "ad_table_id": "259",
-          "columnname": "DocAction",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "2453",
-          "ad_table_id": "259",
-          "columnname": "Processing",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "3398",
-          "ad_table_id": "259",
-          "columnname": "Processed",
-          "position": "14"
-        },
-        {
-          "ad_column_id": "2172",
-          "ad_table_id": "259",
-          "columnname": "C_DocType_ID",
-          "position": "15"
-        },
-        {
-          "ad_column_id": "2173",
-          "ad_table_id": "259",
-          "columnname": "C_DocTypeTarget_ID",
-          "position": "16"
-        },
-        {
-          "ad_column_id": "2174",
-          "ad_table_id": "259",
-          "columnname": "Description",
-          "position": "17"
-        },
-        {
-          "ad_column_id": "2177",
-          "ad_table_id": "259",
-          "columnname": "IsDelivered",
-          "position": "18"
-        },
-        {
-          "ad_column_id": "2178",
-          "ad_table_id": "259",
-          "columnname": "IsInvoiced",
-          "position": "19"
-        },
-        {
-          "ad_column_id": "2179",
-          "ad_table_id": "259",
-          "columnname": "IsPrinted",
-          "position": "20"
-        },
-        {
-          "ad_column_id": "4699",
-          "ad_table_id": "259",
-          "columnname": "IsSelected",
-          "position": "21"
-        },
-        {
-          "ad_column_id": "2186",
-          "ad_table_id": "259",
-          "columnname": "SalesRep_ID",
-          "position": "22"
-        },
-        {
-          "ad_column_id": "2181",
-          "ad_table_id": "259",
-          "columnname": "DateOrdered",
-          "position": "23"
-        },
-        {
-          "ad_column_id": "2182",
-          "ad_table_id": "259",
-          "columnname": "DatePromised",
-          "position": "24"
-        },
-        {
-          "ad_column_id": "3719",
-          "ad_table_id": "259",
-          "columnname": "DatePrinted",
-          "position": "25"
-        },
-        {
-          "ad_column_id": "2183",
-          "ad_table_id": "259",
-          "columnname": "DateAcct",
-          "position": "26"
-        },
-        {
-          "ad_column_id": "2762",
-          "ad_table_id": "259",
-          "columnname": "C_BPartner_ID",
-          "position": "27"
-        },
-        {
-          "ad_column_id": "2189",
-          "ad_table_id": "259",
-          "columnname": "BillTo_ID",
-          "position": "28"
-        },
-        {
-          "ad_column_id": "3400",
-          "ad_table_id": "259",
-          "columnname": "C_BPartner_Location_ID",
-          "position": "29"
-        },
-        {
-          "ad_column_id": "3045",
-          "ad_table_id": "259",
-          "columnname": "POReference",
-          "position": "30"
-        },
-        {
-          "ad_column_id": "4298",
-          "ad_table_id": "259",
-          "columnname": "IsDiscountPrinted",
-          "position": "31"
-        },
-        {
-          "ad_column_id": "2191",
-          "ad_table_id": "259",
-          "columnname": "C_Currency_ID",
-          "position": "32"
-        },
-        {
-          "ad_column_id": "4019",
-          "ad_table_id": "259",
-          "columnname": "PaymentRule",
-          "position": "33"
-        },
-        {
-          "ad_column_id": "2187",
-          "ad_table_id": "259",
-          "columnname": "C_PaymentTerm_ID",
-          "position": "34"
-        },
-        {
-          "ad_column_id": "2192",
-          "ad_table_id": "259",
-          "columnname": "InvoiceRule",
-          "position": "35"
-        },
-        {
-          "ad_column_id": "3721",
-          "ad_table_id": "259",
-          "columnname": "DeliveryRule",
-          "position": "36"
-        },
-        {
-          "ad_column_id": "3722",
-          "ad_table_id": "259",
-          "columnname": "FreightCostRule",
-          "position": "37"
-        },
-        {
-          "ad_column_id": "2195",
-          "ad_table_id": "259",
-          "columnname": "FreightAmt",
-          "position": "38"
-        },
-        {
-          "ad_column_id": "2196",
-          "ad_table_id": "259",
-          "columnname": "DeliveryViaRule",
-          "position": "39"
-        },
-        {
-          "ad_column_id": "2197",
-          "ad_table_id": "259",
-          "columnname": "M_Shipper_ID",
-          "position": "40"
-        },
-        {
-          "ad_column_id": "3046",
-          "ad_table_id": "259",
-          "columnname": "C_Charge_ID",
-          "position": "41"
-        },
-        {
-          "ad_column_id": "3047",
-          "ad_table_id": "259",
-          "columnname": "ChargeAmt",
-          "position": "42"
-        },
-        {
-          "ad_column_id": "E5F6A7B8C9DA490030F5A6B7C8D9E0F1",
-          "ad_table_id": "259",
-          "columnname": "EM_Psd2_Generate_Bank_Payment",
-          "position": "42"
-        },
-        {
-          "ad_column_id": "2198",
-          "ad_table_id": "259",
-          "columnname": "PriorityRule",
-          "position": "43"
-        },
-        {
-          "ad_column_id": "2200",
-          "ad_table_id": "259",
-          "columnname": "TotalLines",
-          "position": "44"
-        },
-        {
-          "ad_column_id": "2201",
-          "ad_table_id": "259",
-          "columnname": "GrandTotal",
-          "position": "45"
-        },
-        {
-          "ad_column_id": "2202",
-          "ad_table_id": "259",
-          "columnname": "M_Warehouse_ID",
-          "position": "46"
-        },
-        {
-          "ad_column_id": "2204",
-          "ad_table_id": "259",
-          "columnname": "M_PriceList_ID",
-          "position": "47"
-        },
-        {
-          "ad_column_id": "4651",
-          "ad_table_id": "259",
-          "columnname": "IsTaxIncluded",
-          "position": "48"
-        },
-        {
-          "ad_column_id": "2454",
-          "ad_table_id": "259",
-          "columnname": "C_Campaign_ID",
-          "position": "49"
-        },
-        {
-          "ad_column_id": "3402",
-          "ad_table_id": "259",
-          "columnname": "C_Project_ID",
-          "position": "50"
-        },
-        {
-          "ad_column_id": "3403",
-          "ad_table_id": "259",
-          "columnname": "C_Activity_ID",
-          "position": "51"
-        },
-        {
-          "ad_column_id": "4650",
-          "ad_table_id": "259",
-          "columnname": "Posted",
-          "position": "52"
-        },
-        {
-          "ad_column_id": "2763",
-          "ad_table_id": "259",
-          "columnname": "AD_User_ID",
-          "position": "53"
-        },
-        {
-          "ad_column_id": "8765",
-          "ad_table_id": "259",
-          "columnname": "CopyFrom",
-          "position": "54"
-        },
-        {
-          "ad_column_id": "8764",
-          "ad_table_id": "259",
-          "columnname": "DropShip_BPartner_ID",
-          "position": "55"
-        },
-        {
-          "ad_column_id": "8766",
-          "ad_table_id": "259",
-          "columnname": "DropShip_Location_ID",
-          "position": "56"
-        },
-        {
-          "ad_column_id": "8763",
-          "ad_table_id": "259",
-          "columnname": "DropShip_User_ID",
-          "position": "57"
-        },
-        {
-          "ad_column_id": "8832",
-          "ad_table_id": "259",
-          "columnname": "IsSelfService",
-          "position": "58"
-        },
-        {
-          "ad_column_id": "9331",
-          "ad_table_id": "259",
-          "columnname": "AD_OrgTrx_ID",
-          "position": "59"
-        },
-        {
-          "ad_column_id": "9569",
-          "ad_table_id": "259",
-          "columnname": "User1_ID",
-          "position": "60"
-        },
-        {
-          "ad_column_id": "9568",
-          "ad_table_id": "259",
-          "columnname": "User2_ID",
-          "position": "61"
-        },
-        {
-          "ad_column_id": "800139",
-          "ad_table_id": "259",
-          "columnname": "Deliverynotes",
-          "position": "62"
-        },
-        {
-          "ad_column_id": "800140",
-          "ad_table_id": "259",
-          "columnname": "C_Incoterms_ID",
-          "position": "63"
-        },
-        {
-          "ad_column_id": "800141",
-          "ad_table_id": "259",
-          "columnname": "Incotermsdescription",
-          "position": "64"
-        },
-        {
-          "ad_column_id": "800274",
-          "ad_table_id": "259",
-          "columnname": "Generatetemplate",
-          "position": "65"
-        },
-        {
-          "ad_column_id": "802485",
-          "ad_table_id": "259",
-          "columnname": "Delivery_Location_ID",
-          "position": "66"
-        },
-        {
-          "ad_column_id": "803711",
-          "ad_table_id": "259",
-          "columnname": "CopyFromPO",
-          "position": "67"
-        },
-        {
-          "ad_column_id": "828EE0AE802C5FA1E040007F010067C7",
-          "ad_table_id": "259",
-          "columnname": "FIN_Paymentmethod_ID",
-          "position": "68"
-        },
-        {
-          "ad_column_id": "831B272EE4364C208EFA70098EDF29B4",
-          "ad_table_id": "259",
-          "columnname": "FIN_Payment_Priority_ID",
-          "position": "69"
-        },
-        {
-          "ad_column_id": "AF2B81F2F6CBCDB5E040007F01006F02",
-          "ad_table_id": "259",
-          "columnname": "RM_PickFromShipment",
-          "position": "70"
-        },
-        {
-          "ad_column_id": "AF2B81F2F6CDCDB5E040007F01006F02",
-          "ad_table_id": "259",
-          "columnname": "RM_ReceiveMaterials",
-          "position": "71"
-        },
-        {
-          "ad_column_id": "AF2B81F2F6CECDB5E040007F01006F02",
-          "ad_table_id": "259",
-          "columnname": "RM_CreateInvoice",
-          "position": "72"
-        },
-        {
-          "ad_column_id": "C66674DA045E47D1A50B3C5805326AB9",
-          "ad_table_id": "259",
-          "columnname": "C_Return_Reason_ID",
-          "position": "73"
-        },
-        {
-          "ad_column_id": "CCB0DDDAF34E4415B9DBEB51B4C36A33",
-          "ad_table_id": "259",
-          "columnname": "RM_AddOrphanLine",
-          "position": "74"
-        },
-        {
-          "ad_column_id": "1E2CDC6A59BF4277B0E0A5EA45332EE9",
-          "ad_table_id": "259",
-          "columnname": "A_Asset_ID",
-          "position": "75"
-        },
-        {
-          "ad_column_id": "98ADA80EF26D40C6A8FDB4FD9AFA6763",
-          "ad_table_id": "259",
-          "columnname": "Calculate_Promotions",
-          "position": "76"
-        },
-        {
-          "ad_column_id": "6CF3E69515CE4C3595538750AE208570",
-          "ad_table_id": "259",
-          "columnname": "C_Costcenter_ID",
-          "position": "77"
-        },
-        {
-          "ad_column_id": "154B76A81BCB4CD2AE569E0CC25A12FD",
-          "ad_table_id": "259",
-          "columnname": "Convertquotation",
-          "position": "78"
-        },
-        {
-          "ad_column_id": "E59D4BB7F1C342619CB4131FE4888FFA",
-          "ad_table_id": "259",
-          "columnname": "C_Reject_Reason_ID",
-          "position": "79"
-        },
-        {
-          "ad_column_id": "1E2AD60A472147B38A1C52F8CE473F19",
-          "ad_table_id": "259",
-          "columnname": "validuntil",
-          "position": "80"
-        },
-        {
-          "ad_column_id": "367DCAA9CF4442ADB9A76F6539102217",
-          "ad_table_id": "259",
-          "columnname": "Quotation_ID",
-          "position": "81"
-        },
-        {
-          "ad_column_id": "CE4E26D99C2EC060E040007F010027BD",
-          "ad_table_id": "259",
-          "columnname": "SO_Res_Status",
-          "position": "82"
-        },
-        {
-          "ad_column_id": "E071B334E376EEEBE040007F010016FA",
-          "ad_table_id": "259",
-          "columnname": "Create_POLines",
-          "position": "83"
-        },
-        {
-          "ad_column_id": "EBF93239BAC24CF19609CD1766D7B56C",
-          "ad_table_id": "259",
-          "columnname": "Iscashvat",
-          "position": "84"
-        },
-        {
-          "ad_column_id": "B22C83F80E9748D0B2E096984736918E",
-          "ad_table_id": "259",
-          "columnname": "RM_Pickfromreceipt",
-          "position": "85"
-        },
-        {
-          "ad_column_id": "9AEBE3623CCD4E6F820A2EB70F2F243D",
-          "ad_table_id": "259",
-          "columnname": "Cancelandreplace",
-          "position": "86"
-        },
-        {
-          "ad_column_id": "F8F6A13C5682DC4DE040007F01000363",
-          "ad_table_id": "259",
-          "columnname": "EM_APRM_AddPayment",
-          "position": "86"
-        },
-        {
-          "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
-          "ad_table_id": "259",
-          "columnname": "EM_Aeatsii_Fecha_Operacion",
-          "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
-        },
-        {
-          "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
-          "ad_table_id": "259",
-          "columnname": "EM_Aeatsii_Descripcion_Sii",
-          "position": "94"
-        },
-        {
-          "ad_column_id": "23CE6F2B4A694AD2836DB4636F783983",
-          "ad_table_id": "259",
-          "columnname": "EM_Etpr_Remove_Payment",
-          "position": "94"
-        },
-        {
-          "ad_column_id": "B51A586E40F64085806027AE460C27B5",
-          "ad_table_id": "259",
-          "columnname": "EM_Etvfac_Reversed_Invoice",
-          "position": "96"
-        },
-        {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
-          "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
-          "ad_table_id": "259",
-          "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "E01F12C1B9CE4539B145357B931F49FD",
-          "ad_table_id": "259",
-          "columnname": "EM_ETGO_Currency_Rate",
-          "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
-        },
-        {
-          "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
-          "ad_table_id": "259",
-          "columnname": "DeliveryStatus",
-          "position": null
-        },
-        {
-          "ad_column_id": "9B350DD4248848A7ACC12061D151E92D",
-          "ad_table_id": "259",
-          "columnname": "DeliveryStatusPurchase",
-          "position": null
-        },
-        {
-          "ad_column_id": "B5B203AE8D674B8DABC6669419815CA7",
-          "ad_table_id": "259",
-          "columnname": "InvoiceStatus",
-          "position": null
-        },
-        {
-          "ad_column_id": "9F1044EB393B4D60895532DB5D568BEE",
-          "ad_table_id": "259",
-          "columnname": "PaymentStatus",
-          "position": null
-        },
-        {
-          "ad_column_id": "2205",
-          "ad_table_id": "260",
-          "columnname": "C_OrderLine_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "2206",
-          "ad_table_id": "260",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "2207",
-          "ad_table_id": "260",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "2208",
-          "ad_table_id": "260",
-          "columnname": "IsActive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "2209",
-          "ad_table_id": "260",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "2210",
-          "ad_table_id": "260",
-          "columnname": "CreatedBy",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "2211",
-          "ad_table_id": "260",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "2212",
-          "ad_table_id": "260",
-          "columnname": "UpdatedBy",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "2213",
-          "ad_table_id": "260",
-          "columnname": "C_Order_ID",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "2214",
-          "ad_table_id": "260",
-          "columnname": "Line",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "2764",
-          "ad_table_id": "260",
-          "columnname": "C_BPartner_ID",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "3404",
-          "ad_table_id": "260",
-          "columnname": "C_BPartner_Location_ID",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "2216",
-          "ad_table_id": "260",
-          "columnname": "DateOrdered",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "2217",
-          "ad_table_id": "260",
-          "columnname": "DatePromised",
-          "position": "14"
-        },
-        {
-          "ad_column_id": "2218",
-          "ad_table_id": "260",
-          "columnname": "DateDelivered",
-          "position": "15"
-        },
-        {
-          "ad_column_id": "2219",
-          "ad_table_id": "260",
-          "columnname": "DateInvoiced",
-          "position": "16"
-        },
-        {
-          "ad_column_id": "2220",
-          "ad_table_id": "260",
-          "columnname": "Description",
-          "position": "17"
-        },
-        {
-          "ad_column_id": "2221",
-          "ad_table_id": "260",
-          "columnname": "M_Product_ID",
-          "position": "18"
-        },
-        {
-          "ad_column_id": "2223",
-          "ad_table_id": "260",
-          "columnname": "M_Warehouse_ID",
-          "position": "19"
-        },
-        {
-          "ad_column_id": "3048",
-          "ad_table_id": "260",
-          "columnname": "DirectShip",
-          "position": "20"
-        },
-        {
-          "ad_column_id": "2222",
-          "ad_table_id": "260",
-          "columnname": "C_UOM_ID",
-          "position": "21"
-        },
-        {
-          "ad_column_id": "2224",
-          "ad_table_id": "260",
-          "columnname": "QtyOrdered",
-          "position": "22"
-        },
-        {
-          "ad_column_id": "2225",
-          "ad_table_id": "260",
-          "columnname": "QtyReserved",
-          "position": "23"
-        },
-        {
-          "ad_column_id": "2226",
-          "ad_table_id": "260",
-          "columnname": "QtyDelivered",
-          "position": "24"
-        },
-        {
-          "ad_column_id": "2227",
-          "ad_table_id": "260",
-          "columnname": "QtyInvoiced",
-          "position": "25"
-        },
-        {
-          "ad_column_id": "2229",
-          "ad_table_id": "260",
-          "columnname": "M_Shipper_ID",
-          "position": "26"
-        },
-        {
-          "ad_column_id": "2230",
-          "ad_table_id": "260",
-          "columnname": "C_Currency_ID",
-          "position": "27"
-        },
-        {
-          "ad_column_id": "2231",
-          "ad_table_id": "260",
-          "columnname": "PriceList",
-          "position": "28"
-        },
-        {
-          "ad_column_id": "2232",
-          "ad_table_id": "260",
-          "columnname": "PriceActual",
-          "position": "29"
-        },
-        {
-          "ad_column_id": "4022",
-          "ad_table_id": "260",
-          "columnname": "PriceLimit",
-          "position": "30"
-        },
-        {
-          "ad_column_id": "3723",
-          "ad_table_id": "260",
-          "columnname": "LineNetAmt",
-          "position": "31"
-        },
-        {
-          "ad_column_id": "4031",
-          "ad_table_id": "260",
-          "columnname": "Discount",
-          "position": "32"
-        },
-        {
-          "ad_column_id": "3049",
-          "ad_table_id": "260",
-          "columnname": "FreightAmt",
-          "position": "33"
-        },
-        {
-          "ad_column_id": "3050",
-          "ad_table_id": "260",
-          "columnname": "C_Charge_ID",
-          "position": "34"
-        },
-        {
-          "ad_column_id": "3051",
-          "ad_table_id": "260",
-          "columnname": "ChargeAmt",
-          "position": "35"
-        },
-        {
-          "ad_column_id": "2235",
-          "ad_table_id": "260",
-          "columnname": "C_Tax_ID",
-          "position": "36"
-        },
-        {
-          "ad_column_id": "6775",
-          "ad_table_id": "260",
-          "columnname": "S_ResourceAssignment_ID",
-          "position": "37"
-        },
-        {
-          "ad_column_id": "7812",
-          "ad_table_id": "260",
-          "columnname": "Ref_OrderLine_ID",
-          "position": "38"
-        },
-        {
-          "ad_column_id": "8767",
-          "ad_table_id": "260",
-          "columnname": "M_AttributeSetInstance_ID",
-          "position": "39"
-        },
-        {
-          "ad_column_id": "9868",
-          "ad_table_id": "260",
-          "columnname": "IsDescription",
-          "position": "40"
-        },
-        {
-          "ad_column_id": "800004",
-          "ad_table_id": "260",
-          "columnname": "QuantityOrder",
-          "position": "41"
-        },
-        {
-          "ad_column_id": "800003",
-          "ad_table_id": "260",
-          "columnname": "M_Product_Uom_Id",
-          "position": "42"
-        },
-        {
-          "ad_column_id": "801165",
-          "ad_table_id": "260",
-          "columnname": "M_Offer_ID",
-          "position": "43"
-        },
-        {
-          "ad_column_id": "801166",
-          "ad_table_id": "260",
-          "columnname": "PriceStd",
-          "position": "44"
-        },
-        {
-          "ad_column_id": "14814F507BF440C1A7A3A64D9066C49F",
-          "ad_table_id": "260",
-          "columnname": "CANCELPRICEAD",
-          "position": "45"
-        },
-        {
-          "ad_column_id": "68142DE975336AAFE040007F01012F8D",
-          "ad_table_id": "260",
-          "columnname": "C_Order_Discount_ID",
-          "position": "46"
-        },
-        {
-          "ad_column_id": "7E011D1981B2E366E040007F01013030",
-          "ad_table_id": "260",
-          "columnname": "Iseditlinenetamt",
-          "position": "47"
-        },
-        {
-          "ad_column_id": "7E28A3F0EA09F997E040007F01006F15",
-          "ad_table_id": "260",
-          "columnname": "Taxbaseamt",
-          "position": "48"
-        },
-        {
-          "ad_column_id": "AF2B81C4FC82B807E040007F01006F3D",
-          "ad_table_id": "260",
-          "columnname": "M_Inoutline_ID",
-          "position": "49"
-        },
-        {
-          "ad_column_id": "6769A5EF62DF47F3A68B04AF8298AA5A",
-          "ad_table_id": "260",
-          "columnname": "C_Return_Reason_ID",
-          "position": "50"
-        },
-        {
-          "ad_column_id": "EB0B8E4554EF4A9CA512B9C5FF4FFABF",
-          "ad_table_id": "260",
-          "columnname": "Gross_Unit_Price",
-          "position": "51"
-        },
-        {
-          "ad_column_id": "025E1896618449A4B30FE9CC729CC615",
-          "ad_table_id": "260",
-          "columnname": "Line_Gross_Amount",
-          "position": "52"
-        },
-        {
-          "ad_column_id": "C4EEB8D909C48483E040007F01001710",
-          "ad_table_id": "260",
-          "columnname": "GrossPriceList",
-          "position": "53"
-        },
-        {
-          "ad_column_id": "4BDAB25F4E75423DBF487DA8533282BD",
-          "ad_table_id": "260",
-          "columnname": "C_Costcenter_ID",
-          "position": "54"
-        },
-        {
-          "ad_column_id": "9E7E0CF74B80471094024EE8181BD14B",
-          "ad_table_id": "260",
-          "columnname": "grosspricestd",
-          "position": "55"
-        },
-        {
-          "ad_column_id": "6B6445E10CA84681A0C1B25C299F9CBA",
-          "ad_table_id": "260",
-          "columnname": "A_Asset_ID",
-          "position": "56"
-        },
-        {
-          "ad_column_id": "CB9E308EE8DFDCBAE040007F010001E7",
-          "ad_table_id": "260",
-          "columnname": "M_Warehouse_Rule_ID",
-          "position": "57"
-        },
-        {
-          "ad_column_id": "8CAD7261EEDA4B9399990094D1D285FB",
-          "ad_table_id": "260",
-          "columnname": "User1_ID",
-          "position": "58"
-        },
-        {
-          "ad_column_id": "E9612846B6F5472A8F64CF729E0B25AE",
-          "ad_table_id": "260",
-          "columnname": "Quotationline_ID",
-          "position": "59"
-        },
-        {
-          "ad_column_id": "69EFBAC452404EDCA43212FA04D9464D",
-          "ad_table_id": "260",
-          "columnname": "User2_ID",
-          "position": "60"
-        },
-        {
-          "ad_column_id": "CCCD60BB98EDDFF7E040007F01006A5A",
-          "ad_table_id": "260",
-          "columnname": "Create_Reservation",
-          "position": "61"
-        },
-        {
-          "ad_column_id": "B2023461A08649D58E5D144D4FC2C507",
-          "ad_table_id": "260",
-          "columnname": "C_Project_ID",
-          "position": "62"
-        },
-        {
-          "ad_column_id": "CE4DBA92A2E80C3CE040007F0100316C",
-          "ad_table_id": "260",
-          "columnname": "SO_Res_Status",
-          "position": "63"
-        },
-        {
-          "ad_column_id": "CE612A71B701D54AE040007F01001500",
-          "ad_table_id": "260",
-          "columnname": "Manage_Reservation",
-          "position": "64"
-        },
-        {
-          "ad_column_id": "CE87A0172A66C01CE040007F01003234",
-          "ad_table_id": "260",
-          "columnname": "Manage_Prereservation",
-          "position": "65"
-        },
-        {
-          "ad_column_id": "A8DDAF547BE745EEAB8967F47308486B",
-          "ad_table_id": "260",
-          "columnname": "Explode",
-          "position": "66"
-        },
-        {
-          "ad_column_id": "9E6D689864154F91B98ACB746EB9C507",
-          "ad_table_id": "260",
-          "columnname": "BOM_Parent_ID",
-          "position": "67"
-        },
-        {
-          "ad_column_id": "C724ECE5B05848489719C64111425FDB",
-          "ad_table_id": "260",
-          "columnname": "Replacedorderline_id",
-          "position": "68"
-        },
-        {
-          "ad_column_id": "4EA73125B044436198DB81CFF08E94D6",
-          "ad_table_id": "260",
-          "columnname": "Print_Description",
-          "position": "69"
-        },
-        {
-          "ad_column_id": "71F11E61216A4BD8A165B892D5904848",
-          "ad_table_id": "260",
-          "columnname": "Overdue_Return_Days",
-          "position": "70"
-        },
-        {
-          "ad_column_id": "33EFF29653024C0E99CAB3E79F01F205",
-          "ad_table_id": "260",
-          "columnname": "Relate_Orderline",
-          "position": "71"
-        },
-        {
-          "ad_column_id": "986686B366B044BD8C1E27B729EF9ABB",
-          "ad_table_id": "260",
-          "columnname": "C_Aum",
-          "position": "72"
-        },
-        {
-          "ad_column_id": "BAA3518A49E842DFB007FC6C2BDDCE64",
-          "ad_table_id": "260",
-          "columnname": "Aumqty",
-          "position": "73"
-        },
-        {
-          "ad_column_id": "E1D1BA1B8B0B43BBB14BEAF0C72EEA5D",
-          "ad_table_id": "260",
-          "columnname": "Returnline",
-          "position": "79"
-        },
-        {
-          "ad_column_id": "E1CEFFBF1C9640C59B9F11EB682297B6",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "C_Orderline_Servicerelation_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "9034B5BA566D423F90F00F66918D95C6",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "2E2EC43A859B4C61B3E3BB8141DAA86B",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "67FB2658FAED476688A24DAC7EFDF7F9",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "Isactive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "7E64099B64D14E76876A77F97A290A4B",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "05CA75162B934B8A96CF13A480F35807",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "Createdby",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "99002FE5874A49E899A025F499D21D99",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "A1052365E6104B0F902B5ECD65BBB7A2",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "Updatedby",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "BE7EBD2E571B4AA79872AF5DD1D69699",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "C_Orderline_ID",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "E40BE1D053DC41C7A91D45CBFCBD4B64",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "C_Orderline_Related_ID",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "7B0B2E7A93F24233B554B5BE22A94B29",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "Amount",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "19F5EDF7B1743036E0530100007F86E8",
-          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
-          "columnname": "Quantity",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "521F8231190A6C29E040007F01001B31",
-          "ad_table_id": "314",
-          "columnname": "C_OrderTax_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "3355",
-          "ad_table_id": "314",
-          "columnname": "C_Order_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "3356",
-          "ad_table_id": "314",
-          "columnname": "C_Tax_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "3348",
-          "ad_table_id": "314",
-          "columnname": "AD_Client_ID",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "3349",
-          "ad_table_id": "314",
-          "columnname": "AD_Org_ID",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "3350",
-          "ad_table_id": "314",
-          "columnname": "IsActive",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "3351",
-          "ad_table_id": "314",
-          "columnname": "Created",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "3352",
-          "ad_table_id": "314",
-          "columnname": "CreatedBy",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "3353",
-          "ad_table_id": "314",
-          "columnname": "Updated",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "3354",
-          "ad_table_id": "314",
-          "columnname": "UpdatedBy",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "3766",
-          "ad_table_id": "314",
-          "columnname": "TaxBaseAmt",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "3767",
-          "ad_table_id": "314",
-          "columnname": "TaxAmt",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "803239",
-          "ad_table_id": "314",
-          "columnname": "Line",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "802DBB308CF6C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Fin_Payment_Sched_Ord_V_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "802DBB308CF7C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "802DBB308CF8C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "802DBB308CF9C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Isactive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "802DBB308CFAC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "802DBB308CFBC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Createdby",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "802DBB308CFCC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "802DBB308CFDC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Updatedby",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "802DBB308CFEC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "C_Invoice_ID",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "802DBB308CFFC960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "C_Order_ID",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "802DBB308D00C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Duedate",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "802DBB308D01C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "FIN_Paymentmethod_ID",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "802DBB308D02C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Expected",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "802DBB308D03C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Received",
-          "position": "14"
-        },
-        {
-          "ad_column_id": "802DBB308D04C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Outstanding",
-          "position": "15"
-        },
-        {
-          "ad_column_id": "802DBB308D05C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "C_Currency_ID",
-          "position": "16"
-        },
-        {
-          "ad_column_id": "802DBB308D06C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Lastpayment",
-          "position": "17"
-        },
-        {
-          "ad_column_id": "802DBB308D07C960E040007F01001D1B",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Numberofpayments",
-          "position": "18"
-        },
-        {
-          "ad_column_id": "51459B51FC494A6D90DF9D9CE5A89653",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "FIN_Payment_Priority_ID",
-          "position": "19"
-        },
-        {
-          "ad_column_id": "81C4432CDC76416896A6421BA60A2324",
-          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
-          "columnname": "Update_Payment_Plan",
-          "position": "20"
-        },
-        {
-          "ad_column_id": "78D16B5B1787661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Fin_Payment_Detail_V_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "78D16B5B1788661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "AD_Client_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "78D16B5B1789661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "AD_Org_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "78D16B5B178A661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Isactive",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "78D16B5B178B661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Created",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "78D16B5B178C661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Createdby",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "78D16B5B178D661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Updated",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "78D16B5B178E661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Updatedby",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "7FF2234748E8844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Fin_Payment_Sched_Ord_V_Id",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "F20FDC4004064C7CB665BD655B0F307D",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "FIN_Payment_Sched_Inv_ID",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "5050E5D10E5B4D94BF36BEF4E578313B",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "FIN_Payment_Sched_Ord_ID",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "7FF2234748E9844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Invoiceno",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "7FF2234748EA844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Orderno",
-          "position": "14"
-        },
-        {
-          "ad_column_id": "7FF2234748EB844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Paymentno",
-          "position": "15"
-        },
-        {
-          "ad_column_id": "7FF2234748EC844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "FIN_Payment_ID",
-          "position": "16"
-        },
-        {
-          "ad_column_id": "7FF2234748ED844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Duedate",
-          "position": "17"
-        },
-        {
-          "ad_column_id": "7FF2234748EE844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Invoicedamt",
-          "position": "18"
-        },
-        {
-          "ad_column_id": "7FF2234748EF844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Expected",
-          "position": "19"
-        },
-        {
-          "ad_column_id": "7FF2234748F0844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Paidamt",
-          "position": "20"
-        },
-        {
-          "ad_column_id": "7FF2234748F1844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Bpartner_ID",
-          "position": "21"
-        },
-        {
-          "ad_column_id": "7DC34559B3F7B45BE040007F0100784A",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Fin_Paymentmethod_ID",
-          "position": "22"
-        },
-        {
-          "ad_column_id": "7FF2234748F2844FE040007F01003861",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Fin_Financial_Account_ID",
-          "position": "23"
-        },
-        {
-          "ad_column_id": "E94E132EFCCC422CA9DB4E98BB648E92",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Currency_ID",
-          "position": "24"
-        },
-        {
-          "ad_column_id": "78D16B5B178F661EE040007F010152F7",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Paymentdate",
-          "position": "25"
-        },
-        {
-          "ad_column_id": "84BE5A55A365CEFEE040007F01000402",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Glitemname",
-          "position": "26"
-        },
-        {
-          "ad_column_id": "8D6169322485477F8D53E2E246723D3A",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Writeoffamt",
-          "position": "27"
-        },
-        {
-          "ad_column_id": "3DFAB9DBB8D143A3951271CBE02C224F",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Finacc_Currency_ID",
-          "position": "28"
-        },
-        {
-          "ad_column_id": "85072D35A21C4487A9B16A210878D3C8",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Finacc_Txn_Convert_Rate",
-          "position": "29"
-        },
-        {
-          "ad_column_id": "8DF9D8A154DC4353ACD4F91DA30CA06E",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "PaidConverted",
-          "position": "30"
-        },
-        {
-          "ad_column_id": "91375A8F85DF48FFA962C940E9BAF889",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "ExpectedConverted",
-          "position": "31"
-        },
-        {
-          "ad_column_id": "7299BF93D2984DF8932FE2800DA0ED2A",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Iscanceled",
-          "position": "32"
-        },
-        {
-          "ad_column_id": "20217D869BFD41938E250F7F7528E06F",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Bpartner_Id_Dim",
-          "position": "33"
-        },
-        {
-          "ad_column_id": "9C7C878101214039A2BEAE25ED564B4B",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Activity_ID",
-          "position": "34"
-        },
-        {
-          "ad_column_id": "29292D14E1CA4C2E9F1219D50AF35491",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "M_Product_ID",
-          "position": "35"
-        },
-        {
-          "ad_column_id": "9FFD173571C74908A5F48C4C44C5E8C1",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Campaign_ID",
-          "position": "36"
-        },
-        {
-          "ad_column_id": "1C30BBC88DEA4E40831C616E1D34973B",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Project_ID",
-          "position": "37"
-        },
-        {
-          "ad_column_id": "A58DFDE11BF342779F8FAF40B84E8899",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "C_Salesregion_ID",
-          "position": "38"
-        },
-        {
-          "ad_column_id": "C1DE4479A025001AE040007F01000C7E",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "Status",
-          "position": "39"
-        },
-        {
-          "ad_column_id": "C8B98FF8B51C43F7B12E8C448B0A2725",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "EM_APRM_Displayed_Paymmeth_ID",
-          "position": "40"
-        },
-        {
-          "ad_column_id": "47DC39551EA14F5E861296054B731B26",
-          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
-          "columnname": "EM_APRM_Displayed_Acc_ID",
-          "position": "41"
-        },
-        {
-          "ad_column_id": "7E562C34A0496EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "C_Orderlinetax_ID",
-          "position": "1"
-        },
-        {
-          "ad_column_id": "7E562C34A04A6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "C_Orderline_ID",
-          "position": "2"
-        },
-        {
-          "ad_column_id": "7E562C34A04B6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "C_Tax_ID",
-          "position": "3"
-        },
-        {
-          "ad_column_id": "7E562C34A04C6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "AD_Client_ID",
-          "position": "4"
-        },
-        {
-          "ad_column_id": "7E562C34A04D6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "AD_Org_ID",
-          "position": "5"
-        },
-        {
-          "ad_column_id": "7E562C34A04E6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Isactive",
-          "position": "6"
-        },
-        {
-          "ad_column_id": "7E562C34A04F6EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Created",
-          "position": "7"
-        },
-        {
-          "ad_column_id": "7E562C34A0506EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Createdby",
-          "position": "8"
-        },
-        {
-          "ad_column_id": "7E562C34A0516EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Updated",
-          "position": "9"
-        },
-        {
-          "ad_column_id": "7E562C34A0526EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Updatedby",
-          "position": "10"
-        },
-        {
-          "ad_column_id": "7E562C34A0536EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Taxbaseamt",
-          "position": "11"
-        },
-        {
-          "ad_column_id": "7E562C34A0546EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Taxamt",
-          "position": "12"
-        },
-        {
-          "ad_column_id": "7E562C34A0556EB2E040007F01001D67",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "Line",
-          "position": "13"
-        },
-        {
-          "ad_column_id": "7E55E529C694721EE040007F01002C65",
-          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
-          "columnname": "C_Order_ID",
-          "position": "14"
-        }
-      ]
-    },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
-      "checksum": "933fda89a2b159e8d27354f4679a4193812efa84d7469a2a7de878ef2c7a8c32",
+      "checksum": "d89b7b61054390621da0530eb47d8d66b9976c43497bc200c87cfe124d2127e9",
       "params": [
         "123271B9AD60469BAE8A924841456B63"
       ],
@@ -33854,6 +30790,12 @@
           "position": "69"
         },
         {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
+        },
+        {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",
           "ad_table_id": "319",
           "columnname": "InvoiceStatus",
@@ -34072,7 +31014,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
-      "checksum": "a504eb62ef117da75737a5c246d2d2b05c08d8a3a5184d0ac44815901cda64a0",
+      "checksum": "2baacecd495ef2be772eb62cbaae8d3e36325817971b0f42160dd8a359460534",
       "params": [
         "181"
       ],
@@ -34678,16 +31620,46 @@
           "position": "86"
         },
         {
+          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
+          "ad_table_id": "259",
+          "columnname": "Confirmcancelandreplace",
+          "position": "87"
+        },
+        {
+          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
+          "ad_table_id": "259",
+          "columnname": "Cancelledorder_id",
+          "position": "88"
+        },
+        {
+          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
+          "ad_table_id": "259",
+          "columnname": "Replacedorder_id",
+          "position": "89"
+        },
+        {
+          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
+          "ad_table_id": "259",
+          "columnname": "Iscancelled",
+          "position": "90"
+        },
+        {
+          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
+          "ad_table_id": "259",
+          "columnname": "Replacementorder_ID",
+          "position": "91"
+        },
+        {
+          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
+          "ad_table_id": "259",
+          "columnname": "BPartner_ExtRef",
+          "position": "92"
+        },
+        {
           "ad_column_id": "81DC33A710F7483DA6B47F9A654DC99E",
           "ad_table_id": "259",
           "columnname": "EM_Aeatsii_Fecha_Operacion",
           "position": "93"
-        },
-        {
-          "ad_column_id": "51E299D6B5824EC480B524E1ED726985",
-          "ad_table_id": "259",
-          "columnname": "Confirmcancelandreplace",
-          "position": "94"
         },
         {
           "ad_column_id": "50E460F9A753421FA0B3D59D0F1F8B8B",
@@ -34708,21 +31680,9 @@
           "position": "96"
         },
         {
-          "ad_column_id": "129F2530A63B4C7CA9AF17996732E6A4",
-          "ad_table_id": "259",
-          "columnname": "Cancelledorder_id",
-          "position": "97"
-        },
-        {
           "ad_column_id": "801DA2A5D6C4436F8B0F26D0995189C4",
           "ad_table_id": "259",
           "columnname": "EM_Etgo_Total_Discount",
-          "position": "98"
-        },
-        {
-          "ad_column_id": "CB3A64CFC2B8471E91DBBF12A663D0FB",
-          "ad_table_id": "259",
-          "columnname": "Replacedorder_id",
           "position": "98"
         },
         {
@@ -34730,24 +31690,6 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
-        },
-        {
-          "ad_column_id": "F54BEAEAA4C04BDD9DC1448954589ED0",
-          "ad_table_id": "259",
-          "columnname": "Iscancelled",
-          "position": "101"
-        },
-        {
-          "ad_column_id": "E61022D568524DD78F02815F50092DB8",
-          "ad_table_id": "259",
-          "columnname": "Replacementorder_ID",
-          "position": "103"
-        },
-        {
-          "ad_column_id": "E97BA84C97A24937B99F9F01D6818B94",
-          "ad_table_id": "259",
-          "columnname": "BPartner_ExtRef",
-          "position": "106"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",
@@ -35958,7 +32900,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "bd406e71a607946170c1c60e06423b68c5466095e8bf5c4b6609bbd913b3d224",
+      "checksum": "a15624c615e07424dccbcf2603d6271ece2acb638ec5bddc3c37ecde4a9f9276",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -36810,6 +33752,12 @@
           "position": "21"
         },
         {
+          "ad_column_id": "876CAA031C8648A39E8D0CA4151A22C6",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "columnname": "EM_ETGO_Match_Group_ID",
+          "position": "22"
+        },
+        {
           "ad_column_id": "D88FE68C6A19467DB8341FFC18C0C90D",
           "ad_table_id": "84203CBEBDA349C38319C0E549751546",
           "columnname": "EM_PSD2_Transaction_Identifier",
@@ -36822,10 +33770,10 @@
           "position": "23"
         },
         {
-          "ad_column_id": "876CAA031C8648A39E8D0CA4151A22C6",
+          "ad_column_id": "2A8EA3EC7BFD415692D844A42EE5BFD5",
           "ad_table_id": "84203CBEBDA349C38319C0E549751546",
-          "columnname": "EM_ETGO_Match_Group_ID",
-          "position": null
+          "columnname": "EM_ETGO_Pending_Amount",
+          "position": "27"
         },
         {
           "ad_column_id": "828EE0AE7FEA5FA1E040007F010067C7",
@@ -38474,7 +35422,7 @@
       ]
     },
     "f059b24ecd20866b3f9f2bc8f3e5f8c6e2852af85784f3ade7eaa77668d467e5": {
-      "checksum": "80d089eeda1473bc87a61de3918e20057899c8229d4b9475a05fb6c1e17fb5a2",
+      "checksum": "3c62538401f39855f7045bdd76504e2ad4d729548d69acc85daa873199a88f75",
       "params": [
         "168"
       ],
@@ -39090,6 +36038,80 @@
           "ad_table_id": "322",
           "columnname": "Relatedinventorylineid",
           "position": "22"
+        },
+        {
+          "ad_column_id": "A64CA09596E6451F91D6E8C48E1E5B59",
+          "ad_table_id": "322",
+          "columnname": "EM_Etgo_Qtydiff",
+          "position": "24"
+        }
+      ]
+    },
+    "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
+      "checksum": "f7abd42387d6e39c1b5b0e3a44c0ca9c2d4695dc5032fbe2009bda7e2aedfebe",
+      "params": [
+        "82922976BB524D1BAA3CF8462B9219FE"
+      ],
+      "rows": [
+        {
+          "ad_column_id": "A821CBD8B0674217BDD63B4245716F0E",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "ETGO_Transaction_Type_ID",
+          "position": "1"
+        },
+        {
+          "ad_column_id": "A499FADF3B564EE9A8546A0EC4854441",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "AD_Client_ID",
+          "position": "2"
+        },
+        {
+          "ad_column_id": "EB3128C088F443B284B9995AB6D68199",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "AD_Org_ID",
+          "position": "3"
+        },
+        {
+          "ad_column_id": "D9203189334E431192882F5A9AC7160F",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Isactive",
+          "position": "4"
+        },
+        {
+          "ad_column_id": "3A34717361E44C43AEFB2C526EE67FA2",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Created",
+          "position": "5"
+        },
+        {
+          "ad_column_id": "0A2CB489CADF4241A690CBA80EE1FA55",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Createdby",
+          "position": "6"
+        },
+        {
+          "ad_column_id": "9981200F6BEB43F5BFD1EC3AFB4971F0",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Updated",
+          "position": "7"
+        },
+        {
+          "ad_column_id": "EC00FCCA393B4856B72D871FFE0229B4",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Updatedby",
+          "position": "8"
+        },
+        {
+          "ad_column_id": "055A945DE49748B7B84DDB7CD31F6FD1",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Value",
+          "position": "9"
+        },
+        {
+          "ad_column_id": "17853BF4B17446D2A6CF6AE59F48A4C2",
+          "ad_table_id": "F56179E34ACB42CC9E8ED2E5C6085EEE",
+          "columnname": "Name",
+          "position": "10"
         }
       ]
     },
@@ -39234,7 +36256,7 @@
       ]
     },
     "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
-      "checksum": "96d9413a33fdcc94f6768fa4b3b2aa04bebd3fafbec91b334942e35313fe9e2a",
+      "checksum": "9e4453dcb4689ee44dbb1f1e18865c1c1c4b015d47f9b9a08bc14c5cfb31d2a1",
       "params": [
         "169"
       ],
@@ -39964,6 +36986,12 @@
           "ad_table_id": "319",
           "columnname": "EM_Etblkp_Bulkposting",
           "position": "69"
+        },
+        {
+          "ad_column_id": "9AADFB849BAA4F9DAC9C5C7663C537FE",
+          "ad_table_id": "319",
+          "columnname": "EM_ETGO_Currency_ID",
+          "position": null
         },
         {
           "ad_column_id": "9AFE960A44A147ECAADB875D96399AA2",

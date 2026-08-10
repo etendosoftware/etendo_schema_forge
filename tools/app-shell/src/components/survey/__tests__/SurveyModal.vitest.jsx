@@ -410,8 +410,8 @@ describe('SurveyModal — CSAT flow', () => {
     const star3Svg = screen.getByTestId('SurveyModal__star-3').querySelector('svg');
     const star5Svg = screen.getByTestId('SurveyModal__star-5').querySelector('svg');
 
-    expect(star1Svg).toHaveAttribute('fill', '#FFC233');
-    expect(star3Svg).toHaveAttribute('fill', '#FFC233');
+    expect(star1Svg).toHaveAttribute('fill', 'var(--status-warning-fg)');
+    expect(star3Svg).toHaveAttribute('fill', 'var(--status-warning-fg)');
     expect(star5Svg).toHaveAttribute('fill', 'transparent');
   });
 

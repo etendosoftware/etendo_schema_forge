@@ -10,7 +10,7 @@ function SectionCard({ title, onRefresh, isRefreshing, children }) {
   return (
     <div className="mx-4 mt-5">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</span>
         {onRefresh && (
           <button
             type="button"
@@ -33,7 +33,7 @@ function SectionCard({ title, onRefresh, isRefreshing, children }) {
           </button>
         )}
       </div>
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden px-4 py-2">
+      <div className="bg-card rounded-xl border border-border-subtle overflow-hidden px-4 py-2">
         {children}
       </div>
     </div>
@@ -43,8 +43,8 @@ function SectionCard({ title, onRefresh, isRefreshing, children }) {
 function SkeletonRow() {
   return (
     <div className="flex justify-between items-center py-2">
-      <div className="h-3.5 w-24 bg-gray-100 rounded animate-pulse" />
-      <div className="h-5 w-16 bg-gray-100 rounded-full animate-pulse" />
+      <div className="h-3.5 w-24 bg-muted rounded animate-pulse" />
+      <div className="h-5 w-16 bg-muted rounded-full animate-pulse" />
     </div>
   );
 }
@@ -67,15 +67,15 @@ function DocRow({ type, doc, ui, navigate }) {
     <button
       type="button"
       onClick={() => navigate(`${cfg.routePrefix}/${doc.id}`)}
-      className="flex justify-between items-center py-2 w-full text-left hover:bg-gray-50 rounded -mx-1 px-1 transition-colors"
+      className="flex justify-between items-center py-2 w-full text-left hover:bg-muted rounded -mx-1 px-1 transition-colors"
     >
       <div className="flex items-center gap-2 min-w-0">
-        <span className={`shrink-0 ${CHIP_COLORS[cfg.iconKey] ?? 'text-gray-400'}`}>
+        <span className={`shrink-0 ${CHIP_COLORS[cfg.iconKey] ?? 'text-muted-foreground'}`}>
           {CHIP_ICONS[cfg.iconKey]}
         </span>
-        <span className="text-sm font-medium text-gray-900 truncate">{label}</span>
+        <span className="text-sm font-medium text-foreground truncate">{label}</span>
         {amountStr && (
-          <span className="text-xs text-gray-400 tabular-nums shrink-0">{amountStr}</span>
+          <span className="text-xs text-muted-foreground tabular-nums shrink-0">{amountStr}</span>
         )}
       </div>
       {statusCode && (

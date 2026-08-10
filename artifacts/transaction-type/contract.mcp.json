@@ -1,0 +1,103 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-06-16T16:35:15.726Z",
+  "updatedAt": "2026-07-28T13:51:31.609Z",
+  "contractChecksum": "88c9f5b2db3ccb9c",
+  "apiPrediction": {
+    "specName": "transaction-type",
+    "baseUrl": "/sws/neo/transaction-type",
+    "crud": {
+      "transactionType": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/transaction-type/transactionType",
+        "detailUrl": "/sws/neo/transaction-type/transactionType/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    }
+  },
+  "formState": {
+    "entities": {
+      "transactionType": {
+        "fields": {
+          "name": {
+            "required": true
+          },
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "searchKey": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage transaction type financial records.",
+    "whenToUse": [
+      "Use for transaction type management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name",
+        "active"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [
+      "Create draft header with required fields"
+    ],
+    "edgeCases": [
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name",
+          "active"
+        ]
+      }
+    ],
+    "warnings": [
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "0791d1d7d3f255fa"
+}

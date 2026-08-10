@@ -1,7 +1,10 @@
 import { Switch } from '@/components/ui/switch';
 import { StatusTag } from '@/components/ui/status-tag';
 import { Tag } from '@/components/ui/tag';
+import { BoxIcon } from '@/components/ui/box-icon';
+import { useNeoImage } from '@/hooks/useNeoImage';
 import { formatAmount } from '@/lib/formatAmount.js';
+import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { getStatusDotColor, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
 
@@ -13,7 +16,7 @@ function getDateDotColor(dateValue) {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(str) ? new Date(str + 'T00:00:00') : new Date(str);
   d.setHours(0, 0, 0, 0);
   if (d.getTime() === today.getTime()) return null;
-  return d > today ? 'bg-emerald-500' : 'bg-red-500';
+  return d > today ? 'bg-status-success' : 'bg-destructive';
 }
 
 function isTruthyBoolean(value) {
@@ -25,9 +28,9 @@ function isFalsyBoolean(value) {
 }
 
 function renderBooleanFallback(val, ui) {
-  if (isTruthyBoolean(val)) return <span className="text-emerald-600">{ui('yes')}</span>;
-  if (isFalsyBoolean(val)) return <span className="text-slate-400">{ui('no')}</span>;
-  return <span className="text-slate-300">&mdash;</span>;
+  if (isTruthyBoolean(val)) return <span className="text-status-success-foreground">{ui('yes')}</span>;
+  if (isFalsyBoolean(val)) return <span className="text-muted-foreground">{ui('no')}</span>;
+  return <span className="text-muted-foreground">&mdash;</span>;
 }
 
 function renderBooleanBadge(col, val, trueLabel, falseLabel) {
@@ -39,8 +42,8 @@ function renderBooleanBadge(col, val, trueLabel, falseLabel) {
 }
 
 function renderColoredBooleanBadge(col, val, trueLabel, falseLabel) {
-  const trueColor = col.badgeColors.true ?? 'bg-emerald-100 text-emerald-800';
-  const falseColor = col.badgeColors.false ?? 'bg-amber-100 text-amber-700';
+  const trueColor = col.badgeColors.true ?? 'bg-status-success text-status-success-foreground';
+  const falseColor = col.badgeColors.false ?? 'bg-status-warning text-status-warning-foreground';
   if (isTruthyBoolean(val)) return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${trueColor}`}>
       {trueLabel}
@@ -100,19 +103,19 @@ function getPercentCellPalette(row, col) {
   const pct = Number.isNaN(val) ? 0 : val;
   let color;
   if (pct >= 100) {
-    color = 'bg-emerald-500';
+    color = 'bg-status-success';
   } else if (pct > 0) {
-    color = 'bg-amber-400';
+    color = 'bg-status-warning';
   } else {
-    color = 'bg-slate-200';
+    color = 'bg-muted';
   }
   let textColor;
   if (pct >= 100) {
-    textColor = 'text-emerald-700';
+    textColor = 'text-status-success-foreground';
   } else if (pct > 0) {
-    textColor = 'text-amber-700';
+    textColor = 'text-status-warning-foreground';
   } else {
-    textColor = 'text-slate-400';
+    textColor = 'text-muted-foreground';
   }
   return { color, pct, textColor };
 }
@@ -155,7 +158,7 @@ export function renderPercentCell({ row, col }) {
   const { color, pct, textColor } = getPercentCellPalette(row, col);
   return (
     <div className="flex items-center gap-2">
-      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
       <span className={`text-xs tabular-nums ${textColor}`}>{pct}%</span>
@@ -206,8 +209,85 @@ export function renderDateCell({ row, col, dateFormatter }) {
   );
 }
 
+// Generic `amount`-type column renderer used by almost every window's DataTable.
+// This is the reference pattern for any new amount column — copy this, don't
+// reimplement Intl.NumberFormat locally (see CLAUDE.md § Currency & Amount Formatting).
 export function renderAmountCell({ row, col }) {
   return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
+}
+
+// Mirrors TONE_CLASS in components/ui/money-amount.jsx and the sibling
+// InlineLinesPanel ReadCell branch — kept as a single source via
+// formatSignedDelta so both grids render identical text/color for the same
+// `signedDelta` column type.
+const SIGNED_DELTA_TONE_COLOR = {
+  positive: 'var(--status-success-fg)',
+  negative: 'hsl(var(--destructive))',
+  neutral: 'hsl(var(--foreground))',
+};
+
+export function renderSignedDeltaCell({ row, col }) {
+  const { text, tone } = formatSignedDelta(row[col.key]);
+  return (
+    <span
+      className="block text-right tabular-nums"
+      style={{ fontWeight: 600, color: SIGNED_DELTA_TONE_COLOR[tone] }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/**
+ * Built-in `multiField` cell body: bold title + optional subtitle chip +
+ * optional authenticated media box. Renders purely from column config — no
+ * `render` function needed — and is pixel-identical to the legacy Product
+ * identity cell (`ProductNameCell`). Kept as a component (not an inline render)
+ * so `useNeoImage` is a valid hook call.
+ *
+ * Config consumed: `col.title` (row field → bold title), `col.subtitle` (row
+ * field → chip, only when present), `col.media` (`{ field, kind: 'neoImage',
+ * fallback: 'box' }`, optional). The hook runs unconditionally with a possibly
+ * undefined id (no media → no fetch) to keep the hook order stable.
+ */
+export function MultiFieldCell({ row, col, token, apiBaseUrl }) {
+  const media = col.media;
+  const imageId = media?.kind === 'neoImage' ? row[media.field] : undefined;
+  const imgSrc = useNeoImage(imageId, token, apiBaseUrl);
+  const titleValue = row[col.title];
+  const subtitleValue = col.subtitle ? row[col.subtitle] : undefined;
+
+  return (
+    <div className="flex items-center gap-3">
+      {media && (
+        <div className="w-10 h-10 rounded-lg bg-[hsl(var(--muted))] flex items-center justify-center overflow-hidden flex-shrink-0">
+          {imgSrc
+            ? <img src={imgSrc} alt={titleValue} className="w-full h-full object-cover" />
+            : <BoxIcon data-testid="BoxIcon__fed565" />
+          }
+        </div>
+      )}
+      <div className="flex flex-col justify-center gap-0.5">
+        <span className="text-sm font-semibold text-[hsl(var(--foreground))] leading-5">{titleValue}</span>
+        {subtitleValue && (
+          <span className="inline-flex items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit">
+            {subtitleValue}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function renderMultiFieldCell({ row, col, token, apiBaseUrl }) {
+  return (
+    <MultiFieldCell
+      row={row}
+      col={col}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
+      data-testid="MultiFieldCell__a91437" />
+  );
 }
 
 export function renderDefaultCell({ row, col, display, visibleColumns }) {
@@ -218,7 +298,7 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
       <span className="inline-flex items-center gap-2">
         <span>{display}</span>
         {pillLabel && (
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-gray-50 text-gray-600 border-gray-200'}`} style={{ borderWidth: '0.5px' }}>
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-muted text-muted-foreground border-border-subtle'}`} style={{ borderWidth: '0.5px' }}>
             {pillLabel}
           </span>
         )}
@@ -239,5 +319,7 @@ export const CELL_RENDERERS = {
   boolean: renderBooleanCell,
   date: renderDateCell,
   amount: renderAmountCell,
+  signedDelta: renderSignedDeltaCell,
+  multiField: renderMultiFieldCell,
   default: renderDefaultCell,
 };

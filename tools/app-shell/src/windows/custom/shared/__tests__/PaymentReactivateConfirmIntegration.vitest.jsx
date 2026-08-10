@@ -34,6 +34,23 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 
+// ETP-4520 batch regen (00062c488) wired `useWindowAccess`/`WindowAccessGuard`
+// into every generated Page — including payment-in/payment-out — reading them
+// from `@/auth/AuthContext.jsx`. This suite renders those REAL generated pages
+// with no `AuthProvider` ancestor, so the real hook throws "must be used
+// within AuthProvider". Mocked here the same way
+// `PurchaseInvoiceTopbar.vitest.jsx` mocks `@etendosoftware/app-shell-core/auth`
+// for the identical situation — full, non-fail-closed access so the guard
+// never blocks the render and the reactivate-confirm assertions are
+// unaffected.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn(), windowAccess: {}, capabilities: {} }),
+  useWindowAccess: () => 'full',
+  useHasCapability: () => true,
+  WindowAccessGuard: ({ children }) => children,
+  AuthProvider: ({ children }) => children,
+}));
+
 // One shared, mutable hook double per test file — mirrors the convention in
 // DetailView.processesAndBadges.vitest.jsx. `handleProcess` is the spy we
 // assert on: if it fires before the modal's confirm button is clicked, the
@@ -154,7 +171,8 @@ vi.mock('@generated/payment-out/custom/PaymentConciliadoBadge', () => ({ default
 vi.mock('@generated/payment-out/custom/PaymentDetailSidebar', () => ({ default: () => <div data-testid="stub-side-panel" /> }));
 
 // NOTE — deliberately NOT mocked: `ReactivarConfirmModal` (payment-in/out
-// custom) and its real children `ReactivarModal.jsx` / `ConfirmPaymentModal.jsx`
+// custom) and its real children `PaymentLifecycleConfirmModal.jsx` /
+// `LifecycleConfirmModal.jsx` / `ConfirmPaymentModal.jsx`
 // (tools/app-shell/src/windows/custom/shared/). Those must render for real so
 // this test actually observes the confirm modal appearing (or not).
 
@@ -198,9 +216,12 @@ describe.each([
     const user = userEvent.setup();
     await renderDetail(Page, windowName);
 
-    // Sanity: no confirm modal present before the click.
-    expect(screen.queryByText('reactivarInTitle')).toBeNull();
-    expect(screen.queryByText('reactivarOutTitle')).toBeNull();
+    // Sanity: no confirm modal present before the click. Fixture record has
+    // status: 'RPR' — a DEPOSITED status but NOT 'RPPC' (reconciled), so
+    // under PaymentLifecycleConfirmModal's derivation reconciled is false
+    // and the NON-reconciled reactivate title key is expected.
+    expect(screen.queryByText('paymentConfirmReactivateTitleIn')).toBeNull();
+    expect(screen.queryByText('paymentConfirmReactivateTitleOut')).toBeNull();
 
     const reactivateBtn = screen.getByText('processReactivate');
     await act(async () => { await user.click(reactivateBtn); });
@@ -210,7 +231,7 @@ describe.each([
     // appears and handleProcess is NOT called until the user confirms.
     expect(mockHook.handleProcess).not.toHaveBeenCalled();
 
-    const expectedTitleKey = windowName === 'payment-in' ? 'reactivarInTitle' : 'reactivarOutTitle';
+    const expectedTitleKey = windowName === 'payment-in' ? 'paymentConfirmReactivateTitleIn' : 'paymentConfirmReactivateTitleOut';
     await waitFor(() => {
       expect(screen.getByText(expectedTitleKey)).toBeInTheDocument();
     });
@@ -223,7 +244,9 @@ describe.each([
     const reactivateBtn = screen.getByText('processReactivate');
     await act(async () => { await user.click(reactivateBtn); });
 
-    const confirmBtn = await screen.findByText('reactivarTodosModoss');
+    // Confirm button label key is direction-agnostic — same key used for
+    // both payment-in and payment-out (only the title differs by direction).
+    const confirmBtn = await screen.findByText('paymentConfirmReactivateBtn');
     await act(async () => { await user.click(confirmBtn); });
 
     await waitFor(() => {
@@ -252,7 +275,7 @@ describe.each([
     await act(async () => { await user.click(cancelBtn); });
 
     expect(mockHook.handleProcess).not.toHaveBeenCalled();
-    const expectedTitleKey = windowName === 'payment-in' ? 'reactivarInTitle' : 'reactivarOutTitle';
+    const expectedTitleKey = windowName === 'payment-in' ? 'paymentConfirmReactivateTitleIn' : 'paymentConfirmReactivateTitleOut';
     expect(screen.queryByText(expectedTitleKey)).toBeNull();
   });
 });

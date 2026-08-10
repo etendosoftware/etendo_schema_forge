@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ConversionRateTable from './ConversionRateTable';
 import ConversionRateForm from './ConversionRateForm';
 import { AttachmentsTab } from '@/components/attachments';
@@ -18,7 +20,9 @@ const statusField = null;
 // @sf-generated-end summary:conversionRate
 
 // @sf-generated-start extraBadges:conversionRate
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:conversionRate
 
 // @sf-generated-start processes:conversionRate
@@ -44,10 +48,10 @@ export const api = {
     "conversionRate": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/conversion-rates/conversionRate",
       "detailUrl": "/sws/neo/conversion-rates/conversionRate/{id}",
       "supportedFilters": [
@@ -89,14 +93,23 @@ export const api = {
     "parentFilter": "parentId={id} for child entities"
   },
   "window": {
-    "category": "finance"
+    "category": "finance",
+    "readOnly": true
   }
 };
 
 // @sf-generated-start component:ConversionRatePage
 export default function ConversionRatePage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('116');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="116" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="conversionRate"
         Form={ConversionRateForm}
@@ -112,8 +125,9 @@ export default function ConversionRatePage({ windowName, recordId, ...props }) {
       api={api}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Conversion_Rate", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -125,8 +139,9 @@ export default function ConversionRatePage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hideCreate
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -9,9 +9,9 @@ vi.mock('@/lib/dateOnly', () => ({
   formatCalendarDate: (val) => (val ? `formatted:${val}` : '—'),
 }));
 
-vi.mock('@/lib/formatAmount.js', () => ({
+vi.mock('@/lib/formatCurrency.js', () => ({
   // Include currency code in output so amount-display assertions can match on it
-  formatAmount: (val, code) => `${code ? code + ' ' : ''}${Number(val || 0).toFixed(2)}`,
+  formatCurrency: (code, val) => `${code ? code + ' ' : ''}${Number(val || 0).toFixed(2)}`,
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({
@@ -82,18 +82,18 @@ describe('PercentBar', () => {
     expect(screen.getByText('0%')).toBeInTheDocument();
   });
 
-  it('renders a mid-value (50%) with amber color classes', () => {
+  it('renders a mid-value (50%) with semantic warning color classes', () => {
     render(<PercentBar value={50} />);
     expect(screen.getByText('50%')).toBeInTheDocument();
     const text = screen.getByText('50%');
-    expect(text.className).toContain('amber');
+    expect(text.className).toContain('status-warning');
   });
 
-  it('renders 100% with emerald color classes', () => {
+  it('renders 100% with semantic success color classes', () => {
     render(<PercentBar value={100} />);
     expect(screen.getByText('100%')).toBeInTheDocument();
     const text = screen.getByText('100%');
-    expect(text.className).toContain('emerald');
+    expect(text.className).toContain('status-success');
   });
 
   it('clamps values above 100 to 100', () => {
@@ -126,7 +126,7 @@ describe('SummaryCard', () => {
 
   it('renders the formatted grandTotal with currency code', () => {
     render(<SummaryCard {...fullProps} />);
-    // formatAmount(1500, 'EUR') → "EUR 1500.00" via mock
+    // formatCurrency('EUR', 1500) → "EUR 1500.00" via mock
     expect(screen.getByText('EUR 1500.00')).toBeInTheDocument();
   });
 
@@ -219,33 +219,43 @@ describe('SummaryCard', () => {
 
     it('shows orgGrandTotal formatted with orgCurrencyCode as primary amount when currencies differ', () => {
       render(<SummaryCard {...dualProps} />);
-      // formatAmount(261.81, 'EUR') → "EUR 261.81" via updated mock
+      // formatCurrency('EUR', 261.81) → "EUR 261.81" via updated mock
       expect(screen.getByText('EUR 261.81')).toBeInTheDocument();
     });
 
     it('shows doc amount as secondary below the header when currencies differ', () => {
       render(<SummaryCard {...dualProps} />);
-      // formatAmount(304.92, 'USD') → "USD 304.92" in secondary span
+      // formatCurrency('USD', 304.92) → "USD 304.92" in secondary span
       expect(screen.getByText('USD 304.92')).toBeInTheDocument();
     });
 
-    it('shows exchange rate note (in parentheses) when currencies differ', () => {
+    it('shows exchange rate note (in parentheses) formatted in es-ES (comma decimal), never dot', () => {
       render(<SummaryCard {...dualProps} />);
-      // rateNote is formatted to 4 decimal places — matches "(1.1647)" pattern
-      expect(screen.getByText(/\(1[.,]1647\)/)).toBeInTheDocument();
+      // Exact match — a tolerant [.,] regex would pass even with the unpinned-locale bug
+      // whenever the host machine's default locale happens to use comma decimals.
+      expect(screen.getByText('(1,1647)')).toBeInTheDocument();
+      expect(screen.queryByText('(1.1647)')).toBeNull();
+    });
+
+    it('pins the exchange rate note to the es-ES locale explicitly (not the unpinned host default)', () => {
+      const spy = vi.spyOn(Number.prototype, 'toLocaleString');
+      render(<SummaryCard {...dualProps} />);
+      const call = spy.mock.calls.find(([locale]) => locale === 'es-ES');
+      expect(call).toBeDefined();
+      spy.mockRestore();
     });
 
     it('shows only doc amount — no secondary row — when orgCurrencyCode equals currencyCode', () => {
       render(<SummaryCard {...fullProps} orgCurrencyCode="EUR" orgGrandTotal={1600} exchangeRate={1.1} />);
       // fullProps has currencyCode='EUR' === orgCurrencyCode='EUR' → showOrgTotal=false
       expect(screen.queryByText(/\(.*\)/)).not.toBeInTheDocument();
-      // Primary amount is doc amount: formatAmount(1500, 'EUR') → "EUR 1500.00"
+      // Primary amount is doc amount: formatCurrency('EUR', 1500) → "EUR 1500.00"
       expect(screen.getByText('EUR 1500.00')).toBeInTheDocument();
     });
 
     it('falls back to doc amount only when orgGrandTotal is null (no rate available)', () => {
       render(<SummaryCard {...dualProps} orgGrandTotal={null} />);
-      // orgGrandTotal == null → showOrgTotal=false → primary = formatAmount(304.92, 'USD')
+      // orgGrandTotal == null → showOrgTotal=false → primary = formatCurrency('USD', 304.92)
       expect(screen.getByText('USD 304.92')).toBeInTheDocument();
       // EUR amount must NOT be the primary
       expect(screen.queryByText(/EUR 261/)).not.toBeInTheDocument();

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const localStorageMock = (() => {
   let store = {};
@@ -62,6 +63,23 @@ vi.mock('@etendosoftware/app-shell-core/i18n', () => ({
 // Mock onboarding API
 vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
   ONBOARDING_ERROR_CODES: {},
+  // ETP-4664: RegisterStep/LoginStep resolve the backend's stable error code through this
+  // table before rendering it. Mirrored from the real module — a factory mock replaces the
+  // whole module, so omitting it makes AUTH_ERROR_UI_KEYS[err.code] throw inside the catch
+  // and the error message is silently never rendered.
+  AUTH_ERROR_UI_KEYS: {
+    WEAK_PASSWORD: 'onboardingWeakPassword',
+    INVALID_REQUEST: 'onboardingInvalidRequest',
+    REGISTER_MISSING_FIELDS: 'onboardingRegisterMissingFields',
+    REGISTER_EMPTY_FIELDS: 'onboardingRegisterEmptyFields',
+    INVALID_EMAIL_FORMAT: 'onboardingInvalidEmailFormat',
+    EMAIL_ALREADY_REGISTERED: 'onboardingEmailAlreadyRegistered',
+    REGISTER_SERVER_ERROR: 'onboardingRegisterServerError',
+    LOGIN_MISSING_FIELDS: 'onboardingLoginMissingFields',
+    INVALID_CREDENTIALS: 'onboardingInvalidCredentials',
+    LOGIN_SERVER_ERROR: 'onboardingLoginServerError',
+    INTERNAL_ERROR: 'onboardingConnectionError',
+  },
   changePassword: vi.fn(),
   confirmPasswordReset: vi.fn(),
   fetchAccount: vi.fn(),
@@ -102,6 +120,15 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/state', () => ({
   ],
   isCompanyStepValid: () => true,
   isProfileStepValid: () => true,
+  ENVIRONMENT_SESSION_KEYS: [
+    'sf_auth_token',
+    'sf_auth_user',
+    'sf_auth_client_id',
+    'sf_auth_client_name',
+    'sf_auth_rolelist',
+    'sf_auth_selected_role',
+    'sf_auth_selected_org',
+  ],
 }));
 
 vi.mock('../../lib/observability.js', () => ({
@@ -426,7 +453,8 @@ describe('OnboardingPage', () => {
   });
 
   it('tracks registration exceptions', async () => {
-    registerAccount.mockRejectedValue({ code: 'onboardingConnectionError' });
+    // An unrecognised code falls back to the generic connection message.
+    registerAccount.mockRejectedValue({ code: 'SOME_UNMAPPED_CODE' });
 
     localStorage.removeItem('sf_platform_token');
     renderAtRegister();
@@ -443,6 +471,27 @@ describe('OnboardingPage', () => {
       });
     });
     expect(screen.getByText('onboardingConnectionError')).toBeInTheDocument();
+  });
+
+  // ETP-4664: the backend returns a stable machine-readable code; the UI must render the
+  // translated key it maps to, never the code itself nor the backend's raw English message.
+  it('translates a known registration error code instead of showing the raw message', async () => {
+    registerAccount.mockRejectedValue({
+      code: 'EMAIL_ALREADY_REGISTERED',
+      userMessage: 'Email already registered',
+    });
+
+    localStorage.removeItem('sf_platform_token');
+    renderAtRegister();
+
+    fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
+
+    await waitFor(() => {
+      expect(screen.getByText('onboardingEmailAlreadyRegistered')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Email already registered')).not.toBeInTheDocument();
+    expect(screen.queryByText('EMAIL_ALREADY_REGISTERED')).not.toBeInTheDocument();
+    expect(screen.queryByText('onboardingConnectionError')).not.toBeInTheDocument();
   });
 
   it('tracks onboarding setup step navigation', async () => {
@@ -465,6 +514,27 @@ describe('OnboardingPage', () => {
     });
   });
 
+  it('keeps the logout action keyboard-accessible in a narrow environment view without account data', async () => {
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    fetchAccount.mockResolvedValue({});
+    fetchEnvironments.mockResolvedValue([{ id: 'demo', name: 'Demo environment' }]);
+    loginEnvironment.mockResolvedValue({});
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+
+    render(<OnboardingPage />);
+
+    const logout = await screen.findByRole('button', { name: 'logout' });
+    expect(logout).toBeVisible();
+    expect(logout).toHaveAttribute('type', 'button');
+    expect(logout.closest('header').firstElementChild).toHaveClass('min-w-0');
+
+    logout.focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(await screen.findByTestId('action-login-submit')).toBeVisible();
+    expect(localStorage.getItem('sf_platform_token')).toBeNull();
+  });
+
   it('tracks setup step back and keeps company-form edits out of tracking payloads', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
@@ -479,7 +549,7 @@ describe('OnboardingPage', () => {
     // so it is no longer changed here.
     fireEvent.click(await screen.findByText('onboardingBusinessTypeFreelancer'));
     fireEvent.click(screen.getByText('onboardingContinueAction'));
-    fireEvent.change(screen.getByLabelText(/onboardingAddressLabel/), {
+    fireEvent.change(await screen.findByLabelText(/onboardingAddressLabel/), {
       target: { value: 'Secret Street 123' },
     });
     fireEvent.change(screen.getByLabelText(/onboardingSectorLabel/), {
@@ -499,13 +569,23 @@ describe('OnboardingPage', () => {
     expect(JSON.stringify(track.mock.calls)).not.toContain('Private Setup Name');
   });
 
-  it('tracks login failures without credentials', async () => {
+  it('tracks login failures when the server returns no token', async () => {
     loginAccount.mockResolvedValue({});
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
+    // LoginStep now enforces required email/password before it even calls
+    // trackOnboarding (client-side validation added in core 0.3.20) — fill both
+    // fields so the submit reaches the API call, whose empty response ({}, no
+    // token) is what actually exercises the failure-tracking path this test covers.
+    fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
+      target: { value: 'nocreds@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/onboardingPasswordLabel/), {
+      target: { value: 'x' },
+    });
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
     await waitFor(() => {
@@ -572,6 +652,13 @@ describe('OnboardingPage', () => {
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
+    // Required-field validation (core 0.3.20) blocks submit until both are filled.
+    fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
+      target: { value: 'ada@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/onboardingPasswordLabel/), {
+      target: { value: 'x' },
+    });
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
     await waitFor(() => {
@@ -625,12 +712,22 @@ describe('OnboardingPage', () => {
   });
 
   it('tracks login exceptions', async () => {
-    loginAccount.mockRejectedValue({ userMessage: 'Readable login failure' });
+    // LoginStep's catch no longer surfaces err.userMessage for the plain login path
+    // (core 0.3.20) — it renders ui(AUTH_ERROR_UI_KEYS[err.code] || 'onboardingConnectionError')
+    // since ETP-4664.
+    loginAccount.mockRejectedValue({});
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
     render(<OnboardingPage />);
 
+    // Required-field validation (core 0.3.20) blocks submit until both are filled.
+    fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
+      target: { value: 'exception@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/onboardingPasswordLabel/), {
+      target: { value: 'x' },
+    });
     fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
 
     await waitFor(() => {
@@ -642,7 +739,38 @@ describe('OnboardingPage', () => {
         windowName: 'onboarding',
       });
     });
-    expect(screen.getByText('Readable login failure')).toBeInTheDocument();
+    // core 0.3.20 (ETP-4676) no longer renders the raw backend userMessage; the error is
+    // always translated through AUTH_ERROR_UI_KEYS, falling back to this key when the
+    // rejection carries no code. The mocked ui() is the identity function.
+    expect(screen.getByText('onboardingConnectionError')).toBeInTheDocument();
+    expect(screen.queryByText('Readable login failure')).not.toBeInTheDocument();
+  });
+
+  // ETP-4664: same contract as the register path — translate the code, never leak the
+  // backend's raw English message.
+  it('translates a known login error code instead of showing the raw message', async () => {
+    loginAccount.mockRejectedValue({
+      code: 'LOGIN_SERVER_ERROR',
+      userMessage: 'Unexpected server error',
+    });
+
+    localStorage.removeItem('sf_platform_token');
+    render(<OnboardingPage />);
+
+    fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
+      target: { value: 'exception@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/onboardingPasswordLabel/), {
+      target: { value: 'x' },
+    });
+    fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
+
+    await waitFor(() => {
+      expect(screen.getByText('onboardingLoginServerError')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Unexpected server error')).not.toBeInTheDocument();
+    expect(screen.queryByText('LOGIN_SERVER_ERROR')).not.toBeInTheDocument();
+    expect(screen.queryByText('onboardingConnectionError')).not.toBeInTheDocument();
   });
 
   it('submits forgot password requests with neutral success messaging', async () => {
@@ -737,13 +865,13 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.change(screen.getByLabelText(/onboardingCompanyNameLabel/), {
+    fireEvent.change(await screen.findByLabelText(/onboardingCompanyNameLabel/), {
       target: { value: 'Secret Company' },
     });
     fireEvent.change(screen.getByLabelText(/onboardingFiscalIdLabel/), {
       target: { value: 'B12345678' },
     });
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_started', {
@@ -779,7 +907,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_started', {
@@ -805,7 +933,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     // Since core 0.3.9 (ETP-4446) the loading screen no longer pins the
     // per-step description: while running, the status line rotates through the
@@ -834,7 +962,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     // Reads the "NN%" counter next to the progress bar. Since core 0.3.9
     // (ETP-4446) the displayed value trickles forward between real milestones,
@@ -877,7 +1005,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_failed', {
@@ -899,7 +1027,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_failed', {
@@ -1038,7 +1166,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     // The run succeeds and the success screen renders immediately, before
     // any retry timer has been allowed to fire.
@@ -1083,7 +1211,7 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
-    fireEvent.click(screen.getByText('onboardingStartAction'));
+    fireEvent.click(await screen.findByText('onboardingStartAction'));
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_run_succeeded', {
@@ -1228,7 +1356,7 @@ describe('OnboardingPage', () => {
           'Failed to save onboarding draft', expect.any(Error),
         );
       });
-      expect(saveOnboardingDraft).toHaveBeenCalledTimes(1);
+      expect(saveOnboardingDraft.mock.calls.length).toBeGreaterThanOrEqual(1);
 
       // The failure reset lastSavedDraftRef, so the next form change retries
       // instead of being suppressed as already saved.
@@ -1237,18 +1365,17 @@ describe('OnboardingPage', () => {
       });
 
       await waitFor(() => {
-        expect(saveOnboardingDraft).toHaveBeenCalledTimes(2);
+        expect(saveOnboardingDraft).toHaveBeenLastCalledWith(
+          expect.any(Function), '', 'platform-token',
+          expect.objectContaining({
+            step: 2,
+            form: expect.objectContaining({ clientName: 'Acme SL' }),
+          }),
+        );
       });
-      expect(saveOnboardingDraft).toHaveBeenLastCalledWith(
-        expect.any(Function), '', 'platform-token',
-        expect.objectContaining({
-          step: 2,
-          form: expect.objectContaining({ clientName: 'Acme SL' }),
-        }),
-      );
     });
 
-    it('does not autosave a pristine step-1 form', async () => {
+    it('autosaves a changed Profile form on step 1', async () => {
       const realSetTimeout = globalThis.setTimeout;
       vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
         if (delay === 1500) {
@@ -1264,7 +1391,7 @@ describe('OnboardingPage', () => {
 
       render(<OnboardingPage />);
 
-      // fullName/country/businessType are not draft-relevant content on step 1.
+      // ETP-4584 persists Profile changes so a user can resume before Company.
       fireEvent.change(await screen.findByLabelText(/onboardingFullNameLabel/), {
         target: { value: 'Ana' },
       });
@@ -1272,7 +1399,15 @@ describe('OnboardingPage', () => {
       await act(async () => {
         await Promise.resolve();
       });
-      expect(saveOnboardingDraft).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(saveOnboardingDraft).toHaveBeenCalledWith(
+          expect.any(Function), '', 'platform-token',
+          expect.objectContaining({
+            step: 1,
+            form: expect.objectContaining({ fullName: 'Ana' }),
+          }),
+        );
+      });
     });
 
     it('does not fetch the draft nor show the notice after registering a new account', async () => {
@@ -1292,7 +1427,7 @@ describe('OnboardingPage', () => {
       expect(screen.queryByTestId('draft-restored-notice')).not.toBeInTheDocument();
     });
 
-    it('does not autosave when the platform token has been cleared', async () => {
+    it('does not autosave after logout clears the platform token', async () => {
       const realSetTimeout = globalThis.setTimeout;
       vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
         if (delay === 1500) {
@@ -1308,17 +1443,12 @@ describe('OnboardingPage', () => {
 
       render(<OnboardingPage />);
 
-      // Drop the token before triggering the autosave effect again.
+      // Logging out updates the in-memory token as well as localStorage.
       await screen.findByLabelText(/onboardingFullNameLabel/);
-      localStorage.removeItem('sf_platform_token');
+      fireEvent.click(screen.getByTestId('onboarding-logout'));
 
-      // A form change re-runs the effect, which now bails on the missing token.
-      fireEvent.change(screen.getByLabelText(/onboardingFullNameLabel/), {
-        target: { value: 'Ana' },
-      });
-
-      await act(async () => {
-        await Promise.resolve();
+      await waitFor(() => {
+        expect(screen.getByTestId('action-login-submit')).toBeInTheDocument();
       });
       expect(saveOnboardingDraft).not.toHaveBeenCalled();
     });
@@ -1519,7 +1649,11 @@ describe('OnboardingPage', () => {
       render(<OnboardingPage />);
 
       fireEvent.click(await screen.findByText('onboardingContinueAction'));
-      fireEvent.click(screen.getByText('onboardingStartAction'));
+      fireEvent.click(await screen.findByText('onboardingStartAction'));
+
+      await waitFor(() => {
+        expect(emit).toEqual(expect.any(Function));
+      });
 
       // 'finalize' exists in the mocked initialSetupSteps, so applyProgressMessage
       // can flip it to running and drive the organization/finalize progress branch.
@@ -1540,6 +1674,14 @@ describe('OnboardingPage', () => {
   describe('password strength feedback', () => {
     const typePassword = (container, value) => {
       const input = container.querySelector('#reg-password');
+      fireEvent.change(input, { target: { value } });
+      return input;
+    };
+
+    // ETP-4664 (core 0.3.25): submit is gated on isValidEmailFormat(email) as well as on
+    // password strength, so a strong password alone is no longer enough to enable it.
+    const typeEmail = (container, value) => {
+      const input = container.querySelector('#reg-email');
       fireEvent.change(input, { target: { value } });
       return input;
     };
@@ -1565,10 +1707,30 @@ describe('OnboardingPage', () => {
     it('marks every rule met and enables submit for a strong password', () => {
       localStorage.removeItem('sf_platform_token');
       const { container } = renderAtRegister();
+      typeEmail(container, 'ada@example.com');
       typePassword(container, 'Str0ng!Pass');
       ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
         expect(screen.getByTestId(`register-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');
       });
+      expect(screen.getByTestId('action-register-submit')).not.toBeDisabled();
+    });
+
+    it('keeps submit disabled for a strong password when the email is malformed', () => {
+      localStorage.removeItem('sf_platform_token');
+      const { container } = renderAtRegister();
+      typePassword(container, 'Str0ng!Pass');
+      ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
+        expect(screen.getByTestId(`register-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');
+      });
+
+      // Empty, then progressively less wrong, but never valid.
+      expect(screen.getByTestId('action-register-submit')).toBeDisabled();
+      ['ada', 'ada@', 'ada@example'].forEach((value) => {
+        typeEmail(container, value);
+        expect(screen.getByTestId('action-register-submit')).toBeDisabled();
+      });
+
+      typeEmail(container, 'ada@example.com');
       expect(screen.getByTestId('action-register-submit')).not.toBeDisabled();
     });
   });

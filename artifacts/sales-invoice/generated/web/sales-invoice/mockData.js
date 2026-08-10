@@ -19,6 +19,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 38907,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-15",
     "etvfacInvoiceStatus": "DR",
     "etvfacInvType": "Sample etvfacInvType",
@@ -60,6 +62,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 9306,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-16",
     "etvfacInvoiceStatus": "CO",
     "etvfacInvType": "Sample etvfacInvType",
@@ -101,6 +105,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 11544,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-17",
     "etvfacInvoiceStatus": "VO",
     "etvfacInvType": "Sample etvfacInvType",
@@ -142,6 +148,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 11872,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-18",
     "etvfacInvoiceStatus": "IP",
     "etvfacInvType": "Sample etvfacInvType",
@@ -183,6 +191,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 48460,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-19",
     "etvfacInvoiceStatus": "DR",
     "etvfacInvType": "Sample etvfacInvType",
@@ -224,6 +234,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 45418,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-20",
     "etvfacInvoiceStatus": "CO",
     "etvfacInvType": "Sample etvfacInvType",
@@ -265,6 +277,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 33840,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-21",
     "etvfacInvoiceStatus": "VO",
     "etvfacInvType": "Sample etvfacInvType",
@@ -306,6 +320,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 25716,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-22",
     "etvfacInvoiceStatus": "IP",
     "etvfacInvType": "Sample etvfacInvType",
@@ -347,6 +363,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 44780,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-23",
     "etvfacInvoiceStatus": "DR",
     "etvfacInvType": "Sample etvfacInvType",
@@ -388,6 +406,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 12483,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-24",
     "etvfacInvoiceStatus": "CO",
     "etvfacInvType": "Sample etvfacInvType",
@@ -429,6 +449,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 46022,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-25",
     "etvfacInvoiceStatus": "VO",
     "etvfacInvType": "Sample etvfacInvType",
@@ -470,6 +492,8 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 38634,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-26",
     "etvfacInvoiceStatus": "IP",
     "etvfacInvType": "Sample etvfacInvType",
@@ -507,6 +531,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 38907,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-001"
   },
   {
@@ -520,6 +546,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 9306,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-002"
   },
   {
@@ -533,6 +561,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 11544,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-003"
   },
   {
@@ -546,6 +576,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 11872,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-004"
   },
   {
@@ -559,6 +591,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 48460,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-005"
   },
   {
@@ -572,6 +606,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 45418,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-006"
   },
   {
@@ -585,6 +621,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 33840,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-007"
   },
   {
@@ -598,6 +636,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 25716,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-008"
   },
   {
@@ -611,6 +651,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 44780,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-009"
   },
   {
@@ -624,6 +666,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 12483,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-010"
   },
   {
@@ -637,6 +681,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 46022,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-011"
   },
   {
@@ -650,6 +696,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 38634,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-012"
   }
 ];
@@ -845,6 +893,129 @@ export const paymentPlan = [
     "numberOfPayments": 26,
     "description": "Government contract fulfillment",
     "totalDebtAmount": 38634,
+    "headerId": "mock-header-012"
+  }
+];
+
+export const reversedInvoices = [
+  {
+    "id": "mock-reversedInvoices-001",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 38907,
+    "aEAT349BPBaseAmountS": 38907,
+    "headerId": "mock-header-001"
+  },
+  {
+    "id": "mock-reversedInvoices-002",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 9306,
+    "aEAT349BPBaseAmountS": 9306,
+    "headerId": "mock-header-002"
+  },
+  {
+    "id": "mock-reversedInvoices-003",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 11544,
+    "aEAT349BPBaseAmountS": 11544,
+    "headerId": "mock-header-003"
+  },
+  {
+    "id": "mock-reversedInvoices-004",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 11872,
+    "aEAT349BPBaseAmountS": 11872,
+    "headerId": "mock-header-004"
+  },
+  {
+    "id": "mock-reversedInvoices-005",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 48460,
+    "aEAT349BPBaseAmountS": 48460,
+    "headerId": "mock-header-005"
+  },
+  {
+    "id": "mock-reversedInvoices-006",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 45418,
+    "aEAT349BPBaseAmountS": 45418,
+    "headerId": "mock-header-006"
+  },
+  {
+    "id": "mock-reversedInvoices-007",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 33840,
+    "aEAT349BPBaseAmountS": 33840,
+    "headerId": "mock-header-007"
+  },
+  {
+    "id": "mock-reversedInvoices-008",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 25716,
+    "aEAT349BPBaseAmountS": 25716,
+    "headerId": "mock-header-008"
+  },
+  {
+    "id": "mock-reversedInvoices-009",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 44780,
+    "aEAT349BPBaseAmountS": 44780,
+    "headerId": "mock-header-009"
+  },
+  {
+    "id": "mock-reversedInvoices-010",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 12483,
+    "aEAT349BPBaseAmountS": 12483,
+    "headerId": "mock-header-010"
+  },
+  {
+    "id": "mock-reversedInvoices-011",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 46022,
+    "aEAT349BPBaseAmountS": 46022,
+    "headerId": "mock-header-011"
+  },
+  {
+    "id": "mock-reversedInvoices-012",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 38634,
+    "aEAT349BPBaseAmountS": 38634,
     "headerId": "mock-header-012"
   }
 ];

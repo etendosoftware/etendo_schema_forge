@@ -6,7 +6,7 @@ Use this window to register and complete outbound customer shipments. The functi
 
 ## What this window should allow
 
-- Create or review a shipment header with warehouse, customer, delivery address, movement date, status (rendered as a status badge, not a dot indicator), and invoicing state.
+- Create or review a shipment header with warehouse, customer, delivery address, movement date, status (rendered as a status badge, not a dot indicator), currency, and invoicing state.
 - Maintain shipment lines that represent the delivered products and quantities for the selected shipment.
 - Complete a draft shipment when it is ready to be executed.
 - Create a draft sales invoice from one completed shipment or from multiple completed shipments when they are invoiceable together.
@@ -29,11 +29,14 @@ Use this window to register and complete outbound customer shipments. The functi
 - The window is master-child: opening a shipment detail loads the header plus its child lines, and line creation/editing happens in the context of the current shipment.
 - The partner address selector depends on the selected business partner. Current contract evidence shows `partnerAddress` as a dependent selector filtered by `businessPartner`.
 - Header editability is status-driven. Core header fields such as warehouse, business partner, partner address, and movement date become read-only once the shipment is processed.
+- Unified document/accounting date (ETP-4531, redefined 2026-07-17): `accountingDate` (`DateAcct`) is `visibility: system` — fully hidden from the UI, not present in `frontendContract.entities.goodsShipment.fields` at all. `movementDate` is the single visible date field. `M_InOut.MovementDate` (shared table with Goods Receipt) carries `AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate`, which auto-fills `dateAcct` from `movementDate`. This cascade is now intentionally allowed to flow through untouched — the earlier `GoodsShipmentHeaderHandler#afterCallout` guard that stripped it (ETP-4531's original, now-superseded scope; see `docs/feedback.md`) has been removed on the `com.etendoerp.go` side, so saving the shipment writes the same date to both `movementDate` and `accountingDate` internally, and the accounting facts generated on posting reflect that unified value as the journal entry's accounting date.
 - Shipment lines react to processing state as well. Product and quantities become read-only after processing, and `orderQuantity` only appears when the UOM-related display logic evaluates true.
 - Completing is the primary status-driven action exposed through the document action override: the UI labels the action as `Complete` when the shipment is in draft status.
 - The detail top bar exposes shipment-specific downstream actions. `Create Invoice` appears only for completed shipments that are not considered fully invoiced by the current page logic; `Create Return` appears for completed shipments; `Send Document` is always exposed from the custom top bar component.
-- Single-shipment invoicing opens a preview modal that loads shipment lines, enriches them with unit prices from the related sales order lines, lets the user reduce quantities per line, warns when a draft invoice already exists, and posts to `createDraftInvoice`. The visible total in that modal is a preview derived from selected lines and prices, not a shipment-header total.
-- Batch invoicing from the list is constrained by current UI logic: only completed shipments that are not fully invoiced are counted as invoiceable, and all selected invoiceable shipments must belong to the same business partner before `Create Invoice` is enabled. The batch modal lets the user include or exclude specific lines, adjust quantities per line, previews a derived total, checks for an existing draft invoice, and creates one draft invoice for the selected shipment set.
+- **Currency (ETP-4028)**: header field `etgoCurrency` (`M_InOut.EM_Etgo_Currency_ID`, mandatory). Defaults to the organization's currency (`defaultExpr: "@C_Currency_ID@"`), editable while the shipment is in draft, and becomes read-only once the shipment is processed (`readOnlyLogic: "@Processed@='Y'"`). Changing the currency after lines already exist does **not** recalculate those existing lines' prices — it only applies to newly added lines going forward. When a shipment is created from a sales order (via `NeoCommercialDocumentFactory.createShipmentReceiptHeader`), it inherits the order's currency; other shipment-creation paths (from an invoice, return receipts) inherit the currency of their respective source document. There is deliberately **no** total/amount display that converts the shipment's currency into the organization's currency — `M_InOutLine` carries no monetary columns at all (a shipment is a pure goods movement), so no reliable "document total" exists to convert; this was scoped out of ETP-4028 and left as an open question on the ticket (see comment 2026-07-29).
+- Currency filter on line import (ETP-4028): the shipment's own `etgoCurrency` value determines which source documents appear in **Import from Sales Order** and **Import from Sales Invoice**. Each modal's `fetchDocuments` self-fetches the current shipment header to read its currency, then filters candidates so only documents in the same currency are selectable; when the filter excludes all candidates, the modal shows a dedicated empty-state message (`noSalesOrdersMatchShipmentCurrency` / `noSalesInvoicesMatchShipmentCurrency`).
+- Single-shipment invoicing opens a preview modal that loads shipment lines, enriches them with unit prices from the related sales order lines, lets the user reduce quantities per line, warns when a draft invoice already exists, and posts to `createDraftInvoice`. The visible total in that modal is a preview derived from selected lines and prices, not a shipment-header total. Since ETP-4028, confirming the invoice also requires an explicit **Tarifa** (price list) selection in `CreateInvoiceConfirmModal` — the shipment's currency is shown read-only (inherited, not editable) while the price list is a required, user-selectable dropdown; the chosen `priceListId` is sent to `createDraftInvoice` and applied to the generated invoice before its lines are created, so every line prices off that price list (if a product has no price there, its price field is left blank for the user to fill in).
+- Batch invoicing from the list is constrained by current UI logic: only completed shipments that are not fully invoiced are counted as invoiceable, and all selected invoiceable shipments must belong to the same business partner before `Create Invoice` is enabled. Since ETP-4028, batch invoicing also requires all selected shipments to share the same currency (`currencyCheck` guard) — mixed-currency selections disable `Create Invoice` with an explanatory tooltip; a full price-list picker for this batch flow was not implemented (backend already accepts `priceListId` for the multi-shipment path if a future UI needs it). The batch modal lets the user include or exclude specific lines, adjust quantities per line, previews a derived total, checks for an existing draft invoice, and creates one draft invoice for the selected shipment set.
 - Related documents currently react to the shipment's linked sales order. The tab fetches the sales order by `salesOrder`, then fetches sales invoices by the same order id, and renders navigation chips for both. Return receipts are only shown from an internal `_returnReceipts` payload if present.
 - Send Email recipient resolution: the Send Email modal (`SendDocumentModal`) pre-fills the `Para` field by fetching `GET /sws/neo/contacts/businessPartner/{businessPartner}` when the modal opens, reading `etgoEmail` (`C_BPartner.EM_Etgo_Email`) from the contacts spec. The field is left empty if no email is registered for the business partner. The modal title uses `useMenuLabel()` so it renders in the active UI language (e.g. "Factura de Venta" in Spanish instead of "Invoice").
 - No explicit shipment-level tax, discount, or financial recalculation behavior is visible in the current evidence. The only observed financial reaction is invoice preview total calculation based on selected shipment lines and sales-order prices.
@@ -60,6 +63,12 @@ Use this window to register and complete outbound customer shipments. The functi
 11. Select two or more draft shipments from the list and confirm the bulk action bar shows a `Confirmar (N)` button. Trigger it and verify all selected shipments move to completed status and a result toast appears.
 12. Open the Send Email modal from the topbar and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language.
 13. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+14. Create a shipment from a sales order confirmed in a non-org currency (e.g. USD, org in EUR) via "Manage Shipment" and confirm the new shipment's Currency field is pre-filled with USD, not the org's default.
+15. On a draft shipment, confirm Currency defaults to the org's currency and is editable; confirm it becomes read-only once the shipment is completed.
+16. On a draft shipment with existing lines, change Currency and add a new line; confirm the existing lines' prices/behavior are unaffected and only the new line reflects the new currency context.
+17. On a shipment with Currency = USD, open **Import from Sales Order** / **Import from Sales Invoice** and confirm only USD-denominated source documents are listed, with EUR (or other-currency) documents excluded and an explanatory empty-state message shown when nothing matches.
+18. Use `Create Invoice` on a completed shipment and confirm the confirmation popup shows Currency read-only (inherited from the shipment) and a required Tarifa (price list) selector; confirm the created invoice's lines price off the selected price list.
+19. Select multiple completed shipments with different currencies from the list and confirm `Create Invoice` stays disabled with an explanatory tooltip; repeat with same-currency shipments and confirm it enables.
 
 ## Automated evidence
 
@@ -75,3 +84,90 @@ Use this window to register and complete outbound customer shipments. The functi
 - The generated `GoodsShipmentPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_InOut` AD table.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
 - **ETP-4032 — Shared ConfirmResultModal**: `GoodsShipmentActions.jsx` now imports `ConfirmResultModal` from `@/components/contract-ui` instead of the former `@generated/sales-order/custom/OrderCreateInvoice` re-export. The modal's props API uses `cards` (array of document links) instead of the previous `docs` object — behavior is unchanged for the user.
+- **ETP-4028 — Currency field**: `modules/com.etendoerp.go/src-db/database/model/modifiedTables/M_INOUT.xml` adds `EM_ETGO_CURRENCY_ID` (mandatory, Search reference to `C_Currency`). `NeoCommercialDocumentFactory.java` sets `.setEtgoCurrency(...)` on every `ShipmentInOut` creation path (from a sales order, from another shipment, from an invoice). `artifacts/goods-shipment/decisions.json` declares `etgoCurrency` (editable, `defaultExpr: "@C_Currency_ID@"`, locked on `Processed='Y'`) plus `window.labelOverrides` for the field label.
+- **ETP-4028 — Currency-filtered imports**: `artifacts/goods-shipment/custom/ImportFromSalesOrderModal.jsx` and `ImportFromSalesInvoiceModal.jsx` fetch the shipment header for `etgoCurrency` and filter candidate documents by matching currency, passing `noCurrencyMatchMessageKey` to the shared `ImportLinesModal`.
+- **ETP-4028 — Price-list picker at invoice time**: `tools/app-shell/src/components/contract-ui/CreateInvoiceConfirmModal.jsx` (shared with goods-receipt, purchase-order, sales-order) gained `showPriceListPicker`/`isSOTrx` props, fetching `/price-list/priceList` and letting the user pick a price list before confirming; `GoodsShipmentActions.jsx` wires this in and forwards `priceListId` to `createDraftInvoice`. Backend: `CreateDraftInvoiceHandler.java`'s `createFromOrder`/`createFromShipments` gained a 3rd `priceListId` parameter and an `applyPriceListOverride` helper that sets `invoice.setPriceList(...)` before the native `CreateInvoiceLinesFromProcess` prices the lines.
+- **ETP-4028 — Bulk-invoice currency guard**: `BulkInvoiceFromShipment.jsx` adds a `currencyCheck` that disables `Create Invoice` when the selected shipments don't share the same currency.
+
+## Accounting dimension visibility per section — ETP-4529
+
+| Field | Header | Lines |
+| --- | --- | --- |
+| `businessPartner` (Contacto) | **Nunca** — no separate dimension field exists (the header's `businessPartner` is the shipment's core Customer field, not a dimension pick; raw AD carries no display-logic gating on it) | **Nunca** — the raw AD `businessPartner` field on lines carries `@ACCT_DIMENSION_DISPLAY@` but was never added to `decisions.json`, so it is absent from the generated contract by default (already matches Nunca) |
+| `product` | *(no such field on the header)* | **Siempre** — core line field, no dimension gating |
+| `project` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously discarded) | **Por config** — same passthrough (previously discarded) |
+| `costcenter` | **Por config** — raw AD `@ACCT_DIMENSION_DISPLAY@` passthrough (`section: "other"`, previously discarded) | **Por config** — same passthrough (previously discarded) |
+
+**Runtime evaluator — fixed (ETP-4529 follow-up).**
+Three generic bugs (the `EntityForm.jsx` visibility filter never actually consulting the
+evaluate-display result, the `principal` section hardcoding empty visibility, and no
+lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
+`sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
+runtime.
+
+**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
+`lines.costcenter` are correctly evaluated, but this window uses
+`window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` never mounts at all — so
+the two fields had no UI surface to render on (Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`). Fixed by flipping `lines.project.grid` and
+`lines.costcenter.grid` from `false` to `true` in `decisions.json` (this window's line table,
+`GoodsShipmentLineTable.jsx`, is pipeline-generated, so the pipeline-generated
+`@sf-generated-start columns` block now includes both fields once `grid: true`) and wiring
+dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
+`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
+dimension toggles OFF, the columns do not render as grid columns; with them ON, they do. See
+`sales-invoice.md` for the full write-up (including the verified list of which windows
+actually hit this gap).
+
+### Header section fix, and the plain grid columns above were reverted (ETP-4529 follow-up)
+
+`header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
+so they render in the main visible form area — same fix as `sales-invoice.md`.
+
+Separately: the `lines.project.grid`/`lines.costcenter.grid` flags flipped `false → true` just
+above (ETP-4543) were **flipped back to `false`**. The user asked for the same expand-row
+"Dimensiones contables" UX Amortización has instead of plain always-rendered columns (see
+`docs/ui-customization.md` §14b for the new `dimensionsPanel` `InlineLinesPanel` column type),
+but this window's `GoodsShipmentLineTable.jsx` is fully pipeline-generated with no override
+mechanism that fits that column type — the only existing lines-tab override point,
+`window.customLinesComponent`/`CustomLines`, replaces the entire lines tab with a fully
+self-fetching component (own fetch, own add/delete — matching `AmortizationLinesTable.jsx`'s
+contract), not a drop-in for the `columns`-array contract this generated table uses. This
+window is back to its pre-ETP-4543 state (no project/costcenter on the lines grid) pending a
+coordinator decision on how to add that override point — see `docs/feedback.md`'s ETP-4543
+supersession note for the full reasoning.
+
+**Resolved (ETP-4529 generator support):** `generate-frontend.js`'s `generateTableComponent`
+(`schema_forge_core`) now emits a synthetic `dimensionsPanel` column directly from
+`decisions.json` — no custom override needed. `lines.project.dimensionsPanel` and
+`lines.costcenter.dimensionsPanel` are now `true` (grid stays `false`); the pipeline-generated
+`GoodsShipmentLineTable.jsx` renders the expand-row "Dimensiones contables" panel for existing
+rows. See `docs/decisions-reference.md` (`dimensionsPanel`) and `docs/ui-customization.md` §14b.
+
+### "Añadir dimensiones" moves to a hover action, column no longer shown (ETP-4610)
+
+Same intent as `sales-invoice.md`/`purchase-invoice.md`: `InlineLinesPanel` no longer renders the
+`dimensionsPanel` type as a grid column at all — "Añadir dimensiones" is now a hover action next
+to Edit/Delete, gated on at least one visible dimension field, with the expand-chevron column
+unchanged. The label/icon is adaptive: "Añadir dimensiones" while the line has no dimension values,
+"Editar dimensiones" once at least one is set.
+
+**Regen history on this window:** two `make regen` attempts against the local sandbox's LIVE DB
+both hit the already-documented `AD_Ref_List_Trl` es_ES translation-stripping issue (see
+`docs/feedback.md`'s "`make regen` Silently Strips es_ES Enum Labels..." entry) on this window's
+`etblkpAccountingstatus` field, and were reverted rather than committed with a translation
+regression. The window was ultimately regenerated cleanly by the **pre-push hook's own
+offline/cached-AD-snapshot pipeline run** (the CI-parity "UI / contract drift" check, which
+regenerates from a frozen cached snapshot rather than the incomplete local sandbox DB) —
+that run hit no translation loss at all, confirming the earlier failures were purely a local-DB
+data gap, not a real blocker. `contract.json`, `contract.mcp.json`, and
+`GoodsShipmentLineTable.jsx` are now regenerated and validated (`sf-validate-pipeline`: OK) —
+see `docs/feedback.md`'s ETP-4610 entry for the full trail.
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

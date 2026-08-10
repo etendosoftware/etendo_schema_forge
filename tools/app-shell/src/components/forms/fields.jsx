@@ -2,12 +2,15 @@
 // Order detail form (EntityForm), so wizard/modal inputs, selects and date
 // pickers look and behave identically across the app. Shared by the New
 // Movement wizard and the generic Payment form.
-import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Search, ChevronDown } from 'lucide-react';
+import { useUI } from '@/i18n';
 import { Label as UiLabel } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
+import { getCurrencySymbol } from '@/lib/formatCurrency.js';
 import {
   Select as RSelect, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -19,7 +22,7 @@ export function Field({ label, required, className = '', children }) {
         <UiLabel
           className="text-sm font-medium text-foreground"
           data-testid="UiLabel__7183e9">
-          {label}{required ? <span className="ml-0.5 text-red-500">*</span> : null}
+          {label}{required ? <span className="ml-0.5 text-destructive">*</span> : null}
         </UiLabel>
       ) : null}
       {children}
@@ -36,7 +39,7 @@ export function ReadOnly({ children }) {
 export function TextInput({ className = '', name, ...rest }) {
   // White background: these are editable; the app's default Input is grey, which
   // reads as read-only. Caller className can still override.
-  return <Input className={`bg-white ${className}`} name={name} {...rest} data-testid={name ? `field-text-${name}` : 'field-text'} />;
+  return <Input className={`bg-card ${className}`} name={name} {...rest} data-testid={name ? `field-text-${name}` : 'field-text'} />;
 }
 
 /**
@@ -110,10 +113,11 @@ export function MoneyInput({ value, onChange, className = '', disabled, placehol
   );
 }
 
-export function AmountInput({ label, required, value, onChange, placeholder, readOnly, className, name }) {
+export function AmountInput({ label, required, value, onChange, onBlur, placeholder, readOnly, className, name, currency }) {
   // Keep what the user types verbatim while the field is focused, so a parent
   // that re-formats `value` on every change (e.g. eur(parseEur(x))) doesn't
-  // fight the keystrokes. On blur we fall back to the formatted `value`.
+  // fight the keystrokes. On blur we fall back to the formatted `value` and run
+  // the optional `onBlur` (parents use it to normalize, e.g. "20" → "20,00").
   const [buffer, setBuffer] = useState(value);
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setBuffer(value); }, [value, focused]);
@@ -126,15 +130,15 @@ export function AmountInput({ label, required, value, onChange, placeholder, rea
       data-testid="Field__7183e9">
       <div className="relative">
         <Input
-          className={`pr-8 text-right tabular-nums ${readOnly ? '' : 'bg-white'}`}
+          className={`pr-8 text-right tabular-nums ${readOnly ? '' : 'bg-card'}`}
           value={focused ? buffer : value}
           onChange={(e) => { setBuffer(e.target.value); onChange?.(e); }}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => { setFocused(false); onBlur?.(); }}
           placeholder={placeholder}
           disabled={readOnly}
           data-testid={name ? `field-number-${name}` : 'field-number'} />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground">€</span>
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground">{getCurrencySymbol(currency) || '€'}</span>
       </div>
     </Field>
   );
@@ -166,7 +170,7 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
       <PopoverAnchor asChild data-testid="PopoverAnchor__7183e9">
         <div className="relative">
           <Input
-            className="bg-white pr-9"
+            className="bg-card pr-9"
             value={query}
             placeholder={placeholder}
             onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(null); }}
@@ -182,18 +186,104 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
         sideOffset={4}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
-        className="max-h-56 overflow-auto rounded-lg border border-[#D1D4DB] bg-white p-0 shadow-lg"
+        className="max-h-56 overflow-auto rounded-lg border border-[hsl(var(--border-control))] bg-card p-0 shadow-lg"
         style={{ width: 'var(--radix-popover-trigger-width)' }}
         data-testid="PopoverContent__7183e9">
         {loading && results.length === 0 ? (
-          <div className="px-3 py-2 text-sm text-[#6C6C89]">…</div>
+          <div className="px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">…</div>
         ) : null}
         {results.map((r) => (
           <button
             key={r.id}
             type="button"
             onClick={() => { onChange(r); setOpen(false); }}
-            className="block w-full px-3 py-2 text-left text-sm text-[#121217] hover:bg-[#F5F7F9]"
+            className="block w-full px-3 py-2 text-left text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
+          >
+            {r.name}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Chip-style searchable single-select, matching the Funds-transfer modal's
+ * accounting-item selector: once chosen, the value shows as a removable chip
+ * (label + ×) inside the field; clicking it returns to typing mode. The dropdown
+ * is rendered INLINE (not portaled) so it scrolls with wheel/touchpad inside a
+ * RemoveScroll-locked Dialog. Data comes from a `useLookup` hook, exactly like
+ * {@link LookupPicker}.
+ *
+ * @param {{ id, name } | null} value
+ * @param {(row: { id, name } | null) => void} onChange
+ * @param {function} useLookup - hook `(query) => { results, loading }` returning `{ id, name }` rows
+ * @param {string} [placeholder]
+ * @param {string} [testId] - base for the field's data-testids
+ */
+export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar…', testId = 'chip-select' }) {
+  const ui = useUI();
+  const inputRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [query, setQuery] = useState('');
+  const { results } = useLookup(query);
+  const showChip = !!value && !editing;
+  const close = () => { setOpen(false); setEditing(false); setQuery(''); };
+  const startEditing = () => { setEditing(true); setOpen(true); setQuery(''); };
+
+  // Keep focus in the input while the (portaled) list is open, so the user can keep typing.
+  useEffect(() => { if (editing && open) inputRef.current?.focus(); }, [editing, open]);
+
+  // Radix Popover portals the list to the body and auto-flips on collision, so it is never
+  // clipped by an ancestor's overflow (e.g. the modal body) — unlike an inline dropdown.
+  return (
+    <Popover open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} data-testid="Popover__chip">
+      <PopoverAnchor asChild data-testid="PopoverAnchor__chip">
+        <div
+          className="relative flex h-10 w-full items-center gap-1 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:border-[hsl(var(--text-primary))] focus-within:ring-[3px] focus-within:ring-[hsl(var(--focus-ring))]/[0.08]"
+          onClick={showChip ? startEditing : undefined}
+        >
+          {showChip ? (
+            <SelectorChip
+              label={value.name}
+              onClick={startEditing}
+              onClear={() => { onChange(null); close(); }}
+              clearAriaLabel={ui('clear')}
+              testId={`${testId}-chip`}
+              data-testid={`${testId}-chip`} />
+          ) : (
+            <input
+              ref={inputRef}
+              className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
+              value={query}
+              placeholder={placeholder}
+              onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+              onFocus={() => setOpen(true)}
+              data-testid={`${testId}-search`} />
+          )}
+          <ChevronDown className="ml-auto h-4 w-4 flex-none text-muted-foreground" data-testid={`${testId}-chevron`} />
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        sideOffset={6}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
+        className="max-h-64 overflow-auto rounded-xl border border-[hsl(var(--border-control))] bg-card p-1.5 shadow-lg"
+        style={{ width: 'var(--radix-popover-trigger-width)' }}
+        data-testid={`${testId}-popover`}
+      >
+        {results.length === 0 ? (
+          <div className="px-2.5 py-3 text-sm text-[hsl(var(--muted-foreground))]">—</div>
+        ) : null}
+        {results.map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => { onChange(r); close(); }}
+            data-testid={`${testId}-option-${r.id}`}
+            className={`flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--page-bg))] ${value?.id === r.id ? 'bg-[hsl(var(--page-bg))]' : ''}`}
           >
             {r.name}
           </button>
@@ -205,7 +295,7 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
 
 export function Note({ children }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-[#E8EAEF] bg-white px-3 py-2.5 text-xs leading-[17px] text-[#6C6C89] [&_b]:font-semibold [&_b]:text-[#121217]">
+    <div className="flex items-start gap-2 rounded-lg border border-[hsl(var(--border-subtle))] bg-card px-3 py-2.5 text-xs leading-[17px] text-[hsl(var(--muted-foreground))] [&_b]:font-semibold [&_b]:text-[hsl(var(--foreground))]">
       {children}
     </div>
   );
@@ -213,7 +303,7 @@ export function Note({ children }) {
 
 export function SectionLabel({ children }) {
   return (
-    <div className="mb-3 mt-[18px] text-xs font-bold uppercase leading-4 tracking-[0.06em] text-[#8A8AA3] first:mt-1.5">
+    <div className="mb-3 mt-[18px] text-xs font-bold uppercase leading-4 tracking-[0.06em] text-[hsl(var(--text-disabled))] first:mt-1.5">
       {children}
     </div>
   );

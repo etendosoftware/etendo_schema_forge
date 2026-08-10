@@ -22,7 +22,7 @@ const CHECK_ICON = (
 const BADGE_STYLE = {
   display: 'inline-flex', alignItems: 'center', gap: 4,
   padding: '4px 8px', borderRadius: 360,
-  background: '#EEFBF4', color: '#17663A',
+  background: 'var(--status-success-bg)', color: 'var(--status-success-fg)',
   fontFamily: 'Inter', fontWeight: 600, fontSize: 14, lineHeight: '20px',
   whiteSpace: 'nowrap',
 };
@@ -66,7 +66,7 @@ export default function PaymentConciliadoBadge({ data }) {
       title={ui('paymentGoToTransaction')}
       aria-label={ui('paymentGoToTransaction')}
       data-testid="payment-conciliado-go-to-transaction"
-      className="transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#17663A]"
+      className="transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--status-success-fg)]"
       style={BADGE_BUTTON_STYLE}
     >
       {CHECK_ICON}

@@ -1,8 +1,12 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import WarehouseTable from './WarehouseTable';
 import WarehouseForm from './WarehouseForm';
 import WarehouseTransactionsTable from '@/windows/custom/warehouse/WarehouseTransactionsTable';
+import AccountingTable from './AccountingTable';
+import AccountingForm from './AccountingForm';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -89,6 +93,17 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/warehouse/binContents",
       "detailUrl": "/sws/neo/warehouse/binContents/{id}",
+      "supportedFilters": []
+    },
+    "accounting": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": false,
+      "listUrl": "/sws/neo/warehouse/accounting",
+      "detailUrl": "/sws/neo/warehouse/accounting/{id}",
       "supportedFilters": []
     }
   },
@@ -188,6 +203,14 @@ export const api = {
       "reference": "RefInventory",
       "inputMode": "selector",
       "url": "/sws/neo/warehouse/binContents/selectors/referencedInventory"
+    },
+    {
+      "entity": "accounting",
+      "field": "warehouseDifferences",
+      "column": "W_Differences_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/warehouse/accounting/selectors/warehouseDifferences"
     }
   ],
   "actions": [
@@ -228,6 +251,13 @@ export const api = {
 
 // @sf-generated-start component:WarehousePage
 export default function WarehousePage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('139');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="139" />;
+  }
   if (recordId) {
     return (
       <>
@@ -246,11 +276,12 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
       api={api}
         secondaryTabs={[
           { key: 'productTransactions', label: 'Transactions', Panel: WarehouseTransactionsTable },
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm },
         ]}
         hidePrint
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Warehouse", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
       </>
     );
@@ -269,7 +300,7 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
       hidePrint
       hideLink
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

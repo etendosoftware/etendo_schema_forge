@@ -1,4 +1,4 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import { createRef } from 'react';
 
 // Stub the three children. We expose:
@@ -109,19 +109,22 @@ vi.mock('../MovementsTable.jsx', () => ({
       <button data-testid="toggle-select-a" onClick={() => onSelectionChange('a')}>
         toggle a
       </button>
+      <button data-testid="toggle-select-b" onClick={() => onSelectionChange('b')}>
+        toggle b
+      </button>
     </div>
   ),
 }));
 
-// Stub the wizard — its internals (useCreateMovement → useAuth, lookups, etc.)
-// are out of scope for MovementsTab filtering behaviour and need a real
-// AuthProvider otherwise. onClose/onSuccess are surfaced so tests can trigger
+// Stub the new-transaction modal — its internals (useCreateMovement → useAuth,
+// lookups, etc.) are out of scope for MovementsTab filtering behaviour and need a
+// real AuthProvider otherwise. onClose/onSuccess are surfaced so tests can trigger
 // the callbacks MovementsTab wires up (setNewMovementOpen(false) / onReload).
-vi.mock('../NewMovementWizard/index.jsx', () => ({
-  NewMovementWizard: ({ open, onClose, onSuccess }) => (
-    <div data-testid="new-movement-wizard" data-open={String(!!open)}>
-      <button data-testid="wizard-close" onClick={() => onClose?.()}>close</button>
-      <button data-testid="wizard-success" onClick={() => onSuccess?.()}>success</button>
+vi.mock('../NewTransactionModal.jsx', () => ({
+  NewTransactionModal: ({ open, onClose, onSuccess }) => (
+    <div data-testid="new-transaction-modal" data-open={String(!!open)}>
+      <button data-testid="modal-close" onClick={() => onClose?.()}>close</button>
+      <button data-testid="modal-success" onClick={() => onSuccess?.()}>success</button>
     </div>
   ),
 }));
@@ -136,6 +139,33 @@ vi.mock('../FundsTransferModal.jsx', () => ({
       <button data-testid="transfer-success" onClick={() => onSuccess?.()}>success</button>
     </div>
   ),
+}));
+
+// ETP-4656 — MovementsTab now also calls useDeleteMovement() directly (bulk
+// "Delete selected" over the existing checkbox selection), which calls
+// useAuth() internally; stub it like the other auth-touching hooks above (no
+// AuthProvider needed).
+// `mockDeleteMovement` is hoisted to module scope (not re-created per render,
+// unlike the original inline `vi.fn()`) so the bulk-delete describe block
+// below can configure per-id resolve/reject behavior across renders.
+const mockDeleteMovement = vi.fn();
+vi.mock('@/hooks/useCreateMovement', () => ({
+  useDeleteMovement: () => ({ deleteMovement: (...args) => mockDeleteMovement(...args), deleting: false, error: null }),
+}));
+
+// The wiring itself (requestBatchDelete → confirm → onOutcome) is exercised
+// against the real `useBatchDeleteDialog` + `BulkDeleteSelectionBar` below —
+// only their downstream toast side effect needs a spy.
+const toastSuccess = vi.fn();
+const toastWarning = vi.fn();
+const toastError = vi.fn();
+vi.mock('sonner', () => ({
+  toast: {
+    success: (...a) => toastSuccess(...a),
+    warning: (...a) => toastWarning(...a),
+    error: (...a) => toastError(...a),
+    info: vi.fn(),
+  },
 }));
 
 import { MovementsTab } from '../MovementsTab.jsx';
@@ -302,6 +332,94 @@ describe('MovementsTab — selection toggle', () => {
   });
 });
 
+// ETP-4656 (Gap 2) — bulk "Delete selected" over the existing checkbox
+// selection, via BulkDeleteSelectionBar + useBatchDeleteDialog (neither
+// mocked here — the real components render, matching ImportedStatementsTab's
+// equivalent suite).
+describe('MovementsTab — bulk delete selection bar', () => {
+  beforeEach(() => {
+    mockDeleteMovement.mockReset();
+    toastSuccess.mockReset();
+    toastWarning.mockReset();
+    toastError.mockReset();
+  });
+
+  it('is hidden with no selection, and appears once a row is selected', () => {
+    renderTab();
+    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+
+    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-selection-trigger')).toHaveTextContent('(1)');
+  });
+
+  it('Cancel clears the selection and hides the bar', () => {
+    renderTab();
+    act(() => screen.getByTestId('toggle-select-a').click());
+    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+
+    act(() => screen.getByTestId('bulk-delete-selection-cancel').click());
+
+    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('selected-ids').textContent).toBe('');
+  });
+
+  it('all succeed: calls deleteMovement per selected id, reloads, fires a success toast, and clears the selection', async () => {
+    mockDeleteMovement.mockResolvedValue(undefined);
+    const onReload = vi.fn();
+    renderTab({ onReload });
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+    act(() => screen.getByTestId('toggle-select-b').click());
+    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
+    act(() => screen.getByTestId('batch-delete-confirm').click());
+
+    await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1));
+    expect(mockDeleteMovement).toHaveBeenCalledWith({ id: 'a' });
+    expect(mockDeleteMovement).toHaveBeenCalledWith({ id: 'b' });
+    expect(toastSuccess).toHaveBeenCalled();
+    expect(toastWarning).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+  });
+
+  it('partial failure (e.g. a payment-linked movement): reloads, fires ONE warning toast, and keeps only the failed movement selected', async () => {
+    mockDeleteMovement.mockImplementation(({ id }) =>
+      id === 'a' ? Promise.resolve() : Promise.reject(new Error('cannot delete linked movement')),
+    );
+    const onReload = vi.fn();
+    renderTab({ onReload });
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+    act(() => screen.getByTestId('toggle-select-b').click());
+    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
+    act(() => screen.getByTestId('batch-delete-confirm').click());
+
+    await waitFor(() => expect(toastWarning).toHaveBeenCalled());
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
+    expect(onReload).toHaveBeenCalledTimes(1);
+    // 'a' succeeded and was dropped; 'b' failed and remains selected.
+    expect(screen.getByTestId('selected-ids').textContent).toBe('b');
+  });
+
+  it('all fail: does not reload, fires an error toast, and leaves the selection untouched', async () => {
+    mockDeleteMovement.mockRejectedValue(new Error('cannot delete linked movement'));
+    const onReload = vi.fn();
+    renderTab({ onReload });
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
+    act(() => screen.getByTestId('batch-delete-confirm').click());
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(onReload).not.toHaveBeenCalled();
+    expect(screen.getByTestId('selected-ids').textContent).toBe('a');
+    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+  });
+});
+
 describe('MovementsTab — kpi window suffix', () => {
   it('returns null when dateRange has neither presetId nor from/to', () => {
     renderTab();
@@ -372,19 +490,19 @@ describe('MovementsTab — transfer flow', () => {
   });
 });
 
-describe('MovementsTab — new movement wizard callbacks', () => {
-  it('invokes onReload on wizard success, and onClose does not throw', () => {
+describe('MovementsTab — new transaction modal callbacks', () => {
+  it('invokes onReload on modal success, and onClose does not throw', () => {
     const onReload = vi.fn();
     renderTab({ onReload });
 
     act(() => {
-      screen.getByTestId('wizard-success').click();
+      screen.getByTestId('modal-success').click();
     });
     expect(onReload).toHaveBeenCalledTimes(1);
 
     expect(() => {
       act(() => {
-        screen.getByTestId('wizard-close').click();
+        screen.getByTestId('modal-close').click();
       });
     }).not.toThrow();
   });

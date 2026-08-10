@@ -6,10 +6,12 @@ import WarehouseTransactionsTable from './WarehouseTransactionsTable';
 import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import WarehouseProductsTab from './WarehouseProductsTab';
 import WarehouseCustomTable from './WarehouseCustomTable';
+import AccountingTable from '@generated/warehouse/generated/web/warehouse/AccountingTable';
+import AccountingForm from '@generated/warehouse/generated/web/warehouse/AccountingForm';
 
 async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }) {
   const searchKey = `${warehouse.searchKey}-0-0-0`;
-  const res = await fetch(`${apiBaseUrl}/sws/neo/warehouse/storageBin`, {
+  const res = await fetch(`${apiBaseUrl}/storageBin`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -24,6 +26,11 @@ async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }) {
       levelZ: '0',
       relativePriority: 50,
       default: true,
+      // Fixed system ID for M_InventoryStatus "Available" (OVERISSUE='N').
+      // Without this, the DB column default lands new locators on
+      // "Undefined" (7B3DC15A20234C418D26EECDC5D59003), which behaves
+      // identically but is semantically mislabeled. See ETP-4761.
+      inventoryStatus: '2',
     }),
   });
 
@@ -40,6 +47,7 @@ export default function WarehouseWindow(props) {
   const secondaryTabs = [
     { key: 'products', label: ui('warehouseProductsTab'), Panel: WarehouseProductsTab },
     { key: 'productTransactions', label: ui('warehouseTransactionsTab'), Panel: WarehouseTransactionsTable },
+    { key: 'accounting', label: ui('warehouseAccountingTab'), Table: AccountingTable, Form: AccountingForm },
   ];
 
   const handleAfterCreate = async (warehouse, context) => {
@@ -67,7 +75,7 @@ export default function WarehouseWindow(props) {
       onAfterCreate={handleAfterCreate}
       sidebarContent={sidebarContent}
       secondaryTabs={secondaryTabs}
-      sidebarClassName="w-[30%] shrink-0 border-l border-[#E8EAEF] overflow-y-auto p-2"
+      sidebarClassName="w-[30%] shrink-0 border-l border-[hsl(var(--border-subtle))] overflow-y-auto p-2"
       sidebarAboveTabsOnly
       formScrollPaddingX=""
       contentOverflow="hidden"
