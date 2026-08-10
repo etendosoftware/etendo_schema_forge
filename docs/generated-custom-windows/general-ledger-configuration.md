@@ -85,6 +85,8 @@ Editable toggle list over `C_AcctSchema_Element` rows.
 - `Withholding_Acct` stays out of scope
 - Mandatory dimensions are visible but cannot be deactivated from this UI.
 - The backing `AcctSchemaElement` query does **not** filter on `IsActive` (`setFilterOnActive(false)`, ETP-4452) — deactivating a dimension and saving keeps the row visible (unchecked) on the very next reload instead of making it disappear.
+- **Label i18n (ETP-4845):** `GeneralLedgerConfigurationHandler.buildDimensions` sends each row's stable `type` (the `C_AcctSchema_Element.ElementType` / AD_Ref_List `181` code — `OO`, `AC`, `PR`, `BP`, `PJ`, `CC`, …) but no `labelKey`; `row.label` is the raw (English) `Name` column, untranslated. `mapDimensionRows()` in `mockCatalogs.js` derives `labelKey` from `type` via `DIMENSION_TYPE_LABEL_KEYS` before the row reaches `DimensionsTab.jsx`, which already preferred `labelKey` over `label`. Filter/translate by `type`, never by matching the display name (it isn't stable across locales).
+- **User 1 / User 2 excluded (ETP-4845):** `mapDimensionRows()` drops rows whose `type` is `U1`/`U2` (or any code absent from `DIMENSION_TYPE_LABEL_KEYS`) regardless of `IsActive` — no window's contract curates `USER1_ID`/`USER2_ID` as an editable (`form: true`) field, so Etendo GO does not support them as an accounting dimension and showing the toggle is misleading. A client created through classic Etendo's default "new client" wizard seeds all 8 elements (including `U1`/`U2`); GOClient's own provisioning seeds only the 6 GO-supported ones.
 
 ### Cuentas generales
 
