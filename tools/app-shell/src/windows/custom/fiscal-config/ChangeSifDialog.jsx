@@ -72,7 +72,12 @@ export default function ChangeSifDialog({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ active: false }),
     });
-    if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      let msg = text;
+      try { const j = JSON.parse(text); if (j?.error?.message) msg = j.error.message; } catch (_) {}
+      throw new Error(msg);
+    }
   }
 
   async function handleConfirm() {
