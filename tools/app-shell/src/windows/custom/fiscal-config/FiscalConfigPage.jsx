@@ -224,7 +224,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
               onClick={handleAddComplementary}
               disabled={saving || creatingComplementary}
               data-testid="FiscalConfigPage__addComplementary">
-              <PlusCircle size={14} className="mr-1.5" />
+              <PlusCircle size={14} className="mr-1.5" data-testid="PlusCircle__310303" />
               {creatingComplementary
                 ? ui('fiscal.addComplementary.creating')
                 : ui('fiscal.addComplementary.addSii')}
