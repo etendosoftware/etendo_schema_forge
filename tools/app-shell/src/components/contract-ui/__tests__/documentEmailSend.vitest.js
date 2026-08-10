@@ -30,6 +30,22 @@ describe('documentEmailSend', () => {
     expect(command.subject).toBeUndefined();
   });
 
+  // ETP-4717 — messageEdits mirrors the existing recipientEdits opt-in
+  // pattern: included only when the operator actually changed subject/message.
+  it('includes messageEdits in the command when the operator edited subject/message', () => {
+    const command = buildEmailContractCommand('sales-invoice-send', 'invoice-1', {
+      messageEdits: { subject: 'S', message: 'M' },
+    });
+
+    expect(command.messageEdits).toEqual({ subject: 'S', message: 'M' });
+  });
+
+  it('omits messageEdits from the command when no message edits are provided', () => {
+    const command = buildEmailContractCommand('sales-invoice-send', 'invoice-1', {});
+
+    expect(command.messageEdits).toBeUndefined();
+  });
+
   it('resolves sales document contract names', () => {
     expect(resolveDocumentEmailContract('sales-invoice')).toBe('sales-invoice-send');
     expect(resolveDocumentEmailContract('sales-order')).toBe('sales-order-send');

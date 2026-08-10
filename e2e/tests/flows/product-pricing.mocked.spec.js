@@ -148,7 +148,7 @@ async function mockProductDetail(page, product) {
  * tests can assert the lazy fetch actually fired.
  */
 async function mockSelector(page, calls) {
-  await page.route('**/sws/neo/product/price/selectors/M_PriceList_Version_ID**', async (route) => {
+  await page.route('**/sws/neo/product/price/selectors/M_PriceList_Version_ID{/**,}**', async (route) => {
     calls.push(route.request().url());
     await route.fulfill({
       status: 200,
@@ -164,7 +164,7 @@ async function mockSelector(page, calls) {
  * list GET reflects it. `postBodies` captures each create body.
  */
 function installPriceRoute(page, state) {
-  return page.route('**/sws/neo/product/price**', async (route) => {
+  return page.route('**/sws/neo/product/price{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     const method = req.method();
@@ -222,7 +222,7 @@ function installPriceRoute(page, state) {
  * Accounting secondary tab added in ETP-4402.
  */
 async function mockProductAccounting(page, rows) {
-  await page.route('**/sws/neo/product/accounting**', async (route) => {
+  await page.route('**/sws/neo/product/accounting{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 
@@ -346,7 +346,7 @@ test.describe('Product pricing — selector populates dropdown from lazy fetch (
     await login(page);
 
     // Return ONE existing sales row so the sales section is populated.
-    await page.route('**/sws/neo/product/price**', async (route) => {
+    await page.route('**/sws/neo/product/price{/**,}**', async (route) => {
       const req = route.request();
       const url = req.url();
       const method = req.method();
@@ -433,7 +433,7 @@ test.describe('Product pricing — inline create tariff', () => {
 
     // Spec-swapped price-list create endpoint: apiBaseUrl `/sws/neo/product`
     // has its last segment replaced → `/sws/neo/price-list/priceList`.
-    await page.route('**/sws/neo/price-list/priceList**', async (route) => {
+    await page.route('**/sws/neo/price-list/priceList{/**,}**', async (route) => {
       const req = route.request();
       if (req.method() !== 'POST') return route.fallback();
       createBodies.push(req.postData() ? JSON.parse(req.postData()) : {});

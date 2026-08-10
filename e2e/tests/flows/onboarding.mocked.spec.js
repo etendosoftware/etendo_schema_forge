@@ -126,7 +126,7 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     });
   });
 
-  await page.route('**/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID**', async route => {
+  await page.route('**/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID{/**,}**', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -134,7 +134,7 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     });
   });
 
-  await page.route('**/sws/neo/sales-invoice/header/selectors/C_BPartner_ID**', async route => {
+  await page.route('**/sws/neo/sales-invoice/header/selectors/C_BPartner_ID{/**,}**', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

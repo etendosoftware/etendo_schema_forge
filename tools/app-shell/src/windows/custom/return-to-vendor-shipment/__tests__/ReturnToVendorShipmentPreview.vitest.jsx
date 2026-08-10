@@ -6,6 +6,11 @@
 // gate that decides whether `onEmail` reaches buildReturnPreviewContent, and
 // mirrors the existing conventions from
 // return-material-receipt/__tests__/ReturnMaterialReceiptPreview.vitest.jsx.
+//
+// ETP-4789 — Download PDF gets its own status gate on this window (it has no
+// pre-existing isSendable to reuse for that purpose): only downloadable once
+// the return shipment is Confirmado (CO). See the "Download PDF gating by
+// documentStatus (ETP-4789)" describe block below.
 
 import React from 'react';
 
@@ -150,6 +155,38 @@ describe('ReturnToVendorShipmentPreview', () => {
   it('subtitle shows businessPartner$_identifier when present', () => {
     renderPreview();
     expect(screen.getByTestId('modal-subtitle').textContent).toContain('Vendor Corp');
+  });
+
+  it('forwards pdfBlob from useReturnToVendorPdf into buildReturnPreviewContent', () => {
+    const pdfBlob = new Blob(['%PDF'], { type: 'application/pdf' });
+    mockUseReturnToVendorPdf.mockReturnValue({ pdfUrl: 'blob:fake-url', pdfBlob, loading: false, error: null });
+    renderPreview();
+    expect(mockBuildReturnPreviewContent).toHaveBeenCalledWith(
+      expect.objectContaining({ pdfBlob }),
+    );
+  });
+
+  // ── ETP-4789: Download PDF gating by documentStatus ───────────────────────
+  // Unlike the other 5 windows in this bug, this window has no pre-existing
+  // isSendable (it never had a Send action). The fix computes a fresh
+  // isDownloadable = documentStatus === 'CO' and forwards it as canDownload
+  // into buildReturnPreviewContent (which applies the actual gate — see
+  // buildReturnPreviewContent.test.js). These cases must FAIL against the
+  // current (unfixed) source, which never passes canDownload at all.
+  describe('Download PDF gating by documentStatus (ETP-4789)', () => {
+    it('passes canDownload: false to buildReturnPreviewContent when documentStatus is DR (draft)', () => {
+      renderPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
+      expect(mockBuildReturnPreviewContent).toHaveBeenCalledWith(
+        expect.objectContaining({ canDownload: false }),
+      );
+    });
+
+    it('passes canDownload: true to buildReturnPreviewContent when documentStatus is CO (completed)', () => {
+      renderPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
+      expect(mockBuildReturnPreviewContent).toHaveBeenCalledWith(
+        expect.objectContaining({ canDownload: true }),
+      );
+    });
   });
 
   it('does not render subtitle when businessPartner$_identifier is absent', () => {

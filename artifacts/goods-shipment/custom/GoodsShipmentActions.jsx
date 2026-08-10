@@ -7,7 +7,7 @@ import ReturnWizard from './ReturnWizard';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import GoodsShipmentConfirmModal from './GoodsShipmentConfirmModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
-import { generateShipmentPdf, getShipmentPdfLabels, useShipmentPdf } from '@/windows/custom/goods-shipment/useShipmentPdf';
+import { useShipmentPdf } from '@/windows/custom/goods-shipment/useShipmentPdf';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -24,8 +24,6 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const [showSend, setShowSend] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfLoadingAction, setPdfLoadingAction] = useState(null);
   const [showClone, setShowClone] = useState(false);
   const resultNavigatedRef = useRef(false);
 
@@ -50,23 +48,6 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     window.addEventListener('goods-shipment:open-confirm-modal', handler);
     return () => window.removeEventListener('goods-shipment:open-confirm-modal', handler);
   }, []);
-
-  const pdfLabels = getShipmentPdfLabels(ui);
-
-  const handlePrint = async () => {
-    if (pdfLoading) return;
-    setPdfLoading(true); setPdfLoadingAction('print');
-    try {
-      const blob = await generateShipmentPdf(recordId, apiBaseUrl, token, pdfLabels);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (err) {
-      toast.error(err.message || ui('failedToGeneratePdf'));
-    } finally {
-      setPdfLoading(false); setPdfLoadingAction(null);
-    }
-  };
 
   useEffect(() => {
     if (!wizardOpen || !recordId || !base) return;
@@ -169,16 +150,6 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       {isCompleted && <SendDocumentButton onClick={() => setShowSend(true)} />}
 
       <CopyRecordLinkButton recordId={recordId} windowName="goods-shipment" />
-
-      <button
-        type="button"
-        onClick={handlePrint}
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
-        style={{ padding: '4px 12px', borderRadius: '6px', borderWidth: '1px', opacity: pdfLoading && pdfLoadingAction === 'print' ? 0.6 : 1 }}
-      >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
-        {ui('print')}
-      </button>
 
       {!isCompleted && showConfirmModal && isFullyInvoiced
         ? createPortal(

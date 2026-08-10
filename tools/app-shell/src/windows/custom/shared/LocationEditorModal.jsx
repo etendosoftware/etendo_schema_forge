@@ -789,6 +789,11 @@ export default function LocationEditorModal({
                 {/* Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 20px 0', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
+                        {/* Titled "Dirección" in Spanish regardless of saveMode — an earlier round
+                            tried splitting this by saveMode (location vs bpartner), keeping "Ubicación"
+                            for the BP-linked flows (Contacts, fiscal-monitor, shipping/invoicing
+                            pickers), but Ivan confirmed the rename applies everywhere this modal is
+                            used, Contacts included. English stays "Location" (ETP-4749 review round). */}
                         <div style={{ font: '700 20px/28px system-ui', color: 'hsl(var(--foreground))' }}>
                             {ui('locationSelectorTitle')}
                         </div>
