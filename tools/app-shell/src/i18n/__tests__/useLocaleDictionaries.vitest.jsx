@@ -17,8 +17,15 @@ describe('useLocaleDictionaries', () => {
     };
     const { result } = renderHook(() => useLocaleDictionaries('es_ES', loaders));
 
-    await waitFor(() => expect(result.current.renderedLocale).toBe('es_ES'));
-    expect(result.current.dictionaries.es_ES).toEqual({ hello: 'Hola' });
+    // Both waitFors get a longer timeout: under a fully-loaded CPU (e.g. the full
+    // pre-push suite running hundreds of files in parallel), renderedLocale and
+    // dictionaries can update on separate ticks far enough apart that the default
+    // 1000ms window isn't enough — this was observed flaking there while always
+    // passing in isolation. Polling `dictionaries.es_ES` itself (not just asserting
+    // it right after the first waitFor resolves) is the actual fix; the timeout bump
+    // is what gives it room to matter under load.
+    await waitFor(() => expect(result.current.renderedLocale).toBe('es_ES'), { timeout: 5000 });
+    await waitFor(() => expect(result.current.dictionaries.es_ES).toEqual({ hello: 'Hola' }), { timeout: 5000 });
   });
 
   it('ETP-4663: keeps rendering the previous locale/dictionary while the new one is still loading (no flash)', async () => {

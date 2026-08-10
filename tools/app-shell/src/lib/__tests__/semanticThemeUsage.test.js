@@ -40,6 +40,16 @@ const DATA_COLOR_LITERALS = new Map([
   ['windows/custom/sales-invoice/ReversedInvoicesPanel.jsx', new Set([
     'text-purple-700', '#f4f1fd', '#c6b6f7',
   ])],
+  // Support chat "talk to a human" escalate CTA: a deliberate brand-navy matching a specific
+  // reference design, with no existing semantic precedent (checked --primary/--foreground —
+  // --primary collapses to near-black in light mode, not this blue). See the comment above
+  // .sc-escalate-btn in support-chat.css for the same rationale.
+  // Matched fragments are truncated by COLOR_LITERAL's `\brgba?\(\s*\d` (captures only up to
+  // the first digit, e.g. "rgba(3" for "rgba(32,36,82,.32)") — both box-shadow values below
+  // happen to share that same first digit, so one "rgba(3" entry covers both occurrences.
+  ['components/support/support-chat.css', new Set([
+    '#202452', '#2c3168', 'rgba(3',
+  ])],
 ]);
 
 const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\brgba?\(\s*\d|\bhsl\(\s*\d|['"](?:white|black)['"]|\b(?:bg|text|border|ring|outline|fill|stroke)-(?:white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-[0-9]{2,3})?\b/gi;
