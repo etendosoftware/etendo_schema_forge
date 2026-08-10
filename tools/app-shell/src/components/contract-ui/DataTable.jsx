@@ -12,7 +12,7 @@ import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
-import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
+import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
@@ -1255,7 +1255,7 @@ function getRowClassName({
 // own branch instead of adding flat complexity to the caller.
 function computeActionColsWidthPx({
   selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
-  onCloneRow, quickActionsEnabled, ilpHasNoAmountCol,
+  onCloneRow, quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
 }) {
   const showHoverActions = !ilpTrailing && hoverRowActions;
   const showHoverDelete = showHoverActions && onDeleteRow;
@@ -1263,7 +1263,13 @@ function computeActionColsWidthPx({
   const showLegacyClone = !ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled;
   const showQuickActions = !ilpTrailing && quickActionsEnabled;
 
-  return oneIfTrue(selectable) * 40
+  // ETP-4735's leading CHEVRON_COLUMN_WIDTH <col> (see renderLinesColgroup) is a
+  // real, literal-pixel column too — omitting it here would leave growColumnWidth()
+  // computing grow columns as if that 44px were still free, overflowing the table
+  // by 44px in every hasDimensionsPanel window (table-layout: fixed doesn't clamp
+  // <col> widths back down to the table's own 100%).
+  return oneIfTrue(hasDimensionsPanel) * CHEVRON_COLUMN_WIDTH
+    + oneIfTrue(selectable) * 40
     + oneIfTrue(showHoverActions) * 40
     + oneIfTrue(showHoverDelete) * 40
     + oneIfTrue(showLegacyDelete) * 40
@@ -1956,10 +1962,15 @@ export function DataTable({
   );
 
   const visibleColumns = useMemo(() => {
+    // ETP-4803 — drop columns that never render as a grid column in either
+    // lines renderer (e.g. `dimensionsPanel`) BEFORE any other filter. This
+    // must mirror InlineLinesPanel's own `visibleColumns` exactly, since
+    // DataTable's hidden `hideHeader` colgroup replicates that flex layout's
+    // math — a phantom column here desyncs `growColumnWidth()` for every
+    // subsequent column in the inline add-row form.
+    let base = columns.filter(isLineGridColumn);
     // Start from explicit hiddenColumns prop
-    let base = hiddenColumns.length > 0 ? columns.filter(col => !hiddenColumns.includes(col.key)) : columns;
-    // ETP-4735 — never render dimensionsPanel as a normal column (see comment above).
-    base = base.filter(col => col.type !== 'dimensionsPanel');
+    base = hiddenColumns.length > 0 ? base.filter(col => !hiddenColumns.includes(col.key)) : base;
     // Auto-hide columns whose controlling field (displayIf) is inactive in ALL
     // saved rows AND in the current add-row values.
     if (Object.keys(displayIfControllers).length > 0) {
@@ -2122,7 +2133,7 @@ export function DataTable({
   const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
   const fixedColsTotalPx = fixedColsBasisPx + computeActionColsWidthPx({
     selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
-    onCloneRow, quickActionsEnabled, ilpHasNoAmountCol,
+    onCloneRow, quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
   });
 
   return (
