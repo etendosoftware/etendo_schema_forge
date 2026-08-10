@@ -36,6 +36,16 @@ function resolveSaveClass(savedOk) {
   return savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : '';
 }
 
+function resolveEffectiveProfile(mockOverride, profile) {
+  return mockOverride
+    ? detectProfile(mockOverride.sii, mockOverride.tbai, mockOverride.verifactu)
+    : profile;
+}
+
+function resolvePageTitle(ui, profileLabel) {
+  return profileLabel ? `${ui('fiscal.title')} ${profileLabel}` : ui('fiscal.title');
+}
+
 async function saveTwoRefs(ref1, ref2) {
   const [r0, r1] = await Promise.allSettled([ref1?.save(), ref2?.save()]);
   if (r0.status === 'rejected' || r1.status === 'rejected') {
@@ -77,9 +87,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   } = useFiscalConfig(orgId, apiBaseUrl);
 
   // When mock is active, bypass API result entirely
-  const effectiveProfile  = mockOverride
-    ? detectProfile(mockOverride.sii, mockOverride.tbai, mockOverride.verifactu)
-    : profile;
+  const effectiveProfile = resolveEffectiveProfile(mockOverride, profile);
 
   // When adding a complementary SIF, switch the rendered layout to the combined profile
   // so the page immediately looks like the sii+tbai view (two tabs).
@@ -87,7 +95,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   const renderProfile = addingComplementary ? 'sii+tbai' : effectiveProfile;
 
   const profileLabel = PROFILE_LABEL[effectiveProfile];
-  const pageTitle = profileLabel ? `${ui('fiscal.title')} ${profileLabel}` : ui('fiscal.title');
+  const pageTitle = resolvePageTitle(ui, profileLabel);
   useSetPageMeta({ title: pageTitle, breadcrumb: `${ui('settings')} / ${ui('fiscal.monitor.nav')} / ${pageTitle}` });
   const [effectiveSii, effectiveTbai, effectiveVerifactu] = mockOverride
     ? [mockOverride.sii, mockOverride.tbai, mockOverride.verifactu]
