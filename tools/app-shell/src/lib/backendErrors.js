@@ -32,6 +32,10 @@ const BACKEND_ERROR_MAP = {
   // (OBMessageUtils.parseTranslation() resolves the outer message but doesn't
   // recursively re-parse the nested placeholder), so it's a stable exact match.
   'The cost of the product @product@ has not been calculated.': 'backendError.costNotCalculated',
+  // CreateDraftInvoiceHandler (com.etendoerp.go) — hardcoded Spanish literal with no
+  // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
+  // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
+  'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a

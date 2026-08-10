@@ -19733,6 +19733,7 @@
     "backendError.priceListCannotDeactivateDefault": "A tariff marked as default cannot be deactivated.",
     "backendError.productCategoryCannotSetMultipleDefault": "Only one product category can be marked as default.",
     "backendError.costNotCalculated": "The cost of the product could not be calculated.",
+    "backendError.noLinesToInvoice": "There are no lines to invoice for this order.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
     "uomTypeTime": "Time",
