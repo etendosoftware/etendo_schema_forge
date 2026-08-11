@@ -8,6 +8,7 @@ import {
   Plug,
   ArrowLeftRight,
   Plus,
+  RotateCcw,
   Trash2,
 } from 'lucide-react';
 import {
@@ -44,6 +45,7 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConne
   const ui = useUI();
   const isCash = account.type === ACCOUNT_TYPE.CASH;
   const bankConnected = account.bankConnected === true;
+  const isArchived = account.active === false;
   // Soft-disconnected: not connected, but the bank link survives and can be revived.
   const bankReconnectable = account.bankReconnectable === true;
 
@@ -174,15 +176,32 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConne
         ) : null}
 
         <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
-        <DropdownMenuItem
-          onClick={() => onArchive?.(account)}
-          data-testid={`account-row-menu-archive-${account.id}`}
-        >
-          <Archive className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
-            {ui('financeAccountsMenuArchive')}
-          </span>
-        </DropdownMenuItem>
+        {/* Archived accounts (the "Inactivas" view) get the inverse action instead — otherwise the
+            only thing on offer is archiving something that is already archived, with no way back.
+            Restoring is not destructive, so it drops the red treatment. */}
+        {isArchived ? (
+          <DropdownMenuItem
+            onClick={() => onArchive?.(account)}
+            data-testid={`account-row-menu-unarchive-${account.id}`}
+          >
+            <RotateCcw
+              className="h-5 w-5 text-[hsl(var(--muted-foreground))]"
+              data-testid="RotateCcw__ffaf9f" />
+            <span className="text-sm font-normal leading-6">
+              {ui('financeAccountsMenuUnarchive')}
+            </span>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            onClick={() => onArchive?.(account)}
+            data-testid={`account-row-menu-archive-${account.id}`}
+          >
+            <Archive className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
+            <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+              {ui('financeAccountsMenuArchive')}
+            </span>
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

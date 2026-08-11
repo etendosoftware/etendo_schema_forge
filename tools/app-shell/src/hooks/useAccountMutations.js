@@ -14,6 +14,7 @@ import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
  *   - updateAccount(id, payload) → PUT    /sws/neo/financial-account/account/{id}
  *   - archiveAccount(id)         → DELETE /sws/neo/financial-account/account/{id}
  *                                  (the hook soft-archives: IsActive='N')
+ *   - unarchiveAccount(id)       → PATCH  /sws/neo/financial-account/account/{id} {active:true}
  *   - fetchDefaults()            → GET selectors/C_Currency_ID + GET defaults
  *
  * Callers keep the SPA-level payload `{ name, type, currencyId, iban, swiftCode }`;
@@ -57,6 +58,7 @@ function toDalBody(payload) {
     const raw = payload.writeoffLimit;
     body.writeofflimit = (raw === '' || raw == null) ? null : Number(raw);
   }
+  if ('glItemDifferenceId' in payload) body.aprmGlitemDiff = payload.glItemDifferenceId || null;
   return body;
 }
 
@@ -105,6 +107,27 @@ export function useAccountMutations() {
   }, [token]);
 
   /**
+   * Restores an archived account (`IsActive` back to 'Y').
+   *
+   * A plain PATCH rather than a dedicated endpoint: `active` is a base AD column with no
+   * ETGO_SF_FIELD row, and `NeoFieldFilter` deliberately hardcodes it as included AND writable
+   * precisely so inline activate/deactivate works — the same route match-rule's "Activa" toggle
+   * already uses. `FinancialAccountHandler.validateAndEnrichUpdate` only validates the keys the
+   * body actually carries, so a body of just `{ active }` passes straight through to the generic
+   * CRUD. No backend change was needed for this.
+   */
+  const unarchiveAccount = useCallback(async (accountId) => {
+    const url = `${getApiBase()}${ENTITY_PATH}/${encodeURIComponent(accountId)}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: authHeaders(token),
+      body: JSON.stringify({ active: true }),
+    });
+    if (!res.ok) await throwHttpError(res);
+    return true;
+  }, [token]);
+
+  /**
    * Currency list + session default for the New/Edit account forms, served by
    * the generic W endpoints (selector options + entity defaults). Keeps the
    * legacy return shape `{ currencies: [{ id, iso, symbol }], defaultCurrencyId }`
@@ -140,5 +163,5 @@ export function useAccountMutations() {
     return { currencies, defaultCurrencyId };
   }, [token]);
 
-  return { createAccount, updateAccount, archiveAccount, fetchDefaults };
+  return { createAccount, updateAccount, archiveAccount, unarchiveAccount, fetchDefaults };
 }
