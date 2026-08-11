@@ -445,7 +445,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         hidePrint
         hideSaveStatuses={["RDNC","RPPC","RPR","RPVOID","PWNC"]}
         toolbarBorderBottom
-        saveBeforeProcesses
         hideFormCard
         notesField="description"
         bottomSection={PaymentOutBottomPanel}

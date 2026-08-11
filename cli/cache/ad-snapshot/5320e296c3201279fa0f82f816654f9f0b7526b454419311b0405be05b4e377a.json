@@ -13148,7 +13148,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "a57c043bfd2735c62c984e24d1a0a1ab04ddc48e389e9b69a9c37dd94b93360a",
+      "checksum": "88c22d2b291a05a1860851bf685afa4df2448339e543c6e03c1a56eb42fd52e0",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -13843,10 +13843,10 @@
         },
         {
           "columnname": "EM_Psd2_Refresh_Connections",
-          "displaylogic": "@PSD2_HasConecctions@>0 & @Type@!'C'",
+          "displaylogic": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
-          "name": "Refresh Connections",
+          "name": "Search Recent Transactions",
           "readonlylogic": null
         },
         {
