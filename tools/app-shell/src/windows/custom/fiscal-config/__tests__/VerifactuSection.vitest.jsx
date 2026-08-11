@@ -81,9 +81,9 @@ describe('VerifactuSection — locked state', () => {
     expect(screen.getByTestId('Input__e30816')).toBeDisabled();
   });
 
-  it('disables the QR switch when isReady=Y', () => {
+  it('does not render a QR switch (ETP-4783: defaultQR always forced to true)', () => {
     render(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'Y' }} />);
-    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   it('hides the save button when locked', () => {

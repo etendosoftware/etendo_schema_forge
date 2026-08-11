@@ -58,10 +58,10 @@ const BASE_RECORD = {
 const PROPS = { record: BASE_RECORD, apiBaseUrl: '/api', orgId: 'org-1', onSave: vi.fn() };
 
 describe('TbaiSection — rendering', () => {
-  it('renders section labels', () => {
+  it('renders section labels (ETP-4783: technical section removed)', () => {
     render(<TbaiSection {...PROPS} />);
     expect(screen.getByText('fiscal.tbai.legend.billing')).toBeInTheDocument();
-    expect(screen.getByText('fiscal.tbai.legend.technical')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.tbai.legend.technical')).not.toBeInTheDocument();
   });
 
   it('renders the CertSection when hideCert is false', () => {
@@ -86,13 +86,10 @@ describe('TbaiSection — rendering', () => {
 });
 
 describe('TbaiSection — validation', () => {
-  it('shows date error when tbaisystemdate is empty', async () => {
+  it('does not validate tbaisystemdate (ETP-4783: removed from UI, always uses record value)', async () => {
     const ref = createRef();
     render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, tbaisystemdate: '' }} ref={ref} />);
-    await expect(ref.current.save()).rejects.toThrow();
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.tbai.err.enrollDate')).toBeInTheDocument();
-    });
+    expect(screen.queryByText('fiscal.tbai.err.enrollDate')).not.toBeInTheDocument();
   });
 
   it('shows description error when invoiceDescription is empty', async () => {

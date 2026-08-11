@@ -290,28 +290,29 @@ describe('detectProfile', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildOnboardingPayloads — SII', () => {
-  it('navarra: sets navarra=Y, taxtype=IVA', () => {
+  it('navarra: sets navarra=Y, taxtype=IVA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII', 'navarra');
-    expect(p.sii).toEqual({ navarra: 'Y', taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ navarra: 'Y', taxtype: 'IVA', acogidaAlSII: 'Y', entornoDeProduccin: 'Y', adjuntarArchivosXML: 'Y' }));
+    expect(p.sii.fechaAcogidaSII).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(p.tbai).toBeNull();
     expect(p.verifactu).toBeNull();
   });
 
-  it('gipuzkoa: sets guipuzcoa=Y, taxtype=IVA', () => {
+  it('gipuzkoa: sets guipuzcoa=Y, taxtype=IVA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII', 'gipuzkoa');
-    expect(p.sii).toEqual({ guipuzcoa: 'Y', taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ guipuzcoa: 'Y', taxtype: 'IVA', acogidaAlSII: 'Y' }));
   });
 
-  it('baleares: IVA', () => {
-    expect(buildOnboardingPayloads('SII', 'baleares').sii).toEqual({ taxtype: 'IVA' });
+  it('baleares: IVA with forced defaults', () => {
+    expect(buildOnboardingPayloads('SII', 'baleares').sii).toEqual(expect.objectContaining({ taxtype: 'IVA', acogidaAlSII: 'Y' }));
   });
 
-  it('canarias: IGIC', () => {
-    expect(buildOnboardingPayloads('SII', 'canarias').sii).toEqual({ taxtype: 'IGIC' });
+  it('canarias: IGIC with forced defaults', () => {
+    expect(buildOnboardingPayloads('SII', 'canarias').sii).toEqual(expect.objectContaining({ taxtype: 'IGIC', acogidaAlSII: 'Y' }));
   });
 
-  it('ceuta: IPSI', () => {
-    expect(buildOnboardingPayloads('SII', 'ceuta').sii).toEqual({ taxtype: 'IPSI' });
+  it('ceuta: IPSI with forced defaults', () => {
+    expect(buildOnboardingPayloads('SII', 'ceuta').sii).toEqual(expect.objectContaining({ taxtype: 'IPSI', acogidaAlSII: 'Y' }));
   });
 
   it('unknown territory returns all null', () => {
@@ -343,22 +344,23 @@ describe('buildOnboardingPayloads — TBAI', () => {
 });
 
 describe('buildOnboardingPayloads — SII+TBAI', () => {
-  it('alava: sets sii taxtype=IVA and tbai ARABA', () => {
+  it('alava: sets sii taxtype=IVA and tbai ARABA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII+TBAI', 'alava');
-    expect(p.sii).toEqual({ taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ taxtype: 'IVA', acogidaAlSII: 'Y' }));
     expect(p.tbai.etsgSifTerritory).toBe('ARABA');
+    expect(p.tbai.productionEnv).toBe('Y');
     expect(p.verifactu).toBeNull();
   });
 
-  it('bizkaia: sii IVA + BIZKAIA', () => {
+  it('bizkaia: sii IVA + BIZKAIA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII+TBAI', 'bizkaia');
-    expect(p.sii).toEqual({ taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ taxtype: 'IVA', acogidaAlSII: 'Y' }));
     expect(p.tbai.etsgSifTerritory).toBe('BIZKAIA');
   });
 
-  it('gipuzkoa: sii guipuzcoa=Y + GIPUZKOA', () => {
+  it('gipuzkoa: sii guipuzcoa=Y + GIPUZKOA with forced defaults', () => {
     const p = buildOnboardingPayloads('SII+TBAI', 'gipuzkoa');
-    expect(p.sii).toEqual({ guipuzcoa: 'Y', taxtype: 'IVA' });
+    expect(p.sii).toEqual(expect.objectContaining({ guipuzcoa: 'Y', taxtype: 'IVA', acogidaAlSII: 'Y' }));
     expect(p.tbai.etsgSifTerritory).toBe('GIPUZKOA');
   });
 
@@ -368,9 +370,9 @@ describe('buildOnboardingPayloads — SII+TBAI', () => {
 });
 
 describe('buildOnboardingPayloads — VERIFACTU', () => {
-  it('baleares: tAXType=01', () => {
+  it('baleares: tAXType=01 with defaultQR=Y forced', () => {
     const p = buildOnboardingPayloads('VERIFACTU', 'baleares');
-    expect(p.verifactu).toEqual({ tAXType: '01', nextSendWaitTime: '60' });
+    expect(p.verifactu).toEqual(expect.objectContaining({ tAXType: '01', nextSendWaitTime: '60', defaultQR: 'Y' }));
     expect(p.sii).toBeNull();
     expect(p.tbai).toBeNull();
   });
@@ -405,16 +407,16 @@ describe('buildVerifactuUpdatePayload', () => {
     expect(p.defaultQR).toBe(true);
   });
 
-  it('sets defaultQR to false for "N"', () => {
+  it('always sets defaultQR to true regardless of input (ETP-4783)', () => {
     const p = buildVerifactuUpdatePayload({ tAXType: 'IGIC', defaultQR: 'N' });
     expect(p.tAXType).toBe('03');
-    expect(p.defaultQR).toBe(false);
+    expect(p.defaultQR).toBe(true);
   });
 
-  it('handles null form gracefully', () => {
+  it('handles null form gracefully, defaultQR always true', () => {
     const p = buildVerifactuUpdatePayload(null);
     expect(p.tAXType).toBe('');
-    expect(p.defaultQR).toBe(false);
+    expect(p.defaultQR).toBe(true);
   });
 });
 

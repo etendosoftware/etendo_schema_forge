@@ -38,6 +38,7 @@ vi.mock('../CertSection.jsx', () => ({ default: () => <div data-testid="cert-sec
 vi.mock('../fiscalConfig.utils.js', () => ({
   getFiscalRecordId: vi.fn(() => 'rec-1'),
   isEtendoTrue: (v) => v === 'Y',
+  normalizeDateInputValue: (v) => v ?? '',
   mapSiiRecordToForm: vi.fn((r) => ({
     acogidaAlSII: r?.acogidaAlSII ?? 'N',
     entornoDeProduccin: r?.entornoDeProduccin ?? 'N',
@@ -63,10 +64,10 @@ const BASE_RECORD = { plazoLmiteDeEnvoASII: 4 };
 const PROPS = { record: BASE_RECORD, apiBaseUrl: '/api', orgId: 'org-1', onSave: vi.fn() };
 
 describe('SiiSection — rendering', () => {
-  it('renders section labels', () => {
+  it('renders section labels (ETP-4783: status+env sections removed)', () => {
     render(<SiiSection {...PROPS} />);
-    expect(screen.getByText('fiscal.sii.legend.status')).toBeInTheDocument();
-    expect(screen.getByText('fiscal.sii.legend.env')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.sii.legend.status')).not.toBeInTheDocument();
+    expect(screen.queryByText('fiscal.sii.legend.env')).not.toBeInTheDocument();
     expect(screen.getByText('fiscal.sii.legend.sends')).toBeInTheDocument();
   });
 

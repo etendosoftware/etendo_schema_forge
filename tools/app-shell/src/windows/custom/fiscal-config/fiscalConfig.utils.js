@@ -144,6 +144,7 @@ export function buildOnboardingPayloads(system, territory) {
   const tbaiDefaults = {
     tbaisystemdate:          today,
     productionEnv:           'Y',
+    uSEAsproductDesc:        'N',
     validatePreviousInvoice: 'N',
   };
   const verifactuDefaults = { defaultQR: 'Y' };

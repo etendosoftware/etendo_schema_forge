@@ -45,7 +45,6 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [form, setForm] = useState({
     invoiceDescription: record?.invoiceDescription ?? '',
-    uSEAsproductDesc:   normalizeEtendoBoolean(record?.uSEAsproductDesc),
     autoSendInvoices:   normalizeEtendoBoolean(record?.autoSendInvoices),
     jasperreportPath:   record?.jasperreportPath  ?? '',
   });
@@ -78,6 +77,7 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
           ...form,
           tbaisystemdate:          normalizeDateInputValue(record?.tbaisystemdate) || new Date().toISOString().slice(0, 10),
           productionEnv:           'Y',
+          uSEAsproductDesc:        'N',
           validatePreviousInvoice: 'N',
         }, ['productionEnv', 'uSEAsproductDesc', 'autoSendInvoices', 'validatePreviousInvoice'])),
       });
@@ -106,13 +106,6 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
       {/* Facturación */}
       <SectionRow label={ui('fiscal.tbai.legend.billing')} data-testid="SectionRow__f06d4b">
         <div className="flex flex-wrap gap-4 items-start">
-          <div className="flex items-center gap-2 pt-1 w-[376px]">
-            <Switch
-              checked={isEtendoTrue(form.uSEAsproductDesc)}
-              onCheckedChange={v => set('uSEAsproductDesc', v ? 'Y' : 'N')}
-              data-testid="Switch__f06d4b" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.useAsProduct')}</span>
-          </div>
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.autoSendInvoices)}

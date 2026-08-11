@@ -919,11 +919,11 @@ describe('SifTab', () => {
       expect(screen.getByText('sifDataTabs.field.noRecipientIdArt61d')).toBeInTheDocument();
     });
 
-    it('calls onChange with etvfacReverseinvtype when changed via its select', () => {
+    it('calls onChange with etvfacReverseinvtype when changed via its select (ETP-4783: S option removed, only I remains)', () => {
       const onChange = vi.fn();
       renderControlled({ data: { documentStatus: 'DR', etvfacInvType: 'R2' } }, onChange);
-      fireEvent.click(screen.getByTestId('mock-select-option-S'));
-      expect(onChange).toHaveBeenCalledWith('etvfacReverseinvtype', 'S');
+      fireEvent.click(screen.getByTestId('mock-select-option-I'));
+      expect(onChange).toHaveBeenCalledWith('etvfacReverseinvtype', 'I');
     });
   });
 

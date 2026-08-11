@@ -44,6 +44,14 @@ describe('TbaiSection — form fields', () => {
     assert.doesNotMatch(src, /fiscal\.tbai\.field\.validatePrev/);
   });
 
+  it('does not render the uSEAsproductDesc toggle (ETP-4783: always forced to N — use product name)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.field\.useAsProduct/);
+  });
+
+  it('uSEAsproductDesc is still sent in the PUT body with forced value N', () => {
+    assert.match(src, /uSEAsproductDesc/);
+  });
+
   it('renders the invoice description field', () => {
     assert.match(src, /invoiceDescription/);
   });
