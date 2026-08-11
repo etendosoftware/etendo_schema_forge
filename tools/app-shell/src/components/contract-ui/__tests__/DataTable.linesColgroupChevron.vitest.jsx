@@ -45,6 +45,9 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({ applyCalloutUpdates: vi.fn() })
 vi.mock('@/lib/linesColumnWidth.js', () => ({
   columnMinWidthPx: () => 100,
   columnFlex: () => '1 0 100px',
+  // ETP-4803 — real predicate (not an always-true stub), so this file's own
+  // dimensionsPanel-exclusion assertions still exercise the real behavior.
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 
 // Flattens renderLinesColgroup's returned <colgroup> children into an array of

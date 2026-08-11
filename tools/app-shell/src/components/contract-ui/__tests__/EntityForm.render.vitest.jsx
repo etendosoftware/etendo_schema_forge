@@ -1961,6 +1961,56 @@ describe('EntityForm — extended render coverage', () => {
     expect(screen.getByTestId('field-region')).toBeInTheDocument();
   });
 
+  // --- ETP-4773: required dependent field must show the "Requerido" error text,
+  // same as any other field. DependentFkField used to render its own wrapping
+  // <div> with no children slot for renderFieldWithError's cloneElement to inject
+  // the error <p> into, so the asterisk showed but the error text silently didn't.
+  // Covers both DependentFkField branches (PartnerAddressPicker + DependentSelect).
+
+  it('shows required error text for dependent field (PartnerAddressPicker branch) when fieldErrors is set', () => {
+    const fields = [{
+      key: 'partnerAddress',
+      label: 'Address',
+      type: 'dependent',
+      column: 'C_BPartner_Location_ID',
+      dependsOn: 'bp',
+      required: true,
+    }];
+    render(
+      <EntityForm
+        fields={fields}
+        data={{}}
+        onChange={vi.fn()}
+        apiBaseUrl="/api"
+        fieldErrors={{ partnerAddress: 'requiredFieldsMissing' }}
+      />,
+    );
+    expect(screen.getByTestId('partner-address-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('error-partnerAddress')).toBeInTheDocument();
+    expect(screen.getByText('requiredFieldsMissing')).toBeInTheDocument();
+  });
+
+  it('shows required error text for dependent field (DependentSelect branch) when fieldErrors is set', () => {
+    const fields = [{
+      key: 'region',
+      label: 'Region',
+      type: 'dependent',
+      column: 'Region',
+      dependsOn: 'country',
+      required: true,
+    }];
+    render(
+      <EntityForm
+        fields={fields}
+        data={{}}
+        onChange={vi.fn()}
+        fieldErrors={{ region: 'requiredFieldsMissing' }}
+      />,
+    );
+    expect(screen.getByTestId('error-region')).toBeInTheDocument();
+    expect(screen.getByText('requiredFieldsMissing')).toBeInTheDocument();
+  });
+
   // --- registerFields cleanup on unmount ---
 
   it('calls registerFields(null, formId) on unmount', () => {
