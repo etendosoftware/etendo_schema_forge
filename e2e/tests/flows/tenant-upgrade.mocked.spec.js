@@ -79,7 +79,7 @@ async function seedPlatformToken(page) {
  * that mutation, without re-registering the route.
  */
 async function installEnvironmentsMock(page, environments) {
-  await page.route('**/sws/go/environments**', async (route) => {
+  await page.route('**/sws/go/environments{/**,}**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -95,7 +95,7 @@ async function installEnvironmentsMock(page, environments) {
  * response includes a `token` — without one it silently no-ops.
  */
 async function installEnvironmentLoginMock(page, { token, roleList } = {}) {
-  await page.route('**/sws/go/login**', async (route) => {
+  await page.route('**/sws/go/login{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -118,7 +118,7 @@ async function installEnvironmentLoginMock(page, { token, roleList } = {}) {
  */
 async function installOnboardingMock(page, { status = 200, success = true, delayMs = 0 } = {}) {
   const requests = [];
-  await page.route('**/sws/go/onboarding**', async (route) => {
+  await page.route('**/sws/go/onboarding{/**,}**', async (route) => {
     const request = route.request();
     if (request.method() !== 'POST') return route.fallback();
 

@@ -41,7 +41,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:user
 
 // @sf-generated-start requiredHeaderFields:user
-const requiredHeaderFields = ['name', 'username', 'locked', 'lastPasswordUpdate'];
+const requiredHeaderFields = ['name', 'email', 'locked', 'lastPasswordUpdate'];
 // @sf-generated-end requiredHeaderFields:user
 
 // @sf-generated-start addLineFields:userRoles
@@ -73,7 +73,6 @@ export const api = {
       "detailUrl": "/sws/neo/user/user/{id}",
       "supportedFilters": [
         "name",
-        "username",
         "email"
       ]
     },

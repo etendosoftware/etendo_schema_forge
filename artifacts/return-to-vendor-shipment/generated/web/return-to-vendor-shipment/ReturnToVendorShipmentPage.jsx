@@ -317,7 +317,6 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument
         {...props} window={effectiveWindow}
       />

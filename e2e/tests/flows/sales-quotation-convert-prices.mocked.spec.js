@@ -130,7 +130,7 @@ async function installQuotationMocks(page, state) {
   });
 
   // Sales order mock — used by QuotationConfirmModal to find the created order
-  await page.route('**/sws/neo/sales-order/header**', async (route) => {
+  await page.route('**/sws/neo/sales-order/header{/**,}**', async (route) => {
     const req = route.request();
     if (req.method() === 'GET') {
       // Detail fetch by ID
