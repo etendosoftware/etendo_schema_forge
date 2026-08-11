@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -83,6 +83,52 @@ describe('AccountRowMenu', () => {
       render(<AccountRowMenu account={noFlag} />);
       openMenu();
       expect(await screen.findByTestId('account-row-menu-archive-acc-1')).toBeInTheDocument();
+    });
+  });
+
+  // The bank-connection group is a three-way choice, not a connected/not-connected toggle:
+  // an account can also be soft-disconnected — deactivated but still linked (ETP-4764).
+  describe('bank connection group', () => {
+    function openMenu(account) {
+      const onBankConnectionAction = vi.fn();
+      render(<AccountRowMenu account={account} onBankConnectionAction={onBankConnectionAction} />);
+      // Radix's DropdownMenuTrigger opens on pointerDown, not click.
+      fireEvent.pointerDown(
+        screen.getByTestId(`account-row-menu-trigger-${account.id}`),
+        { button: 0, ctrlKey: false, pointerType: 'mouse' },
+      );
+      return onBankConnectionAction;
+    }
+
+    it('offers disconnect and permanent deletion while connected', () => {
+      openMenu({ ...baseAccount, bankConnected: true });
+      expect(screen.getByTestId('account-row-menu-disconnect-acc-1')).toBeInTheDocument();
+      expect(screen.getByTestId('account-row-menu-delete-connection-acc-1')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-row-menu-connect-acc-1')).toBeNull();
+    });
+
+    it('offers reconnect instead of connect once soft-disconnected', () => {
+      openMenu({ ...baseAccount, bankConnected: false, bankReconnectable: true });
+      expect(screen.getByTestId('account-row-menu-reconnect-acc-1')).toBeInTheDocument();
+      // Connecting from scratch would orphan the surviving connection.
+      expect(screen.queryByTestId('account-row-menu-connect-acc-1')).toBeNull();
+      // The link still exists, so it can still be released for good.
+      expect(screen.getByTestId('account-row-menu-delete-connection-acc-1')).toBeInTheDocument();
+    });
+
+    it('offers only connect when there is no bank link at all', () => {
+      openMenu({ ...baseAccount, bankConnected: false });
+      expect(screen.getByTestId('account-row-menu-connect-acc-1')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-row-menu-reconnect-acc-1')).toBeNull();
+      expect(screen.queryByTestId('account-row-menu-delete-connection-acc-1')).toBeNull();
+    });
+
+    it('dispatches deleteConnection with the account', () => {
+      const onBankConnectionAction = openMenu({ ...baseAccount, bankConnected: true });
+      fireEvent.click(screen.getByTestId('account-row-menu-delete-connection-acc-1'));
+      expect(onBankConnectionAction).toHaveBeenCalledWith(
+        'deleteConnection', expect.objectContaining({ id: 'acc-1' }),
+      );
     });
   });
 });

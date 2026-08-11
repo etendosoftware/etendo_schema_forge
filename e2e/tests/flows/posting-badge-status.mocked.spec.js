@@ -58,7 +58,7 @@ const ROWS = [ROW_POSTED, ROW_NOT_POSTED];
  * (Playwright matches routes in reverse registration order).
  */
 async function installMocks(page, { rows = ROWS } = {}) {
-  await page.route(`**/sws/neo/${SPEC}/${ENTITY}**`, async (route) => {
+  await page.route(`**/sws/neo/${SPEC}/${ENTITY}{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
 

@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   Plus,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -30,8 +31,10 @@ import { ACCOUNT_TYPE } from './tokens';
  *                                connection panel when connected, ETP-4097 / T3)
  *   3. Sincronizar ahora        (connected only — runs the bank statement fetch)
  *   ───
- *   4. Desconectar banco         (connected only)
- *   4'. Conectar banco           (not connected)
+ *   4. Desconectar banco         (connected only — deactivates, stays reconnectable)
+ *   4'. Reconectar               (soft-disconnected only — revives the surviving link)
+ *   4''. Conectar banco          (no bank link at all)
+ *   5. Borrar conexión           (any bank link — irreversible, ETP-4764)
  *
  * The former standalone "Editar conexión bancaria" item was merged into "Editar
  * cuenta": both surfaced the same account data, so editing is now unified.
@@ -43,6 +46,8 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConne
   const isCash = account.type === ACCOUNT_TYPE.CASH;
   const bankConnected = account.bankConnected === true;
   const isArchived = account.active === false;
+  // Soft-disconnected: not connected, but the bank link survives and can be revived.
+  const bankReconnectable = account.bankReconnectable === true;
 
   return (
     <DropdownMenu data-testid="DropdownMenu__ffaf9f">
@@ -124,7 +129,26 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConne
                   </span>
                 </DropdownMenuItem>
               </>
-            ) : (
+            ) : null}
+
+            {/* Soft-disconnected: the link survives, so offer to revive it rather than a
+                from-scratch connect, which would orphan the existing connection. */}
+            {!bankConnected && bankReconnectable ? (
+              <>
+                <DropdownMenuItem
+                  onClick={() => onBankConnectionAction?.('reconnect', account)}
+                  data-testid={`account-row-menu-reconnect-${account.id}`}
+                >
+                  <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCwReconnect__ffaf9f" />
+                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                    {ui('financeAccountsBankConnectionReconnect')}
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
+              </>
+            ) : null}
+
+            {!bankConnected && !bankReconnectable ? (
               <DropdownMenuItem
                 onClick={() => onBankConnectionAction?.('connect', account)}
                 data-testid={`account-row-menu-connect-${account.id}`}
@@ -134,7 +158,20 @@ export function AccountRowMenu({ account, onOpen, onEdit, onArchive, onBankConne
                   {ui('financeAccountsMenuConnect')}
                 </span>
               </DropdownMenuItem>
-            )}
+            ) : null}
+
+            {/* Permanent deletion is offered wherever a bank link exists — live or deactivated. */}
+            {bankConnected || bankReconnectable ? (
+              <DropdownMenuItem
+                onClick={() => onBankConnectionAction?.('deleteConnection', account)}
+                data-testid={`account-row-menu-delete-connection-${account.id}`}
+              >
+                <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__ffaf9f" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+                  {ui('financeAccountsBankConnectionDeleteAction')}
+                </span>
+              </DropdownMenuItem>
+            ) : null}
           </>
         ) : null}
 

@@ -45,8 +45,13 @@ function toDalBody(payload) {
   if (payload.providerCode) body.providerCode = payload.providerCode;
   if (payload.providerName) body.providerName = payload.providerName;
   // Reconciliation tolerance fields (only sent when explicitly changed in the edit modal).
-  if ('dateTolerance' in payload) body.eMETGODateTolerance = payload.dateTolerance;
-  if ('amountTolerance' in payload) body.eMETGOAmountTolerance = payload.amountTolerance;
+  // DAL property names per contract.json: the custom columns are `EM_ETGO_Date_Tolerance` /
+  // `EM_ETGO_Amount_Tolerance`, but Etendo derives the bean property by dropping the "EM_"
+  // module prefix — `eTGODateTolerance` / `eTGOAmountTolerance`, NOT `eMETGO...`. The W CRUD
+  // spec silently ignores unrecognized body keys (no 400), so the stray "eM" prefix used to
+  // PUT successfully while quietly dropping both tolerances — ETP-4764 follow-up.
+  if ('dateTolerance' in payload) body.eTGODateTolerance = payload.dateTolerance;
+  if ('amountTolerance' in payload) body.eTGOAmountTolerance = payload.amountTolerance;
   if ('glItemDifferenceId' in payload) body.aprmGlitemDiff = payload.glItemDifferenceId || null;
   return body;
 }
