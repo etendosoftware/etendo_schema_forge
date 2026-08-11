@@ -9,9 +9,12 @@
 | **Registered** | 2026-08-10, after a fourth reproduction |
 
 > **Reading order.** §1–§9 describe the defect and **option A** (honest reporting), which shipped and
-> was verified live on 2026-08-10. **Option B** — the batch is now genuinely atomic — is §11, and it
-> changes what §1 and §2 describe: they are kept as the record of *why* B had to take the shape it did,
-> not as a description of current behaviour.
+> was verified live on 2026-08-10. **Option B** — the batch is now genuinely atomic — is §11, verified
+> live on 2026-08-11 in §12. §1 and §2 therefore no longer describe current behaviour: they are kept as
+> the record of *why* B had to take the shape it did.
+>
+> **Current state:** the batch rolls back as a unit for plain CRUD ops (§12), it is **not hermetic**
+> (§11.4), and the row's score still awaits a `/mcp-comparison` re-measure (§11.6).
 
 ## 1. The mechanism, read out of the code
 
@@ -194,12 +197,13 @@ day** under this item, per §5.1 (§11).
 - [x] `docs/neo-headless.md` §4.12.4 shows the real failure shape, with a new §4.12.4.1 on why
 - [x] the tests that asserted the atomicity stop asserting it and guard the new contract instead
 - [x] deployed and probed live: C10 re-run returns the surviving order id in `persisted` (§9)
-- [ ] `./gradlew test` (owed — the module tests were run standalone, see §8 and §11.4)
+- [x] `./gradlew test` — run green by the user on 2026-08-11 at a HEAD containing B (`7159376c`),
+      alongside the compile and redeploy; this discharges the debt §8 opened
 - [ ] registry row re-scored by a `/mcp-comparison` run (not a bookkeeping edit)
 - [x] option B — actual atomicity (§5.1: closes this item, does not open a new one) — §11
-- [ ] **B deployed and probed live**: a 2-op batch whose op 1 fails must leave **no** survivor, i.e.
-      the same C10 vector that returned `persisted:[…]` in §9.1 must now return `persisted:[]` and
-      `atomic:true`. This is B's only real verification (§5.2) and the build/deploy is the user's
+- [x] **B deployed and probed live** (2026-08-11, §12): the same C10 vector that returned
+      `persisted:[{recordId:"CEDA7318…"}]` in §9.1 now returns `persisted:[]` / `atomic:true`, and a
+      DB sweep with a positive control confirms **no survivor exists**
 
 ## 7. What was implemented
 
@@ -438,6 +442,81 @@ blast radius closing in the same change.
 
 ### 11.6 Scoring
 
-The row can now go ⚠️ partial → ✅ **5 / 5**: **+2.5 earned, known scope and quota untouched**, per
-§5.1. **Both gates apply**: the live probe in §6 must pass first, and the score change itself is a
-`/mcp-comparison` measurement, not a bookkeeping edit here.
+The row can now go ⚠️ partial → ✅: the defect no longer reproduces, verified live (§12). The **score**
+is a separate question from the **status**, and conflating them is a mistake this file made when §11.6
+was first written — it treated *"⚠️ → ✅ (+2.5)"* as one gated event. They are two:
+
+* **Status** reflects what the product measurably does, so the live probe settles it. ✅ as of §12.
+* **Score** (0 / 5 → 5 / 5, **+2.5 earned, known scope and quota untouched** per §5.1) is credited by a
+  `/mcp-comparison` run, never by an edit here. Still owed.
+
+The precedent is IMP-14, which sat at ⚠️ while explicitly *"still worth 0"* through three separate
+gates. Status and score move on different evidence.
+
+## 12. Live verification of option B (2026-08-11, `etendo-go-local`)
+
+Compiled, redeployed and `./gradlew test` run green by the user at a HEAD whose tip is `7159376c`
+(verified: `git log` on the module shows B as the tip of `feature/ETP-4793`, working tree clean). Then
+one batch, authorised as a write probe. **Nothing pre-existing was touched, and this time nothing was
+created either — which is the result.**
+
+### 12.1 The C10 vector, third time
+
+Same two-op `sales-order/header` batch as §9.1: op `h0` valid, op `h1` identical but with a 281-char
+`description` against `c_order.description varchar(255)`. Chosen for the third time because it fails at
+**persist** time rather than validation time — §1.1's discriminator, and the only kind of failure that
+ever exposed the defect.
+
+```json
+{"committed": false, "atomic": true, "persisted": [],
+ "hint": "Nothing was persisted: the batch was rolled back as a unit, so no partial records were
+          left behind. Fix the operation reported in 'failedAt' and retry the whole batch.",
+ "failedAt": {"index": 1, "id": "h1"},
+ "error": {"status": 400, "error": "validation_error",
+           "detail": "Operation 'h1' rejected by server: description: Order.description: Value too
+                      long. Length 281, maximum allowed 255 […]"}}
+```
+
+**`atomic:true`, `persisted:[]`** — where the identical call returned `persisted:[{id:"h0",
+recordId:"CEDA7318DE814C679F0A0EE992A0FE92"}]` twenty-four hours earlier.
+
+### 12.2 The response was not taken at its word
+
+That mattered, because *"nothing was persisted"* is the exact claim that was **false** before B: the old
+javadoc asserted all-or-nothing, and `verify(obDal, never()).commitAndClose()` passed while orphans
+accumulated. A self-report of atomicity is worth nothing here on its own.
+
+So the DB was queried directly: `neo_list` filtered on op `h0`'s marker description → **0 rows**; and a
+sweep for any header dated on or after 2026-08-11 → **0 rows**.
+
+**With a positive control**, because a `0` can just as easily mean a filter that never matches: an
+unfiltered `neo_list` ordered by date returned **7 headers, newest 2026-06-24**, none carrying an
+`IMP23B-PROBE` marker. The query sees data, and the data does not contain op `h0`. Worth noting the
+same listing shows the orphans of the earlier runs (`1000017`, `1000024`, `1000027`, `1000029`) are all
+gone — the top document number is `1000015`, so option A's recovery loop cleaned up after itself.
+
+### 12.3 What this settles, and what it does not
+
+**Settles:** the batch rolls back as a unit for plain CRUD ops. The defect registered on 2026-08-10 and
+reproduced four times does not reproduce against this build. This is the verification §5.2 said was the
+only one possible — no unit test in the module could have produced it (§11.4).
+
+**Does not settle:**
+
+* **Hermeticity.** The probe's failing op was a plain CRUD write. A batch op that triggers
+  `ProcessInvoiceUtil#process` still commits internally, and the `atomic:false` + `persisted` branch that
+  reports it (§11.3) **has not been exercised live** — only against a mocked `Session` swap. That is
+  the one part of B still resting on a unit test.
+* **The empty-`persisted` hint's other reading.** `persisted:[]` now means *"rolled back, nothing
+  exists"*, whereas before B the same empty array meant *"nothing survived this particular failure,
+  but the endpoint is not atomic anyway"*. Both live probes (§9.2, §12.1) produced the empty array, so
+  its **wording** has been seen in both eras — but only the new hint text is now correct, and §9.2's
+  reading is retired.
+* **Tool descriptions in open sessions**, again. The `neo_batch` schema this session holds is still the
+  **pre-A original** — *"atomically … any failure rolls back everything (no partial writes)"*, with no
+  `atomic`/`persisted` in its returns clause. §9.3 found this after A and it repeated verbatim after B:
+  the MCP client caches the tool list at session start, so **a connected agent reads a description two
+  deploys stale** while the response body is already current. The irony is that this stale text is now
+  *accidentally true* — but it still omits `persisted` and the process-commit exception, so an agent
+  trusting it would not know to check `atomic`. This is a client-side caching limit no server change
+  reaches, and it is the strongest argument in the file for having put the contract in the response body.
