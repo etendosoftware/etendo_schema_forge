@@ -110,4 +110,50 @@ describe('TbaiSection — save', () => {
     await ref.current.save();
     expect(onSave).toHaveBeenCalled();
   });
+
+  // ETP-4783 regression guard: fields hidden from UI must always be sent with
+  // forced values, regardless of what the record contains.
+  it('always sends productionEnv=Y in the PUT body, regardless of record value', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, productionEnv: 'N' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.productionEnv).toBe('Y');
+  });
+
+  it('always sends uSEAsproductDesc=N in the PUT body, regardless of record value', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, uSEAsproductDesc: 'Y' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.uSEAsproductDesc).toBe('N');
+  });
+
+  it('always sends validatePreviousInvoice=N in the PUT body, regardless of record value', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, validatePreviousInvoice: 'Y' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.validatePreviousInvoice).toBe('N');
+  });
+
+  it('always sends a truthy tbaisystemdate in the PUT body (falls back to today when record has null)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<TbaiSection {...PROPS} record={{ ...BASE_RECORD, tbaisystemdate: null }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.tbaisystemdate).toBeTruthy();
+  });
 });

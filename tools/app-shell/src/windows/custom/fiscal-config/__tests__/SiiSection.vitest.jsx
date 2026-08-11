@@ -124,4 +124,61 @@ describe('SiiSection — save', () => {
       expect(screen.getByText('Server error')).toBeInTheDocument();
     });
   });
+
+  // ETP-4783 regression guard: fields hidden from UI must always be sent with
+  // forced values, regardless of what the record contains.
+  it('always sends acogidaAlSII=Y in the PUT body, regardless of record value', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, acogidaAlSII: 'N' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.acogidaAlSII).toBe('Y');
+  });
+
+  it('always sends entornoDeProduccin=Y in the PUT body, regardless of record value', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, entornoDeProduccin: 'N' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.entornoDeProduccin).toBe('Y');
+  });
+
+  it('always sends adjuntarArchivosXML=Y in the PUT body, regardless of record value', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, adjuntarArchivosXML: 'N' }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.adjuntarArchivosXML).toBe('Y');
+  });
+
+  it('always sends a truthy fechaAcogidaSII in the PUT body (falls back to today when record has null)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, fechaAcogidaSII: null }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.fechaAcogidaSII).toBeTruthy();
+  });
+
+  it('always sends a truthy monitordate in the PUT body (falls back to today when record has null)', async () => {
+    const { useApiFetch } = await import('@/auth/useApiFetch.js');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    useApiFetch.mockReturnValueOnce(fetchMock);
+    const ref = createRef();
+    render(<SiiSection {...PROPS} record={{ ...BASE_RECORD, monitordate: null }} ref={ref} />);
+    await ref.current.save();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.monitordate).toBeTruthy();
+  });
 });
