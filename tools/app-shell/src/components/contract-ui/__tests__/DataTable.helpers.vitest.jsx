@@ -29,6 +29,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({ applyCalloutUpdates: vi.fn() })
 vi.mock('@/lib/linesColumnWidth.js', () => ({
   columnMinWidthPx: () => 100,
   columnFlex: () => '1 0 100px',
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 
 describe('DataTable helpers', () => {
