@@ -32,6 +32,11 @@ const BACKEND_ERROR_MAP = {
   // (OBMessageUtils.parseTranslation() resolves the outer message but doesn't
   // recursively re-parse the nested placeholder), so it's a stable exact match.
   'The cost of the product @product@ has not been calculated.': 'backendError.costNotCalculated',
+  // Exchange Rates tab (ConversionRateDocLockObserver, com.smf.currency.conversionrate
+  // AD_MESSAGE `SMFCR_CannotModifyRateNonDraft`) — that module ships no es_ES
+  // AD_MESSAGE_TRL, so OBException falls back to the raw English MSGTEXT (ETP-4837).
+  'Cannot modify document conversion rate when the invoice is not in draft status.':
+    'backendError.conversionRateNotDraft',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a

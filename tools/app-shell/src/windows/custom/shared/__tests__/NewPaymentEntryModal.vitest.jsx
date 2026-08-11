@@ -536,10 +536,34 @@ describe('NewPaymentEntryModal', () => {
       expect(screen.getByText('cpMissing')).toBeInTheDocument();
       // the delta amount (200,00) should be rendered nearby — MoneyAmount now renders
       // es-ES digits via the shared formatCurrency util ("200,00 €" for the EUR invoice).
-      expect(screen.getByText(/200,00/)).toBeInTheDocument();
+      // Scoped to the delta cell: since ETP-4797 a partial payment also renders the write-off
+      // toggle, whose title repeats the same figure, so a bare getByText would match twice.
+      expect(within(screen.getByTestId('cp-delta-cell')).getByText(/200,00/))
+        .toBeInTheDocument();
       // Confirmar stays enabled for a partial payment — only excess blocks it.
       const confirm = screen.getByText('cpConfirm').closest('button');
       expect(confirm).not.toBeDisabled();
+    });
+
+    it('ETP-4797: offers the write-off toggle, off by default, on a partial payment', async () => {
+      renderModal({ dir: 'in', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '800' } });
+
+      const toggle = screen.getByTestId('cp-writeoff-toggle-switch');
+      expect(toggle).toHaveAttribute('data-state', 'unchecked');
+      // The amount in the title is the shortfall, not the payment.
+      expect(screen.getByText(/writeoffAdjustTitle.*200,00/)).toBeInTheDocument();
+    });
+
+    it('ETP-4797: hides the write-off toggle once the amount covers the invoice', async () => {
+      renderModal({ dir: 'in', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '800' } });
+      expect(screen.getByTestId('cp-writeoff-toggle-switch')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1000' } });
+      expect(screen.queryByTestId('cp-writeoff-toggle-switch')).not.toBeInTheDocument();
     });
   });
 
