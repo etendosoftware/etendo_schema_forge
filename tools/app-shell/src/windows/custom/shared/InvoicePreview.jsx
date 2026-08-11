@@ -1,5 +1,5 @@
 import { useRef, useMemo } from 'react';
-import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet, MoreVertical } from 'lucide-react';
+import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
 import { getLatestInstallmentDueDate } from '@/lib/invoiceDueDate';
@@ -92,12 +92,6 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         <Edit2 className="text-muted-foreground" data-testid="Edit2__cf88e6" />
         {ui('invoicePreviewEdit')}
       </Button>
-      <button
-        type="button"
-        className="w-8 h-8 flex items-center justify-center bg-card border border-border shadow-sm rounded-lg hover:bg-muted transition-colors"
-      >
-        <MoreVertical size={20} className="text-muted-foreground" data-testid="MoreVertical__cf88e6" />
-      </button>
     </>
   );
 }

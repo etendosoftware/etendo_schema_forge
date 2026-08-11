@@ -4,6 +4,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { WriteoffToggleRow, writeoffState } from '@/components/contract-ui/WriteoffAdjustment.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
@@ -176,6 +177,8 @@ function mapAccounts(json) {
     // PSD2/PIS enrichment (ETP-4406) — absent on older backends, so default
     // to "not connected" rather than throwing off the eligibility gate.
     bankConnected: !!a.bankConnected, maskedPan: a.maskedPan || null,
+    // ETP-4797 write-off cap. Absent when unconfigured → null, read as "no limit".
+    writeoffLimit: a.writeoffLimit ?? null,
   }));
 }
 
@@ -876,6 +879,23 @@ export default function NewPaymentEntryModal({
   // transfer-like method, in a currency Salt Edge supports. Imperfect by design
   // (mirrors the backend's own heuristic) — not meant to be exhaustive.
   const selectedAccount = useMemo(() => accounts.find(a => a.id === accountId), [accounts, accountId]);
+  // ETP-4797: opt-in write-off of the shortfall, so the invoice is settled in full instead of
+  // keeping a residual balance. Off by default — today's behaviour is the default.
+  const [writeoff, setWriteoff] = useState(false);
+  // `balance.diff` is funds − invoice total, so a shortfall is negative; the write-off amount is
+  // its magnitude. Hidden while editing a draft: that path reconciles the already-linked PSD
+  // through a Core call with no write-off input (see applyInvoiceInstallment), so offering it here
+  // would promise something the backend cannot honour.
+  const writeoffInfo = useMemo(() => writeoffState({
+    difference: -balance.diff,
+    limit: selectedAccount?.writeoffLimit,
+    eligible: balance.isPartial && !isEdit,
+  }), [balance.diff, balance.isPartial, isEdit, selectedAccount]);
+
+  // A write-off that is no longer on offer must not linger checked and reach the payload.
+  useEffect(() => {
+    if (!writeoffInfo.visible || writeoffInfo.blocked) setWriteoff(false);
+  }, [writeoffInfo.visible, writeoffInfo.blocked]);
   const selectedMethodObj = useMemo(() => methods.find(m => m.id === methodId), [methods, methodId]);
 
   // ── multi-currency conversion (ETP-4504) ────────────────────────────────────
@@ -1096,6 +1116,11 @@ export default function NewPaymentEntryModal({
         conversionRate: (isForeign && rate != null) ? String(rate) : undefined,
         // Edit mode: update this existing draft instead of creating a new one.
         paymentId: payment?.id || undefined,
+        // ETP-4797. Only when the toggle was offered AND accepted; the backend re-checks the limit
+        // anyway, since a disabled switch is a convenience rather than a boundary.
+        writeoffDifference: (writeoff && writeoffInfo.visible && !writeoffInfo.blocked)
+          ? true
+          : undefined,
       };
       // PIS only ever accompanies the primary "confirm" action — Guardar
       // borrador keeps recording a plain manual payment, byte-for-byte
@@ -1330,9 +1355,24 @@ export default function NewPaymentEntryModal({
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>=</span>
               <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.funds} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-applied" /></div></div>
               <div style={{ flex: 1 }} />
-              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[hsl(var(--destructive))]' : 'text-[var(--status-success-fg)]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
+              <div style={{ textAlign: 'right' }} data-testid="cp-delta-cell"><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[hsl(var(--destructive))]' : 'text-[var(--status-success-fg)]'} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-delta" /></div></div>
               <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
             </div>
+            {/* ETP-4797 — sits directly under the amount strip, which already spells out the
+                difference, so no separate breakdown is repeated here. */}
+            {writeoffInfo.visible && (
+              <div style={{ marginTop: 10 }}>
+                <WriteoffToggleRow
+                  checked={writeoff}
+                  onCheckedChange={setWriteoff}
+                  amount={writeoffInfo.amount}
+                  currency={currency}
+                  isReceipt={isReceipt}
+                  blocked={writeoffInfo.blocked}
+                  limit={writeoffInfo.limit}
+                  data-testid="cp-writeoff-toggle" />
+              </div>
+            )}
           </div>
 
           {pisEligible && (
