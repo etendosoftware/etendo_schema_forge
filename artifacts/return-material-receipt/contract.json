@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.21.1",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "updatedAt": "2026-08-05T03:15:28.243Z",
-  "checksum": "b4a039d37f7e2442",
+  "updatedAt": "2026-08-11T18:21:58.155Z",
+  "checksum": "6a71dd600d4153ea",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -1434,7 +1434,7 @@
             "apiKey": "storageBin",
             "column": "M_Locator_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {
