@@ -15,13 +15,16 @@ vi.mock('sonner', () => ({
 }));
 
 const archiveAccount = vi.fn();
+const unarchiveAccount = vi.fn();
 vi.mock('@/hooks/useAccountMutations.js', () => ({
-  useAccountMutations: () => ({ archiveAccount }),
+  useAccountMutations: () => ({ archiveAccount, unarchiveAccount }),
 }));
 
-import { ArchiveAccountDialog } from '../ArchiveAccountDialog.jsx';
+import { ArchiveAccountDialog, isUnarchiveMode } from '../ArchiveAccountDialog.jsx';
 
 const ACCOUNT = { id: 'acc-1', name: 'BBVA' };
+/** An archived account — `active === false` is what flips the dialog into restore mode. */
+const ARCHIVED_ACCOUNT = { id: 'acc-2', name: 'Vieja', active: false };
 
 function renderDialog(props = {}) {
   return render(
@@ -41,6 +44,8 @@ describe('ArchiveAccountDialog', () => {
     toastError.mockClear();
     archiveAccount.mockReset();
     archiveAccount.mockResolvedValue(true);
+    unarchiveAccount.mockReset();
+    unarchiveAccount.mockResolvedValue(true);
   });
 
   it('returns null (renders nothing) when no account is given', () => {
@@ -96,5 +101,54 @@ describe('ArchiveAccountDialog', () => {
     await user.click(screen.getByTestId('archive-account-confirm'));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('boom'));
+  });
+
+  // ── Unarchive mode, derived from the record itself ──────────────────────────
+  describe('unarchive mode (account.active === false)', () => {
+    it('isUnarchiveMode only flips on an explicitly inactive account', () => {
+      // `active` is absent on most fixtures and on freshly created accounts; only an explicit
+      // `false` means archived, so a missing flag must NOT be read as "restore".
+      expect(isUnarchiveMode({ active: false })).toBe(true);
+      expect(isUnarchiveMode({ active: true })).toBe(false);
+      expect(isUnarchiveMode({})).toBe(false);
+      expect(isUnarchiveMode(null)).toBe(false);
+    });
+
+    it('shows the restore copy instead of the archive copy', () => {
+      renderDialog({ account: ARCHIVED_ACCOUNT });
+      expect(screen.getByText('financeAccountsUnarchiveConfirmTitle')).toBeInTheDocument();
+      expect(screen.getByTestId('archive-account-confirm'))
+        .toHaveTextContent('financeAccountsUnarchiveConfirm');
+      expect(screen.queryByText('financeAccountsArchiveConfirmTitle')).not.toBeInTheDocument();
+    });
+
+    it('calls unarchiveAccount — never archiveAccount — on confirm', async () => {
+      const user = userEvent.setup();
+      const onArchived = vi.fn();
+      const onClose = vi.fn();
+      renderDialog({ account: ARCHIVED_ACCOUNT, onArchived, onClose });
+
+      await user.click(screen.getByTestId('archive-account-confirm'));
+
+      await waitFor(() => expect(unarchiveAccount).toHaveBeenCalledWith('acc-2'));
+      expect(archiveAccount).not.toHaveBeenCalled();
+      await waitFor(() => expect(onArchived).toHaveBeenCalled());
+      expect(onClose).toHaveBeenCalled();
+      expect(toastSuccess).toHaveBeenCalledWith('financeAccountsUnarchiveSuccess');
+    });
+
+    it('has no 409 special case — a conflict surfaces the backend message', async () => {
+      const user = userEvent.setup();
+      const err = new Error('conflict');
+      err.status = 409;
+      unarchiveAccount.mockRejectedValueOnce(err);
+      renderDialog({ account: ARCHIVED_ACCOUNT });
+
+      await user.click(screen.getByTestId('archive-account-confirm'));
+
+      // The open-reconciliation guard only applies to archiving.
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('conflict'));
+      expect(toastError).not.toHaveBeenCalledWith('financeAccountsArchiveOpenRecon');
+    });
   });
 });
