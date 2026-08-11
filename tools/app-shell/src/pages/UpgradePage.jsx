@@ -55,6 +55,16 @@ function emitUpgradeEvent(eventDefinition, properties) {
   void track(event.name, event.properties);
 }
 
+/**
+ * Keep upgrade API calls same-origin while running Vite locally. A leaked
+ * VITE_API_BASE points the browser straight at Tomcat and bypasses Vite's
+ * /sws proxy; production deployments still derive their context path from
+ * the served URL (or the configured API base).
+ */
+function getUpgradeBaseUrl() {
+  return import.meta.env?.DEV ? '' : detectBaseUrl();
+}
+
 function PlanCard({ testId, name, tagline, price, features, current, highlighted, ui }) {
   return (
     <Card
@@ -216,7 +226,7 @@ export default function UpgradePage() {
       return undefined;
     }
 
-    fetchEnvironments(fetch, detectBaseUrl(), token)
+    fetchEnvironments(fetch, getUpgradeBaseUrl(), token)
       .then(list => {
         if (cancelled) return;
         setEnvironments(Array.isArray(list) ? list : []);
@@ -267,11 +277,11 @@ export default function UpgradePage() {
       try {
         let status = { status: 'pending' };
         for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
-          status = await getCheckoutStatus(fetch, detectBaseUrl(), token, requestId);
+          status = await getCheckoutStatus(fetch, getUpgradeBaseUrl(), token, requestId);
           if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
         }
         if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
-        await runPaidOnboarding(fetch, detectBaseUrl(), token, {
+        await runPaidOnboarding(fetch, getUpgradeBaseUrl(), token, {
           clientName: status.clientName || tenantName,
           paymentToken: requestId,
           upgradeAction,
@@ -327,7 +337,7 @@ export default function UpgradePage() {
     try {
       const session = await createCheckoutSession(
         fetch,
-        detectBaseUrl(),
+        getUpgradeBaseUrl(),
         token,
         {
           action: 'productive-tenant',

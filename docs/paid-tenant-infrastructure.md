@@ -67,7 +67,9 @@ gates provisioning, and the record of which plan a tenant is on.
    Productive comparison and a checkout form: a name for the new tenant, plus cardholder,
    card number, expiry and CVC.
 8. **The user fills the form and submits.** Everything from here to step 12 happens in the
-   browser.
+   browser. In Vite development, the upgrade API calls remain same-origin (`/sws/...`) so
+   the Vite proxy can forward them to the configured Etendo context; `VITE_API_BASE` must not
+   make the browser call Tomcat directly.
 9. **The form is validated locally.** The tenant name must be non-empty and must not match a
    tenant the account already owns — resubmitting an existing name would be treated by the
    backend as *resuming* that tenant rather than creating a new one, so the page rejects it

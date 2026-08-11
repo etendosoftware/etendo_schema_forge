@@ -9,7 +9,7 @@ vi.mock('@/i18n', () => ({
   useUI: () => key => key,
   getStoredLocale: () => 'es_ES',
 }));
-vi.mock('@/auth/api.js', () => ({ detectBaseUrl: () => '' }));
+vi.mock('@/auth/api.js', () => ({ detectBaseUrl: () => 'http://tomcat.example/etendo' }));
 
 vi.mock('@/lib/observability.js', () => ({
   track: vi.fn(),
@@ -186,6 +186,7 @@ describe('UpgradePage — hosted checkout', () => {
 
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith('https://checkout.stripe.test/session-1'));
     expect(requests).toHaveLength(1);
+    expect(requests[0].url).toBe('/sws/go/checkout/sessions');
     expect(requests[0].body).toEqual({
       action: 'productive-tenant',
       clientName: 'Acme Productive',
