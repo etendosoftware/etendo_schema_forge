@@ -535,9 +535,10 @@ is for.
   the **promotion condition**: if the flag ever pilots before a gateway exists, the three
   flag-on components must be promoted to their own item, because at that point they are
   scheduled work rather than part of the real-payments decision.
-- *Plan badge in the environment picker* — **cosmetic, 1 point.** The backend ships the plan
-  with every environment; nothing renders it, because the picker lives in a shared package that
-  needs its own change and release.
+- *Plan badge in the environment picker* — **implemented.** The app-shell company selector renders
+  `Demo`/`Productive` badges, sorts productive environments first, and the backend uses the same
+  order for the initial post-login environment selection. The shared core onboarding chooser can
+  adopt the badge when its package is upgraded independently.
 
 ## 4.5 The rules that keep the number worth reading
 

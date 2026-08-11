@@ -385,7 +385,7 @@ tenant selection happens at sign-in and there is no in-app tenant switcher in v1
 | Re-submitting a `clientName` the account already owns **resumes** that tenant and is not charged | The page rejects a name that matches an existing tenant, so a "success" never silently hands back an existing tenant. |
 | The backend re-evaluates `tenant-upgrade` and is **authoritative** | The frontend flag is presentation only, consistent with rule 3 above. |
 | Backend targeting key is the **account email**, now returned as `accountEmail` at the top level of `GET /sws/go/environments` | Not consumed yet — see below. |
-| `GET /sws/go/environments` items now carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Not consumed yet — see below. |
+| `GET /sws/go/environments` items now carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Consumed by the app-shell company selector; missing values render as `Demo`. |
 
 **Closed (ETP-4693): both ends target the same identity.** The backend buckets on
 the account, and the frontend now reads that same account from
@@ -410,10 +410,11 @@ Onboarding composes that username from the account email, and `+` is legal in an
 address — splitting on it would mangle plus-addressed users and surface as a rare
 unexplained mismatch instead of an obvious failure.
 
-**Open: `plan` is not shown anywhere.** The natural place to badge it is the
-environment picker, which lives in `@etendosoftware/etendo-go-core`
-(`onboarding/steps/EnvSelectStep.jsx`), not in this repo. It needs a change in
-the core package.
+The app-shell company selector now badges each environment as `Demo` or
+`Productive` and sorts productive environments first. The backend applies the
+same ordering to the post-login environment list, so an account with both plans
+enters its productive tenant by default. The shared core onboarding chooser may
+still need the same badge when its package is upgraded independently.
 
 `lib/upgrade/api.js` deliberately does not reuse `runOnboardingStream` from
 `@etendosoftware/etendo-go-core`: that helper serialises a fixed allowlist of

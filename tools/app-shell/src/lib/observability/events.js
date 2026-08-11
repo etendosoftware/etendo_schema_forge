@@ -19,8 +19,6 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   CATEGORY: 'category',
   CLIENT: 'client',
   COUNT: 'count',
-  COUNTRY_CODE: 'countryCode',
-  CURRENCY: 'currency',
   DURATION_MS: 'durationMs',
   ENABLED: 'enabled',
   ENTITY: 'entity',
@@ -32,6 +30,7 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   PROVIDER: 'provider',
   FEEDBACK: 'feedback',
   REASON: 'reason',
+  UPGRADE_ACTION: 'upgradeAction',
   SCORE: 'score',
   SOURCE: 'source',
   TAGS: 'tags',
@@ -576,10 +575,13 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   UPGRADE_CHECKOUT_SUBMITTED: defineEvent('upgrade_checkout_submitted', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
-      OBSERVABILITY_PROPERTY_KEYS.CURRENCY,
-      OBSERVABILITY_PROPERTY_KEYS.COUNTRY_CODE,
+      OBSERVABILITY_PROPERTY_KEYS.UPGRADE_ACTION,
     ],
   }),
+  // Currently unreachable from the frontend: Stripe's hosted checkout page
+  // owns card entry and decline handling, so the browser never observes a
+  // decline directly. Kept defined for a future backend-side (webhook) emitter
+  // — see docs/paid-tenant-infrastructure.md §3.6.
   UPGRADE_PAYMENT_DECLINED: defineEvent('upgrade_payment_declined', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
@@ -590,8 +592,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [
       OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
-      OBSERVABILITY_PROPERTY_KEYS.CURRENCY,
-      OBSERVABILITY_PROPERTY_KEYS.COUNTRY_CODE,
+      OBSERVABILITY_PROPERTY_KEYS.UPGRADE_ACTION,
     ],
   }),
   UPGRADE_TENANT_PROVISIONING_FAILED: defineEvent('upgrade_tenant_provisioning_failed', {
