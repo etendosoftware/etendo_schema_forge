@@ -39,6 +39,8 @@ The browser must never send provider payload fields such as `to`, `template`, `d
 4. Confirm whether the window already has a document preview/PDF flow.
 5. Confirm whether the backend contract already exists in `com.etendoerp.go`.
 6. Confirm the target provider template variables. The default document payload must remain minimal unless the provider template requires compatibility aliases.
+7. Confirm the template name is one the provider gateway exposes — `reset-password`, `login-alert`, `invoice`, `custom`. Anything else is rejected with HTTP 400 and surfaces as `PROVIDER_FAILED` (ETP-4786). New document contracts inherit `custom` from `DefaultDocumentSendEmailContract` and get their `subject`/`body` composed for them; do not invent a template name.
+8. If the contract pins a branded template of its own, override `documentTypeLabel()` too: an operator-edited send swaps that template for the content template (ETP-4717) and needs a subject label. Everything else is inherited — do not re-implement `messageEdits` parsing, escaping, or the idempotency content hash per contract.
 
 Do not hardcode or guess window, menu, process, or tab identifiers. Use Schema Forge artifacts, NEO configuration, or DB/menu-cache discovery.
 
@@ -107,7 +109,7 @@ Use this minimum descriptor shape:
 {
   "name": "sales-order-send",
   "version": "v1",
-  "template": "document",
+  "template": "custom",
   "caller": ["frontend"],
   "authorization": {
     "windowAccess": "sales-order",

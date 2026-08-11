@@ -97,7 +97,7 @@ import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -2610,7 +2610,6 @@ export function DetailView({
       roundAmounts(result);
       applyUpdates?.(result, forceFields);
 
-
     } catch {
       // Callout is best-effort
     }
@@ -2941,7 +2940,7 @@ export function DetailView({
             >
               {ui('cancel')}
             </Button>
-            {statusField && data[statusField] != null && (
+            {statusField && data[statusField] != null && !WINDOW_HIDE_STATUS_PILL_FOR[windowName]?.has(data[statusField]) && (
               <DocumentStatusPill
                 status={data[statusField]}
                 enumLabels={statusEnumLabels}
@@ -3102,7 +3101,7 @@ export function DetailView({
                         )
                         : (
                           <>
-                            {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[hsl(var(--destructive))]" data-testid="Undo2__fa3275" />}
+                            {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[hsl(var(--destructive))]" data-testid="Undo2__fa3275" />}{p.style === 'positive' && <Check size={16} className="mr-1" data-testid="Check__process" />}
                             {tMenu(resolveProcessLabel(p, data))}
                           </>
                         )}
@@ -4439,25 +4438,3 @@ function populateIdentifierFields(api, result, detailEntity, catalogs) {
   }
 }
 
-function getButtonClass(salesTheme, p, isPrimary) {
-  if (p.style === 'ghost-danger') {
-    return 'bg-card border-[hsl(var(--destructive) / 0.3)] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)]';
-  }
-  if (salesTheme) {
-    if (p.style === 'destructive') {
-      return 'border-status-warning-border bg-status-warning text-status-warning-foreground hover:bg-status-warning';
-    } else {
-      if (isPrimary) {
-        return 'bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium';
-      } else {
-        return 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success';
-      }
-    }
-  } else {
-    if (p.style === 'destructive') {
-      return 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20';
-    } else {
-      return '';
-    }
-  }
-}
