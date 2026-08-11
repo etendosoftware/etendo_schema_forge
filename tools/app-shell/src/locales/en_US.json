@@ -19826,7 +19826,7 @@
     "backendError.matchRulePriorityConflict": "A rule with this priority already exists for the selected scope",
     "backendError.priceListCannotDeactivateDefault": "A tariff marked as default cannot be deactivated.",
     "backendError.productCategoryCannotSetMultipleDefault": "Only one product category can be marked as default.",
-    "backendError.costNotCalculated": "The cost of the product could not be calculated.",
+    "backendError.costNotCalculated": "The product cost has not been calculated yet. The system calculates it automatically; please try posting the document again in a few minutes.",
     "backendError.conversionRateNotDraft": "Cannot modify the document conversion rate when the invoice is not in draft status.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
