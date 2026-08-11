@@ -162,45 +162,53 @@ function matchShipmentNotFound(msg) {
   return { id };
 }
 
-function translateParameterized(msg, t) {
+// Runs the parameterized matchers in order and returns the winning translation
+// key + params, with no translation call involved — pure "which skeleton matched"
+// decision. Kept separate from translateParameterized() below so the "call t(),
+// guard against the key echoing back" logic isn't duplicated once per matcher.
+function resolveParameterizedMatch(msg) {
   const accountMatch = matchAccountNotFound(msg);
   if (accountMatch) {
     if (accountMatch.group !== null) {
-      const key = 'backendError.invalidAccountBpAndGroup';
-      const translated = t(key, { bp: accountMatch.bp, group: accountMatch.group });
-      return (translated && translated !== key) ? translated : null;
+      return {
+        key: 'backendError.invalidAccountBpAndGroup',
+        params: { bp: accountMatch.bp, group: accountMatch.group },
+      };
     }
-    const key = 'backendError.invalidAccountBpOnly';
-    const translated = t(key, { bp: accountMatch.bp });
-    return (translated && translated !== key) ? translated : null;
+    return { key: 'backendError.invalidAccountBpOnly', params: { bp: accountMatch.bp } };
   }
 
   const invoiceLineMatch = matchInvoiceLineAlreadyInvoiced(msg);
   if (invoiceLineMatch) {
-    const key = 'backendError.invoiceLineAlreadyInvoiced';
-    const translated = t(key, {
-      docNo: invoiceLineMatch.docNo,
-      invoiced: invoiceLineMatch.invoiced,
-      pending: invoiceLineMatch.pending,
-    });
-    return (translated && translated !== key) ? translated : null;
+    return {
+      key: 'backendError.invoiceLineAlreadyInvoiced',
+      params: {
+        docNo: invoiceLineMatch.docNo,
+        invoiced: invoiceLineMatch.invoiced,
+        pending: invoiceLineMatch.pending,
+      },
+    };
   }
 
   const orderMatch = matchOrderNotFound(msg);
   if (orderMatch) {
-    const key = 'backendError.orderNotFound';
-    const translated = t(key, { orderId: orderMatch.orderId });
-    return (translated && translated !== key) ? translated : null;
+    return { key: 'backendError.orderNotFound', params: { orderId: orderMatch.orderId } };
   }
 
   const shipmentMatch = matchShipmentNotFound(msg);
   if (shipmentMatch) {
-    const key = 'backendError.shipmentNotFound';
-    const translated = t(key, { id: shipmentMatch.id });
-    return (translated && translated !== key) ? translated : null;
+    return { key: 'backendError.shipmentNotFound', params: { id: shipmentMatch.id } };
   }
 
   return null;
+}
+
+function translateParameterized(msg, t) {
+  const match = resolveParameterizedMatch(msg);
+  if (!match) return null;
+  const translated = t(match.key, match.params);
+  // Guard: if t() returns the key itself the translation is missing — keep original
+  return (translated && translated !== match.key) ? translated : null;
 }
 
 export function translateBackendError(msg, t) {
