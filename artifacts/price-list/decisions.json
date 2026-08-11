@@ -7,6 +7,7 @@
     "hidePrint": true,
     "hideMoreMenu": true,
     "showDetailFooterTotals": false,
+    "summaryFields": [],
     "labelOverrides": {
       "es_ES": {
         "Name": "Nombre",
