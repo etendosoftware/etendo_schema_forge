@@ -63,7 +63,7 @@ describe('getStatusBadgeProps — remaining word-form operands in compound OR co
     assert.equal(getStatusBadgeProps('booked').variant, 'default');
     assert.equal(
       getStatusBadgeProps('booked').className,
-      'border-status-success-border bg-status-success text-status-success-foreground',
+      'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success',
     );
   });
 
