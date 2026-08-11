@@ -390,10 +390,12 @@ describe('computeLineGrossAmount — order config', () => {
     assert.equal(result.lineGrossAmount, undefined);
   });
 
-  it('no-op when lineNet is 0 (missing listPrice)', () => {
+  it('no-op when discount drives lineNet to 0 but orderedQuantity is missing (indeterminate, not edited directly)', () => {
     const cache  = { [TAX_ID]: 21 };
     const result = { tax: TAX_ID };
-    computeLineGrossAmount('orderedQuantity', '0', result, { listPrice: 50 }, cache, [], ORDER_LINE_CONFIG);
+    // discount changed, not qty/price — qty is genuinely absent here, so the
+    // zero can't be distinguished from "not set yet" (e.g. product pending).
+    computeLineGrossAmount('discount', '100', result, { listPrice: 50 }, cache, [], ORDER_LINE_CONFIG);
     assert.equal(result.lineGrossAmount, undefined);
   });
 
