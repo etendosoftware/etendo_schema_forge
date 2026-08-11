@@ -97,6 +97,12 @@ test.describe('Required-field validation — /sales-quotation/new (ETP-3894)', (
     // EntityForm appends <p data-testid="error-{key}"> via renderFieldWithError.
     const bpError = page.getByTestId('error-businessPartner');
     await expect(bpError).toBeVisible({ timeout: 5_000 });
+
+    // partnerAddress (inputMode: "dependent") is also required and empty —
+    // ETP-4773 fix: dependent fields must show the same inline error as any
+    // other required field when saving with the form empty.
+    const partnerAddressError = page.getByTestId('error-partnerAddress');
+    await expect(partnerAddressError).toBeVisible({ timeout: 5_000 });
   });
 
   // -------------------------------------------------------------------------
