@@ -485,6 +485,7 @@ export default function SideMenu({
   const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch({
     enabled: multiTenantEnabled,
   });
+  const currentEnvironment = environments.find(env => env.clientId === currentClientId);
 
   const favNameMap = useMemo(() => {
     const map = {};
@@ -572,6 +573,11 @@ export default function SideMenu({
                   <span className="flex-1 text-left text-sm font-semibold text-foreground truncate">
                     {selectedOrg?.name || ui('yourCompany')}
                   </span>
+                  {multiTenantEnabled && (
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {ui(environmentPlanLabelKey(currentEnvironment))}
+                    </span>
+                  )}
                   <ChevronDown
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     data-testid="ChevronDown__247c75" />
