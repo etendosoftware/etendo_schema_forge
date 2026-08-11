@@ -200,6 +200,13 @@ expand-chevron column unchanged. The label/icon is adaptive: "Añadir dimensione
 no dimension values, "Editar dimensiones" once at least one is set. See `docs/ui-customization.md`
 §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
 
+## Print button — confirmed always hidden — ETP-4714
+
+Listed in this ticket's "Ocultar botón siempre" scope. No change was needed: `window.hidePrint:
+true` was already set in `decisions.json`, and `GoodsReceiptActions.jsx` (the `topbarRight`
+component) has never rendered a print button of its own. Documented here only so the audit
+trail for ETP-4714 is complete across every window it named.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

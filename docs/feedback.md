@@ -844,3 +844,40 @@ override needed.
 | `warehouse` | entity `accounting` |
 
 **Lesson:** a `decisions.json` flag that reaches `contract.json` is not proof it reaches the runtime. `apiPrediction.crud.<entity>.delete: false` in the contract is a *declared intent*; only `push-to-neo.js`/`neo-delta.js` actually writing `ISDELETE='N'` to `ETGO_SF_ENTITY` makes NEO Headless enforce it. When adding a new declarative flag that's supposed to restrict the live API, verify the write path (`resolveContractEntityMethods()` or equivalent), not just the contract shape — this is exactly the same class of gap ETP-4254 closed for `readOnly`/`methods`, and `hideDelete` had quietly never gotten the same treatment.
+
+---
+
+## [2026-08-11] `sales-order-happy-path.integration.spec.js` — false-negative on `epic/ETP-3504` baseline, ambiguous `/confirmar/i` selector
+
+**Component:** `e2e/tests/flows/sales-order-happy-path.integration.spec.js` (integration project, real backend). Not a product bug — the underlying feature (Sales Order confirm + optional invoice/shipment creation via `artifacts/sales-order/custom/OrderConfirmModal.jsx`) works correctly.
+
+**Symptom:** running the integration suite (`--project=integration`, any worker count) reliably fails at `creates an order, confirms with invoice, then confirms the invoice`, timing out on `page.getByText(/pedido confirmado|order confirmed/i)`. Reproduced twice in a row, single worker, no resource contention, on a clean `origin/epic/ETP-3504` checkout with **zero ETP-4714 changes applied** — confirms this is pre-existing on epic, unrelated to the print-visibility work.
+
+**Root cause:** step 7 of the test does:
+```js
+const modalBtn = page.getByRole('button', { name: /confirmar/i }).last();
+await modalBtn.click();
+```
+At the moment `OrderConfirmModal` is open, **two** buttons on the page match `/confirmar/i`: the DetailView toolbar's own "Confirmar" (`action-save`/`action-complete`) and the modal's dynamic-label submit button, which reads "Confirmar pedido" (no doc selected) or **"Confirmar + factura →"** once "Crear factura" is checked (see `primaryLabel` in `OrderConfirmModal.jsx`) — both contain the substring "confirmar", so both match the regex. `.last()` is presumed to always resolve to the modal's button (rendered later in the DOM), but this is fragile — under some render/hydration timing the wrong element gets clicked (or the click lands before the modal's button is stable), the modal never actually submits, and the test hangs waiting for a success message that will never arrive because `handleConfirm` was never invoked. Manually reproduced the exact same click sequence via Chrome MCP (real backend, real UI) and the flow completes instantly and correctly — "Pedido confirmado" appears, draft invoice is created — proving the feature itself is sound.
+
+**Fix:** not applied — this is pre-existing test-suite flakiness, out of scope for ETP-4714, tracked here so it isn't mistaken for a regression once ETP-4714's `hidePrintWhen` diff lands on top of this same baseline. A real fix should scope the modal button more precisely (e.g. a dedicated `data-testid` on `OrderConfirmModal`'s submit button) instead of a bare `/confirmar/i` role-name regex shared with the toolbar.
+
+**Lesson:** when a `getByRole(..., { name: /regex/i }).last()` selector must disambiguate between a toolbar action and a modal's dynamically-labeled submit button, a shared substring (here "confirmar") makes `.last()` a timing bet, not a guarantee. Prefer a `data-testid` scoped to the modal over a text-regex role selector whenever a toolbar and an overlay can both expose a same-labeled action simultaneously.
+
+---
+
+## [2026-08-11] ETP-4714 — `listViewOptions` never reached custom hand-rolled `<ListView>` wrappers; separately, ETP-4729 superseded the fix for two windows
+
+**Component:** `tools/app-shell/src/windows/custom/{sales-order,purchase-order,sales-invoice}/index.jsx` — the three custom window wrappers that hand-roll their own `<ListView>` for the list route instead of delegating to the generated `HeaderPage.jsx`/`App`.
+
+**Symptom (gap #1 — generic):** `decisions.json → window.listViewOptions.hidePrint: true` reached `contract.json` and the generator-emitted `HeaderPage.jsx` correctly (`listViewOptions={{"hidePrint":true}}`), and `sf-validate-pipeline` was clean — but the browser still showed the list-view "Imprimir" button. A React-fiber inspection (`node.memoizedProps.listViewOptions`) on the live `<ListView>` instance showed the prop as `undefined`, and the component tree showed a `SalesOrderWindow` wrapper, not `HeaderPage`/`App`.
+
+**Root cause (gap #1):** these three windows' `index.jsx` (registered directly in `registry.js`'s custom-loader map, ahead of the generated `App`) render `recordId ? <GeneratedApp .../> : <ListView .../>` — i.e. **only the detail route delegates to the generated component; the list route hand-rolls its own `<ListView>` with an explicit, hardcoded prop list** (matching the existing pattern already used there for `dateFilterKey`, `hideLink`, etc.). Any *new* generator-emitted list-level prop — `listViewOptions` didn't exist before ETP-4714 — is invisible to these three windows until someone manually adds it to the hardcoded prop list. The generated `HeaderPage.jsx` having the correct prop is not proof the live app does; check which component the *list* route actually renders (`registry.js`'s `customLoaders` map wins over `windowLoaders`) before trusting the generated artifact.
+
+**Fix (gap #1):** hardcoded `listViewOptions={{ hidePrint: true }}` directly on the `<ListView>` call in `purchase-order/index.jsx` and `sales-invoice/index.jsx` (still valid for both).
+
+**Second, independent complication (`sales-order`/`sales-quotation` only):** while investigating gap #1, adding the same `listViewOptions={{ hidePrint: true }}` to `sales-order/index.jsx` broke an *existing* regression-guard test: `tools/app-shell/src/windows/custom/sales-order/__tests__/index.test.js` → `'does not hardcode hidePrint on ListView (ETP-4729 — print restored)'`. A separate, unrelated ticket (ETP-4729, merged to epic **after** ETP-4714's original list-view fix was designed) had **deliberately removed** the pre-existing `window.hidePrint: true` from `sales-order`, `sales-quotation`, and `goods-shipment`'s `decisions.json`, intentionally restoring list-view print to always-visible as the new, tested, correct baseline. ETP-4714's `listViewOptions` addition for these two windows was based on a now-stale "what the list looked like before this ticket" premise that a *later* ticket had already, deliberately, superseded.
+
+**Fix (second complication):** removed `"listViewOptions": { "hidePrint": true }` from `sales-order` and `sales-quotation`'s `decisions.json` (and did not add the `index.jsx` hardcode for `sales-order` either) — deferring to ETP-4729's more recent, tested decision. `goods-shipment` was never affected by gap #1 (its custom wrapper delegates to a shared shell that always renders the generated component for both routes), so no `index.jsx` change was needed there.
+
+**Lesson:** two lessons, independent of each other. (1) When a window's custom `index.jsx` renders its own `<ListView>` for the list route (check for `if (recordId) { <GeneratedApp/> } return <ListView .../>` — grep the window's own `index.jsx`, don't assume `registry.js`'s default loader applies), any decisions.json-driven list-level prop needs the same hardcoded treatment as the window's other manually-mirrored props — a clean `contract.json`/generated `HeaderPage.jsx` is necessary but not sufficient; verify what the *live* React tree actually receives (fiber `memoizedProps`), not just what the generator emitted. (2) Before restoring a "pre-ticket" list/detail visibility state from git history, re-check whether a *more recent* commit already changed that same state deliberately (with its own test) — the most recent intent should win over a diff generated before it existed, and a passing regression-guard test failing after your change is a signal to investigate the test's own history, not to work around it.
