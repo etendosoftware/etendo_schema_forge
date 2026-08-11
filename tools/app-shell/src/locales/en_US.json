@@ -19745,6 +19745,7 @@
     "backendError.priceListCannotDeactivateDefault": "A tariff marked as default cannot be deactivated.",
     "backendError.productCategoryCannotSetMultipleDefault": "Only one product category can be marked as default.",
     "backendError.costNotCalculated": "The cost of the product could not be calculated.",
+    "backendError.conversionRateNotDraft": "Cannot modify the document conversion rate when the invoice is not in draft status.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
     "uomTypeTime": "Time",

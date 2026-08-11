@@ -19995,6 +19995,7 @@
     "backendError.priceListCannotDeactivateDefault": "No es posible desactivar una tarifa marcada como por defecto.",
     "backendError.productCategoryCannotSetMultipleDefault": "Solo una categoría de producto puede estar marcada como valor por defecto.",
     "backendError.costNotCalculated": "No se pudo calcular el costo del producto.",
+    "backendError.conversionRateNotDraft": "No es posible modificar el tipo de cambio del documento cuando la factura no está en estado Borrador.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",
     "uomTypeTime": "Tiempo",
