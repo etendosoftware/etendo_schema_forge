@@ -75,6 +75,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
 vi.mock('@/lib/linesColumnWidth.js', () => ({
   columnMinWidthPx: () => 96,
   columnFlex: (col) => (col?.flexGrow === 0 ? '0 0 80px' : '1 1 120px'),
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 
 vi.mock('@/components/ui/select', () => ({
@@ -202,6 +203,80 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     expect(cols[0].style.width).toMatch(/^calc\(/);
     // Header row is hidden entirely in this mode.
     expect(screen.getByTestId('TableHeader__eb5261')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  // ETP-4803 — `dimensionsPanel` never renders as a fixed grid column in
+  // InlineLinesPanel (it renders via a hover action + expand sub-row
+  // instead). DataTable's hidden `hideHeader` colgroup must reproduce that
+  // SAME data-column set, or `growColumnWidth()`'s fixed/grow totals go out
+  // of sync with the real header row and every column after the phantom one
+  // gets the wrong width. Reproduces the live bug on purchase-invoice /
+  // sales-invoice / purchase-shipment / sales-shipment lines and confirms
+  // the fix: the `dimensionsPanel` column itself is dropped from
+  // `visibleColumns` before the colgroup is built, exactly like
+  // InlineLinesPanel does.
+  //
+  // ETP-4735 (merged from epic/ETP-3504) — separately, whenever a
+  // `dimensionsPanel` column is present, InlineLinesPanel's real rows DO grow
+  // a leading CHEVRON_COLUMN_WIDTH (44px) slot for the expand-chevron, so the
+  // add-row colgroup must reserve the identical slot too. So the two
+  // colgroups are legitimately NOT byte-identical: `colsWith` gains exactly
+  // one leading '44px' entry over `colsWithout`, and nothing else changes.
+  it('excludes a dimensionsPanel column from the hidden add-row colgroup, matching InlineLinesPanel', () => {
+    const columnsWithoutDimensions = [
+      { key: 'name', label: 'Name', type: 'string' },
+      { key: 'fixed', label: 'Fixed', type: 'string', flexGrow: 0 },
+    ];
+    const columnsWithDimensions = [
+      columnsWithoutDimensions[0],
+      { key: 'dimensions', label: 'Dimensions', type: 'dimensionsPanel', dimensionFields: [] },
+      columnsWithoutDimensions[1],
+    ];
+
+    const { container: withoutDimensions } = render(
+      <DataTable
+        columns={columnsWithoutDimensions}
+        data={baseRows}
+        hideHeader
+        linesLayout="inlineEditable"
+        selectable={false}
+      />,
+    );
+    const colsWithout = [...withoutDimensions.querySelectorAll('colgroup col')]
+      .map((c) => c.style.width);
+
+    const { container: withDimensions } = render(
+      <DataTable
+        columns={columnsWithDimensions}
+        data={baseRows}
+        hideHeader
+        linesLayout="inlineEditable"
+        selectable={false}
+      />,
+    );
+    const colsWith = [...withDimensions.querySelectorAll('colgroup col')]
+      .map((c) => c.style.width);
+
+    // The dimensionsPanel column itself must add NO extra data <col> and
+    // change NO fixed-column width — adding it to the schema is a no-op on
+    // the DATA columns, exactly as it is on InlineLinesPanel's real
+    // header/flex row. Before the ETP-4803 fix, this list gained a phantom
+    // `120px`/'1 0' DATA entry that desynced fixedColsTotalPx/growCount,
+    // shrinking every subsequent grow column's calc() width.
+    //
+    // ETP-4735's leading chevron reservation is the one legitimate
+    // difference: one extra '44px' <col>, plus the grow column's calc()
+    // subtracting those same 44px from its fixedTotalPx term (so the row's
+    // total literal-pixel width — chevron + fixed cols — stays accounted for
+    // instead of overflowing the table by 44px under table-layout: fixed).
+    expect(colsWith[0]).toBe('44px');
+    expect(colsWith[2]).toBe(colsWithout[1]); // the 'Fixed' column is untouched
+    expect(colsWithout[1]).toBe('80px');
+    expect(colsWithout[0]).toMatch(/^calc\(/);
+    expect(colsWith[1]).toMatch(/^calc\(/);
+    const fixedTotalWithout = Number(colsWithout[0].match(/100% - (\d+)px/)[1]);
+    const fixedTotalWith = Number(colsWith[1].match(/100% - (\d+)px/)[1]);
+    expect(fixedTotalWith).toBe(fixedTotalWithout + 44);
   });
 
   // ── visibleColumns auto-hide/reveal for a displayIf-controlled column ───

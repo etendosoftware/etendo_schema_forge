@@ -433,43 +433,40 @@ function getInputStateClass(isReadOnly) {
   return isReadOnly ? 'bg-muted/50' : 'bg-card focus:ring-2 focus:ring-focus-ring focus:outline-none';
 }
 
+// Renders only the dependent selector itself (no wrapping label) — the label lives
+// in the caller's wrapper div (renderDependentField), matching the same label/selector
+// split renderSearchSelectField uses, so renderFieldWithError's cloneElement-injected
+// error <p> (ETP-3894) lands inside a real div that renders {props.children} — see
+// ETP-4773. Keeping the label OUT of this component (rather than just deduplicating it)
+// is what makes that injection possible: DependentFkField previously returned its own
+// <div> with no children slot for the caller to append into.
 function DependentFkField(props) {
-  return (
-    <div className={LABEL_GAP}>
-      <Label
-        htmlFor={props.f.key}
-        className="text-sm text-foreground font-medium"
-        data-testid="Label__a8d626">
-        {props.label}{requiredAsterisk(props.f)}
-      </Label>
-      {props.f.column === "C_BPartner_Location_ID" ? (
-          <PartnerAddressPicker
-            field={props.f}
-            value={props.data?.[props.f.key] ?? ""}
-            displayValue={props.data?.[props.f.key + "$_identifier"]}
-            onChange={props.onChange}
-            formData={props.data}
-            resolvedLabel={props.label}
-            selectorUrl={props.selectorUrl}
-            selectorContext={props.selectorContext}
-            token={props.token}
-            apiBaseUrl={props.apiBaseUrl}
-            data-testid="PartnerAddressPicker__a8d626" />
-      ) : (
-          <DependentSelect
-            field={props.f}
-            value={props.data?.[props.f.key] ?? ""}
-            displayValue={props.data?.[props.f.key + "$_identifier"]}
-            onChange={props.onChange}
-            catalogs={props.catalogs}
-            formData={props.data}
-            resolvedLabel={props.label}
-            selectorUrl={props.selectorUrl}
-            selectorContext={props.selectorContext}
-            token={props.token}
-            data-testid="DependentSelect__a8d626" />
-      )}
-    </div>
+  return props.f.column === "C_BPartner_Location_ID" ? (
+      <PartnerAddressPicker
+        field={props.f}
+        value={props.data?.[props.f.key] ?? ""}
+        displayValue={props.data?.[props.f.key + "$_identifier"]}
+        onChange={props.onChange}
+        formData={props.data}
+        resolvedLabel={props.label}
+        selectorUrl={props.selectorUrl}
+        selectorContext={props.selectorContext}
+        token={props.token}
+        apiBaseUrl={props.apiBaseUrl}
+        data-testid="PartnerAddressPicker__a8d626" />
+  ) : (
+      <DependentSelect
+        field={props.f}
+        value={props.data?.[props.f.key] ?? ""}
+        displayValue={props.data?.[props.f.key + "$_identifier"]}
+        onChange={props.onChange}
+        catalogs={props.catalogs}
+        formData={props.data}
+        resolvedLabel={props.label}
+        selectorUrl={props.selectorUrl}
+        selectorContext={props.selectorContext}
+        token={props.token}
+        data-testid="DependentSelect__a8d626" />
   );
 }
 
@@ -1199,18 +1196,25 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       else if (!val) onChange?.(f.key + '$_identifier', '');
     };
     return (
-      <DependentFkField
-        key={f.key}
-        f={f}
-        label={label}
-        data={data}
-        onChange={fieldOnChange}
-        selectorUrl={fieldSelectorUrl}
-        selectorContext={effectiveSelectorContext}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        catalogs={catalogs}
-        data-testid="DependentFkField__a8d626" />
+      <div key={f.key} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}{requiredAsterisk(f)}
+        </Label>
+        <DependentFkField
+          f={f}
+          label={label}
+          data={data}
+          onChange={fieldOnChange}
+          selectorUrl={fieldSelectorUrl}
+          selectorContext={effectiveSelectorContext}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          catalogs={catalogs}
+          data-testid="DependentFkField__a8d626" />
+      </div>
     );
   };
 
