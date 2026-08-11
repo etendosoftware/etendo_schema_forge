@@ -65,6 +65,11 @@ const BACKEND_ERROR_MAP = {
   // literal, thrown when the Business Partner lacks mandatory Payment Terms/Method
   // (ETP-4831 case 4, family A).
   'Business Partner is missing mandatory Payment Terms or Payment Method': 'backendError.bpMissingPaymentTermsOrMethod',
+  // Exchange Rates tab (ConversionRateDocLockObserver, com.smf.currency.conversionrate
+  // AD_MESSAGE `SMFCR_CannotModifyRateNonDraft`) — that module ships no es_ES
+  // AD_MESSAGE_TRL, so OBException falls back to the raw English MSGTEXT (ETP-4837).
+  'Cannot modify document conversion rate when the invoice is not in draft status.':
+    'backendError.conversionRateNotDraft',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a

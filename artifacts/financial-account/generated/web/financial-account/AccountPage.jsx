@@ -4,6 +4,10 @@ import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import AccountTable from '../../../custom/AccountsHeaderTable';
 import AccountForm from './AccountForm';
+import ReconciliationsTable from './ReconciliationsTable';
+import ReconciliationsForm from './ReconciliationsForm';
+import ClearedItemsTable from './ClearedItemsTable';
+import ClearedItemsForm from './ClearedItemsForm';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -122,6 +126,28 @@ export const api = {
       "listUrl": "/sws/neo/accounts/bankStatementLines",
       "detailUrl": "/sws/neo/accounts/bankStatementLines/{id}",
       "supportedFilters": []
+    },
+    "reconciliations": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/accounts/reconciliations",
+      "detailUrl": "/sws/neo/accounts/reconciliations/{id}",
+      "supportedFilters": []
+    },
+    "clearedItems": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/accounts/clearedItems",
+      "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
+      "supportedFilters": []
     }
   },
   "selectors": [
@@ -132,6 +158,14 @@ export const api = {
       "reference": "Currency",
       "inputMode": "selector",
       "url": "/sws/neo/accounts/account/selectors/currency"
+    },
+    {
+      "entity": "account",
+      "field": "aprmGlitemDiff",
+      "column": "EM_Aprm_Glitem_Diff",
+      "reference": "Glitem",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/account/selectors/aprmGlitemDiff"
     },
     {
       "entity": "account",
@@ -252,6 +286,70 @@ export const api = {
       "reference": "Glitem",
       "inputMode": "selector",
       "url": "/sws/neo/accounts/bankStatementLines/selectors/gLItem"
+    },
+    {
+      "entity": "clearedItems",
+      "field": "financialAccountTransaction",
+      "column": "FIN_Finacc_Transaction_ID",
+      "reference": "Finacc_Transaction",
+      "inputMode": "search",
+      "url": "/sws/neo/accounts/clearedItems/selectors/financialAccountTransaction"
+    },
+    {
+      "entity": "clearedItems",
+      "field": "bankStatementLine",
+      "column": "FIN_Bankstatementline_ID",
+      "reference": "Bankstatementline",
+      "inputMode": "search",
+      "url": "/sws/neo/accounts/clearedItems/selectors/bankStatementLine"
+    },
+    {
+      "entity": "clearedItems",
+      "field": "currency",
+      "column": "C_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "search",
+      "url": "/sws/neo/accounts/clearedItems/selectors/currency"
+    },
+    {
+      "entity": "clearedItems",
+      "field": "payment",
+      "column": "FIN_Payment_ID",
+      "reference": "Payment",
+      "inputMode": "search",
+      "url": "/sws/neo/accounts/clearedItems/selectors/payment"
+    },
+    {
+      "entity": "clearedItems",
+      "field": "gLItem",
+      "column": "C_Glitem_ID",
+      "reference": "Glitem",
+      "inputMode": "search",
+      "url": "/sws/neo/accounts/clearedItems/selectors/gLItem"
+    },
+    {
+      "entity": "clearedItems",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/accounts/clearedItems/selectors/project"
+    },
+    {
+      "entity": "clearedItems",
+      "field": "stDimension",
+      "column": "User1_ID",
+      "reference": "User1",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/clearedItems/selectors/stDimension"
+    },
+    {
+      "entity": "clearedItems",
+      "field": "ndDimension",
+      "column": "User2_ID",
+      "reference": "User2",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/clearedItems/selectors/ndDimension"
     }
   ],
   "actions": [
@@ -420,6 +518,62 @@ export const api = {
       "url": "/sws/neo/accounts/importedBankStatements/{id}/action/etblkpBulkposting",
       "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
+    },
+    {
+      "entity": "reconciliations",
+      "field": "aPRMPrintDetailed",
+      "column": "EM_APRM_PrintDetailed",
+      "url": "/sws/neo/accounts/reconciliations/{id}/action/aPRMPrintDetailed",
+      "processId": "3C4A5FB206B74C3CA9FE20116FCA0464",
+      "processType": "classic"
+    },
+    {
+      "entity": "reconciliations",
+      "field": "aPRMPrintSummary",
+      "column": "EM_APRM_PrintSummary",
+      "url": "/sws/neo/accounts/reconciliations/{id}/action/aPRMPrintSummary",
+      "processId": "BBA11D1A061346459AF6148920FE6629",
+      "processType": "classic"
+    },
+    {
+      "entity": "reconciliations",
+      "field": "etprReactivateRecon",
+      "column": "EM_Etpr_Reactivate_Recon",
+      "url": "/sws/neo/accounts/reconciliations/{id}/action/etprReactivateRecon",
+      "processId": "B2A7F27C590546F38563C20CA9AD00B7",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "reconciliations",
+      "field": "aprmProcessRec",
+      "column": "EM_Aprm_Process_Rec",
+      "url": "/sws/neo/accounts/reconciliations/{id}/action/aprmProcessRec",
+      "processId": "FF8080812E2F8EAE012E2F94CF470014",
+      "processType": "classic"
+    },
+    {
+      "entity": "reconciliations",
+      "field": "aPRMProcessReconciliationForce",
+      "column": "EM_APRM_Process_Rec_Force",
+      "url": "/sws/neo/accounts/reconciliations/{id}/action/aPRMProcessReconciliationForce",
+      "processId": "6BF16EFC772843AC9A17552AE0B26AB7",
+      "processType": "classic"
+    },
+    {
+      "entity": "reconciliations",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/accounts/reconciliations/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "reconciliations",
+      "field": "etprRemoveReconciliation",
+      "column": "EM_Etpr_Remove_Reconciliation",
+      "url": "/sws/neo/accounts/reconciliations/{id}/action/etprRemoveReconciliation",
+      "processId": "22C4DBA9FAC9444995EC27DD439A6F1B",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -475,6 +629,10 @@ export default function AccountPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        secondaryTabs={[
+          { key: 'reconciliations', label: 'Reconciliations', Table: ReconciliationsTable, Form: ReconciliationsForm },
+          { key: 'clearedItems', label: 'Cleared items', Table: ClearedItemsTable, Form: ClearedItemsForm },
+        ]}
         hidePrint
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Financial_Account", config: {} } }]}
