@@ -292,4 +292,66 @@ describe('buildAdvancedFilterCriteria', () => {
       ]);
     });
   });
+
+  // ETP-4770: "Antes de" (Before) on a date column must exclude the entered
+  // day itself, regardless of whether the column also happens to be the
+  // window's `dateFilterKey` (the separate quick date-range picker). A prior
+  // regression: this exact fix landed only in the schema_forge_core package
+  // copy of gridQuery.js and never in this repo's own local copy (the one
+  // ListView.jsx actually imports via '@/lib/gridQuery'), so it silently had
+  // zero effect in the running app for every window.
+  describe('date "Before" excludes the boundary day (ETP-4770)', () => {
+    const DATE_COL = { key: 'orderDate', type: 'date' };
+    // Mirrors a real window config where the same field is ALSO wired as the
+    // quick "date range" filter (decisions.json `dateFilterKey`) — that must
+    // not change how the advanced filter builds its own criteria.
+    const DATE_COL_WITH_FILTER_KEY = { key: 'orderDate', type: 'date', dateFilterKey: true };
+
+    it('shifts lessThan back a day and uses lessOrEqual', () => {
+      const out = buildAdvancedFilterCriteria(
+        filter([cond('orderDate', 'lessThan', '2026-08-06')]), [DATE_COL],
+      );
+      assert.deepEqual(out, [
+        { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-08-05' },
+      ]);
+    });
+
+    it('still shifts when the column is also the dateFilterKey target', () => {
+      const out = buildAdvancedFilterCriteria(
+        filter([cond('orderDate', 'lessThan', '2026-08-06')]), [DATE_COL_WITH_FILTER_KEY],
+      );
+      assert.deepEqual(out, [
+        { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-08-05' },
+      ]);
+    });
+
+    it('does not affect greaterThan (After stays untouched)', () => {
+      const out = buildAdvancedFilterCriteria(
+        filter([cond('orderDate', 'greaterThan', '2026-08-06')]), [DATE_COL],
+      );
+      assert.deepEqual(out, [
+        { fieldName: 'orderDate', operator: 'greaterThan', value: '2026-08-06' },
+      ]);
+    });
+
+    it('does not affect greaterOrEqual, equals, or between', () => {
+      assert.deepEqual(
+        buildAdvancedFilterCriteria(filter([cond('orderDate', 'greaterOrEqual', '2026-08-06')]), [DATE_COL]),
+        [{ fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-08-06' }],
+      );
+      assert.deepEqual(
+        buildAdvancedFilterCriteria(filter([cond('orderDate', 'equals', '2026-08-06')]), [DATE_COL]),
+        [{ fieldName: 'orderDate', operator: 'equals', value: '2026-08-06' }],
+      );
+      assert.deepEqual(
+        buildAdvancedFilterCriteria(
+          filter([cond('orderDate', 'between', ['2026-08-01', '2026-08-06'])]), [DATE_COL],
+        ),
+        [
+          { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-08-01' },
+          { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-08-06' },
+        ],
+      );
+    });
+  });
 });
