@@ -60,16 +60,14 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
   });
 
   it('keeps purchase SII and SIF status fields included in the header contract', () => {
+    // ETP-4783: aeatsiiEjercicio, aeatsiiPeriodo, aeatsiiPurDescription removed (discarded — never had values in GO)
+    // ETP-4783: aeatsiiDescripcionSii changed to form:true (was read-only looking, now editable)
     const expectedNames = [
       'aeatsiiClaveTipoFc',
-      'aeatsiiDescripcionSii',
-      'aeatsiiEjercicio',
       'aeatsiiEstado',
       'aeatsiiFechaRegCont',
       'aeatsiiIsauthorization',
       'aeatsiiIssent',
-      'aeatsiiPeriodo',
-      'aeatsiiPurDescription',
       'etsgDateOperation',
       'etvfacInvoiceStatus',
     ];
@@ -80,6 +78,12 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
       assert.notEqual(field.visibility, 'discarded', `${name} must not be discarded`);
       assert.equal(field.form, false, `${name} must stay out of the main header form`);
     }
+
+    // aeatsiiDescripcionSii is editable and in the form (ETP-4783)
+    const descSii = headerField('aeatsiiDescripcionSii');
+    assert.ok(descSii, 'aeatsiiDescripcionSii must be in header contract');
+    assert.equal(descSii.visibility, 'editable', 'aeatsiiDescripcionSii must be editable');
+    assert.equal(descSii.form, true, 'aeatsiiDescripcionSii must be in the form (ETP-4783)');
   });
 
   it('discards tbaiIssent from the frontend contract now that TbaiConfigSequenceHandler chains TBAI sequencing on the backend (ETP-4401)', () => {

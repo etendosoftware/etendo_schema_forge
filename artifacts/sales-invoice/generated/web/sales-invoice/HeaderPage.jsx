@@ -280,14 +280,6 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "aeatsiiDescription",
-      "column": "EM_Aeatsii_Description_ID",
-      "reference": "aeatsii_description",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiDescription"
-    },
-    {
-      "entity": "header",
       "field": "aeatsiiCauseExemption",
       "column": "EM_Aeatsii_Cause_Exemption_ID",
       "reference": "aeatsii_cause_exemption",

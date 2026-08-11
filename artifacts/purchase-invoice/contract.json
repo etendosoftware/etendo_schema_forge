@@ -1,8 +1,8 @@
 {
-  "version": "0.80.0",
+  "version": "0.81.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-07T12:06:34.464Z",
-  "checksum": "2c7b3a608d9ee140",
+  "updatedAt": "2026-08-11T16:50:23.615Z",
+  "checksum": "b265827e28ea68c6",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -462,73 +462,43 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed",
-                "labels": {
-                  "es_ES": "Cerrado"
-                }
+                "name": "Closed"
               },
               {
                 "value": "CO",
-                "name": "Completed",
-                "labels": {
-                  "es_ES": "Completado"
-                }
+                "name": "Completed"
               },
               {
                 "value": "DR",
-                "name": "Draft",
-                "labels": {
-                  "es_ES": "Borrador"
-                }
+                "name": "Draft"
               },
               {
                 "value": "NA",
-                "name": "Not Accepted",
-                "labels": {
-                  "es_ES": "No aprobado"
-                }
+                "name": "Not Accepted"
               },
               {
                 "value": "WP",
-                "name": "Not Paid",
-                "labels": {
-                  "es_ES": "Pendiente de Pago"
-                }
+                "name": "Not Paid"
               },
               {
                 "value": "RE",
-                "name": "Re-Opened",
-                "labels": {
-                  "es_ES": "Reabierto"
-                }
+                "name": "Re-Opened"
               },
               {
                 "value": "TEMP",
-                "name": "Temporal",
-                "labels": {
-                  "es_ES": "Temporal"
-                }
+                "name": "Temporal"
               },
               {
                 "value": "IP",
-                "name": "Under Way",
-                "labels": {
-                  "es_ES": "En curso"
-                }
+                "name": "Under Way"
               },
               {
                 "value": "??",
-                "name": "Unknown",
-                "labels": {
-                  "es_ES": "Desconocido"
-                }
+                "name": "Unknown"
               },
               {
                 "value": "VO",
-                "name": "Voided",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "Voided"
               }
             ],
             "defaultValue": "DR",
@@ -1045,31 +1015,19 @@
             "enumValues": [
               {
                 "value": "F6",
-                "name": "Accounting document",
-                "labels": {
-                  "es_ES": "Justificante contable"
-                }
+                "name": "Accounting document"
               },
               {
                 "value": "LC",
-                "name": "Aduanas - Liquidación complementaria",
-                "labels": {
-                  "es_ES": "Aduanas - Liquidación complementaria"
-                }
+                "name": "Aduanas - Liquidación complementaria"
               },
               {
                 "value": "F5",
-                "name": "Import (DUA)",
-                "labels": {
-                  "es_ES": "Importación (DUA)"
-                }
+                "name": "Import (DUA)"
               },
               {
                 "value": "F1",
-                "name": "Invoice",
-                "labels": {
-                  "es_ES": "Factura"
-                }
+                "name": "Invoice"
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -1087,40 +1045,6 @@
             }
           },
           {
-            "name": "aeatsiiPurDescription",
-            "apiKey": "aeatsiiPurDescription",
-            "column": "EM_Aeatsii_Pur_Description_ID",
-            "label": "SII purchase description master",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "derivation": {
-              "type": "lookup",
-              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN (@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (null)\n\t\t\t\t\t\t\t\tELSE (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
-            },
-            "reference": "aeatsii_description",
-            "inputMode": "selector",
-            "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN (@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (null)\n\t\t\t\t\t\t\t\tELSE (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual",
-            "validation": {
-              "maxLength": 32
-            },
-            "callout": {
-              "className": "org.openbravo.module.sii.callouts.SiiDescriptionCallout"
-            },
-            "displayLogic": {
-              "raw": "@AEATSII_AcogidaSII2@='Y'",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='N')) & @Processed@='Y'",
-              "evaluable": true,
-              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || (record['documentStatus'] === 'VO' && record['em_aeatsii_issent'] === 'N')) && record['processed'] === true"
-            }
-          },
-          {
             "name": "aeatsiiDescripcionSii",
             "apiKey": "aeatsiiDescripcionSii",
             "column": "EM_Aeatsii_Descripcion_Sii",
@@ -1130,7 +1054,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "derivation": {
               "type": "lookup",
               "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
@@ -1167,112 +1091,40 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors",
-                "labels": {
-                  "es_ES": "Aceptado con errores"
-                }
+                "name": "Accepted with errors"
               },
               {
                 "value": "AN",
-                "name": "Annulled",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "Annulled"
               },
               {
                 "value": "IN",
-                "name": "Incorrect",
-                "labels": {
-                  "es_ES": "Incorrecto"
-                }
+                "name": "Incorrect"
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII",
-                "labels": {
-                  "es_ES": "No Declarable en SII"
-                }
+                "name": "Not Registrable to SII"
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII",
-                "labels": {
-                  "es_ES": "Pendiente de enviar a SII"
-                }
+                "name": "Pending to send to SII"
               },
               {
                 "value": "CO",
-                "name": "Right",
-                "labels": {
-                  "es_ES": "Correcto"
-                }
+                "name": "Right"
               },
               {
                 "value": "EE",
-                "name": "Sending error",
-                "labels": {
-                  "es_ES": "Error al enviar"
-                }
+                "name": "Sending error"
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed",
-                "labels": {
-                  "es_ES": "Baja"
-                }
+                "name": "Unsubscribed"
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
-            },
-            "displayLogic": {
-              "raw": "@AEATSII_AcogidaSII2@='Y'",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "true",
-              "evaluable": true,
-              "js": "true"
-            }
-          },
-          {
-            "name": "aeatsiiEjercicio",
-            "apiKey": "aeatsiiEjercicio",
-            "column": "EM_Aeatsii_Ejercicio",
-            "label": "SII exercise",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "validation": {
-              "maxLength": 4
-            },
-            "displayLogic": {
-              "raw": "@AEATSII_AcogidaSII2@='Y'",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "true",
-              "evaluable": true,
-              "js": "true"
-            }
-          },
-          {
-            "name": "aeatsiiPeriodo",
-            "apiKey": "aeatsiiPeriodo",
-            "column": "EM_Aeatsii_Periodo",
-            "label": "SII period",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "validation": {
-              "maxLength": 2
             },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII2@='Y'",
@@ -1661,13 +1513,6 @@
             "derivation": {
               "type": "lookup",
               "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
-            }
-          },
-          {
-            "name": "aeatsiiPurDescription",
-            "derivation": {
-              "type": "lookup",
-              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN (@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (null)\n\t\t\t\t\t\t\t\tELSE (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
             }
           },
           {
@@ -2338,122 +2183,71 @@
             "enumValues": [
               {
                 "value": "INTRES_15",
-                "name": "Arrendamiento financiero (alquiler­compra)",
-                "labels": {
-                  "es_ES": "Arrendamiento financiero (alquiler­compra)"
-                }
+                "name": "Arrendamiento financiero (alquiler­compra)"
               },
               {
                 "value": "INTRES_11",
-                "name": "Compra/venta en firme",
-                "labels": {
-                  "es_ES": "Compra/venta en firme"
-                }
+                "name": "Compra/venta en firme"
               },
               {
                 "value": "INTRES_14",
-                "name": "Compras por particulares",
-                "labels": {
-                  "es_ES": "Compras por particulares"
-                }
+                "name": "Compras por particulares"
               },
               {
                 "value": "INTRES_21",
-                "name": "Devolución de mercancías,",
-                "labels": {
-                  "es_ES": "Devolución de mercancías,"
-                }
+                "name": "Devolución de mercancías,"
               },
               {
                 "value": "INTRES_12",
-                "name": "Entrega para venta a la vista o de prueba",
-                "labels": {
-                  "es_ES": "Entrega para venta a la vista o de prueba"
-                }
+                "name": "Entrega para venta a la vista o de prueba"
               },
               {
                 "value": "INTRES_31",
-                "name": "Mercancías suministradas financiados CE",
-                "labels": {
-                  "es_ES": "Mercancías suministradas financiados CE"
-                }
+                "name": "Mercancías suministradas financiados CE"
               },
               {
                 "value": "INTRES_40",
-                "name": "Operaciones con miras al trabajo por encargo",
-                "labels": {
-                  "es_ES": "Operaciones con miras al trabajo por encargo"
-                }
+                "name": "Operaciones con miras al trabajo por encargo"
               },
               {
                 "value": "INTRES_70",
-                "name": "Operaciones en programas comunes de defensa/intergubernament",
-                "labels": {
-                  "es_ES": "Operaciones en programas comunes de defensa/intergubernament"
-                }
+                "name": "Operaciones en programas comunes de defensa/intergubernament"
               },
               {
                 "value": "INTRES_50",
-                "name": "Operaciones tras el trabajo por encargo",
-                "labels": {
-                  "es_ES": "Operaciones tras el trabajo por encargo"
-                }
+                "name": "Operaciones tras el trabajo por encargo"
               },
               {
                 "value": "INTRES_33",
-                "name": "Otras entregas de ayuda (particulares, orgs. no gubernamenta",
-                "labels": {
-                  "es_ES": "Otras entregas de ayuda (particulares, orgs. no gubernamenta"
-                }
+                "name": "Otras entregas de ayuda (particulares, orgs. no gubernamenta"
               },
               {
                 "value": "INTRES_32",
-                "name": "Otras entregas de ayuda gubernamental",
-                "labels": {
-                  "es_ES": "Otras entregas de ayuda gubernamental"
-                }
+                "name": "Otras entregas de ayuda gubernamental"
               },
               {
                 "value": "INTRES_90",
-                "name": "Otras transacciones",
-                "labels": {
-                  "es_ES": "Otras transacciones"
-                }
+                "name": "Otras transacciones"
               },
               {
                 "value": "INTRES_34",
-                "name": "Otros",
-                "labels": {
-                  "es_ES": "Otros"
-                }
+                "name": "Otros"
               },
               {
                 "value": "INTRES_80",
-                "name": "Suministro de materiales de construcción y maquinaria",
-                "labels": {
-                  "es_ES": "Suministro de materiales de construcción y maquinaria"
-                }
+                "name": "Suministro de materiales de construcción y maquinaria"
               },
               {
                 "value": "INTRES_22",
-                "name": "Sustitución de mercancías devueltas",
-                "labels": {
-                  "es_ES": "Sustitución de mercancías devueltas"
-                }
+                "name": "Sustitución de mercancías devueltas"
               },
               {
                 "value": "INTRES_23",
-                "name": "Sustitución de mercancías no devueltas,",
-                "labels": {
-                  "es_ES": "Sustitución de mercancías no devueltas,"
-                }
+                "name": "Sustitución de mercancías no devueltas,"
               },
               {
                 "value": "INTRES_13",
-                "name": "Trueque (compensación en especie)",
-                "labels": {
-                  "es_ES": "Trueque (compensación en especie)"
-                }
+                "name": "Trueque (compensación en especie)"
               }
             ],
             "validation": {
@@ -2479,59 +2273,35 @@
             "enumValues": [
               {
                 "value": "4",
-                "name": "Air transport",
-                "labels": {
-                  "es_ES": "Transporte Aéreo"
-                }
+                "name": "Air transport"
               },
               {
                 "value": "7",
-                "name": "Fixed transport installations",
-                "labels": {
-                  "es_ES": "Instalaciones fijas de transporte"
-                }
+                "name": "Fixed transport installations"
               },
               {
                 "value": "8",
-                "name": "Inland waterway transport",
-                "labels": {
-                  "es_ES": "Transporte de navegación interior"
-                }
+                "name": "Inland waterway transport"
               },
               {
                 "value": "9",
-                "name": "Own propulsion",
-                "labels": {
-                  "es_ES": "Autopropulsión"
-                }
+                "name": "Own propulsion"
               },
               {
                 "value": "5",
-                "name": "Postal consignment",
-                "labels": {
-                  "es_ES": "Envíos postales"
-                }
+                "name": "Postal consignment"
               },
               {
                 "value": "2",
-                "name": "Rail transport",
-                "labels": {
-                  "es_ES": "Transporte por ferrocaril"
-                }
+                "name": "Rail transport"
               },
               {
                 "value": "3",
-                "name": "Road transport",
-                "labels": {
-                  "es_ES": "Transporte por Carretera"
-                }
+                "name": "Road transport"
               },
               {
                 "value": "1",
-                "name": "Sea transport",
-                "labels": {
-                  "es_ES": "Transporte marítimo"
-                }
+                "name": "Sea transport"
               }
             ],
             "validation": {
@@ -2557,416 +2327,239 @@
             "enumValues": [
               {
                 "value": "INTRES_0101",
-                "name": "ALAVA AEROPUERTO",
-                "labels": {
-                  "es_ES": "ALAVA AEROPUERTO"
-                }
+                "name": "ALAVA AEROPUERTO"
               },
               {
                 "value": "INTRES_0717",
-                "name": "ALCUDIA MARITIMA",
-                "labels": {
-                  "es_ES": "ALCUDIA MARITIMA"
-                }
+                "name": "ALCUDIA MARITIMA"
               },
               {
                 "value": "INTRES_1131",
-                "name": "ALGECIRAS MARITIMA",
-                "labels": {
-                  "es_ES": "ALGECIRAS MARITIMA"
-                }
+                "name": "ALGECIRAS MARITIMA"
               },
               {
                 "value": "INTRES_0301",
-                "name": "ALICANTE AEROPUERTO",
-                "labels": {
-                  "es_ES": "ALICANTE AEROPUERTO"
-                }
+                "name": "ALICANTE AEROPUERTO"
               },
               {
                 "value": "INTRES_0311",
-                "name": "ALICANTE MARITIMA",
-                "labels": {
-                  "es_ES": "ALICANTE MARITIMA"
-                }
+                "name": "ALICANTE MARITIMA"
               },
               {
                 "value": "INTRES_0401",
-                "name": "ALMERIA AEROPUERTO",
-                "labels": {
-                  "es_ES": "ALMERIA AEROPUERTO"
-                }
+                "name": "ALMERIA AEROPUERTO"
               },
               {
                 "value": "INTRES_0411",
-                "name": "ALMERIA MARITIMA",
-                "labels": {
-                  "es_ES": "ALMERIA MARITIMA"
-                }
+                "name": "ALMERIA MARITIMA"
               },
               {
                 "value": "INTRES_3301",
-                "name": "ASTURIAS AEROPUERTO",
-                "labels": {
-                  "es_ES": "ASTURIAS AEROPUERTO"
-                }
+                "name": "ASTURIAS AEROPUERTO"
               },
               {
                 "value": "INTRES_3331",
-                "name": "AVILES MARITIMA",
-                "labels": {
-                  "es_ES": "AVILES MARITIMA"
-                }
+                "name": "AVILES MARITIMA"
               },
               {
                 "value": "INTRES_0801",
-                "name": "BARCELONA AEROPUERTO",
-                "labels": {
-                  "es_ES": "BARCELONA AEROPUERTO"
-                }
+                "name": "BARCELONA AEROPUERTO"
               },
               {
                 "value": "INTRES_812",
-                "name": "BARCELONA MARITIMA EXP",
-                "labels": {
-                  "es_ES": "BARCELONA MARITIMA EXP"
-                }
+                "name": "BARCELONA MARITIMA EXP"
               },
               {
                 "value": "INTRES_0811",
-                "name": "BARCELONA MARITIMA IMP",
-                "labels": {
-                  "es_ES": "BARCELONA MARITIMA IMP"
-                }
+                "name": "BARCELONA MARITIMA IMP"
               },
               {
                 "value": "INTRES_4801",
-                "name": "BILBAO AEROPUERTO",
-                "labels": {
-                  "es_ES": "BILBAO AEROPUERTO"
-                }
+                "name": "BILBAO AEROPUERTO"
               },
               {
                 "value": "INTRES_4811",
-                "name": "BILBAO MARITIMA",
-                "labels": {
-                  "es_ES": "BILBAO MARITIMA"
-                }
+                "name": "BILBAO MARITIMA"
               },
               {
                 "value": "INTRES_1111",
-                "name": "CADIZ MARITIMA",
-                "labels": {
-                  "es_ES": "CADIZ MARITIMA"
-                }
+                "name": "CADIZ MARITIMA"
               },
               {
                 "value": "INTRES_3011",
-                "name": "CARTAGENA MARITIMA",
-                "labels": {
-                  "es_ES": "CARTAGENA MARITIMA"
-                }
+                "name": "CARTAGENA MARITIMA"
               },
               {
                 "value": "INTRES_1211",
-                "name": "CASTELLON MARIMA",
-                "labels": {
-                  "es_ES": "CASTELLON MARIMA"
-                }
+                "name": "CASTELLON MARIMA"
               },
               {
                 "value": "INTRES_1521",
-                "name": "EL FERROL MARITIMA",
-                "labels": {
-                  "es_ES": "EL FERROL MARITIMA"
-                }
+                "name": "EL FERROL MARITIMA"
               },
               {
                 "value": "INTRES_4631",
-                "name": "GANDIA MARITIMA",
-                "labels": {
-                  "es_ES": "GANDIA MARITIMA"
-                }
+                "name": "GANDIA MARITIMA"
               },
               {
                 "value": "INTRES_1701",
-                "name": "GERONA AEROPUERTO",
-                "labels": {
-                  "es_ES": "GERONA AEROPUERTO"
-                }
+                "name": "GERONA AEROPUERTO"
               },
               {
                 "value": "INTRES_3311",
-                "name": "GIJON MARITIMA",
-                "labels": {
-                  "es_ES": "GIJON MARITIMA"
-                }
+                "name": "GIJON MARITIMA"
               },
               {
                 "value": "INTRES_1801",
-                "name": "GRANDA AEROPUERTO",
-                "labels": {
-                  "es_ES": "GRANDA AEROPUERTO"
-                }
+                "name": "GRANDA AEROPUERTO"
               },
               {
                 "value": "INTRES_2001",
-                "name": "GUIPUZCOA AEROPUERTO",
-                "labels": {
-                  "es_ES": "GUIPUZCOA AEROPUERTO"
-                }
+                "name": "GUIPUZCOA AEROPUERTO"
               },
               {
                 "value": "INTRES_2111",
-                "name": "HUELVA MARITIMA",
-                "labels": {
-                  "es_ES": "HUELVA MARITIMA"
-                }
+                "name": "HUELVA MARITIMA"
               },
               {
                 "value": "INTRES_0707",
-                "name": "IBIZA AEROPUERTO",
-                "labels": {
-                  "es_ES": "IBIZA AEROPUERTO"
-                }
+                "name": "IBIZA AEROPUERTO"
               },
               {
                 "value": "INTRES_0721",
-                "name": "IBIZA MARITIMA",
-                "labels": {
-                  "es_ES": "IBIZA MARITIMA"
-                }
+                "name": "IBIZA MARITIMA"
               },
               {
                 "value": "INTRES_1101",
-                "name": "JEREZ AEROPUERTO",
-                "labels": {
-                  "es_ES": "JEREZ AEROPUERTO"
-                }
+                "name": "JEREZ AEROPUERTO"
               },
               {
                 "value": "INTRES_1501",
-                "name": "LA CORUNA AEROPUERTO",
-                "labels": {
-                  "es_ES": "LA CORUNA AEROPUERTO"
-                }
+                "name": "LA CORUNA AEROPUERTO"
               },
               {
                 "value": "INTRES_1511",
-                "name": "LA CORUNA MARITIMA",
-                "labels": {
-                  "es_ES": "LA CORUNA MARITIMA"
-                }
+                "name": "LA CORUNA MARITIMA"
               },
               {
                 "value": "INTRES_2801",
-                "name": "MADRID AEROPUERTO",
-                "labels": {
-                  "es_ES": "MADRID AEROPUERTO"
-                }
+                "name": "MADRID AEROPUERTO"
               },
               {
                 "value": "INTRES_2901",
-                "name": "MALAGA AEROPUERTO",
-                "labels": {
-                  "es_ES": "MALAGA AEROPUERTO"
-                }
+                "name": "MALAGA AEROPUERTO"
               },
               {
                 "value": "INTRES_2911",
-                "name": "MALAGA MARITIMA",
-                "labels": {
-                  "es_ES": "MALAGA MARITIMA"
-                }
+                "name": "MALAGA MARITIMA"
               },
               {
                 "value": "INTRES_3621",
-                "name": "MARTIN MARITIMA",
-                "labels": {
-                  "es_ES": "MARTIN MARITIMA"
-                }
+                "name": "MARTIN MARITIMA"
               },
               {
                 "value": "INTRES_0708",
-                "name": "MOHAN AEROPUERTO",
-                "labels": {
-                  "es_ES": "MOHAN AEROPUERTO"
-                }
+                "name": "MOHAN AEROPUERTO"
               },
               {
                 "value": "INTRES_0731",
-                "name": "MOHAN MARITIMA",
-                "labels": {
-                  "es_ES": "MOHAN MARITIMA"
-                }
+                "name": "MOHAN MARITIMA"
               },
               {
                 "value": "INTRES_1811",
-                "name": "MORIL MARIMA",
-                "labels": {
-                  "es_ES": "MORIL MARIMA"
-                }
+                "name": "MORIL MARIMA"
               },
               {
                 "value": "INTRES_3001",
-                "name": "MURCIA AEROPUERTO",
-                "labels": {
-                  "es_ES": "MURCIA AEROPUERTO"
-                }
+                "name": "MURCIA AEROPUERTO"
               },
               {
                 "value": "INTRES_0711",
-                "name": "P . MALLORCA MARITIMA",
-                "labels": {
-                  "es_ES": "P . MALLORCA MARITIMA"
-                }
+                "name": "P . MALLORCA MARITIMA"
               },
               {
                 "value": "INTRES_0701",
-                "name": "P. MALLORCA AEROPUERTO",
-                "labels": {
-                  "es_ES": "P. MALLORCA AEROPUERTO"
-                }
+                "name": "P. MALLORCA AEROPUERTO"
               },
               {
                 "value": "INTRES_1711",
-                "name": "PALAMOS MARITIMA",
-                "labels": {
-                  "es_ES": "PALAMOS MARITIMA"
-                }
+                "name": "PALAMOS MARITIMA"
               },
               {
                 "value": "INTRES_2011",
-                "name": "PASAJES MARITIMA",
-                "labels": {
-                  "es_ES": "PASAJES MARITIMA"
-                }
+                "name": "PASAJES MARITIMA"
               },
               {
                 "value": "INTRES_1121",
-                "name": "PUERTO DE SANTA MARIA",
-                "labels": {
-                  "es_ES": "PUERTO DE SANTA MARIA"
-                }
+                "name": "PUERTO DE SANTA MARIA"
               },
               {
                 "value": "INTRES_2711",
-                "name": "RIBADEO MARITIMA",
-                "labels": {
-                  "es_ES": "RIBADEO MARITIMA"
-                }
+                "name": "RIBADEO MARITIMA"
               },
               {
                 "value": "INTRES_4621",
-                "name": "SAGUNTO MARITIMA",
-                "labels": {
-                  "es_ES": "SAGUNTO MARITIMA"
-                }
+                "name": "SAGUNTO MARITIMA"
               },
               {
                 "value": "INTRES_4321",
-                "name": "SAN CARLOS MARITIMA",
-                "labels": {
-                  "es_ES": "SAN CARLOS MARITIMA"
-                }
+                "name": "SAN CARLOS MARITIMA"
               },
               {
                 "value": "INTRES_3901",
-                "name": "SANTANDER AUEROPUERTO",
-                "labels": {
-                  "es_ES": "SANTANDER AUEROPUERTO"
-                }
+                "name": "SANTANDER AUEROPUERTO"
               },
               {
                 "value": "INTRES_3911",
-                "name": "SANTANDER MARITIMA",
-                "labels": {
-                  "es_ES": "SANTANDER MARITIMA"
-                }
+                "name": "SANTANDER MARITIMA"
               },
               {
                 "value": "INTRES_1507",
-                "name": "SANTIAGO AEROPUERTO",
-                "labels": {
-                  "es_ES": "SANTIAGO AEROPUERTO"
-                }
+                "name": "SANTIAGO AEROPUERTO"
               },
               {
                 "value": "INTRES_4101",
-                "name": "SEVILLA AEROPUERTO",
-                "labels": {
-                  "es_ES": "SEVILLA AEROPUERTO"
-                }
+                "name": "SEVILLA AEROPUERTO"
               },
               {
                 "value": "INTRES_4111",
-                "name": "SEVILLA MARITIMA",
-                "labels": {
-                  "es_ES": "SEVILLA MARITIMA"
-                }
+                "name": "SEVILLA MARITIMA"
               },
               {
                 "value": "INTRES_4301",
-                "name": "TARRAGONA AEROPUERTO",
-                "labels": {
-                  "es_ES": "TARRAGONA AEROPUERTO"
-                }
+                "name": "TARRAGONA AEROPUERTO"
               },
               {
                 "value": "INTRES_4311",
-                "name": "TARRAGONA MARITIMA",
-                "labels": {
-                  "es_ES": "TARRAGONA MARITIMA"
-                }
+                "name": "TARRAGONA MARITIMA"
               },
               {
                 "value": "INTRES_4601",
-                "name": "VALENCIA AEROPUERTO",
-                "labels": {
-                  "es_ES": "VALENCIA AEROPUERTO"
-                }
+                "name": "VALENCIA AEROPUERTO"
               },
               {
                 "value": "INTRES_4611",
-                "name": "VALENCIA MARITIMA",
-                "labels": {
-                  "es_ES": "VALENCIA MARITIMA"
-                }
+                "name": "VALENCIA MARITIMA"
               },
               {
                 "value": "INTRES_4701",
-                "name": "VALLADOLID AEROPUERTO",
-                "labels": {
-                  "es_ES": "VALLADOLID AEROPUERTO"
-                }
+                "name": "VALLADOLID AEROPUERTO"
               },
               {
                 "value": "INTRES_3601",
-                "name": "VIGO AEROPUERTO",
-                "labels": {
-                  "es_ES": "VIGO AEROPUERTO"
-                }
+                "name": "VIGO AEROPUERTO"
               },
               {
                 "value": "INTRES_3611",
-                "name": "VIGO MARITIMA",
-                "labels": {
-                  "es_ES": "VIGO MARITIMA"
-                }
+                "name": "VIGO MARITIMA"
               },
               {
                 "value": "INTRES_3631",
-                "name": "VILLAGARCIA MARITIMA",
-                "labels": {
-                  "es_ES": "VILLAGARCIA MARITIMA"
-                }
+                "name": "VILLAGARCIA MARITIMA"
               },
               {
                 "value": "INTRES_5001",
-                "name": "ZARAGOZA AEROPUERTO",
-                "labels": {
-                  "es_ES": "ZARAGOZA AEROPUERTO"
-                }
+                "name": "ZARAGOZA AEROPUERTO"
               }
             ],
             "validation": {
@@ -2996,73 +2589,43 @@
             "enumValues": [
               {
                 "value": "INTRES_Acq_1",
-                "name": "Comunitarias destino final Estado miembro introducción",
-                "labels": {
-                  "es_ES": "Comunitarias destino final Estado miembro introducción"
-                }
+                "name": "Comunitarias destino final Estado miembro introducción"
               },
               {
                 "value": "INTRES_Acq_4",
-                "name": "Comunitarias devueltas al mismo estado expedidas",
-                "labels": {
-                  "es_ES": "Comunitarias devueltas al mismo estado expedidas"
-                }
+                "name": "Comunitarias devueltas al mismo estado expedidas"
               },
               {
                 "value": "INTRES_Acq_5",
-                "name": "Comunitarias devueltas transformadas",
-                "labels": {
-                  "es_ES": "Comunitarias devueltas transformadas"
-                }
+                "name": "Comunitarias devueltas transformadas"
               },
               {
                 "value": "INTRES_Del_5",
-                "name": "Salida de mercancías tras transformación",
-                "labels": {
-                  "es_ES": "Salida de mercancías tras transformación"
-                }
+                "name": "Salida de mercancías tras transformación"
               },
               {
                 "value": "INTRES_Del_1",
-                "name": "Salida mercancías a estado miembro",
-                "labels": {
-                  "es_ES": "Salida mercancías a estado miembro"
-                }
+                "name": "Salida mercancías a estado miembro"
               },
               {
                 "value": "INTRES_Del_4",
-                "name": "Salida para devolución de mercancías",
-                "labels": {
-                  "es_ES": "Salida para devolución de mercancías"
-                }
+                "name": "Salida para devolución de mercancías"
               },
               {
                 "value": "INTRES_Del_2",
-                "name": "Salida temporal para reintroducir en el mismo estado",
-                "labels": {
-                  "es_ES": "Salida temporal para reintroducir en el mismo estado"
-                }
+                "name": "Salida temporal para reintroducir en el mismo estado"
               },
               {
                 "value": "INTRES_Del_3",
-                "name": "Salida temporal para reintroducir tras transformación",
-                "labels": {
-                  "es_ES": "Salida temporal para reintroducir tras transformación"
-                }
+                "name": "Salida temporal para reintroducir tras transformación"
               },
               {
                 "value": "INTRES_Acq_3",
-                "name": "Temporales a otro Estado miembro con transformación",
-                "labels": {
-                  "es_ES": "Temporales a otro Estado miembro con transformación"
-                }
+                "name": "Temporales a otro Estado miembro con transformación"
               },
               {
                 "value": "INTRES_Acq_2",
-                "name": "Temporales para ser reexpedidas a un Estado miembro",
-                "labels": {
-                  "es_ES": "Temporales para ser reexpedidas a un Estado miembro"
-                }
+                "name": "Temporales para ser reexpedidas a un Estado miembro"
               }
             ],
             "validation": {
@@ -3567,59 +3130,35 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment",
-                "labels": {
-                  "es_ES": "A Pagar"
-                }
+                "name": "Awaiting Payment"
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution",
-                "labels": {
-                  "es_ES": "A Ejecutar"
-                }
+                "name": "Awaiting Execution"
               },
               {
                 "value": "RPVOID",
-                "name": "Void",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "Void"
               },
               {
                 "value": "PPM",
-                "name": "Payment Made",
-                "labels": {
-                  "es_ES": "Pagado"
-                }
+                "name": "Payment Made"
               },
               {
                 "value": "RPR",
-                "name": "Payment Received",
-                "labels": {
-                  "es_ES": "Cobrado"
-                }
+                "name": "Payment Received"
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared",
-                "labels": {
-                  "es_ES": "Cobro depositado"
-                }
+                "name": "Deposited not Cleared"
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared",
-                "labels": {
-                  "es_ES": "Pago reintegrado"
-                }
+                "name": "Withdrawn not Cleared"
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared",
-                "labels": {
-                  "es_ES": "Conciliado"
-                }
+                "name": "Payment Cleared"
               }
             ],
             "validation": {
@@ -4735,31 +4274,19 @@
             "enumValues": [
               {
                 "value": "A",
-                "name": "Actual",
-                "labels": {
-                  "es_ES": "Real"
-                }
+                "name": "Actual"
               },
               {
                 "value": "B",
-                "name": "Budget",
-                "labels": {
-                  "es_ES": "Presupuesto"
-                }
+                "name": "Budget"
               },
               {
                 "value": "E",
-                "name": "Encumbrance",
-                "labels": {
-                  "es_ES": "Gravamen"
-                }
+                "name": "Encumbrance"
               },
               {
                 "value": "S",
-                "name": "Statistical",
-                "labels": {
-                  "es_ES": "Estadística"
-                }
+                "name": "Statistical"
               }
             ],
             "validation": {
@@ -4825,59 +4352,35 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors",
-                "labels": {
-                  "es_ES": "Aceptado con errores"
-                }
+                "name": "Accepted with errors"
               },
               {
                 "value": "AN",
-                "name": "Annulled",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "Annulled"
               },
               {
                 "value": "IN",
-                "name": "Incorrect",
-                "labels": {
-                  "es_ES": "Incorrecto"
-                }
+                "name": "Incorrect"
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII",
-                "labels": {
-                  "es_ES": "No Declarable en SII"
-                }
+                "name": "Not Registrable to SII"
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII",
-                "labels": {
-                  "es_ES": "Pendiente de enviar a SII"
-                }
+                "name": "Pending to send to SII"
               },
               {
                 "value": "CO",
-                "name": "Right",
-                "labels": {
-                  "es_ES": "Correcto"
-                }
+                "name": "Right"
               },
               {
                 "value": "EE",
-                "name": "Sending error",
-                "labels": {
-                  "es_ES": "Error al enviar"
-                }
+                "name": "Sending error"
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed",
-                "labels": {
-                  "es_ES": "Baja"
-                }
+                "name": "Unsubscribed"
               }
             ],
             "validation": {
@@ -4899,24 +4402,15 @@
             "enumValues": [
               {
                 "value": "A0",
-                "name": "Alta en SII (A0)",
-                "labels": {
-                  "es_ES": "Alta en SII (A0)"
-                }
+                "name": "Alta en SII (A0)"
               },
               {
                 "value": "A1",
-                "name": "Modification to SII (A1)",
-                "labels": {
-                  "es_ES": "Modificación a SII (A1)"
-                }
+                "name": "Modification to SII (A1)"
               },
               {
                 "value": "Q",
-                "name": "SII Query",
-                "labels": {
-                  "es_ES": "Consulta SII"
-                }
+                "name": "SII Query"
               }
             ],
             "validation": {
@@ -4952,38 +4446,23 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - Not contrastable",
-                "labels": {
-                  "es_ES": "1 - No contrastable"
-                }
+                "name": "1 - Not contrastable"
               },
               {
                 "value": "2",
-                "name": "2 - In contrasting process",
-                "labels": {
-                  "es_ES": "2 - En proceso de contraste"
-                }
+                "name": "2 - In contrasting process"
               },
               {
                 "value": "3",
-                "name": "3 - Not contrasted",
-                "labels": {
-                  "es_ES": "3 - No contrastada"
-                }
+                "name": "3 - Not contrasted"
               },
               {
                 "value": "4",
-                "name": "4 - Partially contrasted",
-                "labels": {
-                  "es_ES": "4 - Parcialmente constrastada"
-                }
+                "name": "4 - Partially contrasted"
               },
               {
                 "value": "5",
-                "name": "5 - Contrasted",
-                "labels": {
-                  "es_ES": "5 - Contrastada"
-                }
+                "name": "5 - Contrasted"
               }
             ],
             "validation": {
@@ -5749,7 +5228,7 @@
             "apiKey": "aeatsiiPurDescription",
             "column": "EM_Aeatsii_Pur_Description_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -5789,7 +5268,7 @@
             "apiKey": "aeatsiiEjercicio",
             "column": "EM_Aeatsii_Ejercicio",
             "type": "integer",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -5797,7 +5276,7 @@
             "apiKey": "aeatsiiPeriodo",
             "column": "EM_Aeatsii_Periodo",
             "type": "integer",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -9937,14 +9416,6 @@
       },
       {
         "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "column": "EM_Aeatsii_Pur_Description_ID",
-        "reference": "aeatsii_description",
-        "inputMode": "selector",
-        "url": "/sws/neo/purchase-invoice/header/selectors/aeatsiiPurDescription"
-      },
-      {
-        "entity": "header",
         "field": "aeatsiiCauseExemption",
         "column": "EM_Aeatsii_Cause_Exemption_ID",
         "reference": "aeatsii_cause_exemption",
@@ -10914,14 +10385,6 @@
         "description": "Default value for 'aeatsiiIssent' in header should be a string"
       },
       {
-        "id": "t-default-value-type-header-aeatsiiPurDescription",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "runner": "node",
-        "description": "Default value for 'aeatsiiPurDescription' in header should be a string"
-      },
-      {
         "id": "t-default-value-type-header-currency",
         "category": "default-value-type",
         "entity": "header",
@@ -11138,14 +10601,6 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-header-aeatsiiEjercicio",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiEjercicio' in header should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-header-aeatsiiEstado",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -11168,22 +10623,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-aeatsiiPeriodo",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiPeriodo' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-aeatsiiPurDescription",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiPurDescription' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-costcenter",
@@ -11338,14 +10777,6 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-header-aeatsiiEjercicio",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiEjercicio' in header should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-header-aeatsiiEstado",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -11368,22 +10799,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-aeatsiiPeriodo",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiPeriodo' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-aeatsiiPurDescription",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiPurDescription' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-costcenter",
@@ -11834,14 +11249,6 @@
         "description": "Field 'aeatsiiDescripcionSii' should be present in header"
       },
       {
-        "id": "t-field-presence-header-aeatsiiEjercicio",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Field 'aeatsiiEjercicio' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-aeatsiiEstado",
         "category": "field-presence",
         "entity": "header",
@@ -11872,22 +11279,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-aeatsiiPeriodo",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Field 'aeatsiiPeriodo' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-aeatsiiPurDescription",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "runner": "node",
-        "description": "Field 'aeatsiiPurDescription' should be present in header"
       },
       {
         "id": "t-field-presence-header-businessPartner",
@@ -13066,14 +12457,6 @@
         "description": "Field 'aeatsiiDescripcionSii' should have type 'string' in header"
       },
       {
-        "id": "t-field-type-header-aeatsiiEjercicio",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Field 'aeatsiiEjercicio' should have type 'number' in header"
-      },
-      {
         "id": "t-field-type-header-aeatsiiEstado",
         "category": "field-type",
         "entity": "header",
@@ -13104,22 +12487,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should have type 'boolean' in header"
-      },
-      {
-        "id": "t-field-type-header-aeatsiiPeriodo",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Field 'aeatsiiPeriodo' should have type 'number' in header"
-      },
-      {
-        "id": "t-field-type-header-aeatsiiPurDescription",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "runner": "node",
-        "description": "Field 'aeatsiiPurDescription' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-businessPartner",
@@ -14050,14 +13417,6 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiEjercicio",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiEjercicio' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiEstado",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -14080,22 +13439,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiIssent' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiPeriodo",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiPeriodo' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiPurDescription",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiPurDescription' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-businessPartner",
@@ -14610,14 +13953,6 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-aeatsiiEjercicio",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiEjercicio' in header should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-header-aeatsiiEstado",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -14640,22 +13975,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiIssent' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-aeatsiiPeriodo",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiPeriodo' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-aeatsiiPurDescription",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiPurDescription' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-businessPartner",
@@ -15449,14 +14768,6 @@
         "field": "aeatsiiCauseExemption",
         "runner": "node",
         "description": "Selector endpoint for 'aeatsiiCauseExemption' in header should exist"
-      },
-      {
-        "id": "t-selector-endpoint-header-aeatsiiPurDescription",
-        "category": "selector-endpoint",
-        "entity": "header",
-        "field": "aeatsiiPurDescription",
-        "runner": "node",
-        "description": "Selector endpoint for 'aeatsiiPurDescription' in header should exist"
       },
       {
         "id": "t-selector-endpoint-header-businessPartner",
@@ -16499,6 +15810,14 @@
         "description": "System field 'aeatsiiDup' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-aeatsiiEjercicio",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiEjercicio",
+        "runner": "node",
+        "description": "System field 'aeatsiiEjercicio' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-aeatsiiErrorCode",
         "category": "system-field",
         "entity": "header",
@@ -16593,6 +15912,22 @@
         "field": "aeatsiiMultiDua",
         "runner": "node",
         "description": "System field 'aeatsiiMultiDua' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-aeatsiiPeriodo",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "System field 'aeatsiiPeriodo' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-aeatsiiPurDescription",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiPurDescription",
+        "runner": "node",
+        "description": "System field 'aeatsiiPurDescription' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiSend",
@@ -18447,25 +17782,25 @@
       }
     ],
     "summary": {
-      "total": 996,
+      "total": 979,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
-        "default-value-type": 37,
-        "displaylogic-evaluable": 25,
-        "displaylogic-valid": 25,
-        "field-presence": 154,
-        "field-type": 154,
-        "readonlylogic-evaluable": 70,
-        "readonlylogic-valid": 70,
+        "default-value-type": 36,
+        "displaylogic-evaluable": 22,
+        "displaylogic-valid": 22,
+        "field-presence": 151,
+        "field-type": 151,
+        "readonlylogic-evaluable": 67,
+        "readonlylogic-valid": 67,
         "rule-declared": 23,
         "searchable-filters": 6,
-        "selector-endpoint": 53,
-        "system-field": 327,
+        "selector-endpoint": 52,
+        "system-field": 330,
         "visibility": 13
       },
       "byRunner": {
-        "node": 996,
+        "node": 979,
         "junit": 0
       }
     }

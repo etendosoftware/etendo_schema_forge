@@ -461,12 +461,11 @@
           "form": false
         },
         "aeatsiiPurDescription": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiDescripcionSii": {
           "visibility": "editable",
-          "form": false
+          "form": true
         },
         "aeatsiiCauseExemption": {
           "visibility": "editable",
@@ -494,12 +493,10 @@
           "form": false
         },
         "aeatsiiEjercicio": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiPeriodo": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "tbaiIssent": {
           "visibility": "discarded",

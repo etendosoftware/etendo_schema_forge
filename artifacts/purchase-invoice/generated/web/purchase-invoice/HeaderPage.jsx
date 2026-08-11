@@ -392,14 +392,6 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "aeatsiiPurDescription",
-      "column": "EM_Aeatsii_Pur_Description_ID",
-      "reference": "aeatsii_description",
-      "inputMode": "selector",
-      "url": "/sws/neo/purchase-invoice/header/selectors/aeatsiiPurDescription"
-    },
-    {
-      "entity": "header",
       "field": "aeatsiiCauseExemption",
       "column": "EM_Aeatsii_Cause_Exemption_ID",
       "reference": "aeatsii_cause_exemption",

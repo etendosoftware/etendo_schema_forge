@@ -1,8 +1,8 @@
 {
-  "version": "0.68.0",
+  "version": "0.69.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-07T18:34:30.122Z",
-  "checksum": "018ff15fb8c32bd2",
+  "updatedAt": "2026-08-11T16:50:23.877Z",
+  "checksum": "af7c68bc4c73cb95",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -439,73 +439,43 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed",
-                "labels": {
-                  "es_ES": "Cerrado"
-                }
+                "name": "Closed"
               },
               {
                 "value": "CO",
-                "name": "Completed",
-                "labels": {
-                  "es_ES": "Completado"
-                }
+                "name": "Completed"
               },
               {
                 "value": "DR",
-                "name": "Draft",
-                "labels": {
-                  "es_ES": "Borrador"
-                }
+                "name": "Draft"
               },
               {
                 "value": "NA",
-                "name": "Not Accepted",
-                "labels": {
-                  "es_ES": "No aprobado"
-                }
+                "name": "Not Accepted"
               },
               {
                 "value": "WP",
-                "name": "Not Paid",
-                "labels": {
-                  "es_ES": "Pendiente de Pago"
-                }
+                "name": "Not Paid"
               },
               {
                 "value": "RE",
-                "name": "Re-Opened",
-                "labels": {
-                  "es_ES": "Reabierto"
-                }
+                "name": "Re-Opened"
               },
               {
                 "value": "TEMP",
-                "name": "Temporal",
-                "labels": {
-                  "es_ES": "Temporal"
-                }
+                "name": "Temporal"
               },
               {
                 "value": "IP",
-                "name": "Under Way",
-                "labels": {
-                  "es_ES": "En curso"
-                }
+                "name": "Under Way"
               },
               {
                 "value": "??",
-                "name": "Unknown",
-                "labels": {
-                  "es_ES": "Desconocido"
-                }
+                "name": "Unknown"
               },
               {
                 "value": "VO",
-                "name": "Voided",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "Voided"
               }
             ],
             "defaultValue": "DR",
@@ -937,7 +907,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "validation": {
               "maxLength": 500
             },
@@ -1096,31 +1066,19 @@
             "enumValues": [
               {
                 "value": "R",
-                "name": "Corrective invoice",
-                "labels": {
-                  "es_ES": "Factura rectificativa"
-                }
+                "name": "Corrective invoice"
               },
               {
                 "value": "F1",
-                "name": "Invoice",
-                "labels": {
-                  "es_ES": "Factura"
-                }
+                "name": "Invoice"
               },
               {
                 "value": "F2",
-                "name": "Simplified invoice",
-                "labels": {
-                  "es_ES": "Factura simplificada"
-                }
+                "name": "Simplified invoice"
               },
               {
                 "value": "F4",
-                "name": "Simplified invoices summary",
-                "labels": {
-                  "es_ES": "Asiento resumen facturas simplificadas"
-                }
+                "name": "Simplified invoices summary"
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -1138,40 +1096,6 @@
             }
           },
           {
-            "name": "aeatsiiDescription",
-            "apiKey": "aeatsiiDescription",
-            "column": "EM_Aeatsii_Description_ID",
-            "label": "SII description master",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "derivation": {
-              "type": "lookup",
-              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN ('Y' = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (null)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
-            },
-            "reference": "aeatsii_description",
-            "inputMode": "selector",
-            "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN ('Y' = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (null)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual",
-            "validation": {
-              "maxLength": 32
-            },
-            "callout": {
-              "className": "org.openbravo.module.sii.callouts.SiiDescriptionCallout"
-            },
-            "displayLogic": {
-              "raw": "@AEATSII_AcogidaSII@='Y'",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='Y')) & @Processed@='Y'",
-              "evaluable": true,
-              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || (record['documentStatus'] === 'VO' && record['em_aeatsii_issent'] === 'Y')) && record['processed'] === true"
-            }
-          },
-          {
             "name": "aeatsiiDescripcionSii",
             "apiKey": "aeatsiiDescripcionSii",
             "column": "EM_Aeatsii_Descripcion_Sii",
@@ -1181,7 +1105,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "derivation": {
               "type": "lookup",
               "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
@@ -1218,112 +1142,40 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors",
-                "labels": {
-                  "es_ES": "Aceptado con errores"
-                }
+                "name": "Accepted with errors"
               },
               {
                 "value": "AN",
-                "name": "Annulled",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "Annulled"
               },
               {
                 "value": "IN",
-                "name": "Incorrect",
-                "labels": {
-                  "es_ES": "Incorrecto"
-                }
+                "name": "Incorrect"
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII",
-                "labels": {
-                  "es_ES": "No Declarable en SII"
-                }
+                "name": "Not Registrable to SII"
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII",
-                "labels": {
-                  "es_ES": "Pendiente de enviar a SII"
-                }
+                "name": "Pending to send to SII"
               },
               {
                 "value": "CO",
-                "name": "Right",
-                "labels": {
-                  "es_ES": "Correcto"
-                }
+                "name": "Right"
               },
               {
                 "value": "EE",
-                "name": "Sending error",
-                "labels": {
-                  "es_ES": "Error al enviar"
-                }
+                "name": "Sending error"
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed",
-                "labels": {
-                  "es_ES": "Baja"
-                }
+                "name": "Unsubscribed"
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
             "validation": {
               "maxLength": 60
-            },
-            "displayLogic": {
-              "raw": "@AEATSII_AcogidaSII@='Y'",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "true",
-              "evaluable": true,
-              "js": "true"
-            }
-          },
-          {
-            "name": "aeatsiiEjercicio",
-            "apiKey": "aeatsiiEjercicio",
-            "column": "EM_Aeatsii_Ejercicio",
-            "label": "SII exercise",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "validation": {
-              "maxLength": 4
-            },
-            "displayLogic": {
-              "raw": "@AEATSII_AcogidaSII@='Y'",
-              "evaluable": true
-            },
-            "readOnlyLogic": {
-              "raw": "true",
-              "evaluable": true,
-              "js": "true"
-            }
-          },
-          {
-            "name": "aeatsiiPeriodo",
-            "apiKey": "aeatsiiPeriodo",
-            "column": "EM_Aeatsii_Periodo",
-            "label": "SII period",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "validation": {
-              "maxLength": 2
             },
             "displayLogic": {
               "raw": "@AEATSII_AcogidaSII@='Y'",
@@ -1580,13 +1432,6 @@
             "derivation": {
               "type": "lookup",
               "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
-            }
-          },
-          {
-            "name": "aeatsiiDescription",
-            "derivation": {
-              "type": "lookup",
-              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN ('Y' = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (null)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
             }
           },
           {
@@ -3463,7 +3308,7 @@
             "apiKey": "aeatsiiDescription",
             "column": "EM_Aeatsii_Description_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3495,7 +3340,7 @@
             "apiKey": "aeatsiiEjercicio",
             "column": "EM_Aeatsii_Ejercicio",
             "type": "integer",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3503,7 +3348,7 @@
             "apiKey": "aeatsiiPeriodo",
             "column": "EM_Aeatsii_Periodo",
             "type": "integer",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -5418,14 +5263,6 @@
       },
       {
         "entity": "header",
-        "field": "aeatsiiDescription",
-        "column": "EM_Aeatsii_Description_ID",
-        "reference": "aeatsii_description",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiDescription"
-      },
-      {
-        "entity": "header",
         "field": "aeatsiiCauseExemption",
         "column": "EM_Aeatsii_Cause_Exemption_ID",
         "reference": "aeatsii_cause_exemption",
@@ -6045,14 +5882,6 @@
         "description": "Default value for 'aeatsiiDescripcionSii' in header should be a string"
       },
       {
-        "id": "t-default-value-type-header-aeatsiiDescription",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "runner": "node",
-        "description": "Default value for 'aeatsiiDescription' in header should be a string"
-      },
-      {
         "id": "t-default-value-type-header-aeatsiiEstado",
         "category": "default-value-type",
         "entity": "header",
@@ -6253,22 +6082,6 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-header-aeatsiiDescription",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiDescription' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-aeatsiiEjercicio",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiEjercicio' in header should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-header-aeatsiiEstado",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -6291,14 +6104,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-header-aeatsiiPeriodo",
-        "category": "displaylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiPeriodo' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-costcenter",
@@ -6493,22 +6298,6 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-header-aeatsiiDescription",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiDescription' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-aeatsiiEjercicio",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiEjercicio' in header should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-header-aeatsiiEstado",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -6531,14 +6320,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-header-aeatsiiPeriodo",
-        "category": "displaylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Display logic for 'aeatsiiPeriodo' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-costcenter",
@@ -6765,22 +6546,6 @@
         "description": "Field 'aeatsiiDescripcionSii' should be present in header"
       },
       {
-        "id": "t-field-presence-header-aeatsiiDescription",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "runner": "node",
-        "description": "Field 'aeatsiiDescription' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-aeatsiiEjercicio",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Field 'aeatsiiEjercicio' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-aeatsiiEstado",
         "category": "field-presence",
         "entity": "header",
@@ -6803,14 +6568,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-aeatsiiPeriodo",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Field 'aeatsiiPeriodo' should be present in header"
       },
       {
         "id": "t-field-presence-header-businessPartner",
@@ -7349,22 +7106,6 @@
         "description": "Field 'aeatsiiDescripcionSii' should have type 'string' in header"
       },
       {
-        "id": "t-field-type-header-aeatsiiDescription",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "runner": "node",
-        "description": "Field 'aeatsiiDescription' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-aeatsiiEjercicio",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Field 'aeatsiiEjercicio' should have type 'number' in header"
-      },
-      {
         "id": "t-field-type-header-aeatsiiEstado",
         "category": "field-type",
         "entity": "header",
@@ -7387,14 +7128,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should have type 'boolean' in header"
-      },
-      {
-        "id": "t-field-type-header-aeatsiiPeriodo",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Field 'aeatsiiPeriodo' should have type 'number' in header"
       },
       {
         "id": "t-field-type-header-businessPartner",
@@ -7925,22 +7658,6 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiDescription",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiDescription' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiEjercicio",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiEjercicio' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiEstado",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -7955,14 +7672,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiIssent' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiPeriodo",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiPeriodo' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-businessPartner",
@@ -8285,22 +7994,6 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-aeatsiiDescription",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiDescription' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-aeatsiiEjercicio",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiEjercicio' in header should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-header-aeatsiiEstado",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -8315,14 +8008,6 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiIssent' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-aeatsiiPeriodo",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiPeriodo' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-businessPartner",
@@ -8739,14 +8424,6 @@
         "description": "Selector endpoint for 'aeatsiiCauseExemption' in header should exist"
       },
       {
-        "id": "t-selector-endpoint-header-aeatsiiDescription",
-        "category": "selector-endpoint",
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "runner": "node",
-        "description": "Selector endpoint for 'aeatsiiDescription' in header should exist"
-      },
-      {
         "id": "t-selector-endpoint-header-businessPartner",
         "category": "selector-endpoint",
         "entity": "header",
@@ -9043,6 +8720,14 @@
         "description": "System field 'aeatsiiDateIssue' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-aeatsiiDescription",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "runner": "node",
+        "description": "System field 'aeatsiiDescription' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-aeatsiiDua",
         "category": "system-field",
         "entity": "header",
@@ -9057,6 +8742,14 @@
         "field": "aeatsiiDup",
         "runner": "node",
         "description": "System field 'aeatsiiDup' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-aeatsiiEjercicio",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiEjercicio",
+        "runner": "node",
+        "description": "System field 'aeatsiiEjercicio' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiErrorCode",
@@ -9161,6 +8854,14 @@
         "field": "aeatsiiMultiDua",
         "runner": "node",
         "description": "System field 'aeatsiiMultiDua' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-aeatsiiPeriodo",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "System field 'aeatsiiPeriodo' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiPurDescription",
@@ -10599,25 +10300,25 @@
       }
     ],
     "summary": {
-      "total": 606,
+      "total": 589,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
-        "default-value-type": 26,
-        "displaylogic-evaluable": 30,
-        "displaylogic-valid": 30,
-        "field-presence": 73,
-        "field-type": 73,
-        "readonlylogic-evaluable": 45,
-        "readonlylogic-valid": 45,
+        "default-value-type": 25,
+        "displaylogic-evaluable": 27,
+        "displaylogic-valid": 27,
+        "field-presence": 70,
+        "field-type": 70,
+        "readonlylogic-evaluable": 42,
+        "readonlylogic-valid": 42,
         "rule-declared": 10,
         "searchable-filters": 6,
-        "selector-endpoint": 22,
-        "system-field": 210,
+        "selector-endpoint": 21,
+        "system-field": 213,
         "visibility": 5
       },
       "byRunner": {
-        "node": 606,
+        "node": 589,
         "junit": 0
       }
     }

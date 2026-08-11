@@ -423,12 +423,11 @@
           "form": false
         },
         "aeatsiiDescription": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiDescripcionSii": {
           "visibility": "editable",
-          "form": false
+          "form": true
         },
         "aeatsiiCauseExemption": {
           "visibility": "editable",
@@ -466,7 +465,7 @@
         },
         "etvfacVerifacDesc": {
           "visibility": "editable",
-          "form": false
+          "form": true
         },
         "etvfacSimpinvart7273": {
           "visibility": "editable",
@@ -493,12 +492,10 @@
           "visibility": "discarded"
         },
         "aeatsiiEjercicio": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiPeriodo": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "discarded"
         },
         "tbaiSequence": {
           "visibility": "discarded",
