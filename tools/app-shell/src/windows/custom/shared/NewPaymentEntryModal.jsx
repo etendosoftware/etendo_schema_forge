@@ -881,14 +881,41 @@ export default function NewPaymentEntryModal({
     fromCode: currency, toCode: accountCurrency, date, apiBaseUrl, token,
   });
   const [rateStr, setRateStr] = useState('');
-  // Seed the rate field from the freshly-fetched prefill, re-running when the currency pair
-  // (accountCurrency) or the fetched rate changes. Crucially this also CLEARS the field when
-  // moving to a pair that has no DB rate, so a stale rate from a previously-selected account
-  // never silently carries across currency pairs (ETP-4504 W1). Manual edits persist until one
-  // of these inputs changes; when not foreign the field is kept empty.
+  // Edit mode: the rate stored on the draft (ETP-4841). Kept as the raw string from the response
+  // so a value like "0.680272" is shown back exactly, without float re-formatting.
+  const persistedRate = isEdit && Number(payment?.conversionRate) > 0
+    ? String(payment.conversionRate)
+    : null;
+  // It only applies while the modal is showing the currency PAIR it was saved for: the rate is a
+  // property of the pair, not of the account, so switching between two accounts in the same
+  // currency keeps it, while another foreign pair must reseed from the DB (showing a USD→EUR rate
+  // in a USD→GBP field would be a silent accounting error — ETP-4504 W1).
+  const persistedRateApplies = persistedRate != null
+    && !!accountCurrency && accountCurrency === payment?.accountCurrency;
+  const persistedRateSeededRef = useRef(false);
+  // Seed the rate field, re-running when the currency pair (accountCurrency) or the fetched rate
+  // changes. Crucially this also CLEARS the field when moving to a pair that has no DB rate, so a
+  // stale rate from a previously-selected account never silently carries across currency pairs
+  // (ETP-4504 W1). Manual edits persist until one of these inputs changes; when not foreign the
+  // field is kept empty. A persisted rate wins over the system one and is seeded exactly once per
+  // visit to its pair, so neither a late validate-exchange-rate response nor a date change nor a
+  // subsequent manual edit can overwrite what the user saved on the draft (ETP-4841).
   useEffect(() => {
-    setRateStr(isForeign && conversion.rate != null ? String(conversion.rate) : '');
-  }, [isForeign, accountCurrency, conversion.rate]);
+    if (!isForeign) {
+      persistedRateSeededRef.current = false;
+      setRateStr('');
+      return;
+    }
+    if (persistedRateApplies) {
+      if (!persistedRateSeededRef.current) {
+        persistedRateSeededRef.current = true;
+        setRateStr(persistedRate);
+      }
+      return;
+    }
+    persistedRateSeededRef.current = false;
+    setRateStr(conversion.rate != null ? String(conversion.rate) : '');
+  }, [isForeign, accountCurrency, conversion.rate, persistedRateApplies, persistedRate]);
   // Parse the typed rate (accepts "0.92" or "0,92"); null when blank/invalid/non-positive.
   const rate = useMemo(() => {
     const n = parseFloat(String(rateStr).replace(',', '.'));
