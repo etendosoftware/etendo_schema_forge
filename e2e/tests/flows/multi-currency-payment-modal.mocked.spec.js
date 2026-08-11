@@ -15,6 +15,12 @@ import { login } from '../helpers/auth.js';
  *   - a payment overpayment offers only "Igualar" (no "leave credit", no refund),
  *     and confirmation is blocked until the amount is adjusted.
  *
+ * Plus the reopen-a-draft flow (ETP-4841):
+ *   list → badge → history popup → click the DRAFT row → NewPaymentEntryModal in
+ *   EDIT mode, where the rate stored on the draft (`conversionRate`, now returned
+ *   by the invoicePayments action) must win over the system spot rate served by
+ *   validate-exchange-rate, and must be re-submitted unchanged on "Guardar".
+ *
  * The receipt-side "leave credit present when invoice in org currency" case is
  * covered at the unit level (NewPaymentEntryModal.vitest.jsx) — the sales-invoice
  * receipt entry point is not a stable list-grid button, so it is not driven here.
@@ -26,6 +32,37 @@ import { login } from '../helpers/auth.js';
 
 const INVOICE_ID = 'pinv-conv-1';
 const DOC_NO = 'PINV-CONV-001';
+
+// ETP-4841 — the draft listed in the history popup: a USD invoice paid from the EUR account
+// with a hand-typed rate that differs from the system one served by validate-exchange-rate.
+const DRAFT_DOC_NO = 'PAY-DRAFT-001';
+const DRAFT_PAYMENT_ID = 'pay-draft-1';
+const DRAFT_RATE = '0.89';
+const SYSTEM_RATE = 0.92;
+
+/**
+ * A draft payment row as the `invoicePayments` action returns it. `processed: false` plus a
+ * non-paid status keeps InvoicePaymentHistoryModal treating it as a draft, so clicking the row
+ * reopens the editable modal instead of navigating to the read-only payment window.
+ */
+function buildDraftPayment(accountCurrency) {
+  return {
+    id: DRAFT_PAYMENT_ID,
+    documentNo: DRAFT_DOC_NO,
+    paymentDate: '2026-01-20',
+    paymentMethod: 'Transferencia',
+    status: 'RPAP',
+    processed: false,
+    amount: 100,
+    appliedToInvoice: 100,
+    accountId: 'acc-1',
+    accountName: `Cuenta ${accountCurrency}`,
+    accountCurrency,
+    creditSourcesUsed: [],
+    // The stored rate the user typed before saving the draft (ETP-4841).
+    conversionRate: Number(DRAFT_RATE),
+  };
+}
 
 function buildInvoice(invoiceCurrency) {
   return {
@@ -51,9 +88,11 @@ function buildInvoice(invoiceCurrency) {
  * @param {number|null} opts.rate        exchange rate returned by validate-exchange-rate
  * @param {string} opts.orgCurrency      org currency returned by /session
  * @param {Array}  opts.sources          invoiceCreditSources items (same-currency only)
+ * @param {Array}  opts.payments         invoicePayments rows (existing payments/drafts)
  */
 async function installMocks(page, {
   invoiceCurrency, accountCurrency, rate = null, orgCurrency = 'EUR', sources = [],
+  payments = [],
 }) {
   const invoice = buildInvoice(invoiceCurrency);
 
@@ -103,7 +142,7 @@ async function installMocks(page, {
       return jsonOk(route, { items: sources });
     }
     if (/\/action\/invoicePayments/.test(url)) {
-      return jsonOk(route, { response: { data: [] } });
+      return jsonOk(route, { response: { data: payments } });
     }
     if (/\/action\/registerPayment/.test(url)) {
       return jsonOk(route, { response: { data: { id: 'pay-1' } } });
@@ -131,17 +170,40 @@ async function installMocks(page, {
     jsonOk(route, rate == null ? {} : { rate }));
 }
 
-/** list → outstanding badge → history modal → "+ Añadir pago" → NewPaymentEntryModal. */
-async function openPaymentEntryModal(page) {
+/** list → outstanding badge → InvoicePaymentHistoryModal (step 1 of the two-step flow). */
+async function openPaymentHistoryModal(page) {
   const row = page.locator('tbody tr').filter({ hasText: DOC_NO }).first();
   await expect(row).toBeVisible({ timeout: 10_000 });
   // The outstanding-amount badge opens the payment-history modal (aria-label
   // resolves to "Añadir pago" / "Add payment").
   await row.getByRole('button', { name: /añadir pago|add payment/i }).click();
+  await expect(page.getByTestId('InvoicePaymentHistoryModal__panel')).toBeVisible();
+}
+
+/** list → outstanding badge → history modal → "+ Añadir pago" → NewPaymentEntryModal. */
+async function openPaymentEntryModal(page) {
+  await openPaymentHistoryModal(page);
 
   const addBtn = page.getByTestId('InvoicePaymentHistoryModal__add-btn');
   await expect(addBtn).toBeVisible();
   await addBtn.click();
+
+  const modal = page.getByTestId('cp-new-payment-modal');
+  await expect(modal).toBeVisible();
+  return modal;
+}
+
+/**
+ * list → badge → history modal → click the DRAFT row → NewPaymentEntryModal in EDIT mode.
+ * Draft rows reopen the editable modal (processed rows navigate to the read-only payment window).
+ */
+async function reopenDraftPaymentModal(page) {
+  await openPaymentHistoryModal(page);
+
+  const draftRow = page.getByTestId('InvoicePaymentHistoryModal__row')
+    .filter({ hasText: DRAFT_DOC_NO }).first();
+  await expect(draftRow).toBeVisible();
+  await draftRow.click();
 
   const modal = page.getByTestId('cp-new-payment-modal');
   await expect(modal).toBeVisible();
@@ -204,5 +266,67 @@ test.describe('Multi-currency payment modal (ETP-4504) — purchase-invoice', ()
     // "Igualar" resets the amount to exactly cover the invoice → confirm re-enables.
     await modal.getByTestId('cp-equalize').click();
     await expect(modal.getByTestId('cp-confirm')).toBeEnabled();
+  });
+});
+
+/**
+ * ETP-4841 — reopening a draft that was saved with a manual conversion rate. The stored rate
+ * travels on the invoicePayments row (`conversionRate`) and must be shown back instead of the
+ * system spot rate that validate-exchange-rate returns for the same currency pair.
+ */
+test.describe('Reopened draft keeps its saved conversion rate (ETP-4841) — purchase-invoice', () => {
+  const DRAFT_MOCKS = {
+    invoiceCurrency: 'USD',
+    accountCurrency: 'EUR',
+    // The DB/system rate for USD→EUR differs from the 0.89 stored on the draft, so a regression
+    // that reseeds from validate-exchange-rate is immediately visible.
+    rate: SYSTEM_RATE,
+    payments: [buildDraftPayment('EUR')],
+  };
+
+  test('shows the rate stored on the draft, not the system rate, with a matching account-currency readout', async ({ page }) => {
+    await login(page);
+    await installMocks(page, DRAFT_MOCKS);
+    await page.goto('/purchase-invoice');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const modal = await reopenDraftPaymentModal(page);
+
+    // Account (EUR) ≠ invoice (USD) → the conversion block is present in edit mode too.
+    await expect(modal.getByTestId('cp-conversion-fields')).toBeVisible();
+    // The persisted 0.89 wins over the system 0.92.
+    await expect(modal.getByTestId('cp-conversion-rate-input')).toHaveValue(DRAFT_RATE);
+
+    // The account-currency readout is derived from the SAME rate: 100 × 0.89 = 89 €.
+    const readout = modal.getByTestId('cp-amount-in-account');
+    await expect(readout).toContainText(/89/);
+    await expect(readout).toContainText('€');
+
+    // A valid persisted rate satisfies the foreign-payment gate on its own.
+    await expect(modal.getByTestId('cp-save-draft')).toBeEnabled();
+    await expect(modal.getByTestId('cp-confirm')).toBeEnabled();
+  });
+
+  test('re-saving the reopened draft submits the stored rate unchanged', async ({ page }) => {
+    await login(page);
+    await installMocks(page, DRAFT_MOCKS);
+    await page.goto('/purchase-invoice');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const modal = await reopenDraftPaymentModal(page);
+    await expect(modal.getByTestId('cp-conversion-rate-input')).toHaveValue(DRAFT_RATE);
+
+    const saveDraft = modal.getByTestId('cp-save-draft');
+    await expect(saveDraft).toBeEnabled();
+    const [request] = await Promise.all([
+      page.waitForRequest(r => r.url().includes('/action/registerPayment') && r.method() === 'POST'),
+      saveDraft.click(),
+    ]);
+
+    const body = JSON.parse(request.postData() || '{}');
+    expect(body.process).toBe('draft');
+    expect(body.conversionRate).toBe(DRAFT_RATE);
+    // Edit mode → the same payment is updated rather than a second one created.
+    expect(body.paymentId).toBe(DRAFT_PAYMENT_ID);
   });
 });
