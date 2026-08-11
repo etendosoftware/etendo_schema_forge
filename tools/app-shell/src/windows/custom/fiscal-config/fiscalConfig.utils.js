@@ -133,21 +133,34 @@ export function todayIsoDate() {
 }
 
 export function buildOnboardingPayloads(system, territory) {
-  const tbaiDefaults = { tbaisystemdate: todayIsoDate() };
+  const today = todayIsoDate();
+  const siiDefaults = {
+    acogidaAlSII:       'Y',
+    entornoDeProduccin: 'Y',
+    adjuntarArchivosXML: 'Y',
+    fechaAcogidaSII:    today,
+    monitordate:        today,
+  };
+  const tbaiDefaults = {
+    tbaisystemdate:          today,
+    productionEnv:           'Y',
+    validatePreviousInvoice: 'N',
+  };
+  const verifactuDefaults = { defaultQR: 'Y' };
 
   switch (system) {
     case 'SII':
       switch (territory) {
         case 'navarra':
-          return { sii: { navarra: 'Y', taxtype: 'IVA' }, tbai: null, verifactu: null };
+          return { sii: { navarra: 'Y', taxtype: 'IVA', ...siiDefaults }, tbai: null, verifactu: null };
         case 'gipuzkoa':
-          return { sii: { guipuzcoa: 'Y', taxtype: 'IVA' }, tbai: null, verifactu: null };
+          return { sii: { guipuzcoa: 'Y', taxtype: 'IVA', ...siiDefaults }, tbai: null, verifactu: null };
         case 'baleares':
-          return { sii: { taxtype: 'IVA' }, tbai: null, verifactu: null };
+          return { sii: { taxtype: 'IVA', ...siiDefaults }, tbai: null, verifactu: null };
         case 'canarias':
-          return { sii: { taxtype: 'IGIC' }, tbai: null, verifactu: null };
+          return { sii: { taxtype: 'IGIC', ...siiDefaults }, tbai: null, verifactu: null };
         case 'ceuta':
-          return { sii: { taxtype: 'IPSI' }, tbai: null, verifactu: null };
+          return { sii: { taxtype: 'IPSI', ...siiDefaults }, tbai: null, verifactu: null };
         default:
           return { sii: null, tbai: null, verifactu: null };
       }
@@ -165,22 +178,22 @@ export function buildOnboardingPayloads(system, territory) {
     case 'SII+TBAI':
       switch (territory) {
         case 'alava':
-          return { sii: { taxtype: 'IVA' }, tbai: { etsgSifTerritory: 'ARABA', ...tbaiDefaults }, verifactu: null };
+          return { sii: { taxtype: 'IVA', ...siiDefaults }, tbai: { etsgSifTerritory: 'ARABA', ...tbaiDefaults }, verifactu: null };
         case 'bizkaia':
-          return { sii: { taxtype: 'IVA' }, tbai: { etsgSifTerritory: 'BIZKAIA', ...tbaiDefaults }, verifactu: null };
+          return { sii: { taxtype: 'IVA', ...siiDefaults }, tbai: { etsgSifTerritory: 'BIZKAIA', ...tbaiDefaults }, verifactu: null };
         case 'gipuzkoa':
-          return { sii: { guipuzcoa: 'Y', taxtype: 'IVA' }, tbai: { etsgSifTerritory: 'GIPUZKOA', ...tbaiDefaults }, verifactu: null };
+          return { sii: { guipuzcoa: 'Y', taxtype: 'IVA', ...siiDefaults }, tbai: { etsgSifTerritory: 'GIPUZKOA', ...tbaiDefaults }, verifactu: null };
         default:
           return { sii: null, tbai: null, verifactu: null };
       }
     case 'VERIFACTU':
       switch (territory) {
         case 'baleares':
-          return { sii: null, tbai: null, verifactu: { tAXType: '01', nextSendWaitTime: '60' } };
+          return { sii: null, tbai: null, verifactu: { tAXType: '01', nextSendWaitTime: '60', ...verifactuDefaults } };
         case 'canarias':
-          return { sii: null, tbai: null, verifactu: { tAXType: '03', nextSendWaitTime: '60' } };
+          return { sii: null, tbai: null, verifactu: { tAXType: '03', nextSendWaitTime: '60', ...verifactuDefaults } };
         case 'ceuta':
-          return { sii: null, tbai: null, verifactu: { tAXType: '02', nextSendWaitTime: '60' } };
+          return { sii: null, tbai: null, verifactu: { tAXType: '02', nextSendWaitTime: '60', ...verifactuDefaults } };
         default:
           return { sii: null, tbai: null, verifactu: null };
       }
@@ -192,7 +205,7 @@ export function buildOnboardingPayloads(system, territory) {
 export function buildVerifactuUpdatePayload(form) {
   return {
     tAXType: normalizeVerifactuTaxType(form?.tAXType),
-    defaultQR: isEtendoTrue(form?.defaultQR),
+    defaultQR: true,
   };
 }
 

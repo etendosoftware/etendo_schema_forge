@@ -23,24 +23,42 @@ describe('TbaiSection — structure', () => {
 });
 
 describe('TbaiSection — form fields', () => {
-  it('renders the enroll date (tbaisystemdate) field', () => {
-    assert.match(src, /fiscal\.tbai\.field\.enrollDate/);
-    assert.match(src, /tbaisystemdate/);
+  it('does not render the enroll date (tbaisystemdate) field (ETP-4783: always set to creation date)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.field\.enrollDate/);
   });
 
-  it('renders the production environment toggle', () => {
+  it('tbaisystemdate is still sent in the PUT body from the record (not editable)', () => {
+    assert.match(src, /tbaisystemdate/);
+    assert.match(src, /record\?\.tbaisystemdate/);
+  });
+
+  it('does not render the production environment toggle (ETP-4783: always forced to Y)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.field\.production/);
+  });
+
+  it('productionEnv is still sent in the PUT body with forced value Y', () => {
     assert.match(src, /productionEnv/);
+  });
+
+  it('does not render the validatePreviousInvoice toggle (ETP-4783: always forced to N)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.field\.validatePrev/);
   });
 
   it('renders the invoice description field', () => {
     assert.match(src, /invoiceDescription/);
   });
+
+  it('territory names use Spanish forms (ETP-4783)', () => {
+    assert.match(src, /Vizcaya/);
+    assert.match(src, /Guipúzcoa/);
+    assert.doesNotMatch(src, /BIZKAIA: 'Bizkaia'/);
+    assert.doesNotMatch(src, /GIPUZKOA: 'Gipuzkoa'/);
+  });
 });
 
 describe('TbaiSection — validation', () => {
-  it('validates tbaisystemdate is present before saving', () => {
-    assert.match(src, /tbaisystemdate/);
-    assert.match(src, /fiscal\.tbai\.err\.enrollDate/);
+  it('does not validate tbaisystemdate (removed from UI, ETP-4783)', () => {
+    assert.doesNotMatch(src, /fiscal\.tbai\.err\.enrollDate/);
   });
 
   it('validates invoiceDescription is present before saving', () => {

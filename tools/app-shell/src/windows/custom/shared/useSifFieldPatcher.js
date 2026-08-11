@@ -32,7 +32,6 @@ export const VERIFACTU_INV_TYPE_OPTIONS = [
 
 export const VERIFACTU_REVERSE_TYPE_OPTIONS = [
   { value: 'I', labelKey: 'sifDataTabs.option.vfReverseByDifference' },
-  { value: 'S', labelKey: 'sifDataTabs.option.vfReverseBySubstitution' },
 ];
 
 // ETP-4463: SIF fields no longer persist themselves via a per-field PATCH on

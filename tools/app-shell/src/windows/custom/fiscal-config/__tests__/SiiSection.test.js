@@ -34,14 +34,30 @@ describe('SiiSection — Navarra badge', () => {
 });
 
 describe('SiiSection — form fields', () => {
-  it('renders the enrolled (acogidaAlSII) toggle', () => {
-    assert.match(src, /fiscal\.sii\.field\.enrolled/);
+  it('does not render the enrolled (acogidaAlSII) toggle (ETP-4783: always forced to Y)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.enrolled/);
+  });
+
+  it('acogidaAlSII is still sent in the PUT body with forced value Y', () => {
     assert.match(src, /acogidaAlSII/);
   });
 
-  it('renders the production environment toggle', () => {
-    assert.match(src, /fiscal\.sii\.field\.production/);
+  it('does not render the production environment toggle (ETP-4783: always forced to Y)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.production/);
+  });
+
+  it('entornoDeProduccin is still sent in the PUT body with forced value Y', () => {
     assert.match(src, /entornoDeProduccin/);
+  });
+
+  it('does not render enrollment date fields (ETP-4783: always set to creation date)', () => {
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.enrollDate/);
+    assert.doesNotMatch(src, /fiscal\.sii\.field\.monitorDate/);
+  });
+
+  it('enrollment dates are still sent in the PUT body from the record', () => {
+    assert.match(src, /fechaAcogidaSII/);
+    assert.match(src, /monitordate/);
   });
 
   it('renders the submission deadline (plazoLmiteDeEnvoASII) field', () => {

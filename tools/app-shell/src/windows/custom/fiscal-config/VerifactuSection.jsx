@@ -1,7 +1,6 @@
 import { useState, forwardRef, useImperativeHandle } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useUI } from '@/i18n';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -12,7 +11,6 @@ import {
   getFiscalRecordId,
   getVerifactuTaxTypeLabel,
   isEtendoTrue,
-  normalizeEtendoBoolean,
   normalizeVerifactuTaxType,
   VERIFACTU_TAX_TYPE_OPTIONS,
 } from './fiscalConfig.utils.js';
@@ -36,8 +34,7 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
   const isLocked = isEtendoTrue(record?.isReady);
 
   const [form, setForm] = useState({
-    tAXType:   normalizeVerifactuTaxType(record?.tAXType) ?? '',
-    defaultQR: normalizeEtendoBoolean(record?.defaultQR),
+    tAXType: normalizeVerifactuTaxType(record?.tAXType) ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -109,14 +106,6 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
                 ))}
               </select>
             )}
-          </div>
-          <div className="flex items-center gap-2 pb-1">
-            <Switch
-              checked={isEtendoTrue(form.defaultQR)}
-              onCheckedChange={v => set('defaultQR', v ? 'Y' : 'N')}
-              disabled={isLocked}
-              data-testid="Switch__e30816" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.verifactu.field.qr')}</span>
           </div>
         </div>
       </SectionRow>

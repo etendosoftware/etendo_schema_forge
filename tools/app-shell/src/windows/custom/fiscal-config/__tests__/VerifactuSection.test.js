@@ -34,8 +34,8 @@ describe('VerifactuSection — locked/unlocked state', () => {
     assert.match(src, /isLocked/);
   });
 
-  it('disables the switches when record is locked', () => {
-    assert.match(src, /disabled=\{isLocked\}/);
+  it('does not allow form changes when record is locked (set() guard)', () => {
+    assert.match(src, /if \(isLocked\) return/);
   });
 
   it('passes locked state to save button', () => {
@@ -53,9 +53,9 @@ describe('VerifactuSection — form fields', () => {
     assert.match(src, /getVerifactuTaxTypeLabel/);
   });
 
-  it('renders the QR code toggle', () => {
-    assert.match(src, /fiscal\.verifactu\.field\.qr/);
-    assert.match(src, /defaultQR/);
+  it('does not render the QR code toggle (ETP-4783: defaultQR is always forced to true in the payload)', () => {
+    assert.doesNotMatch(src, /fiscal\.verifactu\.field\.qr/);
+    assert.doesNotMatch(src, /defaultQR/);
   });
 
   it('does not render the removed enrollment date field (inVfactuSystem)', () => {
