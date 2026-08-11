@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-11T14:14:14.274Z",
-  "checksum": "0ec1af3e8cd9a13c",
+  "updatedAt": "2026-08-11T14:43:58.423Z",
+  "checksum": "043645578f010f83",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -601,28 +601,28 @@
                 "value": "1BE",
                 "name": "New statement each run",
                 "labels": {
-                  "es_ES": "New statement each run"
+                  "es_ES": "One per run"
                 }
               },
               {
                 "value": "1BD",
                 "name": "Within 1 day",
                 "labels": {
-                  "es_ES": "Within 1 day"
+                  "es_ES": "One per day"
                 }
               },
               {
                 "value": "1BW",
                 "name": "Within 7 days",
                 "labels": {
-                  "es_ES": "Within 7 days"
+                  "es_ES": "One per week"
                 }
               },
               {
                 "value": "1BM",
                 "name": "Within 30 days",
                 "labels": {
-                  "es_ES": "Within 30 days"
+                  "es_ES": "One per month"
                 }
               }
             ],
@@ -10871,6 +10871,13 @@
         "description": "Rule 'Reconnect Account' (process) should be declared"
       },
       {
+        "id": "t-rule-declared-Refresh-Connections",
+        "category": "rule-declared",
+        "rule": "Refresh Connections",
+        "runner": "node",
+        "description": "Rule 'Refresh Connections' (process) should be declared"
+      },
+      {
         "id": "t-rule-declared-Remove-Reconciliation",
         "category": "rule-declared",
         "rule": "Remove Reconciliation",
@@ -10953,13 +10960,6 @@
         "rule": "SE_Trxtype_Transaction_Trxtype",
         "runner": "node",
         "description": "Rule 'SE_Trxtype_Transaction_Trxtype' (callout) should be declared"
-      },
-      {
-        "id": "t-rule-declared-Search-Recent-Transactions",
-        "category": "rule-declared",
-        "rule": "Search Recent Transactions",
-        "runner": "node",
-        "description": "Rule 'Search Recent Transactions' (process) should be declared"
       },
       {
         "id": "t-rule-declared-SL-AdvPayment-Document-C-Doctype-ID",
