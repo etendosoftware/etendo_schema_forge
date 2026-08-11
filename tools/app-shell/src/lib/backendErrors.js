@@ -41,6 +41,30 @@ const BACKEND_ERROR_MAP = {
   // string: capShipmentLineOverrides (~L952) and the line-selection loop inside
   // createFromShipments (~L1123). One entry covers both (ETP-4831 case 3).
   'No hay líneas pendientes de facturar en este albarán': 'backendError.noPendingLinesToInvoiceShipment',
+  // CreateShipmentHandler.java:136 (com.etendoerp.go) — hardcoded Spanish literal, no
+  // AD_Message involvement, thrown when an order has zero pending-delivery lines
+  // (ETP-4831 case 4, family A).
+  'No hay líneas pendientes de entrega en este pedido': 'backendError.noPendingLinesToDeliverOrder',
+  // CreateInvoiceShipmentHandler.java:200 (com.etendoerp.go) — hardcoded Spanish
+  // literal, thrown when an invoice has zero lines with a product (ETP-4831 case 4,
+  // family A).
+  'No hay líneas con producto en esta factura': 'backendError.noProductLinesInInvoice',
+  // CreateDraftInvoiceHandler.java:812 AND :1042 (com.etendoerp.go) — same hardcoded
+  // English literal thrown from two sites (getOrCreateArInvoiceDocType has no linked
+  // doc type). One entry covers both throw sites (ETP-4831 case 4, family A).
+  'No AR Invoice document type found': 'backendError.noArInvoiceDocTypeFound',
+  // CreateDraftInvoiceHandler.java:999 (com.etendoerp.go) — hardcoded English literal,
+  // thrown when createFromShipments receives an empty shipment list (ETP-4831 case 4,
+  // family A).
+  'No shipments provided': 'backendError.noShipmentsProvided',
+  // CreateDraftInvoiceHandler.java:1005 (com.etendoerp.go) — hardcoded English
+  // literal, thrown when the selected shipments don't all share the same Business
+  // Partner (ETP-4831 case 4, family A).
+  'All shipments must belong to the same Business Partner': 'backendError.shipmentsMustShareBusinessPartner',
+  // CreateDraftInvoiceHandler.java:1068 (com.etendoerp.go) — hardcoded English
+  // literal, thrown when the Business Partner lacks mandatory Payment Terms/Method
+  // (ETP-4831 case 4, family A).
+  'Business Partner is missing mandatory Payment Terms or Payment Method': 'backendError.bpMissingPaymentTermsOrMethod',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
@@ -111,6 +135,33 @@ function matchInvoiceLineAlreadyInvoiced(msg) {
   return { docNo, invoiced, pending };
 }
 
+// CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
+// orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
+// (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
+// matchAccountNotFound above: orderId is not attacker-controlled free text here
+// either, but consistency with the rest of the file's matchers (no regex) keeps the
+// ReDoS-safety argument uniform across all parameterized skeletons.
+const ORDER_NOT_FOUND_PREFIX = 'Order not found: ';
+
+function matchOrderNotFound(msg) {
+  if (!msg.startsWith(ORDER_NOT_FOUND_PREFIX)) return null;
+  const orderId = msg.slice(ORDER_NOT_FOUND_PREFIX.length);
+  if (!orderId) return null;
+  return { orderId };
+}
+
+// CreateDraftInvoiceHandler.java:996 (com.etendoerp.go) — "Shipment not found: " +
+// id. Same shape as ORDER_NOT_FOUND_PREFIX above but for the shipment-lookup loop
+// inside createFromShipments (ETP-4831 case 4, family B).
+const SHIPMENT_NOT_FOUND_PREFIX = 'Shipment not found: ';
+
+function matchShipmentNotFound(msg) {
+  if (!msg.startsWith(SHIPMENT_NOT_FOUND_PREFIX)) return null;
+  const id = msg.slice(SHIPMENT_NOT_FOUND_PREFIX.length);
+  if (!id) return null;
+  return { id };
+}
+
 function translateParameterized(msg, t) {
   const accountMatch = matchAccountNotFound(msg);
   if (accountMatch) {
@@ -132,6 +183,20 @@ function translateParameterized(msg, t) {
       invoiced: invoiceLineMatch.invoiced,
       pending: invoiceLineMatch.pending,
     });
+    return (translated && translated !== key) ? translated : null;
+  }
+
+  const orderMatch = matchOrderNotFound(msg);
+  if (orderMatch) {
+    const key = 'backendError.orderNotFound';
+    const translated = t(key, { orderId: orderMatch.orderId });
+    return (translated && translated !== key) ? translated : null;
+  }
+
+  const shipmentMatch = matchShipmentNotFound(msg);
+  if (shipmentMatch) {
+    const key = 'backendError.shipmentNotFound';
+    const translated = t(key, { id: shipmentMatch.id });
     return (translated && translated !== key) ? translated : null;
   }
 
