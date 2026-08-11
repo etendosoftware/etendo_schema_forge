@@ -15,18 +15,23 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   ACCURACY: 'accuracy',
   ACCOUNT_ID: 'accountId',
   ATTEMPT: 'attempt',
+  BRANCH: 'branch',
   CATEGORY: 'category',
   CLIENT: 'client',
   COUNT: 'count',
+  COUNTRY_CODE: 'countryCode',
+  CURRENCY: 'currency',
   DURATION_MS: 'durationMs',
   ENABLED: 'enabled',
   ENTITY: 'entity',
+  ERROR_CODE: 'errorCode',
   FLAG_KEY: 'flagKey',
   HAS_COMMENT: 'hasComment',
   OPERATION: 'operation',
   POSITION: 'position',
   PROVIDER: 'provider',
   FEEDBACK: 'feedback',
+  REASON: 'reason',
   SCORE: 'score',
   SOURCE: 'source',
   TAGS: 'tags',
@@ -550,6 +555,54 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
       OBSERVABILITY_PROPERTY_KEYS.USER_ID,
     ],
+  }),
+  // Checkout funnel for the tenant-upgrade flow (paid-second-tenant, ETP-4686).
+  // See docs/paid-tenant-infrastructure.md §3.6.
+  UPGRADE_PAGE_VIEWED: defineEvent('upgrade_page_viewed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.BRANCH,
+    ],
+  }),
+  UPGRADE_FIRST_TENANT_FREE_CONTINUED: defineEvent('upgrade_first_tenant_free_continued', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  UPGRADE_EXISTING_TENANT_NAME_BLOCKED: defineEvent('upgrade_existing_tenant_name_blocked', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  UPGRADE_SESSION_EXPIRED: defineEvent('upgrade_session_expired', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  UPGRADE_CHECKOUT_SUBMITTED: defineEvent('upgrade_checkout_submitted', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CURRENCY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNTRY_CODE,
+    ],
+  }),
+  UPGRADE_PAYMENT_DECLINED: defineEvent('upgrade_payment_declined', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.REASON,
+    ],
+  }),
+  UPGRADE_TENANT_PROVISIONING_SUCCEEDED: defineEvent('upgrade_tenant_provisioning_succeeded', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.CURRENCY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNTRY_CODE,
+    ],
+  }),
+  UPGRADE_TENANT_PROVISIONING_FAILED: defineEvent('upgrade_tenant_provisioning_failed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ERROR_CODE,
+    ],
+  }),
+  UPGRADE_ENTER_TENANT_FAILED: defineEvent('upgrade_enter_tenant_failed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
   }),
 });
 

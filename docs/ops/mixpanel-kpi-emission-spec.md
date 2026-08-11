@@ -50,6 +50,8 @@ Backend token values must remain outside committed source files.
 | Product usage | `window_opened`, `record_created`, `record_updated`, `search_performed`, `search_result_selected` | Validation dashboard Product Usage report. |
 | Dashboard KPI slice | `quick_action_used`, `pending_task_opened`, `dashboard_document_opened`, `accounting_dashboard_viewed` | Implemented in dashboard/accounting call sites; emits when those UI widgets are used. |
 | Backend write telemetry | `backend_write_operation_completed` | Java backend sink submitted to Mixpanel with HTTP 200 and response `status=1`; Mixpanel query `93de91d8` showed product writes. |
+| Feature flags | `feature_flag_evaluated` | Global OpenFeature hook (`lib/flags/flag-exposure.js`); confirmed live via Mixpanel queries `b653bf8a` / `6a731a9c` (342 unique users / 30d across both current flags). |
+| Tenant-upgrade checkout funnel | `upgrade_page_viewed`, `upgrade_first_tenant_free_continued`, `upgrade_existing_tenant_name_blocked`, `upgrade_session_expired`, `upgrade_checkout_submitted`, `upgrade_payment_declined`, `upgrade_tenant_provisioning_succeeded`, `upgrade_tenant_provisioning_failed`, `upgrade_enter_tenant_failed` | Added in `UpgradePage.jsx` / `lib/upgrade/`, see `docs/paid-tenant-infrastructure.md` §3.6. Not yet validated against live traffic — no deploy has shipped this yet, so Mixpanel shows zero events for these names until it does. |
 
 ### Defined But Not Yet Emitting Broadly
 

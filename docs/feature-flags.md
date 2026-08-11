@@ -316,14 +316,32 @@ Event `feature_flag_evaluated` (Mixpanel channel, declared in
 | `flagKey` | The flag key, e.g. `tenant-upgrade` |
 | `enabled` | The resolved boolean value |
 | `variant` | The variant name, e.g. `on` / `off` |
-| `provider` | Registered provider, e.g. `in-memory` |
+| `provider` | Registered provider: `in-memory` or `configcat` |
 | `username` | The targeting key |
+
+`provider` is a label `createFlagProvider` pins itself (`CONFIGCAT_PROVIDER_NAME`
+in `lib/flags/bootstrap.js`), not whatever the underlying SDK reports. ConfigCat's
+own provider derives its default name from the JS class name
+(`ConfigCatWebProvider.name`), which a production minifier is free to rename per
+build — observed in the wild as both `_ConfigCatWebProvider` and `ut` across
+different deploys, fragmenting any report grouped by provider. Pinning it keeps
+the value stable regardless of how a given build was minified.
 
 Two behaviours are deliberate:
 
-- **Deduplicated** — one event per flag/value combination per session, not one
-  per render. `useFeatureFlag` re-evaluates on every render, so without this the
-  event would be uncountable. A flag that flips reports each distinct value once.
+- **Deduplicated per flag/value/provider** — one event per combination per
+  session, not one per render. `useFeatureFlag` re-evaluates on every render, so
+  without this the event would be uncountable. But the provider is part of the
+  key on purpose: `initFeatureFlags` registers this hook *before* the real
+  provider is ready (`createFlagProvider` awaits a dynamic import and, for
+  ConfigCat, a network round-trip), so the very first evaluation on every page
+  load — for effectively every session, since React's initial render is
+  synchronous and always wins that race — goes through OpenFeature's built-in
+  no-op default. Deduplicating on `flagKey:value` alone let that transient
+  no-op result permanently claim the session's report for a value, silently
+  swallowing every later evaluation once the real provider took over, even when
+  it resolved the exact same boolean. A flag that flips reports each distinct
+  value once *per provider that produced it*, not just the first to answer.
 - **Never disturbs evaluation** — the hook runs inside flag resolution. It never
   awaits and never throws; a reporting failure cannot change what a flag
   resolves to.

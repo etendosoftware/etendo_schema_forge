@@ -25,8 +25,13 @@ vi.mock('@/auth/api.js', () => ({
   detectBaseUrl: () => '',
 }));
 
+vi.mock('@/lib/observability.js', () => ({
+  track: vi.fn(),
+}));
+
 import UpgradePage from '../UpgradePage.jsx';
 import { DECLINE_CARD_NUMBER } from '@/lib/upgrade/mockPayment.js';
+import { track } from '@/lib/observability.js';
 
 const PLATFORM_TOKEN_KEY = 'sf_platform_token';
 const GOOD_CARD = '4242424242424242';
@@ -102,6 +107,13 @@ async function fillCheckout(user, { tenantName, cardNumber = GOOD_CARD }) {
   await user.type(screen.getByTestId('upgrade-card-number'), cardNumber);
   await user.type(screen.getByTestId('upgrade-expiry'), FUTURE_EXPIRY);
   await user.type(screen.getByTestId('upgrade-cvc'), '123');
+}
+
+/** The properties of every tracked event carrying this name, in order. */
+function trackedEvents(name) {
+  return track.mock.calls
+    .filter(([eventName]) => eventName === name)
+    .map(([, properties]) => properties);
 }
 
 /** Renders and waits for the environments lookup to settle. */
@@ -440,5 +452,214 @@ describe('UpgradePage — when the account lookup cannot answer', () => {
 
     expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradeSessionExpired');
     expect(requests).toHaveLength(0);
+  });
+});
+
+/**
+ * Checkout funnel telemetry. Each test drives one funnel step and asserts the
+ * event name and properties the analytics side reads, because a renamed event or
+ * a dropped property is invisible in the UI and only shows up as a hole in the
+ * funnel weeks later.
+ */
+describe('UpgradePage — checkout funnel tracking', () => {
+  it('reports the checkout branch exactly once when the account already owns a tenant', async () => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'checkout' }]));
+  });
+
+  it('reports the free-first-tenant branch for an account with no tenants', async () => {
+    installFetch({ environments: [] });
+    await renderUpgradePage();
+
+    await waitFor(() => expect(trackedEvents('upgrade_page_viewed'))
+      .toEqual([{ branch: 'first_tenant_free' }]));
+  });
+
+  it('reports the unavailable branch when the environments lookup fails', async () => {
+    installFetch({ environments: () => Promise.reject(new Error('offline')) });
+    await renderUpgradePage();
+
+    await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'unavailable' }]));
+  });
+
+  it('reports the unavailable branch when there is no platform token to look up with', async () => {
+    globalThis.localStorage.removeItem(PLATFORM_TOKEN_KEY);
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'unavailable' }]));
+  });
+
+  it('tracks leaving for free onboarding instead of the checkout', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [] });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-first-tenant-free-continue'));
+
+    expect(trackedEvents('upgrade_first_tenant_free_continued')).toEqual([{}]);
+    expect(navigateMock).toHaveBeenCalledWith('/onboarding');
+  });
+
+  it('tracks a tenant name the account already owns, without tracking a submission', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: EXISTING_TENANT });
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await screen.findByTestId('upgrade-tenant-name-error');
+    expect(trackedEvents('upgrade_existing_tenant_name_blocked')).toEqual([{}]);
+    expect(trackedEvents('upgrade_checkout_submitted')).toEqual([]);
+  });
+
+  it('tracks an expired session instead of a submission', async () => {
+    const user = userEvent.setup();
+    globalThis.localStorage.removeItem(PLATFORM_TOKEN_KEY);
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: 'Acme Productive' });
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await screen.findByTestId('upgrade-error');
+    expect(trackedEvents('upgrade_session_expired')).toEqual([{}]);
+    expect(trackedEvents('upgrade_checkout_submitted')).toEqual([]);
+  });
+
+  it('tracks the submission with the tenant defaults the backend is asked for', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: 'Acme Productive' });
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await screen.findByTestId('upgrade-success');
+    expect(trackedEvents('upgrade_checkout_submitted')).toEqual([{ currency: 'EUR', countryCode: 'ES' }]);
+  });
+
+  it('tracks the declined test card as a client-side decline, before any submission', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: 'Acme Productive', cardNumber: DECLINE_CARD_NUMBER });
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await screen.findByTestId('upgrade-error');
+    expect(trackedEvents('upgrade_payment_declined')).toEqual([{ reason: 'test_card' }]);
+    // The decline is reported without a submission, matching the request count.
+    expect(trackedEvents('upgrade_checkout_submitted')).toEqual([]);
+    expect(requests).toHaveLength(0);
+  });
+
+  it('tracks the backend paywall as a decline, not a provisioning failure', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      onboarding: () => jsonResponse(
+        { error: 'payment_required', message: 'Payment is required' },
+        { ok: false, status: 402 }
+      ),
+    });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: 'Acme Productive' });
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await screen.findByTestId('upgrade-error');
+    expect(trackedEvents('upgrade_payment_declined')).toEqual([{ reason: 'backend_402' }]);
+    expect(trackedEvents('upgrade_tenant_provisioning_failed')).toEqual([]);
+  });
+
+  it('tracks a successful provisioning with its duration and the tenant defaults', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: 'Acme Productive' });
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await screen.findByTestId('upgrade-success');
+    const [succeeded] = trackedEvents('upgrade_tenant_provisioning_succeeded');
+    expect(succeeded).toEqual({
+      currency: 'EUR',
+      countryCode: 'ES',
+      durationMs: expect.any(Number),
+    });
+    expect(succeeded.durationMs).toBeGreaterThanOrEqual(0);
+    expect(trackedEvents('upgrade_tenant_provisioning_failed')).toEqual([]);
+  });
+
+  it('tracks a stream that reports failure as a missing result', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      onboarding: () => successStream({ success: false }),
+    });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: 'Acme Productive' });
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await screen.findByTestId('upgrade-error');
+    expect(trackedEvents('upgrade_tenant_provisioning_failed')).toEqual([
+      { errorCode: 'no_result', durationMs: expect.any(Number) },
+    ]);
+    expect(trackedEvents('upgrade_tenant_provisioning_succeeded')).toEqual([]);
+  });
+
+  it('tracks a thrown provisioning error under its own error code', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      onboarding: () => ({ ok: true, status: 200 }),
+    });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: 'Acme Productive' });
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await screen.findByTestId('upgrade-error');
+    expect(trackedEvents('upgrade_tenant_provisioning_failed')).toEqual([
+      { errorCode: 'upgradeStreamUnavailable', durationMs: expect.any(Number) },
+    ]);
+  });
+
+  it('tracks a failure with no error code as generic', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      // A transport failure carries no application error code.
+      onboarding: () => { throw new Error('network down'); },
+    });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: 'Acme Productive' });
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await screen.findByTestId('upgrade-error');
+    expect(trackedEvents('upgrade_tenant_provisioning_failed')).toEqual([
+      { errorCode: 'generic', durationMs: expect.any(Number) },
+    ]);
+  });
+
+  it('tracks a tenant that was provisioned but cannot be entered', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    await fillCheckout(user, { tenantName: 'Acme Productive' });
+    await user.click(screen.getByTestId('upgrade-submit'));
+    await screen.findByTestId('upgrade-success');
+
+    await user.click(screen.getByTestId('upgrade-success-continue'));
+
+    await screen.findByTestId('upgrade-enter-error');
+    expect(trackedEvents('upgrade_enter_tenant_failed')).toEqual([{}]);
   });
 });

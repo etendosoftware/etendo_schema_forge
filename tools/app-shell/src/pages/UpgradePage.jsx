@@ -8,6 +8,8 @@ import {
 } from '@etendosoftware/etendo-go-core/onboarding';
 import { useUI, getStoredLocale } from '@/i18n';
 import { detectBaseUrl } from '@/auth/api.js';
+import { track } from '@/lib/observability.js';
+import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '@/lib/observability/events.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +52,12 @@ const STEP_LABELS = {
 };
 
 const EMPTY_FORM = { tenantName: '', cardholder: '', cardNumber: '', expiry: '', cvc: '' };
+
+/** Checkout funnel telemetry — see docs/paid-tenant-infrastructure.md §3.6. */
+function emitUpgradeEvent(eventDefinition, properties) {
+  const event = buildObservabilityEvent(eventDefinition, properties);
+  void track(event.name, event.properties);
+}
 
 function PlanCard({ testId, name, tagline, price, features, current, highlighted, ui }) {
   return (
@@ -227,6 +235,16 @@ export default function UpgradePage() {
     };
   }, []);
 
+  // Fires once accountState settles ('loading' happens exactly once at mount),
+  // reporting which branch the user actually landed on.
+  useEffect(() => {
+    if (accountState === 'loading') return;
+    const branch = accountState === 'unavailable'
+      ? 'unavailable'
+      : environments.length === 0 ? 'first_tenant_free' : 'checkout';
+    emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_PAGE_VIEWED, { branch });
+  }, [accountState, environments]);
+
   const update = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
     setErrors(prev => (prev[field] ? { ...prev, [field]: undefined } : prev));
@@ -236,11 +254,19 @@ export default function UpgradePage() {
     const token = getPlatformToken();
     if (!token) {
       setFormError('upgradeSessionExpired');
+      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_SESSION_EXPIRED);
       return;
     }
 
     setPhase('running');
     setSteps(initialSetupSteps());
+
+    const startedAt = Date.now();
+    const provisioningProperties = {
+      currency: TENANT_DEFAULTS.currency,
+      countryCode: TENANT_DEFAULTS.countryCode,
+    };
+    emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_CHECKOUT_SUBMITTED, provisioningProperties);
 
     try {
       const result = await createProductiveTenant(
@@ -263,15 +289,31 @@ export default function UpgradePage() {
 
       if (result.success) {
         setPhase('success');
+        emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_SUCCEEDED, {
+          ...provisioningProperties,
+          durationMs: Date.now() - startedAt,
+        });
         return;
       }
       setPhase('form');
       setFormError('upgradeGenericError');
+      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
+        errorCode: 'no_result',
+        durationMs: Date.now() - startedAt,
+      });
     } catch (error) {
       setPhase('form');
       setFormError(
         Object.values(UPGRADE_ERROR_CODES).includes(error.code) ? error.code : 'upgradeGenericError'
       );
+      if (error.code === UPGRADE_ERROR_CODES.paymentRequired) {
+        emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_PAYMENT_DECLINED, { reason: 'backend_402' });
+      } else {
+        emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
+          errorCode: error.code || 'generic',
+          durationMs: Date.now() - startedAt,
+        });
+      }
     }
   };
 
@@ -299,6 +341,7 @@ export default function UpgradePage() {
     );
     if (requested && alreadyOwned) {
       validation.tenantName = 'upgradeTenantNameTaken';
+      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_EXISTING_TENANT_NAME_BLOCKED);
     }
 
     if (Object.keys(validation).length > 0) {
@@ -311,6 +354,7 @@ export default function UpgradePage() {
     // exercise the error path, not the backend.
     if (isDeclinedCard(form.cardNumber)) {
       setFormError('upgradePaymentDeclined');
+      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_PAYMENT_DECLINED, { reason: 'test_card' });
       return;
     }
 
@@ -365,6 +409,7 @@ export default function UpgradePage() {
           if (!entered) {
             setEntering(false);
             setEnterError(true);
+            emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_ENTER_TENANT_FAILED);
           }
         }}
         data-testid="SuccessPanel__58bad7" />}
@@ -381,7 +426,10 @@ export default function UpgradePage() {
       {showFirstTenantFree && (
         <FirstTenantFreePanel
           ui={ui}
-          onContinue={() => navigate('/onboarding')}
+          onContinue={() => {
+            emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_FIRST_TENANT_FREE_CONTINUED);
+            navigate('/onboarding');
+          }}
           data-testid="FirstTenantFreePanel__58bad7" />
       )}
       {showCheckout && (
