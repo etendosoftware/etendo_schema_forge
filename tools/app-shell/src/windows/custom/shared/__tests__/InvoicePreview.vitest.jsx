@@ -203,6 +203,35 @@ describe('InvoicePreview', () => {
     expect(title).toContain('Sales Invoice');
   });
 
+  // ── ETP-4842: dead kebab button removed from InvoiceActionButtons ────────
+  // A trailing icon-only <button> (MoreVertical, no onClick/menuActions) used
+  // to always render in the action bar regardless of status/specName — dead
+  // UI that never did anything on click. Assert every action-bar button now
+  // has a real accessible name (no leftover icon-only button) for both
+  // sales-invoice and purchase-invoice.
+  describe('dead kebab button removed (ETP-4842)', () => {
+    it('renders only labeled action buttons for purchase-invoice (no icon-only kebab)', () => {
+      renderInvoicePreview({ specName: 'purchase-invoice' });
+      const actionsContainer = screen.getByTestId('modal-actions');
+      const buttons = actionsContainer.querySelectorAll('button');
+      expect(buttons.length).toBeGreaterThan(0);
+      buttons.forEach((btn) => {
+        expect(btn.textContent.trim().length).toBeGreaterThan(0);
+      });
+    });
+
+    it('renders only labeled action buttons for sales-invoice (no icon-only kebab)', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true }));
+      renderInvoicePreview({ specName: 'sales-invoice' });
+      const actionsContainer = screen.getByTestId('modal-actions');
+      const buttons = actionsContainer.querySelectorAll('button');
+      expect(buttons.length).toBeGreaterThan(0);
+      buttons.forEach((btn) => {
+        expect(btn.textContent.trim().length).toBeGreaterThan(0);
+      });
+    });
+  });
+
   // ── Dual-currency via useDocumentCurrency (ETP-4029) ─────────────────────
 
   describe('dual-currency via useDocumentCurrency', () => {
