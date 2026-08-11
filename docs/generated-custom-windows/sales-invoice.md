@@ -562,7 +562,7 @@ and before the credit section:
 | Field | i18n key | Behavior |
 |-------|----------|----------|
 | **Tasa de conversión** (Conversion rate) | `cpConversionRate` | Editable numeric input. Prefilled from the system exchange rate for the *invoice → account* currency pair via the `GET {base}/validate-exchange-rate` endpoint, wrapped by the new `useConversionRate` hook (`tools/app-shell/src/windows/custom/shared/useConversionRate.js`). Accepts `0.92` or `0,92`. |
-| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Read-only. Computed as `amount × rate` and recomputed live whenever the amount or the rate changes. Rendered with `formatCurrency(accountCurrency, …)` so the account currency shows next to the value. |
+| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Also editable, mirroring Classic's Add Payment. Whichever of the two the user edits drives the other: typing a rate recomputes this amount (`= invoice amount × rate`, rounded to 2 decimals); typing an amount here recomputes the rate instead (`= typed amount ÷ invoice amount`, rounded to 6 decimals). Changing the invoice-currency amount elsewhere in the modal (e.g. **Igualar**) keeps the rate fixed and recomputes this amount forward. |
 
 Both fields are **hidden whenever the currencies match** (the common case), so single-currency
 collections are visually unchanged. The prefilled rate field is cleared automatically when the

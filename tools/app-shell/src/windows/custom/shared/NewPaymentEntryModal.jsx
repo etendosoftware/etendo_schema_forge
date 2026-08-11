@@ -128,6 +128,13 @@ function fmtCur(n, currency) {
   return formatCurrency(currency, n);
 }
 
+/** Rate implied by a typed account-currency amount, given the (fixed) invoice-currency amount —
+ *  the inverse of `amount × rate`. Rounded to 6 decimals (typical FX-rate precision) and
+ *  re-parsed to strip trailing zeros / float noise before being handed back as the rate string. */
+function deriveRateFromAmount(accountAmount, invoiceAmount) {
+  return String(parseFloat((accountAmount / invoiceAmount).toFixed(6)));
+}
+
 /** Label for the balance delta (excess / missing / exact). */
 function deltaLabelFor(balance, ui) {
   if (balance.isExcess) return ui('cpExcess');
@@ -921,8 +928,46 @@ export default function NewPaymentEntryModal({
     const n = parseFloat(String(rateStr).replace(',', '.'));
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [rateStr]);
-  // Amount expressed in the account currency = payment amount × rate (recomputes live on both).
-  const amountInAccount = (isForeign && rate != null) ? round2(balance.amount * rate) : null;
+  // ── "Importe en moneda de la cuenta" (Converted Amount) is independently editable, mirroring
+  // Classic's Add Payment: editing the rate recomputes the converted amount, and editing the
+  // converted amount recomputes the rate — whichever the user touches drives the other.
+  const [amountStr, setAmountStr] = useState('');
+  // Set right before an amount-driven rate update so the effect below skips its own echo: without
+  // this, typing in the amount field would derive a rate, which would immediately recompute (and
+  // reformat) the amount field the user is still typing in, fighting their keystrokes.
+  const skipAmountRecomputeRef = useRef(false);
+  // Recompute the converted amount from the rate whenever the rate changes (typed directly, or
+  // re-seeded from the system/persisted value) or the invoice-currency amount changes (e.g. via
+  // "Igualar" or the Importe field) — in both cases the rate is the value to keep fixed, matching
+  // Classic. Skipped once when the change originated from the amount field itself (see the ref
+  // above), and cleared entirely when the fields aren't shown.
+  useEffect(() => {
+    if (skipAmountRecomputeRef.current) {
+      skipAmountRecomputeRef.current = false;
+      return;
+    }
+    if (isForeign && rate != null) {
+      setAmountStr(formatPlain(round2(balance.amount * rate)));
+    } else {
+      setAmountStr('');
+    }
+  }, [isForeign, rate, balance.amount]);
+  const onRateChange = useCallback((e) => {
+    setRateStr(e.target.value);
+  }, []);
+  const onAmountChange = useCallback((e) => {
+    const raw = e.target.value;
+    setAmountStr(raw);
+    const n = parseFloat(String(raw).replace(',', '.'));
+    if (Number.isFinite(n) && n > 0 && balance.amount > 0) {
+      skipAmountRecomputeRef.current = true;
+      setRateStr(deriveRateFromAmount(n, balance.amount));
+    } else {
+      // Blank/invalid amount ⇒ the implied rate is unknown too, so fall back to the same
+      // rateMissing gating a blank rate field already triggers.
+      setRateStr('');
+    }
+  }, [balance.amount]);
 
   // Derived gating/eligibility state, computed together since save/confirm disabled-ness,
   // the PIS block's visibility, and its "ready to confirm" state all share the same inputs.
@@ -1229,7 +1274,7 @@ export default function NewPaymentEntryModal({
                 <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                   <input
                     type="text" inputMode="decimal" value={rateStr}
-                    onChange={e => setRateStr(e.target.value)}
+                    onChange={onRateChange}
                     data-testid="cp-conversion-rate-input"
                     style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
                   />
@@ -1240,12 +1285,22 @@ export default function NewPaymentEntryModal({
                   </p>
                 )}
               </Field>
-              <Field label={ui('cpAmountInAccount')} data-testid="Field__amount-in-account">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: 40, border: `1px solid ${BORDER1}`, borderRadius: 8, background: WIDGET_BG, minWidth: 0, padding: '0 12px', font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }} data-testid="cp-amount-in-account">
-                  {amountInAccount == null
-                    ? '—'
-                    : <MoneyAmount value={amountInAccount} currency={accountCurrency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-amount-in-account" />}
+              {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
+              <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
+                <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
+                  <input
+                    type="text" inputMode="decimal" value={amountStr}
+                    onChange={onAmountChange}
+                    data-testid="cp-amount-in-account-input"
+                    style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                  />
+                  <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>
                 </div>
+                {(rateMissing || rateIsOne) && (
+                  <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-amount-in-account-error">
+                    {ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired')}
+                  </p>
+                )}
               </Field>
             </div>
           )}

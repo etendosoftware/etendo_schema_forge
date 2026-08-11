@@ -509,7 +509,7 @@ When the invoice currency differs from the currency of the selected financial ac
 | Field | i18n key | Behavior |
 |-------|----------|----------|
 | **Tasa de conversión** (Conversion rate) | `cpConversionRate` | Editable numeric input, prefilled from `GET {base}/validate-exchange-rate` via the `useConversionRate` hook (`tools/app-shell/src/windows/custom/shared/useConversionRate.js`); accepts `0.92` or `0,92`. |
-| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Read-only, `= amount × rate`, recomputed live; rendered in the account currency. |
+| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Also editable, mirroring Classic's Add Payment. Whichever of the two the user edits drives the other: typing a rate recomputes this amount (`= invoice amount × rate`, rounded to 2 decimals); typing an amount here recomputes the rate instead (`= typed amount ÷ invoice amount`, rounded to 6 decimals). Changing the invoice-currency amount elsewhere in the modal (e.g. **Igualar**) keeps the rate fixed and recomputes this amount forward. |
 
 Both are **hidden when the currencies match**. On a foreign-currency payment a **positive rate
 ≠ 1 is required** — a blank/non-positive or `1` rate disables **Guardar** and **Confirmar** (the
