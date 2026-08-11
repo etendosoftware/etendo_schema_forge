@@ -224,13 +224,19 @@ test.describe('Multi-currency payment modal (ETP-4504) — purchase-invoice', ()
     const rateInput = modal.getByTestId('cp-conversion-rate-input');
     await expect(rateInput).toHaveValue(/0[.,]92/);
 
-    // 100 (outstanding) × 0.92 = 92 in the account currency.
-    const readout = modal.getByTestId('cp-amount-in-account');
-    await expect(readout).toContainText(/92/);
+    // 100 (outstanding) × 0.92 = 92 in the account currency — the converted amount is now an
+    // editable <input> (no longer a read-only readout), so assert its value directly.
+    const amountInAccount = modal.getByTestId('cp-amount-in-account-input');
+    await expect(amountInAccount).toHaveValue(/92/);
 
     // Recompute live when the rate changes: 100 × 0.5 = 50.
     await rateInput.fill('0.5');
-    await expect(readout).toContainText(/50/);
+    await expect(amountInAccount).toHaveValue(/50/);
+
+    // Reverse direction: typing directly into the converted-amount field derives a new rate
+    // (the inverse of amount × rate) — 30 / 100 = 0.3.
+    await amountInAccount.fill('30');
+    await expect(rateInput).toHaveValue(/0[.,]3/);
   });
 
   test('hides the conversion fields when the account currency matches the invoice currency', async ({ page }) => {
@@ -297,10 +303,15 @@ test.describe('Reopened draft keeps its saved conversion rate (ETP-4841) — pur
     // The persisted 0.89 wins over the system 0.92.
     await expect(modal.getByTestId('cp-conversion-rate-input')).toHaveValue(DRAFT_RATE);
 
-    // The account-currency readout is derived from the SAME rate: 100 × 0.89 = 89 €.
-    const readout = modal.getByTestId('cp-amount-in-account');
-    await expect(readout).toContainText(/89/);
-    await expect(readout).toContainText('€');
+    // The account-currency amount is derived from the SAME rate: 100 × 0.89 = 89. The currency
+    // symbol now renders in a sibling <span> right after the (editable) input — NOT inside a
+    // "Field__amount-in-account" testid, which the Field() wrapper never actually forwards to
+    // the DOM (it destructures only { label, required, children }, silently dropping any other
+    // prop passed on <Field>, including every other data-testid="Field__…" in this file) — so
+    // check the numeric value on the input and the symbol on its immediate sibling instead.
+    const amountInAccount = modal.getByTestId('cp-amount-in-account-input');
+    await expect(amountInAccount).toHaveValue(/89/);
+    await expect(amountInAccount.locator('xpath=following-sibling::span[1]')).toContainText('€');
 
     // A valid persisted rate satisfies the foreign-payment gate on its own.
     await expect(modal.getByTestId('cp-save-draft')).toBeEnabled();
