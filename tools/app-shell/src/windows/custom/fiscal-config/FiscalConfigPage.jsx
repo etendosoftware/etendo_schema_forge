@@ -1,5 +1,11 @@
 import { useState, useRef } from 'react';
-import { Save, RefreshCw, PlusCircle } from 'lucide-react';
+import { Save, RefreshCw, PlusCircle, MoreVertical } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import OrgDropdown from './FiscalOrgDropdown.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -218,27 +224,40 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
             data-testid="OrgDropdown__310303" />
         </div>
         <div className="flex items-center gap-2">
-          {canAddComplementary && !addingComplementary && (
-            <Button
-              variant="outline"
-              onClick={handleAddComplementary}
-              disabled={saving || creatingComplementary}
-              data-testid="FiscalConfigPage__addComplementary">
-              <PlusCircle size={14} className="mr-1.5" data-testid="PlusCircle__310303" />
-              {creatingComplementary
-                ? ui('fiscal.addComplementary.creating')
-                : ui('fiscal.addComplementary.addSii')}
-            </Button>
-          )}
-          {canChangeSif && !addingComplementary && (
-            <Button
-              variant="outline"
-              onClick={() => setChangeSifOpen(true)}
-              disabled={saving}
-              data-testid="FiscalConfigPage__changeSif">
-              <RefreshCw size={14} className="mr-1.5" data-testid="RefreshCw__310303" />
-              {ui('fiscal.changeSif.action')}
-            </Button>
+          {(canAddComplementary || canChangeSif) && !addingComplementary && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={saving}
+                  aria-label={ui('fiscal.actions.menu')}
+                  data-testid="FiscalConfigPage__actionsMenu"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none">
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                {canAddComplementary && (
+                  <DropdownMenuItem
+                    disabled={creatingComplementary}
+                    onSelect={handleAddComplementary}
+                    data-testid="FiscalConfigPage__addComplementary">
+                    <PlusCircle className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {creatingComplementary
+                      ? ui('fiscal.addComplementary.creating')
+                      : ui('fiscal.addComplementary.addSii')}
+                  </DropdownMenuItem>
+                )}
+                {canChangeSif && (
+                  <DropdownMenuItem
+                    onSelect={() => setChangeSifOpen(true)}
+                    data-testid="FiscalConfigPage__changeSif">
+                    <RefreshCw className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {ui('fiscal.changeSif.action')}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <Button
             variant="outline"

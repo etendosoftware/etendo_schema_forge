@@ -20074,6 +20074,7 @@
     "fiscal.addComplementary.addSii": "Añadir SII",
     "fiscal.addComplementary.creating": "Creando…",
     "fiscal.addComplementary.err.createFailed": "No se ha podido crear el registro de configuración complementario: {error}",
+    "fiscal.actions.menu": "Más acciones",
     "fiscal.changeSif.action": "Cambiar SIF",
     "fiscal.changeSif.title": "Cambiar sistema de facturación (SIF)",
     "fiscal.changeSif.body": "Se desactivará el sistema de facturación actual para esta organización. Su configuración se conserva como registro y no se elimina. A continuación podrás elegir un nuevo sistema de facturación, o dejar la organización sin ninguno activo.",

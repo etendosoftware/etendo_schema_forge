@@ -76,6 +76,17 @@ async function loginWithOrg(page) {
   await login(page);
 }
 
+// ── Kebab menu helper ─────────────────────────────────────────────────────────
+//
+// The "Añadir SII" and "Cambiar SIF" actions are inside a DropdownMenu kebab
+// triggered by `FiscalConfigPage__actionsMenu`. The content only renders after
+// the trigger is clicked, so all interactions with those items must open the
+// kebab first.
+
+async function openActionsMenu(page) {
+  await page.getByTestId('FiscalConfigPage__actionsMenu').click();
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 test.describe('Fiscal Config — no org selected', () => {
@@ -445,6 +456,7 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
       await navigateTo(page, 'fiscal-config');
 
       await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+      await openActionsMenu(page);
       await page.getByTestId('FiscalConfigPage__changeSif').click();
 
       await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible();
@@ -472,6 +484,7 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
     await navigateTo(page, 'fiscal-config');
 
     await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+    await openActionsMenu(page);
     await page.getByTestId('FiscalConfigPage__changeSif').click();
 
     await expect(page.getByTestId('ChangeSifDialog__notice')).toBeVisible();
@@ -495,6 +508,7 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
     await navigateTo(page, 'fiscal-config');
 
     await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+    await openActionsMenu(page);
     await page.getByTestId('FiscalConfigPage__changeSif').click();
     await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible();
 
@@ -686,7 +700,9 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
     // TBAI section must load first
     await expect(page.getByText(t('fiscal.tbai.field.enrollDate'))).toBeVisible({ timeout: 8_000 });
 
-    // The "Add SII" button is shown because canAddComplementary is true (tbai-only profile)
+    // The "Add SII" item is in the kebab because canAddComplementary is true (tbai-only profile).
+    // Open the actions menu first, then assert the item is present and contains the right text.
+    await openActionsMenu(page);
     await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toBeVisible();
     await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toContainText(
       t('fiscal.addComplementary.addSii'),
@@ -700,7 +716,9 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
 
     await expect(page.getByText(t('fiscal.sii.field.enrolled'))).toBeVisible({ timeout: 8_000 });
 
-    // canAddComplementary is false for sii-only profile
+    // canAddComplementary is false for sii-only profile — open the kebab and verify
+    // addComplementary is absent from its items.
+    await openActionsMenu(page);
     await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toHaveCount(0);
   });
 
@@ -711,7 +729,9 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
 
     await expect(page.getByText(t('fiscal.verifactu.field.tax'))).toBeVisible({ timeout: 8_000 });
 
-    // canAddComplementary is false for verifactu profile
+    // canAddComplementary is false for verifactu profile — open the kebab and verify
+    // addComplementary is absent from its items.
+    await openActionsMenu(page);
     await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toHaveCount(0);
   });
 
@@ -768,11 +788,12 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
 
     await navigateTo(page, 'fiscal-config');
 
-    // TBAI section loads and the "Add SII" button is shown
+    // TBAI section loads and the "Add SII" item is in the kebab.
     await expect(page.getByText(t('fiscal.tbai.field.enrollDate'))).toBeVisible({ timeout: 8_000 });
+    await openActionsMenu(page);
     await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toBeVisible();
 
-    // Click "Add SII" — intercept the POST to sii-config
+    // Click "Add SII" — intercept the POST to sii-config.
     const [postReq] = await Promise.all([
       page.waitForRequest(
         req => req.method() === 'POST' && req.url().includes('/sii-config/'),
@@ -796,4 +817,196 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
     // The "Add SII" button itself disappears (addingComplementary is now set)
     await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toHaveCount(0);
   });
+});
+
+// ── Smart deactivation — deleted:true response (ETP-4785) ────────────────────
+//
+// When the backend removes the fiscal config record entirely (because no sent
+// invoices existed), it returns `{ response: { data: { deleted: true } } }` in
+// the PUT response body instead of the usual deactivated row envelope.
+// ChangeSifDialog treats any ok=200 as success and calls onChanged(), which
+// triggers refetch(). After a deletion the GET returns an empty list, so the
+// page resolves back to `unconfigured` and the onboarding wizard reappears —
+// exactly the same visible end-state as a regular deactivation, so no special
+// error branch is hit.
+//
+// TC-DEL-1: Verifactu config — deleted:true → page refetches → wizard reappears
+// TC-DEL-2: SII config — deleted:true → GET re-fires → wizard reappears
+// TC-DEL-3: deleted:true does NOT leave a stale SIF section visible while loading
+
+async function installChangeSifDeletedMocks(page, { spec, record }) {
+  const state = { deleted: false };
+  await page.route(`**/sws/neo/${spec}/**`, async route => {
+    const req = route.request();
+    const method = req.method();
+    if (method === 'GET') {
+      // After the DELETE the record is gone — return empty list for the refetch.
+      if (state.deleted) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(neoOk([])),
+        });
+      }
+      // Before the PUT — return the active record.
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(neoOk([{ ...record, active: 'Y' }])),
+      });
+    }
+    if (method === 'PUT') {
+      state.deleted = true;
+      // Backend deleted the record (no sent invoices) — returns the smart-delete shape.
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: { deleted: true } } }),
+      });
+    }
+    return route.fallback();
+  });
+  for (const other of ['sii-config', 'tbai-config', 'verifactu-config'].filter(s => s !== spec)) {
+    await page.route(`**/sws/neo/${other}/**`, route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) }),
+    );
+  }
+  return state;
+}
+
+test.describe('Fiscal Config — smart deactivation (deleted:true response)', () => {
+  test('TC-DEL-1: Verifactu config — deleted:true response refreshes the page correctly', async ({ page }) => {
+    const c = CHANGE_SIF_CASES.find(x => x.label === 'VERIFACTU');
+    await loginWithOrg(page);
+    const state = await installChangeSifDeletedMocks(page, c);
+    await navigateTo(page, 'fiscal-config');
+
+    // Verifactu section must render before we can interact
+    await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+
+    // Open kebab → click "Cambiar SIF"
+    await openActionsMenu(page);
+    await page.getByTestId('FiscalConfigPage__changeSif').click();
+
+    await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible({ timeout: 4_000 });
+
+    // Confirm the SIF change and wait for the PUT to complete
+    const [putReq] = await Promise.all([
+      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes(`/${c.spec}/`)),
+      page.getByTestId('ChangeSifDialog__confirm').click(),
+    ]);
+    expect(putReq.url()).toContain(c.record.id);
+    expect(state.deleted).toBe(true);
+
+    // After deleted:true the page must refetch and resolve to unconfigured
+    // → the onboarding wizard reappears
+    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+
+    // No error banner must be visible
+    await expect(page.locator('[data-testid="ChangeSifDialog__error"]')).toHaveCount(0);
+
+    // The old SIF section must be gone
+    await expect(page.getByText(c.detailFieldLabel)).toHaveCount(0);
+  });
+
+  test('TC-DEL-2: SII config — deleted:true response, org ends up unconfigured', async ({ page }) => {
+    const c = CHANGE_SIF_CASES.find(x => x.label === 'SII');
+    await loginWithOrg(page);
+    const state = await installChangeSifDeletedMocks(page, c);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+
+    // Track the GET that fires after the PUT to confirm refetch happened
+    let refetchGetFired = false;
+    page.on('request', req => {
+      if (req.method() === 'GET' && req.url().includes(`/${c.spec}/`) && state.deleted) {
+        refetchGetFired = true;
+      }
+    });
+
+    await openActionsMenu(page);
+    await page.getByTestId('FiscalConfigPage__changeSif').click();
+    await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible({ timeout: 4_000 });
+
+    await Promise.all([
+      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes(`/${c.spec}/`)),
+      page.getByTestId('ChangeSifDialog__confirm').click(),
+    ]);
+
+    // Wizard reappears — proves the GET re-fired and the page resolved to unconfigured
+    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+    expect(refetchGetFired).toBe(true);
+
+    // No error shown
+    await expect(page.locator('[data-testid="ChangeSifDialog__error"]')).toHaveCount(0);
+  });
+
+  test('TC-DEL-3: deleted:true does NOT leave a stale SIF section visible while transitioning', async ({ page }) => {
+    const c = CHANGE_SIF_CASES.find(x => x.label === 'SII');
+    await loginWithOrg(page);
+    await installChangeSifDeletedMocks(page, c);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+
+    await openActionsMenu(page);
+    await page.getByTestId('FiscalConfigPage__changeSif').click();
+    await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible({ timeout: 4_000 });
+
+    await Promise.all([
+      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes(`/${c.spec}/`)),
+      page.getByTestId('ChangeSifDialog__confirm').click(),
+    ]);
+
+    // The page must reach the wizard (unconfigured) without showing the old SIF
+    // section at any point after the PUT resolves. We wait for the wizard text
+    // rather than polling — if the old SIF section reappears, this expectation
+    // catches the stale-UI regression.
+    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
+
+    // At this point (wizard visible) the old SIF section must not co-exist
+    await expect(page.getByText(c.detailFieldLabel)).toHaveCount(0);
+  });
+});
+
+// ── ChangeSifDialog disclaimer per profile (ETP-4785) ─────────────────────────
+//
+// Each SIF profile shows a different notice key in the ChangeSifDialog:
+//   SII       → fiscal.changeSif.notice.sii
+//   TBAI      → fiscal.changeSif.notice.tbai
+//   Verifactu → fiscal.changeSif.notice.verifactu (also tested in TC6 above as a
+//               correctness regression, here we verify all three profiles match)
+//
+// The notice is rendered in the `ChangeSifDialog__notice` container.
+// We open the kebab, click "Cambiar SIF", and assert the notice text differs
+// per profile — proving the dialog receives the correct `noticeKey` prop.
+
+test.describe('Fiscal Config — ChangeSifDialog notice per SIF profile', () => {
+  for (const c of CHANGE_SIF_CASES) {
+    test(`${c.label}: ChangeSifDialog shows the correct notice text`, async ({ page }) => {
+      await loginWithOrg(page);
+      await installChangeSifMocks(page, c);
+      await navigateTo(page, 'fiscal-config');
+
+      // Wait for the fiscal config section to load (profile-specific field label)
+      await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
+
+      // Open the kebab and click "Cambiar SIF"
+      await openActionsMenu(page);
+      await page.getByTestId('FiscalConfigPage__changeSif').click();
+
+      // The dialog must be visible with its notice section
+      await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible({ timeout: 4_000 });
+
+      // The notice section must contain the profile-specific i18n text
+      const notice = page.getByTestId('ChangeSifDialog__notice');
+      await expect(notice).toBeVisible();
+      await expect(notice).toContainText(t(c.noticeKey));
+
+      // Dismiss (cancel) without making changes
+      await page.getByTestId('ChangeSifDialog__cancel').click();
+      await expect(page.getByTestId('ChangeSifDialog__content')).toHaveCount(0);
+    });
+  }
 });

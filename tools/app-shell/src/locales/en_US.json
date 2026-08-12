@@ -19824,6 +19824,7 @@
     "fiscal.addComplementary.addSii": "Add SII",
     "fiscal.addComplementary.creating": "Creating…",
     "fiscal.addComplementary.err.createFailed": "Could not create the complementary configuration record: {error}",
+    "fiscal.actions.menu": "More actions",
     "fiscal.changeSif.action": "Change SIF",
     "fiscal.changeSif.title": "Change fiscal system (SIF)",
     "fiscal.changeSif.body": "The current fiscal system will be deactivated for this organization. Its configuration is kept as a record and is not deleted. You will then be able to choose a new fiscal system, or leave the organization without an active one.",
