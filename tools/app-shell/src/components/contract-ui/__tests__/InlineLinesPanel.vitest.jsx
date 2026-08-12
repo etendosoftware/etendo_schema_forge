@@ -37,6 +37,7 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
 vi.mock('@/lib/linesColumnWidth.js', () => ({
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 
 // Stub the heavy sub-components that need their own providers

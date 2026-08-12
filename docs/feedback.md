@@ -517,6 +517,58 @@ second line of defense in case it doesn't.
 
 ---
 
+## [2026-07-30] ETP-4741 — Creation-form defaults race fixed; two follow-ups deferred
+
+The race fix itself (defaults-loading gate on the `/new` route, 4s gate-release budget, epoch-based
+invalidation of superseded sessions, user-edit merge guard, record-load neutralization) is documented in
+`docs/generated-custom-windows/app-shell-functional-flows.md` §4 and
+`docs/ops/app-shell-observability.md` (`defaults_block`). Two follow-ups were agreed and
+deliberately deferred:
+
+- A `handleNew()` session superseded by a newer `handleNew()` is made epoch-inert but its fetch is
+  NOT aborted — it runs to completion against a form that will ignore it. Only record-load
+  neutralization (`handleSelect`/`fetchById`) aborts the in-flight request. The 4s timer does not
+  abort either: it only releases the gate, so the request is unbounded, not capped at 4s.
+- A mocked Playwright spec covering the `/new` defaults gate and the record-navigation
+  (neutralization) path is recommended but not yet written; current coverage is Vitest-only
+  (`tools/app-shell/src/hooks/__tests__/useEntity.defaultsRace.vitest.jsx`).
+
+---
+
+## [2026-07-31] ETP-4741 — Initial-callout latch can be consumed before the defaults land (pre-existing, deferred)
+
+**Component:** `tools/app-shell/src/components/contract-ui/DetailView.jsx` — the "fire callouts for
+non-dependent selector fields" effect (around L2951-2978).
+
+**Symptom:** on a `/new` route the backend defaults arrive and are merged into the form, but the
+initial callout chain (e.g. `businessPartner` → `priceList` / `paymentTerms`) never runs, so the
+dependent fields stay empty until the user re-picks a value by hand.
+
+**Root cause:** the effect is latched by `defaultCalloutsTriggeredRef` and arms as soon as
+`hook.editing` becomes non-empty *for any reason*. Typing into a plain, non-selector field is
+enough: the effect runs, sets the latch, then computes its `triggers` as the selectors filtered by
+`hook.editing[s.field]` — still empty, because the defaults have not landed — and fires nothing.
+When the defaults merge a moment later the effect re-runs, but `defaultCalloutsTriggeredRef.current`
+is already `true`, so it returns immediately. The latch condition tracks "the form has some value"
+when what it actually needs is "the defaults have been applied".
+
+**Pre-existing, not introduced by this branch:** verified against the branch base (`85a147423`) —
+the effect and its latch condition are byte-identical there; ETP-4741's only change to
+`DetailView.jsx` is the one-line `isLoadingRecordForRoute` gate. What ETP-4741 does change is the
+exposure window: while `defaultsLoading` is true the new-record form is gated, so typing is
+impossible. The only remaining way in is the window between the 4s gate release and a late defaults
+response — which is exactly the case the redesigned timeout now keeps alive (the request is no
+longer discarded), so the narrowed defect deserves an explicit record rather than silence.
+
+**Why it was not fixed here:** the fix is a one-line change to the latch condition, but it lands in
+`DetailView.jsx`, a file that is hot in ETP-4730 / PR #994. Touching it from this branch would
+manufacture a merge conflict out of all proportion to a residual, pre-existing defect. A follow-up
+ticket carries it.
+
+**Where the fix belongs:** in the latch condition itself — arm on the defaults having actually been
+applied (or on a non-empty `triggers` set), not on `editing` merely becoming non-empty. Do **not**
+"fix" it by re-introducing the timeout's old discard behavior: that is the regression ETP-4741
+removed, and it produced a form with neither defaults nor callouts at all.
 ## [2026-07-30] ETP-4565 — `contacts` hit the known `AD_Ref_List_Trl` translation-stripping gap
 
 **Follow-up to** "`make regen` Silently Strips es_ES Enum Labels on a DB Missing `AD_Ref_List_Trl` Rows" above (originally documented against `financial-account`, also hit by `goods-shipment`). `contacts` is now a third confirmed occurrence.
@@ -778,3 +830,57 @@ treating it as a working pattern to copy. A real fix for `onPageHelp` app-wide b
 `schema_forge_core`/Schema Forge Developer territory (`DetailView.jsx`/`ListView.jsx`/`TopBar.jsx`
 are shared generic components, not window-specific config) — file as a follow-up task rather than
 scope-creeping it into a single window's fix.
+
+## ETP-4773: Missing "Required" Error on `inputMode: dependent` Fields
+
+**Component:** `EntityForm.jsx` — `DependentFkField`, `renderDependentField`
+
+**Symptom:** In the Form view, required fields with `inputMode: "dependent"` (e.g. `partnerAddress` /
+"Dirección") showed the required asterisk but did NOT render the "Requerido" error text after saving
+with the field empty. Required `inputMode: "selector"` fields (Tarifa, Condiciones de pago) showed the
+error correctly.
+
+**Root cause:** `renderFieldWithError` injects the error `<p>` via `React.cloneElement`, assuming the
+target element renders `{props.children}` so the injected node lands inside it. `DependentFkField`
+returned its own `<div>` with hardcoded children (a `<Label>` plus the selector) and no children slot —
+the cloned-in error node had nowhere to attach and was silently dropped.
+
+**Fix:** `DependentFkField` no longer renders its own `<Label>` — it returns only the selector
+(`PartnerAddressPicker` or `DependentSelect`). The caller, `renderDependentField`, now wraps the label
+and the field in a `<div>{Label}<DependentFkField .../></div>`, the same label/selector split already
+used by `renderSearchSelectField` for `inputMode: "selector"` fields — which is exactly why that mode
+never had this bug.
+
+**Lesson:** Any field renderer that `renderFieldWithError` wraps via `cloneElement` MUST expose a real
+children slot (i.e. actually render `{props.children}`, generally by keeping the field's own label
+outside the cloned element). A field component that renders its own complete, self-contained markup —
+label included — silently swallows the injected error node. This is a generic component fix in
+`EntityForm.jsx`; it applies to every window with a required `inputMode: dependent` field
+(sales-order, purchase-order, purchase-invoice, sales-invoice, sales-quotation, goods-shipment,
+goods-receipt, return-material-receipt, return-to-vendor-shipment, assets, user) with no per-window
+override needed.
+
+## [2026-08-06] ETP-4745 — `hideDelete` never reached NEO backend; root cause fixed in `schema_forge_core`, 10 windows still need a re-push
+
+**Component:** `cli/src/lib/entity-methods.js` (`resolveContractEntityMethods()`) — `schema_forge_core` repo, not this one. Consumed here only as a published/`LOCAL_CORE` dependency, and via the `decisions.json → hideDelete` key documented in `docs/decisions-reference.md` and `docs/ui-customization.md`.
+
+**Symptom:** setting `hideDelete: true` (window- or entity-level) in `decisions.json` hid the delete affordance in the UI, but a direct `DELETE` API call against the same entity still succeeded — `hideDelete` never reached `ETGO_SF_ENTITY.ISDELETE`. Confirmed by the ETP-4745 QA pass, live DB query: **every window in this repo that currently declares `hideDelete` (10 total) has `isdelete='Y'` in the local dev DB's `ETGO_SF_ENTITY` right now.**
+
+**Root cause and fix:** see the Jira ticket (ETP-4745) and GitHub issue [etendosoftware/schema_forge_core#116](https://github.com/etendosoftware/schema_forge_core/issues/116) for the full write-up. In short: `resolveContractEntityMethods()` — the single function both `push-to-neo.js` (live DB push) and `lib/neo-delta.js` (offline XML delta) read the resolved HTTP-method set from — silently ignored `hideDelete` when folding `decisions.json`'s read-only/method intent into the entity's method list. Fixed generically in `schema_forge_core` branch `feature/ETP-4745` (commit `6f02aac37`); no window-specific code changed. Pipeline validator rule F21 was updated to also catch a stale `hideDelete`-derived `crud.<entity>.delete` (see `docs/pipeline-validator-reference.md`).
+
+**This fix does NOT self-apply to already-declared windows.** `push-to-neo.js` only runs when a window is explicitly re-pushed; existing `ETGO_SF_ENTITY` rows keep their current (wrong) `ISDELETE='Y'` value until that happens. **Once the `schema_forge_core` fix is merged and published (or consumed via `LOCAL_CORE=1`), the following 10 windows/entities need `make regen ONLY=<window> PUSH_TO_NEO=1` followed by `./gradlew export.database`** to actually close the gap — this re-push is a deliberate, separate step requiring explicit human go-ahead, not part of the ETP-4745 pipeline run itself:
+
+| Window | `hideDelete` scope |
+|--------|---------------------|
+| `asset-group` | entity `accounting` |
+| `business-partner-category` | entity `accounting` |
+| `contacts` | entities `customerAccounting`, `vendorAccounting` |
+| `open-close-period-control` | window-level |
+| `product-category` | entity `accounting` |
+| `product` | entity `accounting` |
+| `tax-category` | window-level |
+| `tax` | window-level + entity `accounting` |
+| `user` | entity `userRoles` |
+| `warehouse` | entity `accounting` |
+
+**Lesson:** a `decisions.json` flag that reaches `contract.json` is not proof it reaches the runtime. `apiPrediction.crud.<entity>.delete: false` in the contract is a *declared intent*; only `push-to-neo.js`/`neo-delta.js` actually writing `ISDELETE='N'` to `ETGO_SF_ENTITY` makes NEO Headless enforce it. When adding a new declarative flag that's supposed to restrict the live API, verify the write path (`resolveContractEntityMethods()` or equivalent), not just the contract shape — this is exactly the same class of gap ETP-4254 closed for `readOnly`/`methods`, and `hideDelete` had quietly never gotten the same treatment.

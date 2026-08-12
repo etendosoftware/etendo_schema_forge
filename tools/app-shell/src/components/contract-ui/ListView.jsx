@@ -934,7 +934,7 @@ export function ListView({
                   <Button
                     size={selectionBarSize}
                     className="gap-1.5"
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token)}
+                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
                     {ui('print')} ({selectedRows.length})

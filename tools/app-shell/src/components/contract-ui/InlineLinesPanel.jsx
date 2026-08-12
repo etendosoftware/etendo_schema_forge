@@ -22,7 +22,7 @@ import { SelectorInput } from './SelectorInput.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
-import { columnFlex } from '@/lib/linesColumnWidth.js';
+import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 // ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
 // AmortizationLinesTable.jsx). ETP-4610 moved the per-row entry point from a fixed
@@ -49,7 +49,10 @@ const TOKENS = {
 // chevron gets the same breathing room from the row's left border that every other
 // leading column already has — it previously had none, sitting flush against the edge.
 const CHECKBOX_COLUMN_WIDTH = 40;
-const CHEVRON_COLUMN_WIDTH = 44;
+// Exported — DataTable's add-row-only companion table (see renderLinesColgroup
+// in DataTable.jsx) reserves a matching leading column so the two independently
+// mounted tables stay pixel-aligned when a dimensionsPanel column is present.
+export const CHEVRON_COLUMN_WIDTH = 44;
 // Left indent for the dimensions expand sub-row so its first field aligns with the first
 // real grid column above it: chevron column + checkbox column + the first cell's own
 // leading `cellPaddingX`.
@@ -788,10 +791,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // longer rendered as a fixed grid column (no header cell, no width). Its metadata
   // (`rawDimensionsColumn`/`visibleDimensionFields` above) is still used to drive the
   // leading expand-chevron column and the "Add dimensions" hover action — see
-  // `hasDimensionsPanel` below.
+  // `hasDimensionsPanel` below. ETP-4803 — the exclusion itself now lives in
+  // `isLineGridColumn` (linesColumnWidth.js), shared with DataTable's hidden
+  // add-row colgroup, so the two renderers can't diverge on this again.
   const visibleColumns = useMemo(
     () => (columns || []).filter(c => (
-      c.type !== 'dimensionsPanel' && !c.hidden && !hiddenColumns.includes(c.key)
+      isLineGridColumn(c) && !c.hidden && !hiddenColumns.includes(c.key)
     )),
     [columns, hiddenColumns]
   );

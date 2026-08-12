@@ -256,7 +256,7 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
     // replaced → `/sws/neo/price-list/priceList`. Without a matching sales price
     // list, priceListId stays '' and the "Crear →" button never enables (see
     // product-pricing.mocked.spec.js for the same spec-swap URL pattern, POST case).
-    await page.route('**/sws/neo/price-list/priceList**', async (route) => {
+    await page.route('**/sws/neo/price-list/priceList{/**,}**', async (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,

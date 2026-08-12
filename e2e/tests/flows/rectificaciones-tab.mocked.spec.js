@@ -131,7 +131,7 @@ async function installDetailMocks(page, spec, invoice, reversedLines = []) {
   });
 
   for (const entity of ['lines', 'paymentPlan']) {
-    await page.route(`**/sws/neo/${spec}/${entity}**`, async (route) => {
+    await page.route(`**/sws/neo/${spec}/${entity}{/**,}**`, async (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
@@ -141,7 +141,7 @@ async function installDetailMocks(page, spec, invoice, reversedLines = []) {
     });
   }
 
-  await page.route(`**/sws/neo/${spec}/reversedInvoices**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/reversedInvoices{/**,}**`, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -150,7 +150,7 @@ async function installDetailMocks(page, spec, invoice, reversedLines = []) {
     });
   });
 
-  await page.route(`**/sws/neo/${spec}/evaluate-display**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/evaluate-display{/**,}**`, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
   });
 }
@@ -336,14 +336,14 @@ async function installNewInvoiceMocks(page, capture) {
     id: NEW_SAVED_ID, documentNo: 'NC-NEW-1', isRectificative: true, ...newInvoiceDefaults(),
   });
 
-  await page.route('**/sws/neo/sales-invoice/header/defaults**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/header/defaults{/**,}**', async (route) => {
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ defaults: newInvoiceDefaults() }),
     });
   });
 
-  await page.route(`**/sws/neo/sales-invoice/header/${NEW_SAVED_ID}**`, async (route) => {
+  await page.route(`**/sws/neo/sales-invoice/header/${NEW_SAVED_ID}{/**,}**`, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200, contentType: 'application/json',
@@ -352,7 +352,7 @@ async function installNewInvoiceMocks(page, capture) {
   });
 
   // Header POST (create) → saved record; GET list → picker candidates.
-  await page.route('**/sws/neo/sales-invoice/header**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'POST') {
@@ -384,7 +384,7 @@ async function installNewInvoiceMocks(page, capture) {
   });
 
   for (const entity of ['lines', 'paymentPlan']) {
-    await page.route(`**/sws/neo/sales-invoice/${entity}**`, async (route) => {
+    await page.route(`**/sws/neo/sales-invoice/${entity}{/**,}**`, async (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200, contentType: 'application/json',
@@ -393,7 +393,7 @@ async function installNewInvoiceMocks(page, capture) {
     });
   }
 
-  await page.route('**/sws/neo/sales-invoice/reversedInvoices**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/reversedInvoices{/**,}**', async (route) => {
     const req = route.request();
     if (req.method() === 'POST') {
       capture.reversedPosts.push(JSON.parse(req.postData() || '{}'));
@@ -410,7 +410,7 @@ async function installNewInvoiceMocks(page, capture) {
     });
   });
 
-  await page.route('**/sws/neo/sales-invoice/evaluate-display**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/evaluate-display{/**,}**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
   });
 }

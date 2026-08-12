@@ -165,7 +165,7 @@ describe('InlineLinesPanel', () => {
   });
 
   it('imports linesColumnWidth helper for consistent column sizing', () => {
-    assert.match(src, /import \{ columnFlex \} from '@\/lib\/linesColumnWidth\.js'/);
+    assert.match(src, /import \{ columnFlex, isLineGridColumn \} from '@\/lib\/linesColumnWidth\.js'/);
   });
 
   it('exposes clearSelection through the imperative ref', () => {

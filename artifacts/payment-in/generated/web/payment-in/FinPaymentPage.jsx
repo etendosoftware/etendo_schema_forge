@@ -275,6 +275,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         hidePrint
         hideSaveStatuses={["RDNC","RPPC","RPR","RPVOID","PWNC"]}
         toolbarBorderBottom
+        saveBeforeProcesses
         hideFormCard
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }]}
@@ -284,7 +285,6 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid hsl(var(--border-subtle))","padding":0}}
         processConfirmModal={ReactivarConfirmModal}
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"cobroDepositado","RDNC":"cobroDepositado","RPPC":"cobroDepositado","PPM":"cobroDepositado","PWNC":"cobroDepositado"}}
-        statusFieldLabel="statusColumnLabel"
         sendDocument
         {...props} window={effectiveWindow}
       />

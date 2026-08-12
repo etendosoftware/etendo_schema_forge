@@ -81,6 +81,89 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - LinesTable template updated in ETP-3908 to include the inline-editable add-row alignment fix. This window uses `linesLayout: "classic"` so the new template branch is dead code here — no behavioral change.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
 
+## Write-off summary and lines column rename — ETP-4797
+
+`PaymentDetailSidebar` (`artifacts/payment-in/custom/PaymentDetailSidebar.jsx`, thin wrapper over
+the shared `PaymentDetailSidebarBase.jsx`) is the left-column panel showing **Importe del cobro**
+and the breakdown card (**Importe total** / **Aplicado a facturas** / **Sin aplicar**). It was not
+previously documented in this file.
+
+That breakdown now conditionally grows a fourth row, **Diferencia ajustada**, shown only when the
+payment's `writeoffAmount` (DAL property on `finPayment`, physical column `Writeoffamt`) is
+non-zero (`Math.abs(writeoffAmount) >= WRITEOFF_EPSILON`, the same 0.005 tolerance used everywhere
+else in the write-off feature). A payment created without the write-off toggle carries
+`writeoffAmount = 0` and the row never appears — the panel renders exactly as it did before this
+change.
+
+**What "Diferencia ajustada" means:** when this payment settled an invoice for less than its
+outstanding amount and the user turned on the "Ajustar diferencia" toggle at creation time (see
+`financial-account.md`'s reconciliation write-off section, and `sales-invoice.md` /
+`purchase-invoice.md` for the `NewPaymentEntryModal` toggle), the shortfall was not left as a
+pending balance — it was written off. This row shows that written-off amount, i.e. the part of the
+invoice the customer/vendor was released from paying because it was posted to the business
+partner group's write-off account instead. It is **not** a discount, credit, or G/L-item
+allocation — no accounting concept is chosen by the user; the destination account is resolved from
+configuration (see `financial-account.md`).
+
+`writeoffAmount` was flipped from `discarded` to `readOnly` in `decisions.json` for this reason —
+it used to be excluded from the generic W CRUD response entirely, so the frontend had no value to
+read even before this UI existed.
+
+The **Líneas de cobro** table (`PaymentBottomPanel.jsx`) also changed: the **Pendiente** column
+(a purely frontend-computed `Math.max(0, expected - amount)`, never a backend field) was removed,
+and the remaining two columns were renamed to match Classic's own wording for the equivalent grid
+on the `FIN_Payment` window — **Importe** → **Importe esperado** (Expected Amount), **Aplicado** →
+**Importe recibido** (Received Amount). Classic's grid does not carry an outstanding-amount column
+either; the gap between the two remaining numbers already conveys it.
+
+## Draft-state color regressions restored, Confirm button reordered — ETP-4797
+
+ETP-4554 ("Migrate Artifact/Shared Theme Styles", 4 commits, same day) mis-mapped several colors on
+this window's custom components — every case followed the same shape: a neutral gray or a bright
+literal hex got swapped for the wrong CSS variable token, and no exact-match token existed to
+tokenize to cleanly, so the literal hex was restored instead of force-fitting an approximate token.
+All of the following were verified by diffing the pre-refactor commit against the current code
+(and, for the two ambiguous cases, by sampling pixel colors from the Figma reference):
+
+- **`PaymentBottomPanel.jsx` / `PaymentOutBottomPanel.jsx`** — field labels, icons, and loading/empty
+  text were on `--status-info-*` (blue) instead of `--muted-foreground` (gray); the lines-table box
+  border and row dividers were on `--foreground`/`--card` (near-black / invisible-on-white) instead
+  of `--status-neutral-border`.
+- **`DetailView.jsx` / `detailViewHelpers.jsx`** — the `ghost-danger` Reactivar button's border was
+  diluted to `--destructive/0.3` and never pinned a hover text color, so the base `Button` outline
+  variant's `hover:text-accent-foreground` won on hover and turned the label gray instead of red.
+- **`PaymentDetailSidebarBase.jsx`** — the "confirmed" activity dot was `--status-success-fg`
+  (too dark) instead of the original `#2DCA72`; the "draft" (Borrador) activity dot was
+  `--status-warning-fg` (`#8A6100`, too dark) instead of the original `#FAAF00` (bright orange).
+- **`PaymentDraftBanner.jsx`** (payment-in and payment-out) — the panel background was
+  `hsl(var(--card))` (white, same as the page behind it — invisible) instead of `hsl(var(--muted))`;
+  the body text was `--status-info-fg` (blue) instead of `--muted-foreground`; the bold title text
+  was `hsl(var(--foreground))` (`#0F172A`, navy-tinted) instead of the original `#121217`. The
+  bold/dark portion of the banner was also widened to cover "Borrador — sin impacto en caja." as one
+  unit (previously only "Borrador —" was bold; "sin impacto en caja." was grouped with the lighter
+  sentence that follows it), matching the Figma reference. This moved text between the
+  `draftBannerTitle` and `draftBannerBodyIn`/`draftBannerBodyOut` i18n keys — no new keys were added.
+
+**Confirm button position and icon.** The header toolbar's `Confirmar` action comes from
+`processOverrides.aPRMProcessPayment` in `decisions.json` (not from `draftMode`, which this window
+does not use), so it renders through the generic AD-process button loop in `DetailView.jsx` rather
+than the Save+Confirm pair used by windows like sales-invoice. That loop rendered process buttons
+*before* the Save button by default and never drew an icon for `style: 'positive'` (only
+`ghost-danger` got one, a `Undo2`), so `Confirmar` appeared to the left of `Guardar` and without the
+check mark sales-invoice's own Confirm button has.
+
+Fixed by adding `"saveBeforeProcesses": true` to this window's `decisions.json` (and
+payment-out's), which reorders the toolbar so Save renders first and the process buttons (Confirmar,
+Reactivar) render after it, landing Confirmar as the rightmost button next to Guardar. This
+decisions.json key already existed as a `DetailView.jsx` prop (added under ETP-4542) but was never
+wired through the generator — `resolve-curated.js`'s window-key whitelist didn't include it, so
+setting it in `decisions.json` was silently dropped before reaching `contract.json`. That gap was
+closed in `schema_forge_core` (`resolve-curated.js` + `generate-frontend.js`, `feature/ETP-4797`
+branch) as part of this fix — see `docs/repo-topology.md` for the publish step required before a
+plain `make regen` (without `LOCAL_CORE=1`) picks it up for other windows. A `Check` icon was also
+added for any process button with `style: 'positive'` in `DetailView.jsx`, matching the checkmark
+already used by the `draftMode` Confirm button elsewhere in the app.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which adds the

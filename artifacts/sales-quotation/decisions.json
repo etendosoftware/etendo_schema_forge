@@ -9,7 +9,6 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
     "customComponents": {
       "topbarRight": "QuotationTopbarActions",
       "bottomSection": "QuotationBottomPanel"
@@ -70,6 +69,13 @@
       "specName": "sales-quotation",
       "hasPdf": true,
       "cacheOnComplete": true
+    },
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@!='DR'"
+        }
+      }
     }
   },
   "entities": {

@@ -8,6 +8,7 @@
     "sidebarLayout": false,
     "breadcrumb": "Contact",
     "detailEntity": null,
+    "statusField": "none",
     "summaryFields": [],
     "primaryTabs": [
       {
@@ -268,7 +269,8 @@
           "grid": true,
           "label": "Web",
           "section": "principal",
-          "order": 9
+          "order": 9,
+          "inputPrefix": "https://"
         },
         "etgoEmail": {
           "visibility": "editable",
