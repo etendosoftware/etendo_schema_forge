@@ -2,7 +2,7 @@
 
 **Registry row:** `mcp-improvements-registry.md` → IMP-5 (P1, C1, 2.5 / 5, `com.etendoerp.go`).
 **Registered:** base §12 run, from evidence **A5, A8, W4**.
-**Status:** clauses **(i)** and **(iv)** implemented and verified live 2026-08-12 (§5, §6). Registry row
+**Status:** clauses **(i)** and **(iv)** implemented and **both verified live** 2026-08-12 (§6). Registry row
 stays ⚠️ for clause (iii)'s surviving **success**-body asymmetry. Score unchanged pending a
 `/mcp-comparison` re-measure.
 
@@ -173,14 +173,48 @@ the test fails if a future edit re-introduces a second spelling.
 Flat, `error` is a code, `status` present, no `seeAlso` — the §4.6 omission holding in the live
 response, not just in the unit test. Same defect vector as IMP-19 §6.3, which is where it was found.
 
-**Clause (i) — not yet verified live.** Needs the C9 vector (a `neo_batch` whose FK-by-name pre-pass
-fails) re-run against the deployed module, asserting `committed:false`, `atomic:true`,
-`persisted:[]`, and `failedAt.index`. It is a write probe, so it needs per-run human authorization.
-Unit-covered by four tests in the meantime.
+**Clause (i) — confirmed.** The C9 vector re-run (human-authorized write probe; a single op whose
+`businessPartner` name matches nothing, so no valid op existed that *could* have persisted):
+
+```json
+{"committed": false, "atomic": true, "persisted": [],
+ "hint": "Nothing was persisted: the batch was rejected before the transaction opened, so no
+          records were created and none need cleaning up. Fix the operation reported in
+          'failedAt' and retry the whole batch.",
+ "failedAt": {"index": 0, "id": "h0"},
+ "error": {"status": 422, "error": "not_found",
+           "detail": "No match for 'businessPartner'='__NO_EXISTE_ETP4793__': it is neither the id
+                      of an existing record nor a value any selector matched. Use neo_selectors to
+                      find a valid one.",
+           "field": "businessPartner"}}
+```
+
+Every key the `neo_batch` description promises is present, including `failedAt.id` — the whole point
+of §5.2. The resolver's own `detail` and `field` survive inside the nested `error`, so nothing the
+old flattened shape carried was lost in exchange for the outcome keys.
+
+### 6.1 Why `error` is an object here and a code string in (iv)
+
+The two fixes converge on *different* shapes, which reads as a contradiction and is not. A batch
+response's branchable key is `committed`; its `error` is documented as a **sub-object**
+(`{status,error,detail,seeAlso}`) and `BatchService.failureBody` has always built it that way. A
+handler response has no `committed`, so its branchable key is `error` **itself**, which is why (iv)
+flattens. Each clause converges on the shape its own surface promises rather than on a single
+global shape — a uniform `error` across both would have broken one of the two contracts.
+
+### 6.2 What this probe does *not* measure, and why that is acceptable
+
+It does not prove that a **valid** op preceding the failure goes unpersisted — that would need a
+two-op batch with a real business partner. Deliberately not run, and not for cost: the pre-pass has
+*always* run before the transaction opened (IMP-23 §1 established exactly that), so the behaviour
+this clause fixed was never the persistence, only the **reporting** of it. A two-op probe would
+measure a property the change did not touch, while risking a real order if the reasoning were
+wrong. The claim `atomic:true`/`persisted:[]` is verified by reading the call order, and §5.3 states
+it as construction rather than measurement on purpose.
 
 ## 7. Not verified / still open
 
-- Clause (i) live, per §6.
+- The two-op batch case, per §6.2 — recorded as a deliberate omission, not a gap.
 - Clause (iii)'s **success**-body nesting asymmetry — the whole reason the row is still ⚠️. Not
   attempted here; it is a response-envelope change on the read verbs, not an error-shape change, and
   it deserves its own decision about whether the React UI's `{"response":{…}}` contract moves with
