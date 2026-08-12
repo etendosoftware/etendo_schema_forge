@@ -404,6 +404,34 @@ function toleranceValue(raw) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Highest amount tolerance that means anything: 100 % of the line is the whole line. */
+const MAX_AMOUNT_TOLERANCE_PCT = 100;
+
+/**
+ * Constrains the amount tolerance to 0…100 — the last line of defence for the saved value.
+ *
+ * The input carries `min={0} max={100}`, but on `<input type="number">` those only bound the spinner
+ * arrows and native form validation, and this modal saves through its own handler. Out-of-range
+ * input is REJECTED visibly by {@link isAmountToleranceInvalid} rather than clamped behind the
+ * user's back; this clamp stays as a belt-and-braces guard on the payload itself (the column is
+ * `numeric(10,2)`, so a wild value would otherwise overflow it) and mirrors the server-side bound in
+ * `FinancialAccountHandler.validateAmountTolerance`.
+ */
+function clampTolerancePct(value) {
+  return Math.min(MAX_AMOUNT_TOLERANCE_PCT, Math.max(0, value));
+}
+
+/**
+ * True when what the user typed is a real value outside 0…100. An empty box is not invalid — it
+ * means "no tolerance" and settles on 0 — so clearing the field never blocks saving.
+ */
+function isAmountToleranceInvalid(raw) {
+  const text = String(raw).trim();
+  if (text === '') return false;
+  const n = Number(text);
+  return !Number.isFinite(n) || n < 0 || n > MAX_AMOUNT_TOLERANCE_PCT;
+}
+
 /**
  * Both tolerances are held as the RAW STRING the user typed, not as a number, so the box can be
  * emptied while editing. Storing `Number(e.target.value)` instead made the field impossible to
@@ -432,7 +460,15 @@ function useReconciliationSettings(open, account) {
   }, [open, account]);
 
   const dateToleranceValue = toleranceValue(dateTolerance);
-  const amountToleranceValue = toleranceValue(amountTolerance);
+  // Clamped here, at the single point where the raw string becomes the number that is both
+  // dirty-checked and sent in the payload — so an out-of-range value can never be persisted, however
+  // it was typed or pasted.
+  const amountToleranceValue = clampTolerancePct(toleranceValue(amountTolerance));
+  // Out-of-range input is surfaced, not silently rewritten: an earlier version clamped the text on
+  // blur, which meant typing 500 and pressing Save stored 100 with no explanation and the value
+  // "changed by itself" on reopening. The field now keeps what was typed, shows the error under it
+  // and blocks Save (same shape as accounting.assetAcctMissing).
+  const amountToleranceInvalid = isAmountToleranceInvalid(amountTolerance);
   // Compared numerically, so re-typing the stored value in a different shape ("03", "3.0")
   // correctly reads as unchanged rather than triggering a pointless write.
   const dateDirty = dateToleranceValue !== snapshot.dateTolerance;
@@ -442,6 +478,7 @@ function useReconciliationSettings(open, account) {
   return {
     dateTolerance, setDateTolerance, amountTolerance, setAmountTolerance,
     dateToleranceValue, amountToleranceValue, dateDirty, amountDirty,
+    amountToleranceInvalid,
     writeoffLimit, setWriteoffLimit, writeoffDirty, dirty,
   };
 }
@@ -472,13 +509,18 @@ function ReconciliationSettingsSection({ ui, recon }) {
           <Input
             type="number"
             min={0}
-            max={100}
+            max={MAX_AMOUNT_TOLERANCE_PCT}
             step={0.1}
             value={recon.amountTolerance}
             onChange={(e) => recon.setAmountTolerance(e.target.value)}
             className={FIELD_INPUT}
             data-testid="recon-amount-tolerance-input"
           />
+          {recon.amountToleranceInvalid ? (
+            <p className="text-xs text-destructive" data-testid="recon-amount-tolerance-error">
+              {ui('financeAccountsReconciliationAmountToleranceInvalid')}
+            </p>
+          ) : null}
         </Field>
         <Field
           label={ui('writeoffAccountLimitLabel')}
@@ -811,7 +853,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
     || accounting.dirty;
   const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
-    && !accounting.assetAcctMissing;
+    && !accounting.assetAcctMissing && !recon.amountToleranceInvalid;
   const busy = saving || bankConnection.busy;
 
   const handleSave = async () => {
