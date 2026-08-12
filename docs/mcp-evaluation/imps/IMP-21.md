@@ -184,6 +184,53 @@ now reports `invokable:false` while `documentAction` keeps `invokeVia`. The ambi
 describes ("nothing says which to use") is answered as a side effect: one of the two is callable and
 the other says why it is not. The underlying duplication in AD is untouched, and §5 keeps it open.
 
+### 3.7 A button AD itself hides is not an action — clause (viii)
+
+Added after the §6 live verification, which is what surfaced the defect: the fix above left exactly
+one misleading entry in the catalog. `processNow` came back `invokeVia:"neo_action"` carrying no
+`actionValues`, no `actionParameter`, no `agentPrompt` and `businessCritical:false` — and it points
+at the **same** `AD_Process` as `documentAction`:
+
+```
+columnname | ad_process_id |     process     |  procedurename
+DocAction  | 111           | Process Invoice | C_Invoice_Post0
+Processing | 111           | Process Invoice | C_Invoice_Post0
+```
+
+So the catalog offered two doors to the invoice-processing process, one with a paragraph of
+instructions and one with nothing, and no way to tell they were the same door. AD already answers
+which is which:
+
+```
+window                 | field           | isdisplayed
+Sales Invoice          | Process Invoice | N
+Purchase Invoice       | Process Invoice | N
+Business Partner Info  | Process Invoice | N
+```
+
+`Processing` is the classic procedure's internal "in progress" flag and is hidden in **every** window
+that has a field for it, while `DocAction` and `Posted` are `isDisplayed='Y'` in both invoice
+windows. `addInvokability` therefore gained a third blocker: a button whose `AD_Field` in this tab is
+`isDisplayed='N'` reports `invokable:false` with a `hidden:` reason. Instance-wide there are 133
+hidden button field-rows over 76 distinct columns against 369 displayed over 288.
+
+Three things make this belong in the generic layer rather than in `decisions.json`:
+
+* **It is structural.** That a button the UI never renders is not a user action is a fact about AD,
+  on exactly the footing as §3.3's `docAction` binding — not per-window judgement.
+* **Curation could not carry it anyway.** `Processing` *is* curated — as `system`. That value means
+  "the server fills this, do not ask the user", a statement about a payload value which says nothing
+  whatsoever about a button. This is the same category error §3.2 found with `discarded`: a
+  visibility vocabulary designed for form fields, applied to buttons, where `discarded` happened to
+  be the only value that meant anything. Curating `processNow` to `discarded` would have fixed one
+  window and left the pattern intact on the other 88.
+* **A missing `AD_Field` is deliberately *not* hidden.** Module-contributed buttons routinely have
+  no tab field — that is the case §3.4's fallback exists for — so only an explicit `isDisplayed='N'`
+  blocks. The opposite reading would have silently retired most module actions in the instance.
+
+`discarded` is still reported ahead of `hidden`, on §3.2's reasoning: it tells the agent a human
+decided this.
+
 ---
 
 ## 4. Blast radius
@@ -218,6 +265,14 @@ asserted the defect:
 (including "curated flag still wins" and "a plain process button is not promoted"), 4 on
 `humanizeExtensionColumn` (including the degenerate inputs), 2 on `invokableCount`.
 
+**§3.7 added 9 more** and migrated the 12 `addButtonInfo` reflective call sites to its fourth
+parameter. Two cover the blocker itself (`buttonHiddenInTheTabIsNotInvokableEvenWithAProcess`, and
+`discardedTakesPrecedenceOverHiddenInTheReason` for the both-blockers case); seven pin
+`isHiddenButtonField`, and the load-bearing one is `columnWithNoTabFieldIsNotHidden` — the inverse
+reading of that case would silently retire most module-contributed actions in the instance, which is
+the one way this fix could do real damage. The rest cover the displayed case, an inactive field, a
+field with no column, case-insensitive matching and a null tab.
+
 ---
 
 ## 5. Left open, deliberately
@@ -232,19 +287,15 @@ asserted the defect:
   whether `aPRMProcessinvoice` should exist. Separately, `posted` shares `processId`
   `57496FB9CF9E4E8F847224017941570E` with `etblkpBulkposting` — the same process reached through two
   buttons — which is worth a look on its own.
-* **(viii) `processNow` is a third alias of `documentAction`, and it is the one invokable action that
-  still misleads.** Found by the live verification in §6, not by the code read. `Processing` and
-  `DocAction` both point at `processId` `111` ("Process Invoice"), but `Processing` is a bare Yes/No
-  trigger: no `actionValues`, no `actionParameter`, no `agentPrompt`, and therefore
-  `businessCritical:false` from §3.3, whose derivation keys on the `docAction` binding that
-  `Processing` does not have. So of the four actions the catalog now presents as callable, three are
-  honestly described and the fourth invites an agent to fire the invoice-processing process with no
-  document action attached and no warning. **What actually happens when it is fired was not tested** —
-  that is a write against a real invoice and needs its own authorization. Two candidate answers, and
-  they need different fixes: if `Processing` is a legacy internal flag that should never have been
-  exposed, it belongs curated out like the other 17; if it is a real entry point, it needs the
-  derivation to reach it. Do not widen §3.3 to cover it before knowing which — a derivation keyed on
-  "shares a `processId` with a `docAction` button" is a guess dressed as structure.
+* **(viii) — closed by §3.7, not left open.** It was recorded here first, from the §6 verification,
+  as a product decision between curating `processNow` out and widening §3.3's derivation to reach it.
+  Neither was right: AD already marks the column hidden in all three windows that expose it, so the
+  answer was structural and generic. What *firing* `processNow` actually does is still untested —
+  that is a write against a real invoice — but it no longer matters for the catalog's honesty, since
+  the action is no longer advertised as callable.
+* **The AD duplication behind (viii).** `Processing` and `DocAction` sharing `AD_Process` `111` is
+  core Etendo, not something this work introduced or should change. §3.7 stops the MCP surface from
+  presenting it as two independent actions; it does not deduplicate AD.
 * **Which of the 17 discarded actions should be promoted.** With §3.2 the 17 are now honestly
   reported as out of scope, which is a true statement about the current curation — not a claim that
   the curation is right. Several are plausible agent capabilities (`aPRMAddpayment`,
@@ -273,8 +324,12 @@ not, and the same holds for the `posted` / `etblkpBulkposting` pair that shares 
 
 Two things this verification did **not** settle:
 
-* **It surfaced defect (viii)** — `processNow` shares `processId` `111` with `documentAction` and is
-  callable, undescribed and unflagged. See §5. Fixing it needs a product answer first.
+* **It surfaced defect (viii)**, which §3.7 then fixed — so §3.7 is itself unverified. The owed
+  re-probe is narrow: `processNow` must come back `invokable:false` with a `hidden:` reason,
+  `invokableCount` must drop 4 → 3, and the other three (`posted`, `documentAction`, `generateTo`)
+  must be untouched. The risk to watch is over-reach — a button that AD displays but that the mock
+  path treats as hidden would silently retire real actions, which is why §3.7 treats a missing
+  `AD_Field` as *not* hidden and why the test suite pins that case explicitly.
 * **M4 is not re-measured.** The assertion that moves it is now true in the payload, but the metric
   is scored by `/mcp-comparison`, which has not been re-run — so this item's score stays at 0/3
   until it is. Status and score move on different evidence.
