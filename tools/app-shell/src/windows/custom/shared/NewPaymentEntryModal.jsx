@@ -920,6 +920,16 @@ export default function NewPaymentEntryModal({
   const persistedRateApplies = persistedRate != null
     && !!accountCurrency && accountCurrency === payment?.accountCurrency;
   const persistedRateSeededRef = useRef(false);
+  // ── "Importe en moneda de la cuenta" (Converted Amount) is independently editable, mirroring
+  // Classic's Add Payment: editing the rate recomputes the converted amount, and editing the
+  // converted amount recomputes the rate — whichever the user touches drives the other.
+  const [amountStr, setAmountStr] = useState('');
+  // Set right before an amount-driven rate/amount update so the recompute effect below skips its
+  // own echo: without this, typing in the amount field (or seeding the rate, see below) would
+  // trigger a SECOND, separate render+effect pass that recomputes the other field from a stale
+  // snapshot, producing a one-frame "wrong" value — see the seed effect's comment for how that
+  // exact window let a real user edit get silently swallowed (ETP-4876).
+  const skipAmountRecomputeRef = useRef(false);
   // Seed the rate field, re-running when the currency pair (accountCurrency) or the fetched rate
   // changes. Crucially this also CLEARS the field when moving to a pair that has no DB rate, so a
   // stale rate from a previously-selected account never silently carries across currency pairs
@@ -927,40 +937,57 @@ export default function NewPaymentEntryModal({
   // field is kept empty. A persisted rate wins over the system one and is seeded exactly once per
   // visit to its pair, so neither a late validate-exchange-rate response nor a date change nor a
   // subsequent manual edit can overwrite what the user saved on the draft (ETP-4841).
+  //
+  // Seeds amountStr in THIS SAME effect pass (instead of leaving it to the recompute effect
+  // below) and flags skipAmountRecomputeRef so that effect sits out its own pass for this commit.
+  // Without this, rateStr and amountStr settled over TWO separate render/effect passes: the
+  // recompute effect's FIRST pass still closes over the pre-seed `rate` (null, since rateStr
+  // hasn't propagated to a re-render yet) and clears amountStr to '', with the correct value only
+  // landing on a SECOND pass once `rate` catches up. That one-frame "rate seeded, amount blank"
+  // state is normally invisible, but if a real amount-field edit (e.g. blanking it) lands inside
+  // that window, React's input value-tracker sees the DOM already showing '' and skips firing
+  // onChange for the no-op edit — so the still-pending stale pass then overwrites the user's blank
+  // input with the seeded amount instead (ETP-4876).
   useEffect(() => {
+    const seedAmountFrom = (rawRate) => {
+      const n = parseFloat(String(rawRate).replace(',', '.'));
+      setAmountStr(Number.isFinite(n) && n > 0 ? formatPlain(round2(balance.amount * n)) : '');
+    };
     if (!isForeign) {
       persistedRateSeededRef.current = false;
       setRateStr('');
+      setAmountStr('');
       return;
     }
     if (persistedRateApplies) {
       if (!persistedRateSeededRef.current) {
         persistedRateSeededRef.current = true;
+        skipAmountRecomputeRef.current = true;
         setRateStr(persistedRate);
+        seedAmountFrom(persistedRate);
       }
       return;
     }
     persistedRateSeededRef.current = false;
-    setRateStr(conversion.rate != null ? String(conversion.rate) : '');
+    const seeded = conversion.rate != null ? String(conversion.rate) : '';
+    skipAmountRecomputeRef.current = true;
+    setRateStr(seeded);
+    seedAmountFrom(seeded);
+    // balance.amount is read here only to seed amountStr at the moment the rate is (re)seeded —
+    // it doesn't need to retrigger this effect; ongoing balance.amount changes (e.g. "Igualar")
+    // are handled by the recompute effect below, which does list it as a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isForeign, accountCurrency, conversion.rate, persistedRateApplies, persistedRate]);
   // Parse the typed rate (accepts "0.92" or "0,92"); null when blank/invalid/non-positive.
   const rate = useMemo(() => {
     const n = parseFloat(String(rateStr).replace(',', '.'));
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [rateStr]);
-  // ── "Importe en moneda de la cuenta" (Converted Amount) is independently editable, mirroring
-  // Classic's Add Payment: editing the rate recomputes the converted amount, and editing the
-  // converted amount recomputes the rate — whichever the user touches drives the other.
-  const [amountStr, setAmountStr] = useState('');
-  // Set right before an amount-driven rate update so the effect below skips its own echo: without
-  // this, typing in the amount field would derive a rate, which would immediately recompute (and
-  // reformat) the amount field the user is still typing in, fighting their keystrokes.
-  const skipAmountRecomputeRef = useRef(false);
   // Recompute the converted amount from the rate whenever the rate changes (typed directly, or
   // re-seeded from the system/persisted value) or the invoice-currency amount changes (e.g. via
   // "Igualar" or the Importe field) — in both cases the rate is the value to keep fixed, matching
-  // Classic. Skipped once when the change originated from the amount field itself (see the ref
-  // above), and cleared entirely when the fields aren't shown.
+  // Classic. Skipped once when the change originated from the amount field itself, or from the
+  // seed effect above (see the ref there), and cleared entirely when the fields aren't shown.
   useEffect(() => {
     if (skipAmountRecomputeRef.current) {
       skipAmountRecomputeRef.current = false;
