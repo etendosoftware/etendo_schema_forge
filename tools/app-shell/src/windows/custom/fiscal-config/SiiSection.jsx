@@ -7,7 +7,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertSection from './CertSection.jsx';
 import SectionSaveButton from './SectionSaveButton.jsx';
-import { getFiscalRecordId, isEtendoTrue, mapSiiRecordToForm, normalizeDateInputValue, serializeBooleanFields } from './fiscalConfig.utils.js';
+import { getFiscalRecordId, isEtendoTrue, mapSiiRecordToForm, normalizeDateInputValue, parseApiError, serializeBooleanFields } from './fiscalConfig.utils.js';
 
 const SII_ENTITY = 'siiConfiguration';
 
@@ -63,7 +63,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
           monitordate:       normalizeDateInputValue(record?.monitordate) || today,
         }, ['acogidaAlSII', 'entornoDeProduccin', 'adjuntarArchivosXML', 'postedInvoices', 'recc', 'redeme'])),
       });
-      if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+      if (!res.ok) throw new Error(await parseApiError(res));
       onSave();
     } catch (err) {
       setError(err.message);

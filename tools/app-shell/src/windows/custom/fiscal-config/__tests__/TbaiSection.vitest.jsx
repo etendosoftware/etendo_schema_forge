@@ -41,6 +41,7 @@ vi.mock('../fiscalConfig.utils.js', () => ({
   getFiscalRecordId: vi.fn(() => 'rec-1'),
   isEtendoTrue: (v) => v === 'Y',
   normalizeDateInputValue: vi.fn((v) => v ?? ''),
+  parseApiError: async (res) => res.text().then(t => { try { return JSON.parse(t)?.error?.message ?? t; } catch { return t; } }),
   normalizeEtendoBoolean: vi.fn((v) => v === 'Y'),
   serializeBooleanFields: vi.fn((form) => form),
 }));

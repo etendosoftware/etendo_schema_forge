@@ -12,6 +12,7 @@ import {
   getVerifactuTaxTypeLabel,
   isEtendoTrue,
   normalizeVerifactuTaxType,
+  parseApiError,
   VERIFACTU_TAX_TYPE_OPTIONS,
 } from './fiscalConfig.utils.js';
 
@@ -64,7 +65,7 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildVerifactuUpdatePayload(form)),
       });
-      if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+      if (!res.ok) throw new Error(await parseApiError(res));
       onSave();
     } catch (err) {
       setError(err.message);

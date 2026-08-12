@@ -277,3 +277,13 @@ export function getTerritoryDefaults(territory, inSii) {
       return { sii: null, verifactu: null, tbai: null };
   }
 }
+
+export async function parseApiError(res) {
+  const body = await res.text().catch(() => res.statusText);
+  try {
+    const parsed = JSON.parse(body);
+    return parsed?.error?.message ?? parsed?.message ?? body;
+  } catch {
+    return body || res.statusText;
+  }
+}

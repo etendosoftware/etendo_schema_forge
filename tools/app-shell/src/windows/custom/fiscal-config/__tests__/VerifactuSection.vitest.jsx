@@ -36,6 +36,7 @@ vi.mock('../CertSection.jsx', () => ({ default: () => <div data-testid="cert-sec
 vi.mock('../fiscalConfig.utils.js', () => ({
   getFiscalRecordId: vi.fn(() => 'rec-1'),
   isEtendoTrue: (v) => v === 'Y',
+  parseApiError: async (res) => res.text().then(t => { try { return JSON.parse(t)?.error?.message ?? t; } catch { return t; } }),
   normalizeEtendoBoolean: vi.fn((v) => v === 'Y'),
   normalizeVerifactuTaxType: vi.fn((v) => v ?? 'IVA'),
   getVerifactuTaxTypeLabel: vi.fn((v) => v ?? ''),

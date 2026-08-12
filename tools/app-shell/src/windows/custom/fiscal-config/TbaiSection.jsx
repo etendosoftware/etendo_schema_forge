@@ -13,6 +13,7 @@ import {
   isEtendoTrue,
   normalizeDateInputValue,
   normalizeEtendoBoolean,
+  parseApiError,
   serializeBooleanFields,
 } from './fiscalConfig.utils.js';
 
@@ -81,7 +82,7 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
           validatePreviousInvoice: 'N',
         }, ['productionEnv', 'uSEAsproductDesc', 'autoSendInvoices', 'validatePreviousInvoice'])),
       });
-      if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+      if (!res.ok) throw new Error(await parseApiError(res));
       onSave();
     } catch (err) {
       setError(err.message);
