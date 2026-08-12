@@ -162,21 +162,83 @@ the only writer of `Y` — writes both columns in the same statement. The remain
 reads like the fix for. That is a hypothesis with a cheap settling probe (§5.1), and it changes the
 size of the fix but not its shape.
 
+### 4.1 Direction A settled — the skew is confirmed, and the fix already exists
+
+§5.1's probe was run on 2026-08-12. The hypothesis holds, and the fix for it is **already written
+and has never run against this database**.
+
+`schema_forge_core` carries `0b712f843` *"Feature ETP-4793: Persist curated field visibility on push
+to NEO"*, dated **2026-08-06**, and `git branch --contains` returns exactly one branch:
+`feature/ETP-4793`. It is not in `develop` and not in `main`. So every published CLI release that has
+ever pushed to this instance had a step 3 that wrote `isincluded`/`isreadonly` and **not**
+`visibility` — which produces direction A exactly: a `decisions.json` change from `editable` to
+`readOnly` moved the projection and fossilised the source.
+
+The timestamps close it, and one of them looked like a counterexample first:
+
+```
+spec | column   | visibility | inc/ro | updated
+tax  | Name     | editable   | Y / Y  | 2026-08-07 12:12:00   (all 6 tax rows, one push)
+user | UserName | editable   | Y / Y  | 2026-08-12 11:45:00   (today)
+```
+
+A row written *today* would refute the skew if today's writer were the fixed one. It is not: the
+installed package is `0.3.32-preview.feature-ETP-4793.20260812143756.518e1b8`, built at **14:37:56**,
+and the row was written at **11:45**. No row in `ETGO_SF_FIELD` has been written by a
+`visibility`-persisting writer yet. There is no counterexample and no second mechanism to look for.
+
+**What this changes about the item.** Direction A is now a data repair (§5.2) whose code fix is
+in flight on this very branch, not new work — but the re-push is also the *first* live exercise of
+`0b712f843`, so it verifies the fix rather than merely applying it. **Direction B is untouched by
+that commit** and remains a live defect of the writer as it stands: step 2 still defaults
+`isincluded='Y'` and step 4 still skips columns that no longer extract, so §5.3's guard is still
+owed in full.
+
+### 4.2 A third writer of these rows, which models the column not at all
+
+Found while probing: `--dump-delta` does not go through `populateSpec`/`buildFieldUpdateParams` at
+all. It builds its own picture via `computeWindowDelta`, and in the 78 `ETGO_SF_FIELD` upserts it
+emits for `tax`, **`VISIBILITY` appears zero times** — every row carries `ISINCLUDED`/`ISREADONLY`
+and nothing else. Meanwhile the module's own `src-db/database/sourcedata/ETGO_SF_FIELD.xml` *does*
+carry the column, on 4343 of its 6468 rows, so `export.database` and `update.database` are not the
+culprits here.
+
+Two models of the same write, disagreeing about which columns exist, is the same shape of defect as
+the one this item registers — one column, two writers, no cross-check. It is recorded here rather
+than registered separately because the F11+ validator rule in §5.3 detects the *state* regardless of
+which writer produced it, which is the argument for putting the guard there and not in a writer.
+
 ## 5. The fix
 
-### 5.1 Settle the cause first (one dry-run, no writes)
+### 5.1 Settle the cause first (one dry-run, no writes) — **done 2026-08-12**
 
-`node cli/src/push-to-neo.js tax --dry-run` prints the planned `visibility` / `isIncluded` /
-`isReadOnly` per field (`reportDryRunPlan`, `:485-503`). If the plan shows all three agreeing for
-the 22 rows, they are stale and a re-push closes them; if any row is planned inconsistent, there is
-a live writer path and this item is bigger than a data repair. **Cheap, read-only, and it decides
-the scope — do it before writing any code.**
+`sf-push-neo tax --dry-run` prints the planned `visibility` / `isIncluded` / `isReadOnly` per field
+(`reportDryRunPlan`, `:485-503`). The plan shows all three agreeing, so the 22 rows are stale rather
+than continuously re-broken — see §4.1 for the confirmation and §4.2 for what else the probe turned
+up.
+
+Two notes for whoever runs it next, since the invocation in the line above is not the one in this
+repo's older docs. Post-split the script is the published bin, not `cli/src/push-to-neo.js`, and it
+resolves `artifacts/` relative to its own package unless told otherwise — so it needs
+**`SF_ROOT="$PWD"`**:
+
+```bash
+SF_ROOT="$PWD" npx sf-push-neo tax --dry-run
+SF_ROOT="$PWD" npx sf-push-neo tax --dump-delta /tmp/tax-delta.json   # also read-only
+```
 
 ### 5.2 Repair
 
 Re-push the six specs (`tax`, `user`, `financial-account`, `payment-in`,
 `return-material-receipt`, `return-to-vendor-shipment`). Requires the usual
 `./gradlew export.database` afterwards.
+
+Per §4.1 this is also the **first live run of `0b712f843`**, so it is a verification and not only a
+repair. Assert afterwards that the direction-A query returns **0 rows**
+(`visibility='editable' AND isincluded='Y' AND isreadonly='Y'`) and that the direction-B count has
+not grown. It writes to `ETGO_SF_FIELD`, so it needs explicit authorisation per run — and it must be
+the fixed writer that runs it, i.e. the `feature/ETP-4793` preview package or `LOCAL_CORE=1`, never a
+published release, or it will re-fossilise the rows it is meant to repair.
 
 ### 5.3 Stop it recurring
 
