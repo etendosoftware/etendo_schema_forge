@@ -1,29 +1,33 @@
 # ETP-4777 — Fix plan: Form summary Total / Send-PDF Total must match Grid Imp. Total
 
-**Status:** implemented and verified (TDD: failing tests → fix → passing tests → live browser verification against real seeded data, including a Draft→Complete transition with per-line + document-level discount matching the ticket's reproduction shape). Companion investigation doc: `docs/bug-reports/2026-08-12-form-summary-total-rounding-mismatch.md` (read that first — this plan assumes its findings and does not re-derive them).
+**Status:** implemented and exhaustively verified (TDD: failing tests → fix → passing tests → live browser verification across Sales/Purchase Order, Sales/Purchase Invoice, Sales Quotation, and Shipments/Receipts, including Draft→Complete transitions, an invoice-created-from-a-discounted-order path, and edge cases — 100% line discount, 100% document discount). Companion investigation doc: `docs/bug-reports/2026-08-12-form-summary-total-rounding-mismatch.md` (read that first — this plan assumes its findings and does not re-derive them).
 
 ## 0. Implementation summary (what actually shipped)
 
-Three commits on `feature/ETP-4777`:
+Six commits on `feature/ETP-4777`:
 1. Investigation + this plan doc.
 2. Failing tests (RED) for `DocumentTotalsPanel` (Case 1/3) and `documentPdf.js`'s `buildOrderData` (Case 2).
 3. The fix: `DocumentTotalsPanel.jsx` gained a `persistedTotals` prop, preferred over `computeDocumentTotals` whenever there's no pending line/edit; `LinesBottomSection.jsx` derives it from `data.grandTotalAmount`/`data.summedLineAmount`; `documentPdf.js`'s `buildOrderData` now sources `grandTotal`/`taxAmount` from the persisted header instead of recomputing, matching the pattern already proven correct in `buildInvoiceData`/`buildQuotationData`.
 4. A follow-up commit fixing two regressions found during manual browser verification (not caught by the original test scenarios) — see §5.
+5. A second follow-up fixing a stale-total bug in `DetailView.jsx`'s discount-% save handler, found while re-verifying §5's fix — see §5.
+6. A third follow-up replacing the `isReadOnly`-based raw-vs-discounted heuristic with a self-consistent one (comparing against a fresh recompute) after it broke on an invoice created from an already-discounted order — see §5.
 
 **Turned out simpler than expected:** `documentTotals.js` itself needed zero changes — see §2.
 
-## 5. Two regressions found during manual verification (fixed, tests added)
+## 5. Four regressions found during manual verification (all fixed, tests added)
 
-Verifying against a real Draft document (multi-line + per-line discount + 25% document discount, matching the ticket's reproduction shape) surfaced two issues neither the original design nor the first round of tests anticipated:
+Verifying against real Draft documents (multi-line + per-line discount + document discount, matching the ticket's reproduction shape) across every document type surfaced four issues neither the original design nor the first round of tests anticipated:
 
 1. **Typing into the "Descuento total" % input froze the panel.** The % input's `onChange` only updates local `inputPct` state — it never touches `pendingLine`/`editingLine`. `hasPendingEdit` (the flag gating baseline-vs-recompute) didn't know about this, so the panel kept showing the frozen persisted baseline while the user typed, ignoring every keystroke until the `onBlur` PATCH round-tripped. Fix: `hasPendingEdit` now also becomes true whenever `inputPct !== totalDiscountPct` (the prop) — i.e. there's an unsaved discount-% edit in flight.
-2. **Completing the document with a pending discount broke Subtotal/Impuesto (Total stayed correct).** `resolveTotalDiscountPct`'s "is the discount already a materialised line?" check reads the `lines` prop — but the `ETGO_DTO` discount line is filtered out server-side before it ever reaches the frontend, so that check can never detect materialisation and always returns the full pct. Before Complete, `summedLineAmount` is the raw (pre-discount) net; after Complete, once `TotalDiscountService` materialises the line, `summedLineAmount` becomes net-of-discount — same field, opposite meaning, and nothing in the payload flags which one it currently is except `documentStatus`. The fix branches on `isReadOnly` (`documentStatus !== 'DR'`) to know which of "raw" vs "discounted" net subtotal `summedLineAmount` currently represents, and derives the other one from it — see the `rawNetSubtotal`/`discountedNetSubtotal` split in `LinesBottomSection.jsx`.
+2. **After the discount-% PATCH resolved, the Total stayed frozen on the stale pre-discount value** — verified live on a Sales Order: typed 30%, backend correctly returned `grandTotalAmount: 418.38`, but the Form kept showing 597,69 € until a full page reload. Root cause: `DetailView.jsx`'s `handleTotalDiscountChange` only applied `hook.handleChange('etgoTotalDiscount', pct)` (an optimistic patch of that one field) after the PATCH — it never refreshed `grandTotalAmount`/`summedLineAmount`, which the backend DID recompute. Once `inputPct` caught up to the (now also-updated) `totalDiscountPct` prop, `hasPendingEdit` went false and the panel trusted the stale baseline. Fix: call `hook.refreshHeaderTotals(currentId)` after the successful PATCH — the same lightweight header re-GET already used elsewhere in `DetailView.jsx` for an analogous case (the `exchangeRates` PATCH handler).
+3. **Completing the document with a pending discount initially broke Subtotal/Impuesto (Total stayed correct)** — first fix attempt used `isReadOnly` (`documentStatus !== 'DR'`) to decide whether `summedLineAmount` was still raw (pre-discount) or already net-of-discount (once `TotalDiscountService` materialises the `ETGO_DTO` line at Complete). `resolveTotalDiscountPct`'s own "is there a materialised line?" check can't tell — that line is filtered out of `lines` server-side, so it always reports "not materialised" and returns the full pct regardless.
+4. **The `isReadOnly` heuristic from fix #3 broke on a Sales Invoice created from an already-discounted Sales Order** — `InvoiceFromOrderSupport` materialises the discount line **immediately at creation**, so a Draft invoice can already have `summedLineAmount` net-of-discount, contradicting the "Draft ⇒ raw" assumption. Verified live: Subtotal 296,38 + Impuesto 162,02 ≠ Total 478,16. **Final fix:** replaced the `documentStatus`-based guess with a self-consistent check — compare the persisted `netSubtotal` against a *fresh recompute from the current lines' own qty/price/per-line-discount* (`recomputed.netSubtotal`, already computed by `DocumentTotalsPanel` for the live-edit path). If they differ by more than rounding noise, the persisted figure must already be net-of-discount; if they match, it's still raw. This needs no knowledge of document status or materialisation timing at all, and the reconciliation logic moved from `LinesBottomSection.jsx` into `DocumentTotalsPanel.jsx` (where the recompute already lives) — `LinesBottomSection.jsx` now only passes the two raw header fields through.
 
-Both were caught by literally reproducing the ticket's steps in the browser (localhost:3100) against real seeded purchase-order data before declaring the fix done — see §6 for the full verification log.
+All four were caught by literally reproducing the ticket's steps in the browser (localhost:3100) against real and newly-created data before declaring the fix done — see §6 for the full verification log.
 
-## 6. Live verification log (localhost:3100, Purchase Order 1000009)
+## 6. Live verification log (localhost:3100)
 
-Real end-to-end run reproducing the ticket's exact reproduction shape (multi-line, per-line discount, 25% document-level discount, Draft → Complete):
+### 6.1 Purchase Order 1000009 — original reproduction (multi-line, per-line + document discount, Draft → Complete)
 
 | Step | Grid "Imp. Total" | Form panel Total | Subtotal + Impuesto |
 |---|---|---|---|
@@ -33,7 +37,32 @@ Real end-to-end run reproducing the ticket's exact reproduction shape (multi-lin
 
 Before the fix, the equivalent local records (`1000008`, `1000007`, sales order `1000010` — all using tax-exclusive price lists) showed the Form panel Total as **0,00 €** while the Grid showed the real persisted value (e.g. 3.327,50 €) — the same defect the ticket describes, reproduced here in its most extreme local form. Confirmed fixed on all three after the change.
 
-**Out-of-scope finding, flagged but not fixed here:** the "Confirmar pedido" modal (`OrderConfirmModal.jsx`/equivalent) shows its own preview total, computed independently of both the Form panel and `computeDocumentTotals` — observed showing **74,42 €** for the same document where Grid/Form both correctly showed 99,23 €. This is a fourth, undocumented total-display surface, not one of the ticket's 3 reported cases, and wasn't analyzed as part of this investigation. Worth its own follow-up ticket.
+### 6.2 Exhaustive matrix — every document family, both sides, edge cases
+
+All created fresh via the UI and cross-checked Form Total vs Grid "Imp. Total" (and Subtotal+Impuesto internal consistency):
+
+| Document | Scenario | Grid | Form Total | Consistent? |
+|---|---|---|---|---|
+| Sales Order 1000016 | 3 lines (12%/5%/0% line discounts, mixed qty/price) + 30% doc discount | 597,69 € → **418,38 €** after discount | matches at each step | ✓ (after fix #2 for the live-update-after-PATCH bug) |
+| → Sales Invoice 10000020 | Created via "Crear factura" from the Order above (discount line materialised immediately, still Draft) | 478,16 € | 478,16 € (395,17+82,99) | ✓ (after fix #4) |
+| Purchase Order 1000011 | Edge case: one line at **100% line discount** | 0,00 € | 0,00 €, no NaN | ✓ |
+| Purchase Order 1000011 | Edge case: **100% document discount** on top of a normal line | 0,00 € | 0,00 €, no NaN, no tax row (correctly hidden) | ✓ |
+| Purchase Invoice 10000010 | Standalone (not from an order), 1 line 8% discount + 15% doc discount, Draft → Complete | 218,57 € | 218,57 € (180,64+37,93) — 1-cent shift on Complete is the accepted Task 3 tradeoff | ✓ |
+| Sales Quotation 1000001 | 1 line + 12% doc discount, Draft → "Enviar a evaluación" (Bajo Evaluación) | 459,99 € | 459,99 € (380,16+79,83), unchanged across the status transition | ✓ |
+| Sales Albarán 1000013 | Goods Shipment | — | No totals panel at all (Form or PDF) | ✓ confirmed out of scope, as designed |
+| Purchase Albarán (Goods Receipt) | list view | — | No monetary column at all | ✓ confirmed out of scope, as designed |
+
+Case 2 (Send/Preview PDF) for the Order/Invoice above was confirmed via the unit tests added in commit 2 (`documentPdf.buildOrderData.vitest.jsx`) plus cross-checking the live header API response (`grandTotalAmount`) against what `buildOrderData`'s fixed code path now reads — the actual rendered PDF couldn't be visually captured because "Abrir"/opening the generated PDF triggers a new browser window that the automation tooling couldn't attach to (popup not created via the tracked tab group). Not a gap in the fix itself, just in how far the visual proof could be pushed with the available tooling.
+
+### 6.3 New out-of-scope finding — a THIRD confirm-modal-total bug, same family as the one already flagged
+
+The "Confirmar pedido"/"Confirmar presupuesto" modals (`OrderConfirmModal.jsx`/`QuotationConfirmModal.jsx` or equivalent) each show their own preview total, computed independently of both the Form panel and `computeDocumentTotals`:
+
+- Purchase Order 1000009 (25% discount): modal showed **74,42 €** vs the real 99,23 €.
+- Sales Order 1000016 (30% discount): modal showed **382,52 €** vs the real 418,38 €.
+- Sales Quotation 1000001 (12% discount): modal showed **404,79 €** vs the real 459,99 €.
+
+Three independent confirmations of the same pattern — this is a real, reproducible bug, but it's a fourth/fifth total-display surface not among the ticket's 3 reported cases, and wasn't in this investigation's original scope. Recommend filing a separate ticket ("Confirm modal preview total doesn't match the document's real total") rather than folding it into ETP-4777's fix, since fixing it means auditing yet another set of components (`*ConfirmModal.jsx` per document type) with their own totals logic.
 
 **Branch:** `feature/ETP-4777` (created from `origin/epic/ETP-3504`, no upstream yet).
 
