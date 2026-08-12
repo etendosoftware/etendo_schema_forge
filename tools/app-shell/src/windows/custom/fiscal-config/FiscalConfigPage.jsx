@@ -52,6 +52,10 @@ function resolvePageTitle(ui, profileLabel) {
   return profileLabel ? `${ui('fiscal.title')} ${profileLabel}` : ui('fiscal.title');
 }
 
+function resolveRenderProfile(addingComplementary, effectiveProfile) {
+  return addingComplementary ? 'sii+tbai' : effectiveProfile;
+}
+
 async function saveTwoRefs(ref1, ref2) {
   const [r0, r1] = await Promise.allSettled([ref1?.save(), ref2?.save()]);
   if (r0.status === 'rejected' || r1.status === 'rejected') {
@@ -98,7 +102,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   // When adding a complementary SIF, switch the rendered layout to the combined profile
   // so the page immediately looks like the sii+tbai view (two tabs).
   // effectiveProfile is still used for canAddComplementary, canChangeSif, handleSave logic.
-  const renderProfile = addingComplementary ? 'sii+tbai' : effectiveProfile;
+  const renderProfile = resolveRenderProfile(addingComplementary, effectiveProfile);
 
   const profileLabel = PROFILE_LABEL[effectiveProfile];
   const pageTitle = resolvePageTitle(ui, profileLabel);
@@ -145,14 +149,11 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
         await saveTwoRefs(siiRef.current, complementaryRef.current);
       } else if (effectiveProfile === 'tbai' && addingComplementary === 'sii') {
         await saveTwoRefs(tbaiRef.current, complementaryRef.current);
-      } else if (['sii', 'sii-navarra'].includes(effectiveProfile)) {
-        await siiRef.current?.save();
-      } else if (effectiveProfile === 'tbai') {
-        await tbaiRef.current?.save();
-      } else if (effectiveProfile === 'verifactu') {
-        await verifactuRef.current?.save();
       } else if (effectiveProfile === 'sii+tbai') {
         await saveTwoRefs(siiRef.current, tbaiRef.current);
+      } else {
+        const refMap = { sii: siiRef, 'sii-navarra': siiRef, tbai: tbaiRef, verifactu: verifactuRef };
+        await refMap[effectiveProfile]?.current?.save();
       }
       setAddingComplementary(null);
       setComplementaryRecord(null);
