@@ -395,6 +395,12 @@ back as `{"response":{startRow,…,status:0}}`. So the nesting IMP-5 clause (iii
 was never its funnel. Clause (iii) stays partly open under IMP-5, now with a measured cause rather
 than an inference.
 
+**Closed 2026-08-12 under IMP-5 §7**, with one correction back to this section: *"every read error
+came back flat"* was measured on the DAL-failure vector, and the get-by-id **not-found** vector — the
+`buildNotFoundError` envelope — was in fact wrapped. The probes above never hit it. So the error half
+was closed one envelope short of complete, and the same reading applies as in §8.1: a measurement
+covers the vectors it ran, and generalising it to a sibling path is an inference, not a result.
+
 ---
 
 ## 9. Not verified

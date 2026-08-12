@@ -2,15 +2,15 @@
 
 **Registry row:** `mcp-improvements-registry.md` → IMP-5 (P1, C1, 2.5 / 5, `com.etendoerp.go`).
 **Registered:** base §12 run, from evidence **A5, A8, W4**.
-**Status:** clauses **(i)** and **(iv)** implemented and **both verified live** 2026-08-12 (§6). Registry row
-stays ⚠️ for clause (iii)'s surviving **success**-body asymmetry. Score unchanged pending a
-`/mcp-comparison` re-measure.
+**Status:** clauses **(i)**, **(iii)** and **(iv)** implemented 2026-08-12. (i) and (iv) **verified
+live** the same day (§6); (iii) is unit-tested and awaits a redeploy (§7.6). With (iii) the last
+clause is closed. Score unchanged pending a `/mcp-comparison` re-measure.
 
 Status lives only in the registry; this file describes the work.
 
-This file is opened late in the item's life: the named gap and clauses (ii) and (iii)'s error half
-were closed by IMP-15 and IMP-17 and are documented there. §1 exists so the clause numbering has a
-home; §3 onward is the 2026-08-12 work.
+This file is opened late in the item's life: the named gap and clause (ii) were closed by IMP-15 and
+IMP-17 and are documented there. §1 exists so the clause numbering has a home; §3 onward is the
+2026-08-12 work.
 
 ---
 
@@ -21,13 +21,14 @@ home; §3 onward is the 2026-08-12 work.
 | — | Raw DAL `status:-4` leaking from `neo_batch` | IMP-15, verified live 2026-08-10 (C10) |
 | i | An FK-resolution batch failure returns a flattened body with **no `committed` key** (C9) | **here, §5** |
 | ii | Unknown named filter arrives as a raw `Error executing neo_list: …` string (C14) | IMP-17, verified live |
-| iii | Read-verb responses wrapped `{"response":{…}}`, write-verb bare | error half: IMP-17 §8.6 · **success half open** |
+| iii | Read-verb responses wrapped `{"response":{…}}`, write-verb bare | error half: IMP-17 §8.6 · success half **here, §7** |
 | iv | A report **handler's own** errors are not enveloped | **here, §4** |
 
-Clause (iii) is the reason the row is still ⚠️. IMP-17 §8.6 measured it rather than guessing: every
-read *error* comes back flat, every read *success* is still `{"response":{startRow,…,status:0}}`. So
-the nesting this clause describes lives in the success body and was never the error funnel IMP-17
-fixed. Nothing in the 2026-08-12 work touches it.
+Clause (iii) came in two halves and they were closed a day apart. IMP-17 §8.6 measured rather than
+guessed: every read *error* comes back flat, every read *success* was still
+`{"response":{startRow,…,status:0}}`, so the nesting the clause describes lived in the **success**
+body and was never the error funnel IMP-17 fixed. §7 closes that half — and, in the process, finds
+that the clause's own wording was wrong about the write verbs.
 
 ## 2. The canonical envelope, for reference
 
@@ -212,12 +213,76 @@ measure a property the change did not touch, while risking a real order if the r
 wrong. The claim `atomic:true`/`persisted:[]` is verified by reading the call order, and §5.3 states
 it as construction rather than measurement on purpose.
 
-## 7. Not verified / still open
+## 7. Clause (iii) — the success-body wrapper
 
+### 7.1 The clause was wrong about the write verbs, and reading the code is what showed it
+
+The clause reads *"read-verb responses wrapped `{"response":{…}}`, write-verb bare"*. That was
+measured on the **error** bodies, and on those it is true. On the **success** bodies it is not: the
+four DAL-backed verbs — `neo_list`, `neo_get`, `neo_create`, `neo_update` — all forward
+`DefaultJsonDataService`'s wrapper untouched. The only bare success is `neo_delete`, and only because
+it discards core's response and builds its own `{deleted, id}`.
+
+So the fix is wider than the clause as written. Flattening the reads alone would have made
+`neo_create` and `neo_update` the new outliers — moving the inconsistency rather than removing it,
+and leaving a follow-up item that reads as a regression of this one. The scope came from re-reading
+the four call sites, not from the clause text; a clause is a record of what was observed once, and
+what it *implies* about untested neighbours has to be re-checked.
+
+### 7.2 A second, smaller find: the not-found envelope was the wrapped one
+
+`buildNotFoundError` — IMP-5's own C17 envelope, the one the registry calls "excellent on
+single-record verbs" — was returned inside `{"response":{…}}`. So on a single `neo_get` call an
+unknown filter or a DAL failure came back flat from `buildDalFailureEnvelope` while a missing id came
+back nested. IMP-17 §8.6's "read errors are flat" was measured on the DAL vector and the not-found
+vector was never re-probed, which is how the asymmetry survived *inside* the item that introduced the
+envelope. It is now flat, with a test asserting the absence of the wrapper directly (`isFlat`) rather
+than only asserting the keys — a wrapper that comes back is otherwise invisible to key assertions.
+
+### 7.3 Where it is flattened, and why last
+
+`McpToolRouterSupport.flattenCoreResponse` is called on the returned body only, **after**
+`filterGetResponse` and `applyProjection`. Those stages read and write inside the wrapper, so
+flattening earlier would mean editing them; flattening last means IMP-2's projection and IMP-18's
+`unknownFields` are untouched code. On the write verbs the post-hook likewise still receives the
+wrapped body, for parity with the REST CRUD path a handler was written against.
+
+The lift is **by rule, not by allow-list**: every key inside the wrapper moves up. That is what makes
+IMP-18's annotation arrive at the top level without this method naming it, and what means the next
+stage to annotate a response needs no edit here. A body with no wrapper is returned untouched, so the
+call is idempotent; a body with keys *beside* `response` is passed through rather than merged, because
+that shape is not one this layer produces and guessing at a collision is worse than leaving it.
+
+### 7.4 `status:0` is dropped and nothing replaces it
+
+By the time a body reaches the flatten, every failure branch has already returned — so the DAL success
+code carries no information, and it actively misleads: `status` on every other MCP body is an HTTP
+code, so an agent branching on it read `0` where it expected `200`. No `status:200` is substituted
+either. The absence of `error` is already the success discriminator every other verb uses, and a
+second redundant one is a second thing to drift apart — which is the failure this whole item is
+about.
+
+### 7.5 What is deliberately left wrapped
+
+`neo_widget` still returns `{response:{data,count}}`, and its tool description says so. That wrapper
+is not core's DAL envelope — it is the widget handlers' own normalized contract, shared with the React
+dashboard reading the same endpoint. Same boundary as §4.4: translate what the MCP layer produced,
+leave a handler's published contract alone.
+
+No tool description changed. `neo_list`/`neo_get` never promised the wrapper, and the `fields`
+description already told the agent that unknown names *"come back in `unknownFields` alongside
+`data`"* — which the flatten makes literally true instead of approximately. Same shape as §5.2: the
+cheaper direction is the one where the fix makes an existing promise true.
+
+### 7.6 Not verified live
+
+The four flattened bodies are unit-tested and **not yet probed live** — the change landed after the
+last redeploy. The probe is a one-liner per verb on the next one (`neo_list` and `neo_get` need no
+authorization; `neo_create`/`neo_update` reuse the §6 write-probe rules).
+
+## 8. Not verified / still open
+
+- Clause (iii) live, per §7.6 — the only thing this item owes.
 - The two-op batch case, per §6.2 — recorded as a deliberate omission, not a gap.
-- Clause (iii)'s **success**-body nesting asymmetry — the whole reason the row is still ⚠️. Not
-  attempted here; it is a response-envelope change on the read verbs, not an error-shape change, and
-  it deserves its own decision about whether the React UI's `{"response":{…}}` contract moves with
-  it.
 - The score. Status and score move on different evidence: the row can be ✅ per-clause with the score
   still 2.5 / 5 until a `/mcp-comparison` run re-measures it.
