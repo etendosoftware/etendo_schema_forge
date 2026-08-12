@@ -52,7 +52,13 @@ const PENDING_CHECKOUT_STARTED_AT = 'sf_pending_checkout_started_at';
 /** Checkout funnel telemetry — see docs/paid-tenant-infrastructure.md §3.6. */
 function emitUpgradeEvent(eventDefinition, properties) {
   const event = buildObservabilityEvent(eventDefinition, properties);
-  void track(event.name, event.properties);
+  track(event.name, event.properties);
+}
+
+/** Which `/upgrade` branch the user actually landed on, for UPGRADE_PAGE_VIEWED. */
+function resolveUpgradePageViewBranch(accountState, environments) {
+  if (accountState === 'unavailable') return 'unavailable';
+  return environments.length === 0 ? 'first_tenant_free' : 'checkout';
 }
 
 /**
@@ -245,9 +251,7 @@ export default function UpgradePage() {
   // reporting which branch the user actually landed on.
   useEffect(() => {
     if (accountState === 'loading') return;
-    const branch = accountState === 'unavailable'
-      ? 'unavailable'
-      : environments.length === 0 ? 'first_tenant_free' : 'checkout';
+    const branch = resolveUpgradePageViewBranch(accountState, environments);
     emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_PAGE_VIEWED, { branch });
   }, [accountState, environments]);
 
