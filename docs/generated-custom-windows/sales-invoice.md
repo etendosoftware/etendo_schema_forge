@@ -690,6 +690,64 @@ the "Reversed Invoices" (`C_Invoice_Reverse`) tab, not `originInvoice`; reusing 
 there would incorrectly block saving every Factura Rectificativa. See the equivalent AP-side
 note in [`purchase-invoice.md`](purchase-invoice.md#f5--gridtopbar-saldo-a-favor-badge-now-recognizes-facturas-rectificativas--etp-4738).
 
+### F6 — "Saldo a favor" is decided by the SIGN of the total, not the document type — ETP-4841
+
+> **Supersedes F4 and F5.** Those sections describe the doc-type-based rule that ETP-4841
+> replaced; they are kept for history. Where they conflict with this section, this section wins.
+
+**Why.** F4/F5 assumed *rectificativa ⇒ credit*. Functionally there are **two** kinds of
+Factura Rectificativa:
+
+| Kind | Example | Meaning |
+|---|---|---|
+| **Negative** total | billed 5, customer returned 2 | a credit — "saldo a favor", spent against other invoices |
+| **Positive** total | billed 3, should have been 4 | a correction for the difference — **payable**, it receives a payment |
+
+and symmetrically an ordinary **"Factura" with a negative total is also a credit**. Keying the
+behaviour off the document type therefore got both edge cases wrong, in four visible ways:
+
+1. a positive rectificativa rendered with a **negated** amount in the grid (detail said
+   `14,52 €`, grid said `-14,52 €`);
+2. …and wore a **"Saldo a favor"** badge instead of a payable one;
+3. an ordinary negative invoice wore **"Cobrada"**, because the fully-paid test was
+   `outstanding <= 0` and a negative invoice's outstanding is negative;
+4. the credit selector listed only rectificativas, hiding ordinary negative invoices.
+
+**The rule now.** A single shared helper,
+`tools/app-shell/src/windows/custom/shared/invoicePaymentBadge.js` →
+`resolveInvoicePaymentBadge(record)`, returns
+`{ kind, amount, isCredit }` with `kind` ∈ `draft | credit-available | credit-applied | paid |
+partial | pending`. Evaluation order matters: **the credit branch (`grandTotalAmount < 0`) is
+tested before any paid/pending check**, otherwise a negative invoice satisfies `outstanding <= 0`
+and falls into "Cobrada" — defect 3 above. `amount` is always non-negative. `isCredit` reflects
+the document itself, so it stays true on a draft (where `kind` is `draft`).
+
+All four call sites consume it: the two grids' "Pendiente de pago" cells, the two detail
+topbars. They previously re-implemented the pill inline four times; the helper is now the single
+source of truth and matches what `InvoicePaymentHistoryModal.jsx` (the modal these badges open)
+had always done — the two layers used to contradict each other.
+
+**Consequences elsewhere:**
+- `SalesInvoiceHeaderHandler.applyAmountNegationForCredit` was **deleted**. The stored sign is
+  the truth; nothing rewrites it on the way out. Legacy AR Credit Memos (retired `ARC` type,
+  positive totals) consequently now display in positive and as pending — accepted, since the
+  Nota de Crédito disappears as a category: the model is only **Factura** + **Factura
+  Rectificativa** from here on.
+- `PaymentCreditSourcesService.pendingAbonos` dropped the rectificative doc-type whitelist and
+  keeps only `grandTotalAmount < 0` (plus the unchanged BP / side / currency / unpaid filters).
+  `PaymentCreditConsumer.validateAbonoEligible` mirrors it: it now rejects only on a
+  non-negative total. Both sides symmetric, AR and AP.
+- `RectificativeSupport.isRectificativeDocType` and `.resolveRectificativeDocTypes` lost their
+  last callers and were deleted; `isColumnPresent()` and `isRectificative(DocumentType)` stay
+  (used by `classifyDocType` and `ReturnShipmentUtils`).
+- `AbstractInvoiceHeaderHandler.enrichInvoiceSubtype`'s ETP-4738 `FAC` → rectificativa
+  reclassification was deleted as **unreachable**: both `classifyDocType` implementations
+  already check the same flag first, so its `SUBTYPE_FAC.equals(subtype)` guard could never
+  hold. `arInvoiceSubtype` again means strictly "which document type is this", and drives only
+  the doc-type badge column and the list tab filters — never payment state.
+- The two grids stopped hardcoding the literals `Saldo a favor` / `Aplicada` and now use the
+  existing i18n keys `cpFavorBadge` / `cpCreditFullyApplied`, as the topbars already did.
+
 ### Known display-only limitation
 
 The **Importe en moneda de la cuenta** value is rounded to **2 decimals in the UI**

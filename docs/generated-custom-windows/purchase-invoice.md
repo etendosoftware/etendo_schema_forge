@@ -588,6 +588,37 @@ guard (see the AR-side note in `sales-invoice.md`), so Pagos (AP) never lists a 
 row while Cobros (AR) keeps it. The "no accumulated AP credit source (it1)" behavior documented
 above is now actually enforced in code, not just intended.
 
+### F5 — "Saldo a favor" is decided by the SIGN of the total, not the document type — ETP-4841
+
+> **Supersedes F4** (and the AP-side badge notes above). Kept for history; where they conflict,
+> this section wins.
+
+A Factura Rectificativa de Compra can be **positive** (the supplier under-invoiced, so the
+correction is **payable**) or **negative** (a credit). An ordinary "Factura" with a negative
+total is likewise a credit. Payment state is therefore decided by `grandTotalAmount < 0`, never
+by the document type. Full rationale, the shared helper contract and the evaluation order are in
+[`sales-invoice.md` § F6](sales-invoice.md#f6--saldo-a-favor-is-decided-by-the-sign-of-the-total-not-the-document-type--etp-4841)
+— the mechanism is identical on both sides and is applied symmetrically.
+
+AP-specific consequences:
+
+- **`PurchaseInvoiceHeaderTable.jsx` no longer sign-flips the total column.** It used to render
+  `-Math.abs(Number(raw))` for any row whose `getApSubtype` was `RECTIFICATIVA`, which displayed
+  a positive rectificativa as negative. The column is now the plain
+  `{ key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', … }` declaration that
+  sales-invoice always used — the generic amount renderer, no custom `render`.
+- `PurchaseInvoiceTopbar.jsx`'s `isFullyPaid` no longer fires for credit instruments, so a
+  negative purchase invoice stops rendering **"Pagado · 0,00 €"** (it computed
+  `totalPaid = grandTotal − outstanding` = 0 for those rows).
+- Both the grid cell and the topbar now consume `resolveInvoicePaymentBadge`; the local
+  `isNcOrReturn` predicate is gone. `getApSubtype` remains, driving only the document-type badge
+  column (`SUBTYPE_BADGE`) and the list tab filters.
+- The grid stopped hardcoding `Saldo a favor` / `Aplicada` and uses the `cpFavorBadge` /
+  `cpCreditFullyApplied` i18n keys.
+- The credit selector (`pendingAbonos`) dropped the doc-type whitelist: any purchase invoice
+  with a negative total and an unpaid negative PSD of the same supplier and currency now
+  appears. `PaymentCreditConsumer` rejects only non-negative totals.
+
 ### Known display-only limitation
 
 The **Importe en moneda de la cuenta** value is rounded to **2 decimals in the UI** while the

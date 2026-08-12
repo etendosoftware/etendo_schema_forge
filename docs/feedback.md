@@ -844,3 +844,40 @@ override needed.
 | `warehouse` | entity `accounting` |
 
 **Lesson:** a `decisions.json` flag that reaches `contract.json` is not proof it reaches the runtime. `apiPrediction.crud.<entity>.delete: false` in the contract is a *declared intent*; only `push-to-neo.js`/`neo-delta.js` actually writing `ISDELETE='N'` to `ETGO_SF_ENTITY` makes NEO Headless enforce it. When adding a new declarative flag that's supposed to restrict the live API, verify the write path (`resolveContractEntityMethods()` or equivalent), not just the contract shape — this is exactly the same class of gap ETP-4254 closed for `readOnly`/`methods`, and `hideDelete` had quietly never gotten the same treatment.
+
+## [2026-08-11] ETP-4841 — Three `.vitest.jsx` files under `artifacts/` have never run in CI or `make test`
+
+**Symptom:** `tools/app-shell/vitest.config.js:93` declares
+`include: ['src/**/*.vitest.{js,jsx}', 'src/**/*.spec.{js,jsx}']`. That glob is rooted at
+`tools/app-shell/`, so **nothing under the repo-root `artifacts/` tree is ever collected**.
+`.github/workflows/test.yml` and the `test` Make target only invoke that config, so these three
+files are dead weight — they have never gated a single push:
+
+| File | Window |
+|---|---|
+| `artifacts/sales-invoice/custom/__tests__/InvoiceHeaderTable.vitest.jsx` | sales-invoice |
+| `artifacts/chart-of-accounts/custom/__tests__/AccountCodeField.vitest.jsx` | chart-of-accounts |
+| `artifacts/goods-shipment/custom/__tests__/GoodsShipmentMoreMenu.vitest.jsx` | goods-shipment |
+
+**How it surfaced:** while fixing ETP-4841 the sales-invoice file was found to be asserting
+against the pre-ETP-4737 world — it mocked `getArSubtype` to return `'NC'`/`'DEV'`, values the
+component compares against `'RECTIFICATIVA'`, so the mock could never match, and it used the
+retired `creditNotesTab`/`returnsTab` dictionary keys. Those assertions rotted across at least
+two tickets with nothing to flag them, precisely because the file never executes.
+
+**Why it matters beyond housekeeping:** `artifacts/*/custom/` is *hand-written source*, not
+generated output (`@generated` is a Vite alias to `artifacts/`, see `vite.config.js:222`). It is
+where a large share of per-window UI logic lives. Any test written there today is silently
+decorative. ETP-4841's own sales-grid regression tests land in this file, so the fix for the
+"positive rectificativa shows as Saldo a favor" bug is currently **unprotected in CI** even
+though the tests exist and pass.
+
+**Verified, not assumed:** all three files pass when run with an include widened to cover
+`artifacts/`, so closing this is a config change, not a test-fixing exercise. The awkward part
+is that the Vitest root is `tools/app-shell/`, so the pattern has to reach outside it
+(`../../artifacts/**`) — which is why this is written up as its own task rather than slipped
+into ETP-4841.
+
+**Lesson:** a passing test suite proves nothing about files the runner never collects. When
+adding tests under a directory that is not the runner's root, confirm they actually execute
+(`--reporter=verbose` and look for the filename) before treating them as coverage.

@@ -8,6 +8,7 @@ import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useInvoicePreview } from './useInvoicePreview.js';
+import { resolveInvoicePaymentBadge } from './invoicePaymentBadge.js';
 import { useFiscalStatus } from './useFiscalStatus.js';
 import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
 import { getInvoiceFiscalTargets } from './fiscalTargets.js';
@@ -20,11 +21,13 @@ import { fetchByCriteria, fetchById } from '@/components/related-documents';
 import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
+// ETP-4841: a credit instrument is identified by the SIGN of its total, not by its
+// document type. This used to compare `arInvoiceSubtype` against the pre-ETP-4737
+// values 'NC'/'DEV', which no longer exist — the check was silently always false and
+// fell through to keyword matching on the document-type name.
 function isCreditNote(invoice) {
   if (!invoice) return false;
-  if (invoice.arInvoiceSubtype) return invoice.arInvoiceSubtype === 'NC' || invoice.arInvoiceSubtype === 'DEV';
-  const ident = (invoice['transactionDocument$_identifier'] || invoice['cDocTypeTargetId$_identifier'] || '').toLowerCase();
-  return ident.includes('credit') || ident.includes('memo') || ident.includes('crédito') || ident.includes('return') || ident.includes('devoluci');
+  return resolveInvoicePaymentBadge(invoice).isCredit;
 }
 
 /**
