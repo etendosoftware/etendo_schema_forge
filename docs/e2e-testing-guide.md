@@ -50,28 +50,6 @@ If this smoke fails because generated field-name selector URLs return `404 Field
 
 ---
 
-## Purchase/Sales Full-Flow Integration Specs — Accounting Period Precondition
-
-`purchase-order-full-flow.integration.spec.js` and `sales-quotation-full-flow.integration.spec.js` (both gated by `E2E_SALES_INTEGRATION=1`, real backend, no mocks) drive a document all the way through confirm/receipt/shipment/invoice actions for the test org (`GOOrg`, client `GOClient`). Those confirm calls require the current month's `c_periodcontrol` row to be **open** (`periodstatus='O'`) for the relevant doc base types (`SOO`, `POO`, `ARI`, `API`, `MMS`, `MMR`). `c_periodcontrol` rows default to `periodstatus='N'` (Never Opened) until manually opened from the Etendo UI — see `docs/etendo-ad/onboarding-gaps.md` §C2 for the full provisioning-gap background.
-
-Without a guard, a closed period makes the backend silently reject the confirm call with `"The Period does not exist or it is not opened"`, and the test doesn't surface that at all — it just times out ~10s later waiting for an unrelated element (e.g. "Ver factura"), producing a confusing generic Playwright timeout instead of the real cause. This is exactly what happened while debugging ETP-4567 in a fresh environment.
-
-Each of the 3 tests across those two spec files now calls `assertPeriodOpen()` (from `e2e/tests/helpers/period-helpers.js`) as the very first statement in the test body, before any page navigation. It queries `c_periodcontrol`/`c_period`/`ad_org` (resolving `GOOrg` by name, never a hardcoded `AD_Org_ID`, reusing the same gradle.properties/env-var DB credential resolution as `cli/src/db.js`) and:
-
-- **Passes silently** when every requested doc base type is open for the period covering today.
-- **Throws a clear `Error`** — failing the test in well under a second — naming the org, the period (name + date range), and exactly which doc base types are not open, plus the fix:
-  ```
-  Accounting period not open for org "GOOrg", period "Agosto 2026" (2026-08-01 to 2026-08-31).
-  Document types not open: SOO, POO, MMS, ARI, MMR.
-  Fix: Open it via Etendo UI: General Ledger → Setup → Open/Close Period Control →
-  select the period → Open Period for the listed document types.
-  ```
-- **Skips with a `console.warn`** (does not fail the suite) when the DB query itself fails — e.g. running against a remote/deployed environment with no local Postgres access. This guard is a local-dev convenience, not a hard requirement.
-
-It deliberately does **not** auto-open the period — that would mix test "arrange" with a real accounting/business action; opening a period is a human decision made through the Etendo UI. See `e2e/tests/helpers/__tests__/period-helpers.test.js` for the guard's own unit tests (all-open pass case, some-closed throw case, DB-unreachable skip case).
-
----
-
 ## Onboarding Register Integration Smoke
 
 `e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.
