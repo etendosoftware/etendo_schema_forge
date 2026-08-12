@@ -88,10 +88,15 @@ the same primitives `DetailTabs.jsx` uses for the Movements/Reconciliation/State
     `AutoMatchSupport.computeAmountTolerance()` / `withinDateWindow()` apply them. They are
     unrelated to the `0.01` epsilon that gates the `Conciliar` button.
   - **Difference settings** (`GlItemDifferenceSection`, ETP-4795, **all account types**):
-    **Concepto contable de diferencias** — a `ChipSelect` over `useGLItemLookup`, persisting
+    **Concepto contable** — a `ChipSelect` over `useGLItemLookup`, persisting
     `FIN_Financial_Account.EM_Aprm_Glitem_Diff` (DAL `aprmGlitemDiff`, an OBUISEL selector on
-    `C_GLItem`). This is the accounting concept a cash close posts its residual against; it is the
-    same column Classic's manual reconciliation popup uses. Read back through the list payload as
+    `C_GLItem`). **This is the accounting concept the residual amount is posted against when a cash
+    close or a reconciliation does not balance**; it is the same column Classic's manual
+    reconciliation popup uses. That sentence used to render under the field as help text
+    (`financeAccountsGlItemDifferenceHint`); it was dropped from the modal — the section heading
+    ("Configuración de diferencias") already frames what the field is for, and the explanation
+    belongs here rather than in the dialog. The field label was shortened to just "Concepto
+    contable" for the same reason: the heading supplies the "de diferencias". Read back through the list payload as
     `glItemDifferenceId` / `glItemDifferenceName` (`FinancialAccountsPageHandler`), written through
     `useAccountMutations.toDalBody()` as `aprmGlitemDiff`.
 - **Contabilidad** (`financeAccountsEditTabAccounting`, ETP-4530): the accounting accounts used

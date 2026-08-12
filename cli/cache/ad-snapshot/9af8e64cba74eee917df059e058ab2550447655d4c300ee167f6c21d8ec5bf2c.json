@@ -3171,7 +3171,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "067b7353a7c4b9a0977eb91071d3e95c24a834c201eb0cd93a4009cb3e6f15c8",
+      "checksum": "29006e55845566f179599a4bf1bc8e64b1db6fc66c7fce21d9423dee0be3178c",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -3417,14 +3417,6 @@
           "process_id": null
         },
         {
-          "classname": "com.etendoerp.psd2.bank.integration.actionhandler.RefreshConnection",
-          "column_name": "EM_Psd2_Refresh_Connections",
-          "mechanism": "obuiapp_process",
-          "name": "Refresh Connections",
-          "obuiapp_process_id": "83C5DBC9F05B4D38BBB3F5486B377427",
-          "process_id": null
-        },
-        {
           "classname": "com.etendoerp.payment.removal.handler.RemoveReconciliation",
           "column_name": "EM_Etpr_Remove_Reconciliation",
           "mechanism": "obuiapp_process",
@@ -3438,6 +3430,14 @@
           "mechanism": "obuiapp_process",
           "name": "Remove Transaction",
           "obuiapp_process_id": "DC4FCAC608324CB78CF92F99C1A94AD0",
+          "process_id": null
+        },
+        {
+          "classname": "com.etendoerp.psd2.bank.integration.actionhandler.RefreshConnection",
+          "column_name": "EM_Psd2_Refresh_Connections",
+          "mechanism": "obuiapp_process",
+          "name": "Search Recent Transactions",
+          "obuiapp_process_id": "83C5DBC9F05B4D38BBB3F5486B377427",
           "process_id": null
         }
       ]
