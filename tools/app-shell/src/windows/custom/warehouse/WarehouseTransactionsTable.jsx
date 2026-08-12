@@ -47,6 +47,22 @@ const TYPE_KEY_MAP = {
   'D-': 'movTypeInternalConsumption',
 };
 
+/**
+ * Document-window discriminator ({@code etgoDocWindow}, injected server-side by
+ * {@code ProductTransactionsHandler}) to i18n key. Unlike {@code M_Transaction.MovementType}
+ * (which is identical for a shipment and its return on the same side), the resolved window key
+ * already distinguishes a normal document from its return — see ETP-4864.
+ *
+ * Windows without a clear return semantics (goods-movements, physical-inventory) are
+ * intentionally absent here; those rows fall back to {@code TYPE_KEY_MAP} below.
+ */
+const WINDOW_TYPE_KEY_MAP = {
+  'goods-shipment': 'movTypeCustomerShipment',
+  'return-material-receipt': 'movTypeCustomerReturn',
+  'goods-receipt': 'movTypeVendorReceipt',
+  'return-to-vendor-shipment': 'movTypeVendorReturn',
+};
+
 function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -72,8 +88,12 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
     }
   }, [loading, error, transactions?.length]);
 
-  const resolveTypeLabel = (tx) =>
-    tx['movementType$_identifier'] ?? (TYPE_KEY_MAP[tx.movementType] ? ui(TYPE_KEY_MAP[tx.movementType]) : tx.movementType) ?? '';
+  const resolveTypeLabel = (tx) => {
+    const windowTypeKey = WINDOW_TYPE_KEY_MAP[tx.etgoDocWindow];
+    if (windowTypeKey) return ui(windowTypeKey);
+    if (TYPE_KEY_MAP[tx.movementType]) return ui(TYPE_KEY_MAP[tx.movementType]);
+    return tx['movementType$_identifier'] ?? tx.movementType ?? '';
+  };
 
   const sorted = useMemo(() => {
     if (!transactions) return [];
