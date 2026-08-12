@@ -1,6 +1,39 @@
 # ETP-4777 — Fix plan: Form summary Total / Send-PDF Total must match Grid Imp. Total
 
-**Status:** draft implementation plan, not yet built. Companion investigation doc: `docs/bug-reports/2026-08-12-form-summary-total-rounding-mismatch.md` (read that first — this plan assumes its findings and does not re-derive them).
+**Status:** implemented and verified (TDD: failing tests → fix → passing tests → live browser verification against real seeded data, including a Draft→Complete transition with per-line + document-level discount matching the ticket's reproduction shape). Companion investigation doc: `docs/bug-reports/2026-08-12-form-summary-total-rounding-mismatch.md` (read that first — this plan assumes its findings and does not re-derive them).
+
+## 0. Implementation summary (what actually shipped)
+
+Three commits on `feature/ETP-4777`:
+1. Investigation + this plan doc.
+2. Failing tests (RED) for `DocumentTotalsPanel` (Case 1/3) and `documentPdf.js`'s `buildOrderData` (Case 2).
+3. The fix: `DocumentTotalsPanel.jsx` gained a `persistedTotals` prop, preferred over `computeDocumentTotals` whenever there's no pending line/edit; `LinesBottomSection.jsx` derives it from `data.grandTotalAmount`/`data.summedLineAmount`; `documentPdf.js`'s `buildOrderData` now sources `grandTotal`/`taxAmount` from the persisted header instead of recomputing, matching the pattern already proven correct in `buildInvoiceData`/`buildQuotationData`.
+4. A follow-up commit fixing two regressions found during manual browser verification (not caught by the original test scenarios) — see §5.
+
+**Turned out simpler than expected:** `documentTotals.js` itself needed zero changes — see §2.
+
+## 5. Two regressions found during manual verification (fixed, tests added)
+
+Verifying against a real Draft document (multi-line + per-line discount + 25% document discount, matching the ticket's reproduction shape) surfaced two issues neither the original design nor the first round of tests anticipated:
+
+1. **Typing into the "Descuento total" % input froze the panel.** The % input's `onChange` only updates local `inputPct` state — it never touches `pendingLine`/`editingLine`. `hasPendingEdit` (the flag gating baseline-vs-recompute) didn't know about this, so the panel kept showing the frozen persisted baseline while the user typed, ignoring every keystroke until the `onBlur` PATCH round-tripped. Fix: `hasPendingEdit` now also becomes true whenever `inputPct !== totalDiscountPct` (the prop) — i.e. there's an unsaved discount-% edit in flight.
+2. **Completing the document with a pending discount broke Subtotal/Impuesto (Total stayed correct).** `resolveTotalDiscountPct`'s "is the discount already a materialised line?" check reads the `lines` prop — but the `ETGO_DTO` discount line is filtered out server-side before it ever reaches the frontend, so that check can never detect materialisation and always returns the full pct. Before Complete, `summedLineAmount` is the raw (pre-discount) net; after Complete, once `TotalDiscountService` materialises the line, `summedLineAmount` becomes net-of-discount — same field, opposite meaning, and nothing in the payload flags which one it currently is except `documentStatus`. The fix branches on `isReadOnly` (`documentStatus !== 'DR'`) to know which of "raw" vs "discounted" net subtotal `summedLineAmount` currently represents, and derives the other one from it — see the `rawNetSubtotal`/`discountedNetSubtotal` split in `LinesBottomSection.jsx`.
+
+Both were caught by literally reproducing the ticket's steps in the browser (localhost:3100) against real seeded purchase-order data before declaring the fix done — see §6 for the full verification log.
+
+## 6. Live verification log (localhost:3100, Purchase Order 1000009)
+
+Real end-to-end run reproducing the ticket's exact reproduction shape (multi-line, per-line discount, 25% document-level discount, Draft → Complete):
+
+| Step | Grid "Imp. Total" | Form panel Total | Subtotal + Impuesto |
+|---|---|---|---|
+| Draft, 1 line, no discount | 121,00 € | 121,00 € | 100,00 + 21,00 = 121,00 ✓ |
+| Draft, 2 lines (15% line discount) + 25% doc discount | 99,23 € | 99,23 € | 82,01 + 17,22 = 99,23 ✓ |
+| **After Confirmar (documentStatus → CO)** | 99,23 € (unchanged) | **99,23 €** (was frozen at the pre-Complete value before the fix — Case 3) | 82,01 + 17,22 = 99,23 ✓ |
+
+Before the fix, the equivalent local records (`1000008`, `1000007`, sales order `1000010` — all using tax-exclusive price lists) showed the Form panel Total as **0,00 €** while the Grid showed the real persisted value (e.g. 3.327,50 €) — the same defect the ticket describes, reproduced here in its most extreme local form. Confirmed fixed on all three after the change.
+
+**Out-of-scope finding, flagged but not fixed here:** the "Confirmar pedido" modal (`OrderConfirmModal.jsx`/equivalent) shows its own preview total, computed independently of both the Form panel and `computeDocumentTotals` — observed showing **74,42 €** for the same document where Grid/Form both correctly showed 99,23 €. This is a fourth, undocumented total-display surface, not one of the ticket's 3 reported cases, and wasn't analyzed as part of this investigation. Worth its own follow-up ticket.
 
 **Branch:** `feature/ETP-4777` (created from `origin/epic/ETP-3504`, no upstream yet).
 
