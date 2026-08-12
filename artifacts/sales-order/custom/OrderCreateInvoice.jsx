@@ -523,6 +523,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             {ui('cancel')}
           </button>
           <button type="button" onClick={handleConfirm} disabled={loading}
+            data-testid="order-confirm-modal-submit"
             style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__18d1f0" />}
             {loading ? ui('soProcessing') : primaryLabel}
