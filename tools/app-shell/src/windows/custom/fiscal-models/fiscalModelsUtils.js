@@ -205,18 +205,59 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
  * Calls PUT /neo/fiscal303/declarations?id=... to persist a manual status
  * change. Despite the URL, this endpoint is generic across fiscal models —
  * both 303 and 349 declarations live in the same backend table.
+ *
+ * `submissionMethod` (ETP-4755, optional) distinguishes the manual "Presentado" paths
+ * (`manual_ack` / `manual_no_receipt`) that would otherwise collide on the exact same
+ * `submitted_ack` status as a real AEAT telematic submission (which sets its own
+ * `submission_method: 'aeat_telematic'` server-side — see `AeatSubmitFlow.jsx`, never
+ * sent from here). Omitted entirely for any status change that isn't one of the manual
+ * "Presentado" paths (see `FmModel303Page.jsx`/`FmModel349Page.jsx`'s `handlePresent`),
+ * so the backend's "explicit null means not sent" contract for this field is honored.
  * Returns { ok: true } on success, or { ok: false, error: string } on failure.
  */
-export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl } = {}) {
+export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const body = { status: newStatus };
+    if (submissionMethod) body.submissionMethod = submissionMethod;
+    const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+/**
+ * Calls PUT /fiscal303/declarations?id=... to persist the manually-entered identification
+ * checks + box-value overrides for a Modelo 303 declaration, so they survive a page refresh.
+ * Mirrors persistDeclarationStatus's contract: { ok: true } on success, or
+ * { ok: false, error: string } on failure.
+ *
+ * The backend may respond { ok: true, manualDataApplied: false } (HTTP success, but the
+ * payload itself failed server-side validation and was NOT saved — other fields in the same
+ * PUT request still apply, but this function only ever sends manualData, so there's nothing
+ * else to report). That case is surfaced here as { ok: false, error: 'rejected' } — the caller
+ * can't do anything different between "the call failed" and "the call succeeded but the data
+ * was rejected", so both collapse to the same ok:false contract.
+ */
+export async function persistManualData(id, manualData, { token, apiBaseUrl } = {}) {
   if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
+      body: JSON.stringify({ manualData }),
     });
     if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    const body = await res.json().catch(() => null);
+    if (body?.manualDataApplied === false) return { ok: false, error: 'rejected' };
     return { ok: true };
   } catch (_) {
     return { ok: false, error: 'network' };
