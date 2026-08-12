@@ -2,7 +2,8 @@
 
 **Registry row:** `mcp-improvements-registry.md` → IMP-19 (P2, C3, 0 / 3, `com.etendoerp.go`).
 **Registered:** 2026-08-06 run (§5), from evidence **B3, B4, B5**.
-**Status:** 🔧 fix implemented 2026-08-11 (`7282112e`), live verification pending.
+**Status:** implemented 2026-08-11 (`7282112e`), **verified live** 2026-08-12 (§6). Registry row ✅
+with the score still 0 / 3. One new defect found and routed to IMP-5 as clause (iv) — §6.3.
 **Scope authorized by the human:** hide the five unusable `generate_*` tools ("Sí, ocultarlos").
 
 Status lives only in the registry; this file describes the work.
@@ -230,15 +231,80 @@ ad-hoc `javac` classpath used here does not include.
 
 ---
 
-## 6. Not verified
+## 6. Live verification (2026-08-12, `etendo-go-local`)
 
-- **Live**: nothing has been probed against `etendo-go-local`. Owed on the next deploy — that the
-  five tools disappear from the catalog, that `generate_tax_report` publishes typed dates, that
-  omitting `dateTo` returns the 422, and that the React UI still drives the five handlers over NEO
-  REST.
-- **Score**: 0 / 3 stands. Like IMP-22, the status mark is 🔧 — code written, committed and
-  unit-tested, product unmeasured — which is worth **zero**, the same as ⏳.
-- **The stale-tool-description limit from IMP-23 §9.3 applies here too**: an MCP client that is
-  already connected caches the tool list from session start, so it keeps offering the five retired
-  tools until it reconnects. Removing them from the catalog does not retract them from a live
-  session.
+Five probes. All four registered defects behave as designed on the server, one is only half-provable
+from this session for a reason the file itself predicted, and one **new** defect surfaced.
+
+| Probe | Result |
+|---|---|
+| `generate_tax_report({})` — defect A/C | 422 `validation_error`, `missingParameters:["dateFrom","dateTo"]`, hint pointing at the tool schema — exactly §2.4's declared pair |
+| `generate_tax_report(…, format:"pdf")` — defect B | 422, `field:"format"`, `supportedFormats:["json"]`, and §2.2's hint verbatim |
+| `generate_tax_report({dateFrom,dateTo})` | Real data, and its `meta` echoes 8 of the 12 declared parameters with the defaults read from the code |
+| `generate_bank_statements({})` — defect D | `callable:false`, `status:"not_configured_for_report_generation"` with the explanation |
+| `generate_aging_receivable({})` — §4 | Passed parameter validation, then failed **inside the handler** on an environment gap — see §6.3 |
+
+### 6.1 The session proved §9.3 before it proved anything else
+
+The tool schemas this session holds are the **pre-deploy** ones, and they are the defect verbatim:
+`parameters` is `{"description":"Report input parameters","type":"object"}` (defect A, untyped) and
+`format` reads *"Output format: pdf, xlsx, csv (default: pdf)"* (defect B, advertising three formats
+nothing renders). So IMP-23 §9.3's limit is not a theoretical caveat — it is the state this
+verification had to work around, and it is why every probe below tests **server behaviour** rather
+than the published schema.
+
+That makes the `generate_bank_statements` result better than a bare failure would have been. A client
+holding the old catalog still offers the five retired tools; calling one gets `callable:false` plus
+*"Jasper/AD_Process reports are legacy migration sources only… Configure a NEO report handler to
+enable it."* — an agent can act on that. The retirement itself is confirmed in code rather than live:
+`ToolRegistry:143` is `resolveReportContract(spec).ifPresent(contract -> tools.add(...))`, so an empty
+contract emits nothing. **Proving the absence from a live `tools/list` needs a reconnected client**;
+an unauthenticated `POST /mcp` returns 401, so it was not forced from here.
+
+### 6.2 §4's refusal was the right call, measured
+
+§4 refused to honour the Aging descriptor's `recOrPay: required`, on the grounds that the code
+defaults it and enforcing the descriptor would reject working calls. `generate_aging_receivable({})`
+— no parameters at all — **passed validation** and reached the handler. Had the phantom `required`
+been trusted, that call would have been rejected before running.
+
+The Tax success is the positive half of the same point: `meta` comes back with `dateType:"acct"`,
+`transactionType:"B"`, `taxType:"tax"`, `showDetails:false`, `groupByBp:false`,
+`bpNameType:"commercial"` — parameters the handler reads and that §4 found declared in **no**
+descriptor. They are now declared and their defaults are visible in the response.
+
+### 6.3 A new defect: the report handlers' own errors are not enveloped
+
+`generate_aging_receivable({})` failed with:
+
+```json
+{"error": {"message": "No accounting schema with currency is configured for organization 6184…", "status": 422}}
+```
+
+The *content* is fine — a real, actionable configuration gap in this local instance, not a code fault,
+and the reason Aging cannot be exercised end to end here. The **shape** is not: `{"error":{message,
+status}}` is the nested pre-IMP-5 form, not the flat `{status, error, detail, …}` envelope the rest of
+the surface now uses. There is no `error` code an agent can branch on and no `seeAlso`.
+
+This is a **fourth error funnel**, alongside the three IMP-17 §3 enumerated. IMP-17 fixed the CRUD
+failure path, the router's catch-all and the not-null classifier; a report handler returning
+`NeoResponse.error(...)` on its own reaches none of them, and `validateReportRequest` — which does use
+the canonical envelope (§2.3) — runs *before* the handler and so never sees this.
+
+**Where it belongs:** IMP-5, as a clause (iv), not a new number. Same reasoning as IMP-23 §5.1 and
+§9.4 → IMP-17: enveloping errors is literally IMP-5's title, and a new item would force a quota
+re-base for work that is one funnel of the same job. It is not IMP-19's — this item types the report
+*contract*, and the contract behaved correctly here by letting a valid call through.
+
+---
+
+## 7. Not verified
+
+- **The catalog itself.** That the five retired tools are absent from a live `tools/list` needs a
+  reconnected MCP client (§6.1). Confirmed in code and by unit test only.
+- **`generate_inventory_stock_report`** was not called — the third real handler is untested live.
+- **Aging end to end.** It reached its handler and stopped on a missing accounting schema for the
+  organization, so the report's own output is unverified on this instance.
+- **The React UI still driving the five handlers over NEO REST** — the argument §2.1 rests on. No
+  browser probe ran; the handlers were not touched, but that is reasoning, not measurement.
+- **Score**: 0 / 3 stands. The row moves 🔧 → ✅ on §6; the 3 / 3 is a `/mcp-comparison` measurement.
