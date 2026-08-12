@@ -1,8 +1,8 @@
 {
-  "version": "0.70.0",
+  "version": "0.71.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-12T13:27:49.870Z",
-  "contractChecksum": "c4ea15b343cbbd2c",
+  "updatedAt": "2026-08-12T14:40:46.219Z",
+  "contractChecksum": "1fe7f4f22587119b",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1127,6 +1127,11 @@
             "readOnlyLogic": "true",
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
           },
+          "aeatsiiErrorRegistral": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+            "defaultValue": "N"
+          },
           "aeatsiiCauseExemption": {},
           "aeatsiiIsauthorization": {
             "required": true,
@@ -1309,6 +1314,7 @@
         "priceList",
         "etvfacSimpinvart7273",
         "etvfacInvNoIDArt61d",
+        "aeatsiiErrorRegistral",
         "aeatsiiIsauthorization"
       ],
       "lineFields": [
@@ -1461,6 +1467,7 @@
           "priceList",
           "etvfacSimpinvart7273",
           "etvfacInvNoIDArt61d",
+          "aeatsiiErrorRegistral",
           "aeatsiiIsauthorization"
         ]
       },
@@ -1488,5 +1495,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "3f76c9d9847ab7e3"
+  "checksum": "b8242bd2d866b97b"
 }

@@ -1,8 +1,8 @@
 {
-  "version": "0.70.0",
+  "version": "0.71.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-12T13:27:49.870Z",
-  "checksum": "c4ea15b343cbbd2c",
+  "updatedAt": "2026-08-12T14:40:46.219Z",
+  "checksum": "1fe7f4f22587119b",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -1254,6 +1254,37 @@
             }
           },
           {
+            "name": "aeatsiiErrorRegistral",
+            "apiKey": "aeatsiiErrorRegistral",
+            "column": "EM_Aeatsii_Error_Registral",
+            "label": "Register Error Modified",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y' & @em_aeatsii_issent@='Y' & (@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@!'VO') ",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] !== 'CO' && record['em_aeatsii_estado'] !== 'AE') || record['em_aeatsii_modified'] === 'Y' || record['documentStatus'] === 'VO'"
+            }
+          },
+          {
             "name": "aeatsiiCauseExemption",
             "apiKey": "aeatsiiCauseExemption",
             "column": "EM_Aeatsii_Cause_Exemption_ID",
@@ -1537,6 +1568,13 @@
             "derivation": {
               "type": "lookup",
               "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+            }
+          },
+          {
+            "name": "aeatsiiErrorRegistral",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           },
           {
@@ -3430,7 +3468,7 @@
             "apiKey": "aeatsiiErrorRegistral",
             "column": "EM_Aeatsii_Error_Registral",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -5980,6 +6018,14 @@
         "description": "Default value for 'aeatsiiDescripcionSii' in header should be a string"
       },
       {
+        "id": "t-default-value-type-header-aeatsiiErrorRegistral",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiErrorRegistral",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiErrorRegistral' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-aeatsiiEstado",
         "category": "default-value-type",
         "entity": "header",
@@ -6186,6 +6232,14 @@
         "field": "aeatsiiDescripcionSii",
         "runner": "node",
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiErrorRegistral",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiErrorRegistral",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiErrorRegistral' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-aeatsiiEstado",
@@ -6402,6 +6456,14 @@
         "field": "aeatsiiDescripcionSii",
         "runner": "node",
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiErrorRegistral",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiErrorRegistral",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiErrorRegistral' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-aeatsiiEstado",
@@ -6650,6 +6712,14 @@
         "field": "aeatsiiDescripcionSii",
         "runner": "node",
         "description": "Field 'aeatsiiDescripcionSii' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiErrorRegistral",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiErrorRegistral",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorRegistral' should be present in header"
       },
       {
         "id": "t-field-presence-header-aeatsiiEstado",
@@ -7220,6 +7290,14 @@
         "description": "Field 'aeatsiiDescripcionSii' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiErrorRegistral",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiErrorRegistral",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorRegistral' should have type 'boolean' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiEstado",
         "category": "field-type",
         "entity": "header",
@@ -7780,6 +7858,14 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiErrorRegistral",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiErrorRegistral",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorRegistral' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiEstado",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -8122,6 +8208,14 @@
         "field": "aeatsiiDescripcionSii",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiErrorRegistral",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiErrorRegistral",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorRegistral' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-aeatsiiEstado",
@@ -8904,14 +8998,6 @@
         "field": "aeatsiiErrorMsg",
         "runner": "node",
         "description": "System field 'aeatsiiErrorMsg' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiErrorRegistral",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiErrorRegistral",
-        "runner": "node",
-        "description": "System field 'aeatsiiErrorRegistral' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiFechaDua",
@@ -10430,25 +10516,25 @@
       }
     ],
     "summary": {
-      "total": 593,
+      "total": 599,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
-        "default-value-type": 26,
-        "displaylogic-evaluable": 27,
-        "displaylogic-valid": 27,
-        "field-presence": 71,
-        "field-type": 71,
-        "readonlylogic-evaluable": 43,
-        "readonlylogic-valid": 43,
+        "default-value-type": 27,
+        "displaylogic-evaluable": 28,
+        "displaylogic-valid": 28,
+        "field-presence": 72,
+        "field-type": 72,
+        "readonlylogic-evaluable": 44,
+        "readonlylogic-valid": 44,
         "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 21,
-        "system-field": 212,
+        "system-field": 211,
         "visibility": 5
       },
       "byRunner": {
-        "node": 593,
+        "node": 599,
         "junit": 0
       }
     }

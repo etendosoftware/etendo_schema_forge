@@ -492,6 +492,10 @@
           "visibility": "editable",
           "form": true
         },
+        "aeatsiiErrorRegistral": {
+          "visibility": "editable",
+          "form": true
+        },
         "aeatsiiEjercicio": {
           "visibility": "discarded"
         },

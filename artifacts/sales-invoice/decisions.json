@@ -441,6 +441,10 @@
           "visibility": "editable",
           "form": true
         },
+        "aeatsiiErrorRegistral": {
+          "visibility": "editable",
+          "form": true
+        },
         "aeatsiiIssent": {
           "visibility": "readOnly",
           "form": false

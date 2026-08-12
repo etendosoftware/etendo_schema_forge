@@ -1,8 +1,8 @@
 {
-  "version": "0.82.0",
+  "version": "0.83.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-12T13:27:49.556Z",
-  "contractChecksum": "aa36f173bffbe085",
+  "updatedAt": "2026-08-12T14:40:45.947Z",
+  "contractChecksum": "91aa03f358214845",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1483,6 +1483,11 @@
             "readOnlyLogic": "true",
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
           },
+          "aeatsiiErrorRegistral": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+            "defaultValue": "N"
+          },
           "aeatsiiIsauthorization": {
             "required": true,
             "defaultValue": "N"
@@ -1940,6 +1945,7 @@
         "paymentTerms",
         "paymentMethod",
         "currency",
+        "aeatsiiErrorRegistral",
         "aeatsiiIsauthorization"
       ],
       "lineFields": [
@@ -2123,6 +2129,7 @@
           "paymentTerms",
           "paymentMethod",
           "currency",
+          "aeatsiiErrorRegistral",
           "aeatsiiIsauthorization"
         ]
       },
@@ -2157,5 +2164,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "ecdb71039bb1f58a"
+  "checksum": "93ee3b63ccb71b1a"
 }
