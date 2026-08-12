@@ -131,4 +131,64 @@ describe('DocumentTotalsPanel', () => {
     render(<DocumentTotalsPanel lines={LINES} lineConfig={config} formatAmount={(v) => `${v}`} />);
     expect(screen.queryByText(/addTotalDiscount/)).not.toBeInTheDocument();
   });
+
+  // ETP-4777 — the Form summary panel must never show a client-recomputed
+  // total that differs from the persisted backend value (the one the Grid
+  // and the printed document show). Whenever nothing is actively being
+  // edited, the panel must display the authoritative `persistedTotals`
+  // as-is instead of recomputing from `lines` via computeDocumentTotals.
+  describe('ETP-4777 — persisted backend total takes precedence over client recompute', () => {
+    it('shows the persisted total instead of recomputing from lines when nothing is pending (Case 1: Draft)', () => {
+      // Mocked computeDocumentTotals (see top of file) would sum LINES'
+      // lineGrossAmount and return grandTotal=121 — a different number than
+      // the backend-persisted total, reproducing the reported Form-vs-Grid
+      // mismatch (e.g. Form showed 89.19 while Grid's Imp. Total was 89.21).
+      const persistedTotals = { grandTotal: 89.21, netSubtotal: 70, taxAmt: 19.21 };
+      render(
+        <DocumentTotalsPanel
+          lines={LINES}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          persistedTotals={persistedTotals}
+        />
+      );
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('89.21');
+    });
+
+    it('keeps showing the persisted total after the document is completed, not the stale pre-Complete number (Case 3)', () => {
+      // Simulates the Grid/print already updated to the post-Complete value
+      // (e.g. 89.20) while the old buggy panel kept showing the pre-Complete
+      // recompute (89.19) forever, because it never read the persisted total.
+      const persistedTotals = { grandTotal: 76.43, netSubtotal: 60, taxAmt: 16.43 };
+      render(
+        <DocumentTotalsPanel
+          lines={LINES}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          readOnly={true}
+          persistedTotals={persistedTotals}
+        />
+      );
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('76.43');
+    });
+
+    it('falls back to the live recompute while a line is actively pending/unsaved (no persisted number exists yet for it)', () => {
+      // While the user is mid-edit on a new row, there is nothing wrong to
+      // fix — this is the one state where computeDocumentTotals is still the
+      // right source, per the fix's design (see docs/plans/2026-08-12-etp4777-total-rounding-fix-plan.md §2).
+      const persistedTotals = { grandTotal: 89.21, netSubtotal: 70, taxAmt: 19.21 };
+      const pending = { lineGrossAmount: 50, lineNetAmount: 40 };
+      render(
+        <DocumentTotalsPanel
+          lines={LINES}
+          pendingLine={pending}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          persistedTotals={persistedTotals}
+        />
+      );
+      // Mocked computeDocumentTotals sums LINES (121) + pending (50) = 171.
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('171');
+    });
+  });
 });
