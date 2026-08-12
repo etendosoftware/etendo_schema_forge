@@ -791,6 +791,35 @@ separate piece of work.
 
 ---
 
+## ETP-4773: Missing "Required" Error on `inputMode: dependent` Fields
+
+**Component:** `EntityForm.jsx` — `DependentFkField`, `renderDependentField`
+
+**Symptom:** In the Form view, required fields with `inputMode: "dependent"` (e.g. `partnerAddress` /
+"Dirección") showed the required asterisk but did NOT render the "Requerido" error text after saving
+with the field empty. Required `inputMode: "selector"` fields (Tarifa, Condiciones de pago) showed the
+error correctly.
+
+**Root cause:** `renderFieldWithError` injects the error `<p>` via `React.cloneElement`, assuming the
+target element renders `{props.children}` so the injected node lands inside it. `DependentFkField`
+returned its own `<div>` with hardcoded children (a `<Label>` plus the selector) and no children slot —
+the cloned-in error node had nowhere to attach and was silently dropped.
+
+**Fix:** `DependentFkField` no longer renders its own `<Label>` — it returns only the selector
+(`PartnerAddressPicker` or `DependentSelect`). The caller, `renderDependentField`, now wraps the label
+and the field in a `<div>{Label}<DependentFkField .../></div>`, the same label/selector split already
+used by `renderSearchSelectField` for `inputMode: "selector"` fields — which is exactly why that mode
+never had this bug.
+
+**Lesson:** Any field renderer that `renderFieldWithError` wraps via `cloneElement` MUST expose a real
+children slot (i.e. actually render `{props.children}`, generally by keeping the field's own label
+outside the cloned element). A field component that renders its own complete, self-contained markup —
+label included — silently swallows the injected error node. This is a generic component fix in
+`EntityForm.jsx`; it applies to every window with a required `inputMode: dependent` field
+(sales-order, purchase-order, purchase-invoice, sales-invoice, sales-quotation, goods-shipment,
+goods-receipt, return-material-receipt, return-to-vendor-shipment, assets, user) with no per-window
+override needed.
+
 ## [2026-08-06] ETP-4745 — `hideDelete` never reached NEO backend; root cause fixed in `schema_forge_core`, 10 windows still need a re-push
 
 **Component:** `cli/src/lib/entity-methods.js` (`resolveContractEntityMethods()`) — `schema_forge_core` repo, not this one. Consumed here only as a published/`LOCAL_CORE` dependency, and via the `decisions.json → hideDelete` key documented in `docs/decisions-reference.md` and `docs/ui-customization.md`.

@@ -67,6 +67,44 @@ Use this window to register and complete outgoing payments to vendors or other p
 - No payment-out-specific browser or node test was found that proves end-to-end outgoing-payment lifecycle behavior, multi-currency recalculation, credit usage, posting effects, or exposure of the contract-defined secondary surfaces. The form-view delete button's `deleteAction` wiring (ETP-4479) IS covered by `tools/app-shell/src/components/contract-ui/__tests__/DetailView.deleteActionFallback.vitest.jsx`. The previously-planned **Remove Payment** kebab action was removed (ETP-4479) instead of being tested — see the Reactive behavior note above.
 - The generated `HeaderPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `FIN_Payment` AD table.- **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
 
+## Write-off summary and lines column rename — ETP-4797
+
+`PaymentDetailSidebar` (`artifacts/payment-out/custom/PaymentDetailSidebar.jsx`, thin wrapper over
+the shared `tools/app-shell/src/windows/custom/shared/PaymentDetailSidebarBase.jsx`) is the left
+sidebar shown on the detail page (`HeaderPage.jsx` wires it as `sidePanel`, alongside
+`PaymentOutBottomPanel` as `bottomSection` — see the JSX generated for those two props). Neither
+component was previously documented in this file.
+
+The sidebar's breakdown card (**Importe total** / **Aplicado a facturas** / **Sin aplicar**) now
+conditionally grows a fourth row, **Diferencia ajustada**, shown only when the payment's
+`writeoffAmount` (DAL property on `finPayment`, physical column `Writeoffamt`, already `readOnly`
+in this window's `decisions.json`) is non-zero. A payment created without the write-off toggle
+carries `writeoffAmount = 0` and the row never appears.
+
+**What "Diferencia ajustada" means:** when this payment settled an invoice for less than its
+outstanding amount and the user turned on the "Ajustar diferencia" toggle at creation time (see
+`financial-account.md`'s reconciliation write-off section, and this same doc / `sales-invoice.md`
+for the `NewPaymentEntryModal` toggle on the payment side), the shortfall was written off rather
+than left pending — posted to the business partner group's write-off account. This row shows that
+amount. It is **not** a discount, credit, or G/L-item allocation — no accounting concept is chosen
+by the user.
+
+The lines table (`PaymentOutBottomPanel.jsx`) also changed: the **Pendiente** column (a purely
+frontend-computed `Math.max(0, expected - amount)`, never a backend field) was removed, and the
+remaining two columns were renamed to match Classic's own wording on the equivalent `FIN_Payment`
+grid — **Importe** → **Importe esperado** (Expected Amount), **Aplicado** → **Importe recibido**
+(Received Amount).
+
+## Draft-state color regressions restored, Confirm button reordered — ETP-4797
+
+Same ETP-4554 color-mapping bug and same fix as `payment-in.md`'s "Draft-state color regressions
+restored, Confirm button reordered" section (both windows share `PaymentDetailSidebarBase.jsx`,
+`DetailView.jsx`, and near-identical `PaymentOutBottomPanel.jsx` / `PaymentBottomPanel.jsx`
+components) — see that section for the full list of components and the exact hex/token values.
+This window's `decisions.json` also got `"saveBeforeProcesses": true` so `Confirmar`
+(`processOverrides.aPRMProcessPayment`) renders after `Guardar` instead of before it, and its
+`PaymentDraftBanner.jsx` got the same background/text-color and bold-text-split fix.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which places a real

@@ -41,6 +41,10 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 }));
 
 // Detail-only dependency graph — stubbed so mounting the detail branch stays cheap.
+vi.mock('@/hooks/useReconciliationList', () => ({
+  useReconciliations: () => ({ reconciliations: [], loading: false }),
+  useClearedItems: () => ({ items: [], loading: false }),
+}));
 vi.mock('@/hooks/useFinancialAccount', () => ({
   useFinancialAccount: () => ({ account: { id: 'acc-1', name: 'BBVA' }, reload: vi.fn() }),
 }));
@@ -61,7 +65,12 @@ vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: vi.fn() 
 vi.mock('../MovementsTab', () => ({ MovementsTab: () => <div data-testid="tab-movements" /> }));
 vi.mock('../ReconciliationTab', () => ({ ReconciliationTab: () => <div data-testid="tab-reconciliation" /> }));
 vi.mock('../ImportedStatementsTab', () => ({ ImportedStatementsTab: () => <div data-testid="tab-statements" /> }));
-vi.mock('../DetailTabs', () => ({ DetailTabs: () => <div data-testid="detail-tabs" /> }));
+// `getVisibleTabs` is the real one on purpose: index.jsx derives its tab guard from it, so a stub
+// returning the wrong shape would silently disable the guard this suite mounts through.
+vi.mock('../DetailTabs', async (importOriginal) => ({
+  ...(await importOriginal()),
+  DetailTabs: () => <div data-testid="detail-tabs" />,
+}));
 vi.mock('../EditAccountModal.jsx', () => ({ EditAccountModal: () => <div data-testid="edit-modal" /> }));
 vi.mock('../ArchiveAccountDialog.jsx', () => ({ ArchiveAccountDialog: () => <div data-testid="archive-dialog" /> }));
 vi.mock('../BankConnectionFlowUI.jsx', () => ({ BankConnectionFlowUI: () => <div data-testid="bank-connection-flow" /> }));
