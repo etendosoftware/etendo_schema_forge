@@ -25,7 +25,7 @@ vi.mock('../fiscalModelsUtils.js', () => ({
 // ── Import under test ───────────────────────────────────────────────────────
 
 import { render, screen, fireEvent } from '@testing-library/react';
-import { SourcesTab, IncidentsTab, FilesTab } from '../FmTabContent.jsx';
+import { SourcesTab, IncidentsTab } from '../FmTabContent.jsx';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -127,37 +127,5 @@ describe('IncidentsTab', () => {
     expect(link).toBeTruthy();
     fireEvent.click(link);
     expect(onGoToSources).toHaveBeenCalled();
-  });
-});
-
-// ── FilesTab ────────────────────────────────────────────────────────────────
-
-describe('FilesTab', () => {
-  it('shows empty state when no file', () => {
-    render(<FilesTab decl={{ file: null }} t={t} onGenerate={vi.fn()} />);
-    expect(document.body.textContent).toContain('fm.files.empty');
-  });
-
-  it('shows generate button when no file', () => {
-    const onGenerate = vi.fn();
-    render(<FilesTab decl={{ file: null }} t={t} onGenerate={onGenerate} />);
-    const btn = Array.from(document.querySelectorAll('button'))
-      .find((b) => b.textContent.includes('fm.action.generate_file'));
-    expect(btn).toBeTruthy();
-    fireEvent.click(btn);
-    expect(onGenerate).toHaveBeenCalled();
-  });
-
-  it('shows file info when file exists', () => {
-    const decl = {
-      file: { name: '303_T2_2026.txt', size: '1.2 KB', generatedAt: '2026-06-01' },
-    };
-    render(<FilesTab decl={decl} t={t} onGenerate={vi.fn()} />);
-    expect(document.body.textContent).toContain('303_T2_2026.txt');
-  });
-
-  it('uses custom genLabel when provided', () => {
-    render(<FilesTab decl={{ file: null }} t={t} onGenerate={vi.fn()} genLabel="Custom Label" />);
-    expect(document.body.textContent).toContain('Custom Label');
   });
 });

@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import {
   TriangleAlert, OctagonAlert, CircleCheck, ChevronRight,
-  Download, FileText,
 } from 'lucide-react';
-import { Banner, EmptyState } from './FmCommon.jsx';
+import { EmptyState } from './FmCommon.jsx';
 import { formatAmount } from './fiscalModelsUtils.js';
 
 function buildBoxIncidentMap(incidents) {
@@ -206,62 +205,6 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
           title={t('fm.incidents.empty')}
           sub={t('fm.incidents.empty_sub')}
           data-testid="EmptyState__931756" />
-      )}
-    </div>
-  );
-}
-
-// genLabel: text for the generate button — pass model-specific label from parent
-export function FilesTab({ decl, t, onGenerate, fileBlocked, genLabel }) {
-  const file = decl.file ?? null;
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      {file ? (
-        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid var(--status-success-border)', borderRadius: 8, background: 'var(--status-success-bg)' }}>
-            <CircleCheck
-              size={20}
-              strokeWidth={1.75}
-              style={{ color: 'var(--status-success-fg)', flexShrink: 0 }}
-              data-testid="CircleCheck__931756" />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{file.name}</div>
-              <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
-                {file.size} · {file.generatedAt}
-              </div>
-            </div>
-            <button className="fm-btn" onClick={() => {}}>
-              <Download
-                size={13}
-                strokeWidth={1.75}
-                style={{ display:'inline',verticalAlign:'middle',marginRight:4 }}
-                data-testid="Download__931756" />
-              {t('fm.action.download')}
-            </button>
-          </div>
-          <Banner
-            tone="info"
-            title={t('fm.files.next_step')}
-            sub={t('fm.files.next_step_sub')}
-            data-testid="Banner__931756" />
-        </div>
-      ) : (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {t('fm.files.empty') ?? 'Sin fichero generado'}
-          </span>
-          <span style={{ fontSize: 14, fontWeight: 400, color: 'hsl(var(--muted-foreground))' }}>
-            {t('fm.files.empty_sub') ?? 'Genera el fichero de declaración para subir a la sede AEAT'}
-          </span>
-          <button
-            className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ marginTop: 8, borderRadius: 20, padding: '9px 20px' }}
-            onClick={onGenerate}
-          >
-            <FileText size={14} strokeWidth={1.75} data-testid="FileText__931756" />
-            {genLabel ?? t('fm.action.generate_file') ?? 'Generar fichero'}
-          </button>
-        </div>
       )}
     </div>
   );
