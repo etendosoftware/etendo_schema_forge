@@ -229,8 +229,22 @@ asserted the defect:
   than less. This is per-window prose and belongs in `decisions.json`; the generic layer cannot
   produce it.
 * **(vi) the AD duplication itself.** §3.6 removes the ambiguity for an agent without deciding
-  whether `aPRMProcessinvoice` should exist. It also shares `processId`
-  `57496FB9CF9E4E8F847224017941570E` with `posted`, which is worth a look on its own.
+  whether `aPRMProcessinvoice` should exist. Separately, `posted` shares `processId`
+  `57496FB9CF9E4E8F847224017941570E` with `etblkpBulkposting` — the same process reached through two
+  buttons — which is worth a look on its own.
+* **(viii) `processNow` is a third alias of `documentAction`, and it is the one invokable action that
+  still misleads.** Found by the live verification in §6, not by the code read. `Processing` and
+  `DocAction` both point at `processId` `111` ("Process Invoice"), but `Processing` is a bare Yes/No
+  trigger: no `actionValues`, no `actionParameter`, no `agentPrompt`, and therefore
+  `businessCritical:false` from §3.3, whose derivation keys on the `docAction` binding that
+  `Processing` does not have. So of the four actions the catalog now presents as callable, three are
+  honestly described and the fourth invites an agent to fire the invoice-processing process with no
+  document action attached and no warning. **What actually happens when it is fired was not tested** —
+  that is a write against a real invoice and needs its own authorization. Two candidate answers, and
+  they need different fixes: if `Processing` is a legacy internal flag that should never have been
+  exposed, it belongs curated out like the other 17; if it is a real entry point, it needs the
+  derivation to reach it. Do not widen §3.3 to cover it before knowing which — a derivation keyed on
+  "shares a `processId` with a `docAction` button" is a guess dressed as structure.
 * **Which of the 17 discarded actions should be promoted.** With §3.2 the 17 are now honestly
   reported as out of scope, which is a true statement about the current curation — not a claim that
   the curation is right. Several are plausible agent capabilities (`aPRMAddpayment`,
@@ -239,10 +253,34 @@ asserted the defect:
 * **The other 88 entities.** Every measurement above is `sales-invoice/header`. The fixes are
   generic and unconditional, so they apply everywhere, but no other catalog was read.
 
-## 6. Not verified
+## 6. Verified live — 2026-08-12
 
-Nothing was probed live. Owed on the next deploy: that the `sales-invoice/header` catalog reports
-`actionCount:22` with an `invokableCount` well below it, that the three `EM_*` labels are gone, that
-no action carries `required`, and that `documentAction` and `posted` come back
-`businessCritical:true` — which is the one that moves **M4**, the metric this item has been the sole
-blocker on.
+Read back from the deployed instance, `neo_schema({spec:"sales-invoice", entity:"header",
+view:"actions"})`. All four owed assertions hold:
+
+| Owed | Result |
+|---|---|
+| `actionCount:22`, `invokableCount` well below it | **`22` / `4`** — the four are `processNow`, `posted`, `documentAction`, `generateTo`: exactly the non-discarded buttons that have a process |
+| the three `EM_*` labels gone | **gone** — `Generate Bank Payment`, `SII duplicated invoice correction`, `SII Unsubscribe Invoice`. No label in the catalog begins with `EM_` or `RM_` |
+| no action carries `required` | **none of the 22** |
+| `documentAction` and `posted` → `businessCritical:true` | **both true**, and `aPRMProcessinvoice` with them — **3 of 22**, so the derivation discriminates instead of flagging everything, which was the design constraint in §3.3 |
+
+The two unregistered defects the fix targeted are closed in the response: `createLinesFrom` reports
+`invokable:false` with `"no process: the AD button column has no process wired behind it"`, and the
+17 discarded actions each carry the `discarded:` reason. §3.6 landed as predicted — of the
+`documentAction` / `aPRMProcessinvoice` pair exactly one is callable and the other says why it is
+not, and the same holds for the `posted` / `etblkpBulkposting` pair that shares a `processId`.
+
+Two things this verification did **not** settle:
+
+* **It surfaced defect (viii)** — `processNow` shares `processId` `111` with `documentAction` and is
+  callable, undescribed and unflagged. See §5. Fixing it needs a product answer first.
+* **M4 is not re-measured.** The assertion that moves it is now true in the payload, but the metric
+  is scored by `/mcp-comparison`, which has not been re-run — so this item's score stays at 0/3
+  until it is. Status and score move on different evidence.
+
+Also owed, and unrelated to the deploy: the MCP client is still serving the **pre-change
+`tools/list`** — the `view` enum description it advertises is the old text, without the `invokeVia`
+caveat or `invokableCount`. The server payload is current, so this is client-side tool caching, and
+it needs a client reconnect to confirm — the same reconnect already owed for the five retired
+`generate_*` tools.
