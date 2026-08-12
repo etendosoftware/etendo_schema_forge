@@ -1,14 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { formatAmount } from '@/lib/formatAmount.js';
 import PaymentDraftBanner from './PaymentDraftBanner';
 
 /* eslint-disable react/prop-types */
 
-function fmtAmt(val) {
+/**
+ * Formats a line amount in the PAYMENT's own currency. The amounts on these rows come from
+ * FIN_Payment_ScheduleDetail, which stores them in the payment/invoice currency — so a 21.34 USD
+ * payment from a EUR bank account must read "21,34 $", not "21,34 €". This used to be a hand-rolled
+ * formatter with a hardcoded ' €' suffix and no currency parameter at all, which mislabelled every
+ * non-EUR payment regardless of the account (the ETP-4314 sweep centralized this everywhere else but
+ * missed this panel and its payment-out twin). Delegates to the canonical formatAmount/formatCurrency
+ * — never re-add a local Intl or symbol-concatenation path here.
+ */
+function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  const abs = Math.abs(n).toFixed(2).split('.');
-  abs[0] = abs[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' €';
+  return formatAmount(n, currency);
 }
 
 function fmtDate(raw) {
@@ -18,13 +26,13 @@ function fmtDate(raw) {
 }
 
 const CalendarIcon = () => (
-  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
     <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
   </svg>
 );
 
 const TransferIcon = () => (
-  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
     <path d="M3 7h18M3 7l4-4M3 7l4 4M21 17H3M21 17l-4-4M21 17l-4 4"/>
   </svg>
 );
@@ -41,26 +49,34 @@ function resolveMethodKey(name) {
 const METHOD_ICONS = {
   transfer: <TransferIcon />,
   card: (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
     </svg>
   ),
   cash: (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>
     </svg>
   ),
   direct: (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-info-bg)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <path d="M4 4v16M4 8h12a3 3 0 0 1 0 6H4M14 14l4 4M14 14l4-4"/>
     </svg>
   ),
 };
 
+// ETP-4554 ("Migrate Artifact Theme Styles") swapped every neutral gray here (labels, field
+// icons, loading/empty text) for the `--status-info-*` (blue) token family instead of
+// `--muted-foreground` — the icons in particular went to `--status-info-bg`, a near-white pale
+// blue, nearly invisible on a light card. `--status-success-fg` (the deposited-amount green) was
+// mapped correctly in the same commit, so this was a mis-mapping of the neutral grays
+// specifically, not a deliberate palette change. Restored to `--muted-foreground`, matching the
+// original mid-gray label/icon colors and the sibling PaymentDetailSidebarBase.jsx, which already
+// used it correctly for the same kind of label text (found while verifying ETP-4797).
 function FieldItem({ label, children, icon }) {
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
-      <span style={{ font: '400 12px/16px Inter', color: 'var(--status-info-fg)' }}>{label}</span>
+      <span style={{ font: '400 12px/16px Inter', color: 'hsl(var(--muted-foreground))' }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 0 }}>
         {icon && <span style={{ display: 'flex', alignItems: 'center' }}>{icon}</span>}
         <span style={{ font: '600 16px/24px Inter', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -98,7 +114,10 @@ function DatosSection({ data, ui }) {
   );
 }
 
-const DET_COLS = '1.8fr 1fr 1fr 1fr';
+// ETP-4797: dropped the Pendiente column — it duplicated Importe minus Aplicado with no new
+// information, and Classic's own lines grid (Expected Amount / Received Amount) doesn't carry
+// it either. Renamed the remaining two to match Classic's wording.
+const DET_COLS = '1.8fr 1fr 1fr';
 
 function LineasSection({ data, token, apiBaseUrl, ui }) {
   const [lines, setLines] = useState(null);
@@ -119,12 +138,13 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
     return () => { cancelled = true; };
   }, [data?.id, token, apiBaseUrl]);
 
+  // Line amounts are stored in the payment's own currency (see fmtAmt).
+  const currency = data?.['currency$_identifier'];
   const thStyle = { font: '600 12px/16px Inter', color: 'hsl(var(--foreground))' };
   const thRStyle = { ...thStyle, textAlign: 'right' };
   const noLines = !data?.id || (lines !== null && lines.length === 0);
   const totalImporte = (lines || []).reduce((s, r) => s + (parseFloat(r.expected) || 0), 0);
   const totalApplied = (lines || []).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-  const totalPendiente = (lines || []).reduce((s, r) => s + Math.max(0, (parseFloat(r.expected) || 0) - (parseFloat(r.amount) || 0)), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', padding: '8px 20px 12px', gap: 16 }}>
@@ -134,23 +154,25 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
       </div>
 
       {lines === null ? (
-        <div style={{ font: '400 13px/18px Inter', color: 'var(--status-info-border)' }}>{ui('loading')}</div>
+        <div style={{ font: '400 13px/18px Inter', color: 'hsl(var(--muted-foreground))' }}>{ui('loading')}</div>
       ) : noLines ? (
-        <div style={{ font: '400 13px/18px Inter', color: 'var(--status-info-border)' }}>{ui('paymentInNoLines')}</div>
+        <div style={{ font: '400 13px/18px Inter', color: 'hsl(var(--muted-foreground))' }}>{ui('paymentInNoLines')}</div>
       ) : (
-        <div style={{ border: '1px solid hsl(var(--foreground))', borderRadius: 8, overflow: 'hidden', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)' }}>
+        /* ETP-4554 mapped this box's border to hsl(var(--foreground)) (near-black) and the
+           row dividers below to hsl(var(--card)) (white-on-white, invisible) — both were
+           originally the same light neutral gray, which var(--status-neutral-border) matches
+           exactly (found while verifying ETP-4797). */
+        <div style={{ border: '1px solid var(--status-neutral-border)', borderRadius: 8, overflow: 'hidden', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 40 }}>
             <div style={{ padding: '0 12px', ...thStyle }}>{ui('invoice')}</div>
-            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('amount')}</div>
-            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('applied')}</div>
-            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('pending')}</div>
+            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('paymentLineExpectedAmount')}</div>
+            <div style={{ padding: '0 12px', ...thRStyle }}>{ui('paymentLineReceivedAmount')}</div>
           </div>
-          <div style={{ borderTop: '1px solid hsl(var(--card))' }} />
+          <div style={{ borderTop: '1px solid var(--status-neutral-border)' }} />
 
           {lines.map((row, i) => {
             const applied = parseFloat(row.amount) || 0;
             const importe = parseFloat(row.expected) || 0;
-            const pendiente = Math.max(0, importe - applied);
             const invoiceNo = row.invoiceDocumentNo || row['documentNo$_identifier'] || fmtDate(row.dueDate) || '-';
             const dueLabel = row.invoiceDocumentNo ? fmtDate(row.dueDate) : null;
             return (
@@ -158,23 +180,21 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
                 <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 56, background: 'hsl(var(--card))' }}>
                   <div style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2, minWidth: 0 }}>
                     <div style={{ font: '600 14px/20px Inter', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invoiceNo}</div>
-                    {dueLabel && <div style={{ font: '500 12px/16px Inter', color: 'var(--status-info-fg)' }}>{dueLabel}</div>}
+                    {dueLabel && <div style={{ font: '500 12px/16px Inter', color: 'hsl(var(--muted-foreground))' }}>{dueLabel}</div>}
                   </div>
-                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{importe > 0 ? fmtAmt(importe) : '—'}</div>
-                  <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied)}</div>
-                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(pendiente)}</div>
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{importe > 0 ? fmtAmt(importe, currency) : '—'}</div>
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied, currency)}</div>
                 </div>
-                {i < lines.length - 1 && <div style={{ borderTop: '1px solid hsl(var(--card))' }} />}
+                {i < lines.length - 1 && <div style={{ borderTop: '1px solid var(--status-neutral-border)' }} />}
               </div>
             );
           })}
 
-          <div style={{ borderTop: '1px solid hsl(var(--card))' }} />
+          <div style={{ borderTop: '1px solid var(--status-neutral-border)' }} />
           <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 40 }}>
             <div style={{ padding: '0 12px', font: '600 12px/16px Inter', color: 'hsl(var(--foreground))' }}>{ui('totalApplied')}</div>
-            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalImporte)}</div>
-            <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied)}</div>
-            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalPendiente)}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalImporte, currency)}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied, currency)}</div>
           </div>
         </div>
       )}
@@ -188,7 +208,7 @@ export default function PaymentBottomPanel({ data, token, apiBaseUrl }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <PaymentDraftBanner data={data} />
       <DatosSection data={data} ui={ui} />
-      <div style={{ margin: '0 20px', borderTop: '1px solid hsl(var(--card))' }} />
+      <div style={{ margin: '0 20px', borderTop: '1px solid var(--status-neutral-border)' }} />
       <LineasSection data={data} token={token} apiBaseUrl={apiBaseUrl} ui={ui} />
     </div>
   );

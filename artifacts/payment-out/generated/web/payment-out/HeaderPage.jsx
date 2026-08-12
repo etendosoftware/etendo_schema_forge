@@ -453,7 +453,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid hsl(var(--border-subtle))","padding":0}}
         processConfirmModal={ReactivarConfirmModal}
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"pagoDepositado","RDNC":"pagoDepositado","RPPC":"pagoDepositado","PPM":"pagoDepositado","PWNC":"pagoDepositado"}}
-        statusFieldLabel="statusColumnLabel"
         sendDocument
         {...props} window={effectiveWindow}
       />

@@ -271,13 +271,18 @@ Two matching mechanisms coexist — know both before adding a new backend-error 
    literal backend string (trimmed), mapping to a `backendError.*` i18n key. Use this whenever the
    backend message is a fixed string with no embedded dynamic value (e.g. `MatchRuleHandler`,
    `PriceListHeaderHandler` validation messages).
-2. **Parameterized / regex matchers (ETP-4706)** — for backend messages that embed a dynamic value
-   (e.g. a Business Partner name) inside an otherwise-fixed skeleton, so they can't be looked up by
-   exact string. A regex captures the dynamic parts and `t(key, { param: captured })` re-interpolates
-   them through the frontend's own i18n, the same way `ui('linkedToInvoice', { number })` would. See
-   `ACCOUNT_NOT_FOUND_BP_AND_GROUP` / `ACCOUNT_NOT_FOUND_BP_ONLY` in `backendErrors.js` for the
-   pattern: order matters — try the more specific pattern before the more general one, and add a code
-   comment linking the regex back to the server-side `AD_MESSAGE` entry it mirrors.
+2. **Parameterized matchers (ETP-4706, ETP-4831)** — for backend messages that embed a dynamic value
+   (e.g. a Business Partner name, a document number) inside an otherwise-fixed skeleton, so they
+   can't be looked up by exact string. Plain string slicing (`startsWith`/`endsWith`/`indexOf`/`slice`
+   around fixed delimiters) extracts the dynamic parts — deliberately **not** a regex, since the
+   captured values are user-influenced data and a backtracking-prone pattern over them is a SonarQube
+   ReDoS/DoS hotspot (`javascript:S5852`); linear-time slicing has no backtracking surface at all.
+   `t(key, { param: captured })` then re-interpolates the extracted parts through the frontend's own
+   i18n, the same way `ui('linkedToInvoice', { number })` would. See `matchAccountNotFound` (ETP-4706,
+   Account-not-found enrichment) and `matchInvoiceLineAlreadyInvoiced` (ETP-4831,
+   `ETGO_InvoiceLineAlreadyInvoiced`) in `backendErrors.js` for the pattern: order matters — try the
+   more specific matcher before the more general one, and add a code comment linking the matcher back
+   to the server-side `AD_MESSAGE` entry it mirrors.
 
 `translateBackendError` tries the exact-match map first, then falls through to the parameterized
 matchers, and returns the original (untranslated) message if neither matches — never throws and

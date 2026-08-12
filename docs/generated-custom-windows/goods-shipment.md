@@ -175,6 +175,23 @@ data gap, not a real blocker. `contract.json`, `contract.mcp.json`, and
 `GoodsShipmentLineTable.jsx` are now regenerated and validated (`sf-validate-pipeline`: OK) —
 see `docs/feedback.md`'s ETP-4610 entry for the full trail.
 
+## Print button visible only in Completado — ETP-4714
+
+`artifacts/goods-shipment/decisions.json` sets
+`window.hidePrintWhen: { "documentStatus": { "notEquals": "CO" } }` — the same generic
+mechanism used by `sales-invoice`/`sales-order`/`purchase-order`/`return-to-vendor-shipment`
+(see `docs/decisions-reference.md` — "Print Visibility"). It hides the generic icon-only Print
+button rendered by `DetailView.jsx` unless the record is Completado, with no effect on the
+list view.
+
+This window originally shipped a different fix: the custom "Imprimir" button in
+`artifacts/goods-shipment/custom/GoodsShipmentActions.jsx` (the `topbarRight` component),
+wrapped in `{isCompleted && (...)}` to close the bug the ticket reported (visible in Borrador
+too). A separate, unrelated ticket (ETP-4729 — "print unification onto the generic icon")
+removed that custom button from `GoodsShipmentActions.jsx` outright: printing for every window
+is now served exclusively by the generic `DetailView.jsx` icon. That left the generic icon
+with no gate at all on this window until the `hidePrintWhen` entry above was added.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.
