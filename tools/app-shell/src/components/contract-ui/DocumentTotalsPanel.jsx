@@ -66,7 +66,13 @@ export default function DocumentTotalsPanel({
     }
   }, [lines.length, pendingLine, totalDiscountPct]);
 
-  const hasPendingEdit = pendingLine != null || editingLine != null;
+  // A pending edit is either a line being added/edited, OR an unsaved change
+  // to the total-discount % input (inputPct diverges from the totalDiscountPct
+  // prop between keystroke/onBlur and the parent's refetch landing — see the
+  // onChange/onBlur handlers below). In either case there is no fresh
+  // persisted baseline yet for what's on screen, so fall back to the live
+  // recompute exactly like before this fix (ETP-4777).
+  const hasPendingEdit = pendingLine != null || editingLine != null || inputPct !== (totalDiscountPct || 0);
   const recomputed = computeDocumentTotals(lines, pendingLine, editingLine, lineConfig, inputPct);
   const useBaseline = persistedTotals != null && !hasPendingEdit;
 

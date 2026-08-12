@@ -77,6 +77,33 @@ describe('LinesBottomSection', () => {
     assert.match(src, /persistedTotals=\{persistedTotals\}/);
   });
 
+  it('ETP-4777: net subtotal prefers data.summedLineAmount, falling back to data.totalLines', () => {
+    // The NEO header response exposes the persisted net subtotal as
+    // `summedLineAmount` (confirmed live: purchase-order header GET returns
+    // summedLineAmount=2750, no totalLines field at all) — matches the same
+    // fallback pattern already proven in useInvoicePdf.js/useQuotationPdf.js.
+    assert.match(src, /data\?\.summedLineAmount\s*\?\?\s*data\?\.totalLines/);
+  });
+
+  it('ETP-4777: derives raw vs discounted net subtotal from isReadOnly, not from the (unreliable) line-based discount check', () => {
+    // Two regressions found during manual verification with a real Draft→
+    // Complete transition:
+    // (1) Pre-Complete, grandTotalAmount is GET-time-compensated by the
+    //     discount but summedLineAmount/totalLines is NOT — deriving taxAmt
+    //     as a plain grandTotal-netAmount produces a negative "tax".
+    // (2) Post-Complete, summedLineAmount BECOMES net-of-discount (the
+    //     ETGO_DTO line materialised), but resolveTotalDiscountPct cannot see
+    //     that (the line is filtered out of `lines` server-side) and keeps
+    //     reporting the full pct — so naively re-applying the discount
+    //     factor double-counts it (verified live: Subtotal 54,67 + Impuesto
+    //     37,72 ≠ Total 99,23). The fix branches on `isReadOnly`
+    //     (documentStatus) to know which of raw/discounted the persisted
+    //     summedLineAmount already IS, and derives the other one from it.
+    assert.match(src, /discountFactor/);
+    assert.match(src, /if\s*\(isReadOnly\)\s*\{\s*rawNetSubtotal\s*=\s*persistedNetSubtotal\s*\/\s*discountFactor/);
+    assert.match(src, /discountedNetSubtotal\s*=\s*persistedNetSubtotal\s*\*\s*discountFactor/);
+  });
+
   it('totals column uses a soft minHeight floor, not a rigid pixel clamp', () => {
     // Previously the panel was locked at height/minHeight/maxHeight: 241 which
     // acted as a floor on the whole bottom section and crushed the lines table

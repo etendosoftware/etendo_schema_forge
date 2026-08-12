@@ -172,6 +172,36 @@ describe('DocumentTotalsPanel', () => {
       expect(screen.getByTestId('totals-row-total-value').textContent).toBe('76.43');
     });
 
+    it('falls back to the live recompute while the user is actively typing an unsaved total-discount %, even with no pending line', async () => {
+      // Reproduces a real regression found during manual verification: typing
+      // into the "Descuento total" % input doesn't touch pendingLine/
+      // editingLine at all, so without this guard the panel would freeze on
+      // the stale persistedTotals baseline and ignore every keystroke until
+      // the onBlur PATCH round-trips back with a fresh header.
+      const user = userEvent.setup();
+      const persistedTotals = { grandTotal: 89.21, netSubtotal: 70, taxAmt: 19.21 };
+      render(
+        <DocumentTotalsPanel
+          lines={LINES}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          persistedTotals={persistedTotals}
+        />
+      );
+      // Baseline shown initially (no pending edit yet).
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('89.21');
+
+      await user.click(screen.getByText(/addTotalDiscount/));
+      const pctInput = screen.getByDisplayValue('0');
+      await user.clear(pctInput);
+      await user.type(pctInput, '25');
+
+      // Mocked computeDocumentTotals always returns grandTotal=121 (sum of
+      // LINES' lineGrossAmount) regardless of discPct — the point here is
+      // only that it's no longer showing the frozen persisted baseline.
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('121');
+    });
+
     it('falls back to the live recompute while a line is actively pending/unsaved (no persisted number exists yet for it)', () => {
       // While the user is mid-edit on a new row, there is nothing wrong to
       // fix — this is the one state where computeDocumentTotals is still the
