@@ -63,7 +63,8 @@
       "PPM": "cobroDepositado",
       "PWNC": "cobroDepositado"
     },
-    "statusFieldLabel": "statusColumnLabel",
+    "statusFieldLabel": null,
+    "saveBeforeProcesses": true,
     "toolbarBorderBottom": true
   },
   "entities": {
@@ -182,7 +183,9 @@
           "visibility": "discarded"
         },
         "writeoffAmount": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false,
+          "section": "other"
         },
         "aPRMAddScheduledpayments": {
           "visibility": "discarded"
