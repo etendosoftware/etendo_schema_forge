@@ -92,12 +92,15 @@ describe('FmModel349Page — no removed features (kebab / PDF preview)', () => {
     assert.doesNotMatch(src, /fm\.action\.preview_pdf/));
 });
 
-describe('FmModel349Page — kept icon imports (Globe, MoreVertical)', () => {
-  // Globe and MoreVertical must survive the kebab/PDF cleanup — Globe is
-  // still used by the VIES banner, MoreVertical by the title bar's
-  // decorative icon. A regression here means one of those broke silently.
+describe('FmModel349Page — kept icon imports (Globe) / kebab (MoreOptionsMenu)', () => {
+  // Globe must survive the kebab/PDF cleanup — still used by the VIES banner.
+  // The title bar's kebab is no longer a bare decorative MoreVertical icon
+  // rendered directly by this page — it's the real, functional MoreOptionsMenu
+  // (favorites + help) from FmCommon.jsx (ETP-4755), which imports MoreVertical
+  // itself. A regression here means one of those broke silently.
   it('still imports Globe', () => assert.match(src, /\bGlobe\b/));
-  it('still imports MoreVertical', () => assert.match(src, /\bMoreVertical\b/));
+  it('imports MoreOptionsMenu from FmCommon.jsx', () => assert.match(src, /MoreOptionsMenu/));
+  it('renders the MoreOptionsMenu kebab in the title bar', () => assert.match(src, /<MoreOptionsMenu\b/));
 });
 
 describe('FmModel349Page — Calcular button uses the shared compute key', () => {
