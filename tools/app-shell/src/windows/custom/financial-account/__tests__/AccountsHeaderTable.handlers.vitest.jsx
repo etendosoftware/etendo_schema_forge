@@ -300,8 +300,26 @@ describe('AccountsHeaderTable — bank connection disconnect action', () => {
 
     fireEvent.click(await screen.findByText('financeAccountsBankConnectionDisconnectAction'));
 
-    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('acc-1'));
+    // The kebab's "Desconectar" is the SOFT path: it deactivates but keeps the link.
+    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('acc-1', { permanentDeletion: false }));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDisconnectDone'));
+    expect(onDataMutated).toHaveBeenCalled();
+  });
+
+  it('deletes the connection permanently after accepting the warning cartel', async () => {
+    mockDisconnect.mockResolvedValue({ disconnected: true, permanent: true, reconnectable: false });
+    renderTable();
+    openRowMenu('acc-1');
+    fireEvent.click(await screen.findByTestId('account-row-menu-delete-connection-acc-1'));
+
+    // The irreversible path is gated by the warning cartel, not the plain confirm dialog.
+    await screen.findByTestId('bank-connection-delete-confirm-modal');
+    expect(mockDisconnect).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByTestId('bank-connection-delete-confirm-accept'));
+
+    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('acc-1', { permanentDeletion: true }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDeleteDone'));
     expect(onDataMutated).toHaveBeenCalled();
   });
 

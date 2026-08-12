@@ -90,7 +90,7 @@ async function installMocks(page, {
   assetAcct = [],
 } = {}) {
   // Child lines — amortizationLine
-  await page.route('**/sws/neo/assets/amortizationLine**', async (route) => {
+  await page.route('**/sws/neo/assets/amortizationLine{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -100,7 +100,7 @@ async function installMocks(page, {
   });
 
   // Child lines — assetAcct
-  await page.route('**/sws/neo/assets/assetAcct**', async (route) => {
+  await page.route('**/sws/neo/assets/assetAcct{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -110,7 +110,7 @@ async function installMocks(page, {
   });
 
   // Main assets entity — list + detail
-  await page.route('**/sws/neo/assets/assets**', async (route) => {
+  await page.route('**/sws/neo/assets/assets{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 

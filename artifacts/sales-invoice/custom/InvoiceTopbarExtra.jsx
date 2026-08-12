@@ -203,27 +203,12 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
 
   if (!data?.documentStatus) return null;
 
-  // Draft — only show Send button
+  // ETP-4717 — Draft: nothing to show. Send is only available once the
+  // invoice is Completed (CO), matching the grid row quick-action's status
+  // gate; it used to render unconditionally here, which was the bug.
   if (isDraft) {
     return (
-      <>
-        <SendDocumentButton onClick={() => setShowSendModal(true)} />
-        {showSendModal && (
-          <SendDocumentModal
-            documentType={tMenu('Sales Invoice')}
-            documentNo={data?.documentNo}
-            bpName={data?.['businessPartner$_identifier']}
-            bPartnerId={data?.businessPartner}
-            apiBaseUrl={apiBaseUrl}
-            documentId={data?.id}
-            windowName="sales-invoice"
-            token={token}
-            pdfBlobUrl={pdfUrl}
-            pdfBlobLoading={pdfLoading}
-            onClose={() => setShowSendModal(false)}
-          />
-        )}
-      </>
+      <></>
     );
   }
 
@@ -364,7 +349,10 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         status={data?.documentStatus}
       />
 
-      <SendDocumentButton onClick={() => setShowSendModal(true)} />
+      {/* ETP-4717 — explicit Completed gate, matching the grid row
+          quick-action's status rule (this branch is only reached once
+          installments exist, which in practice already implies CO). */}
+      {isCompleted && <SendDocumentButton onClick={() => setShowSendModal(true)} />}
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (

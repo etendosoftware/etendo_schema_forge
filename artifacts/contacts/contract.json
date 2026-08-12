@@ -1,8 +1,8 @@
 {
-  "version": "0.46.0",
+  "version": "0.48.0",
   "generatedAt": "2026-07-31T19:26:59.736Z",
-  "updatedAt": "2026-08-06T17:20:13.359Z",
-  "checksum": "fb0a6e78b55626e2",
+  "updatedAt": "2026-08-10T11:24:59.285Z",
+  "checksum": "cc53b8a90aa98594",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -83,6 +83,7 @@
         }
       },
       "detailEntity": null,
+      "statusField": "none",
       "summaryFields": [],
       "labelOverrides": {
         "en_US": {
@@ -585,6 +586,7 @@
             "required": false,
             "grid": true,
             "form": true,
+            "inputPrefix": "https://",
             "section": "principal",
             "validation": {
               "maxLength": 60
@@ -5074,6 +5076,7 @@
         }
       },
       "detailEntity": null,
+      "statusField": "none",
       "summaryFields": [],
       "labelOverrides": {
         "en_US": {

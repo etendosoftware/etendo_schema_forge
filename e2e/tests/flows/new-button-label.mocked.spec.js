@@ -35,7 +35,7 @@ const WINDOWS = [
  * in reverse registration order, last wins).
  */
 async function installEmptyListMock(page, spec) {
-  await page.route(`**/sws/neo/${spec}/header**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/header{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
 

@@ -29,8 +29,8 @@ export default function PreviewActionButtons({
         size="sm"
         variant="outline"
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
-        disabled={!hasPdf}
-        onClick={hasPdf ? onDownloadPdf : undefined}
+        disabled={!hasPdf || !onDownloadPdf}
+        onClick={hasPdf && onDownloadPdf ? onDownloadPdf : undefined}
         data-testid="Button__9ccdc3">
         <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__9ccdc3" />
         {downloadLabel}

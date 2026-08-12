@@ -19,6 +19,9 @@ export function ReconciliationTab({ account, paymentMethods, onReconcileSuccess 
         accountId={account?.id}
         currency={account?.currencyIso}
         paymentMethods={paymentMethods}
+        // ETP-4797: caps the write-off the payment-method modal will offer. Undefined when the
+        // account has none configured, which the panel reads as "no limit".
+        writeoffLimit={account?.writeoffLimit}
         onBack={() => navigate(-1)}
         onReconcileSuccess={onReconcileSuccess}
         data-testid="ReconciliationSplitPanel__46a213" />

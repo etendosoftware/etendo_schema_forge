@@ -66,7 +66,7 @@ const ROWS = [
  * route wins over the generic /sws/** stub.
  */
 async function installContactsMock(page) {
-  await page.route('**/sws/neo/contacts/businessPartner**', async (route) => {
+  await page.route('**/sws/neo/contacts/businessPartner{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
 

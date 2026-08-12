@@ -4,6 +4,8 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
+import { OBSERVABILITY_EVENTS } from '@/lib/observability/events.js';
+import { startTiming } from '@/lib/observability/timing.js';
 import {
     isCompletionProcess,
     trackDocumentCompleted,
@@ -267,6 +269,13 @@ export async function extractErrorMessage(res, ui) {
 
 const BATCH_SIZE = 75;
 
+// ETP-4741 — UX budget for how long a creation form stays gated waiting for
+// GET /<entity>/defaults. On expiry the gate is released so the user can start
+// working, and nothing else: the request is NOT aborted and its session is NOT
+// invalidated, so it keeps running, stays cancellable, and its response still
+// merges when it lands. See handleNew below.
+const DEFAULTS_TIMEOUT_MS = 4000;
+
 const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
     'priceList',
     'paymentMethod',
@@ -427,6 +436,51 @@ export function normalizeDefaultValue(val, normalized, key) {
         // PATCH/POST API expects string values — otherwise OBDal throws a type error.
         normalized[key] = String(val);
     }
+}
+
+// Normalize a creation-defaults response (already id-stripped) from Etendo format,
+// per normalizeDefaultValue:
+// - Dates: dd-MM-yyyy → yyyy-MM-dd (HTML date input)
+// - Quoted SQL literals: 'foo' → foo
+// - Integers → strings (list/enum columns are VARCHAR in the DB)
+// Booleans are NOT normalized here. The comment this replaces claimed they were
+// ("Y" → true), and they never have been — normalizeDefaultValue has no boolean
+// branch. NEO canonicalizes them server-side since ETP-4793, and every consumer
+// additionally tolerates the raw "Y"/"N" storage encoding — see
+// EntityForm.renderCheckboxField and
+// e2e/tests/flows/boolean-defaults-tolerance.mocked.spec.js.
+// Plus the contacts-window backstop: oBTIKTaxIDKey falls back to '1' (NIF) when
+// the backend sends none. Pure — returns a normalized copy, touches no state.
+export function normalizeCreationDefaults(rawDefaults, { entity, apiBaseUrl }) {
+    const normalized = { ...rawDefaults };
+    for (const [key, val] of Object.entries(normalized)) {
+        normalizeDefaultValue(val, normalized, key);
+    }
+
+    const isContactsBusinessPartner = entity === 'businessPartner'
+        && /\/contacts$/i.test(apiBaseUrl || '');
+    if (isContactsBusinessPartner && (normalized.oBTIKTaxIDKey == null || normalized.oBTIKTaxIDKey === '')) {
+        normalized.oBTIKTaxIDKey = '1';
+    }
+    return normalized;
+}
+
+// ETP-4741 merge guard: apply backend creation defaults over the editing state
+// without clobbering anything the user already typed while the request flew.
+export function mergeDefaultsPreservingUserEdits(prev, defaults, userChangedKeys) {
+    const merged = { ...prev };
+    for (const [key, val] of Object.entries(defaults)) {
+        if (userChangedKeys.has(key)) continue;
+        // A field's $_identifier companion follows its base key: if the user
+        // picked a value, its display label must not be replaced by the
+        // default's label either.
+        if (key.endsWith('$_identifier')
+            && userChangedKeys.has(key.slice(0, -'$_identifier'.length))) {
+            continue;
+        }
+        merged[key] = val;
+    }
+    return merged;
 }
 
 export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing) {
@@ -769,6 +823,9 @@ export function useEntity(entity, childEntity, {
     const [childDefaults, setChildDefaults] = useState({});
     const [childrenLoading, setChildrenLoading] = useState(false);
     const [loading, setLoading] = useState(false);
+    // ETP-4741: true while handleNew's defaults request is in flight, so the
+    // creation form can gate itself instead of letting the user race the merge.
+    const [defaultsLoading, setDefaultsLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     // ETP-4542: identifier of the header process currently running (POST in flight),
@@ -789,6 +846,14 @@ export function useEntity(entity, childEntity, {
     const backendDefaultKeysRef = useRef(new Set());
     // Fields explicitly changed by the user (via handleChange) in the current new-record session.
     const userChangedKeysRef = useRef(new Set());
+    // ETP-4741: monotonic id of the current defaults fetch. A response (or its
+    // timer) only acts while its epoch is still current — bumping the epoch is
+    // how the timeout and newer handleNew calls make in-flight responses inert,
+    // even when the underlying fetch implementation ignores the abort signal.
+    const defaultsEpochRef = useRef(0);
+    // ETP-4741: AbortController of the in-flight defaults fetch, null when none
+    // is pending. Lets record loads neutralize the /new session (see below).
+    const defaultsAbortRef = useRef(null);
     // ETP-3894: per-form snapshot of visible fields registered by each EntityForm instance.
     // Keyed by a stable formId (React.useId) so multiple EntityForms accumulate rather than
     // overwrite each other. handleSave flattens all entries to validate the complete form.
@@ -969,8 +1034,25 @@ export function useEntity(entity, childEntity, {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [apiBaseUrl, childEntity, token]);
 
+    // ETP-4741 (QA BUG-1) — loading an EXISTING record while a /new defaults
+    // request is still in flight must kill that request the same way a newer
+    // handleNew does: bump the epoch so the late response is inert, abort the
+    // fetch, and release defaultsLoading explicitly. The explicit release
+    // matters — once the epoch moves, handleNew's own finally skips its
+    // release, so relying on it would latch the gate true forever. Neutralized
+    // sessions emit no defaults_block event. No-op when nothing is pending.
+    const neutralizePendingDefaults = useCallback(() => {
+        const controller = defaultsAbortRef.current;
+        if (!controller) return;
+        defaultsAbortRef.current = null;
+        defaultsEpochRef.current += 1;
+        setDefaultsLoading(false);
+        controller.abort();
+    }, []);
+
     const fetchById = useCallback((id) => {
         if (!id) return;
+        neutralizePendingDefaults();
         setLoading(true);
         fetch(`${apiBaseUrl}/${entity}/${id}`, { headers })
             .then(res => {
@@ -985,7 +1067,7 @@ export function useEntity(entity, childEntity, {
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, [apiBaseUrl, entity, token, fetchChildren]);
+    }, [apiBaseUrl, entity, token, fetchChildren, neutralizePendingDefaults]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
@@ -1083,11 +1165,12 @@ export function useEntity(entity, childEntity, {
         // user actually edits in THIS record — never legacy values inherited from a
         // previously-edited record. Safe for payloads: userChangedKeysRef only feeds
         // buildCreatePayload (new records), not the existing-record PATCH diff.
+        neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
         setSelected(row);
         setEditing(row ? { ...row } : null);
         fetchChildren(row?.id);
-    }, [fetchChildren]);
+    }, [fetchChildren, neutralizePendingDefaults]);
 
     const handleNew = useCallback(async () => {
         backendDefaultKeysRef.current = new Set();
@@ -1095,38 +1178,70 @@ export function useEntity(entity, childEntity, {
         setFieldErrors({});
         setSelected(null);
         setEditing({}); // Start with empty so UI is responsive
+
+        // ETP-4741 — the defaults GET races the user, who can already be typing
+        // into the open form. Guards: an epoch check discards any response whose
+        // session was superseded (a newer handleNew, or a record load via
+        // neutralizePendingDefaults), and the merge never touches user-changed
+        // keys.
+        //
+        // The timeout is a UX budget, NOT a correctness mechanism: it only
+        // releases the gate so the user can start working. It deliberately does
+        // not bump the epoch, drop the abort handle, or abort the request, so
+        // the response still merges when it lands and a later record load can
+        // still neutralize the session. Full rationale — including the
+        // regression that discarding the late response caused (a form with
+        // neither defaults nor initial callouts) — lives in
+        // docs/generated-custom-windows/app-shell-functional-flows.md §4.
+        const epoch = defaultsEpochRef.current + 1;
+        defaultsEpochRef.current = epoch;
+        const isCurrent = () => defaultsEpochRef.current === epoch;
+        const settleTiming = startTiming(OBSERVABILITY_EVENTS.DEFAULTS_BLOCK, {
+            properties: { entity },
+        });
+        const controller = new AbortController();
+        defaultsAbortRef.current = controller;
+        const timeoutId = setTimeout(() => {
+            if (!isCurrent()) return;
+            setDefaultsLoading(false);
+            settleTiming({ status: 'timeout' });
+        }, DEFAULTS_TIMEOUT_MS);
+
+        setDefaultsLoading(true);
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers });
+            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers, signal: controller.signal });
+            if (!isCurrent()) return;
             if (res.ok) {
                 const data = await res.json();
+                if (!isCurrent()) return;
                 if (data.defaults) {
-                    // Normalize values from Etendo format (see normalizeDefaultValue):
-                    // - Dates: dd-MM-yyyy → yyyy-MM-dd (HTML date input)
-                    // - Quoted SQL literals: 'foo' → foo
-                    // - Integers → strings (list/enum columns are VARCHAR in the DB)
-                    // Booleans are NOT normalized here (this comment used to claim they
-                    // were, and they never have been). NEO canonicalizes them server-side
-                    // since ETP-4793, and every consumer additionally tolerates the raw
-                    // "Y"/"N" storage encoding — see EntityForm.renderCheckboxField and
-                    // e2e/tests/flows/boolean-defaults-tolerance.mocked.spec.js.
-                    const { id: _discardId, ...rest } = data.defaults;
-                    backendDefaultKeysRef.current = new Set(Object.keys(rest));
-                    const normalized = { ...rest };
-                    for (const [key, val] of Object.entries(normalized)) {
-                        normalizeDefaultValue(val, normalized, key);
-                    }
-
-                    const isContactsBusinessPartner = entity === 'businessPartner'
-                        && /\/contacts$/i.test(apiBaseUrl || '');
-                    if (isContactsBusinessPartner && (normalized.oBTIKTaxIDKey == null || normalized.oBTIKTaxIDKey === '')) {
-                        normalized.oBTIKTaxIDKey = '1';
-                    }
-
-                    setEditing(prev => ({ ...prev, ...normalized }));
+                    // backendDefaultKeysRef intentionally captures the keys BEFORE
+                    // the contacts backstop can add oBTIKTaxIDKey — a backstopped
+                    // key must not be treated as backend-provided by
+                    // shouldSkipPayloadField.
+                    const rawDefaults = { ...data.defaults };
+                    delete rawDefaults.id;
+                    backendDefaultKeysRef.current = new Set(Object.keys(rawDefaults));
+                    const normalized = normalizeCreationDefaults(rawDefaults, { entity, apiBaseUrl });
+                    setEditing(prev => mergeDefaultsPreservingUserEdits(prev, normalized, userChangedKeysRef.current));
                 }
             }
+            // Deliberately not awaited: settleTiming ends in client.track(),
+            // a real network call once Mixpanel is enabled. Awaiting it would
+            // put the gate release in `finally` behind an analytics endpoint,
+            // and a hung track() would latch the form shut forever. track()
+            // already swallows provider failures internally, so nothing here
+            // needs the result. Same below on the catch path.
+            settleTiming({ status: res.ok ? 'ok' : 'error' });
         } catch {
             // Defaults are best-effort; proceed with empty form if endpoint fails
+            if (isCurrent()) settleTiming({ status: 'error' });
+        } finally {
+            if (isCurrent()) {
+                clearTimeout(timeoutId);
+                defaultsAbortRef.current = null;
+                setDefaultsLoading(false);
+            }
         }
     }, [apiBaseUrl, entity, token, headers]);
 
@@ -1502,7 +1617,7 @@ export function useEntity(entity, childEntity, {
     }, []);
 
     return {
-        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, loadingMore, hasMore, saveError, isSaving,
+        items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         isDirtyHeader,
         fieldErrors, registerFields,
