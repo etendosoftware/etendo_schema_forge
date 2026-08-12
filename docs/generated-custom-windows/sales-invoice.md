@@ -564,7 +564,7 @@ and before the credit section:
 | Field | i18n key | Behavior |
 |-------|----------|----------|
 | **Tasa de conversión** (Conversion rate) | `cpConversionRate` | Editable numeric input. Prefilled from the system exchange rate for the *invoice → account* currency pair via the `GET {base}/validate-exchange-rate` endpoint, wrapped by the new `useConversionRate` hook (`tools/app-shell/src/windows/custom/shared/useConversionRate.js`). Accepts `0.92` or `0,92`. |
-| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Read-only. Computed as `amount × rate` and recomputed live whenever the amount or the rate changes. Rendered with `formatCurrency(accountCurrency, …)` so the account currency shows next to the value. |
+| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Also editable, mirroring Classic's Add Payment. Whichever of the two the user edits drives the other: typing a rate recomputes this amount (`= invoice amount × rate`, rounded to 2 decimals); typing an amount here recomputes the rate instead (`= typed amount ÷ invoice amount`, rounded to 6 decimals). Changing the invoice-currency amount elsewhere in the modal (e.g. **Igualar**) keeps the rate fixed and recomputes this amount forward. |
 
 Both fields are **hidden whenever the currencies match** (the common case), so single-currency
 collections are visually unchanged. The prefilled rate field is cleared automatically when the
@@ -579,6 +579,35 @@ This mirrors the backend,
 which rejects a foreign payment carrying a `1:1` rate (it would otherwise silently post the wrong
 ledger amount). The rate is sent to the backend as `conversionRate` on the `registerPayment`
 body; the backend recomputes the account-currency amount authoritatively from it.
+
+**Rate persistence on drafts (ETP-4841).** A rate typed by the user is stored on the draft and
+shown back when the draft is reopened — it is not re-derived from the system rate. Three parts:
+
+- The `invoicePayments` action returns `conversionRate` on every row
+  (`FIN_Payment.financialTransactionConvertRate`), so the row the history popup hands to the edit
+  modal carries the stored rate.
+- The backend stores that rate **verbatim** — `PaymentCurrencyConverter.applyTransactionAmountAndRate`
+  writes the rate and the account-currency amount directly instead of going through
+  `FIN_AddPayment.setFinancialTransactionAmountAndRate`, which recomputes
+  `rate = txnAmount / amount` "to correct rounding that occurs in the UI". That core correction
+  assumes Classic's Add Payment, where the user edits the converted *amount*; here the user edits
+  the *rate* and the amount is derived, so it silently mangled the stored value (58.70 × 0.89 →
+  52.24 → 0.889948892674617). The same recompute is commented out in core's
+  `AdvPaymentMngtDao.getNewPayment` (core bug 17829). This applies to the modal path and to the
+  bank-reconciliation path, which share `createDraftPayment`.
+- The modal seeds the stored rate exactly once per visit to the currency pair it was saved for, so
+  neither a late `validate-exchange-rate` response, nor a date change, nor a later manual edit can
+  overwrite it. The reseed key is the **account currency, not the account id** — the rate belongs to
+  the currency pair:
+
+| Action in a reopened draft (USD invoice, rate 0.89 saved on a EUR account) | Rate field |
+|---|---|
+| nothing touched, or the payment date changed | `0.89` |
+| switch to another EUR account (Caja → Banco) | `0.89` (same USD→EUR pair) |
+| switch to a GBP account | DB USD→GBP rate, or empty when none exists |
+| switch to a USD account (= invoice currency) | field hidden, `conversionRate` omitted from the payload |
+| back to a EUR account | `0.89` re-seeded |
+| user retypes the rate | whatever they typed, never overwritten |
 
 ### F2 — Credit filtered by invoice currency
 
@@ -660,6 +689,64 @@ save-time `originInvoice`-required check, and a rectificativa links its correcte
 the "Reversed Invoices" (`C_Invoice_Reverse`) tab, not `originInvoice`; reusing the subtype
 there would incorrectly block saving every Factura Rectificativa. See the equivalent AP-side
 note in [`purchase-invoice.md`](purchase-invoice.md#f5--gridtopbar-saldo-a-favor-badge-now-recognizes-facturas-rectificativas--etp-4738).
+
+### F6 — "Saldo a favor" is decided by the SIGN of the total, not the document type — ETP-4841
+
+> **Supersedes F4 and F5.** Those sections describe the doc-type-based rule that ETP-4841
+> replaced; they are kept for history. Where they conflict with this section, this section wins.
+
+**Why.** F4/F5 assumed *rectificativa ⇒ credit*. Functionally there are **two** kinds of
+Factura Rectificativa:
+
+| Kind | Example | Meaning |
+|---|---|---|
+| **Negative** total | billed 5, customer returned 2 | a credit — "saldo a favor", spent against other invoices |
+| **Positive** total | billed 3, should have been 4 | a correction for the difference — **payable**, it receives a payment |
+
+and symmetrically an ordinary **"Factura" with a negative total is also a credit**. Keying the
+behaviour off the document type therefore got both edge cases wrong, in four visible ways:
+
+1. a positive rectificativa rendered with a **negated** amount in the grid (detail said
+   `14,52 €`, grid said `-14,52 €`);
+2. …and wore a **"Saldo a favor"** badge instead of a payable one;
+3. an ordinary negative invoice wore **"Cobrada"**, because the fully-paid test was
+   `outstanding <= 0` and a negative invoice's outstanding is negative;
+4. the credit selector listed only rectificativas, hiding ordinary negative invoices.
+
+**The rule now.** A single shared helper,
+`tools/app-shell/src/windows/custom/shared/invoicePaymentBadge.js` →
+`resolveInvoicePaymentBadge(record)`, returns
+`{ kind, amount, isCredit }` with `kind` ∈ `draft | credit-available | credit-applied | paid |
+partial | pending`. Evaluation order matters: **the credit branch (`grandTotalAmount < 0`) is
+tested before any paid/pending check**, otherwise a negative invoice satisfies `outstanding <= 0`
+and falls into "Cobrada" — defect 3 above. `amount` is always non-negative. `isCredit` reflects
+the document itself, so it stays true on a draft (where `kind` is `draft`).
+
+All four call sites consume it: the two grids' "Pendiente de pago" cells, the two detail
+topbars. They previously re-implemented the pill inline four times; the helper is now the single
+source of truth and matches what `InvoicePaymentHistoryModal.jsx` (the modal these badges open)
+had always done — the two layers used to contradict each other.
+
+**Consequences elsewhere:**
+- `SalesInvoiceHeaderHandler.applyAmountNegationForCredit` was **deleted**. The stored sign is
+  the truth; nothing rewrites it on the way out. Legacy AR Credit Memos (retired `ARC` type,
+  positive totals) consequently now display in positive and as pending — accepted, since the
+  Nota de Crédito disappears as a category: the model is only **Factura** + **Factura
+  Rectificativa** from here on.
+- `PaymentCreditSourcesService.pendingAbonos` dropped the rectificative doc-type whitelist and
+  keeps only `grandTotalAmount < 0` (plus the unchanged BP / side / currency / unpaid filters).
+  `PaymentCreditConsumer.validateAbonoEligible` mirrors it: it now rejects only on a
+  non-negative total. Both sides symmetric, AR and AP.
+- `RectificativeSupport.isRectificativeDocType` and `.resolveRectificativeDocTypes` lost their
+  last callers and were deleted; `isColumnPresent()` and `isRectificative(DocumentType)` stay
+  (used by `classifyDocType` and `ReturnShipmentUtils`).
+- `AbstractInvoiceHeaderHandler.enrichInvoiceSubtype`'s ETP-4738 `FAC` → rectificativa
+  reclassification was deleted as **unreachable**: both `classifyDocType` implementations
+  already check the same flag first, so its `SUBTYPE_FAC.equals(subtype)` guard could never
+  hold. `arInvoiceSubtype` again means strictly "which document type is this", and drives only
+  the doc-type badge column and the list tab filters — never payment state.
+- The two grids stopped hardcoding the literals `Saldo a favor` / `Aplicada` and now use the
+  existing i18n keys `cpFavorBadge` / `cpCreditFullyApplied`, as the topbars already did.
 
 ### Known display-only limitation
 

@@ -912,3 +912,39 @@ Updated the test locally to `page.getByTestId('order-confirm-modal-submit')` and
 **Fix (second complication):** removed `"listViewOptions": { "hidePrint": true }` from `sales-order` and `sales-quotation`'s `decisions.json` (and did not add the `index.jsx` hardcode for `sales-order` either) — deferring to ETP-4729's more recent, tested decision. `goods-shipment` was never affected by gap #1 (its custom wrapper delegates to a shared shell that always renders the generated component for both routes), so no `index.jsx` change was needed there.
 
 **Lesson:** two lessons, independent of each other. (1) When a window's custom `index.jsx` renders its own `<ListView>` for the list route (check for `if (recordId) { <GeneratedApp/> } return <ListView .../>` — grep the window's own `index.jsx`, don't assume `registry.js`'s default loader applies), any decisions.json-driven list-level prop needs the same hardcoded treatment as the window's other manually-mirrored props — a clean `contract.json`/generated `HeaderPage.jsx` is necessary but not sufficient; verify what the *live* React tree actually receives (fiber `memoizedProps`), not just what the generator emitted. (2) Before restoring a "pre-ticket" list/detail visibility state from git history, re-check whether a *more recent* commit already changed that same state deliberately (with its own test) — the most recent intent should win over a diff generated before it existed, and a passing regression-guard test failing after your change is a signal to investigate the test's own history, not to work around it.
+## [2026-08-11] ETP-4841 — Three `.vitest.jsx` files under `artifacts/` have never run in CI or `make test`
+
+**Symptom:** `tools/app-shell/vitest.config.js:93` declares
+`include: ['src/**/*.vitest.{js,jsx}', 'src/**/*.spec.{js,jsx}']`. That glob is rooted at
+`tools/app-shell/`, so **nothing under the repo-root `artifacts/` tree is ever collected**.
+`.github/workflows/test.yml` and the `test` Make target only invoke that config, so these three
+files are dead weight — they have never gated a single push:
+
+| File | Window |
+|---|---|
+| `artifacts/sales-invoice/custom/__tests__/InvoiceHeaderTable.vitest.jsx` | sales-invoice |
+| `artifacts/chart-of-accounts/custom/__tests__/AccountCodeField.vitest.jsx` | chart-of-accounts |
+| `artifacts/goods-shipment/custom/__tests__/GoodsShipmentMoreMenu.vitest.jsx` | goods-shipment |
+
+**How it surfaced:** while fixing ETP-4841 the sales-invoice file was found to be asserting
+against the pre-ETP-4737 world — it mocked `getArSubtype` to return `'NC'`/`'DEV'`, values the
+component compares against `'RECTIFICATIVA'`, so the mock could never match, and it used the
+retired `creditNotesTab`/`returnsTab` dictionary keys. Those assertions rotted across at least
+two tickets with nothing to flag them, precisely because the file never executes.
+
+**Why it matters beyond housekeeping:** `artifacts/*/custom/` is *hand-written source*, not
+generated output (`@generated` is a Vite alias to `artifacts/`, see `vite.config.js:222`). It is
+where a large share of per-window UI logic lives. Any test written there today is silently
+decorative. ETP-4841's own sales-grid regression tests land in this file, so the fix for the
+"positive rectificativa shows as Saldo a favor" bug is currently **unprotected in CI** even
+though the tests exist and pass.
+
+**Verified, not assumed:** all three files pass when run with an include widened to cover
+`artifacts/`, so closing this is a config change, not a test-fixing exercise. The awkward part
+is that the Vitest root is `tools/app-shell/`, so the pattern has to reach outside it
+(`../../artifacts/**`) — which is why this is written up as its own task rather than slipped
+into ETP-4841.
+
+**Lesson:** a passing test suite proves nothing about files the runner never collects. When
+adding tests under a directory that is not the runner's root, confirm they actually execute
+(`--reporter=verbose` and look for the filename) before treating them as coverage.
