@@ -67,44 +67,17 @@ export default function LinesBottomSection({
   // C_ORDERLINE_TRG2/C_INVOICELINE_TRG2 triggers, same value the Grid's
   // "Imp. Total" column and the printed document read) is the authoritative
   // source. DocumentTotalsPanel prefers this over its own recompute whenever
-  // no line is actively pending/being edited — see DocumentTotalsPanel.jsx.
-  // Note: resolveTotalDiscountPct's "is the discount already materialised as
-  // a line?" check is unreliable here — the ETGO_DTO discount line is
-  // filtered out of `lines` before it ever reaches this component (see
-  // DiscountLineFilter server-side), so that check always reports "not
-  // materialised" and this always returns data.etgoTotalDiscount. That's
-  // fine for the panel's "Descuento total (X%)" label (still correct post-
-  // Complete), but it means we must use documentStatus (isReadOnly), NOT
-  // resolveTotalDiscountPct's line-based flag, to know whether the discount
-  // is already baked into the persisted totals below.
+  // no line is actively pending/being edited. Only the two raw header fields
+  // are passed down — DocumentTotalsPanel itself works out whether
+  // summedLineAmount is already net-of-discount (it compares against a
+  // fresh recompute from the current lines; documentStatus is NOT a
+  // reliable signal here — verified live that an invoice created from an
+  // already-discounted order has its discount line materialised immediately,
+  // while still Draft). See DocumentTotalsPanel.jsx for the full rationale.
   const resolvedTotalDiscountPct = resolveTotalDiscountPct(data, lines, totalDiscountPct, totalsField);
-  const discountFactor = 1 - (resolvedTotalDiscountPct || 0) / 100;
   const persistedNetSubtotal = data?.summedLineAmount ?? data?.totalLines ?? null;
-  // Pre-Complete (Draft, isReadOnly=false): the backend's GET-time
-  // compensation (TotalDiscountService/Abstract*HeaderHandler) only scales
-  // grandTotalAmount — summedLineAmount/totalLines stays the RAW,
-  // pre-discount net. Post-Complete (isReadOnly=true): the ETGO_DTO discount
-  // line has been materialised, so summedLineAmount is ALREADY net of the
-  // discount. `rawNetSubtotal` is always the pre-discount figure (what
-  // DocumentTotalsPanel's "Subtotal" row expects, matching the live-recompute
-  // contract) and `discountedNetSubtotal` is always the post-discount figure
-  // (used to derive taxAmt) — which one persistedNetSubtotal actually IS
-  // depends on isReadOnly, so we derive whichever one is missing from it.
-  let rawNetSubtotal = persistedNetSubtotal;
-  let discountedNetSubtotal = persistedNetSubtotal;
-  if (persistedNetSubtotal != null && discountFactor > 0 && discountFactor !== 1) {
-    if (isReadOnly) {
-      rawNetSubtotal = persistedNetSubtotal / discountFactor;
-    } else {
-      discountedNetSubtotal = persistedNetSubtotal * discountFactor;
-    }
-  }
   const persistedTotals = data?.grandTotalAmount != null
-    ? {
-      grandTotal: data.grandTotalAmount,
-      netSubtotal: rawNetSubtotal,
-      taxAmt: discountedNetSubtotal != null ? data.grandTotalAmount - discountedNetSubtotal : null,
-    }
+    ? { grandTotal: data.grandTotalAmount, netSubtotal: persistedNetSubtotal }
     : null;
 
   return (

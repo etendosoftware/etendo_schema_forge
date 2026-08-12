@@ -25,15 +25,18 @@ import { Checkbox } from '@/components/ui/checkbox';
  *   readOnly               — boolean — when true hides the "+ Add total discount" button
  *   totalDiscountPct       — number from header record (emEtgoTotalDiscount); restores panel on load
  *   onTotalDiscountChange  — callback(pct: number) — called when user changes or removes the discount
- *   persistedTotals        — optional { grandTotal, netSubtotal, taxAmt } read straight from the
- *                            backend-persisted header record (e.g. grandTotalAmount/totalLines).
- *                            When provided AND there is no pendingLine/editingLine, these values are
- *                            shown as-is instead of recomputing from `lines` — this is what keeps the
- *                            panel byte-identical to the Grid's "Imp. Total" and to the value shown
- *                            after the document is completed (ETP-4777). While a line IS actively
- *                            pending/being edited, the live recompute below is used as before — nobody
- *                            reported that transient in-progress number as wrong, only what's shown
- *                            once something is saved.
+ *   persistedTotals        — optional { grandTotal, netSubtotal } read straight from the
+ *                            backend-persisted header record (grandTotalAmount, summedLineAmount/
+ *                            totalLines — taxAmt is deliberately NOT accepted here; it's derived
+ *                            below, since whether netSubtotal is already net-of-discount or not
+ *                            can't be known from the header alone, see the isAlreadyDiscounted
+ *                            check). When provided AND there is no pendingLine/editingLine, these
+ *                            values are used instead of recomputing from `lines` — this is what
+ *                            keeps the panel byte-identical to the Grid's "Imp. Total" and to the
+ *                            value shown after the document is completed (ETP-4777). While a line
+ *                            IS actively pending/being edited, the live recompute below is used as
+ *                            before — nobody reported that transient in-progress number as wrong,
+ *                            only what's shown once something is saved.
  */
 export default function DocumentTotalsPanel({
   lines = [],
@@ -79,9 +82,35 @@ export default function DocumentTotalsPanel({
   const grossSubtotal = recomputed.grossSubtotal;
   const discountAmt = recomputed.discountAmt;
   const totalDiscountAmt = recomputed.totalDiscountAmt;
-  const netSubtotal = useBaseline ? persistedTotals.netSubtotal : recomputed.netSubtotal;
-  const taxAmt = useBaseline ? persistedTotals.taxAmt : recomputed.taxAmt;
-  const grandTotal = useBaseline ? persistedTotals.grandTotal : recomputed.grandTotal;
+
+  // persistedTotals.netSubtotal (header's summedLineAmount/totalLines) is
+  // ambiguous on its own: it's the RAW pre-total-discount net while the
+  // document-level discount is only GET-time-compensated (still no real
+  // discount line — see Order's pre-Complete window), but it BECOMES the
+  // already-discounted net the instant that discount materialises as a real
+  // line — which for e.g. an invoice created from an already-discounted
+  // order happens immediately at creation, regardless of documentStatus.
+  // documentStatus/isReadOnly is therefore NOT a reliable signal for which
+  // one it currently is (verified live: an invoice-from-order was Draft with
+  // the discount already materialised). Instead, compare it against
+  // `recomputed.netSubtotal` — the RAW net freshly summed from the current
+  // lines' own qty/price/per-line-discount fields, independent of any of
+  // this — if they differ by more than rounding noise, the persisted figure
+  // must already be net-of-discount.
+  let netSubtotal = recomputed.netSubtotal;
+  let taxAmt = recomputed.taxAmt;
+  let grandTotal = recomputed.grandTotal;
+  if (useBaseline) {
+    const factor = 1 - (totalDiscountPct || 0) / 100;
+    const persistedNet = persistedTotals.netSubtotal;
+    const rawFromLines = recomputed.netSubtotal;
+    const isAlreadyDiscounted = persistedNet != null && rawFromLines != null
+      && Math.abs(persistedNet - rawFromLines) > 0.01;
+    const discountedNet = isAlreadyDiscounted ? persistedNet : (persistedNet != null ? persistedNet * factor : null);
+    netSubtotal = isAlreadyDiscounted && factor > 0 ? persistedNet / factor : persistedNet;
+    taxAmt = discountedNet != null ? persistedTotals.grandTotal - discountedNet : null;
+    grandTotal = persistedTotals.grandTotal;
+  }
 
   const fmt = (val) => {
     if (val == null) return '';

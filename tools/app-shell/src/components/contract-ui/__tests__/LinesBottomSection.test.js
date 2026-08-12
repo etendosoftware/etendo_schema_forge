@@ -85,23 +85,16 @@ describe('LinesBottomSection', () => {
     assert.match(src, /data\?\.summedLineAmount\s*\?\?\s*data\?\.totalLines/);
   });
 
-  it('ETP-4777: derives raw vs discounted net subtotal from isReadOnly, not from the (unreliable) line-based discount check', () => {
-    // Two regressions found during manual verification with a real Draft→
-    // Complete transition:
-    // (1) Pre-Complete, grandTotalAmount is GET-time-compensated by the
-    //     discount but summedLineAmount/totalLines is NOT — deriving taxAmt
-    //     as a plain grandTotal-netAmount produces a negative "tax".
-    // (2) Post-Complete, summedLineAmount BECOMES net-of-discount (the
-    //     ETGO_DTO line materialised), but resolveTotalDiscountPct cannot see
-    //     that (the line is filtered out of `lines` server-side) and keeps
-    //     reporting the full pct — so naively re-applying the discount
-    //     factor double-counts it (verified live: Subtotal 54,67 + Impuesto
-    //     37,72 ≠ Total 99,23). The fix branches on `isReadOnly`
-    //     (documentStatus) to know which of raw/discounted the persisted
-    //     summedLineAmount already IS, and derives the other one from it.
-    assert.match(src, /discountFactor/);
-    assert.match(src, /if\s*\(isReadOnly\)\s*\{\s*rawNetSubtotal\s*=\s*persistedNetSubtotal\s*\/\s*discountFactor/);
-    assert.match(src, /discountedNetSubtotal\s*=\s*persistedNetSubtotal\s*\*\s*discountFactor/);
+  it('ETP-4777: only passes the two raw header fields — the raw-vs-discounted reconciliation lives in DocumentTotalsPanel', () => {
+    // An earlier version of this fix tried to resolve raw-vs-discounted
+    // net subtotal here using `isReadOnly` (documentStatus), but that signal
+    // is unreliable: an invoice created from an already-discounted order has
+    // its ETGO_DTO discount line materialised immediately, while still
+    // Draft. The reconciliation was moved to DocumentTotalsPanel.jsx, which
+    // can compare against a fresh recompute from the current lines instead
+    // of guessing from status. This component should stay a thin pass-through.
+    assert.match(src, /persistedTotals\s*=\s*data\?\.grandTotalAmount\s*!=\s*null/);
+    assert.doesNotMatch(src, /isAlreadyDiscounted/, 'reconciliation logic must live in DocumentTotalsPanel.jsx, not here');
   });
 
   it('totals column uses a soft minHeight floor, not a rigid pixel clamp', () => {

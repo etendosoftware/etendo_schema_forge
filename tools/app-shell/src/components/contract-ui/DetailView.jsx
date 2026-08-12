@@ -2639,6 +2639,16 @@ export function DetailView({
         return;
       }
       hook.handleChange?.('etgoTotalDiscount', pct);
+      // ETP-4777 — the PATCH above also makes the backend recompute
+      // grandTotalAmount (GET-time discount compensation, see
+      // Abstract{Order,Invoice}HeaderHandler), but this endpoint's response
+      // isn't applied to local state beyond etgoTotalDiscount itself.
+      // Without this, DocumentTotalsPanel's persisted-baseline (ETP-4777)
+      // freezes on the stale pre-discount grandTotalAmount the instant
+      // inputPct catches up to the (now also stale) totalDiscountPct prop —
+      // same lightweight, non-disruptive header refresh already used after
+      // primary-line edits (see the exchangeRates PATCH handler above).
+      hook.refreshHeaderTotals?.(currentId);
       toast.success(ui('totalDiscountSaved'));
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
