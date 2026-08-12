@@ -86,6 +86,7 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
       onSave();
     } catch (err) {
       setError(err.message);
+      err._sectionHandled = true;
       throw err;
     } finally {
       setSaving(false);

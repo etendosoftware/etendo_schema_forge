@@ -69,6 +69,7 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
       onSave();
     } catch (err) {
       setError(err.message);
+      err._sectionHandled = true;
       throw err;
     } finally {
       setSaving(false);

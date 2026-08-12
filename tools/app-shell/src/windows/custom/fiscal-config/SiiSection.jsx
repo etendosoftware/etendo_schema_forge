@@ -67,6 +67,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
       onSave();
     } catch (err) {
       setError(err.message);
+      err._sectionHandled = true;
       throw err;
     } finally {
       setSaving(false);
