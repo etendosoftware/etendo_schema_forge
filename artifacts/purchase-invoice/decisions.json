@@ -58,6 +58,9 @@
       }
     ],
     "lineEntityConfig": "invoice",
+    "headerExtra": {
+      "customForm": "SifErrorBanner"
+    },
     "linesLayout": "inlineEditable",
     "extraTabs": [
       {
@@ -483,6 +486,14 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true
+        },
+        "aeatsiiErrorCode": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiErrorMsg": {
+          "visibility": "readOnly",
+          "form": false
         },
         "etsgDateOperation": {
           "visibility": "editable",

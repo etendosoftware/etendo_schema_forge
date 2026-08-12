@@ -1,8 +1,8 @@
 {
-  "version": "0.83.0",
+  "version": "0.84.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-12T14:40:45.947Z",
-  "contractChecksum": "91aa03f358214845",
+  "updatedAt": "2026-08-12T14:53:46.024Z",
+  "contractChecksum": "95214e85fdb46059",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1497,6 +1497,14 @@
             "required": true
           },
           "aeatsiiCauseExemption": {},
+          "aeatsiiErrorCode": {
+            "readOnly": true,
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiErrorMsg": {
+            "readOnly": true,
+            "readOnlyLogic": "true"
+          },
           "etvfacDateIssue": {
             "readOnly": true,
             "readOnlyLogic": "@processed@='Y'"
@@ -2164,5 +2172,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "93ee3b63ccb71b1a"
+  "checksum": "12b18bf7036343dd"
 }

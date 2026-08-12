@@ -1,8 +1,8 @@
 {
-  "version": "0.83.0",
+  "version": "0.84.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-12T14:40:45.947Z",
-  "checksum": "91aa03f358214845",
+  "updatedAt": "2026-08-12T14:53:46.024Z",
+  "checksum": "95214e85fdb46059",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -45,6 +45,9 @@
           "requireSavedRecord": true,
           "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
+      },
+      "headerExtra": {
+        "customForm": "SifErrorBanner"
       },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
@@ -1294,6 +1297,46 @@
             "inputMode": "selector",
             "validation": {
               "maxLength": 32
+            }
+          },
+          {
+            "name": "aeatsiiErrorCode",
+            "apiKey": "aeatsiiErrorCode",
+            "column": "EM_Aeatsii_Error_Code",
+            "label": "EM_Aeatsii_Error_Code",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 10
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
+            }
+          },
+          {
+            "name": "aeatsiiErrorMsg",
+            "apiKey": "aeatsiiErrorMsg",
+            "column": "EM_Aeatsii_Error_Msg",
+            "label": "EM_Aeatsii_Error_Msg",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
             }
           },
           {
@@ -5107,6 +5150,9 @@
           "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
         }
       },
+      "headerExtra": {
+        "customForm": "SifErrorBanner"
+      },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
@@ -5962,7 +6008,7 @@
             "apiKey": "aeatsiiErrorCode",
             "column": "EM_Aeatsii_Error_Code",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5970,7 +6016,7 @@
             "apiKey": "aeatsiiErrorMsg",
             "column": "EM_Aeatsii_Error_Msg",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -11743,6 +11789,22 @@
         "description": "Field 'aeatsiiDescripcionSii' should be present in header"
       },
       {
+        "id": "t-field-presence-header-aeatsiiErrorCode",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiErrorCode",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorCode' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiErrorMsg",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiErrorMsg",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorMsg' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-aeatsiiErrorRegistral",
         "category": "field-presence",
         "entity": "header",
@@ -12959,6 +13021,22 @@
         "description": "Field 'aeatsiiDescripcionSii' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiErrorCode",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiErrorCode",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorCode' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiErrorMsg",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiErrorMsg",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorMsg' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiErrorRegistral",
         "category": "field-type",
         "entity": "header",
@@ -13927,6 +14005,22 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiErrorCode",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiErrorCode",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorCode' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiErrorMsg",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiErrorMsg",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorMsg' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiErrorRegistral",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -14469,6 +14563,22 @@
         "field": "aeatsiiDescripcionSii",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiErrorCode",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiErrorCode",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorCode' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiErrorMsg",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiErrorMsg",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorMsg' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-aeatsiiErrorRegistral",
@@ -16342,22 +16452,6 @@
         "field": "aeatsiiEjercicio",
         "runner": "node",
         "description": "System field 'aeatsiiEjercicio' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiErrorCode",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiErrorCode",
-        "runner": "node",
-        "description": "System field 'aeatsiiErrorCode' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiErrorMsg",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiErrorMsg",
-        "runner": "node",
-        "description": "System field 'aeatsiiErrorMsg' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiFechaDua",
@@ -18300,25 +18394,25 @@
       }
     ],
     "summary": {
-      "total": 985,
+      "total": 991,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
         "default-value-type": 37,
         "displaylogic-evaluable": 23,
         "displaylogic-valid": 23,
-        "field-presence": 152,
-        "field-type": 152,
-        "readonlylogic-evaluable": 68,
-        "readonlylogic-valid": 68,
+        "field-presence": 154,
+        "field-type": 154,
+        "readonlylogic-evaluable": 70,
+        "readonlylogic-valid": 70,
         "rule-declared": 23,
         "searchable-filters": 6,
         "selector-endpoint": 52,
-        "system-field": 329,
+        "system-field": 327,
         "visibility": 13
       },
       "byRunner": {
-        "node": 985,
+        "node": 991,
         "junit": 0
       }
     }

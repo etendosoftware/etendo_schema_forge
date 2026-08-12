@@ -15,6 +15,9 @@
       "bottomSection": "InvoiceBottomPanel",
       "topbarRight": "InvoiceTopbarExtra"
     },
+    "headerExtra": {
+      "customForm": "SifErrorBanner"
+    },
     "linesLayout": "inlineEditable",
     "extraTabs": [
       {
@@ -454,6 +457,14 @@
           "form": false,
           "grid": true
         },
+        "aeatsiiErrorCode": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiErrorMsg": {
+          "visibility": "readOnly",
+          "form": false
+        },
         "tbaiIssent": {
           "visibility": "discarded",
           "form": false
@@ -497,7 +508,8 @@
           "visibility": "discarded"
         },
         "etvfacIssueDescription": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false
         },
         "aeatsiiEjercicio": {
           "visibility": "discarded"

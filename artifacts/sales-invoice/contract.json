@@ -1,8 +1,8 @@
 {
-  "version": "0.71.0",
+  "version": "0.72.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-12T14:40:46.219Z",
-  "checksum": "1fe7f4f22587119b",
+  "updatedAt": "2026-08-12T14:53:46.264Z",
+  "checksum": "7c8a76933473df4e",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -47,6 +47,9 @@
         }
       },
       "salesTheme": true,
+      "headerExtra": {
+        "customForm": "SifErrorBanner"
+      },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
@@ -1048,6 +1051,30 @@
             }
           },
           {
+            "name": "etvfacIssueDescription",
+            "apiKey": "etvfacIssueDescription",
+            "column": "EM_Etvfac_Issue_Description",
+            "label": "Detalle de la Incidencia",
+            "type": "text",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 2000
+            },
+            "displayLogic": {
+              "raw": "@etvfac_has_configuration@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
             "name": "aeatsiiIssent",
             "apiKey": "aeatsiiIssent",
             "column": "EM_Aeatsii_Issent",
@@ -1368,6 +1395,46 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            }
+          },
+          {
+            "name": "aeatsiiErrorCode",
+            "apiKey": "aeatsiiErrorCode",
+            "column": "EM_Aeatsii_Error_Code",
+            "label": "EM_Aeatsii_Error_Code",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 10
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
+            }
+          },
+          {
+            "name": "aeatsiiErrorMsg",
+            "apiKey": "aeatsiiErrorMsg",
+            "column": "EM_Aeatsii_Error_Msg",
+            "label": "EM_Aeatsii_Error_Msg",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
             }
           },
           {
@@ -2633,6 +2700,9 @@
         }
       },
       "salesTheme": true,
+      "headerExtra": {
+        "customForm": "SifErrorBanner"
+      },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
@@ -3260,7 +3330,7 @@
             "apiKey": "etvfacIssueDescription",
             "column": "EM_Etvfac_Issue_Description",
             "type": "text",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -3708,7 +3778,7 @@
             "apiKey": "aeatsiiErrorCode",
             "column": "EM_Aeatsii_Error_Code",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -3716,7 +3786,7 @@
             "apiKey": "aeatsiiErrorMsg",
             "column": "EM_Aeatsii_Error_Msg",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -6306,6 +6376,14 @@
         "description": "Display logic for 'etvfacInvType' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-etvfacIssueDescription",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacIssueDescription",
+        "runner": "node",
+        "description": "Display logic for 'etvfacIssueDescription' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-etvfacReverseinvtype",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -6530,6 +6608,14 @@
         "description": "Display logic for 'etvfacInvType' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-etvfacIssueDescription",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "etvfacIssueDescription",
+        "runner": "node",
+        "description": "Display logic for 'etvfacIssueDescription' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-etvfacReverseinvtype",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -6714,6 +6800,22 @@
         "description": "Field 'aeatsiiDescripcionSii' should be present in header"
       },
       {
+        "id": "t-field-presence-header-aeatsiiErrorCode",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiErrorCode",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorCode' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiErrorMsg",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiErrorMsg",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorMsg' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-aeatsiiErrorRegistral",
         "category": "field-presence",
         "entity": "header",
@@ -6864,6 +6966,14 @@
         "field": "etvfacInvType",
         "runner": "node",
         "description": "Field 'etvfacInvType' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-etvfacIssueDescription",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "etvfacIssueDescription",
+        "runner": "node",
+        "description": "Field 'etvfacIssueDescription' should be present in header"
       },
       {
         "id": "t-field-presence-header-etvfacReverseinvtype",
@@ -7290,6 +7400,22 @@
         "description": "Field 'aeatsiiDescripcionSii' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiErrorCode",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiErrorCode",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorCode' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiErrorMsg",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiErrorMsg",
+        "runner": "node",
+        "description": "Field 'aeatsiiErrorMsg' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiErrorRegistral",
         "category": "field-type",
         "entity": "header",
@@ -7440,6 +7566,14 @@
         "field": "etvfacInvType",
         "runner": "node",
         "description": "Field 'etvfacInvType' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-etvfacIssueDescription",
+        "category": "field-type",
+        "entity": "header",
+        "field": "etvfacIssueDescription",
+        "runner": "node",
+        "description": "Field 'etvfacIssueDescription' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-etvfacReverseinvtype",
@@ -7858,6 +7992,22 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiErrorCode",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiErrorCode",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorCode' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiErrorMsg",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiErrorMsg",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorMsg' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiErrorRegistral",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -7952,6 +8102,14 @@
         "field": "etvfacInvType",
         "runner": "node",
         "description": "Read-only logic for 'etvfacInvType' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-etvfacIssueDescription",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacIssueDescription",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacIssueDescription' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-etvfacReverseinvtype",
@@ -8210,6 +8368,22 @@
         "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-header-aeatsiiErrorCode",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiErrorCode",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorCode' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiErrorMsg",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiErrorMsg",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiErrorMsg' in header should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-header-aeatsiiErrorRegistral",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -8304,6 +8478,14 @@
         "field": "etvfacInvType",
         "runner": "node",
         "description": "Read-only logic for 'etvfacInvType' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-etvfacIssueDescription",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "etvfacIssueDescription",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacIssueDescription' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-etvfacReverseinvtype",
@@ -8984,22 +9166,6 @@
         "description": "System field 'aeatsiiEjercicio' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-aeatsiiErrorCode",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiErrorCode",
-        "runner": "node",
-        "description": "System field 'aeatsiiErrorCode' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiErrorMsg",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiErrorMsg",
-        "runner": "node",
-        "description": "System field 'aeatsiiErrorMsg' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-aeatsiiFechaDua",
         "category": "system-field",
         "entity": "header",
@@ -9422,14 +9588,6 @@
         "field": "etvfacIssue",
         "runner": "node",
         "description": "System field 'etvfacIssue' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-etvfacIssueDescription",
-        "category": "system-field",
-        "entity": "header",
-        "field": "etvfacIssueDescription",
-        "runner": "node",
-        "description": "System field 'etvfacIssueDescription' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-etvfacIssuedExternally",
@@ -10516,25 +10674,25 @@
       }
     ],
     "summary": {
-      "total": 599,
+      "total": 610,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
         "default-value-type": 27,
-        "displaylogic-evaluable": 28,
-        "displaylogic-valid": 28,
-        "field-presence": 72,
-        "field-type": 72,
-        "readonlylogic-evaluable": 44,
-        "readonlylogic-valid": 44,
+        "displaylogic-evaluable": 29,
+        "displaylogic-valid": 29,
+        "field-presence": 75,
+        "field-type": 75,
+        "readonlylogic-evaluable": 47,
+        "readonlylogic-valid": 47,
         "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 21,
-        "system-field": 211,
+        "system-field": 208,
         "visibility": 5
       },
       "byRunner": {
-        "node": 599,
+        "node": 610,
         "junit": 0
       }
     }
