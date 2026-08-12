@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useWarehouseStock } from './useWarehouseStock';
+import { parseCalendarDate, formatCalendarDate } from '@/lib/dateOnly';
 
 /** Navigable link to the source document, styled like the Assets "Period" link. */
 function DocumentLink({ label, onClick }) {
@@ -49,11 +50,7 @@ const TYPE_KEY_MAP = {
 
 function fmtDate(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  const day   = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year  = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  return formatCalendarDate(iso);
 }
 
 function fmtQty(val) {
@@ -78,7 +75,7 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
   const sorted = useMemo(() => {
     if (!transactions) return [];
     return [...transactions].sort((a, b) =>
-      new Date(b.movementDate).getTime() - new Date(a.movementDate).getTime()
+      (parseCalendarDate(b.movementDate)?.getTime() ?? 0) - (parseCalendarDate(a.movementDate)?.getTime() ?? 0)
     );
   }, [transactions]);
 
