@@ -161,16 +161,31 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   );
 }
 
+// FileGenModal — despite the generic name, this is 349-specific (the 303 file-gen
+// flow uses FileGenModal303 below). Mirrors the classic "Parámetros de entrada del
+// generador de declaraciones" popup (OBTL_TaxReportLauncher) for Modelo 349: the 8
+// `OBTL_Tax_Report_Parameter` rows with type=I (user input), rendered in ascending
+// `order` — FileName/Contact (10), Phone (20), Substitutive (30), FormerStatement
+// (40), RepresentativeTaxId (80), Navarra (90), Guipuzcoa (100). The type=O rows
+// (Año, org name/NIF) are auto-derived by the backend and intentionally never shown
+// here. No conditional show/hide — classic's callout never toggles these fields.
 export function FileGenModal({ decl, onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
-  const [phone,   setPhone]   = React.useState(decl?.phone   ?? '');
-  const [contact, setContact] = React.useState(decl?.contact ?? '');
+  const [fileName,            setFileName]            = React.useState('');
+  const [phone,                setPhone]               = React.useState(decl?.phone   ?? '');
+  const [contact,              setContact]             = React.useState(decl?.contact ?? '');
+  const [substitutive,         setSubstitutive]        = React.useState(false);
+  const [formerStatement,      setFormerStatement]     = React.useState('');
+  const [representativeTaxId,  setRepresentativeTaxId] = React.useState('');
+  const [navarra,              setNavarra]             = React.useState(false);
+  const [guipuzcoa,            setGuipuzcoa]           = React.useState(false);
   const inputSt = {
     width: '100%', fontSize: 14, padding: '8px 12px',
     border: '1px solid hsl(var(--border-control))', borderRadius: 8, height: 40,
     boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none', background: 'hsl(var(--card))',
   };
+  const checkboxRowSt = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' };
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="fm-config-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
@@ -190,6 +205,17 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
         <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
+              {t('fm.filegen.filename')}
+            </div>
+            <input
+              style={inputSt}
+              value={fileName}
+              onChange={e => setFileName(e.target.value)}
+              placeholder={`349_${decl?.period}_${decl?.year}`}
+            />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
               {t('fm.filegen.contact_name')}
               {t('fm.filegen.contact_name_hint') && (
                 <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginLeft: 6 }}>{t('fm.filegen.contact_name_hint')}</span>
@@ -201,6 +227,45 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{t('fm.filegen.contact_phone')}</div>
             <input style={inputSt} value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('fm.filegen.contact_phone_placeholder')} />
           </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={checkboxRowSt}>
+              <Checkbox
+                checked={substitutive}
+                onChange={() => setSubstitutive(v => !v)}
+                data-testid="Checkbox__cda0bb" />
+              {t('fm.filegen.substitutive')}
+            </label>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
+              {t('fm.filegen.former_statement')}
+            </div>
+            <input style={inputSt} value={formerStatement} onChange={e => setFormerStatement(e.target.value)} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
+              {t('fm.filegen.representative_nif')}
+            </div>
+            <input style={inputSt} value={representativeTaxId} onChange={e => setRepresentativeTaxId(e.target.value)} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={checkboxRowSt}>
+              <Checkbox
+                checked={navarra}
+                onChange={() => setNavarra(v => !v)}
+                data-testid="Checkbox__cda0bb" />
+              {t('fm.filegen.navarra')}
+            </label>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={checkboxRowSt}>
+              <Checkbox
+                checked={guipuzcoa}
+                onChange={() => setGuipuzcoa(v => !v)}
+                data-testid="Checkbox__cda0bb" />
+              {t('fm.filegen.guipuzcoa')}
+            </label>
+          </div>
         </div>
 
         {/* Footer */}
@@ -210,7 +275,16 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
           </button>
           <button
             className="fm-btn fm-btn--save-pill fm-btn--save-pill--active"
-            onClick={() => { onConfirm?.({ phone, contact }); onClose(); }}
+            onClick={() => {
+              onConfirm?.({
+                fileName: fileName.trim() || undefined,
+                phone, contact, substitutive,
+                formerStatement: formerStatement.trim() || undefined,
+                representativeTaxId: representativeTaxId.trim() || undefined,
+                navarra, guipuzcoa,
+              });
+              onClose();
+            }}
           >
             {t('fm.filegen.generate')}
           </button>

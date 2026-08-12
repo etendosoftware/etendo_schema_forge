@@ -556,13 +556,37 @@ export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
   return null;
 }
 
-export async function generate349File(decl, { token, apiBaseUrl, phone, contact } = {}) {
-  if (!token || !apiBaseUrl) return false;
+/**
+ * Calls POST /neo/fiscal349/generate and triggers a browser file download.
+ * Returns { ok: true } on success, or { ok: false, error: string, serverMessage?: string }
+ * on failure — same return contract as generate303File, so both 303 and 349 callers can
+ * surface the real backend error message the same way (see applyGenerateError-style helpers
+ * in FmModel303Page.jsx / FmModel349Page.jsx). This matters for 349 specifically because
+ * AEAT3492010Report.generateElectronicFile() (org.openbravo.module.aeat349.es) throws real
+ * validation exceptions the classic UI surfaces — e.g. Substitutive=Y with FormerStatement
+ * blank, or Navarra=Y and Guipuzcoa=Y together — which are only reachable now that this
+ * modal exposes those checkboxes (previously Substitutive was hardcoded to "N" and
+ * Navarra/Guipuzcoa did not exist as parameters).
+ */
+export async function generate349File(decl, {
+  token, apiBaseUrl, phone, contact,
+  fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
+} = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const body = new URLSearchParams({ year: decl.year, period: decl.period });
-    if (phone)   body.set('phone',   phone);
-    if (contact) body.set('contact', contact);
+    if (phone)    body.set('phone',    phone);
+    if (contact)  body.set('contact',  contact);
+    if (fileName) body.set('fileName', fileName);
+    // Substitutive/Navarra/Guipuzcoa are checkbox parameters — always sent, mirroring the
+    // backend's own "must always be present" contract (Fiscal349BoxesHandler#handleGenerate,
+    // AEAT3492010Report.generateLine1 NPEs on Substitutive if the key is absent).
+    body.set('substitutive', substitutive ? 'Y' : 'N');
+    body.set('navarra',      navarra      ? 'Y' : 'N');
+    body.set('guipuzcoa',    guipuzcoa    ? 'Y' : 'N');
+    if (formerStatement)      body.set('formerStatement',      formerStatement);
+    if (representativeTaxId)  body.set('representativeTaxId',  representativeTaxId);
     const res = await fetch(`${base}/fiscal349/generate`, {
       method: 'POST',
       headers: {
@@ -571,20 +595,16 @@ export async function generate349File(decl, { token, apiBaseUrl, phone, contact 
       },
       body: body.toString(),
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      const raw = await res.text().catch(() => '');
+      return { ok: false, error: `http_${res.status}`, serverMessage: parseServerMessage(raw) };
+    }
     const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
     // .txt to match the Etendo classic Tax Report Launcher output extension
-    a.download = `349_${decl.period}_${decl.year}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(objectUrl);
-    return true;
+    triggerDownload(blob, `349_${decl.period}_${decl.year}.txt`);
+    return { ok: true };
   } catch (_) {
-    return false;
+    return { ok: false, error: 'network' };
   }
 }
 
