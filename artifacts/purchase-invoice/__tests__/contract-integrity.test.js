@@ -61,11 +61,10 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
 
   it('keeps purchase SII and SIF status fields included in the header contract', () => {
     // ETP-4783: aeatsiiEjercicio, aeatsiiPeriodo, aeatsiiPurDescription removed (discarded — never had values in GO)
-    // ETP-4783: aeatsiiDescripcionSii changed to form:true (was read-only looking, now editable)
+    // ETP-4783: aeatsiiDescripcionSii and aeatsiiFechaRegCont changed to form:true
     const expectedNames = [
       'aeatsiiClaveTipoFc',
       'aeatsiiEstado',
-      'aeatsiiFechaRegCont',
       'aeatsiiIsauthorization',
       'aeatsiiIssent',
       'etsgDateOperation',
@@ -84,6 +83,12 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.ok(descSii, 'aeatsiiDescripcionSii must be in header contract');
     assert.equal(descSii.visibility, 'editable', 'aeatsiiDescripcionSii must be editable');
     assert.equal(descSii.form, true, 'aeatsiiDescripcionSii must be in the form (ETP-4783)');
+
+    // aeatsiiFechaRegCont is now editable and in the form (ETP-4783)
+    const fechaRegCont = headerField('aeatsiiFechaRegCont');
+    assert.ok(fechaRegCont, 'aeatsiiFechaRegCont must be in header contract');
+    assert.equal(fechaRegCont.visibility, 'editable', 'aeatsiiFechaRegCont must be editable');
+    assert.equal(fechaRegCont.form, true, 'aeatsiiFechaRegCont must be in the form (ETP-4783)');
   });
 
   it('discards tbaiIssent from the frontend contract now that TbaiConfigSequenceHandler chains TBAI sequencing on the backend (ETP-4401)', () => {

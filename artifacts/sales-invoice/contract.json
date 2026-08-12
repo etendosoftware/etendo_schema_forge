@@ -1,8 +1,8 @@
 {
-  "version": "0.69.0",
+  "version": "0.70.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-11T16:50:23.877Z",
-  "checksum": "af7c68bc4c73cb95",
+  "updatedAt": "2026-08-12T13:27:49.870Z",
+  "checksum": "c4ea15b343cbbd2c",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -439,43 +439,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR",
@@ -1066,19 +1096,31 @@
             "enumValues": [
               {
                 "value": "R",
-                "name": "Corrective invoice"
+                "name": "Corrective invoice",
+                "labels": {
+                  "es_ES": "Factura rectificativa"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               },
               {
                 "value": "F2",
-                "name": "Simplified invoice"
+                "name": "Simplified invoice",
+                "labels": {
+                  "es_ES": "Factura simplificada"
+                }
               },
               {
                 "value": "F4",
-                "name": "Simplified invoices summary"
+                "name": "Simplified invoices summary",
+                "labels": {
+                  "es_ES": "Asiento resumen facturas simplificadas"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -1142,35 +1184,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
@@ -1271,6 +1337,31 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            }
+          },
+          {
+            "name": "aeatsiiFechaRegCont",
+            "apiKey": "aeatsiiFechaRegCont",
+            "column": "EM_Aeatsii_Fecha_Reg_Cont",
+            "label": "EM_Aeatsii_Fecha_Reg_Cont",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN null ELSE now() END FROM dual"
+            },
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN null ELSE now() END FROM dual",
+            "validation": {
+              "maxLength": 19
+            },
+            "readOnlyLogic": {
+              "raw": "@AEATSII_InSIIAndPostedInvoices@='Y'",
+              "evaluable": true,
+              "js": "record['aEATSII_InSIIAndPostedInvoices'] === 'Y'"
             }
           },
           {
@@ -1460,6 +1551,13 @@
             "derivation": {
               "type": "computed",
               "source": "false"
+            }
+          },
+          {
+            "name": "aeatsiiFechaRegCont",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN null ELSE now() END FROM dual"
             }
           }
         ],
@@ -3604,7 +3702,7 @@
             "apiKey": "aeatsiiFechaRegCont",
             "column": "EM_Aeatsii_Fecha_Reg_Cont",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -5890,6 +5988,14 @@
         "description": "Default value for 'aeatsiiEstado' in header should be a string"
       },
       {
+        "id": "t-default-value-type-header-aeatsiiFechaRegCont",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiFechaRegCont",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiFechaRegCont' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-aeatsiiIsauthorization",
         "category": "default-value-type",
         "entity": "header",
@@ -6554,6 +6660,14 @@
         "description": "Field 'aeatsiiEstado' should be present in header"
       },
       {
+        "id": "t-field-presence-header-aeatsiiFechaRegCont",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiFechaRegCont",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaRegCont' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-aeatsiiIsauthorization",
         "category": "field-presence",
         "entity": "header",
@@ -7114,6 +7228,14 @@
         "description": "Field 'aeatsiiEstado' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiFechaRegCont",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiFechaRegCont",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaRegCont' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiIsauthorization",
         "category": "field-type",
         "entity": "header",
@@ -7666,6 +7788,14 @@
         "description": "Read-only logic for 'aeatsiiEstado' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiFechaRegCont",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiFechaRegCont",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiFechaRegCont' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiIssent",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -8000,6 +8130,14 @@
         "field": "aeatsiiEstado",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiEstado' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiFechaRegCont",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiFechaRegCont",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiFechaRegCont' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-aeatsiiIssent",
@@ -8790,14 +8928,6 @@
         "field": "aeatsiiFechaOperacion",
         "runner": "node",
         "description": "System field 'aeatsiiFechaOperacion' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiFechaRegCont",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "System field 'aeatsiiFechaRegCont' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiHash",
@@ -10300,25 +10430,25 @@
       }
     ],
     "summary": {
-      "total": 589,
+      "total": 593,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
-        "default-value-type": 25,
+        "default-value-type": 26,
         "displaylogic-evaluable": 27,
         "displaylogic-valid": 27,
-        "field-presence": 70,
-        "field-type": 70,
-        "readonlylogic-evaluable": 42,
-        "readonlylogic-valid": 42,
+        "field-presence": 71,
+        "field-type": 71,
+        "readonlylogic-evaluable": 43,
+        "readonlylogic-valid": 43,
         "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 21,
-        "system-field": 213,
+        "system-field": 212,
         "visibility": 5
       },
       "byRunner": {
-        "node": 589,
+        "node": 593,
         "junit": 0
       }
     }

@@ -489,8 +489,8 @@
           "form": false
         },
         "aeatsiiFechaRegCont": {
-          "visibility": "readOnly",
-          "form": false
+          "visibility": "editable",
+          "form": true
         },
         "aeatsiiEjercicio": {
           "visibility": "discarded"
