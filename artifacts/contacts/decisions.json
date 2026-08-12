@@ -8,6 +8,7 @@
     "sidebarLayout": false,
     "breadcrumb": "Contact",
     "detailEntity": null,
+    "statusField": "none",
     "summaryFields": [],
     "primaryTabs": [
       {

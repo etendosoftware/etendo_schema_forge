@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { WRITEOFF_EPSILON } from '@/components/contract-ui/writeoffMath.js';
 
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -109,6 +110,11 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const isDraft = !PAID_STATUSES.has(status);
   const totalAmount = parseFloat(data?.amount ?? 0);
   const currency = data?.['currency$_identifier'];
+  // ETP-4797: the invoice difference the payment wrote off instead of leaving pending. Only a
+  // payment created through the write-off toggle carries this — everything else keeps rendering
+  // exactly as before the toggle existed, since a zero write-off row would just be noise.
+  const writeoffAmount = parseFloat(data?.writeoffAmount ?? 0);
+  const hasWriteoff = Math.abs(writeoffAmount) >= WRITEOFF_EPSILON;
 
   useEffect(() => {
     if (!data?.id) return;
@@ -191,16 +197,30 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
     {
       label: ui(isIn ? 'cobroCreado' : 'pagoCreado'),
       date: createdDate,
-      dot: isDraft ? 'var(--status-warning-fg)' : 'var(--status-success-fg)',
+      // Draft dot: before ETP-4554 this was a bright, vivid orange (~49% lightness). The
+      // migration mapped it to --status-warning-fg, a much darker amber-brown (~27% lightness),
+      // since that token is meant for warning TEXT (needs contrast on a light bg), not a
+      // standalone dot. No warning-family token matches the original brightness (the border
+      // token is too pale, the bg token near-white) — same "no exact token" situation as the
+      // confirmed-dot green below, so the literal color is restored rather than force-fit
+      // (allowlisted in semanticThemeUsage.test.js; found while verifying ETP-4797).
+      dot: isDraft ? '#FAAF00' : 'var(--status-success-fg)',
     },
     // Every confirm/reactivate ever recorded — a full cycle (confirm →
     // reactivate → confirm) shows as three separate rows, not just the
     // latest occurrence of each type.
+    // Confirmed dots are a lighter, brighter green than the "created" dot's
+    // --status-success-fg: before ETP-4554 ("Migrate shared window styles") this was a
+    // mid-lightness green sitting almost exactly halfway between --status-success-fg (dark
+    // forest green, ~25% lightness) and --status-success-border (pale mint, ~71% lightness), so
+    // neither existing token reproduces it. Restored the literal color rather than force-fitting
+    // a token that's visibly too dark or too pale (allowlisted in semanticThemeUsage.test.js;
+    // found while verifying ETP-4797).
     ...events.map(ev => ({
       label: ui(eventLabelKey(ev)),
       confirmedAt: new Date(ev.at),
       date: null,
-      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : 'var(--status-success-fg)',
+      dot: ev.type === 'reactivated' ? 'hsl(var(--muted-foreground))' : '#2DCA72',
     })),
     // Fallback for the rare case where the record is currently confirmed but
     // no event (live or backfilled) could be recorded — still show it once.
@@ -208,7 +228,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       label: ui(isIn ? 'cobroConfirmado' : 'pagoConfirmado'),
       confirmedAt: null,
       date: paymentDate,
-      dot: 'var(--status-success-fg)',
+      dot: '#2DCA72',
     }] : []),
     ...((!isDraft && data?.posted === 'Y') || postedAt ? [{
       label: ui('asientoContabilizado'),
@@ -267,6 +287,15 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
               value={lines === null ? '...' : fmtAmt(unapplied, currency)}
               muted={unapplied === 0}
               data-testid="BreakdownRow__624cef" />
+            {hasWriteoff && (
+              <>
+                <Separator data-testid="Separator__624cef" />
+                <BreakdownRow
+                  label={ui('writtenOffLabel')}
+                  value={fmtAmt(writeoffAmount, currency)}
+                  data-testid="BreakdownRow__writeoff" />
+              </>
+            )}
           </div>
         </div>
       </div>
