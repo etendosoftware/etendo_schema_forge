@@ -875,7 +875,7 @@ async function installChangeSifDeletedMocks(page, { spec, record }) {
 }
 
 test.describe('Fiscal Config — smart deactivation (deleted:true response)', () => {
-  test('TC-DEL-1: Verifactu config — deleted:true response refreshes the page correctly', async ({ page }) => {
+  test('Verifactu — backend deletes the record and the onboarding wizard reappears', async ({ page }) => {
     const c = CHANGE_SIF_CASES.find(x => x.label === 'VERIFACTU');
     await loginWithOrg(page);
     const state = await installChangeSifDeletedMocks(page, c);
@@ -909,7 +909,7 @@ test.describe('Fiscal Config — smart deactivation (deleted:true response)', ()
     await expect(page.getByText(c.detailFieldLabel)).toHaveCount(0);
   });
 
-  test('TC-DEL-2: SII config — deleted:true response, org ends up unconfigured', async ({ page }) => {
+  test('SII — backend deletes the record, refetch fires, and org ends up unconfigured', async ({ page }) => {
     const c = CHANGE_SIF_CASES.find(x => x.label === 'SII');
     await loginWithOrg(page);
     const state = await installChangeSifDeletedMocks(page, c);
@@ -942,7 +942,7 @@ test.describe('Fiscal Config — smart deactivation (deleted:true response)', ()
     await expect(page.locator('[data-testid="ChangeSifDialog__error"]')).toHaveCount(0);
   });
 
-  test('TC-DEL-3: deleted:true does NOT leave a stale SIF section visible while transitioning', async ({ page }) => {
+  test('SII — stale config section is not visible while the page transitions after deletion', async ({ page }) => {
     const c = CHANGE_SIF_CASES.find(x => x.label === 'SII');
     await loginWithOrg(page);
     await installChangeSifDeletedMocks(page, c);
