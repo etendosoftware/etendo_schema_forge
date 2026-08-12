@@ -400,7 +400,7 @@ function getComputedForDecl(decl, isDraft, maps) {
 }
 
 // ── Main component ───────────────────────────────────────────────
-export default function FmListPage({ declarations: propDecls, onSelect, onStatusChange, onComputeUpdate, token, apiBaseUrl }) {
+export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
 

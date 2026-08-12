@@ -1090,12 +1090,12 @@ describe('FmListPage — real incidents refresh (regression, ETP-4755)', () => {
 
   // NOTE: a dedicated assertion that the incidents effect does NOT refire when only
   // a declaration's `status` changes (same id set) is intentionally omitted here.
-  // FmListPage.jsx defines `handleStatusChange` (which would trigger such a change)
-  // but nothing in the current render tree invokes it — there is no row-level status
-  // control wired up yet, so there's no way to exercise this path through the public
-  // component API without reaching into internals. The `declIdsKey` (not `decls`)
-  // dependency array in the source is the mechanism that guards against this; once a
-  // real status-change trigger exists in the UI, this test should be added here.
+  // Nothing in the current render tree changes a declaration's `status` — there is
+  // no row-level status control wired up yet, so there's no way to exercise this path
+  // through the public component API without reaching into internals. The
+  // `declIdsKey` (not `decls`) dependency array in the source is the mechanism that
+  // guards against this; once a real status-change trigger exists in the UI, this
+  // test should be added here.
 });
 
 describe('FmListPage — fiscal-models-catalog concurrent save and unmount safety', () => {

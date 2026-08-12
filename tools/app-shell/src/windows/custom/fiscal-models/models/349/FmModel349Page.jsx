@@ -28,11 +28,6 @@ function statusLabelKey(status) {
 }
 
 // ── Constants ────────────────────────────────────────────────────
-const STEPPER_INDEX = {
-  pending:0, draft:1, ready:2,
-  submitted:3, submitted_ext:3, submitted_ack:3,
-};
-
 const KEY_IDS = ['E', 'S', 'A', 'I'];
 
 const MOCK_OPERATORS = [
@@ -168,7 +163,7 @@ function KeyFilterDropdown({ value, onChange, t }) {
 // changing behavior) so the `viesPending > 0 && !dismissed` gate lives in its own
 // small function instead of nesting inside the main render tree.
 function ViesBanner({ viesPending, dismissed, onDismiss, t }) {
-  if (!(viesPending > 0) || dismissed) return null;
+  if (viesPending <= 0 || dismissed) return null;
   return (
     <div style={{ padding: '8px 20px', flexShrink: 0 }}>
       <div style={{
@@ -270,7 +265,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     if (decl._precomputed?.invoices)  setLiveInvoices(decl._precomputed.invoices);
     if (decl._precomputed?.rectifications) setLiveRectifications(decl._precomputed.rectifications);
   }, [decl._precomputed]);
-  const [invoiceNifFilter, setInvoiceNifFilter] = useState(null);
+  // Only the setter is used below (no consumer reads the filtered value yet —
+  // pre-existing, not introduced by this change); keeping the binding slot
+  // empty avoids an unused-variable warning without touching that behavior.
+  const [, setInvoiceNifFilter] = useState(null);
   const [computing,    setComputing]    = useState(false);
   const [generating,   setGenerating]   = useState(false);
   const [genError,     setGenError]     = useState(null);
@@ -287,7 +285,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   });
 
   const operators = liveOperators ?? decl.operators ?? MOCK_OPERATORS;
-  const stepIdx   = STEPPER_INDEX[status] ?? 0;
 
   const monthNum  = /^\d{2}$/.test(decl.period) ? parseInt(decl.period, 10) : null;
   const monthName = monthNum
@@ -409,8 +406,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     if (v > 0) return `${v} factura${v !== 1 ? 's' : ''} venta`;
     return null;
   }
-
-  const declNif = decl.nif ?? '';
 
   const TABS = [
     { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
