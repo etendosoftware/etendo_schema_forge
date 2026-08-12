@@ -8,7 +8,7 @@ import { EmptyState, KpiWidget, MoreOptionsMenu } from './FmCommon.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
-import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, persistDeclarationStatus, fetchDeclarationIncidents } from './fiscalModelsUtils.js';
+import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 // Real-mode only: throws on fetch failure instead of falling back to mock data.
@@ -148,6 +148,30 @@ const SORT_FIELDS = [
   { key: 'period', labelKey: 'fm.col.period', value: d => periodSortValue(d.period) },
   { key: 'status', labelKey: 'fm.col.status', value: d => STATUS_SORT_ORDER.indexOf(d.status) },
 ];
+
+// Applies the toolbar "Ordenar" popover's field selector to a declaration list.
+// `sortColumn === null` = default order (year+period, descending, most recent
+// first) — same fallback the main component's render already relied on before
+// this was extracted out of it (SonarQube S3776: keeps FmListPage's own
+// cognitive complexity down without changing any ordering behavior).
+function sortDeclarations(list, sortColumn, sortDirection) {
+  const sorted = [...list];
+  if (!sortColumn) {
+    sorted.sort((a, b) =>
+      (b.year * 100 + periodSortValue(b.period)) - (a.year * 100 + periodSortValue(a.period))
+    );
+    return sorted;
+  }
+  const field = SORT_FIELDS.find(f => f.key === sortColumn);
+  if (!field) return sorted;
+  sorted.sort((a, b) => {
+    const av = field.value(a);
+    const bv = field.value(b);
+    const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
+    return sortDirection === 'asc' ? cmp : -cmp;
+  });
+  return sorted;
+}
 
 // SUBMISSION_METHOD_STATUSES (ETP-4755) — only these two statuses can carry a
 // submissionMethod (the two manual "Presentado" paths persist it themselves via
@@ -361,6 +385,20 @@ function getResultKind(r) {
   return 'N';
 }
 
+// Resolves the auto-computed boxes/operators entry for a declaration row —
+// draft declarations read from the polling maps (computedMap/computedMap349),
+// any other status reads from the one-time-compute maps (see the
+// otherDecls303/otherDecls349 comment in the main component for why both are
+// needed). Extracted out of the table row's nested ternary (SonarQube S3358);
+// same values, same logic.
+function getComputedForDecl(decl, isDraft, maps) {
+  const { computedMap, computedMapOther303, computedMap349, computedMapOther349 } = maps;
+  if (decl.model === '349') {
+    return isDraft ? computedMap349[decl.id] : computedMapOther349[decl.id];
+  }
+  return isDraft ? computedMap[decl.id] : computedMapOther303[decl.id];
+}
+
 // ── Main component ───────────────────────────────────────────────
 export default function FmListPage({ declarations: propDecls, onSelect, onStatusChange, onComputeUpdate, token, apiBaseUrl }) {
   const ui = useUI();
@@ -526,29 +564,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
     return () => document.removeEventListener('mousedown', handler);
   }, [showSortMenu]);
 
-  // submissionMethod (ETP-4755, optional 3rd arg) — forwarded from the detail pages'
-  // handlePresent (manual "Presentado" paths only; a real AEAT telematic submission sets
-  // its own submissionMethod server-side and never reaches this handler with one). Stored
-  // on the local decl alongside status so the list row's "Presentado" badge can surface it
-  // immediately, without waiting for the next full declarations refetch.
-  const handleStatusChange = useCallback((id, newStatus, submissionMethod) => {
-    if (token && apiBaseUrl) {
-      persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod })
-        .then(result => {
-          if (!result.ok) return;
-          setDecls(ds =>
-            ds.map(d => d.id === id
-              ? {
-                  ...d, status: newStatus, updatedAt: new Date().toLocaleDateString('es-ES'),
-                  ...(submissionMethod ? { submissionMethod } : {}),
-                }
-              : d)
-          );
-          onStatusChange?.(id, newStatus, submissionMethod);
-        });
-    }
-  }, [onStatusChange, token, apiBaseUrl]);
-
   const handleNewDecl = useCallback(({ model, year, period, status }) => {
     if (token && apiBaseUrl) {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
@@ -603,22 +618,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   // Same mechanism as ListView.jsx's column sort (used by the generated/Factura
   // windows): pick a field, click again to flip direction, "Limpiar orden" resets
   // to the default. `sortColumn === null` = default order (year+period, descending).
-  const sortedDecls = [...kpiFiltered];
-  if (!sortColumn) {
-    sortedDecls.sort((a, b) =>
-      (b.year * 100 + periodSortValue(b.period)) - (a.year * 100 + periodSortValue(a.period))
-    );
-  } else {
-    const field = SORT_FIELDS.find(f => f.key === sortColumn);
-    if (field) {
-      sortedDecls.sort((a, b) => {
-        const av = field.value(a);
-        const bv = field.value(b);
-        const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
-        return sortDirection === 'asc' ? cmp : -cmp;
-      });
-    }
-  }
+  // See `sortDeclarations` above for the implementation.
+  const sortedDecls = sortDeclarations(kpiFiltered, sortColumn, sortDirection);
 
   const activeCount = Object.values(activeModels).filter(Boolean).length;
 
@@ -640,6 +641,119 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
     setSortDirection('desc');
     setShowSortMenu(false);
   };
+
+  // ── Table body (EmptyState variants vs. the real table) ─────────────
+  // If/else-if chain instead of a nested ternary (SonarQube S3358) — same four
+  // outcomes in the same order of precedence, same JSX per outcome.
+  let tableSection;
+  if (!catalogLoaded) {
+    tableSection = (
+      <EmptyState
+        message={t('loading') ?? 'Cargando…'}
+        data-testid="EmptyState__cb728e" />
+    );
+  } else if (activeCount === 0) {
+    tableSection = (
+      <EmptyState
+        title={t('fm.list.empty_no_active_models') ?? 'No hay modelos activos. Configúralos desde el Catálogo de modelos.'}
+        data-testid="EmptyState__cb728e" />
+    );
+  } else if (sortedDecls.length === 0) {
+    tableSection = <EmptyState data-testid="EmptyState__cb728e" />;
+  } else {
+    tableSection = (
+      <table className="fm-table">
+        <thead>
+          <tr>
+            <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
+              <Checkbox
+                checked={allSelected}
+                onChange={toggleAll}
+                onClick={e => e.stopPropagation()}
+                data-testid="Checkbox__cb728e" />
+            </th>
+            <th>{t('fm.col.model')}</th>
+            <th>{t('fm.col.period')}</th>
+            <th>{t('fm.col.type')}</th>
+            <th style={{ minWidth: 180 }}>{t('fm.col.status')}</th>
+            <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
+            <th>{t('fm.col.incidents')}</th>
+            <th>{t('fm.col.updated_at') ?? 'Última actualización'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedDecls.map(decl => {
+            // Draft declarations read from the polling maps (computedMap/computedMap349);
+            // any other status reads from the one-time-compute maps above — see the
+            // otherDecls303/otherDecls349 comment for why both are needed.
+            // (see `getComputedForDecl` above for the implementation)
+            const isDraft = decl.status === 'draft';
+            const computed = getComputedForDecl(decl, isDraft, {
+              computedMap, computedMapOther303, computedMap349, computedMapOther349,
+            });
+            const hasStoredResult = !!decl.result?.kind;
+            const isComputingThis = ['303', '349'].includes(decl.model)
+              && !computed && !hasStoredResult;
+            const computeError = (computed?.error && !hasStoredResult) ? computed.error : null;
+
+            let displayResult = decl.result;
+            if (computed?.summary && !computed.error) {
+              if (decl.model === '349') {
+                const total = ['totalE','totalS','totalA','totalI']
+                  .reduce((s, k) => s + (parseFloat(computed.summary[k]) || 0), 0);
+                displayResult = { kind: 'info', amount: total };
+              } else {
+                const r = computed.summary.result;
+                const kind = getResultKind(r);
+                displayResult = { kind, amount: Math.abs(r) };
+              }
+            }
+
+            return (
+              <tr
+                key={decl.id}
+                className={decl.current ? 'fm-table__row--current' : ''}
+                onClick={() => onSelect?.({ ...decl, _precomputed: computed })}
+              >
+                <td onClick={e => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selected.has(decl.id)}
+                    onChange={() => toggleSelect(decl.id)}
+                    onClick={e => e.stopPropagation()}
+                    data-testid="Checkbox__cb728e" />
+                </td>
+                <td>
+                  <ModelBadge model={decl.model} data-testid="ModelBadge__cb728e" />
+                  <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
+                </td>
+                <td><span className="fm-period">{decl.period}</span></td>
+                <td>{decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}</td>
+                <td>
+                  <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <ResultText
+                    isComputing={isComputingThis}
+                    error={computeError}
+                    result={displayResult}
+                    t={t}
+                    data-testid="ResultText__cb728e" />
+                </td>
+                <td>
+                  <IncidentsCell
+                    blocking={decl.incidents?.blocking ?? 0}
+                    warning={decl.incidents?.warning ?? 0}
+                    t={t}
+                    data-testid="IncidentsCell__cb728e" />
+                </td>
+                <td><span className="fm-date">{decl.updatedAt ?? '—'}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
 
   return (
     <div className="fm-page">
@@ -775,111 +889,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
       )}
       {/* ── Table ──────────────────────────────────────────────── */}
       <div className="fm-table-wrap">
-        {!catalogLoaded
-          ? (
-            <EmptyState
-              message={t('loading') ?? 'Cargando…'}
-              data-testid="EmptyState__cb728e" />
-          )
-          : activeCount === 0
-            ? (
-              <EmptyState
-                title={t('fm.list.empty_no_active_models') ?? 'No hay modelos activos. Configúralos desde el Catálogo de modelos.'}
-                data-testid="EmptyState__cb728e" />
-            )
-            : sortedDecls.length === 0
-              ? <EmptyState data-testid="EmptyState__cb728e" />
-              : (
-            <table className="fm-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
-                    <Checkbox
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      onClick={e => e.stopPropagation()}
-                      data-testid="Checkbox__cb728e" />
-                  </th>
-                  <th>{t('fm.col.model')}</th>
-                  <th>{t('fm.col.period')}</th>
-                  <th>{t('fm.col.type')}</th>
-                  <th style={{ minWidth: 180 }}>{t('fm.col.status')}</th>
-                  <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
-                  <th>{t('fm.col.incidents')}</th>
-                  <th>{t('fm.col.updated_at') ?? 'Última actualización'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedDecls.map(decl => {
-                  // Draft declarations read from the polling maps (computedMap/computedMap349);
-                  // any other status reads from the one-time-compute maps above — see the
-                  // otherDecls303/otherDecls349 comment for why both are needed.
-                  const isDraft = decl.status === 'draft';
-                  const computed = decl.model === '349'
-                    ? (isDraft ? computedMap349[decl.id] : computedMapOther349[decl.id])
-                    : (isDraft ? computedMap[decl.id] : computedMapOther303[decl.id]);
-                  const hasStoredResult = !!decl.result?.kind;
-                  const isComputingThis = ['303', '349'].includes(decl.model)
-                    && !computed && !hasStoredResult;
-                  const computeError = (computed?.error && !hasStoredResult) ? computed.error : null;
-
-                  let displayResult = decl.result;
-                  if (computed?.summary && !computed.error) {
-                    if (decl.model === '349') {
-                      const total = ['totalE','totalS','totalA','totalI']
-                        .reduce((s, k) => s + (parseFloat(computed.summary[k]) || 0), 0);
-                      displayResult = { kind: 'info', amount: total };
-                    } else {
-                      const r = computed.summary.result;
-                      const kind = getResultKind(r);
-                      displayResult = { kind, amount: Math.abs(r) };
-                    }
-                  }
-
-                  return (
-                    <tr
-                      key={decl.id}
-                      className={decl.current ? 'fm-table__row--current' : ''}
-                      onClick={() => onSelect?.({ ...decl, _precomputed: computed })}
-                    >
-                      <td onClick={e => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selected.has(decl.id)}
-                          onChange={() => toggleSelect(decl.id)}
-                          onClick={e => e.stopPropagation()}
-                          data-testid="Checkbox__cb728e" />
-                      </td>
-                      <td>
-                        <ModelBadge model={decl.model} data-testid="ModelBadge__cb728e" />
-                        <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
-                      </td>
-                      <td><span className="fm-period">{decl.period}</span></td>
-                      <td>{decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}</td>
-                      <td>
-                        <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <ResultText
-                          isComputing={isComputingThis}
-                          error={computeError}
-                          result={displayResult}
-                          t={t}
-                          data-testid="ResultText__cb728e" />
-                      </td>
-                      <td>
-                        <IncidentsCell
-                          blocking={decl.incidents?.blocking ?? 0}
-                          warning={decl.incidents?.warning ?? 0}
-                          t={t}
-                          data-testid="IncidentsCell__cb728e" />
-                      </td>
-                      <td><span className="fm-date">{decl.updatedAt ?? '—'}</span></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+        {tableSection}
       </div>
       {/* ── Overlays ─────────────────────────────────────────────── */}
       {showNewDecl && <NewDeclModal

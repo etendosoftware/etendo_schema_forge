@@ -542,33 +542,45 @@ const COMPLETED_STATUSES = new Set([
  * above). Re-verify against the sede electrónica if these dates look wrong
  * for a given campaign year.
  */
+// Quarterly deadline (303 AND 349 — AEAT uses the identical rule for both
+// models). T4 deadline is day 30 of January, not day 20.
+function getQuarterlyDeadline(year, quarter) {
+  if (quarter === 4) return new Date(year + 1, 0, 30);
+  const month = quarter * 3 + 1;
+  return new Date(year, month - 1, 20);
+}
+
+// Monthly 349 deadline. July's 349 is consolidated with August → deadline is
+// Sept 20, not Aug 20. Every other month → day 20 of the following month.
+function getMonthly349Deadline(year, month) {
+  if (month === 7) return new Date(year, 8, 20);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return new Date(nextYear, nextMonth - 1, 20);
+}
+
+// Monthly 303 deadline (and default fallback for any other/unspecified
+// monthly model): day 30 of the following month, except January which
+// extends to the last day of February. `new Date(year, 2, 0)` = "day 0 of
+// March" = the last day of February, automatically leap-year aware.
+function getMonthly303Deadline(year, month) {
+  if (month === 1) return new Date(year, 2, 0);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return new Date(nextYear, nextMonth - 1, 30);
+}
+
+// Dispatches to the quarterly/monthly-303/monthly-349 rule above based on
+// `period`'s shape and `model`. Split out of a single branch-heavy function
+// (SonarQube S3776) into these small, independently-testable helpers — same
+// dates, same logic, just decomposed.
 function getDeadlineDate(model, year, period) {
   if (/^T\d$/.test(period)) {
-    const q = parseInt(period[1], 10);
-    // T4 deadline (both 303 and 349) is day 30 of January, not day 20.
-    if (q === 4) return new Date(year + 1, 0, 30);
-    const month = q * 3 + 1;
-    return new Date(year, month - 1, 20);
+    return getQuarterlyDeadline(year, parseInt(period[1], 10));
   }
   if (/^\d{2}$/.test(period)) {
     const m = parseInt(period, 10);
-
-    if (model === '349') {
-      // July's 349 is consolidated with August → deadline is Sept 20, not Aug 20.
-      if (m === 7) return new Date(year, 8, 20);
-      const nextM = m === 12 ? 1 : m + 1;
-      const y = m === 12 ? year + 1 : year;
-      return new Date(y, nextM - 1, 20);
-    }
-
-    // 303 (and default fallback for any other/unspecified monthly model):
-    // day 30 of the following month, except January which extends to the
-    // last day of February. `new Date(year, 2, 0)` = "day 0 of March" =
-    // the last day of February, automatically leap-year aware.
-    if (m === 1) return new Date(year, 2, 0);
-    const nextM = m === 12 ? 1 : m + 1;
-    const y = m === 12 ? year + 1 : year;
-    return new Date(y, nextM - 1, 30);
+    return model === '349' ? getMonthly349Deadline(year, m) : getMonthly303Deadline(year, m);
   }
   return null;
 }

@@ -73,6 +73,14 @@ export function MoreOptionsMenu({ favKey, favLabel }) {
 export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, value, valueColor, onClick, active }) {
   const [hovered, setHovered] = React.useState(false);
   const clickable = typeof onClick === 'function';
+  // Extracted out of the style object's inline ternary (SonarQube S3358) — same
+  // three states (active / hovered / idle), same resulting colors.
+  let cardBackground = 'hsl(var(--card))';
+  if (active) {
+    cardBackground = 'var(--fm-bg-subtle)';
+  } else if (hovered) {
+    cardBackground = 'hsl(var(--muted))';
+  }
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -87,7 +95,7 @@ export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, 
       style={{
         display: 'flex', flexDirection: 'row', alignItems: 'center',
         padding: '8px 8px 8px 12px', gap: 12, height: 68,
-        background: active ? 'var(--fm-bg-subtle)' : (hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))'),
+        background: cardBackground,
         border: active ? '1px solid var(--fm-gray-900)' : '1px solid hsl(var(--border-subtle))',
         boxShadow: active
           ? 'inset 0 0 0 1px var(--fm-gray-900), 0px 1px 2px hsl(var(--foreground) / 0.05)'

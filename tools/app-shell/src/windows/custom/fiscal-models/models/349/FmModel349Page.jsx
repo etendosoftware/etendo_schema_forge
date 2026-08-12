@@ -163,6 +163,87 @@ function KeyFilterDropdown({ value, onChange, t }) {
   );
 }
 
+// VIES pending-validation banner — extracted out of the main component's render
+// (SonarQube S3776: keeps FmModel349Page's own cognitive complexity down without
+// changing behavior) so the `viesPending > 0 && !dismissed` gate lives in its own
+// small function instead of nesting inside the main render tree.
+function ViesBanner({ viesPending, dismissed, onDismiss, t }) {
+  if (!(viesPending > 0) || dismissed) return null;
+  return (
+    <div style={{ padding: '8px 20px', flexShrink: 0 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '10px 12px', borderRadius: 8, background: 'var(--status-info-bg)',
+      }}>
+        <Globe
+          size={14}
+          strokeWidth={1.75}
+          style={{ color: 'var(--status-info-fg)', flexShrink: 0 }}
+          data-testid="Globe__346dd5" />
+        <span style={{ fontSize: 14, flex: 1 }}>
+          <span style={{ color: 'var(--status-info-fg)', fontWeight: 500 }}>
+            {t('fm.m349.banner.vies_title', { count: viesPending }) ?? `${viesPending} NIF-IVA con validación VIES pendiente`}
+          </span>
+          {' '}
+          <span style={{ color: 'var(--status-info-fg)', fontWeight: 400 }}>
+            {t('fm.m349.banner.vies_sub') ?? 'Validación VIES asíncrona — informativa, no bloqueante'}
+          </span>
+        </span>
+        <button
+          style={{ fontSize: 14, fontWeight: 500, color: 'var(--status-info-fg)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
+        >
+          {t('fm.m349.banner.vies_action') ?? 'Validar VIES'}
+        </button>
+        <button
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-info-fg)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+          onClick={onDismiss}
+          aria-label={t('fm.action.close') ?? 'Cerrar'}
+        >×</button>
+      </div>
+    </div>
+  );
+}
+
+// Shared invoices/incidents/receipt tab content — extracted out of the main
+// component's render (SonarQube S3776, same rationale as ViesBanner above): the
+// `activeTab === 'invoices' || ... || ...` gate and its 3 nested per-tab `&&`
+// branches now live in their own function, called unconditionally below.
+function DetailTabContent({
+  activeTab, decl, liveInvoices, blocking, warning, t, onGoToSources, token, apiBaseUrl, status,
+}) {
+  if (activeTab !== 'invoices' && activeTab !== 'incidents' && activeTab !== 'receipt') return null;
+  return (
+    <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'invoices' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
+      {activeTab === 'invoices' && (
+        <SourcesTab
+          decl={{ ...decl, sources: liveInvoices ?? decl.invoices }}
+          t={t}
+          data-testid="SourcesTab__346dd5" />
+      )}
+      {activeTab === 'incidents' && (
+        <IncidentsTab
+          decl={decl}
+          blocking={blocking}
+          warning={warning}
+          t={t}
+          onGoToSources={onGoToSources}
+          data-testid="IncidentsTab__346dd5" />
+      )}
+      {activeTab === 'receipt' && (
+        <AttachmentsTab
+          tableName={FISCAL_DECL_TABLE}
+          recordId={decl.id}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          isActive={activeTab === 'receipt'}
+          config={{ allowedMimeTypes: ['application/pdf'] }}
+          key={status}
+          data-testid="AttachmentsTab__349receipt" />
+      )}
+    </div>
+  );
+}
+
 // ── Main ─────────────────────────────────────────────────────────
 export default function FmModel349Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
@@ -429,39 +510,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         )}
       </div>
       {/* ── VIES banner ──────────────────────────────────────────── */}
-      {viesPending > 0 && !viesBannerDismissed && (
-        <div style={{ padding: '8px 20px', flexShrink: 0 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 12px', borderRadius: 8, background: 'var(--status-info-bg)',
-          }}>
-            <Globe
-              size={14}
-              strokeWidth={1.75}
-              style={{ color: 'var(--status-info-fg)', flexShrink: 0 }}
-              data-testid="Globe__346dd5" />
-            <span style={{ fontSize: 14, flex: 1 }}>
-              <span style={{ color: 'var(--status-info-fg)', fontWeight: 500 }}>
-                {t('fm.m349.banner.vies_title', { count: viesPending }) ?? `${viesPending} NIF-IVA con validación VIES pendiente`}
-              </span>
-              {' '}
-              <span style={{ color: 'var(--status-info-fg)', fontWeight: 400 }}>
-                {t('fm.m349.banner.vies_sub') ?? 'Validación VIES asíncrona — informativa, no bloqueante'}
-              </span>
-            </span>
-            <button
-              style={{ fontSize: 14, fontWeight: 500, color: 'var(--status-info-fg)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
-            >
-              {t('fm.m349.banner.vies_action') ?? 'Validar VIES'}
-            </button>
-            <button
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-info-fg)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
-              onClick={() => setViesBannerDismissed(true)}
-              aria-label={t('fm.action.close') ?? 'Cerrar'}
-            >×</button>
-          </div>
-        </div>
-      )}
+      <ViesBanner
+        viesPending={viesPending}
+        dismissed={viesBannerDismissed}
+        onDismiss={() => setViesBannerDismissed(true)}
+        t={t}
+        data-testid="ViesBanner__346dd5" />
       {/* ── KPI bar ──────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', flexDirection: 'row', alignItems: 'center',
@@ -675,36 +729,18 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
       </div>
       {/* Shared tab content — same layout as 303 */}
-      {(activeTab === 'invoices' || activeTab === 'incidents' || activeTab === 'receipt') && (
-        <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'invoices' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
-          {activeTab === 'invoices' && (
-            <SourcesTab
-              decl={{ ...decl, sources: liveInvoices ?? decl.invoices }}
-              t={t}
-              data-testid="SourcesTab__346dd5" />
-          )}
-          {activeTab === 'incidents' && (
-            <IncidentsTab
-              decl={decl}
-              blocking={blocking}
-              warning={warning}
-              t={t}
-              onGoToSources={() => setActiveTab('invoices')}
-              data-testid="IncidentsTab__346dd5" />
-          )}
-          {activeTab === 'receipt' && (
-            <AttachmentsTab
-              tableName={FISCAL_DECL_TABLE}
-              recordId={decl.id}
-              token={token}
-              apiBaseUrl={apiBaseUrl}
-              isActive={activeTab === 'receipt'}
-              config={{ allowedMimeTypes: ['application/pdf'] }}
-              key={status}
-              data-testid="AttachmentsTab__349receipt" />
-          )}
-        </div>
-      )}
+      <DetailTabContent
+        activeTab={activeTab}
+        decl={decl}
+        liveInvoices={liveInvoices}
+        blocking={blocking}
+        warning={warning}
+        t={t}
+        onGoToSources={() => setActiveTab('invoices')}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        status={status}
+        data-testid="DetailTabContent__346dd5" />
       {/* Overlays */}
       {showPresent && (
         <PresentModal
