@@ -186,8 +186,9 @@ the other says why it is not. The underlying duplication in AD is untouched, and
 
 ### 3.7 A button AD itself hides is not an action — clause (viii)
 
-Added after the §6 live verification, which is what surfaced the defect: the fix above left exactly
-one misleading entry in the catalog. `processNow` came back `invokeVia:"neo_action"` carrying no
+Added after the §6 live verification, which is what surfaced the defect: the fix above left a
+misleading entry in the catalog — one that the analysis noticed, and, as §6.1 found, a second it did
+not. `processNow` came back `invokeVia:"neo_action"` carrying no
 `actionValues`, no `actionParameter`, no `agentPrompt` and `businessCritical:false` — and it points
 at the **same** `AD_Process` as `documentAction`:
 
@@ -324,12 +325,13 @@ not, and the same holds for the `posted` / `etblkpBulkposting` pair that shares 
 
 Two things this verification did **not** settle:
 
-* **It surfaced defect (viii)**, which §3.7 then fixed — so §3.7 is itself unverified. The owed
-  re-probe is narrow: `processNow` must come back `invokable:false` with a `hidden:` reason,
-  `invokableCount` must drop 4 → 3, and the other three (`posted`, `documentAction`, `generateTo`)
-  must be untouched. The risk to watch is over-reach — a button that AD displays but that the mock
-  path treats as hidden would silently retire real actions, which is why §3.7 treats a missing
-  `AD_Field` as *not* hidden and why the test suite pins that case explicitly.
+* **It surfaced defect (viii)**, which §3.7 then fixed — so §3.7 was itself unverified at the time
+  this section was written. The owed re-probe was pre-specified here as: `processNow` must come back
+  `invokable:false` with a `hidden:` reason, `invokableCount` must drop 4 → 3, and the other three
+  (`posted`, `documentAction`, `generateTo`) must be untouched. The risk to watch is over-reach — a
+  button that AD displays but that the code treats as hidden would silently retire real actions,
+  which is why §3.7 treats a missing `AD_Field` as *not* hidden and why the test suite pins that case
+  explicitly. **Settled in §6.1 — where the pre-specified count turned out to be the wrong number.**
 * **M4 is not re-measured.** The assertion that moves it is now true in the payload, but the metric
   is scored by `/mcp-comparison`, which has not been re-run — so this item's score stays at 0/3
   until it is. Status and score move on different evidence.
@@ -339,3 +341,48 @@ Also owed, and unrelated to the deploy: the MCP client is still serving the **pr
 caveat or `invokableCount`. The server payload is current, so this is client-side tool caching, and
 it needs a client reconnect to confirm — the same reconnect already owed for the five retired
 `generate_*` tools.
+
+### 6.1 §3.7 re-probe — 2026-08-12, and a wrong prediction
+
+Same call after the redeploy. The catalog is now `actionCount:22`, **`invokableCount:2`** — not the
+3 predicted above.
+
+| Action | Result | Blocker reported |
+|---|---|---|
+| `processNow` | `invokable:false` | `hidden:` — the target of §3.7 |
+| `generateTo` | `invokable:false` | `hidden:` — **not predicted** |
+| `createLinesFrom` | `invokable:false` | `no process:` — reached the *third* blocker, so the missing-`AD_Field` guard held |
+| `posted` | `invokeVia:"neo_action"` | — |
+| `documentAction` | `invokeVia:"neo_action"` | — |
+| the other 17 | `invokable:false` | `discarded:` — still reported ahead of `hidden` |
+
+**The number was wrong, not the fix.** The 4 → 3 prediction was written having checked
+`isDisplayed` only for `Processing`. AD says the same about `GenerateTo`, in all three windows that
+have a field for it:
+
+```
+columnname | window                 | tab              | isdisplayed
+GenerateTo | Sales Invoice          | Header           | N
+GenerateTo | Purchase Invoice       | Header           | N
+GenerateTo | Business Partner Info  | Partner Invoices | N
+Processing | Sales Invoice          | Header           | N
+Processing | Purchase Invoice       | Header           | N
+Processing | Business Partner Info  | Partner Invoices | N
+```
+
+So `generateTo` ("Generate Receipt from Invoice") was advertised as callable by an agent on a button
+no Etendo UI has ever rendered. It is the same defect as `processNow`, found by the fix rather than
+by the analysis — which is the outcome a generic fix is supposed to produce and a per-window curation
+would not have.
+
+The over-reach test the prediction was really guarding is the one that passed: every button AD
+*displays* is still callable. `posted`, `documentAction` and `copyFrom` all have `isDisplayed='Y'`
+fields, and none of them is reported `hidden` — `copyFrom` stops at `discarded:`, which is the
+curation talking, not this change. `createLinesFrom` has **no** `AD_Field` at all and falls through
+to `no process:`, which is the `columnWithNoTabFieldIsNotHidden` guard demonstrated live.
+
+One process-note worth keeping: the query behind the wrong prediction filtered `AD_Column.name`
+(the human label — `Process Now`, `Generate To`) instead of `AD_Column.columnname`. It returned one
+row where six exist, and `Posted` only appeared because its label and column name happen to match.
+Cheap mistake, and it is why the assertion was pre-registered — the number being wrong was visible
+in one call instead of becoming a belief.
