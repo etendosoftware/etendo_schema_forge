@@ -703,6 +703,140 @@
 .fm-present-modal__btn--primary { background: var(--fm-gray-900); color: hsl(var(--card)); border-color: var(--fm-gray-900); }
 .fm-present-modal__btn:disabled { opacity: .5; cursor: not-allowed; }
 
+/* ─── "Nueva declaración" modal (NewDeclModal) ─────────────────────── */
+.fm-newdecl-modal { max-width: 560px; }
+/* This modal's body never grows past viewport (compact, fixed set of fields),
+   so it never needs to scroll itself — unlike `.fm-config-modal__body`'s other
+   consumers (e.g. the model catalog modal), which do. Keeping it `visible`
+   here means the Modelo/Año dropdown panels below can render their full
+   (already max-height + overflow-y:auto bounded) height without the body's
+   own `overflow-y: auto` clipping/registering them as extra scrollable
+   content — which was making the whole body scroll instead of just the
+   open dropdown's own option list. */
+.fm-newdecl-modal .fm-config-modal__body { overflow-y: visible; }
+.fm-newdecl-field { margin-bottom: 16px; }
+.fm-newdecl-label {
+  display: block; font: 400 13px/18px var(--fm-font-sans, system-ui);
+  color: var(--fm-fg-2); margin-bottom: 6px;
+}
+.fm-newdecl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fm-newdecl-field__label-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.fm-newdecl-field__label-hint { font: 400 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); }
+
+/* Modelo — trigger button + dropdown panel */
+.fm-newdecl-model-trigger {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 10px;
+  border: 1px solid hsl(var(--border-control));
+  background: var(--fm-bg-card, hsl(var(--card))); cursor: pointer;
+  font: 400 14px/20px var(--fm-font-sans, system-ui); color: var(--fm-fg-1);
+  text-align: left;
+}
+.fm-newdecl-model-trigger:hover { background: var(--fm-bg-subtle); }
+.fm-newdecl-model-trigger:disabled { cursor: not-allowed; opacity: .6; }
+.fm-newdecl-model-trigger__name { flex: 1; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-newdecl-model-trigger__chevron { color: var(--fm-fg-3); flex-shrink: 0; transition: transform .15s; }
+.fm-newdecl-model-trigger[aria-expanded="true"] .fm-newdecl-model-trigger__chevron { transform: rotate(180deg); }
+.fm-newdecl-model-panel {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 5;
+  background: var(--fm-bg-card, hsl(var(--card))); border: 1px solid var(--fm-border-1); border-radius: 12px;
+  box-shadow: 0 8px 24px hsl(var(--foreground) / .14);
+  max-height: 320px; display: flex; flex-direction: column; overflow: hidden;
+}
+.fm-newdecl-model-search {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  border-bottom: 1px solid var(--fm-border-1); flex-shrink: 0; color: var(--fm-fg-3);
+}
+.fm-newdecl-model-search input {
+  flex: 1; border: none; outline: none; background: none;
+  font: 400 13px/18px var(--fm-font-sans, system-ui); color: var(--fm-fg-1);
+}
+.fm-newdecl-model-list { overflow-y: auto; padding: 6px; }
+.fm-newdecl-model-option {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+}
+.fm-newdecl-model-option:hover { background: var(--fm-bg-subtle); }
+.fm-newdecl-model-option--selected { background: hsl(var(--primary) / .08); }
+.fm-newdecl-model-option__body { flex: 1; min-width: 0; }
+.fm-newdecl-model-option__name { font: 600 13px/18px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); }
+.fm-newdecl-model-option__desc { font: 400 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); margin-top: 1px; }
+.fm-newdecl-model-option__check { color: var(--fm-purple-600); flex-shrink: 0; }
+
+/* Año — trigger button + dropdown panel (same idiom as Modelo above, minus the
+   search input and chip/subtitle — SUPPORTED_YEARS is a short flat list). */
+.fm-newdecl-year-trigger {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 10px;
+  border: 1px solid hsl(var(--border-control));
+  background: var(--fm-bg-card, hsl(var(--card))); cursor: pointer;
+  font: 400 14px/20px var(--fm-font-sans, system-ui); color: var(--fm-fg-1);
+  text-align: left;
+}
+.fm-newdecl-year-trigger:hover { background: var(--fm-bg-subtle); }
+.fm-newdecl-year-trigger__value { flex: 1; font-weight: 500; }
+.fm-newdecl-year-trigger__chevron { color: var(--fm-fg-3); flex-shrink: 0; transition: transform .15s; }
+.fm-newdecl-year-trigger[aria-expanded="true"] .fm-newdecl-year-trigger__chevron { transform: rotate(180deg); }
+.fm-newdecl-year-panel {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 5;
+  background: var(--fm-bg-card, hsl(var(--card))); border: 1px solid var(--fm-border-1); border-radius: 12px;
+  box-shadow: 0 8px 24px hsl(var(--foreground) / .14);
+  max-height: 220px; display: flex; flex-direction: column; overflow: hidden;
+}
+.fm-newdecl-year-list { overflow-y: auto; padding: 6px; }
+.fm-newdecl-year-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  font: 500 13px/18px var(--fm-font-sans, system-ui); color: var(--fm-fg-1);
+}
+.fm-newdecl-year-option:hover { background: var(--fm-bg-subtle); }
+.fm-newdecl-year-option--selected { background: hsl(var(--primary) / .08); }
+.fm-newdecl-year-option__check { color: var(--fm-purple-600); flex-shrink: 0; }
+
+/* Frecuencia — segmented pill control (same idiom as ConfigDrawer's tab bar) */
+.fm-newdecl-segmented {
+  display: flex; gap: 4px; padding: 4px; border-radius: 10px;
+  background: var(--fm-bg-subtle); width: 100%;
+}
+.fm-newdecl-segmented__btn {
+  flex: 1; padding: 6px 8px; border-radius: 8px; border: none; cursor: pointer;
+  background: transparent; color: var(--fm-fg-3);
+  font: 400 13px/18px var(--fm-font-sans, system-ui);
+  transition: background .12s, color .12s, box-shadow .12s; white-space: nowrap;
+}
+.fm-newdecl-segmented__btn:hover { color: var(--fm-fg-1); }
+.fm-newdecl-segmented__btn--active {
+  background: var(--fm-bg-card, hsl(var(--card))); color: var(--fm-fg-1); font-weight: 600;
+  box-shadow: 0 1px 3px hsl(var(--foreground) / .1), 0 1px 2px hsl(var(--foreground) / .06);
+}
+
+/* Período — month/quarter grid */
+.fm-newdecl-period-grid { display: grid; gap: 8px; }
+.fm-newdecl-period-grid--monthly   { grid-template-columns: repeat(6, 1fr); }
+.fm-newdecl-period-grid--quarterly { grid-template-columns: repeat(4, 1fr); }
+.fm-newdecl-period-btn {
+  position: relative; padding: 8px 0; border-radius: 8px;
+  border: 1px solid hsl(var(--border-control)); background: var(--fm-bg-card, hsl(var(--card)));
+  color: var(--fm-fg-1); font: 500 13px/18px var(--fm-font-sans, system-ui);
+  cursor: pointer; text-align: center;
+}
+.fm-newdecl-period-btn:hover { background: var(--fm-bg-subtle); }
+.fm-newdecl-period-btn--selected {
+  border-color: var(--fm-purple-600);
+  box-shadow: 0 0 0 2px hsl(var(--primary) / .25);
+}
+.fm-newdecl-period-btn--existing { color: var(--fm-fg-4); background: var(--fm-bg-subtle); }
+.fm-newdecl-period-btn:disabled { cursor: not-allowed; }
+.fm-newdecl-period-btn:disabled:hover { background: var(--fm-bg-subtle); }
+.fm-newdecl-period-btn__dot {
+  position: absolute; top: -3px; right: -3px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--fm-orange-500);
+  border: 1.5px solid hsl(var(--card));
+}
+
+/* Footer "Se creará como…" preview */
+.fm-newdecl-preview { font: 400 13px/18px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); align-self: center; }
+.fm-newdecl-preview strong { color: var(--fm-fg-1); font-weight: 600; }
+
 /* ─── Numbered stepper (303/349 workflow) ──────────────────────────── */
 .fm-stepper {
   display: flex; align-items: center; gap: 0;
