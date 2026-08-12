@@ -9,6 +9,7 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
+    "hidePrintWhen": { "documentStatus": { "notIn": ["UE", "CA", "ETGO_CI", "CJ"] } },
     "customComponents": {
       "topbarRight": "QuotationTopbarActions",
       "bottomSection": "QuotationBottomPanel"

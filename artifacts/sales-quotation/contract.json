@@ -1,8 +1,8 @@
 {
   "version": "0.23.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-08-07T18:34:30.570Z",
-  "checksum": "e0e1b8f90e534da9",
+  "updatedAt": "2026-08-11T21:15:37.418Z",
+  "checksum": "b2b70f37b988b3ab",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -12,6 +12,16 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notIn": [
+            "UE",
+            "CA",
+            "ETGO_CI",
+            "CJ"
+          ]
+        }
+      },
       "hideSaveStatuses": [
         "CA",
         "ETGO_CI",
@@ -1016,6 +1026,16 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notIn": [
+            "UE",
+            "CA",
+            "ETGO_CI",
+            "CJ"
+          ]
+        }
+      },
       "hideSaveStatuses": [
         "CA",
         "ETGO_CI",

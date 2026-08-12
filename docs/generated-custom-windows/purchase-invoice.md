@@ -942,3 +942,17 @@ Three constraints worth knowing:
 The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
 **not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
 different endpoint (`AddPaymentService`), and this modal never used it.
+
+## Print button hidden in every status, list view unaffected — ETP-4714
+
+The generic detail-view "Imprimir" action is hidden unconditionally on this window via
+`"hidePrintWhen": true` in `decisions.json`. Two earlier iterations were tried and superseded:
+first `hidePrintWhen: { documentStatus: "DR" }` (hide only in Borrador — the ticket's original,
+later-corrected ask), then plain `"hidePrint": true`. The plain flag was itself a regression
+caught during review: `hidePrint` drives **both** the detail-view Print button and the list
+view's two print buttons (bulk "Print (N)" + toolbar Print/Report, neither status-gated), and
+this window never had `hidePrint` set before this ticket — its list-view print was visible. The
+final fix passes the literal `true` to `hidePrintWhen` instead, which
+`evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
+the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
+`docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.
