@@ -4,7 +4,9 @@
 **Registered:** 2026-08-06 run (§5), from evidence **B13, B20**.
 **Absorbs:** [IMP-23](IMP-23.md) §9.4's secondary finding, on the human's instruction
 ("dale con IMP-17, absorbiendo el hallazgo §9.4").
-**Status:** 🔧 fix implemented 2026-08-11 (`3db3b4c5`, `08182a77`), live verification pending.
+**Status:** implemented 2026-08-11 (`3db3b4c5`, `08182a77`) and **verified live** 2026-08-11 / 08-12
+(§8), after one probe failed and produced a third commit (`930e484f`). Registry row ✅ with the score
+still 0 / 3 — status and score move on different evidence.
 
 Status lives only in the registry; this file describes the work.
 
@@ -242,9 +244,12 @@ Status codes emitted, by cause:
 - **C14** — IMP-5's clause (ii), the raw `Error executing neo_list: …` on an unknown named filter.
   Closed here, and it had to be (§4.5).
 - **IMP-5 clause (iii)**, *"read-verb errors are wrapped `{"response":{…}}` while write-verb errors
-  are bare"* — all five DAL call sites now render the identical flat envelope, so the asymmetry is
-  gone from this path. Stated as **probably** closed rather than closed: the observation was made
-  live, and only a live re-probe identifies which code path produced the nesting.
+  are bare"* — **adjudicated by the live run (§9.6), and the answer is not the flattering one.** All
+  five DAL call sites do render one flat envelope, and every read *error* probed came back flat. But
+  every read *success* is still wrapped: `neo_list` returns `{"response":{startRow,…,status:0}}`
+  verbatim from the DAL. So the nesting the clause describes was never on the error path this item
+  fixes — it is the success body, which IMP-17 does not touch and should not. The error half of the
+  clause is closed and measured; the asymmetry itself survives and stays with IMP-5.
 - **IMP-5 clause (i)** — C9's flattened batch FK failure with no `committed` key — is **not** touched.
   It is a different funnel (`McpFkResolver` → `handleBatch`), and nothing here changes it.
 
@@ -302,13 +307,103 @@ New coverage:
 
 ---
 
-## 8. Not verified
+## 8. Live verification (2026-08-11 / 08-12, `etendo-go-local`)
 
-- **Live**: nothing probed against `etendo-go-local`. Owed on the next deploy — B13's callout path
-  returning 422, B20 returning `available`, C14 returning 422 rather than 500, §9.4's omitted FK
-  returning the 400 with `partnerAddress` and no row dump, and the REST/React path unchanged.
-- **The non-English `lc_messages` case** (§4.6) is reasoned from the regex, not measured.
-- **Score**: 0 / 3 stands. The mark is 🔧 — written, committed, unit-tested, product unmeasured —
-  which is worth **zero**, the same as ⏳.
+Eight probes on the human's deploy. Seven passed first time; the eighth failed and is the most useful
+entry in this file.
+
+| Probe | Result |
+|---|---|
+| `neo_list(nonexistent-spec-probe, header)` | 404 `not_found`, `field:"spec"`, hint → `neo_discover`, **no `available`** |
+| `neo_list(product, header)` — **B20's exact vector** | 404 `not_found`, `field:"entity"`, `available` = the 25 real entity names |
+| `neo_list(sales-invoice, header, {status:"nonexistent-status-probe"})` — **C14** | 422 `validation_error`, `field:"status"`, `available` = `["completed","pending","partial"]` |
+| `neo_create(conversion-rate-downloader-log, …)` | 405 `method_not_allowed`, **no `hint`**, no `field` |
+| `neo_create(sales-invoice, header, …)` with `etsgDateOperation` after `invoiceDate` — **B13** | 422 `validation_error`, the callout message intact, no `field`, no `status:-4` |
+| `neo_batch` with `partnerAddress` omitted — **IMP-23 §9.4** | ❌ **500** + stripped dump → fixed → ✅ 422 `missingFields:["partnerAddress"]` |
+| `neo_create(product, transactions, {})` | 422 `missingFields` with 4 fields — the IMP-5/IMP-24 path, unbroken |
+| Read successes throughout | still `{"response":{…}}` — see §9.6 |
+
+### 8.1 §9.4 failed live, and the reason was written in §9.4 itself
+
+The first run of the batch probe returned the 500 this change exists to remove. The dump *was* gone
+(`Failing row contains (…)`), which localised the bug precisely: `stripRowDump` ran, so the message
+reached `sanitize`, so `resolvePropertyNameForColumn` had returned `null`.
+
+It returned `null` because core HTML-escapes error messages before they reach us, so the live message
+reads `null value in column &quot;c_bpartner_location_id&quot;`. The pattern required a bare `"`,
+matched nothing, and the violation fell through to the 500 it was supposed to replace.
+
+**IMP-23 §9.4 had recorded the escaping** — *"and `&quot;`-escaped quotes inside a JSON string"* — in
+the same sentence that described the dump. I read that clause as cosmetic noise and fixed the dump,
+which was the loud half. It was load-bearing: it is what the detection has to parse. The lesson is
+narrow and worth keeping: when a finding describes a payload, every oddity in it is a fact about the
+input, and *"ugly but harmless"* is a judgement that has to be earned rather than assumed.
+
+Fixed in `930e484f` — the quote delimiter now accepts `&quot;`/`&#34;` — with a unit test carrying the
+live message verbatim, so the escaped form is pinned by the same evidence that exposed it. The escaping
+is deliberately **not** stripped from the message: after reclassification the Postgres text is gone
+entirely, so the only messages that still carry `&quot;` are the ones that stayed 500, and rewriting
+those would touch the wording `DUPLICATE_KEY_ERROR`'s javadoc says the import UI depends on.
+
+Re-probed after the redeploy: **422, `missingFields:["partnerAddress"]`**, naming the *property* rather
+than `c_bpartner_location_id`, with no Postgres text at all. The REST→MCP translation of §4.4 is
+visible in that result too — the handler returns ETP-3894's 400 and `toMcpBatchFailure` lifts it to the
+422 the agent reads.
+
+### 8.2 A premise of §4.3 was measured false, and the decision survives anyway
+
+§4.3 justified carrying `available` for an entity on the grounds that *"a spec exposes a handful of
+entities"*. `product` exposes **25**, about 300 characters. So the premise is wrong for the largest
+spec, and the honest framing is not "handful" but: the list is the answer to the agent's next
+question, and 300 characters beats a `neo_discover` round trip that returns far more. The
+spec-vs-entity asymmetry stands on that, not on the count.
+
+### 8.3 Two verbs got confirmation for free
+
+`neo_create(product, transactions)` was aimed at the 405 and missed — that entity **does** enable POST
+— returning instead the `missingFields` 422 with all four unresolvable fields. A miss that exercises a
+neighbouring path is still evidence, and it makes the point that 405 is a configuration fact, not a
+guess about which entities look derived.
+
+The 405 was then obtained from a genuinely read-only entity found *using the fix under test*: the
+`available` list from a deliberate 404 named `conversionRateDownloaderLog`. Using the self-correcting
+error to locate the next probe is the behaviour §4.3 was designed for, performed by hand.
+
+### 8.4 IMP-22's C4/C5 vector passed as a side effect
+
+B13's probe deliberately sent both FKs as **display labels** — `businessPartner:"Juan Perez"` and
+`partnerAddress:"Madrid, Avenida Independiente 23"`, the byte-identical label `neo_selectors` had just
+returned. Reaching the callout at all means both resolved, which is exactly the C4/C5 failure IMP-22
+fixed and had listed as unverified. Recorded here and cross-referenced from IMP-22 rather than claimed
+as IMP-17's own result.
+
+### 8.5 What the probes do not settle
+
+- **The read-path 500** (§4.1's deliberate exception) was never provoked: a DAL read failure needs a
+  malformed query the upstream validators now catch first, and IMP-18's `unknownFields` intercepts the
+  obvious vectors. Unit-tested only.
+- **The 409 duplicate-key branch** was not probed — it needs a second write of a colliding value, which
+  the authorization for this run did not cover. Unit-tested only.
+- **The non-English `lc_messages` case** (§4.6) remains reasoned from the regex. §8.1 is a warning about
+  exactly this class of assumption, so it is worth restating that this one is unmeasured.
+
+### 8.6 IMP-5 clause (iii), settled
+
+Every read error came back **flat** (the three 404/422 envelopes above) while every read success came
+back as `{"response":{startRow,…,status:0}}`. So the nesting IMP-5 clause (iii) describes lives in the
+**success** body, not the error path — IMP-17 closes the error half and cannot close the other, which
+was never its funnel. Clause (iii) stays partly open under IMP-5, now with a measured cause rather
+than an inference.
+
+---
+
+## 9. Not verified
+
+- **The REST/React path** was not re-exercised. §4.4 keeps ETP-3894's 400 shape precisely so the UI
+  keeps working, and the unit tests cover the shape, but no browser probe ran.
+- **Score**: 0 / 3 stands. Nine of ten behaviours now have live evidence, but scoring is a
+  `/mcp-comparison` measurement, not a probe count. The registry row moves 🔧 → ✅ on the strength of
+  §8; the 3 / 3 waits on the re-measure.
 - **IMP-23 §9.3's limit does not apply here**: nothing in this change touches a tool description, so a
-  connected client sees the new behaviour on its next call rather than on its next reconnect.
+  connected client sees the new behaviour on its next call rather than on its next reconnect. Confirmed
+  in passing — every probe above ran in a session opened before the deploy.
