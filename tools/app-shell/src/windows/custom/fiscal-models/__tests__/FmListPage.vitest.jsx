@@ -64,6 +64,7 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: ({ title, message, cta }) =>
     React.createElement(
@@ -72,7 +73,15 @@ vi.mock('../FmCommon.jsx', () => ({
       title || message || 'empty',
       cta ?? null,
     ),
-  KpiWidget: ({ value }) => React.createElement('span', { className: 'test-kpi' }, value),
+  // Forwards onClick/active (ETP-4755, click-to-filter) so tests can exercise
+  // FmListPage's own filtering wiring — the rendered textContent stays just
+  // `value` (unchanged) so pre-existing index-based assertions keep working.
+  KpiWidget: ({ value, label, onClick, active }) =>
+    React.createElement(
+      'button',
+      { type: 'button', className: 'test-kpi', 'data-kpi-label': label, 'data-active': String(!!active), onClick },
+      value,
+    ),
 }));
 
 import FmListPage from '../FmListPage.jsx';
@@ -321,8 +330,8 @@ describe('FmListPage — KPI cards row', () => {
   it('shows pending count in KPI', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decls = [
-      makeDecl({ status: 'pending' }),
-      makeDecl({ status: 'pending' }),
+      makeDecl({ status: 'draft' }),
+      makeDecl({ status: 'draft' }),
       makeDecl({ status: 'submitted' }),
     ];
     const { container } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
@@ -330,6 +339,154 @@ describe('FmListPage — KPI cards row', () => {
     const kpis = container.querySelectorAll('.test-kpi');
     // The 2nd KPI is the pending count (index 1)
     expect(kpis[1].textContent).toBe('2');
+  });
+});
+
+// ── KPI cards as click-to-filter (ETP-4755) ───────────────────────────────────
+// Kpi index order (KpiCardsRow): [0] "Por vencer" (upcoming), [1] "Pendientes"
+// (pending/draft), [2] "Incidencias" (incidents). Four declarations, each
+// unambiguously matching (at most) one of the three predicates — draft/ready/
+// submitted statuses and far-past/far-future years so the "upcoming deadline"
+// check is never date-flaky — so a click always narrows to an exact, known set.
+describe('FmListPage — KPI cards as click-to-filter', () => {
+  const pendingOnlyDecl   = makeDecl({ id: 'p1', status: 'draft',     year: 2000, period: 'T1', incidents: { blocking: 0, warning: 0 } });
+  // "Por vencer" is now a rolling 7-day window (ETP-4755), not "any day in the future" — this
+  // fixture's deadline must be pinned relative to a fake "now" (see the test below), not a
+  // far-future year that would fall outside the window against the real current date.
+  const upcomingOnlyDecl  = makeDecl({ id: 'u1', status: 'ready', model: '349', year: 2026, period: '09', incidents: { blocking: 0, warning: 0 } });
+  const incidentsOnlyDecl = makeDecl({ id: 'i1', status: 'submitted', year: 2000, period: 'T1', incidents: { blocking: 1, warning: 0 } });
+  const neutralDecl       = makeDecl({ id: 'n1', status: 'submitted', year: 2000, period: 'T2', incidents: { blocking: 0, warning: 0 } });
+  const allDecls = [pendingOnlyDecl, upcomingOnlyDecl, incidentsOnlyDecl, neutralDecl];
+
+  it('clicking "Pendientes" filters the list to exactly the draft declaration', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const { container } = render(<FmListPage declarations={allDecls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    expect(container.querySelectorAll('tbody tr').length).toBe(4);
+
+    const kpis = container.querySelectorAll('.test-kpi');
+    fireEvent.click(kpis[1]); // Pendientes
+    const rows = container.querySelectorAll('tbody tr');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('T1'); // pendingOnlyDecl's period
+  });
+
+  it('clicking "Incidencias" filters the list to exactly the declaration with incidents', async () => {
+    // FmListPage refetches real per-declaration incidents on mount (ETP-4755
+    // fix) and overwrites the `incidents` field the prop was seeded with — the
+    // fixture's incidents only "stick" if the real fetch reports them too.
+    globalThis.fetch = mockCatalogAndIncidentsFetch({ incidentsByDeclId: { i1: [{ code: 'X', message: 'm', severity: 'block' }] } });
+    const { container } = render(<FmListPage declarations={allDecls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const kpis = container.querySelectorAll('.test-kpi');
+    fireEvent.click(kpis[2]); // Incidencias
+    // Wait for both the real per-declaration incidents fetch to land AND the
+    // filter to apply — either order, this converges once both have happened.
+    await waitFor(() => {
+      const rows = container.querySelectorAll('tbody tr');
+      expect(rows.length).toBe(1);
+      expect(rows[0].textContent).not.toContain('fm.incidents.none');
+    });
+  });
+
+  it('clicking "Por vencer" filters the list to exactly the declaration with an upcoming deadline', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const { container } = render(<FmListPage declarations={allDecls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    // Pin "now" so upcomingOnlyDecl's deadline (349, year 2026, period '09' → October 20, 2026)
+    // falls within the 7-day "Por vencer" window. Faked only after the mount-time catalog fetch
+    // has already resolved, so waitForCatalogLoad's real-timer polling above is unaffected.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 15)); // October 15, 2026
+
+      const kpis = container.querySelectorAll('.test-kpi');
+      fireEvent.click(kpis[0]); // Por vencer
+      const rows = container.querySelectorAll('tbody tr');
+      expect(rows.length).toBe(1);
+      expect(rows[0].textContent).toContain('2026');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('marks the clicked card as active via data-active', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const { container } = render(<FmListPage declarations={allDecls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const kpis = container.querySelectorAll('.test-kpi');
+    expect(kpis[1].getAttribute('data-active')).toBe('false');
+    fireEvent.click(kpis[1]);
+    expect(kpis[1].getAttribute('data-active')).toBe('true');
+    expect(kpis[0].getAttribute('data-active')).toBe('false');
+    expect(kpis[2].getAttribute('data-active')).toBe('false');
+  });
+
+  it('clicking the same active card again clears the filter', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const { container } = render(<FmListPage declarations={allDecls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const kpis = container.querySelectorAll('.test-kpi');
+    fireEvent.click(kpis[1]); // Pendientes — filters to 1 row
+    expect(container.querySelectorAll('tbody tr').length).toBe(1);
+    fireEvent.click(container.querySelectorAll('.test-kpi')[1]); // click again — clears
+    expect(container.querySelectorAll('tbody tr').length).toBe(4);
+    expect(container.querySelectorAll('.test-kpi')[1].getAttribute('data-active')).toBe('false');
+  });
+
+  it('clicking a different card while one is active replaces it (mutual exclusion)', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch({ incidentsByDeclId: { i1: [{ code: 'X', message: 'm', severity: 'block' }] } });
+    const { container } = render(<FmListPage declarations={allDecls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(container.querySelectorAll('.test-kpi')[1]); // Pendientes active
+    expect(container.querySelectorAll('tbody tr').length).toBe(1);
+
+    fireEvent.click(container.querySelectorAll('.test-kpi')[2]); // switch to Incidencias
+    expect(container.querySelectorAll('.test-kpi')[1].getAttribute('data-active')).toBe('false');
+    expect(container.querySelectorAll('.test-kpi')[2].getAttribute('data-active')).toBe('true');
+    await waitFor(() => {
+      const rows = container.querySelectorAll('tbody tr');
+      expect(rows.length).toBe(1);
+      expect(rows[0].textContent).not.toContain('fm.incidents.none');
+    });
+  });
+
+  it('combines (AND) with an existing status filter rather than replacing it', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const { container } = render(<FmListPage declarations={allDecls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    // Apply the "Borrador" status filter (draft only) via the toolbar dropdown.
+    const pills = container.querySelectorAll('.fm-toolbar__pill');
+    fireEvent.click(pills[2]); // status filter pill
+    const options = container.querySelectorAll('[role="option"]');
+    const borradorOpt = Array.from(options).find(o => o.textContent.includes('Borrador'));
+    fireEvent.click(borradorOpt);
+    expect(container.querySelectorAll('tbody tr').length).toBe(1); // only pendingOnlyDecl (draft)
+
+    // Now click "Incidencias" — pendingOnlyDecl has no incidents, and the only
+    // declaration WITH incidents (incidentsOnlyDecl) is 'submitted', not draft —
+    // the AND of both filters must yield zero rows, not the KPI's own 1 result.
+    fireEvent.click(container.querySelectorAll('.test-kpi')[2]);
+    expect(container.querySelectorAll('tbody tr').length).toBe(0);
+    expect(container.querySelector('.fm-empty-state')).toBeTruthy();
+  });
+
+  it('renders the existing empty state when a KPI filter matches zero rows', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    // Only the neutral declaration — matches none of the 3 KPI predicates.
+    const { container } = render(<FmListPage declarations={[neutralDecl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    expect(container.querySelectorAll('tbody tr').length).toBe(1);
+
+    fireEvent.click(container.querySelectorAll('.test-kpi')[1]); // Pendientes
+    expect(container.querySelectorAll('tbody tr').length).toBe(0);
+    expect(container.querySelector('.fm-empty-state')).toBeTruthy();
   });
 });
 
@@ -544,13 +701,13 @@ describe('FmListPage — active-models filtering (regression)', () => {
   it('drives the KPI row from the same activeModels-filtered set (not the raw declarations)', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decls = [
-      makeDecl({ id: '303-a', model: '303', status: 'pending' }),
-      makeDecl({ id: '349-a', model: '349', status: 'pending' }),
+      makeDecl({ id: '303-a', model: '303', status: 'draft' }),
+      makeDecl({ id: '349-a', model: '349', status: 'draft' }),
     ];
     const { container, getByText } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
     await waitForCatalogLoad();
 
-    // Both pending → KPI "pending" count is 2 while both models are active.
+    // Both draft → KPI "pending" count is 2 while both models are active.
     let kpis = container.querySelectorAll('.test-kpi');
     expect(kpis[1].textContent).toBe('2');
 
@@ -562,6 +719,75 @@ describe('FmListPage — active-models filtering (regression)', () => {
     expect(kpis[1].textContent).toBe('1');
   });
 });
+
+// ── submissionMethod sub-label (ETP-4755) ───────────────────────────────────
+// StatusText renders a compact sub-label under the status badge — only when
+// submissionMethod is present AND the row's status is one that can actually
+// carry one (submitted / submitted_ack). Never for submitted_ext (predates the
+// column) and never for a legacy row with no submissionMethod at all.
+
+describe('FmListPage — submissionMethod sub-label (ETP-4755)', () => {
+  it('renders the sub-label for a submitted_ack row with submissionMethod present', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decl = makeDecl({ id: 'sm-1', status: 'submitted_ack', submissionMethod: 'manual_ack' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const statusCell = container.querySelector('tbody tr').querySelectorAll('td')[4];
+    expect(statusCell.textContent).toContain('fm.present.method.manual_ack');
+  });
+
+  it('renders the sub-label for a submitted row with submissionMethod present', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decl = makeDecl({ id: 'sm-2', status: 'submitted', submissionMethod: 'manual_no_receipt' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const statusCell = container.querySelector('tbody tr').querySelectorAll('td')[4];
+    expect(statusCell.textContent).toContain('fm.present.method.manual_no_receipt');
+  });
+
+  it('renders the aeat_telematic sub-label for a submitted_ack row set server-side', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decl = makeDecl({ id: 'sm-3', status: 'submitted_ack', submissionMethod: 'aeat_telematic' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const statusCell = container.querySelector('tbody tr').querySelectorAll('td')[4];
+    expect(statusCell.textContent).toContain('fm.present.method.aeat_telematic');
+  });
+
+  it('does NOT render a sub-label for a submitted_ext row, even with submissionMethod present', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decl = makeDecl({ id: 'sm-4', status: 'submitted_ext', submissionMethod: 'manual_ack' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const statusCell = container.querySelector('tbody tr').querySelectorAll('td')[4];
+    expect(statusCell.textContent).not.toContain('fm.present.method');
+  });
+
+  it('does NOT render a sub-label for a legacy row with no submissionMethod', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decl = makeDecl({ id: 'sm-5', status: 'submitted_ack', submissionMethod: undefined });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const statusCell = container.querySelector('tbody tr').querySelectorAll('td')[4];
+    expect(statusCell.textContent).not.toContain('fm.present.method');
+    // Still shows the bare status badge, unchanged — submitted_ack collapses onto the
+    // 'submitted' i18n key (status-badge unification, ETP-4755); this file's useUI mock is
+    // an identity passthrough, so the badge literally renders the untranslated key.
+    expect(statusCell.textContent).toContain('fm.status.submitted');
+  });
+});
+
+// NOTE: a render-level "Resultado draft-vs-non-draft map selection" test does
+// NOT belong in this file — useFiscalAutoCompute.js is mocked wholesale at
+// the top of this file (a constant `{ computedMap: {} }` for every call), so
+// the real map-selection logic can never be exercised here. See
+// FmListPageAutoCompute.vitest.jsx instead, which mocks the hook with a
+// decls-aware implementation specifically to cover that behavior.
 
 // ── Column headers ────────────────────────────────────────────────────────────
 // The table (and its headers) only renders when activeCount > 0, so these
@@ -765,6 +991,112 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
 });
 
 // ── fiscal-models-catalog — concurrent save / unmount safety ───────────────
+
+// ── Incidencias column — real per-declaration refresh (ETP-4755) ──────────────
+// GET /fiscal303/declarations never carries real blocking/warning counts, so
+// normDecl() defaults every row's incidents to {blocking:0, warning:0}. FmListPage
+// must then fetch the real counts per declaration via fetchDeclarationIncidents
+// and merge them into `decls`, regardless of the declaration's status.
+
+function mockCatalogAndIncidentsFetch({ activeModels = { '303': true, '349': true }, incidentsByDeclId = {} } = {}) {
+  return vi.fn((url) => {
+    const urlStr = String(url);
+    if (urlStr.includes('fiscal-models-catalog')) {
+      return Promise.resolve({ ok: true, json: async () => activeModels });
+    }
+    const incidentsMatch = urlStr.match(/\/incidents\?id=([^&]+)/);
+    if (incidentsMatch) {
+      const id = decodeURIComponent(incidentsMatch[1]);
+      const data = incidentsByDeclId[id] ?? [];
+      return Promise.resolve({ ok: true, json: async () => ({ data }) });
+    }
+    return Promise.reject(new Error(`unmocked fetch: ${urlStr}`));
+  });
+}
+
+// Mocked useUI()/t() echoes i18n keys literally (see the module mock above), so
+// the "no incidents" fallback text renders as the raw key, not the Spanish label.
+const INCIDENTS_NONE_KEY = 'fm.incidents.none';
+
+describe('FmListPage — real incidents refresh (regression, ETP-4755)', () => {
+  it('replaces the stale zero-incidents default with the real count fetched from /fiscal303/incidents', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch({
+      incidentsByDeclId: {
+        'decl-real-1': [{ code: 'AVISO01', message: 'Possible mismatch in box 88', severity: 'warn' }],
+      },
+    });
+    const decl = makeDecl({ id: 'decl-real-1', status: 'submitted' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    await waitFor(() => {
+      const row = container.querySelector('tbody tr');
+      const incidentsCell = row.querySelectorAll('td')[6]; // 7th column = Incidencias
+      expect(incidentsCell.textContent).not.toBe(INCIDENTS_NONE_KEY);
+      expect(incidentsCell.textContent).toContain('1');
+    });
+  });
+
+  it('fetches and shows real incidents for a "draft" declaration too', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch({
+      incidentsByDeclId: {
+        'decl-draft-1': [
+          { code: 'EDID065', message: 'IBAN not allowed', severity: 'block' },
+          { code: 'AVISO01', message: 'Late submission', severity: 'warn' },
+        ],
+      },
+    });
+    const decl = makeDecl({ id: 'decl-draft-1', status: 'draft' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    await waitFor(() => {
+      const row = container.querySelector('tbody tr');
+      const incidentsCell = row.querySelectorAll('td')[6];
+      expect(incidentsCell.textContent).not.toBe(INCIDENTS_NONE_KEY);
+      // One blocking + one warning badge, each rendering its own "1" count.
+      expect(incidentsCell.textContent.match(/1/g)?.length).toBe(2);
+    });
+  });
+
+  it('leaves a declaration with truly no incidents showing "Sin incidencias"', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch({
+      incidentsByDeclId: { 'decl-clean-1': [] },
+    });
+    const decl = makeDecl({ id: 'decl-clean-1', status: 'submitted' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    await waitFor(() => {
+      const row = container.querySelector('tbody tr');
+      const incidentsCell = row.querySelectorAll('td')[6];
+      expect(incidentsCell.textContent).toBe(INCIDENTS_NONE_KEY);
+    });
+  });
+
+  it('calls GET {base}/fiscal303/incidents?id=<declId> with the bearer token for each visible declaration', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch({});
+    const decl = makeDecl({ id: 'decl-url-check' });
+    render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${BASE}/fiscal303/incidents?id=decl-url-check`,
+        expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } })
+      );
+    });
+  });
+
+  // NOTE: a dedicated assertion that the incidents effect does NOT refire when only
+  // a declaration's `status` changes (same id set) is intentionally omitted here.
+  // FmListPage.jsx defines `handleStatusChange` (which would trigger such a change)
+  // but nothing in the current render tree invokes it — there is no row-level status
+  // control wired up yet, so there's no way to exercise this path through the public
+  // component API without reaching into internals. The `declIdsKey` (not `decls`)
+  // dependency array in the source is the mechanism that guards against this; once a
+  // real status-change trigger exists in the UI, this test should be added here.
+});
 
 describe('FmListPage — fiscal-models-catalog concurrent save and unmount safety', () => {
   it('fires two independent PUT requests when the catalog is saved twice in quick succession, with no local-state race', async () => {

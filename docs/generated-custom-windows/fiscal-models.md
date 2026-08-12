@@ -18,7 +18,7 @@ debug contracts.
 ## What this window should allow
 
 - Fetch all declarations from `GET /fiscal303/declarations` and keep status changes in sync via `PUT /fiscal303/declarations?id=`.
-- Auto-compute fiscal boxes for Modelo 303 draft declarations in the background every 3 minutes, updating the result column in the list without user interaction.
+- Auto-compute fiscal boxes for **draft** declarations (303 and 349) in the background every 3 minutes, updating the "Resultado" column in the list without user interaction. **Non-draft** declarations (ready/submitted/submitted_ext/submitted_ack/skipped) get a **one-time** compute on mount instead (no polling) — `FiscalDeclCrudHandler#declToJson` never persists a computed result on the declaration record, so without this the column would be permanently stuck on "—" for every declaration that already left draft, the same class of bug the "Incidencias" column had before it fetched real data (ETP-4755). Both draft and non-draft computations call the same real endpoints (`/fiscal303/boxes`, `/fiscal349/operators`), which recompute from invoice data regardless of declaration status.
 - Display an upcoming deadlines panel for unsubmitted declarations.
 - Filter declarations by model type (303, 349) and status.
 - Navigate into a per-model detail page when a declaration row is clicked, passing precomputed box data so the detail page renders immediately without a duplicate fetch.
@@ -28,20 +28,38 @@ debug contracts.
 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
+`FmListPage` calls `useFiscalAutoCompute` **four times** — once per (model × draft-vs-other)
+combination — because drafts and non-drafts need different refresh semantics:
+
 ```
 FmListPage
-  └── useFiscalAutoCompute(decls, { computeFn, checkModifiedFn, token, apiBaseUrl, pollIntervalMs=180_000 })
+  ├── useFiscalAutoCompute(draftDecls303, { computeFn, checkModifiedFn, token, apiBaseUrl, pollIntervalMs=180_000 })
+  ├── useFiscalAutoCompute(draftDecls349, { computeFn, checkModifiedFn, token, apiBaseUrl, pollIntervalMs=180_000 })
+  ├── useFiscalAutoCompute(otherDecls303, { computeFn, token, apiBaseUrl })   ← no checkModifiedFn
+  └── useFiscalAutoCompute(otherDecls349, { computeFn, token, apiBaseUrl })   ← no checkModifiedFn
         ├── On mount: calls computeFn for every decl in parallel
         │     result → computedMap[decl.id] = { boxes, summary, error, computedAt }
         │     null result → { boxes: null, summary: null, error: 'compute_failed', computedAt }  ← not "computing"
-        └── Polling (every 3 min): calls checkModifiedFn per decl
+        └── Polling (every 3 min, only when checkModifiedFn is passed): calls checkModifiedFn per decl
               if modified → calls computeFn and updates computedMap
 ```
 
+- `draftDecls303`/`draftDecls349` = declarations with `status === 'draft'` — their underlying
+  invoices can still change, so they get the full compute-on-mount + poll-for-changes treatment.
+- `otherDecls303`/`otherDecls349` (ETP-4755) = every non-draft declaration (ready/submitted/
+  submitted_ext/submitted_ack/skipped) — computed **once** on mount and never polled (omitting
+  `checkModifiedFn` makes the hook's polling effect a no-op). Without this, the "Resultado" column
+  was permanently stuck on "—" for any declaration that had left draft, since the backend never
+  persists a computed result on the declaration record (`FiscalDeclCrudHandler#declToJson` has no
+  `result` field) — the same class of bug the "Incidencias" column had before it started fetching
+  real data. Both draft and non-draft instances call the exact same real endpoints, which recompute
+  from invoice data regardless of declaration status.
 - `computeFn` = `computeBoxes303(decl, { token, apiBaseUrl })` → `GET /fiscal303/boxes?year=&period=`
-- `checkModifiedFn` = `checkModified303(decl, sinceMs, { token, apiBaseUrl })` → `GET /fiscal303/modified?year=&period=&since=`
+  (303) or `compute349Operators(decl, { token, apiBaseUrl })` → `GET /fiscal349/operators?year=&period=`
+  (349).
+- `checkModifiedFn` = `checkModified303`/`checkModified349` → `GET /fiscal{model}/modified?year=&period=&since=`.
 - `computedAtRef` tracks the last **successful** compute timestamp per declaration to bound the `since` query parameter. It is intentionally not updated on errors, so `sinceMs` stays at the last success and any subsequent invoice change still triggers a retry.
-- Precomputed data (`decl._precomputed`) is seeded from `computedMap` when a row is opened, so the detail page loads instantly.
+- Precomputed data (`decl._precomputed`) is seeded from whichever map (draft or other) matches the row's status, when it is opened, so the detail page loads instantly instead of redoing its own compute.
 
 ## Status lifecycle
 
@@ -50,24 +68,75 @@ Modelo 303:
 (new) → draft → ready → submitted
                         ↘ submitted_ext
                         ↘ submitted_ack
-          ↓
-        skipped  (can be set from any non-submitted state)
 
 Modelo 349:
-(new) → pending → draft → ready → submitted
+(new) → draft → ready → submitted
 ```
 
 | Status | Color | Meaning |
 |--------|-------|---------|
-| `pending` | orange | Pending — initial state for Modelo 349 before drafting begins |
 | `draft` | blue | Draft — boxes may still be computing |
 | `ready` | green | Ready — review complete, file can be generated |
 | `submitted` | teal | Filed via the standard channel |
 | `submitted_ext` | violet | Filed via an alternative channel — legacy/historical only, see note below |
 | `submitted_ack` | emerald | Filed with receipt acknowledgement |
-| `skipped` | grey | Intentionally skipped |
 
-Status transitions are driven by `StatusPillMenu` inline in the list and by the detail page action buttons. Clicking **"Marcar como 'Presentado'"** opens `PresentModal`, which now offers only **2 submission paths**: `submitted_ack` (upload a PDF/XML receipt) and `submitted` (mark as submitted without a receipt). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
+`pending` and `skipped` were removed (ETP-4755): no write path, frontend or backend, ever produced
+them — the only component that could ever set them (`StatusPillMenu`/`StatusMenu` in
+`FmCommon.jsx`) was never wired into any real page and has been deleted.
+
+Status transitions are driven by the detail page action buttons. Clicking **"Marcar como 'Presentado'"** opens `PresentModal`, which now offers only **2 submission paths**: `submitted_ack` (upload a PDF/XML receipt) and `submitted` (mark as submitted without a receipt). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
+
+### `submissionMethod` — telling apart the 3 paths that lead to "Presentado" (ETP-4755)
+
+A Modelo 303 declaration can reach `submitted_ack` via **two entirely different mechanisms** that
+otherwise leave no trace of which one actually happened: a manual acuse/justificante upload
+(`PresentModal`'s "Con acuse de recibo" path), or a REAL AEAT telematic submission
+(`AeatSubmitFlow` → `AEAT303SubmissionService` → `Fiscal303SubmissionSupport.persistSuccessfulSubmission`
+on success). The `submission_method` column on `ETGO_Fiscal_Decl` (VARCHAR(30), nullable, freeform
+string — same precedent as `declarationStatus`) disambiguates them:
+
+| `submissionMethod` value | Set by | Paired with `status` |
+|---|---|---|
+| `manual_ack` | Frontend PUT (`PresentModal` → `handlePresent`, "Con acuse de recibo") | `submitted_ack` |
+| `manual_no_receipt` | Frontend PUT (`PresentModal` → `handlePresent`, "Sin acuse de recibo") | `submitted` |
+| `aeat_telematic` | Backend only, `Fiscal303SubmissionSupport.persistSuccessfulSubmission` on a real (non-test-mode) AEAT success | `submitted_ack` |
+| *(absent/null)* | Any declaration submitted before this feature shipped | any |
+
+The AEAT telematic path never sends `submissionMethod` in a PUT from the frontend — it is
+server-authoritative, set in the same write as `declarationStatus → submitted_ack`. Both manual
+paths send it alongside the existing `status` field in the same `PUT /fiscal303/declarations?id=`
+call `handlePresent` already made; an explicit `"submissionMethod": null` in that PUT is treated as
+"not sent" (same precedent as `manualData`), never as "clear the value".
+
+**Surfaced in the UI** as a small sub-label next to the "Presentado" badge — only when
+`submissionMethod` is present and only for `submitted`/`submitted_ack` (never `submitted_ext`,
+which predates this column and carries no method): the list row's status cell (`StatusText` in
+`FmListPage.jsx`) and the detail page's "Estado: …" pill (`FmModel303Page.jsx` /
+`FmModel349Page.jsx`). A legacy declaration with no `submissionMethod` shows the bare status badge,
+unchanged — no placeholder or error text.
+
+### Status badge text — `submitted_ack` reads as "Presentado", not "Presentado con acuse" (`statusLabelKey`, ETP-4755)
+
+The status badge itself previously special-cased `submitted_ack` with its own text ("Presentado con
+acuse"), distinct from the plain "Presentado" shown for `submitted` — predating, and directly
+contradicting, the `submissionMethod` sub-label above (which already correctly renders "Acuse
+manual" / "Sin acuse" / "Vía AEAT" underneath the badge). A declaration could end up showing two
+overlapping signals for the same fact.
+
+Fixed with a small local helper, `statusLabelKey(status)` (`status === 'submitted_ack' ? 'submitted'
+: status`), so both statuses now render through the single `fm.status.submitted` i18n key — the
+badge text is identical for `submitted` and `submitted_ack`; only the `submissionMethod` sub-label
+(when present) still tells them apart. The now-orphaned `fm.status.submitted_ack` locale key was
+removed from `en_US.json`, `es_ES.json`, and `es_AR.json`.
+
+**Duplicated, deliberately, in 4 places** — `FmListPage.jsx`, `FmCommon.jsx`, `FmModel303Page.jsx`,
+`FmModel349Page.jsx` — rather than exported once from `fiscalModelsUtils.js`. Adding it there would
+be the natural fix, but ~13 existing tests mock `fiscalModelsUtils.js` without expecting a new named
+export, and changing that surface just to dedupe 4 one-line functions was judged not worth the test
+churn. **Known maintainability tradeoff, logged as a follow-up, not fixed now:** a future 5th status
+value needs the same one-line edit applied in all 4 files, with nothing enforcing that they stay in
+sync.
 
 ## Modelo 303 detail page (`FmModel303Page`)
 
@@ -80,8 +149,6 @@ Three steps (0-based index):
 | Draft | 0 | `draft` |
 | Ready | 1 | `ready` |
 | Submitted | 2 | `submitted*` |
-
-(`skipped` uses index `-1` — no step is highlighted.)
 
 ### Tabs
 
@@ -97,7 +164,7 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), **"Marcar como 'Presentado'"** opening `PresentModal`. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Marcar como 'Presentado'" is. The `MoreVertical` icon still rendered next to the page title is decorative only; it has no menu attached (see "List page toolbar" above for the removal of this page's former kebab).
+Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), **"Marcar como 'Presentado'"** opening `PresentModal`. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Marcar como 'Presentado'" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
 
 ### Identification section (`tipo_declaracion` + bank data)
 
@@ -213,7 +280,8 @@ kinds of AEAT justificante a declaration can end up with:
   justificante PDF inline as base64 (`pdfBase64`) and the backend attaches it to the
   `ETGO_Fiscal_Decl` record server-side, for **both** `SUCCESS` (production) and `TEST_SUCCESS`
   (test mode) results. Production attaches under the normal justificante filename and also moves
-  `DeclarationStatus` → `submitted_ack` (visible as a status change). Test mode attaches under a
+  `DeclarationStatus` → `submitted_ack` and `submissionMethod` → `aeat_telematic` (ETP-4755 — see
+  "`submissionMethod`" above; visible as a status change with a "Vía AEAT" sub-label). Test mode attaches under a
   `TEST-`-prefixed filename (`TEST-justificante-303-<year>-<period>.pdf`) so it's unambiguous in
   the file list, and — per the hard non-authoritative invariant for test submissions — **never**
   touches `DeclarationStatus` or `DeclarationFileName`; no setter is called on the declaration and
@@ -378,13 +446,13 @@ Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalA
 
 ### Tabs
 
-- **Operadores** — operator table with key filter chips and live name/NIF-IVA search. Null `name`/`nif` fields are guarded (`?? ''`) before case-folding to avoid runtime crashes.
-- **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by NIF-IVA. Filter state shows `fm.m349.invoices.filtering_by` + count badge.
+- **Operadores** — operator table with key filter chips and live name/NIF-IVA search. Null `name`/`nif` fields are guarded (`?? ''`) before case-folding to avoid runtime crashes. Each row's "Origen" summary (`FmModel349Page.originByNif`) is keyed by the composite `(nifIva, key)`, not `nifIva` alone — the same counterparty can legitimately appear as two separate operator rows under two different AEAT349 keys (e.g. one row under `E` — Entregas, another under `I` — Servicios recibidos), so each row's origin count now reflects only the invoices that belong to that row's own key (ETP-4755).
+- **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by NIF-IVA. Filter state shows `fm.m349.invoices.filtering_by` + count badge. Each invoice row carries a per-invoice AEAT349 classification key (`E`/`S`/`A`/`I`), resolved server-side by `Fiscal349BoxesHandler#resolveInvoiceKeys` — this is what the Operadores tab's per-key origin scoping (above) relies on.
 - **Rectificaciones / Incidencias / Ficheros** — coming soon.
 
 ### KPIs
 
-Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sourced from `_precomputed.operators`.
+Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sourced from `_precomputed.operators`. Each operator's `vies` value (`'valid'`/`'invalid'`/`'pending'`, driving both the Operadores row badge and the Pendientes VIES count) is derived server-side by `Fiscal349BoxesHandler#mapViesStatus` from the operator's BusinessPartner VIES status (`C_BPartner.EM_OBTIK_VIESStatus`, the same "Estado VIES" field editable on the Contact/BusinessPartner record): `'V'` → `valid`, `'I'` → `invalid`, anything else (null/blank/`'P'`) → `pending` (ETP-4755 — previously this field was never populated, so the badge always defaulted to `pending` regardless of the contact's real verification status).
 
 ### Action bar and kebab menu
 
@@ -393,7 +461,34 @@ The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"
 ### PDF preview and file generation
 
 - `use349Pdf` hook renders a Modelo 349 draft PDF via Handlebars + `renderPdf`. Declarant NIF and org name are read from `_precomputed.orgNif` / `_precomputed.orgName`. The object URL is revoked on unmount to avoid memory leaks.
-- File generation (`generate349File`) prompts for contact name and phone via `FileGenModal` before calling `POST /fiscal349/generate`. Contact/phone are sent in the request body to avoid PII in server logs.
+- File generation (`generate349File`) prompts for the 8 input fields the classic "Parámetros de entrada del generador de declaraciones" popup (`OBTL_TaxReportLauncher`) exposes for Modelo 349, via `FileGenModal`, before calling `POST /fiscal349/generate`. All 8 are sent in the POST body (`application/x-www-form-urlencoded`), never as query params, to avoid PII in server access logs. Field order in the modal — and each field's `OBTL_Tax_Report_Parameter.sequenceNumber` in classic — is:
+
+  | Order | Param | Classic label | Type | Client behavior when blank |
+  |------:|-------|----------------|:----:|------------------------------|
+  | 10 | `fileName` | Nombre del Fichero | TEXT | omitted from the body → backend computes `349_<period>_<year>` (`resolveFileName`) |
+  | 10 | `contact` | Persona de contacto | TEXT | omitted from the body → backend falls back to the current user's display name (`applyContactParams`) |
+  | 20 | `phone` | Teléfono de contacto | TEXT | omitted from the body → backend falls back to `AD_OrgInformation`'s phone for the org (`applyContactParams`) |
+  | 30 | `substitutive` | Sustitutiva | CHECK | never omitted — see below |
+  | 40 | `formerStatement` | Identificador declaración anterior | TEXT | omitted from the body → backend leaves the `FormerStatement` key **out** of `inputParams` entirely (`applyOptionalTextParams`, mirrors classic's TEXT-parameter omission convention — no fallback value exists) |
+  | 80 | `representativeTaxId` | NIF del representante legal | TEXT | same as `formerStatement` — key omitted from `inputParams`, no fallback |
+  | 90 | `navarra` | — | CHECK | never omitted — see below |
+  | 100 | `guipuzcoa` | — | CHECK | never omitted — see below |
+
+  `fileName`/`formerStatement`/`representativeTaxId` are additionally `.trim() || undefined`'d client-side in `FileGenModal`'s confirm handler before being handed to `generate349File`, so whitespace-only input is treated the same as blank. `phone`/`contact` are **not** trimmed (sent as-is if truthy) — a whitespace-only value would still reach the backend, unlike the other three text fields.
+
+  The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
+
+### Generate error banner (`genError`)
+
+`FmModel349Page` mirrors the pre-existing `genError` pattern from `FmModel303Page.jsx`: a local `genError` state, rendered as a destructive banner (`OctagonAlert` icon, `var(--status-destructive-bg)`) directly above the KPI-to-tabs boundary whenever `generate349File` resolves with `{ ok: false, ... }`.
+
+- **Message shown**: `result.serverMessage` when the backend returned one, else the `fm.gen349.error.generic` i18n fallback ("Error al generar el fichero. Por favor, inténtelo de nuevo."). `serverMessage` comes from `parseServerMessage()` (`fiscalModelsUtils.js`), which parses the non-2xx response body as JSON, reads `error.message` (the shape `NeoResponse.error()` always produces server-side: `{"error":{"message": "...", "status": ...}}`), strips a leading Java exception-class prefix (`"...Exception: "`) if present, and unwraps Openbravo `@MessageKey@` delimiters. A non-JSON or unparseable body yields `serverMessage: undefined`, so the banner falls back to the generic key.
+- **Clears**: at the very start of every `handleGenerate` call (so a retry never shows a stale message while the new request is in flight) and when the "Generar fichero 349" button is clicked to reopen `FileGenModal`.
+- **Design decision — no client-side preventive validation, by design.** Enabling `substitutive`/`navarra`/`guipuzcoa` (previously `substitutive` was hardcoded to `"N"` and the other two didn't exist as params) makes two of `AEAT3492010Report`'s own validation exceptions reachable for the first time:
+  - `substitutive = true` with `formerStatement` left blank → `@AEAT349_FormerStatement_Required@`.
+  - `navarra = true` **and** `guipuzcoa = true` together → `@AEAT349_NAVARRA_OR_GUIPUZCOA@`.
+
+  No client-side check blocks either combination before submit — this mirrors classic, which has no `AD_Val_Rule` for either case either; it lets the user attempt the invalid combination and surfaces AEAT's own rejection message after the fact. `handleGenerate` documents this explicitly in a code comment rather than leaving it an unstated gap. The `genError` banner is what makes that real backend message visible to the user (previously, with these params unreachable, there was nothing to surface).
 
 ### Result in list view
 
@@ -405,9 +500,138 @@ The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"
 
 ## List page toolbar (`FmListPage`)
 
-`FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The toolbar's visible actions are, in order: the year/model/status `FilterDropdown` filters, the search and sort icon buttons, the **"Catálogo de modelos (N)"** button (`N = activeCount`), and — only when `activeCount > 0` — **"+ Nueva declaración"**.
+`FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The toolbar's visible actions are, in order: the year/model/status `FilterDropdown` filters, the **"Ordenar"** sort button (opens the field-selector popover described below), the **"Catálogo de modelos (N)"** button (`N = activeCount`), and — only when `activeCount > 0` — **"+ Nueva declaración"**. There is no search input — see "Sort and search" below.
 
 This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`), but its only remaining caller is the model catalog drawer (`FmCatalogPage.jsx`, described below) — `FmModel303Page.jsx` no longer has a 3-dot menu at all; its former Comparar / Configuración / Generar kebab (`MoreOptionsMenu`, plus `CompareDrawer` and this page's own `ConfigDrawer` usage) was removed entirely (see "Modelo 303 detail page" below for where "Generar fichero" now lives). No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
+
+### "More options" menu — favorites and help (`MoreOptionsMenu`, ETP-4755)
+
+The page-title `MoreVertical` icon in all three surfaces — the list header, `FmModel303Page`, and
+`FmModel349Page` — used to render with no `onClick` at all, a leftover from the old kebabs described
+above and below. It now opens a real, shared `MoreOptionsMenu({ favKey, favLabel })` (`FmCommon.jsx`),
+rendering exactly 2 items:
+
+- **"Añadir/Quitar de favoritos"** — wired to the real, server-synced `useFavorites()` context
+  (`toggleFavorite`/`isFavorite`), not a local toggle. All three call sites pass the identical
+  `favKey="fiscal-models"` (and the same `favLabel`, `t('fm.list.title')`), so favoriting from the
+  list header or from either detail page's header keeps all three in sync — there is one favorite
+  for this window, not one per surface.
+- **"Ayuda de esta página"** — wired to a new `useSupportChatSafe()` hook
+  (`components/support/SupportChatContext.jsx`), an additive, no-op-fallback sibling of the existing
+  `useSupportChat()` (same defensive pattern as `useFavorites()`): it calls `actions.setTab('ayuda')`
+  + `actions.open()`, landing on the real `SupportChatWidget` "Ayuda" tab.
+
+**Why not the generic `TopBar.jsx` kebab's `onPageHelp` prop:** a separate, already-logged finding
+(`docs/feedback.md`) found `onPageHelp` is dead app-wide — no window ever sets `meta.onPageHelp`, so
+`TopBar`'s own "Ayuda de esta página" item renders everywhere but does nothing. That gap predates
+this change and is out of scope for a window-level fix. This window's kebab deliberately bypasses it
+and calls the real support-chat mechanism (`useSupportChatSafe`) directly instead of reproducing the
+same dead wiring.
+
+### Model color tags — centralized as CSS custom properties (ETP-4755)
+
+The 303/349 color pairs (background/foreground/border) are defined once, in `fiscal-models.css`, as CSS custom properties (`--fm-model-303-{bg,fg,border}`, `--fm-model-349-{bg,fg,border}`) instead of being hardcoded per usage site. Every place a model tag renders consumes the same pair: list-row model badges (`.fm-model-badge--303/349`), the "Todos los modelos" filter dropdown options, the model catalog cards (`.fm-catalog-card__badge--303/349`), and the "Por vencer" upcoming-deadlines widget (`.fm-upcoming__badge--303/349`). Retinting a model now means editing one variable pair, not hunting down every class that duplicated the same hex values.
+
+### Sort and search (ETP-4755)
+
+**Sort** is a real field-selector popover, not a bare toggle. Clicking "Ordenar" opens a list of sortable fields (`SORT_FIELDS` in `FmListPage.jsx`: Modelo, Año, Período, Estado), explicitly modeled on `components/contract-ui/ListView.jsx`'s existing `sortColumn`/`sortDirection`/`handleSortSelect`/`handleClearSort` pattern — clicking a field sorts ascending, clicking the same field again flips to descending. A **"Limpiar orden"** entry, shown only once a field is active, resets `sortColumn` to `null`, restoring the default order (year + period, most recent first).
+
+**Search** was removed entirely — the search input/icon button is gone from the toolbar. Narrowing the list is handled by the existing year/model/status `FilterDropdown` filters instead.
+
+### "Fichero" column — removed, no download action to offer (ETP-4755)
+
+The list's "Fichero" column (`FileCell`) was first fixed to read the correct backend field
+(`decl.fileName`/`decl.fileExternal` instead of a nonexistent `decl.file` — see git history for that
+intermediate fix) and then removed entirely. Even fixed, the column only ever rendered inert text
+(the generated filename) or an "Externa" badge — there was no click/download action on it. The
+dedicated "Ficheros" tab that used to offer a "Descargar" button for a previously generated file was
+already removed earlier in this same effort, which meant the column had become the *only* remaining
+mention of a declaration's file, with nothing actionable behind it. Rather than keep it as an inert
+historical record, the column (`<th>`/`t('fm.col.file')`, the `<td><FileCell .../></td>` cell, and the
+`FileCell` component itself) was removed from `FmListPage.jsx`. Users now generate and download the
+file on demand from the Modelo 303 detail page's action bar — its existing "Generar fichero" button
+already generates the file AND immediately triggers the browser download in one action.
+
+The underlying `fileName`/`fileExternal` fields are untouched: the backend
+(`FiscalDeclCrudHandler#declToJson`, `com.etendoerp.go`) still serializes them, and
+`Fiscal303SubmissionSupport#persistSuccessfulSubmission` still calls
+`decl.setDeclarationFileName(...)` / `decl.setFileExternal(false)` after every successful production
+AEAT telematic submission — this data is harmless to keep and may back a future feature. The dev-only
+`FmDebugPanel.jsx` mock wiring for `fileName` (`MOCK_FILE_NAME`) is also left in place.
+
+### "Incidencias" list column — real per-declaration fetch (ETP-4755)
+
+The list's "Incidencias" column (and the list's own top "Incidencias" KPI widget, `KpiCardsRow`) always
+showed "Sin incidencias"/zero, disagreeing with a declaration's detail page, because `GET
+/fiscal303/declarations` (`FiscalDeclCrudHandler#declToJson`) never serializes incidents at all — the
+only source of real blocking/warning counts is the dedicated `GET /fiscal{model}/incidents?id=` route
+that the detail pages already call via `fetchDeclarationIncidents`. `normDecl()` defaults every row's
+`incidents` to `{blocking:0, warning:0}` on load and nothing ever refreshed it afterward, regardless of
+the declaration's status (draft or already submitted).
+
+Fixed with a new effect in `FmListPage` (right after the `GET /fiscal303/declarations` mount effect)
+that calls `fetchDeclarationIncidents(d.id, { token, apiBaseUrl, model: d.model })` for **every**
+visible declaration — not gated on `status === 'draft'` the way `useFiscalAutoCompute`'s box/operator
+polling is, since incidents are independent of that pipeline — and merges the result into each
+declaration's `incidents` field in `decls` state. Because both the row cell and the KPI widget read
+`decl.incidents` directly, this one merge fixes both consumers with no separate render-path change.
+The effect is keyed off the joined id set (`declIdsKey`), not the full `decls` array, so a pure
+status-change update (same ids, new object identity) does not re-trigger a full refetch storm.
+`fetchDeclarationIncidents` (`fiscalModelsUtils.js`) gained an optional `model` param (default `'303'`,
+backward compatible) so a 349 declaration hits `/fiscal349/incidents` instead — per
+`AbstractFiscalHandler#handleIncidents`, both routes share the same `ETGO_Fiscal_Decl_Incident` table,
+though only the 303 telematic flow writes real rows there today.
+
+### Incidencias KPI card severity counting — reviewed, already correct (ETP-4755)
+
+`FmModel303Page.jsx`'s "Incidencias" KPI card was suspected of only counting blocking errors and
+silently ignoring warnings. Reviewed and confirmed **not a bug**: `incidentCount = blocking + warning`
+(both severities summed) already drives the card's displayed value; only the badge/icon/color choose
+one dominant tone (danger if any blocking, else warn) for visual styling — the numeric count itself was
+never severity-filtered. No source change was made here. A user seeing an unexpectedly low/zero count
+on the list was hitting the "Incidencias" list-column bug above, not this card.
+
+### KPI cards as click-to-filter toggles (`kpiFilter`, ETP-4755)
+
+The list's 3 KPI cards — "Por vencer", "Pendientes", "Incidencias" — are now clickable filters, not
+just counters. `FmListPage` holds a single `kpiFilter` state (`'upcoming' | 'pending' | 'incidents' |
+null`); clicking a card sets it to that card's key, clicking the same active card again clears it
+back to `null`, and clicking a different card replaces the previous selection — the 3 KPI filters are
+mutually exclusive by construction (one piece of state, not 3 independent booleans).
+
+The resulting `kpiFiltered` set is an **additional AND-condition** layered on top of the existing
+year/model/status `FilterDropdown` filters — it only narrows what those already produced, never
+bypasses or replaces them. Each filter clause reuses the **exact same predicate its own card's count
+is computed from**: `isUpcomingDeadline` (shared with `countUpcomingDeadlines`, see "'Por vencer' KPI"
+below) for "Por vencer", `status === 'draft'` for "Pendientes", and a new `hasIncidents(decl)` helper
+— mirroring the "Incidencias" column's own read of `decl.incidents.blocking`/`.warning` — for
+"Incidencias". Because the displayed count and the filter predicate are literally the same function,
+a card's number and what clicking it actually filters to can never drift apart.
+
+`KpiWidget` (`FmCommon.jsx`) gained optional `onClick`/`active` props to support this. Omitting them
+— as the 303/349 detail-page summary KPI cards still do — preserves the exact old, non-interactive
+rendering (no hover state, no button semantics), so this is fully backward-compatible with every
+existing call site.
+
+### "Por vencer" KPI — real AEAT deadline rules (`getDeadlineDate`, ETP-4755)
+
+`getDeadlineDate` (in `fiscalModelsUtils.js`, feeding `countUpcomingDeadlines` /
+`computeUpcomingDeadlines`) previously used a single oversimplified rule — day 20 of the
+following month/quarter for every (model, frequency) combination. That was wrong: AEAT's real
+deadlines differ by model and frequency, verified against the official
+[sede electrónica](https://sede.agenciatributaria.gob.es/):
+
+| Modelo | Frecuencia | Vencimiento |
+|---|---|---|
+| 303 | Trimestral | 20 abril / 20 julio / 20 octubre; **T4 → 30 enero** del año siguiente (not day 20) |
+| 303 | Mensual | **Día 30** del mes siguiente; **enero se extiende hasta el último día de febrero** (leap-year aware, not a fixed day) |
+| 349 | Trimestral | Idéntico a 303 trimestral: 20 abril / 20 julio / 20 octubre / 30 enero |
+| 349 | Mensual | Primeros 20 días del mes siguiente; **excepción julio** — se consolida con agosto y su plazo pasa a ser el 20 de septiembre (month+2, not month+1) |
+
+Deliberately **not** modeled: AEAT's weekend/public-holiday deadline shift (a real rule, but
+"Por vencer" is a planning-aid KPI, not a compliance calculator — see the code comment above
+`getDeadlineDate` for the full reasoning). Re-verify against the sede electrónica if these dates
+ever look wrong for a given campaign year — AEAT changes them periodically.
 
 ## Model catalog (`FmCatalogPage`)
 
@@ -424,6 +648,20 @@ Each catalog entry declares a `periodicities: string[]` array (not a single `per
 
 Toggling a model on/off in the drawer updates a local `active` map (`{ [modelId]: boolean }`) inside `FmCatalogPage`; closing the drawer calls `onSave(active)`, which `FmListPage` uses to update its own `activeModels` state. That same map is threaded down to `NewDeclModal` (see below) so the "new declaration" flow only ever offers models the tenant actually activated.
 
+### Catalog card height consistency (ETP-4755)
+
+The two catalog cards (303, 349) used to render at visibly different heights, because their
+description strings wrap to a different number of lines inside the same fixed-width column — 303's
+description is short (1 line), 349's is longer (2 lines) — and nothing reserved consistent vertical
+space for the description block. **Not an active/inactive-toggle-state bug**, despite that being the
+original suspicion when the mismatch was first noticed (a red herring from how it happened to be
+spotted) — reproducible in every toggle combination, regardless of which card is active.
+
+Fixed purely in CSS: `.fm-catalog-card__desc` (`fiscal-models.css`) gained `min-height: 40px` plus a
+2-line `-webkit-line-clamp`. Both cards now always render at identical height regardless of content
+length or active state; a future, even-longer description gets truncated instead of growing the card
+taller than its sibling.
+
 ### Persistence (NEO Headless, per-Client)
 
 `activeModels` is not purely in-memory state anymore — it round-trips through NEO Headless and survives reloads:
@@ -435,16 +673,26 @@ Toggling a model on/off in the drawer updates a local `active` map (`{ [modelId]
 
 ### "Nueva declaración" respects the active catalog
 
-`NewDeclModal` (in `FmOverlays.jsx`) receives an `activeModels` prop from `FmListPage` and builds its model `<select>` from `Object.keys(activeModels).filter(id => activeModels[id])` instead of a hardcoded `303`/`349` option list. If the previously-selected default (`303`) is not active, the modal falls back to the first available active model. If **no** model is active, the select and the "Crear" button are disabled and the modal shows `fm.new_decl.no_active_models` instead of leaving an empty, non-functional dropdown. Callers that don't pass `activeModels` (e.g. older tests) keep the legacy behavior of offering both `303` and `349`.
+`NewDeclModal` (in `FmOverlays.jsx`) receives an `activeModels` prop from `FmListPage` and builds its model list from `Object.keys(activeModels).filter(id => activeModels[id])` instead of a hardcoded `303`/`349` option list. If the previously-selected default (`303`) is not active, the modal falls back to the first available active model. If **no** model is active, the model picker and the "Crear declaración" button are disabled and the modal shows `fm.new_decl.no_active_models` instead of leaving an empty, non-functional picker. Callers that don't pass `activeModels` (e.g. older tests) keep the legacy behavior of offering both `303` and `349`.
 
 This in-modal guard is now **defense in depth**: `FmListPage`'s "+ Nueva declaración" toolbar button only renders when `activeCount > 0` (see below), so in practice `NewDeclModal` should never open with zero active models. It stays in place in case the toolbar is customized further or the modal is reused elsewhere.
+
+#### Restyle — searchable model picker, Año dropdown, Frecuencia pills, and duplicate-declaration awareness
+
+`NewDeclModal` was restyled from a plain 3-`<select>` form into the richer modal chrome the rest of `FmOverlays.jsx` already used (`.fm-config-modal` header/body/footer, same as `PresentModal`/`FileGenModal`/`ConfigDrawer`). Behaviorally, `onConfirm` still fires with the exact same shape, `{ model, year, period, status: 'draft' }` — this was a markup/CSS change only, plus one additive feature described below.
+
+- **Modelo** is now a button that opens a searchable dropdown (`ModelSelectMenu`, a private helper in `FmOverlays.jsx`) — one row per active model, each showing the model-number badge, its catalog name and description (reusing the same `fm.catalog.{id}.name` / `.desc` keys `FmCatalogPage.jsx` already relies on, so the row content stays in sync with the catalog automatically), and a search input that filters by number or name. It closes on outside-click via the same ref+`mousedown`-listener idiom used elsewhere in this file.
+- **Año** is now a button-triggered dropdown (`YearSelectMenu`, another private helper in `FmOverlays.jsx`) instead of a `<select>` — mechanically a simplified sibling of the Modelo dropdown: same button + outside-click-closing panel + checkmark on the selected row, backed by `SUPPORTED_YEARS` sorted most-recent-first. It skips the parts that don't apply to a short flat list of year numbers — no search input, no chip, no subtitle — just the year label and, on the selected row, a checkmark.
+- **Frecuencia** is a new segmented pill control (Trimestral/Mensual) that drives which **Período** grid is shown: 4 quarter buttons (`T1`–`T4`) or a 6×2 grid of month buttons (`01`–`12`). Switching frequency resets the selected period to the first value of the new list.
+- **Duplicate-declaration awareness — disabled, no message (updated)**: `NewDeclModal` accepts an optional `existingDeclarations` prop — `FmListPage` passes its own `decls` state. Any period button that already has a declaration for the currently selected model+year renders grayed out with a small dot badge (`.fm-newdecl-period-btn--existing` + `.fm-newdecl-period-btn__dot`) **and is disabled** (real HTML `disabled` attribute — it cannot be clicked or selected). There is **no message of any kind** about it: the warning banner this modal used to show (`fm.new_decl.duplicate_warning`, "Si continúas, se creará una complementaria") was removed entirely, because that copy is factually wrong for many cases (AEAT renamed the concept to "rectificativa" for periods from Q3‑2024/Sept‑2024 onward, and even for older periods a correction is only valid when it favors the Treasury) and because a duplicate submission 500s server-side today (`FmListPage.jsx`'s `handleNewDecl` swallows the failure in an empty `.catch(() => {})`). Disabling the period, without explaining why, is a deliberate stopgap until the complementaria/rectificativa flow gets proper data-model and business-rule support — this UI path can no longer submit a duplicate period, so it no longer exercises that broken backend flow. A `useEffect` keeps the selection off a disabled period automatically: on mount, and on every model/year/frequency change, if the selected period became disabled it jumps to the first still-available period for the current frequency. If **every** period of the current frequency already has a declaration, the "Crear declaración" CTA itself becomes disabled (`allPeriodsTaken`) — still with no explanatory message, per the same "no message" rule. `existingDeclarations` is optional and defaults to "no existing declarations" when omitted, so every caller that predates this feature is unaffected.
+- The footer shows a live "Se creará como Modelo {N} · {período} {año}" preview (`fm.new_decl.will_create_as` / `fm.new_decl.preview`) next to Cancelar / **Crear declaración** (`fm.new_decl.create_cta` — renamed from the generic `fm.action.create` key the button used before this restyle).
 
 ### No active models — hides the CTA and shows a dedicated empty state
 
 `FmListPage` derives `activeCount = Object.values(activeModels).filter(Boolean).length` and uses it for two UX guards:
 
 - **"+ Nueva declaración" toolbar button is not rendered at all** (not just disabled) when `activeCount === 0` — there is nothing productive to create until a model is enabled.
-- **Table region shows a dedicated empty state** — `EmptyState` with only `title = fm.list.empty_no_active_models` ("No tienen modelos activos, configure desde el Catálogo de modelos."). It no longer renders a `cta` button: the always-visible "Catálogo de modelos (N)" toolbar button (see above) already covers that action, so a second, redundant "open catalog" entry point inside the empty state was removed. The `fm.list.empty_no_active_models_cta` locale key still exists in `en_US.json`/`es_ES.json` — it is simply unused in source now. This message takes priority over the generic `fm.list.empty` state even when `filtered` still holds stale rows from before all models were deactivated — the check is `activeCount === 0`, evaluated before `filtered.length === 0`.
+- **Table region shows a dedicated empty state** — `EmptyState` with only `title = fm.list.empty_no_active_models` ("No hay modelos activos. Configúralos desde el Catálogo de modelos."). It no longer renders a `cta` button: the always-visible "Catálogo de modelos (N)" toolbar button (see above) already covers that action, so a second, redundant "open catalog" entry point inside the empty state was removed. The `fm.list.empty_no_active_models_cta` locale key still exists in `en_US.json`/`es_ES.json` — it is simply unused in source now. This message takes priority over the generic `fm.list.empty` state even when `filtered` still holds stale rows from before all models were deactivated — the check is `activeCount === 0`, evaluated before `filtered.length === 0`.
 
 The full precedence in the table region is: `!catalogLoaded` (the "Cargando…" loading state — see Persistence above) → `activeCount === 0` (this empty state) → `filtered.length === 0` (generic `fm.list.empty`) → the real table.
 
@@ -457,6 +705,28 @@ The full precedence in the table region is: `!catalogLoaded` (the "Cargando…" 
 - `modelOptions` (the "Todos los modelos" filter dropdown) is filtered to `.filter(opt => activeModels[opt.value])`, so a deactivated model's option disappears from the dropdown along with its declarations.
 
 Practical effect: deactivating a model in the catalog immediately hides all of its existing declarations from the list and KPI cards, and removes it from the model filter — nothing is deleted, and reactivating the model in the catalog makes its declarations reappear.
+
+### Downstream consumer outside this window: the sales/purchase-invoice "Correctiva del 349" gate (ETP-4755)
+
+`GET /fiscal-models-catalog` (see "Persistence" above) is a generic, per-client endpoint — not
+scoped to the `fiscal-models` spec — so it is reachable cross-spec.
+`tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx` — the shared component
+behind both `sales-invoice`'s and `purchase-invoice`'s "Rectificaciones" tab — now calls this same
+endpoint (mirroring how its own `YearPickerSelect` already calls the cross-spec
+`/fiscal-calendar/year`) and only shows its "Correctiva del 349" checkbox panel (plus the dependent
+AEAT year/period/base-amount fields) when a local `model349Active` flag — derived from the fetch,
+mirroring `FmListPage`'s own `activeModels`/`catalogLoaded` shape — confirms `349: true`.
+
+**Fail-closed in every failure mode**, mirroring `NewDeclModal`'s own convention: hidden while the
+fetch is loading, on a non-200 response, on a network error, and on a malformed/missing-key JSON
+body — never a flash of visible-then-hidden. The read-only "Modelo 349" grid-column badge
+(`CorrectivaBadge`) is explicitly **not** gated — it keeps showing regardless of catalog state; only
+the interactive checkbox is affected. Full write-up of the invoice-side behavior:
+`purchase-invoice.md`'s "Factura Rectificativa" section.
+
+**Known non-blocking follow-up:** toggling 349 off does not clear or warn about an already-`true`
+`aEAT349IsCorrective` value on existing invoice lines — the checkbox simply becomes invisible while
+the underlying data (and the read-only grid badge) stays intact.
 
 ## Key files
 
@@ -472,7 +742,7 @@ Practical effect: deactivating a model in the catalog immediately hides all of i
 | `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels) |
 | `models/303/AeatSubmitFlow.jsx` | AEAT electronic submission flow (ETP-4456) — confirm/submit/result, `POST /fiscal303/submit` |
 | `models/349/FmModel349Page.jsx` | Modelo 349 detail |
-| `FmCommon.jsx` | Shared components: `NumberedStepper`, `ResultPill`, `StatusPillMenu`, `SummaryCard` |
+| `FmCommon.jsx` | Shared components: `NumberedStepper`, `ResultPill`, `SummaryCard` |
 | `FmOverlays.jsx` | Modals and drawers: `PresentModal` (2 manual paths + opt-in `aeat_telematic` sentinel path), `FileGenModal`, `NewDeclModal`, `ConfigDrawer` |
 | `FmDebugPanel.jsx` | Developer panel (keystroke-activated) for testing with fixture data |
 
@@ -482,7 +752,7 @@ Practical effect: deactivating a model in the catalog immediately hides all of i
 |--------|------|---------|
 | `GET` | `/fiscal303/declarations` | FmListPage — fetch all declarations |
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
-| `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client) |
+| `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client); also consumed cross-spec by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above |
 | `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client) |
 | `GET` | `/fiscal303/boxes?year=&period=` | `computeBoxes303` |
 | `GET` | `/fiscal303/modified?year=&period=&since=` | `checkModified303` |
@@ -492,6 +762,8 @@ Practical effect: deactivating a model in the catalog immediately hides all of i
 | `GET` | `/session` | FmModel303Page — org NIF/nombre for file header |
 | `GET` | `/fiscal349/operators?year=&period=` | `compute349Operators` — returns operators + invoices + orgNif/orgName |
 | `GET` | `/fiscal349/modified?year=&period=&since=` | `checkModified349` |
-| `POST` | `/fiscal349/generate` (body: year, period, phone, contact) | `generate349File` |
+| `POST` | `/fiscal349/generate` (body: year, period, phone, contact, fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa) | `generate349File` |
 
 All query parameters are built with `URLSearchParams` to ensure correct encoding.
+
+**Error response shape (`/fiscal349/generate` and siblings).** A non-2xx response from any `AbstractFiscalHandler`-based endpoint (including `/fiscal349/generate`) carries a JSON body of the shape `{"error":{"message": "<text>", "status": <int>}}` — the standard `NeoResponse.error()` envelope, same for every NEO Headless endpoint, not something specific to this feature. On the frontend, `generate349File` treats any `!res.ok` as failure: it reads the response text, feeds it through `parseServerMessage()` to extract and clean `error.message` (see "Generate error banner" above for the exact parsing steps), and returns `{ ok: false, error: 'http_<status>', serverMessage }` instead of throwing — `handleGenerate` in `FmModel349Page.jsx` is what turns that into the visible `genError` banner. A network-level failure (fetch throws) returns `{ ok: false, error: 'network' }` with no `serverMessage`, which also falls back to the generic banner text.

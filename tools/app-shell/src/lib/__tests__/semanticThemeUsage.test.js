@@ -40,6 +40,11 @@ const DATA_COLOR_LITERALS = new Map([
   ['windows/custom/sales-invoice/ReversedInvoicesPanel.jsx', new Set([
     'text-purple-700', '#f4f1fd', '#c6b6f7',
   ])],
+  // Model-tag colors for the fiscal models list (303 blue / 349 purple), no
+  // existing semantic precedent — same rationale as ReversedInvoicesPanel above.
+  ['windows/custom/fiscal-models/fiscal-models.css', new Set([
+    '#f0faff', '#0075ad', '#ade4ff', '#f4f1fd', '#4316ca', '#c6b6f7',
+  ])],
 ]);
 
 const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\brgba?\(\s*\d|\bhsl\(\s*\d|['"](?:white|black)['"]|\b(?:bg|text|border|ring|outline|fill|stroke)-(?:white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-[0-9]{2,3})?\b/gi;

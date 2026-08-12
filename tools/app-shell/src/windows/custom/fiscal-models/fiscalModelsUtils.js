@@ -284,12 +284,17 @@ const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
  * them — left untouched, it's for a separate, not-yet-built casilla-validation feature.
  * Returns `{ blocking, warning, items }` on success, or the all-zero empty shape when
  * token/apiBaseUrl/id are missing or the request fails — safe to always destructure.
+ *
+ * `model` selects which route to hit (`303` by default). Per `AbstractFiscalHandler#handleIncidents`,
+ * `/fiscal303/incidents` and `/fiscal349/incidents` are both backed by the same
+ * `ETGO_Fiscal_Decl_Incident` table, so a 349 declaration can be queried the same way — it will
+ * simply come back empty today, since only the 303 telematic submission flow writes rows there.
  */
-export async function fetchDeclarationIncidents(id, { token, apiBaseUrl } = {}) {
+export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model = '303' } = {}) {
   if (!token || !apiBaseUrl || !id) return EMPTY_INCIDENTS;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    const res = await fetch(`${base}/fiscal303/incidents?id=${encodeURIComponent(id)}`, {
+    const res = await fetch(`${base}/fiscal${model}/incidents?id=${encodeURIComponent(id)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return EMPTY_INCIDENTS;
