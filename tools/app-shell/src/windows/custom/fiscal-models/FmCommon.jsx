@@ -1,22 +1,99 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
+import { MoreVertical, Star, HelpCircle } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { STATUS_COLOR, STATUS_ICON, STATUS_ORDER } from './fiscalModelsUtils.js';
+import { cn } from '@/lib/utils.js';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu.jsx';
+import { useFavorites } from '@/components/layout/FavoritesContext';
+import { useSupportChatSafe } from '@/components/support/SupportChatContext.jsx';
+import { STATUS_COLOR, STATUS_ICON } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
 
+// ── "More options" kebab — list header + 303/349 detail headers ──────────
+// Mirrors the two working items the generic AD-window kebab (TopBar.jsx /
+// DetailView.jsx) offers: "Add to favorites" and page help. Both are wired
+// straight to the same shared, functioning mechanisms those use —
+// FavoritesContext (real, server-synced) and the SupportChatWidget's Ayuda
+// tab (the app's actual working help surface — TopBar's own onPageHelp prop
+// is never populated by any window today, so mirroring it verbatim would
+// just reproduce a dead button; see docs/feedback.md).
+export function MoreOptionsMenu({ favKey, favLabel }) {
+  const ui = useUI();
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const { actions: supportActions } = useSupportChatSafe();
+  const favActive = favKey ? isFavorite(favKey) : false;
+
+  const handleHelp = () => {
+    supportActions.setTab('ayuda');
+    supportActions.open();
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="fm-more-options-trigger"
+          aria-label={ui('more')}
+          data-testid="fm-more-options-trigger"
+        >
+          <MoreVertical size={16} strokeWidth={1.75} data-testid="MoreVertical__fmcommon" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52" data-testid="fm-more-options-content">
+        {favKey && (
+          <DropdownMenuItem onClick={() => toggleFavorite(favKey, favLabel)} data-testid="fm-more-options-favorite">
+            <Star
+              className={cn(
+                'h-4 w-4 mr-2',
+                favActive ? 'fill-accent-highlight text-accent-highlight' : 'text-muted-foreground'
+              )}
+              data-testid="Star__fmcommon" />
+            {favActive ? ui('removeFromFavorites') : ui('addToFavorites')}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onClick={handleHelp} data-testid="fm-more-options-help">
+          <HelpCircle className="h-4 w-4 mr-2 text-muted-foreground" data-testid="HelpCircle__fmcommon" />
+          {ui('pageHelp')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ── KPI Widget — horizontal card (303 & 349) ──────────────────────
-export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, value, valueColor }) {
+// `onClick` + `active` (ETP-4755, KPI-cards-as-filters): opt-in click-to-filter variant.
+// Cards used without `onClick` (349/303 detail pages' plain summary KPIs) render exactly as
+// before — `active`/hover styling and the button semantics below only kick in when a handler
+// is actually passed, so this stays backward-compatible with every existing call site.
+export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, value, valueColor, onClick, active }) {
   const [hovered, setHovered] = React.useState(false);
+  const clickable = typeof onClick === 'function';
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={onClick}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-pressed={clickable ? Boolean(active) : undefined}
+      onKeyDown={clickable ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); }
+      } : undefined}
       style={{
         display: 'flex', flexDirection: 'row', alignItems: 'center',
         padding: '8px 8px 8px 12px', gap: 12, height: 68,
-        background: hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))', border: '1px solid hsl(var(--border-subtle))',
-        boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
-        borderRadius: 8, flex: 1, minWidth: 0, cursor: 'default',
-        transition: 'background .15s',
+        background: active ? 'var(--fm-bg-subtle)' : (hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))'),
+        border: active ? '1px solid var(--fm-gray-900)' : '1px solid hsl(var(--border-subtle))',
+        boxShadow: active
+          ? 'inset 0 0 0 1px var(--fm-gray-900), 0px 1px 2px hsl(var(--foreground) / 0.05)'
+          : '0px 1px 2px hsl(var(--foreground) / 0.05)',
+        borderRadius: 8, flex: 1, minWidth: 0, cursor: clickable ? 'pointer' : 'default',
+        transition: 'background .15s, border-color .15s',
       }}>
       <div style={{
         width: 40, height: 40, background: 'hsl(var(--card))',
@@ -54,58 +131,20 @@ export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, 
   );
 }
 
+// statusLabelKey (ETP-4755): `submitted_ack` shares `submitted`'s badge text — the "how"
+// (manual ack / no receipt / real AEAT ack) belongs only in the submissionMethod sub-label
+// shown alongside the pill, never inside the badge text itself.
+function statusLabelKey(status) {
+  return status === 'submitted_ack' ? 'submitted' : status;
+}
+
 export function StatusPill({ status }) {
   const t = useUI();
   const color = STATUS_COLOR[status] ?? 'grey';
   return (
     <span className={`fm-status-pill fm-status-pill--${color}`}>
-      {STATUS_ICON[status]} {t(`fm.status.${status}`) ?? status}
+      {STATUS_ICON[status]} {t(`fm.status.${statusLabelKey(status)}`) ?? status}
     </span>
-  );
-}
-
-export function StatusMenu({ current, onSelect, onClose }) {
-  const t = useUI();
-  const ref = useRef(null);
-  useEffect(() => {
-    const handler = (e) => { if (!ref.current?.contains(e.target)) onClose(); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-  return (
-    <div className="fm-status-menu" ref={ref} role="listbox">
-      {STATUS_ORDER.map(s => (
-        <button
-          key={s}
-          role="option"
-          aria-selected={s === current}
-          className={`fm-status-menu__item${s === current ? ' fm-status-menu__item--active' : ''}`}
-          onClick={() => { onSelect(s); onClose(); }}
-        >
-          <span className={`fm-status-dot fm-status-dot--${STATUS_COLOR[s]}`} />
-          {t(`fm.status.${s}`)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export function StatusPillMenu({ status, onStatusChange }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="fm-status-pill-menu">
-      <button className="fm-status-pill-menu__trigger" onClick={() => setOpen(o => !o)} aria-haspopup="listbox">
-        <StatusPill status={status} data-testid="StatusPill__1775af" />
-        <span className="fm-status-pill-menu__caret" aria-hidden="true">▾</span>
-      </button>
-      {open && (
-        <StatusMenu
-          current={status}
-          onSelect={onStatusChange}
-          onClose={() => setOpen(false)}
-          data-testid="StatusMenu__1775af" />
-      )}
-    </div>
   );
 }
 

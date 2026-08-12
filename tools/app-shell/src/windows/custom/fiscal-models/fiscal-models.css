@@ -636,6 +636,15 @@
 .fm-btn--primary { background: var(--fm-gray-900); border-color: var(--fm-gray-900); color: hsl(var(--card)); font-weight: 600; }
 .fm-btn--primary:hover { background: var(--fm-gray-800); }
 .fm-btn--danger { background: var(--fm-danger-bg); border-color: var(--fm-danger-border); color: var(--fm-danger-fg); }
+/* "More options" kebab trigger — list header + 303/349 detail headers (FmCommon.jsx MoreOptionsMenu) */
+.fm-more-options-trigger {
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 2px; flex-shrink: 0;
+  background: transparent; border: none; border-radius: 8px; cursor: pointer;
+  color: hsl(var(--text-disabled));
+  transition: background .15s, color .15s;
+}
+.fm-more-options-trigger:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
 /* Pill buttons for config modal footer */
 .fm-btn--cancel-pill {
   font: 400 14px/20px var(--fm-font-sans, system-ui);
