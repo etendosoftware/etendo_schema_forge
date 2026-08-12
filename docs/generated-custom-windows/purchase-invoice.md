@@ -520,33 +520,14 @@ blank/non-positive case also shows the `cpConversionRateRequired` inline error;
 on `registerPayment`; the backend recomputes the account-currency amount authoritatively.
 
 **Rate persistence on drafts (ETP-4841).** A rate typed by the user is stored on the draft and
-shown back when the draft is reopened — it is not re-derived from the system rate. Three parts:
-
-- The `invoicePayments` action returns `conversionRate` on every row
-  (`FIN_Payment.financialTransactionConvertRate`), so the row the history popup hands to the edit
-  modal carries the stored rate.
-- The backend stores that rate **verbatim** — `PaymentCurrencyConverter.applyTransactionAmountAndRate`
-  writes the rate and the account-currency amount directly instead of going through
-  `FIN_AddPayment.setFinancialTransactionAmountAndRate`, which recomputes
-  `rate = txnAmount / amount` "to correct rounding that occurs in the UI". That core correction
-  assumes Classic's Add Payment, where the user edits the converted *amount*; here the user edits
-  the *rate* and the amount is derived, so it silently mangled the stored value (58.70 × 0.89 →
-  52.24 → 0.889948892674617). The same recompute is commented out in core's
-  `AdvPaymentMngtDao.getNewPayment` (core bug 17829). This applies to the modal path and to the
-  bank-reconciliation path, which share `createDraftPayment`.
-- The modal seeds the stored rate exactly once per visit to the currency pair it was saved for, so
-  neither a late `validate-exchange-rate` response, nor a date change, nor a later manual edit can
-  overwrite it. The reseed key is the **account currency, not the account id** — the rate belongs to
-  the currency pair:
-
-| Action in a reopened draft (USD invoice, rate 0.89 saved on a EUR account) | Rate field |
-|---|---|
-| nothing touched, or the payment date changed | `0.89` |
-| switch to another EUR account (Caja → Banco) | `0.89` (same USD→EUR pair) |
-| switch to a GBP account | DB USD→GBP rate, or empty when none exists |
-| switch to a USD account (= invoice currency) | field hidden, `conversionRate` omitted from the payload |
-| back to a EUR account | `0.89` re-seeded |
-| user retypes the rate | whatever they typed, never overwritten |
+shown back when the draft is reopened — it is not re-derived from the system rate. The mechanism
+is shared with the collection side and documented in full in
+[`sales-invoice.md`](sales-invoice.md#multi-currency-support-in-the-cobrospagos-modal--etp-4504):
+the `invoicePayments` row carrying `conversionRate`, the verbatim backend store in
+`PaymentCurrencyConverter.applyTransactionAmountAndRate` (bypassing core's
+`rate = txnAmount / amount` recompute, which mangles a user-typed rate), the once-per-currency-pair
+reseed keyed on the **account currency rather than the account id**, and the table of what each
+action in a reopened draft does to the rate field. None of it is payment-side specific.
 
 ### F2 — Credit filtered by invoice currency
 
