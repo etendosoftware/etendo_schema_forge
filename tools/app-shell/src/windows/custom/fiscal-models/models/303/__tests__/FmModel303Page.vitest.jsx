@@ -21,6 +21,7 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -45,10 +46,13 @@ vi.mock('../../../FmCommon.jsx', () => ({
 vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
   IncidentsTab: () => null,
-  FilesTab: () => null,
 }));
 vi.mock('../FmBoxes303.jsx', () => ({
-  default: () => React.createElement('div', { 'data-testid': 'fm-boxes-303' }, 'boxes'),
+  // Surfaces the `readOnly` prop as a data attribute so tests can assert
+  // CasillasTab correctly threads readOnly={isSubmitted} down to FmBoxes303.
+  default: ({ readOnly }) => React.createElement(
+    'div', { 'data-testid': 'fm-boxes-303', 'data-readonly': String(!!readOnly) }, 'boxes'
+  ),
 }));
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: () => null,
@@ -120,6 +124,17 @@ describe('FmModel303Page — rendering', () => {
     expect(screen.getByTestId('fm-boxes-303')).toBeTruthy();
   });
 
+  it('passes readOnly=false to FmBoxes303 for a non-submitted status (draft)', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(screen.getByTestId('fm-boxes-303').getAttribute('data-readonly')).toBe('false');
+  });
+
+  it('passes readOnly=true to FmBoxes303 for a submitted status', () => {
+    const submittedDecl = { ...BASE_DECL, status: 'submitted' };
+    render(<FmModel303Page decl={submittedDecl} {...defaultProps} />);
+    expect(screen.getByTestId('fm-boxes-303').getAttribute('data-readonly')).toBe('true');
+  });
+
   it('renders the tab bar', () => {
     const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     expect(container.querySelector('[role="tablist"]')).toBeTruthy();
@@ -165,6 +180,37 @@ describe('FmModel303Page — action bar', () => {
     const btns = Array.from(document.querySelectorAll('button'));
     const submitBtn = btns.find(b => b.textContent.includes('fm.action.submit'));
     expect(submitBtn).toBeUndefined();
+  });
+
+  it('renders the Compute (Calcular) button for a non-submitted status (draft)', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const computeBtn = btns.find(b => b.textContent.includes('fm.action.compute'));
+    expect(computeBtn).toBeTruthy();
+  });
+
+  it('hides the Compute (Calcular) button for a submitted status, while Cancelar and Generar fichero 303 remain', () => {
+    const submittedDecl = { ...BASE_DECL, status: 'submitted' };
+    render(<FmModel303Page decl={submittedDecl} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const computeBtn = btns.find(b => b.textContent.includes('fm.action.compute'));
+    const cancelBtn = btns.find(b => b.textContent.includes('fm.action.cancel'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
+    expect(computeBtn).toBeUndefined();
+    expect(cancelBtn).toBeTruthy();
+    expect(genBtn).toBeTruthy();
+  });
+
+  it('hides the Compute (Calcular) button for a submitted_ack status, while Cancelar and Generar fichero 303 remain', () => {
+    const submittedDecl = { ...BASE_DECL, status: 'submitted_ack' };
+    render(<FmModel303Page decl={submittedDecl} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const computeBtn = btns.find(b => b.textContent.includes('fm.action.compute'));
+    const cancelBtn = btns.find(b => b.textContent.includes('fm.action.cancel'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
+    expect(computeBtn).toBeUndefined();
+    expect(cancelBtn).toBeTruthy();
+    expect(genBtn).toBeTruthy();
   });
 });
 
@@ -225,6 +271,13 @@ describe('FmModel303Page — tab navigation', () => {
     const tabLabels = tabs.map(t => t.textContent);
     expect(tabLabels.some(t => t.includes('fm.tab.history'))).toBe(false);
   });
+
+  it('does not render a "Ficheros" tab', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const tabs = screen.getAllByRole('tab');
+    const tabLabels = tabs.map(t => t.textContent);
+    expect(tabLabels.some(t => t.includes('fm.tab.files'))).toBe(false);
+  });
 });
 
 // ── Precomputed data ──────────────────────────────────────────────────────────
@@ -258,13 +311,6 @@ describe('FmModel303Page — tab click switching', () => {
     expect(screen.queryByTestId('fm-boxes-303')).toBeNull();
   });
 
-  it('hides FmBoxes303 when files tab is clicked', () => {
-    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    const tabs = screen.getAllByRole('tab');
-    fireEvent.click(tabs.find(t => t.textContent.includes('fm.tab.files')));
-    expect(screen.queryByTestId('fm-boxes-303')).toBeNull();
-  });
-
   it('shows FmBoxes303 again when boxes tab is re-clicked after switching', () => {
     render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     const tabs = screen.getAllByRole('tab');
@@ -274,32 +320,13 @@ describe('FmModel303Page — tab click switching', () => {
   });
 });
 
-// ── Kebab / MoreOptionsMenu removed ───────────────────────────────────────────
-// The whole MoreOptionsMenu (Comparar / Configuración / Generar) was removed
-// from this page. Comparar and Configuración are gone entirely; Generar
-// fichero moved to a standalone action-bar button (see describe block below).
-
-describe('FmModel303Page — kebab menu removed', () => {
-  it('does not render a kebab options menu trigger button', () => {
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(container.querySelector('button[aria-label="Más opciones"]')).toBeNull();
-  });
-
-  it('never renders a role="menu" element', () => {
-    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(document.querySelector('[role="menu"]')).toBeNull();
-  });
-
-  it('does not render "Comparar" anywhere on the page', () => {
-    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(document.body.textContent).not.toContain('fm.action.compare');
-  });
-
-  it('does not render "Configuración" anywhere on the page', () => {
-    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(document.body.textContent).not.toContain('fm.config.title');
-  });
-});
+// ── Kebab / MoreOptionsMenu ────────────────────────────────────────────────
+// The old MoreOptionsMenu349-style dropdown (Comparar / Configuración / Generar)
+// was removed from this page — Comparar and Configuración are gone entirely;
+// Generar fichero moved to a standalone action-bar button (see describe block
+// below). A NEW, functional MoreOptionsMenu (favorites + help) was added later
+// (ETP-4755) — since FmCommon.jsx is mocked wholesale at the top of this file,
+// its real behavior is covered directly in FmCommon.vitest.jsx instead.
 
 // ── Standalone "Generar fichero" action-bar button ────────────────────────────
 

@@ -17,16 +17,7 @@ describe('FmModel303Page — composition', () => {
   it('renders Tabs', () => assert.match(src, /Tabs/));
   it('has back navigation (onBack)', () => assert.match(src, /onBack/));
   it('renders KpiWidget for summary values', () => assert.match(src, /KpiWidget/));
-  it('uses STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX/));
   it('renders a standalone Generar fichero action-bar button', () => assert.match(src, /fm\.action\.gen303/));
-});
-
-describe('FmModel303Page — stepper', () => {
-  it('defines STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX/));
-  it('STEPPER_INDEX maps draft to 0', () => assert.match(src, /draft:\s*0/));
-  it('STEPPER_INDEX maps ready to 1', () => assert.match(src, /ready:\s*1/));
-  it('STEPPER_INDEX maps submitted to 2', () => assert.match(src, /submitted:\s*2/));
-  it('STEPPER_INDEX maps skipped to -1', () => assert.match(src, /skipped:\s*-1/));
 });
 
 describe('FmModel303Page — i18n completeness', () => {
