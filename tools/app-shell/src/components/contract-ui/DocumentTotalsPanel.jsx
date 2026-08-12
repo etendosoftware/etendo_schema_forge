@@ -25,6 +25,15 @@ import { Checkbox } from '@/components/ui/checkbox';
  *   readOnly               — boolean — when true hides the "+ Add total discount" button
  *   totalDiscountPct       — number from header record (emEtgoTotalDiscount); restores panel on load
  *   onTotalDiscountChange  — callback(pct: number) — called when user changes or removes the discount
+ *   persistedTotals        — optional { grandTotal, netSubtotal, taxAmt } read straight from the
+ *                            backend-persisted header record (e.g. grandTotalAmount/totalLines).
+ *                            When provided AND there is no pendingLine/editingLine, these values are
+ *                            shown as-is instead of recomputing from `lines` — this is what keeps the
+ *                            panel byte-identical to the Grid's "Imp. Total" and to the value shown
+ *                            after the document is completed (ETP-4777). While a line IS actively
+ *                            pending/being edited, the live recompute below is used as before — nobody
+ *                            reported that transient in-progress number as wrong, only what's shown
+ *                            once something is saved.
  */
 export default function DocumentTotalsPanel({
   lines = [],
@@ -36,6 +45,7 @@ export default function DocumentTotalsPanel({
   readOnly = false,
   totalDiscountPct = 0,
   onTotalDiscountChange,
+  persistedTotals = null,
 }) {
   const ui = useUI();
   const [totalDiscountOpen, setTotalDiscountOpen] = useState(totalDiscountPct > 0);
@@ -56,8 +66,16 @@ export default function DocumentTotalsPanel({
     }
   }, [lines.length, pendingLine, totalDiscountPct]);
 
-  const { grossSubtotal, netSubtotal, grandTotal, discountAmt, taxAmt, totalDiscountAmt } =
-    computeDocumentTotals(lines, pendingLine, editingLine, lineConfig, inputPct);
+  const hasPendingEdit = pendingLine != null || editingLine != null;
+  const recomputed = computeDocumentTotals(lines, pendingLine, editingLine, lineConfig, inputPct);
+  const useBaseline = persistedTotals != null && !hasPendingEdit;
+
+  const grossSubtotal = recomputed.grossSubtotal;
+  const discountAmt = recomputed.discountAmt;
+  const totalDiscountAmt = recomputed.totalDiscountAmt;
+  const netSubtotal = useBaseline ? persistedTotals.netSubtotal : recomputed.netSubtotal;
+  const taxAmt = useBaseline ? persistedTotals.taxAmt : recomputed.taxAmt;
+  const grandTotal = useBaseline ? persistedTotals.grandTotal : recomputed.grandTotal;
 
   const fmt = (val) => {
     if (val == null) return '';

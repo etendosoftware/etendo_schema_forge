@@ -63,6 +63,19 @@ export default function LinesBottomSection({
   const currency = data?.['currency$_identifier'] || '';
   const isReadOnly = data?.documentStatus !== 'DR';
 
+  // ETP-4777 — the backend-persisted header total (maintained by the
+  // C_ORDERLINE_TRG2/C_INVOICELINE_TRG2 triggers, same value the Grid's
+  // "Imp. Total" column and the printed document read) is the authoritative
+  // source. DocumentTotalsPanel prefers this over its own recompute whenever
+  // no line is actively pending/being edited — see DocumentTotalsPanel.jsx.
+  const persistedTotals = data?.grandTotalAmount != null
+    ? {
+      grandTotal: data.grandTotalAmount,
+      netSubtotal: data.totalLines ?? null,
+      taxAmt: data.totalLines != null ? data.grandTotalAmount - data.totalLines : null,
+    }
+    : null;
+
   return (
     <div className="flex flex-col">
       <div className="flex">
@@ -158,6 +171,7 @@ export default function LinesBottomSection({
                 readOnly={isReadOnly}
                 totalDiscountPct={resolveTotalDiscountPct(data, lines, totalDiscountPct, totalsField)}
                 onTotalDiscountChange={onTotalDiscountChange}
+                persistedTotals={persistedTotals}
                 data-testid="DocumentTotalsPanel__751847" />
             </div>
           </>
