@@ -2,9 +2,9 @@
 
 **Registry row:** `mcp-improvements-registry.md` → IMP-5 (P1, C1, 2.5 / 5, `com.etendoerp.go`).
 **Registered:** base §12 run, from evidence **A5, A8, W4**.
-**Status:** clauses **(i)**, **(iii)** and **(iv)** implemented 2026-08-12. (i) and (iv) **verified
-live** the same day (§6); (iii) is unit-tested and awaits a redeploy (§7.6). With (iii) the last
-clause is closed. Score unchanged pending a `/mcp-comparison` re-measure.
+**Status:** clauses **(i)**, **(iii)** and **(iv)** implemented and **all three verified live**
+2026-08-12 (§6, §7.6). With (iii) the last clause is closed and the registry row moves to ✅. Score
+unchanged pending a `/mcp-comparison` re-measure.
 
 Status lives only in the registry; this file describes the work.
 
@@ -274,15 +274,44 @@ description already told the agent that unknown names *"come back in `unknownFie
 `data`"* — which the flatten makes literally true instead of approximately. Same shape as §5.2: the
 cheaper direction is the one where the fix makes an existing promise true.
 
-### 7.6 Not verified live
+### 7.6 Live verification (2026-08-12, post-deploy)
 
-The four flattened bodies are unit-tested and **not yet probed live** — the change landed after the
-last redeploy. The probe is a one-liner per verb on the next one (`neo_list` and `neo_get` need no
-authorization; `neo_create`/`neo_update` reuse the §6 write-probe rules).
+All four flattened bodies confirmed, plus the §7.2 not-found. `neo_list` with a projection carrying
+one bad name — which exercises the flatten and IMP-18's lift in one call:
+
+```json
+{"startRow": 0, "endRow": 0, "totalRows": 2,
+ "data": [{"id": "E16EEB…", "documentNo": "10000014", "grandTotalAmount": 1355.2}],
+ "unknownFields": ["nosuchfield_etp4793"]}
+```
+
+Flat, `status:0` gone, the three pagination keys intact, and `unknownFields` **at the top level** —
+§7.3's lift-by-rule working end to end, not just in the unit test. `neo_get` returns `{"data":[{…}]}`
+and the missing-id case returns the §7.2 envelope flat:
+
+```json
+{"status": 404, "error": "not_found",
+ "detail": "No sales-invoice/header with id NONEXISTENT_ETP4793",
+ "seeAlso": "docs(topic:\"reading records\")"}
+```
+
+**Write half — human-authorized probe on `sales-invoice`, cleaned up in the same run.** A header
+created from `neo_defaults` (plus the two fields §7.6's `unresolvedFields` names, `businessPartner`
+and `partnerAddress`), updated, then deleted: `neo_create` and `neo_update` both return
+`{"data":[{…}]}` flat, and `neo_delete` returns `{"deleted":true,"id":"…"}`. So the five CRUD verbs
+now agree on one top-level shape, which is the whole claim of the clause. No pre-existing record was
+touched — the probe wrote and removed its own.
+
+### 7.7 What the probe made visible, and did not fix
+
+The flattened `neo_create` / `neo_update` bodies are ~70 columns wide: every audit flag, every
+`$_identifier`, `_computedColumns`, `recordTime`. That is unchanged by this clause — it was equally
+wide inside the wrapper — but flattening puts it in plain sight, and it is **IMP-20** (write-verb
+projection), already on the board. Recorded here as a confirmation of that item's evidence rather
+than folded in: the two changes have nothing in common but the call site.
 
 ## 8. Not verified / still open
 
-- Clause (iii) live, per §7.6 — the only thing this item owes.
 - The two-op batch case, per §6.2 — recorded as a deliberate omission, not a gap.
 - The score. Status and score move on different evidence: the row can be ✅ per-clause with the score
   still 2.5 / 5 until a `/mcp-comparison` run re-measures it.
