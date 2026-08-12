@@ -355,6 +355,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
+        hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
         noHeaderBorder
         notesField="description"
         dimensionsPanelFieldKeys={["project","costcenter"]}
