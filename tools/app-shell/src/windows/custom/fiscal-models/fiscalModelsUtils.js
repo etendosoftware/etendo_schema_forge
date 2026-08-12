@@ -487,18 +487,83 @@ const COMPLETED_STATUSES = new Set([
   'submitted', 'submitted_ext', 'submitted_ack', 'skipped',
 ]);
 
+/**
+ * Computes the real AEAT filing deadline for a fiscal declaration.
+ *
+ * Rules verified (2026-08) against the official Agencia Tributaria sede electrónica:
+ *   - Modelo 303 plazos: https://sede.agenciatributaria.gob.es/Sede/iva/presentar-declaracion-iva-modelo-303/plazo-presentacion-modelo-303.html
+ *   - Modelo 349 plazos: https://sede.agenciatributaria.gob.es/Sede/todas-gestiones/impuestos-tasas/declaraciones-informativas/modelo-349-decla_____n-recapitulativa-operaciones-intracomunitarias_/plazos-presentacion.html
+ *
+ * ── Quarterly (303 AND 349 — AEAT uses the identical rule for both models) ──
+ *   T1 → April 20, T2 → July 20, T3 → October 20 (same year).
+ *   T4 → January 30 of the FOLLOWING year. NOT day 20 — AEAT explicitly extends
+ *   the last quarter's deadline ("...del último trimestre del año, que deberá
+ *   presentarse durante los treinta primeros días naturales del mes de enero").
+ *
+ * ── Monthly 303 (IVA autoliquidación) ──
+ *   Regular months → day 30 of the following month ("del 1 al 30 del mes
+ *   siguiente"), NOT day 20.
+ *   January        → extended through the LAST DAY OF FEBRUARY (28 or 29,
+ *   leap-year aware) — "hasta el último día del mes de febrero en el caso de
+ *   la autoliquidación correspondiente al mes de enero". This is a fixed
+ *   AEAT extension, not a generic "+1 month, day 30" shift.
+ *
+ * ── Monthly 349 (declaración recapitulativa de operaciones intracomunitarias) ──
+ *   Regular months → first 20 days of the following month → day 20 ("durante
+ *   los veinte primeros días naturales del mes inmediato siguiente").
+ *   July           → EXCEPTION: consolidated with August, filed during the
+ *   first 20 days of SEPTEMBER → day 20 of month+2, not month+1 ("la
+ *   correspondiente al mes de julio, que podrá presentarse durante el mes de
+ *   agosto y los veinte primeros días naturales del mes de septiembre").
+ *   August         → no separate rule needed: August's own "following month"
+ *   deadline is already September 20, which is where July's extended
+ *   deadline lands too — both converge on the same date.
+ *
+ * ── Deliberately NOT modeled: weekend/holiday shifting ──
+ *   AEAT shifts a deadline to the next business day when it falls on a
+ *   weekend or public holiday ("si el vencimiento del plazo... coincide con
+ *   día inhábil, la fecha límite de presentación se traslada al día hábil
+ *   inmediato posterior"). Doing this correctly would require a maintained
+ *   Spanish national-holiday calendar (which also isn't the same calendar as
+ *   AEAT's own "sede electrónica" non-working-day calendar in every year).
+ *   That's out of scope for this KPI: "Por vencer" is a planning aid, not a
+ *   legal compliance calculator, and skipping it only risks the count
+ *   resolving a borderline declaration 1-3 days early/late in years where a
+ *   deadline lands on a weekend. Revisit if this card starts being used for
+ *   anything more binding than a dashboard nudge.
+ *
+ * AEAT deadline rules change periodically (this codebase already tracks a
+ * 2024 AEAT rule change for Modelo 303 boxes elsewhere — see BOX_PARAM_MAP
+ * above). Re-verify against the sede electrónica if these dates look wrong
+ * for a given campaign year.
+ */
 function getDeadlineDate(model, year, period) {
   if (/^T\d$/.test(period)) {
     const q = parseInt(period[1], 10);
-    const month = q === 4 ? 1 : q * 3 + 1;
-    const y = q === 4 ? year + 1 : year;
-    return new Date(y, month - 1, 20);
+    // T4 deadline (both 303 and 349) is day 30 of January, not day 20.
+    if (q === 4) return new Date(year + 1, 0, 30);
+    const month = q * 3 + 1;
+    return new Date(year, month - 1, 20);
   }
   if (/^\d{2}$/.test(period)) {
     const m = parseInt(period, 10);
+
+    if (model === '349') {
+      // July's 349 is consolidated with August → deadline is Sept 20, not Aug 20.
+      if (m === 7) return new Date(year, 8, 20);
+      const nextM = m === 12 ? 1 : m + 1;
+      const y = m === 12 ? year + 1 : year;
+      return new Date(y, nextM - 1, 20);
+    }
+
+    // 303 (and default fallback for any other/unspecified monthly model):
+    // day 30 of the following month, except January which extends to the
+    // last day of February. `new Date(year, 2, 0)` = "day 0 of March" =
+    // the last day of February, automatically leap-year aware.
+    if (m === 1) return new Date(year, 2, 0);
     const nextM = m === 12 ? 1 : m + 1;
     const y = m === 12 ? year + 1 : year;
-    return new Date(y, nextM - 1, 20);
+    return new Date(y, nextM - 1, 30);
   }
   return null;
 }
@@ -634,4 +699,48 @@ export function computeUpcomingDeadlines(decls, limit = 5) {
     .filter(Boolean)
     .sort((a, b) => a.deadline - b.deadline)
     .slice(0, limit);
+}
+
+/**
+ * Number of days the "Por vencer" KPI looks ahead — a rolling window, not "any day in the
+ * future". A deadline exactly `UPCOMING_DEADLINE_WINDOW_DAYS` days from today still counts
+ * (inclusive upper bound); one day further out does not. See `isUpcomingDeadline` below.
+ */
+const UPCOMING_DEADLINE_WINDOW_DAYS = 7;
+
+/**
+ * Per-declaration "is this one due within the next `UPCOMING_DEADLINE_WINDOW_DAYS` days"
+ * predicate — the single source of truth backing the "Por vencer" KPI card, extracted out of
+ * `countUpcomingDeadlines` (ETP-4755, KPI-cards-as-filters) so the KPI's own count and the
+ * list's "Por vencer" filter can never silently drift apart. Deliberately not derived from
+ * `computeUpcomingDeadlines`: that helper is a "top N nearest deadlines for a panel" API
+ * (defaults to `limit = 5`) that never compares against "today" at all — it returns the
+ * nearest deadlines regardless of how far out (or how overdue) they are, which is a different,
+ * legitimate use case ("what's coming up next" vs. this predicate's "is this urgent this
+ * week"). This predicate:
+ *   - reuses the same AEAT deadline rule (`getDeadlineDate`) and the same completed-status
+ *     exclusion (`COMPLETED_STATUSES`), so a presented/skipped declaration is never counted;
+ *   - compares the deadline against the real current date (`referenceDate`, defaults to
+ *     `new Date()` — never mocked/stale), true only when the deadline falls within
+ *     [today, today + UPCOMING_DEADLINE_WINDOW_DAYS] inclusive on both ends. A deadline 80 days
+ *     out (e.g. a 303/period-09 draft due Oct 30 when "today" is Aug 11) is genuinely not
+ *     "upcoming" in any intuitive sense — narrowed from the original unbounded
+ *     "today-or-later" rule for exactly that reason.
+ */
+export function isUpcomingDeadline(decl, referenceDate = new Date()) {
+  if (COMPLETED_STATUSES.has(decl.status)) return false;
+  const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const windowEnd = new Date(today);
+  windowEnd.setDate(windowEnd.getDate() + UPCOMING_DEADLINE_WINDOW_DAYS);
+  const deadline = getDeadlineDate(decl.model, decl.year, decl.period);
+  return deadline != null && deadline >= today && deadline <= windowEnd;
+}
+
+/**
+ * Real count of declarations still pending a real AEAT deadline — used by the "Por vencer"
+ * KPI card. Has no artificial cap — it is a count, not a truncated preview list. See
+ * `isUpcomingDeadline` above for the per-declaration rule this counts.
+ */
+export function countUpcomingDeadlines(decls, referenceDate = new Date()) {
+  return decls.filter(d => isUpcomingDeadline(d, referenceDate)).length;
 }
