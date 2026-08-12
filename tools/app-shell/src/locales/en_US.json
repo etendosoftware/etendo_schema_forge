@@ -19188,6 +19188,8 @@
     "movTypeProductionOut": "Production -",
     "movTypeCustomerShipment": "Customer Shipment",
     "movTypeInternalConsumption": "Internal Consumption",
+    "movTypeCustomerReturn": "Customer Return",
+    "movTypeVendorReturn": "Vendor Return",
     "moduleSales": "Sales",
     "moduleSalesDesc": "Quotations, orders, invoices",
     "modulePurchases": "Purchases",

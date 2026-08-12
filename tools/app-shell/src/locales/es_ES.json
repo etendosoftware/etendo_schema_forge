@@ -19438,6 +19438,8 @@
     "movTypeProductionOut": "Producción -",
     "movTypeCustomerShipment": "Envío a cliente",
     "movTypeInternalConsumption": "Consumo interno",
+    "movTypeCustomerReturn": "Devolución de cliente",
+    "movTypeVendorReturn": "Devolución a proveedor",
     "moduleSales": "Ventas",
     "moduleSalesDesc": "Cotizaciones, pedidos, facturas",
     "modulePurchases": "Compras",
