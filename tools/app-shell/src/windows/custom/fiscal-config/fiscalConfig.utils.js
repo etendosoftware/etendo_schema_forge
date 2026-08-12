@@ -135,7 +135,7 @@ export function todayIsoDate() {
 export function buildOnboardingPayloads(system, territory) {
   const today = todayIsoDate();
   const siiDefaults = {
-    acogidaAlSII:       'Y',
+    acogidaAlSII:       'N',
     entornoDeProduccin: 'Y',
     adjuntarArchivosXML: 'Y',
     fechaAcogidaSII:    today,
