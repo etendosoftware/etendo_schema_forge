@@ -44,6 +44,10 @@ const windowAccessCalls = [];
 const reloadAccountMock = vi.fn();
 const reloadMovementsMock = vi.fn();
 const reloadAutoMatchMock = vi.fn();
+vi.mock('@/hooks/useReconciliationList', () => ({
+  useReconciliations: () => ({ reconciliations: [], loading: false }),
+  useClearedItems: () => ({ items: [], loading: false }),
+}));
 vi.mock('@/hooks/useFinancialAccount', () => ({
   useFinancialAccount: () => ({
     account: { id: 'acc-1', name: 'BBVA', pendingCount: 2 },

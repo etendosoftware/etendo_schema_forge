@@ -1,8 +1,8 @@
 {
-  "version": "0.80.0",
+  "version": "0.83.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-07T12:06:34.464Z",
-  "checksum": "2c7b3a608d9ee140",
+  "updatedAt": "2026-08-11T19:52:32.867Z",
+  "checksum": "758dfc90eed3f4b7",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -12,7 +12,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
@@ -43,7 +43,8 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
       "documentDateField": "invoiceDate",
@@ -5124,7 +5125,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrint": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
@@ -5155,7 +5156,8 @@
           "label": "Exchange Rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
       "documentDateField": "invoiceDate",

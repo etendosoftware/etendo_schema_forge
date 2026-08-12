@@ -25,6 +25,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | H3 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
 | I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
 | J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
+| K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -1031,6 +1032,74 @@ GOClient's original Average rule (`isvalidated='Y'`, no `M_Costing_Rule_Init` ro
 | **Preventive** | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; `referencedata/sampledata/GOClient/M_COSTING_RULE.xml`'s `M_COSTING_ALGORITHM_ID` changed from Average (`B069080A0AE149A79CF1FA0E24F16AB6`) to Standard (`6A39D8B46CD94FE682D48758D3B7726B`) — `isvalidated`/`isactive` were already `'Y'`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-03T18:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by `OnboardingDatasetNormalizerTest.testNormalizerIncludesValidatedStandardCostingRule`. |
 
 **Open question, not blocking (per the ticket's own allowance):** whether `iscostcalculated='N'` on a tenant with no rule at all blocks document posting was not conclusively confirmed this session — worth a follow-up check, but every symptom observed (transactions exist and post; only the cost-calculation flag stays `'N'`) suggests it is a background/async concern rather than a synchronous posting blocker.
+
+---
+
+## K — Accounting Dimension Display Configuration
+
+### K1 — `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'`, making "Dimensiones contables" a no-op (ETP-4854, 2026-08-11)
+
+**Symptom:** the "Dimensiones contables" screen (General Ledger Configuration,
+`GeneralLedgerConfigurationHandler.applyDimensionChanges`) is a flat ON/OFF toggle list per
+accounting dimension. Toggling it appears to succeed (no error, the value is saved), but has
+**zero effect** on whether the corresponding field actually shows on any document for most
+tenants.
+
+**Root cause:** `AD_Client.Acctdim_Centrally_Maintained` selects which of TWO mechanisms
+`DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()` (classic Etendo core) embeds
+into every `@ACCT_DIMENSION_DISPLAY@` field's display-logic JS:
+
+- `'N'` — flat, level-agnostic: reads `C_AcctSchema_Element.IsActive` per dimension
+  (`elementtype` ∈ `OO`/`PJ`/`BP`/`PR`/`CC`/`U1`/`U2`), the SQL schema default (every element row
+  defaults `isactive='Y'`). **This is the ONLY mechanism `GeneralLedgerConfigurationHandler
+  .applyDimensionChanges` writes to** — confirmed by reading the handler: it loads/saves
+  `AcctSchemaElement.IsActive` exclusively, never anything on `AD_Client`.
+- `'Y'` — fine-grained per-document-type/level matrix: reads
+  `AD_Client.<Dim>_Acctdim_IsEnable/Header/Lines/Breakdown` (or a per-doctype
+  `ADClientAcctDimension` override row, if present) — a classic multi-entity feature Etendo GO
+  never built a screen for.
+
+`InitialSetupUtility.java` (~L159, invoked by `InitialClientSetup`, called from
+`EtendoGoJwtServlet.resolveOrCreateClient` upstream of the rest of the onboarding chain)
+hardcodes `newClient.setAcctdimCentrallyMaintained(true)` for EVERY new client — so every tenant
+born through the real onboarding flow ends up `'Y'`, permanently locked out of the only mechanism
+Etendo GO has a working screen for.
+
+**Live-DB evidence (2026-08-11, etendogoclean, 17 clients):** 14 real tenants are `'Y'`; only
+`GOClient`, `QA Testing`, and `System` are `'N'`. Critically, `C_AcctSchema_Element.isactive` is
+ALREADY `'Y'` for CostCenter/User1/User2/Project on almost every `'Y'` client, even though every
+one of them has `<Dim>_Acctdim_IsEnable = 'N'` for those same dimensions (Project on 12 of 14) —
+confirming that a naive flip to `'N'` WITHOUT a backfill would suddenly show fields that are
+currently hidden for nearly every tenant. Org/BPartner/Product are the opposite case (`IsEnable`
+and `Header`/`Lines` already `'Y'` on every client, matching their already-`'Y'` `isactive`) — a
+no-op for those three.
+
+**Backfill rule:** since flat `'N'` mode has no level distinction (one flag governs Header, Lines
+AND Breakdown simultaneously), the fix computes, per dimension, `effective = IsEnable='Y' AND
+(Header='Y' OR Lines='Y' OR Breakdown='Y')` — erring toward NOT hiding a field the client
+currently sees on any level/doctype — and sets `C_AcctSchema_Element.isactive` to match before
+flipping the mode flag, in the same transaction.
+
+**Safety (confirmed, not assumed):** grepped every Java/XML consumer of this flag repo-wide.
+Classic core: only `DimensionDisplayUtility`/`LoginUtils`/`InitialSetupUtility`. Etendo GO: only
+`NeoDisplayLogicHelper.resolveAccountingDimensionFlags` (com.etendoerp.go) — a faithful mirror of
+the classic 'N'/'Y' branching, including its own documented ETP-4529 caveat that the `'N'` branch
+is the one it evaluates most reliably per-request (no HTTP session to piggyback on, unlike
+classic `LoginUtils`). No security/accounting-posting/compliance code path reads this flag — it
+governs ONLY whether an accounting-dimension input field is shown or hidden on a form.
+
+**Both fronts closed (2026-08-11):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260811T120000Z__R23-acctdim-centrally-maintained.sql` — backfills `C_AcctSchema_Element.isactive` per elementtype from the client's current effective config, then flips `Acctdim_Centrally_Maintained` to `'N'`, both in one `@apply`, scoped to `:client_id`. Live-validated: dry-run across all 16 real tenants → 14 `WOULD_APPLY` / 2 `SKIPPED_NOT_NEEDED` (GOClient, QA Testing already `'N'`); a rolled-back transaction against "empresa" confirmed the exact expected before/after state (Org/BPartner/Product stay `'Y'`; CostCenter/Project/User1/User2 flip to `'N'`); a real run against acreedortest (`D94AED60C3E0494AAFD44B8A05BB5CFC`) → `APPLIED (5 rows)` → re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **Preventive** | `OnboardingAcctdimCentrallyMaintainedService.forceFlatAccountingDimensionVisibility`, wired as the new step in `EtendoGoJwtServlet.ensureOnboardingDataset` right after `patchBpGroupAcctMissingColumns` and before the baseline stamp — applies the IDENTICAL backfill-then-flip logic in lockstep with the corrective SQL. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-11T12:00:00Z` in `OnboardingBaselineService.java`. |
+
+**Out of scope, noted for completeness:** `schema_forge_core` (the sibling platform-tooling repo)
+also carries a `cli/src/data-fixes/sql/` directory per the repo-topology note, but on this local
+checkout it is a stale mirror (tops out at `R8`, not kept in sync with `R9`–`R22` shipped after
+the repo split) and is not on a branch related to this ticket — no changes were made there. If it
+needs reconciling with the current fix catalog, that is a separate task.
 
 ---
 
