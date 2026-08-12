@@ -8,6 +8,16 @@ function fmtAmt(val, currency) {
   return formatCurrency(currency || 'EUR', n);
 }
 
+/**
+ * The payment's booked conversion rate, shown verbatim. Deliberately allows up to 6 decimals
+ * instead of clamping to the org's standard precision (2) the way the invoice preview's rate note
+ * does: the whole point is that the user reads back the rate they typed in the Cobros/Pagos modal
+ * (ETP-4841), and "0,68" would hide the 0,680272 that was actually applied.
+ */
+function fmtRate(rate) {
+  return rate.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+}
+
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
 
 function fmtDate(raw) {
@@ -110,6 +120,34 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const isDraft = !PAID_STATUSES.has(status);
   const totalAmount = parseFloat(data?.amount ?? 0);
   const currency = data?.['currency$_identifier'];
+  // Multi-currency readout (ETP-4841). When the money moved through a financial account whose
+  // currency differs from the payment's own, show the account-currency equivalent plus the rate
+  // between them, echoing the "(rate) secondary amount" line of the invoice preview's SummaryCard.
+  //
+  // Three deliberate departures from that card, because a payment is not an invoice:
+  //  1. The primary figure stays in the PAYMENT's currency — it is this document's own defining
+  //     value, and the breakdown rows right below it are in that currency too, so promoting the
+  //     converted amount would leave the headline disagreeing with its own breakdown.
+  //  2. The pair is payment↔ACCOUNT currency (the money that actually moved through the bank), not
+  //     payment↔org currency, which would silently omit the account currency whenever org and
+  //     account differ.
+  //  3. No currency badge. On the preview card the badge is load-bearing: its primary figure is the
+  //     converted one, so the badge names the document's TRUE currency ("shown in €, but this
+  //     invoice is in USD"). Here the primary figure is already the true one, so a bare ISO badge
+  //     would carry the inverted meaning to anyone trained on that card — and it would be redundant
+  //     anyway, since the secondary line below already renders its own currency symbol.
+  //
+  // The rate is the payment's OWN booked rate, not a session/system spot rate — same principle as
+  // the preview preferring a document's own eTGOCurrencyRate over C_Conversion_Rate. These three
+  // fields are injected by ReactivatePaymentHandler's GET post-hook; on an older backend they are
+  // absent and this block simply does not render.
+  const accountCurrency = data?.accountCurrency || null;
+  const conversionRate = parseFloat(data?.conversionRate ?? 0);
+  const accountAmount = data?.financialTransactionAmount != null
+    ? parseFloat(data.financialTransactionAmount)
+    : null;
+  const showDualCurrency = !!accountCurrency && !!currency && accountCurrency !== currency
+    && conversionRate > 0 && accountAmount != null && !Number.isNaN(accountAmount);
   // ETP-4797: the invoice difference the payment wrote off instead of leaving pending. Only a
   // payment created through the write-off toggle carries this — everything else keeps rendering
   // exactly as before the toggle existed, since a zero write-off row would just be noise.
@@ -265,6 +303,19 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
             </span>
           );
         })()}
+        {showDualCurrency && (
+          <div
+            className="tabular-nums"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}
+            data-testid="payment-account-amount">
+            <span style={{ font: '700 12px/16px Inter', color: 'hsl(var(--muted-foreground))' }}>
+              {`(${fmtRate(conversionRate)})`}
+            </span>
+            <span style={{ font: '600 14px/20px Inter', color: 'hsl(var(--foreground))' }}>
+              {fmtAmt(accountAmount, accountCurrency)}
+            </span>
+          </div>
+        )}
       </div>
       {/* Breakdown outer: padding 12px, gap 10px */}
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>

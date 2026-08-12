@@ -97,6 +97,24 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
 - **ETP-4707**: `artifacts/return-to-vendor-shipment/decisions.json` sets `entities.header.fields.posted` to `readOnly`/`badge: true` with `badgeLabels`/`badgeVariants`, adds `window.menuActions` (`post`) and `window.statusPills` (posted/not-posted), and excludes the raw `etblkpBulkposting` process via `window.processOverrides`. The generated `ReturnToVendorShipmentPage.jsx` shows an empty `processes` array (no more raw "Bulk Posting" button), a `post` entry rendered from `menuActions`, and `extraBadges` includes the `posted` status pill. New/updated field-level (`badge`/`badgeLabels`/`badgeVariants`) and window-level (`statusPills`) reference documentation lives in `docs/decisions-reference.md`.
 - **ETP-4707 test coverage**: `e2e/tests/flows/posting-badge-status.mocked.spec.js` is the first automated (mocked) coverage of this pattern — it exercises the sibling `return-material-receipt` window as the representative pick (both windows share byte-identical `decisions.json` shape, generator output, and shared rendering components, so a second parametrized copy of this window would duplicate assertions without covering new code); it asserts the "Contabilizado"/"Sin contabilizar" list badge, the localized "Contabilizar" kebab item, and the accounting-status pill on the detail header. Renderer-level unit coverage for `badge`/`badgeLabels`/`badgeVariants` lives in `tools/app-shell/src/components/contract-ui/__tests__/DataTable.cellRenderers.vitest.jsx`.
 
+## Print button visible only in Completado — ETP-4714
+
+`artifacts/return-to-vendor-shipment/decisions.json` sets
+`window.hidePrintWhen: { "documentStatus": { "notEquals": "CO" } }` — the same generic
+mechanism used by `sales-invoice`/`sales-order`/`purchase-order`/`goods-shipment` (see
+`docs/decisions-reference.md` — "Print Visibility"). It hides the generic icon-only Print
+button rendered by `DetailView.jsx` unless the record is Completado, with no effect on the
+list view.
+
+This window originally shipped a different fix: the shared
+`tools/app-shell/src/windows/custom/shared/ConfirmWithCreditButtonBase.jsx` component (this
+window's `topbarRight`, via the window-scoped `ConfirmWithCreditButton.jsx` wrapper) rendered
+its own inline `PrintButton`, gated by `status !== 'DR'`. A separate, unrelated ticket
+(ETP-4728 — "print unification onto the generic icon") removed that inline button from
+`ConfirmWithCreditButtonBase.jsx` outright: printing for every window is now served exclusively
+by the generic `DetailView.jsx` icon. That left the generic icon with no gate at all on this
+window until the `hidePrintWhen` entry above was added.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

@@ -4,6 +4,7 @@ import { ExternalLink, Box, Calendar, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import { niceScale, formatDashboardAxisTick } from '@/lib/dashboardNumberFormat';
+import { parseCalendarDate } from '@/lib/dateOnly';
 
 const DOT_COLORS = ['#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
 
@@ -92,8 +93,8 @@ function buildChartData(transactions, currentStock, maxMonths = 12) {
   // Group all transactions by YYYY-MM key
   const byMonth = {};
   for (const t of transactions) {
-    const d = new Date(t.movementDate);
-    if (isNaN(d)) continue;
+    const d = parseCalendarDate(t.movementDate);
+    if (!d) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     byMonth[key] = (byMonth[key] || 0) + Number(t.movementQuantity || 0);
   }
@@ -152,8 +153,8 @@ function buildWarehouseSeries(transactions, warehouses, locatorToWarehouse, maxM
     const byMonth = {};
     for (const t of transactions) {
       if (locatorToWarehouse[t.storageBin] !== w.binName) continue;
-      const d = new Date(t.movementDate);
-      if (isNaN(d)) continue;
+      const d = parseCalendarDate(t.movementDate);
+      if (!d) continue;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       byMonth[key] = (byMonth[key] || 0) + Number(t.movementQuantity || 0);
     }

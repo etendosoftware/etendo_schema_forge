@@ -78,9 +78,14 @@ vi.mock('@/lib/formatCurrency.js', () => ({
 }));
 
 // DataTable mock that calls each column's render with multiple representative rows
-// so all render branches (AP Invoice, NC/Credit, paid, no-due-date) are exercised
+// so all render branches are exercised.
+//
+// ETP-4841: the payment badge is driven by the SIGN OF THE TOTAL, never by the
+// document type, so these rows are laid out as a sign matrix. Every branch of
+// resolveInvoicePaymentBadge appears exactly once, and the two rows that used to
+// render wrong (rows 2 and 3 below) are pinned explicitly.
 const MOCK_ROWS = [
-  // AP Invoice — pending outstanding
+  // 0 — ordinary invoice, partially paid → amber pending badge "500:EUR"
   {
     eTGODueDate: '2026-01-01',
     outstandingAmount: '500',
@@ -90,7 +95,7 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: 'sent',
   },
-  // AP Invoice — paid (outstanding <= 0)
+  // 1 — ordinary invoice, settled → green "pagada"
   {
     eTGODueDate: '2026-01-15',
     outstandingAmount: '0',
@@ -100,37 +105,54 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: null,
   },
-  // AP CreditMemo — partial outstanding (NC path)
+  // 2 — ETP-4841 case A: Factura Rectificativa with a POSITIVE total (billed 3,
+  // should have been 4). It is PAYABLE: amber pending badge "400:USD", never
+  // "Saldo a favor". Before the fix the doc-type test made this a credit.
   {
     eTGODueDate: '2026-02-01',
     outstandingAmount: '400',
     grandTotalAmount: '1000',
     documentStatus: 'CO',
     'currency$_identifier': 'USD',
-    'transactionDocument$_identifier': 'AP CreditMemo',
+    'transactionDocument$_identifier': 'Factura Rectificativa',
+    apInvoiceSubtype: 'RECTIFICATIVA',
     aeatsiiEstado: 'CO',
   },
-  // AP CreditMemo — fully applied (outstandingAbs < 0.001)
+  // 3 — ETP-4841 case B: ordinary "Factura" with a NEGATIVE total. It IS a
+  // credit: "Saldo a favor · 900:SEK", never "pagada". Before the fix the
+  // doc-type test sent it down the paid branch (outstanding <= 0).
   {
     eTGODueDate: '2026-02-15',
+    outstandingAmount: '-900',
+    grandTotalAmount: '-900',
+    documentStatus: 'CO',
+    'currency$_identifier': 'SEK',
+    'transactionDocument$_identifier': 'AP Invoice',
+    apInvoiceSubtype: 'FAC',
+    aeatsiiEstado: null,
+  },
+  // 4 — case C: negative invoice fully consumed → green "cpCreditFullyApplied"
+  {
+    eTGODueDate: '2026-03-01',
     outstandingAmount: '0',
-    grandTotalAmount: '1000',
+    grandTotalAmount: '-1000',
     documentStatus: 'CO',
     'currency$_identifier': 'USD',
     'transactionDocument$_identifier': 'AP CreditMemo',
     aeatsiiEstado: null,
   },
-  // Return Material — so isNcOrReturn branch is also hit
+  // 5 — case D: positive invoice OVERPAID (outstanding < 0). Real dev data has
+  // 7 such rows; they must read "pagada", never "Saldo a favor".
   {
-    eTGODueDate: '2026-03-01',
-    outstandingAmount: '200',
-    grandTotalAmount: '500',
+    eTGODueDate: '2026-03-15',
+    outstandingAmount: '-50',
+    grandTotalAmount: '700',
     documentStatus: 'CO',
-    'currency$_identifier': 'EUR',
-    'transactionDocument$_identifier': 'Return Material Purchase Invoice',
+    'currency$_identifier': 'NOK',
+    'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: null,
   },
-  // Non-CO — shows dash for outstanding
+  // 6 — case E: not completed → em dash placeholder, no badge
   {
     eTGODueDate: null,
     outstandingAmount: '300',
@@ -140,17 +162,7 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: null,
   },
-  // Unknown doc type — dash in transactionDocument column
-  {
-    eTGODueDate: '2026-04-01',
-    outstandingAmount: '100',
-    grandTotalAmount: '200',
-    documentStatus: 'CO',
-    'currency$_identifier': 'EUR',
-    'transactionDocument$_identifier': 'SomeOtherDocType',
-    aeatsiiEstado: null,
-  },
-  // AP CreditMemo — mostly applied (ETP-4331 repro ratio: -25.30 total, only
+  // 7 — credit memo mostly applied (ETP-4331 repro ratio: -25.30 total, only
   // -2.30 left unused). Must show "Saldo a favor", never "Pendiente".
   {
     eTGODueDate: '2026-05-01',
@@ -161,7 +173,7 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'AP CreditMemo',
     aeatsiiEstado: null,
   },
-  // Return Material — fully unapplied (nothing applied yet).
+  // 8 — return, fully unapplied (nothing applied yet).
   {
     eTGODueDate: '2026-05-15',
     outstandingAmount: '-27.60',
@@ -209,7 +221,9 @@ const BASE_PROPS = {
   onRefresh: vi.fn(),
 };
 
-// Reusable row shapes
+// Reusable row shapes.
+// ETP-4841: what makes a row a credit is its NEGATIVE grandTotalAmount — the
+// doc-type identifier on each shape is only there to prove it is ignored.
 const AP_INVOICE_ROW = {
   eTGODueDate: '2026-01-01',
   outstandingAmount: '500',
@@ -220,14 +234,16 @@ const AP_INVOICE_ROW = {
   aeatsiiEstado: 'sent',
 };
 
-const NC_ROW = {
+// Credit memo with a negative total and half its balance still unused.
+const CREDIT_ROW = {
   ...AP_INVOICE_ROW,
   'transactionDocument$_identifier': 'AP CreditMemo',
-  outstandingAmount: '500',
+  grandTotalAmount: '-1000',
+  outstandingAmount: '-500',
 };
 
-const NC_ROW_APPLIED = {
-  ...NC_ROW,
+const CREDIT_ROW_APPLIED = {
+  ...CREDIT_ROW,
   outstandingAmount: '0',
 };
 
@@ -236,9 +252,36 @@ const PAID_ROW = {
   outstandingAmount: '0',
 };
 
+// Positive invoice that has been OVERPAID — outstanding is negative but the
+// total is not, so it is settled, not a credit.
+const OVERPAID_ROW = {
+  ...AP_INVOICE_ROW,
+  outstandingAmount: '-100',
+};
+
 const RETURN_ROW = {
   ...AP_INVOICE_ROW,
   'transactionDocument$_identifier': 'Return Material Purchase Invoice',
+  grandTotalAmount: '-1000',
+  outstandingAmount: '-1000',
+};
+
+// ETP-4841 case A — a Factura Rectificativa that corrects an UNDER-invoice: its
+// total is positive, so it is payable exactly like an ordinary invoice.
+const POSITIVE_RECTIFICATIVA_ROW = {
+  ...AP_INVOICE_ROW,
+  'transactionDocument$_identifier': 'Factura Rectificativa',
+  apInvoiceSubtype: 'RECTIFICATIVA',
+  grandTotalAmount: '1000',
+  outstandingAmount: '1000',
+};
+
+// ETP-4841 case B — an ordinary Factura with a negative total: a credit.
+const NEGATIVE_ORDINARY_ROW = {
+  ...AP_INVOICE_ROW,
+  apInvoiceSubtype: 'FAC',
+  grandTotalAmount: '-750',
+  outstandingAmount: '-750',
 };
 
 const NO_DUE_DATE_ROW = {
@@ -283,9 +326,19 @@ describe('PurchaseInvoiceHeaderTable', () => {
     expect(screen.getByText('date:2026-01-01')).toBeInTheDocument();
   });
 
-  it('renders grandTotalAmount column for AP Invoice row', () => {
+  // ETP-4841: grandTotalAmount is a plain `type: 'amount'` column again. It used
+  // to be `type: 'custom'` with a renderer that did `-Math.abs(Number(raw))` for
+  // every rectificativa, which printed a POSITIVE Factura Rectificativa as a
+  // negative amount. There is no cell renderer to exercise any more — the stored
+  // sign is displayed verbatim by DataTable's generic amount cell.
+  it('declares grandTotalAmount as a plain amount column with no sign-flipping renderer', () => {
     renderWithRow(AP_INVOICE_ROW);
-    expect(screen.getByTestId('col-render-grandTotalAmount')).toBeInTheDocument();
+    expect(screen.queryByTestId('col-render-grandTotalAmount')).toBeNull();
+    const col = (capturedColumnsHolder.value || []).find((c) => c.key === 'grandTotalAmount');
+    expect(col).toBeTruthy();
+    expect(col.type).toBe('amount');
+    expect(col.column).toBe('GrandTotal');
+    expect(col.render).toBeUndefined();
   });
 
   it('renders outstandingAmount column with pending button for AP Invoice', () => {
@@ -306,13 +359,18 @@ describe('PurchaseInvoiceHeaderTable', () => {
     expect(screen.getByTestId('col-render-transactionDocument').textContent).toContain('rectificativeInvoicesTab');
   });
 
-  it('renders transactionDocument column with dash for unknown doc type', () => {
+  it('renders both doc-type badges side by side across the mock rows', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    // The unknown doc type row renders "—" in the transactionDocument column
-    // The column container includes multiple rows so check via textContent
     const col = screen.getByTestId('col-render-transactionDocument');
     expect(col.textContent).toContain('invoicesTab');
     expect(col.textContent).toContain('rectificativeInvoicesTab');
+  });
+
+  it('falls back to the ordinary invoice badge for an unrecognized doc-type name', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const col = (capturedColumnsHolder.value || []).find((c) => c.key === 'transactionDocument');
+    const { container } = render(<>{col.render(UNKNOWN_DOC_ROW)}</>);
+    expect(container.textContent).toBe('invoicesTab');
   });
 
   it('does not show SII column when showSii is false', () => {
@@ -377,100 +435,70 @@ describe('PurchaseInvoiceHeaderTable', () => {
 });
 
 // ── Coverage for outstandingAmount column render branches ─────────────────────
-// We create a separate describe that overrides the DataTable mock with specific rows.
-// vi.doMock is called synchronously; the component re-imports from cache on render.
-// Since we can't re-import the module, we test branches via the DataTable callback directly.
+// The render callbacks are read back from the `columns` prop the component
+// actually handed to DataTable (captured by the module-level mock), then invoked
+// with one row shape per branch.
 
 describe('PurchaseInvoiceHeaderTable — column render branches (inline)', () => {
-  // Helper that extracts the outstandingAmount render function by rendering the
-  // component with a mock DataTable that captures the columns array
-  let capturedColumns = null;
-
   beforeEach(() => {
-    capturedColumns = null;
     vi.clearAllMocks();
+    capturedColumnsHolder.value = null;
     getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
-
-    // Override DataTable to capture columns
-    vi.doMock('@/components/contract-ui', () => ({
-      DataTable: ({ columns }) => {
-        capturedColumns = columns;
-        return <div data-testid="DataTable__6b7cdb" />;
-      },
-    }));
   });
 
   function getColRender(key) {
-    if (!capturedColumns) return null;
-    const col = capturedColumns.find((c) => c.key === key);
-    return col?.render ?? null;
+    const cols = capturedColumnsHolder.value;
+    expect(cols, 'DataTable never received a columns prop').toBeTruthy();
+    const col = cols.find((c) => c.key === key);
+    expect(col, `expected column "${key}"`).toBeTruthy();
+    return col.render;
   }
 
   it('outstanding — dash when documentStatus is not CO', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('outstandingAmount');
-    if (!renderFn) return; // columns not captured (module cache), skip
-    const { container } = render(<>{renderFn(NON_CO_ROW)}</>);
+    const { container } = render(<>{getColRender('outstandingAmount')(NON_CO_ROW)}</>);
     expect(container.textContent).toBe('—');
   });
 
-  it('outstanding — paid check for NC row with 0 outstanding', () => {
+  it('outstanding — fully-applied pill for a negative-total row with 0 outstanding', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('outstandingAmount');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(NC_ROW_APPLIED)}</>);
-    // The "applied" NC path renders "Aplicada"
-    expect(container.textContent).toMatch(/Aplicada/);
+    const { container } = render(<>{getColRender('outstandingAmount')(CREDIT_ROW_APPLIED)}</>);
+    expect(container.textContent).toMatch(/cpCreditFullyApplied/);
   });
 
   it('outstanding — paid check span for regular paid row', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('outstandingAmount');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(PAID_ROW)}</>);
+    const { container } = render(<>{getColRender('outstandingAmount')(PAID_ROW)}</>);
     expect(container.textContent).toMatch(/pagada/);
   });
 
-  it('outstanding — return/NC with outstanding > 0 renders a button', () => {
+  it('outstanding — negative-total row with a remaining balance renders a clickable credit button', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('outstandingAmount');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(NC_ROW)}</>);
-    // NC with outstanding > 0 → "Pendiente" button
+    const { container } = render(<>{getColRender('outstandingAmount')(CREDIT_ROW)}</>);
     expect(container.querySelector('button')).toBeTruthy();
+    expect(container.textContent).toBe('cpFavorBadge · 500:EUR');
   });
 
   it('eTGODueDate — dash when no due date', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('eTGODueDate');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(NO_DUE_DATE_ROW)}</>);
+    const { container } = render(<>{getColRender('eTGODueDate')(NO_DUE_DATE_ROW)}</>);
     expect(container.textContent).toBe('—');
   });
 
-  it('eTGODueDate — plain date for NC/return rows', () => {
+  it('eTGODueDate — plain date (no state dot) for a negative-total row', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('eTGODueDate');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(RETURN_ROW)}</>);
+    const { container } = render(<>{getColRender('eTGODueDate')(RETURN_ROW)}</>);
     expect(container.textContent).toBe('date:2026-01-01');
+    expect(container.querySelector('.rounded-full')).toBeNull();
   });
 
-  it('grandTotalAmount — inverts sign for NC rows', () => {
+  it('eTGODueDate — coloured state dot for a POSITIVE Factura Rectificativa (ETP-4841)', () => {
+    // Before the fix any rectificativa lost its due-date state. A positive one is
+    // payable, so it must keep the dot exactly like an ordinary invoice.
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('grandTotalAmount');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(NC_ROW)}</>);
-    // isNcOrReturn → -Math.abs(1000) = -1000, formatCurrency mock: "-1000:EUR"
-    expect(container.textContent).toContain('-1000');
-  });
-
-  it('grandTotalAmount — positive for regular AP Invoice rows', () => {
-    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('grandTotalAmount');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(AP_INVOICE_ROW)}</>);
-    expect(container.textContent).toContain('1000');
+    const { container } = render(<>{getColRender('eTGODueDate')(POSITIVE_RECTIFICATIVA_ROW)}</>);
+    expect(container.textContent).toBe('date:2026-01-01');
+    expect(container.querySelector('.rounded-full')).toBeTruthy();
   });
 });
 
@@ -479,64 +507,121 @@ describe('PurchaseInvoiceHeaderTable — column render branches (inline)', () =>
 // (e.g. -25.30 total, -2.30 unused) must never regress to the amber "Pendiente"
 // badge — it always represents money owed BACK by the supplier.
 describe('PurchaseInvoiceHeaderTable — outstandingAmount credit-note/return badge (ETP-4331 bugfix)', () => {
-  it('mostly-applied credit memo shows "Saldo a favor", never "Pendiente" (bug repro)', () => {
+  it('mostly-applied credit memo shows the credit badge, never the pending one (bug repro)', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const badge = screen.getByText(/Saldo a favor · 2\.3:GBP/);
-    expect(badge).toBeInTheDocument();
+    // MOCK_ROWS[7] — -25.30 total, -2.30 left unused.
+    expect(screen.getByText(/cpFavorBadge · 2\.3:GBP/)).toBeInTheDocument();
     const outstandingCol = screen.getByTestId('col-render-outstandingAmount');
-    expect(outstandingCol.textContent).not.toMatch(/Pendiente/);
+    expect(outstandingCol.querySelector('[aria-label="addPago"]')?.textContent ?? '')
+      .not.toMatch(/cpFavorBadge/);
   });
 
-  it('fully-unapplied return also shows "Saldo a favor" (regression guard)', () => {
+  it('fully-unapplied return also shows the credit badge (regression guard)', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    expect(screen.getByText(/Saldo a favor · 27\.6:CHF/)).toBeInTheDocument();
+    expect(screen.getByText(/cpFavorBadge · 27\.6:CHF/)).toBeInTheDocument();
   });
 
-  it('fully-applied credit memo still shows the green "Aplicada" badge (unchanged)', () => {
+  it('fully-applied credit memo still shows the green fully-applied badge (unchanged)', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    // MOCK_ROWS AP CreditMemo row with outstandingAmount: '0' (USD).
-    expect(screen.getByText('Aplicada')).toBeInTheDocument();
+    // MOCK_ROWS[4] — negative total (-1000 USD) with outstandingAmount '0'.
+    expect(screen.getByText('cpCreditFullyApplied')).toBeInTheDocument();
   });
 
   it('regular AP invoice with partial payment still shows the amber pending badge, unaffected', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    // MOCK_ROWS[0] — regular AP invoice, outstanding 500 EUR, non-credit type.
+    // MOCK_ROWS[0] — regular AP invoice, outstanding 500 EUR.
     const pendingBadge = screen.getByText('500:EUR');
     const pendingButton = pendingBadge.closest('button');
     expect(pendingButton).toHaveAttribute('aria-label', 'addPago');
-    expect(pendingButton.textContent).not.toMatch(/Saldo a favor/);
+    expect(pendingButton.textContent).not.toMatch(/cpFavorBadge/);
   });
 });
 
-// ── ETP-4738: Factura Rectificativa de Compra recognized via apInvoiceSubtype ──
-// A rectificative invoice with a negative total is reclassified server-side to
-// apInvoiceSubtype: 'RECTIFICATIVA' (unified with the legacy AP CreditMemo subtype
-// per ETP-4737), but its doc-type identifier ("Factura Rectificativa") never
-// matches NC_RETURN_TYPES nor the legacy credit/memo keyword fallback in
-// getApSubtype. isNcOrReturn() must still treat it as a credit note via the
-// server-injected subtype field alone. This exercises the REAL
+// ── ETP-4841: the badge follows the SIGN of the total, not the document type ──
+// The four cases below are the ones the previous document-type test rendered
+// wrong. They are driven through the real component's outstandingAmount cell.
+describe('PurchaseInvoiceHeaderTable — sign-driven payment badge (ETP-4841)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedColumnsHolder.value = null;
+    getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
+  });
+
+  function renderOutstanding(row) {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const col = (capturedColumnsHolder.value || []).find((c) => c.key === 'outstandingAmount');
+    expect(col, 'expected the outstandingAmount column').toBeTruthy();
+    return render(<>{col.render(row)}</>);
+  }
+
+  it('a Factura Rectificativa with a POSITIVE total renders the payable badge, not the credit one', () => {
+    const { container } = renderOutstanding(POSITIVE_RECTIFICATIVA_ROW);
+    expect(container.querySelector('button')).toHaveAttribute('aria-label', 'addPago');
+    expect(container.textContent).toContain('1000:EUR');
+    expect(container.textContent).not.toMatch(/cpFavorBadge/);
+    expect(container.textContent).not.toMatch(/cpCreditFullyApplied/);
+  });
+
+  it('an ordinary Factura with a NEGATIVE total renders the credit badge, not "pagada"', () => {
+    const { container } = renderOutstanding(NEGATIVE_ORDINARY_ROW);
+    expect(container.textContent).toBe('cpFavorBadge · 750:EUR');
+    expect(container.textContent).not.toMatch(/pagada/);
+  });
+
+  it('a negative invoice with a zero outstanding renders the fully-applied pill', () => {
+    const { container } = renderOutstanding({ ...NEGATIVE_ORDINARY_ROW, outstandingAmount: '0' });
+    expect(container.textContent).toBe('cpCreditFullyApplied');
+  });
+
+  it('an OVERPAID positive invoice (outstanding < 0) renders "pagada", never the credit badge', () => {
+    const { container } = renderOutstanding(OVERPAID_ROW);
+    expect(container.textContent).toMatch(/pagada/);
+    expect(container.textContent).not.toMatch(/cpFavorBadge/);
+  });
+
+  it('a non-completed row renders the em dash placeholder with no badge at all', () => {
+    const { container } = renderOutstanding({ ...NEGATIVE_ORDINARY_ROW, documentStatus: 'DR' });
+    expect(container.textContent).toBe('—');
+    expect(container.querySelector('button')).toBeNull();
+  });
+
+  it('the whole grid renders each sign case exactly once (end-to-end matrix)', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const col = screen.getByTestId('col-render-outstandingAmount');
+    // Case A — positive rectificativa is payable (MOCK_ROWS[2], 400 USD).
+    expect(col.querySelector('[aria-label="addPago"]')).toBeTruthy();
+    expect(screen.getByText('400:USD').closest('button')).toHaveAttribute('aria-label', 'addPago');
+    // Case B — negative ordinary invoice is a credit (MOCK_ROWS[3], 900 SEK).
+    expect(screen.getByText(/cpFavorBadge · 900:SEK/)).toBeInTheDocument();
+    // Case C — negative invoice fully applied (MOCK_ROWS[4]).
+    expect(screen.getByText('cpCreditFullyApplied')).toBeInTheDocument();
+    // Case D — overpaid positive invoice reads paid (MOCK_ROWS[1] and [5]).
+    expect(screen.getAllByText('pagada').length).toBe(2);
+    // Case E — the draft row contributes the only em dash.
+    expect(col.textContent).toContain('—');
+  });
+});
+
+// ── ETP-4738 → ETP-4841: apInvoiceSubtype now drives ONLY the doc-type badge ──
+// getApSubtype (which resolves the unified FAC | RECTIFICATIVA subtype, from the
+// server-injected apInvoiceSubtype or the doc-type-name fallback) still decides
+// which pill the transactionDocument column shows. It no longer has any say in
+// the payment badge — that is the sign of the total. This exercises the REAL
 // artifacts/purchase-invoice/custom/purchaseInvoiceSubtype.js (not mocked —
 // @generated resolves to artifacts/ in vitest.config.js).
-describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage (ETP-4738)', () => {
-  let capturedColumns = null;
-
+describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage (ETP-4738/ETP-4841)', () => {
   beforeEach(() => {
-    capturedColumns = null;
     vi.clearAllMocks();
+    capturedColumnsHolder.value = null;
     getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
-
-    vi.doMock('@/components/contract-ui', () => ({
-      DataTable: ({ columns }) => {
-        capturedColumns = columns;
-        return <div data-testid="DataTable__6b7cdb" />;
-      },
-    }));
   });
 
   function getColRender(key) {
-    if (!capturedColumns) return null;
-    const col = capturedColumns.find((c) => c.key === key);
-    return col?.render ?? null;
+    const cols = capturedColumnsHolder.value;
+    expect(cols, 'DataTable never received a columns prop').toBeTruthy();
+    const col = cols.find((c) => c.key === key);
+    expect(col, `expected column "${key}"`).toBeTruthy();
+    return col.render;
   }
 
   const RECTIFICATIVA_ROW = {
@@ -566,59 +651,58 @@ describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage
     aeatsiiEstado: null,
   };
 
-  it('outstandingAmount — Factura Rectificativa (apInvoiceSubtype: RECTIFICATIVA, unrecognized doc-type name) shows the purple "Saldo a favor" badge', () => {
+  it('outstandingAmount — a NEGATIVE Factura Rectificativa shows the credit badge', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('outstandingAmount');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
-    expect(container.textContent).toMatch(/Saldo a favor/);
-    expect(container.textContent).not.toMatch(/Pendiente/);
+    const { container } = render(<>{getColRender('outstandingAmount')(RECTIFICATIVA_ROW)}</>);
+    expect(container.textContent).toBe('cpFavorBadge · 15:EUR');
   });
 
-  it('outstandingAmount — fully-consumed Factura Rectificativa (apInvoiceSubtype: RECTIFICATIVA) shows the green "Aplicada" pill', () => {
+  it('outstandingAmount — fully-consumed negative Factura Rectificativa shows the green fully-applied pill', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('outstandingAmount');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW_APPLIED)}</>);
-    expect(container.textContent).toMatch(/Aplicada/);
+    const { container } = render(<>{getColRender('outstandingAmount')(RECTIFICATIVA_ROW_APPLIED)}</>);
+    expect(container.textContent).toMatch(/cpCreditFullyApplied/);
   });
 
-  it('grandTotalAmount — inverts sign for a Factura Rectificativa row via apInvoiceSubtype alone', () => {
+  it('outstandingAmount — the SAME apInvoiceSubtype with a POSITIVE total is payable instead (ETP-4841)', () => {
+    // Identical doc type and subtype as RECTIFICATIVA_ROW; only the sign differs.
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('grandTotalAmount');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
-    // grandTotalAmount is already -15, isNcOrReturn -> -Math.abs(-15) = -15
-    expect(container.textContent).toContain('-15:EUR');
-  });
-
-  it('eTGODueDate — Factura Rectificativa renders a plain date (no progress-state dot), same as legacy credit types', () => {
-    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('eTGODueDate');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
-    expect(container.textContent).toBe('date:2026-06-01');
-  });
-
-  it('regression guard: legacy doc-type-name fallback still works when apInvoiceSubtype is ABSENT (old/undeployed backend)', () => {
-    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('outstandingAmount');
-    if (!renderFn) return;
-    // NC_ROW (AP CreditMemo, no apInvoiceSubtype field) — must still resolve to NC via
-    // the legacy identifier fallback inside getApSubtype.
-    const { container } = render(<>{renderFn(NC_ROW)}</>);
-    expect(container.querySelector('button')).toBeTruthy();
-    expect(container.textContent).toMatch(/Saldo a favor/);
-  });
-
-  it('negative control: a normal invoice with apInvoiceSubtype "FAC" still renders the amber pending badge, never the credit badge', () => {
-    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const renderFn = getColRender('outstandingAmount');
-    if (!renderFn) return;
-    const { container } = render(<>{renderFn(NORMAL_ROW_WITH_FAC_SUBTYPE)}</>);
+    const { container } = render(
+      <>{getColRender('outstandingAmount')({ ...RECTIFICATIVA_ROW, grandTotalAmount: '15.00', outstandingAmount: '15.00' })}</>,
+    );
     expect(container.querySelector('button')).toHaveAttribute('aria-label', 'addPago');
-    expect(container.textContent).not.toMatch(/Saldo a favor/);
-    expect(container.textContent).not.toMatch(/Aplicada/);
+    expect(container.textContent).toContain('15:EUR');
+    expect(container.textContent).not.toMatch(/cpFavorBadge/);
+  });
+
+  it('transactionDocument — the doc-type badge still follows apInvoiceSubtype for BOTH signs', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const renderFn = getColRender('transactionDocument');
+    const negative = render(<>{renderFn(RECTIFICATIVA_ROW)}</>);
+    const positive = render(<>{renderFn({ ...RECTIFICATIVA_ROW, grandTotalAmount: '15.00' })}</>);
+    expect(negative.container.textContent).toBe('rectificativeInvoicesTab');
+    expect(positive.container.textContent).toBe('rectificativeInvoicesTab');
+  });
+
+  it('eTGODueDate — a negative Factura Rectificativa renders a plain date (no progress-state dot)', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const { container } = render(<>{getColRender('eTGODueDate')(RECTIFICATIVA_ROW)}</>);
+    expect(container.textContent).toBe('date:2026-06-01');
+    expect(container.querySelector('.rounded-full')).toBeNull();
+  });
+
+  it('regression guard: an AP CreditMemo with no apInvoiceSubtype and a negative total is still a credit', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const { container } = render(<>{getColRender('outstandingAmount')(CREDIT_ROW)}</>);
+    expect(container.querySelector('button')).toBeTruthy();
+    expect(container.textContent).toMatch(/cpFavorBadge/);
+  });
+
+  it('negative control: a normal invoice with apInvoiceSubtype "FAC" renders the amber pending badge', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const { container } = render(<>{getColRender('outstandingAmount')(NORMAL_ROW_WITH_FAC_SUBTYPE)}</>);
+    expect(container.querySelector('button')).toHaveAttribute('aria-label', 'addPago');
+    expect(container.textContent).not.toMatch(/cpFavorBadge/);
+    expect(container.textContent).not.toMatch(/cpCreditFullyApplied/);
   });
 });
 
@@ -656,8 +740,12 @@ describe('PurchaseInvoiceHeaderTable — advanced filter mode for custom columns
     expect(resolveFilterMode(getColumn('transactionDocument'))).toBe('identifier');
   });
 
-  it('grandTotalAmount (custom-render amount column) resolves to the numeric filter mode', () => {
+  // ETP-4841 dropped the custom renderer here, so `type: 'amount'` now infers
+  // numeric on its own and no filterMode hint is needed — the resolved mode must
+  // stay the same either way.
+  it('grandTotalAmount (plain amount column) still resolves to the numeric filter mode', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(getColumn('grandTotalAmount').filterMode).toBeUndefined();
     expect(resolveFilterMode(getColumn('grandTotalAmount'))).toBe('numeric');
   });
 
@@ -705,30 +793,30 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
     return render(<>{getColumn(key).render(row)}</>);
   }
 
-  // ── setPaymentRow from the purple credit-note badge (uncovered line 172) ────
+  // ── setPaymentRow from the credit badge (uncovered line 172) ───────────────
 
-  it('clicking the purple "Saldo a favor" badge opens the payment history modal', () => {
+  it('clicking the credit badge opens the payment history modal', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
-    // MOCK_ROWS credit memo with -2.30 unused → "Saldo a favor · 2.3:GBP"
-    fireEvent.click(screen.getByText(/Saldo a favor · 2\.3:GBP/));
+    // MOCK_ROWS[7] credit memo with -2.30 unused → "cpFavorBadge · 2.3:GBP"
+    fireEvent.click(screen.getByText(/cpFavorBadge · 2\.3:GBP/));
     expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
   });
 
-  it('closing the modal opened from the "Saldo a favor" badge clears the selected row', () => {
+  it('closing the modal opened from the credit badge clears the selected row', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    fireEvent.click(screen.getByText(/Saldo a favor · 27\.6:CHF/));
+    fireEvent.click(screen.getByText(/cpFavorBadge · 27\.6:CHF/));
     expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Close payment modal'));
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
   });
 
-  it('"Saldo a favor" click stops propagation so the row navigation is not triggered', () => {
+  it('credit badge click stops propagation so the row navigation is not triggered', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     const rowClick = vi.fn();
     const cell = render(
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
-      <div onClick={rowClick}>{getColumn('outstandingAmount').render(NC_ROW)}</div>,
+      <div onClick={rowClick}>{getColumn('outstandingAmount').render(CREDIT_ROW)}</div>,
     );
     fireEvent.click(cell.container.querySelector('button'));
     expect(rowClick).not.toHaveBeenCalled();
@@ -796,25 +884,39 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
 
   it('outstanding cell falls back to EUR when the row carries no currency identifier', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const row = { ...NC_ROW, outstandingAmount: '-5', 'currency$_identifier': undefined };
+    const row = { ...CREDIT_ROW, outstandingAmount: '-5', 'currency$_identifier': undefined };
     const { container } = renderCell('outstandingAmount', row);
-    expect(container.textContent).toBe('Saldo a favor · 5:EUR');
+    expect(container.textContent).toBe('cpFavorBadge · 5:EUR');
   });
 
-  it('outstanding cell treats a missing amount as 0 — credit note reads as fully applied', () => {
+  it('outstanding cell falls back to the full total when the amount is missing — the credit reads as fully unapplied', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    const row = { ...NC_ROW };
+    const row = { ...CREDIT_ROW };
     delete row.outstandingAmount;
     const { container } = renderCell('outstandingAmount', row);
-    expect(container.textContent).toMatch(/Aplicada/);
+    // CREDIT_ROW total is -1000, so the whole balance is still available.
+    expect(container.textContent).toBe('cpFavorBadge · 1000:EUR');
+    expect(container.textContent).not.toMatch(/cpCreditFullyApplied/);
   });
 
-  it('outstanding cell treats a null amount as 0 — regular invoice reads as paid', () => {
+  it('outstanding cell falls back to the full total when the amount is null — a regular invoice reads as UNPAID, never as paid', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     const { container } = renderCell('outstandingAmount', {
       ...AP_INVOICE_ROW,
       outstandingAmount: null,
       'currency$_identifier': undefined,
+    });
+    // Safe direction: an unknown balance must not render as "pagada".
+    expect(container.querySelector('button')).toHaveAttribute('aria-label', 'addPago');
+    expect(container.textContent).toContain('1000:EUR');
+    expect(container.textContent).not.toMatch(/pagada/);
+  });
+
+  it('outstanding cell still reads a PRESENT zero as genuinely paid', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const { container } = renderCell('outstandingAmount', {
+      ...AP_INVOICE_ROW,
+      outstandingAmount: 0,
     });
     expect(container.textContent).toMatch(/pagada/);
   });
