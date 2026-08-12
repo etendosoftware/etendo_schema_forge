@@ -872,7 +872,10 @@ test.describe('Assets (real backend)', () => {
     await page.getByTestId('field-annualDepreciation').fill('-1');
     await saveThenProcess(page, /debe ser al menos 1/i);
     // Above 100% → a client-side guard blocks the process with a clear message.
-    await page.getByTestId('field-annualDepreciation').fill('150');
+    // Blur explicitly so the previous min-validation error is cleared before the
+    // process-specific >100% validation runs; a bare fill can leave the old error
+    // state active and make this assertion flaky.
+    await setFieldUntilDirty(page, 'field-annualDepreciation', '150');
     await saveThenProcess(page, /no puede ser superior al 100%/i);
     await page.getByTestId('field-annualDepreciation').fill('50');
 
@@ -881,6 +884,13 @@ test.describe('Assets (real backend)', () => {
 
     // The residual edits leave the form clean; re-touch Valor a amortizar so the
     // create (save-and-process) persists and runs, then create the amortization.
+    // The invalid 150% value was persisted before client-side validation rejected
+    // the process. The UI can still display 50% after a refetch, so filling 50%
+    // again may not mark the form dirty. Force a valid transition and persist it
+    // before the final create.
+    await setFieldUntilDirty(page, 'field-annualDepreciation', '49');
+    await saveAsset(page);
+    await setFieldUntilDirty(page, 'field-annualDepreciation', '50');
     await setFieldUntilDirty(page, 'field-depreciationAmt', '2000');
     await saveAsset(page);
     await crearAmortizacionBtn(page).click();
