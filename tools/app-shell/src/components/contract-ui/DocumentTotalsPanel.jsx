@@ -38,6 +38,23 @@ import { Checkbox } from '@/components/ui/checkbox';
  *                            before — nobody reported that transient in-progress number as wrong,
  *                            only what's shown once something is saved.
  */
+// Resolves the net/tax/grand totals shown when a persisted baseline is used
+// (see the `persistedTotals` prop doc above for the full rationale). Extracted
+// out of the component so its branching doesn't count against the component's
+// own cognitive-complexity budget.
+function resolvePersistedTotals(recomputed, persistedTotals, totalDiscountPct) {
+  const factor = 1 - (totalDiscountPct || 0) / 100;
+  const persistedNet = persistedTotals.netSubtotal;
+  const rawFromLines = recomputed.netSubtotal;
+  const isAlreadyDiscounted = persistedNet != null && rawFromLines != null
+    && Math.abs(persistedNet - rawFromLines) > 0.01;
+  const netIfNotYetDiscounted = persistedNet != null ? persistedNet * factor : null;
+  const discountedNet = isAlreadyDiscounted ? persistedNet : netIfNotYetDiscounted;
+  const netSubtotal = isAlreadyDiscounted && factor > 0 ? persistedNet / factor : persistedNet;
+  const taxAmt = discountedNet != null ? persistedTotals.grandTotal - discountedNet : null;
+  return { netSubtotal, taxAmt, grandTotal: persistedTotals.grandTotal };
+}
+
 export default function DocumentTotalsPanel({
   lines = [],
   pendingLine = null,
@@ -97,20 +114,9 @@ export default function DocumentTotalsPanel({
   // lines' own qty/price/per-line-discount fields, independent of any of
   // this — if they differ by more than rounding noise, the persisted figure
   // must already be net-of-discount.
-  let netSubtotal = recomputed.netSubtotal;
-  let taxAmt = recomputed.taxAmt;
-  let grandTotal = recomputed.grandTotal;
-  if (useBaseline) {
-    const factor = 1 - (totalDiscountPct || 0) / 100;
-    const persistedNet = persistedTotals.netSubtotal;
-    const rawFromLines = recomputed.netSubtotal;
-    const isAlreadyDiscounted = persistedNet != null && rawFromLines != null
-      && Math.abs(persistedNet - rawFromLines) > 0.01;
-    const discountedNet = isAlreadyDiscounted ? persistedNet : (persistedNet != null ? persistedNet * factor : null);
-    netSubtotal = isAlreadyDiscounted && factor > 0 ? persistedNet / factor : persistedNet;
-    taxAmt = discountedNet != null ? persistedTotals.grandTotal - discountedNet : null;
-    grandTotal = persistedTotals.grandTotal;
-  }
+  const { netSubtotal, taxAmt, grandTotal } = useBaseline
+    ? resolvePersistedTotals(recomputed, persistedTotals, totalDiscountPct)
+    : recomputed;
 
   const fmt = (val) => {
     if (val == null) return '';
