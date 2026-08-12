@@ -907,7 +907,6 @@ export default function NewPaymentEntryModal({
   const conversion = useConversionRate({
     fromCode: currency, toCode: accountCurrency, date, apiBaseUrl, token,
   });
-  const [rateStr, setRateStr] = useState('');
   // Edit mode: the rate stored on the draft (ETP-4841). Kept as the raw string from the response
   // so a value like "0.680272" is shown back exactly, without float re-formatting.
   const persistedRate = isEdit && Number(payment?.conversionRate) > 0
@@ -919,19 +918,52 @@ export default function NewPaymentEntryModal({
   // in a USD→GBP field would be a silent accounting error — ETP-4504 W1).
   const persistedRateApplies = persistedRate != null
     && !!accountCurrency && accountCurrency === payment?.accountCurrency;
+  // Computed BEFORE rateStr/amountStr below so their lazy initializers — and the "already seeded"
+  // flag they set — can rely on it on the very first render.
   const persistedRateSeededRef = useRef(false);
+  // Lazily seed rateStr with whatever's synchronously known at mount (a persisted rate, or a
+  // conversion.rate the hook already resolved) instead of always starting blank and waiting for
+  // the seeding effect below to correct it on a LATER render. Starting blank made `rate` (derived
+  // from rateStr) resolve to null on the very first paint, so rateMissing's error flashed for one
+  // frame even when a valid rate was already known before first paint — a genuine, low-frequency
+  // mount-timing race, not a test-expectation bug (the test-mocked useConversionRate resolves
+  // synchronously, so the "right" rate IS known before first paint; it just wasn't reflected in
+  // state until the seeding effect ran). The effect below still owns re-seeding when these inputs
+  // CHANGE after mount (switching accounts/currency pairs, a late-arriving rate in production) —
+  // this only removes the artificial "always blank first" window.
+  const [rateStr, setRateStr] = useState(() => {
+    if (!isForeign) return '';
+    if (persistedRateApplies) {
+      persistedRateSeededRef.current = true;
+      return persistedRate;
+    }
+    return conversion.rate != null ? String(conversion.rate) : '';
+  });
   // ── "Importe en moneda de la cuenta" (Converted Amount) is independently editable, mirroring
   // Classic's Add Payment: editing the rate recomputes the converted amount, and editing the
   // converted amount recomputes the rate — whichever the user touches drives the other.
-  const [amountStr, setAmountStr] = useState('');
+  // Seeded lazily too, mirroring rateStr above, so it never briefly disagrees with the rate it was
+  // computed from on the very first paint.
+  const [amountStr, setAmountStr] = useState(() => {
+    if (!isForeign) return '';
+    const rawRate = persistedRateApplies ? persistedRate : conversion.rate;
+    const n = parseFloat(String(rawRate ?? '').replace(',', '.'));
+    return Number.isFinite(n) && n > 0 ? formatPlain(round2(balance.amount * n)) : '';
+  });
   // Set right before an amount-driven rate/amount update so the recompute effect below skips its
   // own echo: without this, typing in the amount field (or seeding the rate, see below) would
   // trigger a SECOND, separate render+effect pass that recomputes the other field from a stale
   // snapshot, producing a one-frame "wrong" value — see the seed effect's comment for how that
   // exact window let a real user edit get silently swallowed (ETP-4876).
   const skipAmountRecomputeRef = useRef(false);
-  // Seed the rate field, re-running when the currency pair (accountCurrency) or the fetched rate
-  // changes. Crucially this also CLEARS the field when moving to a pair that has no DB rate, so a
+  // Re-seed the rate field whenever the currency pair (accountCurrency) or the fetched rate
+  // changes AFTER MOUNT — the lazy initializers above already cover the value at first paint, so
+  // this effect's remaining job is exclusively re-seeding on later changes (switching
+  // accounts/currency pairs, a late-arriving conversion.rate, etc.). It still runs unconditionally
+  // on mount too (effects always fire once after the initial commit); when it does, the values it
+  // computes match what the lazy initializers already set, so its `setRateStr`/`setAmountStr`
+  // calls here are idempotent no-ops on that first pass. Crucially this also CLEARS the field when
+  // moving to a pair that has no DB rate, so a
   // stale rate from a previously-selected account never silently carries across currency pairs
   // (ETP-4504 W1). Manual edits persist until one of these inputs changes; when not foreign the
   // field is kept empty. A persisted rate wins over the system one and is seeded exactly once per
