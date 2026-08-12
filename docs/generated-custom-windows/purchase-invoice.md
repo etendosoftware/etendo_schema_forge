@@ -614,6 +614,21 @@ rectificative type and the legacy `APC` credit memo.
   `enrichOriginInvoice`) — the same table the separate "Reversed Invoices" / Modelo 349 tab
   (`ReversedInvoicesPanel.jsx`, `window.extraTabs.reversedInvoices`) manages its own rows on,
   for a different purpose (349 corrective-box reporting). The two are independent.
+  - **New (ETP-4755): the tab's "Correctiva del 349" checkbox is now gated by the tenant's
+    Fiscal Models catalog.** `ReversedInvoicesPanel.jsx` — shared, unchanged, by both
+    `sales-invoice` and `purchase-invoice` — fetches the cross-spec, generic
+    `GET /sws/neo/fiscal-models-catalog` endpoint (the same per-`AD_PREFERENCE` catalog the
+    `fiscal-models` window itself uses to enable/disable tax forms; see
+    `fiscal-models.md`'s "Downstream consumer" note for the full write-up) and only renders
+    the checkbox (plus its dependent AEAT year/period/base-amount fields) when the catalog
+    confirms Modelo 349 is active. **Fail-closed** in every failure mode — loading, non-200,
+    network error, or a malformed/missing-key response all hide the checkbox, never show it
+    by default. The read-only "Modelo 349" grid-column badge (`CorrectivaBadge`) is **not**
+    gated — it always reflects the underlying `aEAT349IsCorrective` value regardless of
+    catalog state; only the interactive checkbox is affected. **Known non-blocking gap:**
+    toggling 349 off does not clear or warn about an already-`true` `aEAT349IsCorrective` on
+    existing lines — the checkbox just becomes invisible while the data (and the grid badge)
+    stay intact.
 
 ### List subset filters: "Todos" / "Facturas" / "Facturas rectificativas"
 
