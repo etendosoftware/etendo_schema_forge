@@ -267,15 +267,12 @@ export async function fetchDeclarationIncidents(id, { token, apiBaseUrl } = {}) 
   }
 }
 
-// 'pending' is kept intentionally: Modelo 349 uses it as its initial draft state.
 export const STATUSES = [
-  'skipped', 'pending', 'draft', 'ready',
+  'draft', 'ready',
   'submitted', 'submitted_ext', 'submitted_ack',
 ];
 
 export const STATUS_COLOR = {
-  skipped:       'grey',
-  pending:       'orange',
   draft:         'blue',
   ready:         'green',
   submitted:     'teal',
@@ -284,8 +281,6 @@ export const STATUS_COLOR = {
 };
 
 export const STATUS_ICON = {
-  skipped:       '×',
-  pending:       '○',
   draft:         '✎',
   ready:         '✓',
   submitted:     '✓',
