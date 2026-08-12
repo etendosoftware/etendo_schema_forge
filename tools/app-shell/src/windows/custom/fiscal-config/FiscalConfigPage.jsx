@@ -225,24 +225,26 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
         </div>
         <div className="flex items-center gap-2">
           {(canAddComplementary || canChangeSif) && !addingComplementary && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <DropdownMenu data-testid="DropdownMenu__310303">
+              <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__310303">
                 <button
                   type="button"
                   disabled={saving}
                   aria-label={ui('fiscal.actions.menu')}
                   data-testid="FiscalConfigPage__actionsMenu"
                   className="flex h-7 w-7 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none">
-                  <MoreVertical className="h-4 w-4" />
+                  <MoreVertical className="h-4 w-4" data-testid="MoreVertical__310303" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-52" data-testid="DropdownMenuContent__310303">
                 {canAddComplementary && (
                   <DropdownMenuItem
                     disabled={creatingComplementary}
                     onSelect={handleAddComplementary}
                     data-testid="FiscalConfigPage__addComplementary">
-                    <PlusCircle className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <PlusCircle
+                      className="h-4 w-4 mr-2 text-muted-foreground"
+                      data-testid="PlusCircle__310303" />
                     {creatingComplementary
                       ? ui('fiscal.addComplementary.creating')
                       : ui('fiscal.addComplementary.addSii')}
@@ -252,7 +254,9 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                   <DropdownMenuItem
                     onSelect={() => setChangeSifOpen(true)}
                     data-testid="FiscalConfigPage__changeSif">
-                    <RefreshCw className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <RefreshCw
+                      className="h-4 w-4 mr-2 text-muted-foreground"
+                      data-testid="RefreshCw__310303" />
                     {ui('fiscal.changeSif.action')}
                   </DropdownMenuItem>
                 )}
