@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertPersistedTaxDerivation } from './testUtils/documentPdfPersistedTotalsAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'useOrderPdf.js'), 'utf8');
@@ -86,12 +87,7 @@ describe('useOrderPdf', () => {
   });
 
   it('ETP-4777: derives printed tax from persisted header totals, not the live recompute', () => {
-    // taxAmt from computeDocumentTotals is a live client-side recompute that can
-    // diverge from the backend-persisted grandTotal/summedLineAmount (rounding
-    // differences between the frontend and the C_ORDERLINE_TRG2 trigger). The
-    // printed PDF must match what the Form panel and Grid show, so it derives
-    // tax from the persisted header fields instead.
-    assert.match(sharedSrc, /const taxAmount = grandTotal - netAmount/);
+    assertPersistedTaxDerivation(assert, sharedSrc);
   });
 
   it('uses grandTotal returned by computeDocumentTotals for printed total', () => {
