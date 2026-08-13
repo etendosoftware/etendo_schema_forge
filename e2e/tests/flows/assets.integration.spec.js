@@ -347,7 +347,7 @@ async function createDepreciableAsset(page, { stamp, name }) {
 async function setupDepreciableWithAmortization(page, { stamp, name, mode }) {
   await createDepreciableAsset(page, { stamp, name });
   await crearAmortizacionBtn(page).click();
-  await expect(toastByText(page, /fecha de inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+  await expect(toastByText(page, /fecha(?: de)? inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
   await fillStartDate(page, mode === 'monthly' ? '01062026' : '01012026');
   await saveThenProcess(page, /Valor a amortizar no puede estar vac/i);
   await setFieldUntilDirty(page, 'field-depreciationAmt', '2000');
@@ -475,7 +475,7 @@ test.describe('Assets (real backend)', () => {
 
     // Attempt 1: missing start date.
     await crearAmortizacionBtn(page).click();
-    await expect(toastByText(page, /fecha de inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+    await expect(toastByText(page, /fecha(?: de)? inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
     await fillStartDate(page, '01062026');
 
     // Attempt 2: missing Valor a amortizar.
@@ -568,7 +568,7 @@ test.describe('Assets (real backend)', () => {
     // clean full years (2026 + 2027), not a prorated 3-year plan (a mid-year
     // start prorates the first year, same as the percentage case).
     await crearAmortizacionBtn(page).click();
-    await expect(toastByText(page, /fecha de inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+    await expect(toastByText(page, /fecha(?: de)? inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
     await fillStartDate(page, '01012026');
 
     // Attempt 2: missing Valor a amortizar.
@@ -659,7 +659,7 @@ test.describe('Assets (real backend)', () => {
 
     // Attempt 1: missing start date.
     await crearAmortizacionBtn(page).click();
-    await expect(toastByText(page, /fecha de inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+    await expect(toastByText(page, /fecha(?: de)? inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
     // Start of year so the annual percentage split is two clean full years
     // (2026 + 2027 at 50% each), not a prorated 3-year plan.
     await fillStartDate(page, '01012026');
@@ -746,7 +746,7 @@ test.describe('Assets (real backend)', () => {
     await createDepreciableAsset(page, { stamp, name });
 
     await crearAmortizacionBtn(page).click();
-    await expect(toastByText(page, /fecha de inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+    await expect(toastByText(page, /fecha(?: de)? inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
     await fillStartDate(page, '01062026');
     await saveThenProcess(page, /Valor a amortizar no puede estar vac/i);
     await setFieldUntilDirty(page, 'field-depreciationAmt', '2000');
@@ -801,7 +801,7 @@ test.describe('Assets (real backend)', () => {
     await createDepreciableAsset(page, { stamp, name });
 
     await crearAmortizacionBtn(page).click();
-    await expect(toastByText(page, /fecha de inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+    await expect(toastByText(page, /fecha(?: de)? inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
     await fillStartDate(page, '01012026');
     await saveThenProcess(page, /Valor a amortizar no puede estar vac/i);
     // Keep the missing-value validation above meaningful, then provide the
@@ -860,7 +860,7 @@ test.describe('Assets (real backend)', () => {
     await createDepreciableAsset(page, { stamp, name });
 
     await crearAmortizacionBtn(page).click();
-    await expect(toastByText(page, /fecha de inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+    await expect(toastByText(page, /fecha(?: de)? inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
     await fillStartDate(page, '01012026');
     await saveThenProcess(page, /Valor a amortizar no puede estar vac/i);
     await setFieldUntilDirty(page, 'field-depreciationAmt', '2000');
