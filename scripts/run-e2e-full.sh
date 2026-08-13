@@ -115,11 +115,20 @@ if [ "$SUITE" != "mocked" ]; then
   integration_workers="${E2E_WORKERS:-1}"
   integration_note=""
   [ "$integration_workers" != "1" ] && integration_note=" — ⚠️  shared admin/backend, data-race risk accepted via E2E_WORKERS"
-  integration_test_args=(npx playwright test --project=integration --no-deps)
+  # onboarding-setup is a real dependency of integration (see playwright.config.js)
+  # and both are listed explicitly here — matches the pipelines' own invocation
+  # exactly. No --no-deps in the default path: it disables Playwright's ordering
+  # guarantee even for explicitly-listed dependencies, so onboarding-setup and
+  # integration end up running IN PARALLEL instead of onboarding-setup completing
+  # first — the integration specs that rely on onboarding's setup data then fail.
+  # --no-deps stays opt-in for the targeted modes below (E2E_FILES/--last-failed),
+  # where skipping the full onboarding flow on every quick rerun is the point.
+  integration_test_args=(npx playwright test --project=onboarding-setup --project=integration)
   if [ "$LAST_FAILED" = "1" ]; then
-    integration_test_args+=(--last-failed)
+    integration_test_args+=(--no-deps --last-failed)
     selection_note=" — last failed"
   elif [ -n "$FILES" ]; then
+    integration_test_args+=(--no-deps)
     IFS=',' read -r -a selected_files <<< "$FILES"
     for selected_file in "${selected_files[@]}"; do
       [ -n "$selected_file" ] && integration_test_args+=("$selected_file")
