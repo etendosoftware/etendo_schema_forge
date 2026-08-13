@@ -326,6 +326,10 @@ async function createDepreciableAsset(page, { stamp, name }) {
 
   await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
   await page.getByTestId('field-name').fill(name);
+  // Depreciation scenarios use a residual of -2000 and expect two 1000
+  // amortization lines. Keep the asset value consistent with that fixture;
+  // a zero-valued asset makes processAsset reject the request with HTTP 400.
+  await page.getByTestId('field-assetValue').fill('2000');
   await selectGrupoActivoOtros(page);
 
   // Activate "Depreciar" → financial + accounting-dimensions sections appear.
