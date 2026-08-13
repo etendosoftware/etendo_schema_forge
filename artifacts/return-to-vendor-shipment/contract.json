@@ -1,7 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-08-13T11:56:58.791Z",
-  "checksum": "6b5482853e0241d3",
+  "updatedAt": "2026-08-13T12:12:37.051Z",
+  "checksum": "18ebd05bb87becbb",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -11,6 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
@@ -709,6 +715,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"

@@ -1,7 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-08-13T11:56:58.624Z",
-  "checksum": "c3b076177dd65306",
+  "updatedAt": "2026-08-13T12:12:36.891Z",
+  "checksum": "b7c115e694dc9287",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -11,6 +12,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "bottomSection": "ReturnMaterialReceiptBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
@@ -723,6 +725,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": true,
       "customComponents": {
         "bottomSection": "ReturnMaterialReceiptBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
