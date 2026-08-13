@@ -562,14 +562,7 @@ run_playwright() {
     return 0
   fi
 
-  if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
-    # Resume convenience (ETP-4861): skip mocked entirely when only integration
-    # needs a rerun. Doesn't need its own onboarding-setup toggle here — unlike
-    # the old direct-Playwright invocation this replaced, run_e2e_suite's
-    # integration pass already always skips that dependency (see run-e2e-full.sh).
-    echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (integration-only resume)"
-    record_summary_row "Playwright — mocked" "-" "SKIPPED" ""
-  elif [ "$RUN_PW_MOCKED" = "1" ]; then
+  if [ "$RUN_PW_MOCKED" = "1" ]; then
     run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
   else
     echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (no mocked-spec / UI changes)"
@@ -933,12 +926,8 @@ if [ -n "$LAST_FAILED_STEP" ]; then
   esac
 fi
 
-if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ] || [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
-  if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
-    echo "==> Resuming at integration stage (--from=integration): stages 0-4 and onboarding skipped by request."
-  else
-    echo "==> Resuming at Playwright stage (--from=playwright): stages 0-4 skipped by request."
-  fi
+if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ]; then
+  echo "==> Resuming at Playwright stage (--from=playwright): stages 0-4 skipped by request."
 else
   run_step_0
   run_step_1
