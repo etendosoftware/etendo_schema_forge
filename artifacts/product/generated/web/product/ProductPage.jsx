@@ -114,13 +114,17 @@ export const api = {
     "costing": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/product/costing",
       "detailUrl": "/sws/neo/product/costing/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "transactionAdjustments": {
       "get": true,
@@ -136,13 +140,17 @@ export const api = {
     "transactions": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/product/transactions",
       "detailUrl": "/sws/neo/product/transactions/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "productCharacteristic": {
       "get": true,
@@ -158,13 +166,17 @@ export const api = {
     "stock": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/product/stock",
       "detailUrl": "/sws/neo/product/stock/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "categoryPriceRuleVersion": {
       "get": true,

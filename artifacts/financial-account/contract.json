@@ -1,8 +1,8 @@
 {
   "version": "0.27.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-13T14:07:09.641Z",
-  "checksum": "0ec1af3e8cd9a13c",
+  "updatedAt": "2026-08-13T16:50:49.908Z",
+  "checksum": "49fd1dce36afe518",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -5512,13 +5512,17 @@
       "clearedItems": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/accounts/clearedItems",
         "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [

@@ -231,3 +231,144 @@ submitted as PR [#35](https://github.com/etendosoftware/etendo-go-docs/pull/35) 
 
 Delivery still needs the merge and the Context7 reindex ([IMP-14](IMP-14.md)) — the third gate, and
 the one IMP-14 exists to name, since a merged PR still is not an indexed corpus.
+
+---
+
+## 2026-08-13 — still open; the target `AFTER` now exists verbatim, from the other side
+
+No code changed and the item stays ⚠️. What the 08-13 run added is that **the `AFTER` block no longer
+needs designing** — Holded, probed on the same task, produced it:
+
+```
+HTTP 400 - {'type': 'https://api.holded.com/problems/bad-request', 'title': 'Bad request',
+'status': 400, 'detail': 'Invalid date format: "03-04-2026". Expected format: YYYY-MM-DD
+(e.g. 2026-08-13) or ISO 8601 datetime (e.g. 2026-08-13T15:04:12+00:00)'}
+```
+
+Everything this item asks for is in that body: it rejects rather than guesses, it echoes the offending
+value, it names the accepted formats, and it gives an example of each. Copy the shape into the IMP-5
+envelope (`status`/`error`/`detail`, plus `field`) and the design work is done; what remains is
+implementation and a test.
+
+This remains **the highest-value item on the board** and the only open defect that destroys data
+rather than costing calls — a wrong `invoiceDate` is stored and stays stored. It is also worth noting
+the asymmetry the run made visible: Etendo GO's *not-found* errors are better than Holded's
+(`{"status":404,"error":"not_found","detail":"No sales-order/header with id …","seeAlso":…}` against
+Holded's bare `'detail': 'Not Found'`), so the envelope is not the weak part — this one field's
+parser is.
+
+---
+
+## 2026-08-13 (later the same day) — the section above is wrong twice, and the real defect is sharper
+
+**The section immediately above is left standing on purpose**, per this skill's rule that a wrong
+diagnosis stays visible next to the evidence that killed it. It is wrong in two ways, and both
+mistakes were made *after* the phase-2 ship, by a reader who had the evidence and misread it.
+
+### Error 1 — "the only open defect that destroys data"
+
+False, and the registry row already said so. Phase 2 shipped, deployed and was probed live on
+**2026-08-10**: the raw DAL `status:-4` was replaced by an IMP-5-shaped 422 with
+`invalidDates:[{name, received, expectedFormat, example}]`. The registry's own words: *"the data-loss
+half is genuinely gone — the value is refused, nothing lands in the first century"*, and *"the P1
+label is now arguably too high"*. Nothing here destroys data today.
+
+### Error 2 — "what remains is implementation and a test"
+
+Also false, in the opposite direction. Correcting error 1 led to the equally wrong claim that the item
+was effectively closed. It is not. The live 08-13 probe against build `8f0d1cce` — i.e. *after* the
+phase-2 deploy — measured this:
+
+| Sent to `etendo-go-local` | Result |
+|---|---|
+| `orderDate: "20-09-2026"` | stored `2026-09-20` — **silently**, no 422 |
+| `orderDate: "03-04-2026"` | stored **`2026-04-03`** — **silently**, no 422 |
+| same value to Holded | **400, rejected** |
+
+The 422 fires on neither. That is not a broken deploy; it is the designed split. IMP-16's coercer
+**repairs** `dd-MM-yyyy` and the 422 is reserved for the **irreparable** (`06/08/2026` with slashes,
+`2026-02-30` impossible). Both probe values fall on the reparable side by construction.
+
+### The actual open defect: ambiguity is never detected
+
+`NeoDateFormat.toCanonical` (`NeoDateFormat.java:161-183`) tries exactly two interpretations in
+`parseDatePart` (`:205-224`): ISO `yyyy-MM-dd` (`:210`), then the configured UI pattern —
+`dd-MM-yyyy` by default, `getUiDatePattern()` `:100-117` — through a strict formatter
+(`strictUiFormatter()`, `:236-245`). If either parses, the canonical string is returned
+**unconditionally**. Only if both fail does it return `null` and route to `buildInvalidDateInfo` via
+`coerceDateFieldValue` (`McpToolRouterSupport.java:707-733`).
+
+There is **no ambiguity check anywhere** — confirmed by absence: `grep -i ambig` over
+`NeoDateFormat.java` and `McpToolRouterSupport.java` returns nothing, and only one non-ISO pattern is
+ever attempted, so no two candidate readings are ever compared. Tracing the two probe values:
+
+- `"20-09-2026"` — ISO fails (day `2026` invalid); UI pattern gives day=20, month=09 → repaired.
+  Swapping day/month would give month=20, invalid under any reading, so this value is genuinely
+  unambiguous. **The code does not know that** — it never computes it.
+- `"03-04-2026"` — identical code path. day=03, month=04 → repaired to 3 April. But 4 March is an
+  equally valid reading. We pick one and say nothing. Holded refuses to pick.
+
+**That is IMP-24's original target verbatim, and it survived phase 2** — because phase 2 split
+reparable from irreparable, and an ambiguous value is, by construction, entirely reparable.
+
+### Why the fix is small and safe — the witness already exists
+
+The reason a blanket rejection is unacceptable is that our own `neo_defaults` injects `dd-MM-yyyy`
+values; rejecting them would blame the agent for a value the server supplied. The `callerSupplied`
+witness that distinguishes the two is **already threaded end-to-end**:
+`McpToolRouter.coerceFieldTypes` computes it per key (`McpToolRouter.java:1619`:
+`callerSupplied = callerKeys == null || callerKeys.has(key)`) and passes it down
+(`:1620-1621` → `McpToolRouterSupport.java:665`).
+
+**It is consulted only on the failure branch.** In `coerceDateFieldValue` (`:707-733`), the
+`canonical == null` block (`:715-726`) branches on `callerSupplied` to choose WARN-pass-through vs
+reject. The **success** branch (`:728-731`) — precisely the repair path — never references it: it
+repairs and logs INFO regardless of who supplied the value.
+
+So the fix is two additions on existing plumbing, not a redesign:
+
+1. An ambiguity predicate on the UI-pattern parse result: day and month both in `[1,12]` and unequal.
+2. A branch in the success path of `coerceDateFieldValue` that rejects (IMP-5 envelope) when that
+   predicate holds **and** `callerSupplied` is true — leaving server-injected values (e.g.
+   `injectMandatoryDefaults`'s `@#Date@`) repaired exactly as today.
+
+Note the predicate rejects `03-04-2026` and still repairs `20-09-2026`. That asymmetry is correct and
+is the point: only genuinely ambiguous values cost the agent a round trip.
+
+### `neo_batch` — a second, lower-priority gap
+
+`handleBatch` (`McpToolRouter.java:1051`) delegates to `BatchService.forBatchOnly().executeBatch`
+(`:1090`) → `NeoCrudHandler#handleDefault` → `NeoTypeCoercionHelper.coerceTypes`/`coerceField`
+(`NeoTypeCoercionHelper.java:174-197`), which only WARNs and passes through — it never builds a
+rejection. So `neo_batch` gets **neither** half: not the irreparable-value 422 that shipped in phase 2,
+nor the ambiguity check proposed above, because it never reaches `coerceFieldTypes` at all.
+
+The leniency of the REST path is justified in code by *"the React form has a date picker and is not an
+agent"*. That argument does not extend to `neo_batch`, which is an agent write verb. This is an unmet
+clause of this item's own title (*on write*), not a new number — but it is separable from the
+ambiguity fix and should ship after it.
+
+### Ruled out — `accountingDate` is not a bug
+
+The 08-13 probe recorded `accountingDate` moving on a call that never named it. That is **intentional**:
+`AbstractOrderHeaderHandler.mirrorAccountingDate` (`AbstractOrderHeaderHandler.java:103-108`, javadoc
+`:86-91`, ETP-4531 "unified date") mirrors `orderDate` into the hidden `accountingDate` on every write,
+called from `SalesOrderHeaderHandler.handle()` (`:60`) and `PurchaseOrderHeaderHandler.handle()`
+(`:65`). Ordering is correct: `coerceFieldTypes` runs at `McpToolRouter.java:561`/`:660`, **before**
+the pre-hook at `:584-586`/`:666-669`, so the mirror copies the canonicalized value, not the raw
+string. Not IMP-16's callout cascade, and not a defect. The only open question is a documentation one:
+whether any MCP-facing tool description discloses the side effect to an agent. Not checked.
+
+### Declared verification gaps, unchanged
+
+- The offset-datetime classifier is covered by unit tests only; never probed live.
+- The `neo_update` call site (`:660`) was never probed live — only `neo_create`.
+
+### Revised `Done when:` delta
+
+- [ ] A caller-supplied ambiguous date (`03-04-2026`) is **rejected** with the IMP-5 envelope, while
+      an unambiguous one (`20-09-2026`) is still repaired and a server-injected one is untouched —
+      pinned by unit tests over all three cases, not a spot check.
+- [ ] `neo_batch` reaches the same coercion path, or the decision that it stays REST-lenient forever
+      is recorded here with its reason.
+- [ ] Re-probed live on `neo_create` **and** `neo_update`.

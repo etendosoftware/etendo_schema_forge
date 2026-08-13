@@ -181,3 +181,27 @@ reconciled on top of the already-merged PR #33, so it is one commit ahead of `ma
 
 Delivery still needs the merge and the Context7 reindex ([IMP-14](IMP-14.md)) — the third gate, and
 the one IMP-14 exists to name, since a merged PR still is not an indexed corpus.
+
+---
+
+## 2026-08-13 — re-probed by a `/mcp-comparison` run (job B); still ⚠️, and the gap is now exact
+
+**An earlier draft of the 08-13 run read this evidence as *resolving* the item. That was wrong, and
+the wrong reading is kept here on purpose** — the registry cell already described the write-verb
+silence (`salePrice`/`purchasePrice`/`stock` dropped without a `warnings` array), so what the run
+found sharpens a registered item instead of closing it.
+
+What was measured on `etendo-go-local`, build `8f0d1cce`:
+
+- **`neo_schema` does report unknown names.** A projection with two bogus keys came back with
+  `"unknownFields": ["price","notAField"]`.
+- **`neo_create` / `neo_update` drop the very same `price` key in silence**, and return 200.
+
+So the warning mechanism exists, is correct, and is **simply not wired into the write verbs**. That is
+a much smaller fix than the original registration implied — it is a call-site question, not a design
+question — and it is the reason the item stays P2 rather than being promoted.
+
+**Boundary with IMP-28**, since the two were found in one probe and are easy to merge by mistake:
+this item is *"you sent a name I do not recognize"*. IMP-28 is *"you sent a name I recognize and you
+may not write it"*. Different messages, different agent recovery, and folding them together would
+produce a response that cannot distinguish a typo from a permission.

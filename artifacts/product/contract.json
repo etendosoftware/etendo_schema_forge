@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-05T02:33:56.657Z",
-  "checksum": "c5aa960de3723932",
+  "updatedAt": "2026-08-13T16:50:51.070Z",
+  "checksum": "d1799b1ceb48a2f8",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -5696,13 +5696,17 @@
       "costing": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/product/costing",
         "detailUrl": "/sws/neo/product/costing/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "transactionAdjustments": {
         "get": true,
@@ -5718,13 +5722,17 @@
       "transactions": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/product/transactions",
         "detailUrl": "/sws/neo/product/transactions/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "productCharacteristic": {
         "get": true,
@@ -5740,13 +5748,17 @@
       "stock": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/product/stock",
         "detailUrl": "/sws/neo/product/stock/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "categoryPriceRuleVersion": {
         "get": true,

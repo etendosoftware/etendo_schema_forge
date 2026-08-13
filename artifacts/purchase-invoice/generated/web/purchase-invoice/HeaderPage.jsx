@@ -122,13 +122,17 @@ export const api = {
     "tax": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/purchase-invoice/tax",
       "detailUrl": "/sws/neo/purchase-invoice/tax/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "basicDiscounts": {
       "get": true,
@@ -199,13 +203,17 @@ export const api = {
     "accounting": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/purchase-invoice/accounting",
       "detailUrl": "/sws/neo/purchase-invoice/accounting/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "siiData": {
       "get": true,
@@ -221,13 +229,17 @@ export const api = {
     "batuz": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/purchase-invoice/batuz",
       "detailUrl": "/sws/neo/purchase-invoice/batuz/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     }
   },
   "selectors": [

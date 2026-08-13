@@ -661,7 +661,12 @@ Hooks: `tools/app-shell/src/hooks/useReconciliationList.js` — `useReconciliati
 
 The toolbar mirrors the Movements tab: back arrow, date range defaulting to **last 30 days**, the advanced condition filter, and a search box; no summary strip, because those KPIs belong to the account and Movements already shows them.
 
-**Known limitation.** Read-only cannot be enforced at *entity* level: `ETGO_SF_ENTITY` has no `ISREADONLY`, and `push-to-neo` forces `ISPOST/ISPUT/ISPATCH/ISDELETE='Y'` with no `decisions.json` knob. What protects these entities in practice is that every field is read-only, so `NeoFieldFilter.filterWriteRequest` strips them all and a PUT/PATCH arrives with an empty body; and `clearedItems` is a DB view, so writes fail at the DAL regardless. `reconciliations` is a physical table, so the verbs remain nominally open with nothing writable behind them. Closing that properly needs a new option in the `schema_forge_core` CLI.
+**Entity-level write access.** `ETGO_SF_ENTITY` still has no `ISREADONLY`, but the six HTTP method flags (`ISGET`/`ISGETBYID`/`ISPOST`/`ISPUT`/`ISPATCH`/`ISDELETE`) *are* declarable from `decisions.json` since ETP-4254 — `entities.<key>.readOnly: true` resolves to `GET` + `GETBYID` only (see `lib/entity-methods.js` in `schema_forge_core`).
+
+- **`clearedItems` is now declared `"readOnly": true`.** It is a DB view (`FIN_ReconciliationLine_v`), so an INSERT was never possible; before, the contract advertised `POST`/`PUT`/`PATCH`/`DELETE` with zero writable fields behind them, and a write died on a raw DAL error instead of a clean `405`. The contract now carries `apiPrediction.crud.clearedItems.methods = ["GET","GETBYID"]`. Reads are unaffected.
+- **`reconciliations` is deliberately left open.** It is a physical table (`FIN_Reconciliation`) whose rows are created by a process rather than by a plain INSERT, and every field being read-only may be over-curation rather than a genuine read-only entity. Closing it is a pending human decision, not an oversight.
+
+Until the next `make regen ONLY=financial-account PUSH_TO_NEO=1` + `./gradlew export.database`, the declaration lives only in `decisions.json`/`contract.json` — the live `ETGO_SF_ENTITY` row still grants the write verbs.
 
 ### Reconciliation tab (T6) — bank and card accounts
 

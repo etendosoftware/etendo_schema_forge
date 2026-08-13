@@ -520,3 +520,17 @@ only one possible — no unit test in the module could have produced it (§11.4)
   *accidentally true* — but it still omits `persisted` and the process-commit exception, so an agent
   trusting it would not know to check `atomic`. This is a client-side caching limit no server change
   reaches, and it is the strongest argument in the file for having put the contract in the response body.
+
+---
+
+## 2026-08-13 — re-probed by a `/mcp-comparison` run (job B); score awarded, 0 → 5/5
+
+Re-probed live on `etendo-go-local`, build `8f0d1cce`: a `neo_batch` whose second op is invalid rolls
+the first one back and reports the failing index. The 08-12 verification had been accepted but left
+unscored; registry §3 now reads ✅ with 5/5.
+
+Note this probe is the **two-op case** that IMP-5's file (§6.2) deliberately declined to run for its
+own clause (i) — there, on the grounds that the pre-pass has always run before the transaction opened,
+so probing it would have measured a property that fix did not touch. Here it is the property under
+test, so it was run. The distinction is worth keeping straight: the same call shape is a
+non-measurement for one item and the measurement for another.

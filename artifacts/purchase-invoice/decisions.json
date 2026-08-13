@@ -762,6 +762,7 @@
       }
     },
     "tax": {
+      "readOnly": true,
       "fields": {
         "lineNo": {
           "visibility": "readOnly",
@@ -829,6 +830,7 @@
       }
     },
     "accounting": {
+      "readOnly": true,
       "name": "accounting",
       "fields": {
         "account": {
@@ -1051,6 +1053,9 @@
         }
       },
       "javaQualifier": "invoiceExchangeRateHandler"
+    },
+    "batuz": {
+      "readOnly": true
     }
   },
   "rules": {

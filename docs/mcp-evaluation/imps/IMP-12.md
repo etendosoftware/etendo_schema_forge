@@ -723,3 +723,21 @@ not all *unlabelled fields*, some are *absent `AD_Field` records*, and the two c
 different repos (an AD record in `com.etendoerp.go` vs an `applyCuratedLabels` override in
 `schema_forge_core`). Whoever picks IMP-1 up should run the query above per offending field first —
 the answer decides which repo the fix lands in.
+
+---
+
+## 2026-08-13 — re-measured by a `/mcp-comparison` run (job B); registry row moved ⚠️ → ✅
+
+`neo_schema view:"create"` on `product/header` returned **4,932 bytes** where the full dump was
+61,963 chars, and the call no longer fails against the context limit — the failure this file
+reproduced byte-for-byte on 08-06. `etendo-go-local`, build `8f0d1cce`. Registry §3 moved the row
+⚠️ → ✅ and 2.5 → 5/5, and §2.6 records the 4,932 B figure as the first ACE-v datum for this surface.
+
+**§15's defect got sharper and is now its own P1.** This file already recorded that on an uncurated
+entity `view:"create"` returns empty *and* its `hint` tells the agent not to look further. The 08-13
+run hit the non-empty variant of the same trap: on `product/header` the projection returns a useful
+subset that **omits every price and stock field**, with the same "do not call `neo_schema` again"
+hint — so the agent is told the writable set is complete when the three fields the task needs are
+missing from it. That is registered as **IMP-28**, not as a regression here: the projection *works*,
+its editorial choice of what to include is the new item. §15's own count (89 of 230 POST-able entities
+returning empty) is unchanged and still belongs to this file.

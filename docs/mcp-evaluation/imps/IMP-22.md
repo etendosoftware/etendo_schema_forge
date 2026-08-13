@@ -228,3 +228,19 @@ Also unverified: the multi-pass path on a body with **three or more** chained de
 partner → address → tax), and the O(n²) worst case has been reasoned about rather than measured.
 §7.1's body chains **two** deep (partner → address); the other four FK names in it resolve without
 context, so they exercise pass 0, not the retry loop.
+
+---
+
+## 2026-08-13 — verified live by a `/mcp-comparison` run (job B); registry row moved 🔧 → ✅
+
+The live verification this file was pending has happened, on `etendo-go-local`, build `8f0d1cce`:
+`neo_create` on `sales-order/header` accepted the partner's address **by display name on the first
+call**. The 422 `not_found` retry loop the 08-10 run measured is gone. Registry §3 moved the row
+🔧 → ✅ and 0 → 3/3.
+
+This is one of the two reasons **M1 reached 1.0×** this run (the other is IMP-12 removing the schema
+re-fetch) — i.e. the item paid off in the outcome half of MARI, not only in the points half.
+
+**Still not measured**, exactly as §7.1 warned: the O(n²) worst case. The probe chained two deep
+(partner → address), which is the same depth §7.1 already reasoned about. A three-deep chain remains
+unexercised, so the performance claim in this file is still a reasoned one and not a measured one.

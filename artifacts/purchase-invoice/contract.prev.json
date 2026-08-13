@@ -1,8 +1,8 @@
 {
   "version": "0.83.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-11T19:52:32.867Z",
-  "checksum": "758dfc90eed3f4b7",
+  "updatedAt": "2026-08-13T16:50:51.321Z",
+  "checksum": "a80f1e3f58743bd2",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -9669,13 +9669,17 @@
       "tax": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-invoice/tax",
         "detailUrl": "/sws/neo/purchase-invoice/tax/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "basicDiscounts": {
         "get": true,
@@ -9746,13 +9750,17 @@
       "accounting": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-invoice/accounting",
         "detailUrl": "/sws/neo/purchase-invoice/accounting/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "siiData": {
         "get": true,
@@ -9768,13 +9776,17 @@
       "batuz": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-invoice/batuz",
         "detailUrl": "/sws/neo/purchase-invoice/batuz/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [

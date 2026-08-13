@@ -119,6 +119,9 @@
           "derivation": "fromConfig"
         }
       }
+    },
+    "logHash": {
+      "readOnly": true
     }
   }
 }

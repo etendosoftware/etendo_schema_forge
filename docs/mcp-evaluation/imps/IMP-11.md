@@ -390,3 +390,29 @@ not at all.
 **Real prerequisites:** the user builds and deploys (never `gradlew` / `update.database` /
 `export.database` / Tomcat from here), and step 3's re-push must be followed by
 `./gradlew export.database` so the config survives a rebuild.
+
+---
+
+## 2026-08-13 — re-measured by a `/mcp-comparison` run (job B); registry row moved ⚠️ → ✅
+
+The measurement this file was waiting on has happened, on `etendo-go-local`, build `8f0d1cce`. Every
+field descriptor on an **uncurated** spec now carries both keys — the case the writer fix was aimed at:
+
+```json
+{"name":"searchKey","column":"Value","label":"Search Key","type":"string","required":true,
+ "readOnly":false,"visibility":"editable","userRequired":true,"businessCritical":false,
+ "description":"A fast method for finding a particular record."}
+```
+
+So the response `hint` and the `neo_schema` tool description no longer promise a key the payload
+omits, which was the whole of this item. Registry §3 moved the row ⚠️ → ✅ and 2.5 → 5/5. Note the
+outstanding condition this file recorded — *staging re-verification* — is **still outstanding**: the
+run probed local only, so the ✅ holds on local. A run against staging would tell us whether it is
+released.
+
+**What the same probe found, and why it is not held against this item:** `visibility` and `readOnly`
+can now *disagree* on the same field (`{"visibility":"readOnly","readOnly":false}` on
+`product/header`'s price fields). Emitting the key was this item; making the two keys agree is a new
+defect, registered as **IMP-28 (P1)**. Closing IMP-11 by suppressing `visibility` again would have
+"fixed" IMP-28 by regressing this one — worth stating, because the two are one line apart in the
+serializer.
