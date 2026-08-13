@@ -21,6 +21,7 @@ artifacts/test-report.html
 window-locks.json
 .active-locale
 tools/app-shell/dist/
+tools/app-shell/dist-e2e/
 tools/app-shell/.env.local
 tools/app-shell/.env.development
 tools/app-shell/.env.development.local

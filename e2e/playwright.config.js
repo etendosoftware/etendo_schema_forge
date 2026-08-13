@@ -7,6 +7,21 @@ import { defineConfig, devices } from '@playwright/test';
  *   1. Dev server (default):  make dev → http://localhost:3100
  *   2. Deployed (Etendo):     BASE_URL=http://localhost:8080/etendo/web/com.etendoerp.go make test-e2e
  */
+
+// mocked is always safe to parallelize — every mocked spec talks to a fully
+// intercepted, per-page fake backend, so workers never share state.
+//
+// onboarding-setup/integration default to workers:1 for a real reason: every
+// *.integration.spec.js logs in with the SAME shared admin credentials against
+// the SAME live Etendo/Postgres tenant (see e.g. contacts-integration.spec.js),
+// so concurrent workers there race on real, shared records — data corruption,
+// not just flakiness. Raising E2E_WORKERS above 1 applies to ALL THREE
+// projects, including these two: that's an explicit, opt-in acceptance of that
+// risk (deliberately not a separate/quieter knob), not a safe default.
+const E2E_WORKERS = process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : undefined;
+const MOCKED_WORKERS = E2E_WORKERS ?? 4;
+const INTEGRATION_WORKERS = E2E_WORKERS ?? 1;
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -34,7 +49,7 @@ export default defineConfig({
       name: 'mocked',
       testMatch: '**/*.mocked.spec.js',
       use: { ...devices['Desktop Chrome'] },
-      workers: process.env.CI ? 4 : undefined,
+      workers: MOCKED_WORKERS,
     },
     {
       name: 'onboarding-setup',
