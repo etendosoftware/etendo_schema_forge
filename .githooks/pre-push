@@ -802,11 +802,15 @@ if [ -n "$LAST_FAILED_STEP" ]; then
   esac
 fi
 
-run_step_0
-run_step_1
-run_step_2
-run_step_3
-run_step_4
+if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ]; then
+  echo "==> Resuming at Playwright stage (--from=playwright): stages 0-4 skipped by request."
+else
+  run_step_0
+  run_step_1
+  run_step_2
+  run_step_3
+  run_step_4
+fi
 
 # Steps 0-4 passed — now the mandatory Playwright E2E suites (mocked + integration).
 run_playwright
