@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
-import { assertPeriodOpen } from '../helpers/period-helpers.js';
+import { ensureOpenPeriod } from '../helpers/period-helpers.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, openDraftRow, clickConfirmButton,
@@ -62,10 +62,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
   );
 
   test('PO → receipt → invoice → payment (full purchasing cycle)', async ({ page }) => {
-    // ETP-4567 — fail fast if the accounting period isn't open for the doc
-    // types this flow confirms, instead of timing out ~10s later on an
-    // unrelated UI element with a confusing generic Playwright timeout.
-    await assertPeriodOpen();
+    // ETP-4567 — open the accounting period for the doc types this flow
+    // confirms, instead of timing out ~10s later on an unrelated UI
+    // element with a confusing generic Playwright timeout.
+    await ensureOpenPeriod();
 
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
@@ -400,10 +400,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
    *      document), so that check does not apply on that stage.
    */
   test('PO with a negative-quantity/positive-price line propagates the negative sign through receipt and invoice', async ({ page }) => {
-    // ETP-4567 — fail fast if the accounting period isn't open for the doc
-    // types this flow confirms, instead of timing out ~10s later on an
-    // unrelated UI element with a confusing generic Playwright timeout.
-    await assertPeriodOpen();
+    // ETP-4567 — open the accounting period for the doc types this flow
+    // confirms, instead of timing out ~10s later on an unrelated UI
+    // element with a confusing generic Playwright timeout.
+    await ensureOpenPeriod();
 
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
