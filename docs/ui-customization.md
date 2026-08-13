@@ -869,7 +869,7 @@ Clicking either the chevron or the hover action toggles the same expand state �
 
 ```
 tools/app-shell/src/windows/custom/shared/
-  useTaxSifLineRowActions.js   // hook: builds `rowActions` (§14c shape) + the modal JSX
+  useTaxSifLineRowActions.jsx  // hook: builds `rowActions` (§14c shape) + the modal JSX
   TaxSifModal.jsx              // the quick-fix dialog itself (EntityForm entity="tax")
   TaxSifField.jsx              // pre-existing; selectSifFields() is reused, not duplicated
 ```

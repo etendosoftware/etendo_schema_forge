@@ -17,7 +17,7 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord } from '../shared/useInvoiceWindow.js';
-import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.js';
+import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 
 /* eslint-disable react/prop-types */
 

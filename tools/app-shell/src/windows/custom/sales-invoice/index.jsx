@@ -21,7 +21,7 @@ import { useInvoicePdf } from '../shared/useInvoicePdf.js';
 import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord } from '../shared/useInvoiceWindow.js';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
-import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.js';
+import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 
 // Mirrors artifacts/sales-invoice/decisions.json → window.lineTaxSifTrigger (ETP-4888
 // point 5, docs/decisions-reference.md). `DetailView`'s `lineRowActions` prop is a

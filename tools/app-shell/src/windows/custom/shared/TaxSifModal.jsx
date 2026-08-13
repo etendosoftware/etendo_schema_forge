@@ -35,7 +35,7 @@ const TAX_ENTITY_NAME = 'tax';
  * an existing header grid; this modal owns its own boxed form). SII never
  * reaches this modal in practice: `selectSifFields()` returns `[]` for it, so
  * the row-action trigger that opens this modal (see
- * `useTaxSifLineRowActions.js`) never shows for an SII-only tax.
+ * `useTaxSifLineRowActions.jsx`) never shows for an SII-only tax.
  *
  * @param {object}   props
  * @param {string|null} props.taxId      C_Tax_ID of the record to edit. Modal is open
@@ -105,7 +105,7 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
       toast.success(ui('taxSif.modal.saveSuccess'));
       // `patchById`'s response uses the tax entity's own camelCase field names (e.g.
       // `tbaiClaveregimeniva`), but the caller's completeness cache (built from the
-      // SIF-enriched tax SELECTOR response — see useTaxSifLineRowActions.js) is keyed by
+      // SIF-enriched tax SELECTOR response — see useTaxSifLineRowActions.jsx) is keyed by
       // the raw AD column names (e.g. `EM_Tbai_Claveregimeniva`, matching `field.column`
       // in `selectSifFields()`'s descriptors). Translate via `selectedFields` so the
       // caller's cache update actually lands on the SAME keys `isTaxSifMissing()` reads —
