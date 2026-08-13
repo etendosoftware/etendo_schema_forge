@@ -238,6 +238,15 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   await expect(searchDrawer).toBeVisible({ timeout: 10_000 });
 
   const product = page.locator('[data-testid^="product-search-option-"]').nth(productIndex);
+  // Product selection starts the line-level SL_Order_Product callout. Do not
+  // let Enter submit the inline row until that response has applied price,
+  // tax, UOM, and the other forced fields to the row state.
+  const productCallout = page.waitForResponse(
+    (resp) => resp.url().includes('/callout')
+      && resp.request().method() === 'POST'
+      && resp.status() < 500,
+    { timeout: 20_000 },
+  );
   if (await product.isVisible({ timeout: 5_000 }).catch(() => false)) {
     await product.click();
   } else {
@@ -245,10 +254,7 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   }
   await slow(page);
   await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
-  await page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-    { timeout: 10_000 },
-  ).catch(() => {});
+  await productCallout;
   await slow(page);
 
   if (quantity) {
