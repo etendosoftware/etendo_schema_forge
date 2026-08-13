@@ -113,7 +113,8 @@ button columns rather than half-apply them.
 
 ## 5. The pieces
 
-Six touchpoints. Nothing here is architecturally novel — `agent_prompt` and `isbusinesscritical`
+Six touchpoints, plus a seventh that is already built and worth reading before the other six.
+Nothing here is architecturally novel — `agent_prompt` and `isbusinesscritical`
 already traverse this exact path, and copying one of them is the cheapest way to build it.
 
 1. **`ETGO_SF_FIELD`** — one new column (`ETGO_SF_FIELD` currently has 19). **`varchar(2)`**, not
@@ -135,6 +136,42 @@ already traverse this exact path, and copying one of them is the cheapest way to
    field it was never shown); `R` forces the reported visibility to `readOnly` and clears
    `userRequired`.
 6. **Docs** — `docs/decisions-reference.md` and `neo-headless.md`, and §3's sentence in both.
+7. **The entity-level twin, already shipped (ETP-4793) — read it as the worked example.** §4.1's `N`
+   removes one field from the agent's view; `ETGO_SF_ENTITY.ISINCLUDED = 'N'` removes a whole entity,
+   and that is the same idea one level up. It needed no new column and no Java: the column already
+   existed, `upsertEntity` already accepted it, and **24 call sites across the REST and MCP surfaces
+   already filtered on `SFEntity.PROPERTY_ISINCLUDED`** before resolving an entity — including
+   `McpToolRouterSupport.findIncludedEntity` / `listIncludedEntities` and `ToolRegistry`. Nobody had
+   ever set it: every one of 257 entity rows read `'Y'`.
+
+   What was broken is the write path, and the shape of the bug is the one §5.4 warns about. `exclude:
+   true` in `decisions.json` was a single `continue` in `resolve-curated.js`; its whole effect was
+   "absent from `contract.json`". But `populateWindowSpec` derives its entity rows from
+   `SELECT … FROM ad_tab WHERE ad_window_id = $1`, never from the contract — so an excluded entity
+   still got a row at `'Y'` plus one field row per AD column. **94 entities and 1,438 field rows the
+   curation had decided not to expose were served anyway**, and served with *more* verbs than their
+   curated siblings, because a tab with no contract entity falls through to the window-level method
+   default. Three things in it transfer directly to the six pieces above:
+
+   - **One predicate, both write paths.** The fix lives in `cli/src/lib/entity-methods.js`
+     (`isEntityExcludedFromContract`) because `push-to-neo.js` and `lib/neo-delta.js` must not
+     diverge or `regen-check` goes red. IMP-27's column has the same constraint: §5.4 is not done
+     until the offline XML delta writes it too.
+   - **Close the children, even when it is redundant.** Every reader filters the entity before it
+     reaches a field, so flipping the entity alone would have been enough behaviourally. The field
+     rows were closed as well because 1,438 rows claiming `'Y'` under a closed entity misreport the
+     agent surface — which is precisely how this went unnoticed. Expect the same of `N`: whatever the
+     column's reader ignores, a counter somewhere still reads.
+   - **Do not zero what you cannot reach.** The six method flags were left at the window default
+     rather than set to `'N'`: they are unreachable once the entity is closed, and an all-`N` set
+     would break the "GET and GETBYID are always granted" invariant `entity-methods.js` enforces.
+     §4.3's treatment of `RW` is the same instinct — leave the incoherent state unrepresentable
+     instead of writing a value nothing honours.
+
+   **This moves §4.1's and §6's denominator.** The 1,422 fields in 89 uncurated entities (IMP-11) and
+   the ~60 kB `neo_schema` responses were measured on a surface that still included these 1,438 field
+   rows. Whatever a follow-up pass with `N` is worth, it is worth it against the post-ETP-4793
+   surface, not the one those figures describe.
 
 ## 6. What this does not solve
 
