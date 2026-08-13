@@ -1,8 +1,8 @@
 {
-  "version": "0.26.0",
+  "version": "0.27.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-08-07T18:34:30.354Z",
-  "checksum": "b3ae4e4578f8cbf5",
+  "updatedAt": "2026-08-13T13:01:38.815Z",
+  "checksum": "ee7929ddf75b1fe9",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -533,6 +533,42 @@
             "form": false,
             "validation": {
               "maxLength": 255
+            }
+          },
+          {
+            "name": "invoiceAddress",
+            "apiKey": "invoiceAddress",
+            "column": "BillTo_ID",
+            "label": "Invoice Address",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "BusinessPartnerLocation",
+            "inputMode": "dependent",
+            "dependsOn": {
+              "field": "businessPartner",
+              "filterKey": "C_BPartner_ID"
+            },
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
+            "validationRule": {
+              "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+              "contextParams": [],
+              "cascadeParams": [
+                "C_BPartner_ID"
+              ]
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' | @DocStatus@='TMP'",
+              "evaluable": true,
+              "js": "record['processed'] === true || record['documentStatus'] === 'TMP'"
             }
           },
           {
@@ -1307,7 +1343,7 @@
             "apiKey": "invoiceAddress",
             "column": "BillTo_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -2725,6 +2761,23 @@
         "url": "/sws/neo/sales-order/header/selectors/currency"
       },
       {
+        "entity": "header",
+        "field": "invoiceAddress",
+        "column": "BillTo_ID",
+        "reference": "BusinessPartnerLocation",
+        "inputMode": "dependent",
+        "url": "/sws/neo/sales-order/header/selectors/invoiceAddress",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
         "entity": "lines",
         "field": "product",
         "column": "M_Product_ID",
@@ -3370,6 +3423,14 @@
         "description": "Field 'grandTotalAmount' should be present in header"
       },
       {
+        "id": "t-field-presence-header-invoiceAddress",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "invoiceAddress",
+        "runner": "node",
+        "description": "Field 'invoiceAddress' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-invoiceStatus",
         "category": "field-presence",
         "entity": "header",
@@ -3594,6 +3655,14 @@
         "description": "Field 'grandTotalAmount' should have type 'number' in header"
       },
       {
+        "id": "t-field-type-header-invoiceAddress",
+        "category": "field-type",
+        "entity": "header",
+        "field": "invoiceAddress",
+        "runner": "node",
+        "description": "Field 'invoiceAddress' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-invoiceStatus",
         "category": "field-type",
         "entity": "header",
@@ -3770,6 +3839,14 @@
         "description": "Read-only logic for 'documentNo' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-invoiceAddress",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "invoiceAddress",
+        "runner": "node",
+        "description": "Read-only logic for 'invoiceAddress' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-orderDate",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -3896,6 +3973,14 @@
         "field": "documentNo",
         "runner": "node",
         "description": "Read-only logic for 'documentNo' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-invoiceAddress",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "invoiceAddress",
+        "runner": "node",
+        "description": "Read-only logic for 'invoiceAddress' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-orderDate",
@@ -5836,6 +5921,14 @@
         "description": "Selector endpoint for 'currency' in header should exist"
       },
       {
+        "id": "t-selector-endpoint-header-invoiceAddress",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "invoiceAddress",
+        "runner": "node",
+        "description": "Selector endpoint for 'invoiceAddress' in header should exist"
+      },
+      {
         "id": "t-selector-endpoint-header-partnerAddress",
         "category": "selector-endpoint",
         "entity": "header",
@@ -6266,14 +6359,6 @@
         "field": "iNCOTERMSDescription",
         "runner": "node",
         "description": "System field 'iNCOTERMSDescription' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-invoiceAddress",
-        "category": "system-field",
-        "entity": "header",
-        "field": "invoiceAddress",
-        "runner": "node",
-        "description": "System field 'invoiceAddress' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-invoiceTerms",
@@ -7115,25 +7200,25 @@
       }
     ],
     "summary": {
-      "total": 549,
+      "total": 553,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 2,
         "default-value-type": 9,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 28,
-        "field-type": 28,
-        "readonlylogic-evaluable": 16,
-        "readonlylogic-valid": 16,
+        "field-presence": 29,
+        "field-type": 29,
+        "readonlylogic-evaluable": 17,
+        "readonlylogic-valid": 17,
         "rule-declared": 254,
         "searchable-filters": 5,
-        "selector-endpoint": 10,
-        "system-field": 150,
+        "selector-endpoint": 11,
+        "system-field": 149,
         "visibility": 2
       },
       "byRunner": {
-        "node": 549,
+        "node": 553,
         "junit": 0
       }
     }

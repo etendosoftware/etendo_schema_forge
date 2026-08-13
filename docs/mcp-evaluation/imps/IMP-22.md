@@ -162,9 +162,35 @@ call only succeeded once I sent it anyway. So an agent that follows the document
 create a sales order, and the only way through is to break the rule the tool just stated.
 
 This is **not** an IMP-22 regression — it is on the create path, not the FK resolver, and the 422
-names a different field. It is recorded here because this run is where it surfaced; it belongs to
-whoever owns the discarded-but-DB-required class, and it is not registered (the quota is the user's
-call, registry §2.2).
+names a different field.
+
+Nor is it a runtime defect, which is how this section first framed it. Checked against AD instead of
+assumed:
+
+| Source | `BillTo_ID` in the sales-order Header tab |
+|---|---|
+| `ad_field` / `ad_column` | `isdisplayed = 'Y'`, `ismandatory = 'Y'`, `isupdateable = 'Y'`, **no `defaultvalue`** |
+| `artifacts/sales-order/schema-raw.json` | extracted as `visibility: "editable"`, with its own validation rule `C_BPartner_Location.IsBillTo = 'Y'` |
+| `artifacts/sales-order/decisions.json` | overridden to `visibility: "discarded"` |
+
+So the field **is** in the Etendo UI, AD requires it, and the extractor classified it correctly. The
+`discarded` is a **curation decision in `decisions.json`** that the runtime then honours faithfully:
+excluded from the agent surface, and with no default and no derivation there is nothing left to fill
+a mandatory column. The 422 is the runtime reporting the curation, not misbehaving.
+
+Note also that `invoiceAddress` is not merely a copy of `partnerAddress`: its validation rule filters
+`IsBillTo`, where the shipping address filters ship-to. They coincide in this tenant only because
+`Tercero España`'s single location carries every flag — a derivation that assumed equality would be
+right here and wrong on the first partner with separate billing and delivery addresses.
+
+The fix therefore belongs in `decisions.json` and goes through the Window Change Integrity Protocol,
+not in `com.etendoerp.go`. Still not registered (the quota is the user's call, registry §2.2).
+
+A sweep of every artifact found **220** `discarded` fields that AD marks mandatory, of which **35**
+are not booleans-with-a-DB-default or audit columns the DAL fills. Those 35 are *candidates*, not
+confirmed defects — each needs its own tab-level display-and-default check, which is the shape of a
+validator rule rather than of a one-off fix, and is the same argument F23 makes for its own
+invariant.
 
 ## 8. What this does not settle
 

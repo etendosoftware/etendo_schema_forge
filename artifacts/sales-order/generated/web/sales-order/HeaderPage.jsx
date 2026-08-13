@@ -51,7 +51,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'warehouse', 'grandTotalAmount', 'summedLineAmount', 'currency'];
+const requiredHeaderFields = ['documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'warehouse', 'grandTotalAmount', 'summedLineAmount', 'currency', 'invoiceAddress'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -189,6 +189,23 @@ export const api = {
       "reference": "Currency",
       "inputMode": "selector",
       "url": "/sws/neo/sales-order/header/selectors/currency"
+    },
+    {
+      "entity": "header",
+      "field": "invoiceAddress",
+      "column": "BillTo_ID",
+      "reference": "BusinessPartnerLocation",
+      "inputMode": "dependent",
+      "url": "/sws/neo/sales-order/header/selectors/invoiceAddress",
+      "context": {
+        "required": [
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
     },
     {
       "entity": "lines",

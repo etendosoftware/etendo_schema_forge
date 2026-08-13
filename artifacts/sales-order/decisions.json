@@ -161,8 +161,7 @@
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
-          "section": "other",
-          "visibility": "discarded"
+          "section": "other"
         },
         "project": {
           "visibility": "discarded"
