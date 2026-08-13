@@ -170,11 +170,13 @@ describe('QuotationPreview', () => {
     expect(screen.queryByTestId('modal-subtitle')).not.toBeInTheDocument();
   });
 
-  it('renders 3 tabs: general, messages, history', () => {
+  // ETP-4855 — Messages and History were empty placeholders and were removed
+  // from every preview. Only the general tab is left.
+  it('renders the general tab alone: no messages or history tab', () => {
     renderQuotationPreview();
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-messages')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-messages')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tab-history')).not.toBeInTheDocument();
   });
 
   it('shows send modal when email button is clicked', () => {

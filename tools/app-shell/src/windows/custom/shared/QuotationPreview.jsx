@@ -5,7 +5,7 @@ import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useQuotationPdf } from './useQuotationPdf.js';
 import { useDocumentCurrency } from './useDocumentCurrency.js';
-import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from './PreviewActionButtons.jsx';
+import PreviewActionButtons, { PreviewPdfPanel } from './PreviewActionButtons.jsx';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
@@ -164,22 +164,6 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
         data-testid="QuotationGeneralTab__7eb018" />,
-    },
-    {
-      key: 'messages',
-      label: ui('quotationPreviewMessages'),
-      content: <PreviewEmptyPanel
-        icon="💬"
-        text={ui('quotationPreviewMessages')}
-        data-testid="PreviewEmptyPanel__7eb018" />,
-    },
-    {
-      key: 'history',
-      label: ui('quotationPreviewHistory'),
-      content: <PreviewEmptyPanel
-        icon="🕐"
-        text={ui('quotationPreviewHistory')}
-        data-testid="PreviewEmptyPanel__7eb018" />,
     },
   ];
 
