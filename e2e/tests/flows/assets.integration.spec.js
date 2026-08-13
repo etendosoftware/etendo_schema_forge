@@ -828,10 +828,11 @@ test.describe('Assets (real backend)', () => {
     await editDescriptionInPlace(page, stamp);
     await editResidualValues(page);
 
-    // The residual edits leave the form clean; re-touch Valor a amortizar so the
-    // create (save-and-process) persists and runs, then create the amortization.
-    await setFieldUntilDirty(page, 'field-depreciationAmt', '2000');
-    await saveAsset(page);
+    // Unlike Case 5 (monthly), `assetValue` was pinned to 2000 above, so the
+    // residual edits' final pass (residualAssetValue = 0) already recomputes
+    // and persists depreciationAmt = assetValue - residualAssetValue = 2000 —
+    // re-touching it to the same value is a guaranteed no-op (never dirties
+    // the form). Just create the amortization directly.
     await crearAmortizacionBtn(page).click();
     await expect(page.locator('[data-sonner-toast][data-front="true"]'))
       .toContainText(/Amortización creada/i, { timeout: 20_000 });
