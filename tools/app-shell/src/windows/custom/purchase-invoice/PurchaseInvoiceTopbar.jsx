@@ -9,7 +9,7 @@ import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton'
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
-import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoiceSubtype.js';
+import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 
 export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUrl, onProcess, onRefresh }) {
   const navigate = useNavigate();
@@ -31,13 +31,15 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
   const grandTotal = data.grandTotalAmount ?? 0;
   const outstanding = data.outstandingAmount ?? grandTotal;
   const totalPaid = grandTotal - outstanding;
-  const isFullyPaid = data.paymentComplete === true || data.paymentComplete === 'Y' || outstanding <= 0;
   const isCompleted = docStatus === 'CO';
-  // ETP-4737/ETP-4738: resolved via getApSubtype — NOT a hardcoded doc-type-name check. A
-  // fixed name Set silently misses any new document type sharing the same
-  // category (this is exactly how this badge missed "Factura Rectificativa
-  // (compras)" until this fix; see PurchaseInvoiceHeaderTable.jsx for the same fix).
-  const isCreditType = getApSubtype(data) === 'RECTIFICATIVA';
+  // ETP-4841: payment state follows the SIGN of the total, not the document type —
+  // a POSITIVE Factura Rectificativa is payable and a NEGATIVE ordinary Factura is
+  // a credit. Shared with both grids via resolveInvoicePaymentBadge.
+  const badge = resolveInvoicePaymentBadge(data);
+  // `paymentComplete` still wins for ordinary invoices: Etendo can mark an invoice
+  // settled without the outstanding reaching exactly zero.
+  const isFullyPaid = !badge.isCredit
+    && (data.paymentComplete === true || data.paymentComplete === 'Y' || badge.kind === 'paid');
 
   const handleBadgeClick = () => {
     if (isCompleted) setShowPaymentModal(true);
@@ -89,12 +91,11 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
         </>
       )}
       {isCompleted && (() => {
-        if (isCreditType) {
-          // Mirror the grid's "Pendiente de pago" cell for credit notes: green "Aplicada"
-          // once fully consumed, else a purple clickable "Saldo a favor · remaining" badge
-          // that opens the same history modal (listing the payments that consumed the note).
-          const outstandingAbs = Math.abs(parseFloat(outstanding) || 0);
-          if (outstandingAbs < 0.001) {
+        if (badge.isCredit) {
+          // Mirror the grid's "Pendiente de pago" cell for credit instruments: green
+          // "Aplicada" once fully consumed, else a clickable "Saldo a favor · remaining"
+          // badge that opens the same history modal (listing the payments that consumed it).
+          if (badge.kind === 'credit-applied') {
             return (
               <span
                 className="inline-flex items-center gap-1.5 text-[13px] font-medium"
@@ -114,7 +115,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-info-fg)' }} />
               {ui('cpFavorBadge')}
               <span style={{ opacity: 0.4 }}>&middot;</span>
-              <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', outstandingAbs)}</span>
+              <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', badge.amount)}</span>
             </span>
           );
         }
@@ -143,7 +144,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-warning-fg)' }} />
             {ui('statusPending')}
             <span style={{ opacity: 0.4 }}>&middot;</span>
-            <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', outstanding)}</span>
+            <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', badge.amount)}</span>
           </span>
         );
       })()}

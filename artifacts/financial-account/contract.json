@@ -1,8 +1,8 @@
 {
-  "version": "0.24.0",
+  "version": "0.25.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-12T18:58:12.885Z",
-  "checksum": "7285bf746cac14f3",
+  "updatedAt": "2026-08-11T22:41:00.513Z",
+  "checksum": "0ec1af3e8cd9a13c",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -601,28 +601,28 @@
                 "value": "1BE",
                 "name": "New statement each run",
                 "labels": {
-                  "es_ES": "One per run"
+                  "es_ES": "New statement each run"
                 }
               },
               {
                 "value": "1BD",
                 "name": "Within 1 day",
                 "labels": {
-                  "es_ES": "One per day"
+                  "es_ES": "Within 1 day"
                 }
               },
               {
                 "value": "1BW",
                 "name": "Within 7 days",
                 "labels": {
-                  "es_ES": "One per week"
+                  "es_ES": "Within 7 days"
                 }
               },
               {
                 "value": "1BM",
                 "name": "Within 30 days",
                 "labels": {
-                  "es_ES": "One per month"
+                  "es_ES": "Within 30 days"
                 }
               }
             ],

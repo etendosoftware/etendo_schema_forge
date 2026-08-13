@@ -63,7 +63,7 @@ describe('getStatusBadgeProps — remaining word-form operands in compound OR co
     assert.equal(getStatusBadgeProps('booked').variant, 'default');
     assert.equal(
       getStatusBadgeProps('booked').className,
-      'border-status-success-border bg-status-success text-status-success-foreground',
+      'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success',
     );
   });
 
@@ -130,10 +130,10 @@ describe('getStatusBadgeProps — full branch coverage', () => {
     assert.equal(props.className, 'border-border-subtle bg-muted text-muted-foreground');
   });
 
-  it('under evaluation/ue -> info outline style', () => {
+  it('under evaluation/ue -> warning outline style', () => {
     const props = getStatusBadgeProps('under evaluation');
     assert.equal(props.variant, 'outline');
-    assert.equal(props.className, 'border-status-info-border bg-status-info text-status-info-foreground');
+    assert.equal(props.className, 'border-status-warning-border bg-status-warning text-status-warning-foreground');
     assert.equal(getStatusBadgeProps('UE').className, props.className);
   });
 

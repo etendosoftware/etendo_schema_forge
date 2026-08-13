@@ -844,3 +844,107 @@ override needed.
 | `warehouse` | entity `accounting` |
 
 **Lesson:** a `decisions.json` flag that reaches `contract.json` is not proof it reaches the runtime. `apiPrediction.crud.<entity>.delete: false` in the contract is a *declared intent*; only `push-to-neo.js`/`neo-delta.js` actually writing `ISDELETE='N'` to `ETGO_SF_ENTITY` makes NEO Headless enforce it. When adding a new declarative flag that's supposed to restrict the live API, verify the write path (`resolveContractEntityMethods()` or equivalent), not just the contract shape — this is exactly the same class of gap ETP-4254 closed for `readOnly`/`methods`, and `hideDelete` had quietly never gotten the same treatment.
+
+---
+
+## [2026-08-10] ETP-4845 — Dimension names untranslated + User1/User2 leaking into "Dimensiones contables"
+
+**Component:** `tools/app-shell/src/windows/custom/general-ledger-configuration/mockCatalogs.js` (new `mapDimensionRows()`), wired into `useGeneralLedgerConfig.js`'s `mapPayload()`.
+
+**Symptom (two bugs, one shared cause):** (1) the "Dimensiones contables" tab always showed dimension names in English (Organization, Account, Product, Bus.Partner, Project, Cost Center) regardless of the session locale. (2) "User 1" / "User 2" appeared in the list for any client whose accounting schema has those elements — most clients do, since classic Etendo's default client-creation wizard seeds all 8 `C_AcctSchema_Element` rows; GOClient's own (GO-specific) provisioning seeds only 6, which is why this was invisible when testing against GOClient specifically.
+
+**Root cause:** `GeneralLedgerConfigurationHandler.buildDimensions` (com.etendoerp.go) sends each row's stable `type` (the `C_AcctSchema_Element.ElementType` / AD_Ref_List `181` code) but never a `labelKey` — `row.label` is the raw, untranslated `Name` DB column. `DimensionsTab.jsx` already preferred `labelKey` over `label` when rendering, but nothing on the frontend ever set it, so it silently fell back to the English name every time. Separately, nothing filtered the list by which dimension types Etendo GO actually curates as an editable field anywhere (`U1`/`U2` map to `USER1_ID`/`USER2_ID`, which no window's contract exposes with `form: true`).
+
+**Fix:** `mapDimensionRows()` derives `labelKey` from `type` via a `DIMENSION_TYPE_LABEL_KEYS` map, and drops any row whose `type` is absent from that map (currently: `U1`/`U2`) — regardless of `IsActive`. Filtering/translating by the stable AD `type` code instead of the (locale-dependent, renamable) display name was deliberate: the same "match by name" mistake is exactly what caused bug (1) in the first place. Added the missing `glc.dim.*` i18n keys to both `en_US.json` and `es_ES.json`.
+
+**Lesson:** when a backend aggregate handler returns a raw AD/DB `Name` column alongside a stable type/code, resolving the *code* to an i18n key on the frontend is safe and locale-correct; matching or filtering by the *name* is not — it breaks the moment the string is translated, renamed, or simply differs from what a test happened to see on one client. Also: a mock/seed fixture (`DIMENSIONS_SEED` here) that predates the real backend integration can quietly diverge from what production actually returns (it modeled a completely different, smaller dimension set) — don't assume the mock's shape is a reliable proxy for the real payload once a handler exists.
+
+---
+
+## [2026-08-10] ETP-4845 — Accounting-dimension fields ignored their config on any unsaved document
+
+**Component:** `tools/app-shell/src/hooks/useDisplayLogic.js` (`evaluate()`), shared by every window's header/lines display-logic resolution via `DetailView.jsx` and `useAccountingDimensionFields.js`.
+
+**Symptom:** toggling a dimension OFF in "Dimensiones contables" appeared to have no effect — a brand-new (not yet saved) document of any window kept showing the field regardless of the toggle. Once the document was saved once and reloaded, the field correctly reflected the toggle.
+
+**Root cause:** `evaluate()` unconditionally skipped calling `/evaluate-display` whenever the record had no `id` yet, with the reasoning "new records have no meaningful state to evaluate." True for genuinely record-dependent logic (e.g. a readOnly flag gated on `@Posted@='Y'` — a brand-new record obviously isn't posted). **False** for the `@ACCT_DIMENSION_DISPLAY@` macro (ETP-4529): its value depends only on GL Configuration, never on the record. With the visibility map staying empty for the whole lifetime of a new/unsaved record, `EntityForm.jsx`'s fail-open filter (only hides a field when the server explicitly says `false`) never got a chance to run — the field defaulted to visible no matter what was configured.
+
+**Fix:** the no-`id` early return now only fires when the caller has NOT declared `cacheableKeys` (the hook's own existing mechanism for marking a key as "constant across every record in this window, GL-Configuration-only"). Every current caller declares it, so this now resolves correctly even for brand-new documents. Verified live, before/after, on a freshly onboarded tenant and on GOClient — no test-suite mock, an actual running backend.
+
+**Remaining gap (NOT fixed here, tracked separately as ETP-4854):** for clients with `AD_Client.Acctdim_Centrally_Maintained='Y'` (the onboarding default for every new tenant today — verified live; GOClient is a manually-pinned exception), the toggle in "Dimensiones contables" only writes `C_AcctSchema_Element.IsActive`, but `DimensionDisplayUtility` for those clients reads a completely different set of columns (`AD_Client.<Dim>_Acctdim_IsEnable/Header/...`) that the toggle never touches — so for the majority of real tenants the toggle still has zero effect on documents even with this fix. That's a `com.etendoerp.go` architecture/data-migration fix, out of scope here.
+
+**Lesson:** an early-return guard justified by "there's no state to evaluate yet" is only as safe as the *union* of everything currently routed through that call — it takes one caller whose logic doesn't depend on record state (a GL-Configuration macro, a role-based flag, anything env/config-driven) to make the assumption wrong. When a hook grows a second class of caller with different invariants (here: `cacheableKeys` already existed as the marker for "config-only"), any blanket short-circuit written before that caller existed needs re-auditing against the new invariant — it won't fail loudly, it'll just silently under-evaluate for that one caller's window in time (record has no id yet).
+## [2026-08-11] `sales-order-happy-path.integration.spec.js` — false-negative on `epic/ETP-3504` baseline, ambiguous `/confirmar/i` selector (ETP-4354)
+
+**Component:** `e2e/tests/flows/sales-order-happy-path.integration.spec.js` (integration project, real backend). Not a product bug — the underlying feature (Sales Order confirm + optional invoice/shipment creation) works correctly.
+
+**Symptom:** running the integration suite (`--project=integration`, any worker count) reliably fails at `creates an order, confirms with invoice, then confirms the invoice`, timing out on `page.getByText(/pedido confirmado|order confirmed/i)`. Reproduced twice in a row, single worker, no resource contention, on a clean `origin/epic/ETP-3504` checkout with **zero ETP-4714 changes applied** — confirms this is pre-existing on epic, unrelated to the print-visibility work.
+
+**Root cause:** step 7 of the test does:
+```js
+const modalBtn = page.getByRole('button', { name: /confirmar/i }).last();
+await modalBtn.click();
+```
+At the moment the confirm modal is open, **two** buttons on the page match `/confirmar/i`: the DetailView toolbar's own "Confirmar" (`action-save`/`action-complete`) and the modal's dynamic-label submit button, which reads "Confirmar pedido" (no doc selected) or "Confirmar + factura →" once "Crear factura" is checked — both contain the substring "confirmar", so both match the regex. `.last()` is presumed to always resolve to the modal's button (rendered later in the DOM), but this is fragile — under some render/hydration timing the wrong element gets clicked, the modal never actually submits, and the test hangs waiting for a success message that never arrives. Manually reproduced the exact same click sequence via Chrome MCP (real backend, real UI) and the flow completes instantly and correctly, proving the feature itself is sound.
+
+**Partial fix applied (production code only, test left untouched):** added `data-testid="order-confirm-modal-submit"` to the modal's real primary submit button. **Trap hit while applying it:** the testid was first added to `artifacts/sales-order/custom/OrderConfirmModal.jsx`, which *looks* like the right component (matching name, matching `primaryLabel`/checkbox/`handleConfirm` shape) but is **dead code** — nothing imports it outside its own test file. The component actually rendered by the "Confirmar pedido" flow is `ConfirmModal`, exported from `artifacts/sales-order/custom/OrderCreateInvoice.jsx` and wired in via `tools/app-shell/src/windows/custom/sales-order/index.jsx` (`import { ConfirmModal, ManageDocsLauncher } from '@generated/sales-order/custom/OrderCreateInvoice'`, passed into `useOrderWindow`). Caught it by inspecting the live DOM after the "fix": `document.querySelector('[data-testid="order-confirm-modal-submit"]')` returned `null` even after a hard reload and confirmed-correct served source for `OrderConfirmModal.jsx` — the served bundle was right, the file was just never used. Re-applied the `data-testid` to the real button in `OrderCreateInvoice.jsx:525` and reverted the no-op change in `OrderConfirmModal.jsx`.
+
+Updated the test locally to `page.getByTestId('order-confirm-modal-submit')` and re-ran the full `onboarding-setup` + `integration` suite (the exact pre-push invocation). The new selector itself resolves and clicks correctly — confirmed by dispatching the same click Playwright would (center point of the smallest DOM node matching `/crear factura/i`) and watching the button relabel to "Confirmar + factura →". But the suite run still failed the same test, this time earlier: `invoiceCard.isVisible({ timeout: 5_000 })` (line 268) returned `false`, so the whole `if (invoiceCardVisible) {...}` block — including the fixed button click — never executed, and the test hung on the success message that nothing had triggered. This 5s visibility check is a **second, separate** pre-existing flakiness source (not caused by ETP-4714, not fixed by the testid change): the checkbox card renders unconditionally with the modal (not gated behind any fetch), so 5s should be ample under normal load, but this test runs as #34 of 37 in the integration suite against a real Tomcat backend already under sustained load from the prior ~30 tests — consistent with the render/backend latency variability seen repeatedly elsewhere in this epic.
+
+**Decision:** left the test file exactly as it was (`page.getByRole('button', { name: /confirmar/i }).last()`, unchanged) — reverted the local edit. The `data-testid` addition to the real button in `OrderCreateInvoice.jsx` stays (harmless, and needed for whoever eventually fixes the test properly). Owner decided to push this one known-failing test through with `--no-verify` and take it up directly with the test's original author rather than have ETP-4714 carry a fix for a pre-existing, unrelated flaky test.
+
+**Lesson:** two near-identically-shaped components with overlapping vocabulary (`OrderConfirmModal.jsx` vs. `OrderCreateInvoice.jsx`'s `ConfirmModal`) can coexist in `artifacts/*/custom/`, one live and one orphaned. Grepping for the component *name* that "sounds right" is not enough — trace the actual import chain from the window's `index.jsx` before editing, and after adding a `data-testid`, confirm it resolves in the live DOM (not just in the edited source file) before trusting the fix. Separately: a single fix can uncover a second, independent flaky point further down the same test — verifying step N doesn't prove steps N+1..end are sound too.
+
+---
+
+## [2026-08-11] ETP-4714 — `listViewOptions` never reached custom hand-rolled `<ListView>` wrappers; separately, ETP-4729 superseded the fix for two windows
+
+**Component:** `tools/app-shell/src/windows/custom/{sales-order,purchase-order,sales-invoice}/index.jsx` — the three custom window wrappers that hand-roll their own `<ListView>` for the list route instead of delegating to the generated `HeaderPage.jsx`/`App`.
+
+**Symptom (gap #1 — generic):** `decisions.json → window.listViewOptions.hidePrint: true` reached `contract.json` and the generator-emitted `HeaderPage.jsx` correctly (`listViewOptions={{"hidePrint":true}}`), and `sf-validate-pipeline` was clean — but the browser still showed the list-view "Imprimir" button. A React-fiber inspection (`node.memoizedProps.listViewOptions`) on the live `<ListView>` instance showed the prop as `undefined`, and the component tree showed a `SalesOrderWindow` wrapper, not `HeaderPage`/`App`.
+
+**Root cause (gap #1):** these three windows' `index.jsx` (registered directly in `registry.js`'s custom-loader map, ahead of the generated `App`) render `recordId ? <GeneratedApp .../> : <ListView .../>` — i.e. **only the detail route delegates to the generated component; the list route hand-rolls its own `<ListView>` with an explicit, hardcoded prop list** (matching the existing pattern already used there for `dateFilterKey`, `hideLink`, etc.). Any *new* generator-emitted list-level prop — `listViewOptions` didn't exist before ETP-4714 — is invisible to these three windows until someone manually adds it to the hardcoded prop list. The generated `HeaderPage.jsx` having the correct prop is not proof the live app does; check which component the *list* route actually renders (`registry.js`'s `customLoaders` map wins over `windowLoaders`) before trusting the generated artifact.
+
+**Fix (gap #1):** hardcoded `listViewOptions={{ hidePrint: true }}` directly on the `<ListView>` call in `purchase-order/index.jsx` and `sales-invoice/index.jsx` (still valid for both).
+
+**Second, independent complication (`sales-order`/`sales-quotation` only):** while investigating gap #1, adding the same `listViewOptions={{ hidePrint: true }}` to `sales-order/index.jsx` broke an *existing* regression-guard test: `tools/app-shell/src/windows/custom/sales-order/__tests__/index.test.js` → `'does not hardcode hidePrint on ListView (ETP-4729 — print restored)'`. A separate, unrelated ticket (ETP-4729, merged to epic **after** ETP-4714's original list-view fix was designed) had **deliberately removed** the pre-existing `window.hidePrint: true` from `sales-order`, `sales-quotation`, and `goods-shipment`'s `decisions.json`, intentionally restoring list-view print to always-visible as the new, tested, correct baseline. ETP-4714's `listViewOptions` addition for these two windows was based on a now-stale "what the list looked like before this ticket" premise that a *later* ticket had already, deliberately, superseded.
+
+**Fix (second complication):** removed `"listViewOptions": { "hidePrint": true }` from `sales-order` and `sales-quotation`'s `decisions.json` (and did not add the `index.jsx` hardcode for `sales-order` either) — deferring to ETP-4729's more recent, tested decision. `goods-shipment` was never affected by gap #1 (its custom wrapper delegates to a shared shell that always renders the generated component for both routes), so no `index.jsx` change was needed there.
+
+**Lesson:** two lessons, independent of each other. (1) When a window's custom `index.jsx` renders its own `<ListView>` for the list route (check for `if (recordId) { <GeneratedApp/> } return <ListView .../>` — grep the window's own `index.jsx`, don't assume `registry.js`'s default loader applies), any decisions.json-driven list-level prop needs the same hardcoded treatment as the window's other manually-mirrored props — a clean `contract.json`/generated `HeaderPage.jsx` is necessary but not sufficient; verify what the *live* React tree actually receives (fiber `memoizedProps`), not just what the generator emitted. (2) Before restoring a "pre-ticket" list/detail visibility state from git history, re-check whether a *more recent* commit already changed that same state deliberately (with its own test) — the most recent intent should win over a diff generated before it existed, and a passing regression-guard test failing after your change is a signal to investigate the test's own history, not to work around it.
+## [2026-08-11] ETP-4841 — Three `.vitest.jsx` files under `artifacts/` have never run in CI or `make test`
+
+**Symptom:** `tools/app-shell/vitest.config.js:93` declares
+`include: ['src/**/*.vitest.{js,jsx}', 'src/**/*.spec.{js,jsx}']`. That glob is rooted at
+`tools/app-shell/`, so **nothing under the repo-root `artifacts/` tree is ever collected**.
+`.github/workflows/test.yml` and the `test` Make target only invoke that config, so these three
+files are dead weight — they have never gated a single push:
+
+| File | Window |
+|---|---|
+| `artifacts/sales-invoice/custom/__tests__/InvoiceHeaderTable.vitest.jsx` | sales-invoice |
+| `artifacts/chart-of-accounts/custom/__tests__/AccountCodeField.vitest.jsx` | chart-of-accounts |
+| `artifacts/goods-shipment/custom/__tests__/GoodsShipmentMoreMenu.vitest.jsx` | goods-shipment |
+
+**How it surfaced:** while fixing ETP-4841 the sales-invoice file was found to be asserting
+against the pre-ETP-4737 world — it mocked `getArSubtype` to return `'NC'`/`'DEV'`, values the
+component compares against `'RECTIFICATIVA'`, so the mock could never match, and it used the
+retired `creditNotesTab`/`returnsTab` dictionary keys. Those assertions rotted across at least
+two tickets with nothing to flag them, precisely because the file never executes.
+
+**Why it matters beyond housekeeping:** `artifacts/*/custom/` is *hand-written source*, not
+generated output (`@generated` is a Vite alias to `artifacts/`, see `vite.config.js:222`). It is
+where a large share of per-window UI logic lives. Any test written there today is silently
+decorative. ETP-4841's own sales-grid regression tests land in this file, so the fix for the
+"positive rectificativa shows as Saldo a favor" bug is currently **unprotected in CI** even
+though the tests exist and pass.
+
+**Verified, not assumed:** all three files pass when run with an include widened to cover
+`artifacts/`, so closing this is a config change, not a test-fixing exercise. The awkward part
+is that the Vitest root is `tools/app-shell/`, so the pattern has to reach outside it
+(`../../artifacts/**`) — which is why this is written up as its own task rather than slipped
+into ETP-4841.
+
+**Lesson:** a passing test suite proves nothing about files the runner never collects. When
+adding tests under a directory that is not the runner's root, confirm they actually execute
+(`--reporter=verbose` and look for the filename) before treating them as coverage.
