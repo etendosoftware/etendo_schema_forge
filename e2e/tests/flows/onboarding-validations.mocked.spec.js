@@ -38,6 +38,12 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
     });
   });
 
+  // Draft autosave/restore — handleNext() awaits this before advancing steps,
+  // so leaving it unmocked hangs every "Continuar" click forever.
+  await page.route('**/sws/go/onboarding/draft', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: null }) });
+  });
+
   await page.route('**/sws/go/login', async route => {
     const method = route.request().method();
     const url = route.request().url();

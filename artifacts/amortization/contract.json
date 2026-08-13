@@ -1,8 +1,8 @@
 {
   "version": "0.39.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-07-29T15:55:48.402Z",
-  "checksum": "5c6eb250a2f5391d",
+  "updatedAt": "2026-08-13T10:26:26.141Z",
+  "checksum": "f063e9d68e79fd2e",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -47,6 +47,7 @@
           "DateAcct": "Fecha contable",
           "StartDate": "Fecha de inicio",
           "Totalamortization": "Amortización total",
+          "Processed": "Estado",
           "C_Currency_ID": "Moneda",
           "A_Asset_ID": "Activo",
           "Amortization_Percentage": "% Amortización",
@@ -67,6 +68,7 @@
           "DateAcct": "Accounting Date",
           "StartDate": "Starting Date",
           "Totalamortization": "Total Amortization",
+          "Processed": "Status",
           "C_Currency_ID": "Currency",
           "A_Asset_ID": "Asset",
           "Amortization_Percentage": "Amortization %",
@@ -279,7 +281,6 @@
               }
             ],
             "defaultValue": "N",
-            "filterOnly": true,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -624,6 +625,7 @@
           "DateAcct": "Fecha contable",
           "StartDate": "Fecha de inicio",
           "Totalamortization": "Amortización total",
+          "Processed": "Estado",
           "C_Currency_ID": "Moneda",
           "A_Asset_ID": "Activo",
           "Amortization_Percentage": "% Amortización",
@@ -644,6 +646,7 @@
           "DateAcct": "Accounting Date",
           "StartDate": "Starting Date",
           "Totalamortization": "Total Amortization",
+          "Processed": "Status",
           "C_Currency_ID": "Currency",
           "A_Asset_ID": "Asset",
           "Amortization_Percentage": "Amortization %",
@@ -1276,6 +1279,7 @@
         "DateAcct": "Fecha contable",
         "StartDate": "Fecha de inicio",
         "Totalamortization": "Amortización total",
+        "Processed": "Estado",
         "C_Currency_ID": "Moneda",
         "A_Asset_ID": "Activo",
         "Amortization_Percentage": "% Amortización",
@@ -1296,6 +1300,7 @@
         "DateAcct": "Accounting Date",
         "StartDate": "Starting Date",
         "Totalamortization": "Total Amortization",
+        "Processed": "Status",
         "C_Currency_ID": "Currency",
         "A_Asset_ID": "Asset",
         "Amortization_Percentage": "Amortization %",
