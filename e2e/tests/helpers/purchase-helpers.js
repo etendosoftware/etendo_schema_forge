@@ -278,11 +278,6 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   const linePromise = expectSaveResponse(page);
   await page.keyboard.press('Enter');
   await linePromise;
-  // The line POST can resolve before DetailView receives the follow-up
-  // children refresh that drives DocumentTotalsPanel. Wait for that refresh
-  // before the caller captures document totals as a reference.
-  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-  await page.waitForTimeout(1_000);
   await slow(page);
 }
 
