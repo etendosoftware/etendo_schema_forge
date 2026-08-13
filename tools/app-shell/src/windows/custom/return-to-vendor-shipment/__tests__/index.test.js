@@ -52,4 +52,44 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
       );
     });
   });
+
+  describe('ETP-4857 — bulk "Confirmar" action for Borrador rows', () => {
+    it('imports BulkDocumentAction and buildInOutActions from @/components/contract-ui/BulkDocumentAction', () => {
+      assert.match(
+        src,
+        /import BulkDocumentAction,\s*\{\s*buildInOutActions\s*\}\s*from\s*['"]@\/components\/contract-ui\/BulkDocumentAction['"]/,
+      );
+    });
+
+    it('defines ReturnToVendorShipmentBulkActions rendering BulkDocumentAction alongside CopyLinkButton', () => {
+      assert.match(src, /function ReturnToVendorShipmentBulkActions\(props\)\s*\{/);
+      assert.match(src, /<BulkDocumentAction/);
+      assert.match(src, /<CopyLinkButton/);
+    });
+
+    it('wires BulkDocumentAction to entity="returnToVendorShipment"', () => {
+      assert.match(
+        src,
+        /<BulkDocumentAction[\s\S]{0,200}entity="returnToVendorShipment"/,
+      );
+    });
+
+    it('wires BulkDocumentAction to buildActions={buildInOutActions} (DR→CO only, no reactivate)', () => {
+      assert.match(
+        src,
+        /<BulkDocumentAction[\s\S]{0,200}buildActions=\{buildInOutActions\}/,
+      );
+    });
+
+    it('wires BulkDocumentAction to labelKey="confirmBulk"', () => {
+      assert.match(
+        src,
+        /<BulkDocumentAction[\s\S]{0,200}labelKey="confirmBulk"/,
+      );
+    });
+
+    it('passes ReturnToVendorShipmentBulkActions as bulkActions to ReturnWindowShell', () => {
+      assert.match(src, /bulkActions=\{ReturnToVendorShipmentBulkActions\}/);
+    });
+  });
 });

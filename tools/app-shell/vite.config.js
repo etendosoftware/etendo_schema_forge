@@ -146,8 +146,9 @@ export default defineConfig(({ mode }) => {
   // Target Etendo instance for dev proxy. Override via ETENDO_URL in .env.local
   // if your instance uses a different context.name (e.g. ETENDO_URL=http://localhost:8080/mycontext)
   const ETENDO_URL = env.ETENDO_URL || process.env.ETENDO_URL || readEnvFile() || 'http://localhost:8080/etendo';
-  // `vite preview` proxies relative API paths that may already include the
-  // Etendo context. Keep an origin-only target to avoid duplicating it.
+  // Origin only (no path) — `vite preview` proxies the built bundle's *relative*
+  // VITE_API_BASE (e.g. "/etendo") verbatim to Tomcat, so the target here must not
+  // duplicate the context path already baked into the request.
   const ETENDO_ORIGIN = new URL(ETENDO_URL).origin;
 
   // LOCAL_CORE dev mode: when set (via `make dev-local-core`), resolve

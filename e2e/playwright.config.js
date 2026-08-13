@@ -1,4 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// The onboarding project creates this file for the downstream integration tests.
+// Reuse it when available so running integration tests does not register another
+// user on every Playwright invocation.
+const authCredentialsPath = resolve(import.meta.dirname, '.auth-credentials.json');
+const hasAuthCredentials = existsSync(authCredentialsPath);
 
 /**
  * Playwright configuration for Schema Forge E2E tests.
@@ -60,7 +68,7 @@ export default defineConfig({
     {
       name: 'integration',
       testIgnore: ['**/*.mocked.spec.js', '**/onboarding-register.integration.spec.js'],
-      dependencies: ['onboarding-setup'],
+      dependencies: hasAuthCredentials ? [] : ['onboarding-setup'],
       use: { ...devices['Desktop Chrome'] },
       workers: 1,
     },

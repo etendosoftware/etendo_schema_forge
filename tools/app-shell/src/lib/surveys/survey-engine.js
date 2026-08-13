@@ -1,37 +1,39 @@
 import { readSurveyState } from './survey-state.js';
 import { SURVEYS } from './surveys.js';
+import { getSurveyConfig, isSurveyTypeEnabled } from './survey-config.js';
 
-const MS_DAY = 86_400_000;
-const GLOBAL_COOLDOWN_MS = 30 * MS_DAY;
-const DISMISSED_COOLDOWN_MS = 21 * MS_DAY;
-const MAX_PER_MONTH = 2;
-
-export function isGlobalCooldownActive(state, now) {
+export function isGlobalCooldownActive(state, now, env = import.meta.env) {
   if (!state.lastShownAt) return false;
-  return now - new Date(state.lastShownAt).getTime() < GLOBAL_COOLDOWN_MS;
+  const { globalCooldownMs } = getSurveyConfig(env);
+  return now - new Date(state.lastShownAt).getTime() < globalCooldownMs;
 }
 
-export function isMonthlyLimitReached(state, now) {
+export function isMonthlyLimitReached(state, now, env = import.meta.env) {
   const monthKey = new Date(now).toISOString().slice(0, 7);
-  return (state.shownThisMonth[monthKey] ?? 0) >= MAX_PER_MONTH;
+  const { maxPerMonth } = getSurveyConfig(env);
+  return (state.shownThisMonth[monthKey] ?? 0) >= maxPerMonth;
 }
 
-export function isDismissedCooldownActive(state, surveyId, now) {
+export function isDismissedCooldownActive(state, surveyId, now, env = import.meta.env) {
   const dismissedAt = state.dismissals[surveyId];
   if (!dismissedAt) return false;
-  return now - new Date(dismissedAt).getTime() < DISMISSED_COOLDOWN_MS;
+  const { dismissedCooldownMs } = getSurveyConfig(env);
+  return now - new Date(dismissedAt).getTime() < dismissedCooldownMs;
 }
 
-export function selectNextSurvey({ isAdmin, now = Date.now(), source } = {}) {
+export function selectNextSurvey({ isAdmin, now = Date.now(), source, env = import.meta.env } = {}) {
   const state = readSurveyState();
 
-  if (isGlobalCooldownActive(state, now)) return null;
-  if (isMonthlyLimitReached(state, now)) return null;
+  if (isGlobalCooldownActive(state, now, env)) return null;
+  if (isMonthlyLimitReached(state, now, env)) return null;
 
   for (const survey of SURVEYS) {
     if (source != null && survey.sources && !survey.sources.includes(source)) continue;
-    if (!survey.isEligible({ state, isAdmin, now })) continue;
-    if (isDismissedCooldownActive(state, survey.id, now)) continue;
+    // Backend-side disable (ETGO_Survey_Type.isactive='N') always wins over the survey's own
+    // isEligible() — a data-driven kill switch, checked before any local eligibility logic runs.
+    if (!isSurveyTypeEnabled(survey.id)) continue;
+    if (!survey.isEligible({ state, isAdmin, now, env })) continue;
+    if (isDismissedCooldownActive(state, survey.id, now, env)) continue;
     return survey;
   }
 
