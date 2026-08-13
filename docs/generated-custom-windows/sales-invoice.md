@@ -215,6 +215,7 @@ Sales invoices carry the same currency/exchange-rate editing model already shipp
 
 - `CurrencyOptionsHandler` (`@Named("currencyOptionsHandler")`) resolves the org/client/date context needed to list currency options. For invoice specs (`context.getSpecName()` containing `"invoice"`) it loads via `Invoice.class` and uses `getInvoiceDate()`; for order specs it uses `Order.class` and `getOrderDate()` as before. `SalesInvoiceHeaderHandler` `@Inject`s `CurrencyOptionsHandler` and passes it into `NeoHeaderActionRouter.dispatch(...)`, exposing `GET /sws/neo/sales-invoice/header/{id}/action/currencyOptions`.
 - `SalesInvoiceHeaderHandler` now implements `afterCallout()` (previously absent), calling `blockCalloutCurrencyUpdate` (strips any callout-pushed `currency` value so currency only ever changes by direct user selection) and `checkExchangeRateWarning` (appends a `WARNING` message when the user changes currency to one with no `C_Conversion_Rate` on the invoice date) — both implemented once on the shared `AbstractInvoiceHeaderHandler` base and called explicitly from the subclass, mirroring the order-side handlers from ETP-4027.
+  - **ETP-4838:** `checkExchangeRateWarning` resolves rate availability through `NeoExchangeRateService.hasRate(...)`, the same lookup behind `GET /sws/neo/validate-exchange-rate` — client-or-system scoped, with the inverse-direction fallback. It previously ran a private query filtered by the current client alone, which stopped seeing the System-level rates once ETP-4474 centralised them there and warned in false on every manual currency change. Full write-up: `sales-order.md` § "`NeoExchangeRateService.hasRate` — the single source of truth".
 - `SalesInvoiceHeaderHandler.afterHandle()` calls `AbstractInvoiceHeaderHandler.autoCreateOrUpdateConversionRateDocument(context)` unconditionally as its first line, on every successful header POST/PATCH/PUT — not gated to GET, and not gated to requests that touch `currency`/`eTGOCurrencyRate`. It upserts the `C_Conversion_Rate_Document` row for the invoice whenever the invoice currency differs from the org currency and an `eTGOCurrencyRate` override is set, recomputing `foreign_amount = grandTotalAmount × (1 / eTGOCurrencyRate)` each time. This keeps the exchange-rate record in sync as the invoice's total changes while lines are added or edited, including for invoices that had zero lines when the currency was first selected. `InvoiceLineHandler.afterHandle()` calls the same upsert (via its `String`-based overload, resolving the parent invoice ID from the line save) on every line POST/PATCH/PUT, so the rate document also stays current as lines are added one at a time rather than only on header save.
 
 ### Rate inheritance when an invoice is created from an order
@@ -259,7 +260,8 @@ When a sales invoice is issued in a currency other than the organization's base 
 - Declared in `artifacts/sales-invoice/decisions.json → window.secondaryTabs.exchangeRates` (`label: "Exchange Rates"`, `tabOrder: 50`) and resolved as the `exchangeRates` child entity (`javaQualifier: "invoiceExchangeRateHandler"`), mapping to the document conversion-rate records (`C_Conversion_Rate_Doc`) tied to the invoice header.
 - **Visible columns:** Currency (derived from the document, `form: false`), To Currency, Rate, and Foreign Amount. The inline add-row exposes `addLineFields: ["toCurrency", "rate", "foreignAmount"]`.
 - **`requireSavedRecord: true`** — usable only after the invoice header is saved.
-- **`readOnlyLogic: "@DocumentStatus@!='DR'"`** — editable only while the invoice is in Draft (`DR`); read-only once completed.
+- **Tab-level `readOnlyLogic: "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"` — ETP-4837:** this is the ONLY place that actually locks the tab at runtime. It is compiled by `resolveSecondaryTabDefs()`/`convertLogicToJs()` against the **header entity's own column map** and evaluated by `evalTabReadOnly(tab, props.hook.selected)` in `DetailView.jsx` — i.e. against the **invoice header record**, not the exchange-rate row. This is what suppresses the row's edit/delete affordances entirely (`InlineLinesPanel`/`DataTable` receive `isDocumentReadOnly={tabReadOnly}`) once the invoice is Completed (`Processed='Y'`) or Posted (`Posted='Y'`), matching the backend guard in `ConversionRateDocLockObserver` (module `com.smf.currency.conversionrate`), which already rejects the save with `SMFCR_CannotModifyRateNonDraft` for any non-Draft document status.
+  - **Gotcha (root cause of a shipped regression):** a *field-level* `readOnlyLogic` set on `entities.exchangeRates.fields.rate` in decisions.json is a no-op for this purpose — per-field `readOnlyLogic` on a secondary-tab field is evaluated against the **line's own record** (the `C_Conversion_Rate_Document` row), which carries no `Processed`/`Posted`/`HASREVERSEDINVOICE*` columns of its own, so the condition always resolves to `false` and the field stays editable. The first ETP-4837 pass added the condition there by mistake; it looked correct (the pipeline validator and contract inspection passed) but never took effect against the live app because it was reachable only via the unused `ExchangeRatesForm.jsx` sidebar (`inlineEditable` layout never renders it). The fix moved the `Processed` condition into the **tab-level** `readOnlyLogic` above instead. Do not reintroduce a field-level override on `rate`/`foreignAmount` for header-derived flags — extend the tab-level expression.
 
 ### Server-side rate ⇄ foreign-amount recompute
 
@@ -562,7 +564,7 @@ and before the credit section:
 | Field | i18n key | Behavior |
 |-------|----------|----------|
 | **Tasa de conversión** (Conversion rate) | `cpConversionRate` | Editable numeric input. Prefilled from the system exchange rate for the *invoice → account* currency pair via the `GET {base}/validate-exchange-rate` endpoint, wrapped by the new `useConversionRate` hook (`tools/app-shell/src/windows/custom/shared/useConversionRate.js`). Accepts `0.92` or `0,92`. |
-| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Read-only. Computed as `amount × rate` and recomputed live whenever the amount or the rate changes. Rendered with `formatCurrency(accountCurrency, …)` so the account currency shows next to the value. |
+| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Also editable, mirroring Classic's Add Payment. Whichever of the two the user edits drives the other: typing a rate recomputes this amount (`= invoice amount × rate`, rounded to 2 decimals); typing an amount here recomputes the rate instead (`= typed amount ÷ invoice amount`, rounded to 6 decimals). Changing the invoice-currency amount elsewhere in the modal (e.g. **Igualar**) keeps the rate fixed and recomputes this amount forward. |
 
 Both fields are **hidden whenever the currencies match** (the common case), so single-currency
 collections are visually unchanged. The prefilled rate field is cleared automatically when the
@@ -577,6 +579,35 @@ This mirrors the backend,
 which rejects a foreign payment carrying a `1:1` rate (it would otherwise silently post the wrong
 ledger amount). The rate is sent to the backend as `conversionRate` on the `registerPayment`
 body; the backend recomputes the account-currency amount authoritatively from it.
+
+**Rate persistence on drafts (ETP-4841).** A rate typed by the user is stored on the draft and
+shown back when the draft is reopened — it is not re-derived from the system rate. Three parts:
+
+- The `invoicePayments` action returns `conversionRate` on every row
+  (`FIN_Payment.financialTransactionConvertRate`), so the row the history popup hands to the edit
+  modal carries the stored rate.
+- The backend stores that rate **verbatim** — `PaymentCurrencyConverter.applyTransactionAmountAndRate`
+  writes the rate and the account-currency amount directly instead of going through
+  `FIN_AddPayment.setFinancialTransactionAmountAndRate`, which recomputes
+  `rate = txnAmount / amount` "to correct rounding that occurs in the UI". That core correction
+  assumes Classic's Add Payment, where the user edits the converted *amount*; here the user edits
+  the *rate* and the amount is derived, so it silently mangled the stored value (58.70 × 0.89 →
+  52.24 → 0.889948892674617). The same recompute is commented out in core's
+  `AdvPaymentMngtDao.getNewPayment` (core bug 17829). This applies to the modal path and to the
+  bank-reconciliation path, which share `createDraftPayment`.
+- The modal seeds the stored rate exactly once per visit to the currency pair it was saved for, so
+  neither a late `validate-exchange-rate` response, nor a date change, nor a later manual edit can
+  overwrite it. The reseed key is the **account currency, not the account id** — the rate belongs to
+  the currency pair:
+
+| Action in a reopened draft (USD invoice, rate 0.89 saved on a EUR account) | Rate field |
+|---|---|
+| nothing touched, or the payment date changed | `0.89` |
+| switch to another EUR account (Caja → Banco) | `0.89` (same USD→EUR pair) |
+| switch to a GBP account | DB USD→GBP rate, or empty when none exists |
+| switch to a USD account (= invoice currency) | field hidden, `conversionRate` omitted from the payload |
+| back to a EUR account | `0.89` re-seeded |
+| user retypes the rate | whatever they typed, never overwritten |
 
 ### F2 — Credit filtered by invoice currency
 
@@ -658,6 +689,64 @@ save-time `originInvoice`-required check, and a rectificativa links its correcte
 the "Reversed Invoices" (`C_Invoice_Reverse`) tab, not `originInvoice`; reusing the subtype
 there would incorrectly block saving every Factura Rectificativa. See the equivalent AP-side
 note in [`purchase-invoice.md`](purchase-invoice.md#f5--gridtopbar-saldo-a-favor-badge-now-recognizes-facturas-rectificativas--etp-4738).
+
+### F6 — "Saldo a favor" is decided by the SIGN of the total, not the document type — ETP-4841
+
+> **Supersedes F4 and F5.** Those sections describe the doc-type-based rule that ETP-4841
+> replaced; they are kept for history. Where they conflict with this section, this section wins.
+
+**Why.** F4/F5 assumed *rectificativa ⇒ credit*. Functionally there are **two** kinds of
+Factura Rectificativa:
+
+| Kind | Example | Meaning |
+|---|---|---|
+| **Negative** total | billed 5, customer returned 2 | a credit — "saldo a favor", spent against other invoices |
+| **Positive** total | billed 3, should have been 4 | a correction for the difference — **payable**, it receives a payment |
+
+and symmetrically an ordinary **"Factura" with a negative total is also a credit**. Keying the
+behaviour off the document type therefore got both edge cases wrong, in four visible ways:
+
+1. a positive rectificativa rendered with a **negated** amount in the grid (detail said
+   `14,52 €`, grid said `-14,52 €`);
+2. …and wore a **"Saldo a favor"** badge instead of a payable one;
+3. an ordinary negative invoice wore **"Cobrada"**, because the fully-paid test was
+   `outstanding <= 0` and a negative invoice's outstanding is negative;
+4. the credit selector listed only rectificativas, hiding ordinary negative invoices.
+
+**The rule now.** A single shared helper,
+`tools/app-shell/src/windows/custom/shared/invoicePaymentBadge.js` →
+`resolveInvoicePaymentBadge(record)`, returns
+`{ kind, amount, isCredit }` with `kind` ∈ `draft | credit-available | credit-applied | paid |
+partial | pending`. Evaluation order matters: **the credit branch (`grandTotalAmount < 0`) is
+tested before any paid/pending check**, otherwise a negative invoice satisfies `outstanding <= 0`
+and falls into "Cobrada" — defect 3 above. `amount` is always non-negative. `isCredit` reflects
+the document itself, so it stays true on a draft (where `kind` is `draft`).
+
+All four call sites consume it: the two grids' "Pendiente de pago" cells, the two detail
+topbars. They previously re-implemented the pill inline four times; the helper is now the single
+source of truth and matches what `InvoicePaymentHistoryModal.jsx` (the modal these badges open)
+had always done — the two layers used to contradict each other.
+
+**Consequences elsewhere:**
+- `SalesInvoiceHeaderHandler.applyAmountNegationForCredit` was **deleted**. The stored sign is
+  the truth; nothing rewrites it on the way out. Legacy AR Credit Memos (retired `ARC` type,
+  positive totals) consequently now display in positive and as pending — accepted, since the
+  Nota de Crédito disappears as a category: the model is only **Factura** + **Factura
+  Rectificativa** from here on.
+- `PaymentCreditSourcesService.pendingAbonos` dropped the rectificative doc-type whitelist and
+  keeps only `grandTotalAmount < 0` (plus the unchanged BP / side / currency / unpaid filters).
+  `PaymentCreditConsumer.validateAbonoEligible` mirrors it: it now rejects only on a
+  non-negative total. Both sides symmetric, AR and AP.
+- `RectificativeSupport.isRectificativeDocType` and `.resolveRectificativeDocTypes` lost their
+  last callers and were deleted; `isColumnPresent()` and `isRectificative(DocumentType)` stay
+  (used by `classifyDocType` and `ReturnShipmentUtils`).
+- `AbstractInvoiceHeaderHandler.enrichInvoiceSubtype`'s ETP-4738 `FAC` → rectificativa
+  reclassification was deleted as **unreachable**: both `classifyDocType` implementations
+  already check the same flag first, so its `SUBTYPE_FAC.equals(subtype)` guard could never
+  hold. `arInvoiceSubtype` again means strictly "which document type is this", and drives only
+  the doc-type badge column and the list tab filters — never payment state.
+- The two grids stopped hardcoding the literals `Saldo a favor` / `Aplicada` and now use the
+  existing i18n keys `cpFavorBadge` / `cpCreditFullyApplied`, as the topbars already did.
 
 ### Known display-only limitation
 
@@ -758,8 +847,65 @@ routing on completion — because `neo_action` executes the entity's `NeoHandler
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
 
+## Print button — added, visible only in Completado — ETP-4714
+
+This window previously suppressed the generic detail-view Print button entirely
+(`window.hidePrint: true`). `decisions.json` now declares
+`hidePrintWhen: { documentStatus: { notEquals: "CO" } }` instead, so the same generic Print
+button in `DetailView.jsx` (backed by `DocumentPrintDrawer` → the pre-existing
+`print-sales-invoice` report — verified rendering real invoice data end-to-end during this
+ticket) now shows once the invoice is Completado. No custom component was added: this
+window's own `InvoiceTopbarExtra.jsx` and its `useInvoicePdf` hook — used only to feed the
+"Enviar documento" preview modal — are unrelated and untouched. See
+`docs/decisions-reference.md` ("Print Visibility") for the generic mechanism.
+
+**Review catch:** swapping `hidePrint: true` for `hidePrintWhen` only affects the detail view —
+the generator's `hidePrintListProp` still keys off the plain `hidePrint`, so the list view's
+bulk "Print (N)" and toolbar Print buttons would otherwise become visible for every row
+regardless of status. `decisions.json` also declares `"listViewOptions": { "hidePrint": true }`
+to keep the list-level print exactly as hidden as it was before this ticket — only the detail
+view gained the new conditional behavior.
+
+**Second catch — the custom wrapper bypasses the generated `listViewOptions` too.**
+`tools/app-shell/src/windows/custom/sales-invoice/index.jsx` hand-rolls its own `<ListView>`
+for the list route instead of delegating to the generated `HeaderPage.jsx` (only the
+detail/record route goes through the generated component), so the generator's literal
+`listViewOptions={{"hidePrint":true}}` emitted into `HeaderPage.jsx` is never reached for the
+list. Fixed by hardcoding the same `listViewOptions={{ hidePrint: true }}` prop directly on
+this file's own `<ListView>` call, matching the existing pattern already used there for
+`dateFilterKey` and other generator-derived list props.
+
 ## Semantic visual states
 
 The pending-payment control uses the warning background, border, and foreground
 roles; settled invoices use the corresponding success roles. Delivery progress is
 rendered by the shared percent cell renderer and remains neutral at zero progress.
+
+### Write off the invoice difference (ETP-4797)
+
+When the amount entered covers **less** than the invoice outstanding, the modal now offers an
+`Ajustar diferencia de X €` toggle directly under the balance strip (which already spells the
+gap out, so no separate breakdown is repeated). Turning it on settles the invoice in full and stores
+the shortfall as `writeoffAmount`; leaving it alone is the previous behaviour — the invoice keeps the
+difference outstanding. **Off by default.**
+
+The control is `WriteoffToggleRow` from `components/contract-ui/WriteoffAdjustment.jsx`, shared with
+the bank-reconciliation payment-method modal so both entry points produce the same outcome — the
+whole point of the ticket. Its copy is direction-aware ("quedará cobrada" for collections).
+
+Three constraints worth knowing:
+
+- **Native write-off, not a G/L item.** The amount lands on the `FIN_PaymentScheduleDetail` and its
+  `FIN_PaymentDetail` and posts against the business partner group's write-off account. There is no
+  accounting-concept selector and the copy deliberately does not mention one.
+- **Hidden while editing a draft.** An edited draft reconciles its already-linked PSD through
+  `PaymentDraftEditService.reapplyLinkedInstallmentPSD`, a Core call with no write-off input, so
+  offering the toggle there would promise something the backend cannot honour.
+- **Capped by the account's write-off limit.** `FIN_Financial_Account.Writeofflimit` disables the
+  toggle with an explanatory caption when the difference exceeds it; the backend re-checks. An unset
+  or zero limit means *no limit* — a deliberate divergence from Classic, documented in
+  `financial-account.md`.
+
+The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
+**not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
+different endpoint (`AddPaymentService`), and this modal never used it.

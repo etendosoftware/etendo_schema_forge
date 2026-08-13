@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useMenuLabel, useUI } from '@/i18n';
+import { useLocale, useMenuLabel, useUI } from '@/i18n';
 import { statusLabel as resolveStatusLabel } from '@/lib/statusBadge.js';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
@@ -24,8 +24,13 @@ const QUOTATION_SPECS = [
 
 function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
+  // Pass the DB-sourced status dictionary (same one DataTable.jsx uses via
+  // useLocale()) so this preview resolves the exact same "Bajo evaluación"
+  // AD_Ref_List_Trl label the grid shows, instead of falling back to the
+  // generic statusUnderEvaluation ("En evaluación") key.
+  const dictionary = useLocale();
   const statusCode = quotation.documentStatus;
-  const statusLabel = resolveStatusLabel(statusCode, null, ui);
+  const statusLabel = resolveStatusLabel(statusCode, dictionary, ui);
 
   return (
     <div className="pb-4">

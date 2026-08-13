@@ -3,6 +3,11 @@
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useMenuLabel: () => (key) => key,
+  // QuotationPreview now forwards this to statusLabel() (ETP-4856) so the
+  // "Bajo evaluación" DB-sourced label resolves the same way it does in the
+  // grid (DataTable.jsx). statusLabel itself is mocked below, so an empty
+  // dictionary is enough here.
+  useLocale: () => ({}),
 }));
 
 vi.mock('@/hooks/useCurrencyPrecision.js', () => ({

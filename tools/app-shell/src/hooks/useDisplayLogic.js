@@ -87,8 +87,14 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
 
   const evaluate = useCallback(async (values) => {
     if (!values || !token || !apiBaseUrl || !entity) return;
-    // Skip evaluation for new records (no id) — they have no meaningful state to evaluate
-    if (!values.id) return;
+    // A brand-new record (no id) has no persisted state, so plain record-dependent
+    // logic (e.g. readOnly gated on `posted`/`processed`) has nothing meaningful to
+    // evaluate yet — skip in that case. But `cacheableKeys` callers (the accounting
+    // dimension macro, ETP-4529) declare their result as GL-Configuration-only, never
+    // record-dependent — for those, skipping here left every brand-new document
+    // showing dimension fields regardless of the toggle in "Dimensiones contables"
+    // until the very first save, when evaluate-display finally ran (ETP-4845 bug 2).
+    if (!values.id && (!cacheRef.current.cacheKeySet || cacheRef.current.cacheKeySet.size === 0)) return;
 
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/evaluate-display`, {

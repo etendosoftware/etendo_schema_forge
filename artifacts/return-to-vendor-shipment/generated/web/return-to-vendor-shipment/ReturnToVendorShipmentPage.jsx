@@ -306,6 +306,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
+        hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
         noHeaderBorder
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}

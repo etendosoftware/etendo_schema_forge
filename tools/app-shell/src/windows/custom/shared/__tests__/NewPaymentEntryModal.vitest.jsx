@@ -72,6 +72,7 @@ vi.mock('../useConversionRate.js', () => ({
   useConversionRate: (args) => (typeof mockConversion === 'function' ? mockConversion(args) : mockConversion),
 }));
 
+import { useState } from 'react';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import NewPaymentEntryModal from '../NewPaymentEntryModal.jsx';
@@ -536,10 +537,34 @@ describe('NewPaymentEntryModal', () => {
       expect(screen.getByText('cpMissing')).toBeInTheDocument();
       // the delta amount (200,00) should be rendered nearby — MoneyAmount now renders
       // es-ES digits via the shared formatCurrency util ("200,00 €" for the EUR invoice).
-      expect(screen.getByText(/200,00/)).toBeInTheDocument();
+      // Scoped to the delta cell: since ETP-4797 a partial payment also renders the write-off
+      // toggle, whose title repeats the same figure, so a bare getByText would match twice.
+      expect(within(screen.getByTestId('cp-delta-cell')).getByText(/200,00/))
+        .toBeInTheDocument();
       // Confirmar stays enabled for a partial payment — only excess blocks it.
       const confirm = screen.getByText('cpConfirm').closest('button');
       expect(confirm).not.toBeDisabled();
+    });
+
+    it('ETP-4797: offers the write-off toggle, off by default, on a partial payment', async () => {
+      renderModal({ dir: 'in', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '800' } });
+
+      const toggle = screen.getByTestId('cp-writeoff-toggle-switch');
+      expect(toggle).toHaveAttribute('data-state', 'unchecked');
+      // The amount in the title is the shortfall, not the payment.
+      expect(screen.getByText(/writeoffAdjustTitle.*200,00/)).toBeInTheDocument();
+    });
+
+    it('ETP-4797: hides the write-off toggle once the amount covers the invoice', async () => {
+      renderModal({ dir: 'in', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '800' } });
+      expect(screen.getByTestId('cp-writeoff-toggle-switch')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1000' } });
+      expect(screen.queryByTestId('cp-writeoff-toggle-switch')).not.toBeInTheDocument();
     });
   });
 
@@ -805,7 +830,7 @@ describe('NewPaymentEntryModal', () => {
       // Conversion fields appear once the account (and thus its currency) resolves.
       expect(await screen.findByTestId('cp-conversion-fields')).toBeInTheDocument();
       expect(screen.getByTestId('cp-conversion-rate-input')).toBeInTheDocument();
-      expect(screen.getByTestId('cp-amount-in-account')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-amount-in-account-input')).toBeInTheDocument();
     });
 
     it('hides the conversion fields when the account currency matches the invoice currency', async () => {
@@ -817,33 +842,47 @@ describe('NewPaymentEntryModal', () => {
       expect(screen.queryByTestId('cp-conversion-fields')).not.toBeInTheDocument();
     });
 
-    it('auto-calculates amount-in-account = amount × rate and recomputes on amount and rate changes', async () => {
+    it('auto-calculates amount-in-account = amount × rate, and recomputes bidirectionally on amount, rate, and a typed converted-amount value', async () => {
       mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
       // Rate prefilled to 0.92; amount prefilled to the outstanding (100).
       mockConversion = { rate: 0.92, hasRate: true, loading: false };
       renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
 
-      const readout = await screen.findByTestId('cp-amount-in-account');
-      // 100 × 0.92 = 92, rendered en-US via the shared formatCurrency util with the real
-      // account-currency symbol ("92.00 €" — EUR account, symbol-after).
-      await waitFor(() => expect(readout).toHaveTextContent(/92([.,]00)?/));
+      const readout = await screen.findByTestId('cp-amount-in-account-input');
+      // 100 × 0.92 = 92, formatted en-US plain (no symbol embedded — the field is now a
+      // free-standing editable <input>; the symbol renders in a separate sibling <span>).
+      await waitFor(() => expect(readout).toHaveValue('92.00'));
 
       // Symbol money convention (ETP-4504): the modal shows the real currency symbol via
-      // Intl `narrowSymbol` (USD→$, EUR→€, GBP→£), never the raw 3-letter ISO code — and with
-      // no hardcoded currency→symbol map (MoneyAmount's `currencyDisplay` prop resolves it).
-      // The account-currency readout carries the account symbol (€, EUR); the amount input's
-      // own suffix carries the invoice symbol ($, USD). Pinning both guards against a future
-      // refactor silently reverting to ISO-code text.
-      expect(readout).toHaveTextContent(/€/);
+      // Intl `narrowSymbol` (USD→$, EUR→€, GBP→£), never the raw 3-letter ISO code. The
+      // account-currency symbol is a sibling <span> next to the input (curSuffix); the amount
+      // input's own suffix carries the invoice symbol ($, USD). Pinning both guards against a
+      // future refactor silently reverting to ISO-code text.
+      expect(readout.parentElement).toHaveTextContent(/€/);
       expect(screen.getByTestId('cp-amount-input').parentElement).toHaveTextContent(/\$/);
 
-      // Recompute on amount change: 200 × 0.92 = 184.
+      // Recompute forward on amount (invoice-currency) change: 200 × 0.92 = 184, rate unchanged.
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '200' } });
-      await waitFor(() => expect(readout).toHaveTextContent(/184([.,]00)?/));
+      await waitFor(() => expect(readout).toHaveValue('184.00'));
+      expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92');
 
-      // Recompute on rate change: 200 × 0.5 = 100.
+      // Recompute forward on rate change: 200 × 0.5 = 100.
       fireEvent.change(screen.getByTestId('cp-conversion-rate-input'), { target: { value: '0.5' } });
-      await waitFor(() => expect(readout).toHaveTextContent(/100([.,]00)?/));
+      await waitFor(() => expect(readout).toHaveValue('100.00'));
+
+      // Reverse direction: typing directly into the converted-amount field derives a new rate
+      // (the inverse of amount × rate) — invoice-currency amount is still 200 here.
+      fireEvent.change(readout, { target: { value: '50' } });
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.25'));
+
+      // Regression guard for `skipAmountRecomputeRef`: deriving the rate from the typed amount
+      // re-renders with a new `rate`, which is a dependency of the amount-recompute effect —
+      // without the skip guard that effect would immediately re-fire and reformat/clobber the
+      // field the user is still typing in (e.g. back to "46.00" = round2(200 × 0.23...)).
+      // Asserted synchronously (no waitFor) right after the change so a removed guard, which
+      // would only clobber the value on the FOLLOWING render/microtask, cannot slip past this
+      // check by coincidence.
+      expect(readout).toHaveValue('50');
     });
 
     it('includes conversionRate in the register body only in the foreign-currency case', async () => {
@@ -1025,7 +1064,7 @@ describe('NewPaymentEntryModal', () => {
       await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('60.00'));
 
       // Amount-in-account tracks the CASH portion only: 60 × 0.92 = 55.20 (account currency).
-      await waitFor(() => expect(screen.getByTestId('cp-amount-in-account')).toHaveTextContent(/55[.,]20/));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-in-account-input')).toHaveValue('55.20'));
 
       // Exact balance (60 cash + 40 credit = 100) → no excess, confirm enabled.
       expect(screen.queryByTestId('cp-excess-credit')).not.toBeInTheDocument();
@@ -1042,6 +1081,408 @@ describe('NewPaymentEntryModal', () => {
         expect(body.creditSources).toHaveLength(1);
         expect(body.creditSources[0]).toMatchObject({ kind: 'credit', paymentId: 'cn-1', use: 40 });
       });
+    });
+
+    it('clears the rate and shows the required-rate error under BOTH fields when the amount-in-account is blanked', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      await screen.findByTestId('cp-conversion-fields');
+      // Sanity: a valid prefilled rate starts with no error on either field.
+      expect(screen.queryByTestId('cp-conversion-rate-error')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-amount-in-account-error')).not.toBeInTheDocument();
+
+      // Blanking the converted-amount field parses to NaN, which is not a valid amount to
+      // derive a rate from — it falls into the same "unknown rate" branch a blank/invalid rate
+      // field already triggers.
+      fireEvent.change(screen.getByTestId('cp-amount-in-account-input'), { target: { value: '' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('');
+        expect(screen.getByTestId('cp-conversion-rate-error')).toHaveTextContent('cpConversionRateRequired');
+        expect(screen.getByTestId('cp-amount-in-account-error')).toHaveTextContent('cpConversionRateRequired');
+        expect(screen.getByTestId('cp-save-draft')).toBeDisabled();
+        expect(screen.getByTestId('cp-confirm')).toBeDisabled();
+      });
+    });
+
+    // Division-by-zero guard: a fully credit-covered invoice legitimately leaves the
+    // invoice-currency cash amount (balance.amount) at 0 — typing in the amount-in-account
+    // field must not throw or produce NaN; it must fall into the "unknown rate" branch and
+    // clear rateStr, exactly like an invalid amount does.
+    it('does not throw and leaves the rate cleared when typing an amount while the invoice amount is fully covered by credit', async () => {
+      mockApiFetch = buildApiFetch({
+        accounts: FOREIGN_ACCOUNTS,
+        sources: [{ id: 's1', kind: 'abono', doc: 'SF-1', date: '2024-03-01', avail: 100 }],
+      });
+      // No DB rate prefilled — an untouched rate field is the realistic starting point for an
+      // invoice that is about to be fully covered by credit (no cash portion to convert yet).
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      await screen.findByTestId('cp-conversion-fields');
+      // Fully consume the credit line: cash drops to 0 (balance.amount === 0).
+      fireEvent.click(await screen.findByTestId('cp-credit-row-s1'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0.00'));
+
+      // Typing a positive amount here would normally derive a rate (accountAmount / invoiceAmount)
+      // — but balance.amount (the divisor) is 0, so the `balance.amount > 0` guard must keep this
+      // from throwing/NaN-ing and fall into the "unknown rate" branch instead.
+      expect(() => {
+        fireEvent.change(screen.getByTestId('cp-amount-in-account-input'), { target: { value: '50' } });
+      }).not.toThrow();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('cp-amount-in-account-input')).toHaveValue('50');
+        expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('');
+        expect(screen.getByTestId('cp-conversion-rate-error')).toHaveTextContent('cpConversionRateRequired');
+        expect(screen.getByTestId('cp-amount-in-account-error')).toHaveTextContent('cpConversionRateRequired');
+      });
+    });
+
+    it('sends the rate derived from a typed amount-in-account value in the register payload (rate never typed directly)', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      // No DB rate prefilled — the rate is reached exclusively via the amount-in-account path.
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      await screen.findByTestId('cp-conversion-fields');
+      expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('');
+
+      // Typing 46 in the converted-amount field derives rate = 46 / 100 = 0.46.
+      fireEvent.change(screen.getByTestId('cp-amount-in-account-input'), { target: { value: '46' } });
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.46'));
+
+      const confirm = screen.getByTestId('cp-confirm');
+      await waitFor(() => expect(confirm).not.toBeDisabled());
+      fireEvent.click(confirm);
+
+      await waitFor(() => {
+        const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+        expect(call).toBeTruthy();
+        expect(JSON.parse(call[1].body).conversionRate).toBe('0.46');
+      });
+    });
+  });
+
+  // ETP-4841: edit mode AND multi-currency, together. Reopening a DRAFT that was saved with a
+  // hand-typed conversion rate must show that stored rate back (payment.conversionRate, added to
+  // every invoicePayments row by the backend action), not the system spot rate from
+  // validate-exchange-rate. The two feature areas were previously tested in isolation — the bug
+  // lived exactly in their intersection, where the seeding effect unconditionally overwrote the
+  // field with the system rate. The persisted rate is a property of the currency PAIR it was saved
+  // for, so it survives a date change and an account switch WITHIN that pair, is replaced by the
+  // DB rate of any other foreign pair, and disappears entirely on a same-currency account.
+  describe('persisted draft conversion rate in edit mode (ETP-4841)', () => {
+    const USD_INVOICE = { ...INVOICE, 'currency$_identifier': 'USD' };
+    // Two accounts in the SAVED currency (EUR), one in another foreign currency (GBP), one in the
+    // invoice currency (USD). No paymentMethodIds → every account supports every method, so an
+    // account switch is never rejected by the method filter.
+    const EUR_ACCOUNT = { id: 'acc-eur', label: 'Caja EUR', currency: 'EUR', defaultPaymentMethod: 'Transfer' };
+    const EUR_ACCOUNT_2 = { id: 'acc-eur-2', label: 'Banco EUR', currency: 'EUR', defaultPaymentMethod: 'Transfer' };
+    const GBP_ACCOUNT = { id: 'acc-gbp', label: 'Cuenta GBP', currency: 'GBP', defaultPaymentMethod: 'Transfer' };
+    const USD_ACCOUNT = { id: 'acc-usd', label: 'Cuenta USD', currency: 'USD', defaultPaymentMethod: 'Transfer' };
+
+    /**
+     * A draft row exactly as InvoicePaymentHistoryModal receives it from the
+     * `invoicePayments` action and forwards as the `payment` prop: a USD invoice paid from the
+     * EUR account with a manual rate of 0.89.
+     */
+    function eurDraft(overrides = {}) {
+      return {
+        id: 'pay-draft-1',
+        documentNo: 'PAY-001',
+        paymentDate: '2026-01-20',
+        paymentMethod: 'Transfer',
+        status: 'RPAP',
+        processed: false,
+        amount: 100,
+        appliedToInvoice: 100,
+        accountId: 'acc-eur',
+        accountName: 'Caja EUR',
+        accountCurrency: 'EUR',
+        conversionRate: 0.89,
+        ...overrides,
+      };
+    }
+
+    // Captured setter of the simulated validate-exchange-rate response (see systemRateHook).
+    let resolveSystemRate;
+
+    /**
+     * A useConversionRate stand-in that models the hook's real async round-trip: it starts with
+     * `initial` (usually null — "no response yet") and only produces a rate once the test calls
+     * `resolveSystemRate(...)`. This is what makes the LATE-response race testable: a naive fix
+     * that seeds the persisted rate but leaves the system rate free to overwrite it later passes
+     * every synchronous assertion and still fails here.
+     */
+    function systemRateHook(initial = null) {
+      return () => {
+        const [rate, setRate] = useState(initial);
+        resolveSystemRate = setRate;
+        return { rate, hasRate: rate != null, loading: rate == null };
+      };
+    }
+
+    /** Picks another account in the (already open) account selector. */
+    async function selectAccount(accountId) {
+      fireEvent.click(screen.getByTestId('field-account-chip'));
+      const accountInput = await screen.findByTestId('field-account');
+      fireEvent.focus(accountInput);
+      fireEvent.change(accountInput, { target: { value: '' } });
+      await waitFor(() => expect(screen.getByTestId('options-account')).toBeInTheDocument());
+      // Options select on mouseDown (fires before blur), not click.
+      fireEvent.mouseDown(screen.getByTestId(`option-account-${accountId}`));
+    }
+
+    beforeEach(() => {
+      resolveSystemRate = undefined;
+    });
+
+    // Truth table row 1 — "nothing touched → 0.89, even when validate-exchange-rate responds LATE".
+    it('shows the rate stored on the draft instead of the system rate, even when the exchange-rate response lands late', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT] });
+      mockConversion = systemRateHook(null);
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      const rateInput = screen.getByTestId('cp-conversion-rate-input');
+      await waitFor(() => expect(rateInput).toHaveValue('0.89'));
+      // The account-currency readout follows the persisted rate: 100 × 0.89 = 89.00 (EUR account).
+      const readout = screen.getByTestId('cp-amount-in-account-input');
+      await waitFor(() => expect(readout).toHaveValue('89.00'));
+      expect(readout.parentElement).toHaveTextContent(/€/);
+
+      // The system spot rate arrives AFTER the account (and therefore the persisted seed) resolved
+      // — it must not win.
+      act(() => resolveSystemRate(0.92));
+      expect(rateInput).toHaveValue('0.89');
+      // And the gate is satisfied by the persisted rate alone (no error, both actions enabled).
+      expect(screen.queryByTestId('cp-conversion-rate-error')).not.toBeInTheDocument();
+      expect(screen.getByTestId('cp-save-draft')).not.toBeDisabled();
+      expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+    });
+
+    // Composition with the amount-in-account bidirectional editing (this change): the persisted
+    // rate correctly seeds a consistent converted amount on reopen, AND the now-editable
+    // converted-amount field is not "stuck" on the persisted rate — editing it re-derives a new
+    // rate exactly like a fresh (non-draft) foreign payment would.
+    it('re-derives a new rate when the reopened amount-in-account field is edited (does not stick to the persisted rate)', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT] });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      const rateInput = screen.getByTestId('cp-conversion-rate-input');
+      const readout = screen.getByTestId('cp-amount-in-account-input');
+      // Consistent seed from the persisted rate: 100 × 0.89 = 89.00.
+      await waitFor(() => expect(rateInput).toHaveValue('0.89'));
+      await waitFor(() => expect(readout).toHaveValue('89.00'));
+
+      // Editing the reopened amount field derives a fresh rate (50 / 100 = 0.5), overriding the
+      // persisted 0.89 — the persisted-rate seeding effect must not re-fight this user edit.
+      fireEvent.change(readout, { target: { value: '50' } });
+      await waitFor(() => expect(rateInput).toHaveValue('0.5'));
+      expect(readout).toHaveValue('50');
+    });
+
+    // Truth table row 2 — "payment date changed → 0.89 (no reseed)".
+    it('keeps the persisted rate when the payment date changes', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT] });
+      // The system rate is already available here, so a reseed would be visible as 0.92.
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      const rateInput = screen.getByTestId('cp-conversion-rate-input');
+      await waitFor(() => expect(rateInput).toHaveValue('0.89'));
+
+      fireEvent.change(screen.getByTestId('date-field'), { target: { value: '2026-02-05' } });
+      await waitFor(() => expect(screen.getByTestId('date-field')).toHaveValue('2026-02-05'));
+      expect(rateInput).toHaveValue('0.89');
+    });
+
+    // Truth table row 3 — "switch to another EUR account (Caja → Banco) → 0.89 (same USD→EUR pair)".
+    it('keeps the persisted rate when switching to another account in the same currency', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT, EUR_ACCOUNT_2] });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+
+      await selectAccount('acc-eur-2');
+      // The switch really happened (Banco EUR selected)…
+      await waitFor(() => expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Banco EUR'));
+      // …and the rate is untouched: it belongs to the USD→EUR pair, not to the account.
+      expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89');
+    });
+
+    // Truth table row 4 — "switch to a GBP account → the DB USD→GBP rate".
+    it('reseeds from the DB rate of the new pair when switching to an account in another foreign currency', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT, GBP_ACCOUNT] });
+      // Driven by the target currency: the GBP pair has its own DB rate.
+      mockConversion = ({ toCode }) => (toCode === 'GBP'
+        ? { rate: 0.75, hasRate: true, loading: false }
+        : { rate: 0.92, hasRate: true, loading: false });
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+
+      await selectAccount('acc-gbp');
+      // Showing the saved USD→EUR rate on a USD→GBP payment would be a silent accounting error.
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.75'));
+    });
+
+    // Truth table row 4 (empty case) — "…or empty if none exists".
+    it('clears the rate when switching to a foreign pair that has no DB rate', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT, GBP_ACCOUNT] });
+      mockConversion = ({ toCode }) => (toCode === 'GBP'
+        ? { rate: null, hasRate: false, loading: false }
+        : { rate: 0.92, hasRate: true, loading: false });
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+
+      await selectAccount('acc-gbp');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue(''));
+      // Empty rate on a foreign payment blocks both actions again (ETP-4504 B1 gate).
+      expect(screen.getByTestId('cp-conversion-rate-error')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-save-draft')).toBeDisabled();
+      expect(screen.getByTestId('cp-confirm')).toBeDisabled();
+    });
+
+    // Truth table row 5 — "switch to a USD account (= invoice currency) → field hidden,
+    // conversionRate absent from the submit payload".
+    it('hides the conversion field and drops conversionRate from the payload on a same-currency account', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT, USD_ACCOUNT] });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+
+      await selectAccount('acc-usd');
+      // Account currency === invoice currency → no conversion at all.
+      await waitFor(() => expect(screen.queryByTestId('cp-conversion-fields')).not.toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('cp-save-draft'));
+      await waitFor(() => {
+        const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+        expect(call).toBeTruthy();
+        const body = JSON.parse(call[1].body);
+        // `conversionRate: undefined` is dropped by JSON.stringify → key absent.
+        expect(body).not.toHaveProperty('conversionRate');
+        expect(body.fin_financial_account_id).toBe('acc-usd');
+        expect(body.paymentId).toBe('pay-draft-1');
+      });
+    });
+
+    // Truth table row 6 — "back to a EUR account from a USD one → 0.89 again".
+    it('restores the persisted rate when coming back to an account in the saved currency', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT, USD_ACCOUNT] });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+
+      // Away to the invoice currency (no conversion), then back to the saved pair.
+      await selectAccount('acc-usd');
+      await waitFor(() => expect(screen.queryByTestId('cp-conversion-fields')).not.toBeInTheDocument());
+      await selectAccount('acc-eur');
+
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+    });
+
+    // Truth table (draft save) — "Guardar" must re-submit the rate the user saved, unchanged.
+    it('re-submits the persisted rate unchanged when saving the reopened draft', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT] });
+      // A different system rate is available; the payload must still carry the persisted one.
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+
+      const saveDraft = screen.getByTestId('cp-save-draft');
+      await waitFor(() => expect(saveDraft).not.toBeDisabled());
+      fireEvent.click(saveDraft);
+
+      await waitFor(() => {
+        const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+        expect(call).toBeTruthy();
+        const body = JSON.parse(call[1].body);
+        expect(body.process).toBe('draft');
+        expect(body.conversionRate).toBe('0.89');
+        // Edit mode → the SAME payment is updated, not a new one created.
+        expect(body.paymentId).toBe('pay-draft-1');
+      });
+    });
+
+    // Truth table row 7 — "user retypes the rate by hand → whatever they typed, never overwritten".
+    it('never overwrites a manual rate edit made after the persisted seed', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT] });
+      mockConversion = systemRateHook(null);
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
+
+      await screen.findByTestId('cp-conversion-fields');
+      const rateInput = screen.getByTestId('cp-conversion-rate-input');
+      await waitFor(() => expect(rateInput).toHaveValue('0.89'));
+
+      // The user corrects the rate by hand…
+      fireEvent.change(rateInput, { target: { value: '0.95' } });
+      expect(rateInput).toHaveValue('0.95');
+
+      // …and neither a late exchange-rate response nor a date change may clobber it.
+      act(() => resolveSystemRate(0.92));
+      expect(rateInput).toHaveValue('0.95');
+      fireEvent.change(screen.getByTestId('date-field'), { target: { value: '2026-02-05' } });
+      await waitFor(() => expect(screen.getByTestId('date-field')).toHaveValue('2026-02-05'));
+      expect(rateInput).toHaveValue('0.95');
+
+      // The typed rate — not the persisted one — is what gets saved.
+      fireEvent.click(screen.getByTestId('cp-save-draft'));
+      await waitFor(() => {
+        const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+        expect(call).toBeTruthy();
+        expect(JSON.parse(call[1].body).conversionRate).toBe('0.95');
+      });
+    });
+
+    // Guard on the isEdit half of the gate: an identical row passed WITHOUT an id (i.e. the
+    // "add new payment" path) is not an edit, so the system rate must still drive the field.
+    it('ignores conversionRate when the modal is not in edit mode', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT] });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({
+        invoiceData: USD_INVOICE,
+        outstanding: 100,
+        payment: eurDraft({ id: undefined }),
+      });
+
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92'));
+    });
+
+    // Guard on the "> 0" half of the gate: a legacy/absent stored rate must fall back to the
+    // system rate rather than blanking the field.
+    it('falls back to the system rate when the draft carries no usable stored rate', async () => {
+      mockApiFetch = buildApiFetch({ accounts: [EUR_ACCOUNT] });
+      mockConversion = { rate: 0.92, hasRate: true, loading: false };
+      renderModal({
+        invoiceData: USD_INVOICE,
+        outstanding: 100,
+        // Older backend (field absent) and an explicit 0 both mean "nothing stored".
+        payment: eurDraft({ conversionRate: 0 }),
+      });
+
+      await screen.findByTestId('cp-conversion-fields');
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92'));
     });
   });
 

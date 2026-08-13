@@ -122,6 +122,25 @@ describe('useGeneralLedgerConfig — NEO fallback on load', () => {
   });
 });
 
+describe('useGeneralLedgerConfig — dimensions mapping on load (ETP-4845)', () => {
+  it('filters out the U1 row and sets labelKey from type on the surviving backend-shaped rows', async () => {
+    mockSelectedOrg = { id: 'ES', name: 'España S.A.' };
+    const backendDimensions = [
+      { id: 'row-cc', type: 'CC', label: 'Cost Center', active: true, mandatory: true },
+      { id: 'row-u1', type: 'U1', label: 'User 1', active: true, mandatory: false },
+      { id: 'row-pj', type: 'PJ', label: 'Project', active: false, mandatory: false },
+    ];
+    mockApiFetch.mockResolvedValue(okJson({ ...GLC_SEED_PAYLOAD, dimensions: backendDimensions }));
+
+    const { result } = renderHook(() => useGeneralLedgerConfig('/sws/neo/general-ledger-configuration'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.dimensions.map((r) => r.id)).toEqual(['row-cc', 'row-pj']);
+    expect(result.current.dimensions.find((r) => r.id === 'row-cc').labelKey).toBe('glc.dim.costCenter');
+    expect(result.current.dimensions.find((r) => r.id === 'row-pj').labelKey).toBe('glc.dim.project');
+  });
+});
+
 describe('useGeneralLedgerConfig — save() payload', () => {
   it('POSTs only the dirty fields per entity plus selectedOrgId', async () => {
     mockSelectedOrg = { id: 'ES', name: 'España S.A.' };
