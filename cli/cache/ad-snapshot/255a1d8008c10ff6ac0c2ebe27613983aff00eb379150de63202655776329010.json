@@ -12426,7 +12426,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "67cd2d579e7e2a9fe2c28a7f2fa24327033cd9b51ee5bedc2230ea69b761a449",
+      "checksum": "d5f6a2ffff38c3ca3528cefd8bf462c887daf97eec026ec7ed4cd9468a9b35ae",
       "params": [
         "123"
       ],
@@ -14087,7 +14087,7 @@
           "entity_classname": "BusinessPartner",
           "entity_javapackage": "org.openbravo.model.common.businesspartner",
           "field_isactive": "Y",
-          "field_name": "Web",
+          "field_name": "EM_Etgo_Web",
           "field_seq": "430",
           "fieldlength": "60",
           "filterclause": null,
@@ -267778,7 +267778,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "ab8c0c2171a0b43b194908e7fd47ecc29aedaf839e202f7779b0e493d3b004d5",
+      "checksum": "f427b858b12614f74516a9064746e9430bacc1c6125278411b014535c66e0d78",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -269632,14 +269632,14 @@
           "callout_class": null,
           "columnname": "EM_Psd2_Refresh_Connections",
           "defaultvalue": null,
-          "displaylogic": "@PSD2_HasConecctions@>0 & @Type@!'C'",
+          "displaylogic": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "entity_alias": null,
           "entity_classname": "FIN_FinancialAccount",
           "entity_javapackage": "org.openbravo.model.financialmgmt.payment",
           "field_isactive": "Y",
-          "field_name": "Refresh Connections",
+          "field_name": "Search Recent Transactions",
           "field_seq": "550",
           "fieldlength": "1",
           "filterclause": null,
@@ -278606,7 +278606,7 @@
           "hqlfilterclause": null,
           "hqlorderbyclause": "lineNo",
           "hqlwhereclause": null,
-          "isdisplayed": "Y",
+          "isdisplayed": "N",
           "ismandatory": "N",
           "isreadonly": "Y",
           "isshowninstatusbar": "N",

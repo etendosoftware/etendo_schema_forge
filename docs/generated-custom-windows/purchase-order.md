@@ -250,3 +250,31 @@ This runs `PurchaseOrderHeaderHandler` exactly as the UI does — including the 
 total-discount line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285).
 If you change this window's workflow rules, update the `agentPrompt` in the same change: it is
 the only thing telling the agent what is legal.
+
+## Print button — added, visible only in Completado — ETP-4714
+
+This window previously suppressed the generic detail-view Print button entirely
+(`window.hidePrint: true`). `decisions.json` now declares
+`hidePrintWhen: { documentStatus: { notEquals: "CO" } }` instead, so the same generic Print
+button in `DetailView.jsx` now shows once the order is Completado, backed by the pre-existing
+`print-purchase-order` report — verified rendering real order data end-to-end during this
+ticket. No custom component was added: `PurchaseOrderActions.jsx` (this window's
+`topbarRight`) and its `usePurchaseOrderPdf` hook — used only to feed the "Enviar documento"
+preview modal — are unrelated and untouched. See `docs/decisions-reference.md`
+("Print Visibility") for the generic mechanism.
+
+**Review catch:** swapping `hidePrint: true` for `hidePrintWhen` only affects the detail view —
+the generator's `hidePrintListProp` still keys off the plain `hidePrint`, so the list view's
+bulk "Print (N)" and toolbar Print buttons would otherwise become visible for every row
+regardless of status. `decisions.json` also declares `"listViewOptions": { "hidePrint": true }`
+to keep the list-level print exactly as hidden as it was before this ticket — only the detail
+view gained the new conditional behavior.
+
+**Second catch — the custom wrapper bypasses the generated `listViewOptions` too.**
+`tools/app-shell/src/windows/custom/purchase-order/index.jsx` hand-rolls its own `<ListView>`
+for the list route instead of delegating to the generated `HeaderPage.jsx` (only the
+detail/record route goes through the generated component), so the generator's literal
+`listViewOptions={{"hidePrint":true}}` emitted into `HeaderPage.jsx` is never reached for the
+list. Fixed by hardcoding the same `listViewOptions={{ hidePrint: true }}` prop directly on
+this file's own `<ListView>` call, matching the existing pattern already used there for
+`dateFilterKey` and other generator-derived list props.

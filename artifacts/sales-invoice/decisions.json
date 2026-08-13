@@ -9,6 +9,8 @@
     "relatedDocuments": true,
     "notesField": "description",
     "hideDeleteWhenComplete": true,
+    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
+    "listViewOptions": { "hidePrint": true },
     "noHeaderBorder": true,
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",
