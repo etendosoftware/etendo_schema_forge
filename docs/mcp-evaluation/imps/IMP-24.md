@@ -130,6 +130,8 @@ fixing precisely because the lenient parser **succeeds** on them.
 - [x] `./gradlew test` on the full module — run by the user 2026-08-10, green. This is the check that counts — after IMP-16 §9.2, a standalone run does not
 - [ ] The `neo_update` call site probed live (§7, probe 6 — blocked, not run)
 - [ ] Corpus row in `etendo-go-docs` mentioning the 422 (separate repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
+  - **Drafted 2026-08-13**, uncommitted in the `etendo-go-docs` working tree — see §8. Left unticked
+    deliberately: text in a working tree is not a corpus an agent can read.
 
 ## 7. Live verification (2026-08-10, after a user-run compile + deploy)
 
@@ -185,3 +187,41 @@ the post-deploy window there are now `Normalized date` INFO lines on every creat
 the gate asked to see. Two caveats keep it open: the traffic is my own probe traffic rather than
 production, and it is exactly the traffic a fix's author would generate, so it cannot speak for shapes
 I did not think to send. The gate should still be re-read against real traffic.
+
+## 9. The corpus row — drafted, not delivered (2026-08-13)
+
+Two pages in `etendo-go-docs` carry the addition, both **extended rather than created**:
+
+| Page | Addition |
+|---|---|
+| `agentic/mcp/index.md` | a new Error-handling row: symptom, cause (bad format *or* ISO-shaped-but-impossible), resolution |
+| `agentic/agent-manual.md` | a new Error-handling row phrased as a normative agent action, plus a clause on the existing date bullet |
+
+Both pages needed it independently, which is a property of the corpus rather than duplication:
+`AGENTS.md` requires each `agentic/` page to stand alone, so a cross-reference would have left
+whichever page Context7 retrieved incomplete. Only `agentic/` is indexed — `docs/` is the human
+MkDocs site and was correctly left alone.
+
+The row's wording is drawn from a live call rather than from `neo-headless.md`, using the same probe
+that opened §1 — `orderDate:"06/08/2026"` on a `neo_create`:
+
+```json
+{ "status": 422, "error": "validation_error",
+  "detail": "One or more date values are not in a format this API can read",
+  "invalidDates": [ { "name": "orderDate", "received": "06/08/2026",
+                      "expectedFormat": "yyyy-MM-dd", "example": "2026-08-10" } ],
+  "hint": "Send dates as ISO: yyyy-MM-dd for dates, yyyy-MM-dd'T'HH:mm:ss for datetimes. Check the
+           value is a real calendar date too — 2026-02-30 is ISO-shaped and still invalid." }
+```
+
+This is the shape §1 set out to replace, now confirmed on the deployed build: the raw DAL
+`status:-4` with a `java.text.ParseException` in it is gone, and the four keys the row documents
+(`name`, `received`, `expectedFormat`, `example`) are all present. **No record was created** — the
+date check fires before the `missingFields` check, so the call cannot reach a write.
+
+The two rows tell an agent something the envelope alone does not: on a multi-date payload, read
+*every* entry in `invalidDates`, and resend only the fields it names. An agent that retries by
+reformatting everything it sent is the failure this row exists to prevent.
+
+Delivery still needs a commit, a PR in that repo, and the Context7 reindex ([IMP-14](IMP-14.md)) —
+none of which this run performed.

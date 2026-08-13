@@ -100,7 +100,7 @@ had two behaviours, and a differently-named report would have left it that way.
 
 ## 6. Done when
 
-- [x] An unknown name in `fields:[…]` comes back in `response.unknownFields` on both tools
+- [x] An unknown name in `fields:[…]` comes back in the response's top-level `unknownFields` on both tools
 - [x] It comes back on an empty result set too (§3.1)
 - [x] A name the spec does not expose is reported even though the DAL has it (§3.2)
 - [x] `view:"summary"` is never judged (§3.3)
@@ -111,6 +111,8 @@ had two behaviours, and a differently-named report would have left it that way.
 - [x] `./gradlew test` on the full module — run by the user 2026-08-10, green
 - [ ] Corpus row for `neo_list`/`neo_get` in `etendo-go-docs` mentions `unknownFields` (separate
       repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
+  - **Drafted 2026-08-13**, uncommitted in the `etendo-go-docs` working tree — see §8. Left
+    unticked deliberately: text in a working tree is not a corpus an agent can read.
 
 ## 7. Live verification (2026-08-10, after a user-run compile + deploy)
 
@@ -137,3 +139,39 @@ row-inspecting implementation goes quiet, and the only one where the typo makes 
 Note, not a defect: the MCP client's cached tool list still showed the pre-fix `fields` descriptions
 during this run — the client fetches the listing once at session start. The server serves the
 updated `ToolRegistry` text; it becomes visible in the next session.
+
+## 8. The corpus row — drafted, not delivered (2026-08-13)
+
+Two pages in `etendo-go-docs` carry the addition, both **extended rather than created**:
+
+| Page | Addition |
+|---|---|
+| `agentic/mcp/index.md` | the `neo_list`/`neo_get` row of the response-shaping table, and a new Error-handling row |
+| `agentic/agent-manual.md` | a new Error-handling row, phrased as a normative agent action |
+
+Both pages needed it independently, which is a property of the corpus rather than duplication:
+`AGENTS.md` requires each `agentic/` page to stand alone ("do not rely on content from other
+agentic pages"), so a cross-reference would have left whichever page Context7 retrieved incomplete.
+Only `agentic/` is indexed — `docs/` is the human MkDocs site and was correctly left alone.
+
+The draft first said the key was `response.unknownFields`. A live call says otherwise:
+
+```
+neo_list sales-order/header fields:["documentNo","salePrice","notAField"] limit:1
+  → { startRow: 0, endRow: 0, totalRows: 2,
+      data: [ { id: …, documentNo: "1000011" } ],
+      unknownFields: [ "notAField", "salePrice" ] }
+```
+
+In what an MCP client actually receives, `unknownFields` is **top-level**, sorted, and sits beside
+`data`. §5's shape above is not wrong — it draws the servlet's own `response` envelope — but the
+corpus is read by agents holding the unwrapped result, and telling them to look under `response.`
+sends them hunting for an object that is not there. Corrected in both pages, and in §6's line, which
+is where the draft got the phrasing.
+
+Worth naming the failure mode: the draft was cross-checked against `neo-headless.md` and agreed with
+it, because both describe the same layer. Document-to-document agreement was never going to catch a
+layer mismatch. Only the call did.
+
+Delivery still needs a commit, a PR in that repo, and the Context7 reindex ([IMP-14](IMP-14.md)) —
+none of which this run performed.
