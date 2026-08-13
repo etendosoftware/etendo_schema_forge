@@ -33,8 +33,8 @@ export function MoreOptionsMenu({ favKey, favLabel }) {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <DropdownMenu data-testid="DropdownMenu__1775af">
+      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__1775af">
         <button
           type="button"
           className="fm-more-options-trigger"

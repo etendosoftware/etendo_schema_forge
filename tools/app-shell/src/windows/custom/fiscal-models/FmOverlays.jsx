@@ -564,7 +564,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                 onSelect={(id) => { setModel(id); setPeriod(periods[0]); setModelMenuOpen(false); }}
                 onClose={() => setModelMenuOpen(false)}
                 t={t}
-              />
+                data-testid="ModelSelectMenu__cda0bb" />
             )}
           </div>
 
@@ -588,7 +588,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                   years={yearOptions}
                   onSelect={(y) => { setYear(y); setYearMenuOpen(false); }}
                   onClose={() => setYearMenuOpen(false)}
-                />
+                  data-testid="YearSelectMenu__cda0bb" />
               )}
             </div>
             <div className="fm-newdecl-field">
