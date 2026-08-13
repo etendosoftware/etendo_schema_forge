@@ -106,10 +106,7 @@ export function usePreviewAttachment({
     setStoredFile(null);
   }, [revokeUrl]);
 
-  const [reloadKey, setReloadKey] = useState(0);
-  const reload = useCallback(() => setReloadKey(k => k + 1), []);
-
-  // Read the slot on mount and on every reload signal.
+  // Read the slot on mount and whenever the record it belongs to changes.
   useEffect(() => {
     if (!active) return undefined;
     let cancelled = false;
@@ -122,7 +119,7 @@ export function usePreviewAttachment({
       setIsBusy(false);
     })();
     return () => { cancelled = true; };
-  }, [active, apiBaseUrl, specName, documentId, token, reloadKey, applyBlob]);
+  }, [active, apiBaseUrl, specName, documentId, token, applyBlob]);
 
   // Revoke Blob URL on unmount
   useEffect(() => () => revokeUrl(), [revokeUrl]);
