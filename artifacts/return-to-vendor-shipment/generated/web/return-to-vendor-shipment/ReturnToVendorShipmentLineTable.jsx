@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:returnToVendorShipmentLine
 const columns = [
-  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product' },
+  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', lookup: true },
   { key: 'movementQuantity', column: 'MovementQty', type: 'number', labels: {"es_ES":"Cant. a devolver","en_US":"Return Qty"}, label: 'Movement Quantity', required: true, grow: true },
   { key: 'orderQuantity', column: 'QuantityOrder', type: 'number', labels: {"es_ES":"Cant. recibida orig.","en_US":"Original Received Qty"}, label: 'Order Quantity', grow: true, readOnly: true },
 ];

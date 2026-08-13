@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.22.1",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "updatedAt": "2026-08-04T17:47:50.269Z",
-  "contractChecksum": "26f99bdcda847e37",
+  "updatedAt": "2026-08-13T12:04:56.203Z",
+  "contractChecksum": "51c13671c84442ee",
   "apiPrediction": {
     "specName": "return-material-receipt",
     "baseUrl": "/sws/neo/return-material-receipt",
@@ -489,7 +489,6 @@
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
           },
           "product": {
-            "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
           "movementQuantity": {
@@ -596,5 +595,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "260c8be9d93285c2"
+  "checksum": "7df0035dd88d7c31"
 }

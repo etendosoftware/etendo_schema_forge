@@ -359,10 +359,12 @@
           "section": "principal"
         },
         "product": {
+          "visibility": "editable",
           "grid": true,
           "gridOrder": 1,
           "searchable": true,
           "inputMode": "search",
+          "lookup": true,
           "readOnlyLogic": null,
           "section": "principal"
         },

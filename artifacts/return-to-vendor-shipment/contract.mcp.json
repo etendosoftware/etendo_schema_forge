@@ -1,8 +1,8 @@
 {
-  "version": "0.24.0",
+  "version": "0.25.1",
   "generatedAt": "2026-07-06T16:17:20.534Z",
-  "updatedAt": "2026-08-04T17:47:50.435Z",
-  "contractChecksum": "c485bdbed2373454",
+  "updatedAt": "2026-08-13T12:04:56.351Z",
+  "contractChecksum": "5c9a29d6d9c72715",
   "apiPrediction": {
     "specName": "return-to-vendor-shipment",
     "baseUrl": "/sws/neo/return-to-vendor-shipment",
@@ -481,7 +481,6 @@
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
           },
           "product": {
-            "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
           "movementQuantity": {
@@ -596,5 +595,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "a9bf582fb7f6f902"
+  "checksum": "d93559ed86c77e12"
 }
