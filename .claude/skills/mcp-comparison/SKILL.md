@@ -64,7 +64,9 @@ run that flips marks without moving MARI has not improved the product.
 discovering a new IMP makes it look worse, and discovery *is* the work. MARI weights outcome (60 %:
 first-call success + calls-to-outcome ratio) over activity (40 %: weighted points against a frozen
 quota + probe coverage), so finding a new defect never drags the number down. Baseline 2026-08-05:
-**MARI = 28**; scope-closed ceiling **88**.
+**MARI = 28**. Since **2026-08-13** the quota is **frozen at 126 permanently** and MARI is a
+**cumulative score, not a percentage** — it has no maximum, and the old "scope-closed ceiling" is
+retired. Registry **§2.2.1** is the live rule; §2.2 above it is the history of the re-base regime.
 
 The reports are **evidence-driven, not opinion-driven**: every finding in §7/§8 traces to a
 numbered live call in §11, and every proposed change shows a verbatim `BEFORE`
@@ -224,7 +226,7 @@ Two structural conventions the report relies on — do not break them:
      — each with its status mark and **one sentence saying what the item is**, in plain language, not
      its title verbatim. The point is that someone who has read nothing else can see the whole board.
    - **What is owed by the human rather than by a run** (unrun test suites, unpushed branches,
-     decisions like re-basing the quota or amending the frozen suite).
+     decisions like amending the frozen suite; the quota is frozen and is no longer such a decision).
 
    Two rules that keep this from rotting: it is a **read-only restatement** of the registry — a
    status or point value written only here is a drift bug, and the two must be diffable; and the
@@ -495,13 +497,23 @@ MARI = 0.30 × M2                       # first-call success rate, as a percenta
 ```
 
 Baseline to carry forward: **2026-08-05 → MARI = 28** (M2 0 % · M1 2.4× · 29.5/73 · 2/6).
-Projections on record: next wave **66**, scope closed **88**. The ceiling is 88, not 100 — see §2.3.
+Projection on record: next wave **66**. **Do not compute or quote a "scope-closed ceiling"** — it was
+retired 2026-08-13 (registry §2.2.1). The number that replaces it is **open debt**
+(`known scope − earned`, in points), stated in the registry header.
 
 Two rules that keep MARI honest:
 
-- **Never re-derive the quota from today's row count.** It was frozen when the OKR period opened
-  (61 known points × 1.20 = 73). Registering a new IMP spends reserve; it must not move the
-  denominator. If you overrun the quota, **stop and tell the user** — re-basing it is their call.
+- **The quota is 126 and never changes.** Do not re-derive it from today's row count, do not re-base
+  it, and do not stop to ask for a re-base when known scope overruns it — as of 2026-08-13 it already
+  does (127 against 126), by design. **Registering a new IMP costs exactly 0 MARI**, because a ⏳ row
+  contributes 0 to `earned` and the denominator no longer reacts. So there is no room check before a
+  registration: find it, number it, move on. Never let the score decide the numbering.
+- **Delivery is uncapped and may exceed 100.** M1 is uncapped too. M2 and Coverage are hard-capped at
+  100 by their own nature, so 45 % of MARI cannot pass 100 and 55 % can. See registry §2.2.1.
+- **Explain every MARI move by component in the closing snapshot.** *Delivery up* = more registered
+  work closed (bookkeeping, and `earned` is a ratchet that never falls). *M1 or M2 up* = the product
+  actually got better for an agent — the only claim worth leading with. *Coverage up* = we can now see
+  a surface we were blind to. A run whose MARI moved on Delivery alone must say so in those words.
 - **If M2 or M1 is not measurable this run, report MARI as a range**, with the unmeasured component
   at 0 and at its last known value. Never fill a component with an estimate and present the sum as
   a single number.

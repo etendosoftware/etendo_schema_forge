@@ -3,9 +3,12 @@
 **Jira:** ETP-4793 (Epic ETP-3504) · continues ETP-4601 · **Labels:** `plataforma`, `validacion-agentica`
 **Scope:** every improvement item ever raised against the **Etendo GO MCP server**
 (`com.etendoerp.go/src/com/etendoerp/go/mcp/`) by the Holded-vs-Etendo-GO agentic benchmark.
-**Last updated:** 2026-08-13 · **MARI 79** (§2.1) · known scope **113** against a quota of **126**
-(§2.2) — 13 points of reserve unspent
-**ACE** (context-cost companion index, §2.6): **defined, first measurement owed by the next run**
+**Last updated:** 2026-08-13 (job A) · **MARI 80** (§2.1) · earned **77.5** of a known scope of **127**
+against a **frozen** quota of **126** (§2.2.1) — **49.5 points of open debt**
+**Quota policy:** frozen at 126 for the rest of the period, **no further re-bases**; Delivery is
+**uncapped** and MARI is a **cumulative score, not a percentage** (§2.2.1, decided 2026-08-13)
+**ACE** (context-cost companion index, §2.6): **first measured 2026-08-13** — ACE-v median ~14× on two
+tasks; **ACE-p blocked** (`tools/list` 401 on both servers), so no break-even figure exists yet
 
 ---
 
@@ -226,12 +229,8 @@ absorbed all four items exactly as intended, and Delivery rose (54 → 62) in th
 registered 10 points of new P1 debt. That is the quota rule working: discovery did not dilute the
 index.
 
-**But the reserve is now 3 points, and a P1 weighs 5.** The next run that finds anything at all
-overruns, so it must stop and ask for a re-base rather than widen the denominator quietly — the same
-warning §2.2 issued when the reserve last hit zero, and this time it arrives with the added weight
-that two of the four items just registered (IMP-30, IMP-31) are causes of one symptom that three
-earlier runs recorded as shipped. Read that as evidence the 20 % allowance is still too thin for a
-period that keeps probing new surfaces, not as a reason to stop registering what is found.
+The reserve landed at 3 points with a P1 weighing 5 — meaning the next run to find anything at all
+would overrun. **That is the situation that ended the re-base regime.** See §2.2.1.
 
 Registering IMP-11…IMP-15 spent reserve without diluting the index. IMP-16…IMP-21 exhausted it. The
 lesson for the next period: a 20 % reserve is too small for a run that probes a surface for the first
@@ -241,6 +240,65 @@ a healthy one, not a number that silently sinks.
 
 A ⚠️ earns **half credit**, deliberately: IMP-4 did ship name resolution on `neo_create`. Scoring it
 zero is exactly what made the old count-based metrics feel punitive.
+
+### 2.2.1 The quota is frozen at 126 — MARI is a score, not a percentage
+
+**Decided 2026-08-13 (human, after the job A run). This supersedes the re-base regime described
+above; everything from §2.2 up to this point is history, not procedure.**
+
+The rule from here to the end of the period:
+
+```
+quota                 = 126, FROZEN. No further re-bases, for any overrun, ever.
+Delivery              = earned / 126 × 100, UNCAPPED — it may exceed 100.
+known scope           = still tracked, but it is now a debt counter, not a denominator.
+MARI                  = a cumulative score. It has no maximum and is not a % of completeness.
+scope-closed ceiling  = RETIRED. The concept no longer exists; do not compute or quote it.
+```
+
+**Why.** Three re-bases in eight days each restated a metric that had not moved, and each one cost
+MARI points for the act of *recording* work rather than for failing to do it. The 08-12 re-base is
+the clearest case: MARI fell 73 → 70 with no code changed and no status moved. A denominator that
+grows every time the registry gets more honest punishes honesty. Freezing it removes the incentive
+entirely — **registering a new ⏳ item now costs exactly zero MARI**, because a ⏳ row contributes 0
+to `earned` and the denominator no longer reacts. There is nothing left to negotiate at registration
+time; find it, number it, move on.
+
+**What "uncapped" actually means, component by component.** Only two of the four components can pass
+100, and that is a deliberate property of the index, not an oversight:
+
+| Component | Weight | Ceiling | Why |
+|---|---:|---|---|
+| M2 — first-call success rate | 30 % | **100, hard** | A percentage of calls. 100 % is every call succeeding; there is no better. |
+| M1 — `100 / calls-to-outcome ratio` | 30 % | **none** | Already unbounded before this change: a ratio of 0.8 reads 125. Fewer calls than the ideal path is genuinely better. |
+| Delivery — `earned / 126 × 100` | 25 % | **none** (was undefined) | §2.2 never actually specified a cap; it was moot while scope ≤ quota. It is now specified: no cap. |
+| Coverage — probe surfaces | 15 % | **100, hard** | 6 of 6 surfaces is all of them. §2.5 may *add* a surface, which re-opens the denominator — that is the honest way this number goes down. |
+
+So **45 % of MARI is structurally capped at 100** and 55 % is not. A score above 100 is reachable but
+it requires real M1 gains plus closed work past 126 points; it is not an arithmetic accident.
+
+**The ratchet caveat — read this before quoting a rise as "the product got better".** `earned` never
+decreases (a ✅ is not un-shipped), so Delivery only ever climbs. Uncapped Delivery therefore measures
+**work capitalized to date**, not current quality. The bidirectional signals are M1 and M2 — together
+60 % of the index — and they *can* and do fall, as job B's 80 % → 67 % M2 showed. Coverage falls only
+if §2.5 grows.
+
+**Reading convention (mandatory in every run report's closing snapshot).** A MARI move must be
+explained by component, never quoted bare:
+
+- *Delivery up* → more registered work was closed. Says nothing about whether the product is better
+  than last week, only that more of the known backlog is behind us.
+- *M1 or M2 up* → the product actually got better for an agent. This is the claim worth making.
+- *Coverage up* → we can now see a surface we were previously blind to. Measurement, not product.
+- *MARI up with only Delivery moving* → say so explicitly. That is bookkeeping, and the closing
+  snapshot must not let it read as a product win.
+
+**What replaces the ceiling.** The scope-closed ceiling answered "how high can this go if we finish
+everything", which is a question a percentage has and a score does not. The successor question is
+**"how much registered debt is still open"**, and that is answered directly by `known scope − earned`
+in points, stated in the header. As of job A, including IMP-32 and IMP-33 (the two items the old rule
+would have refused): 127 − 77.5 = **49.5 points of open debt**. That number falls only by shipping and
+rises only by discovery, with no multiplier in between.
 
 ### 2.3 Current value and reachable value
 
@@ -253,7 +311,7 @@ zero is exactly what made the old count-based metrics feel punitive.
 | 2026-08-12 — quota re-based to 126 for IMP-26 + IMP-27; **no code changed and no status moved** | 80 % | 1.4× | 49.0 / 126 | 6 / 6 | 70 |
 | 2026-08-13 (job B) — IMP-11 + IMP-12 + IMP-22 resolved, IMP-19 + IMP-21 + IMP-23 scored; IMP-28 + IMP-29 registered (no re-base) | 67 % | 1.0× | 68.0 / 126 | 6 / 6 | 79 |
 | **Today** (2026-08-13, job A) — IMP-17 scored ✅ 3/3; IMP-18 + IMP-24 scored ⚠️; IMP-28 ⏳ → ⚠️; **IMP-30 + IMP-31 registered** (no re-base). M1/M2 carried, not re-measured | **67 %** | **1.0×** | **77.5 / 126** | 6 / 6 | **80** |
-| **Registry closed** — all 31 ✅, full probe surface, M1 at its target | 90 % | 1.2× | 123 / 126 | 6 / 6 | **90** |
+| ~~**Registry closed** — all 31 ✅, full probe surface, M1 at its target~~ *(retired 2026-08-13 — see §2.2.1; the scope-closed ceiling no longer exists)* | ~~90 %~~ | ~~1.2×~~ | ~~123 / 126~~ | ~~6 / 6~~ | ~~**90**~~ |
 
 The 2026-08-06 jump from 28 to 49 is **measurement, not shipped product**: no code changed. Coverage
 went 2/6 → 6/6 (+10) and M1/M2 were re-measured across the full frozen suite instead of two write
@@ -281,6 +339,12 @@ As in the 08-10 case this is **the reserve draining, not headroom appearing**: 3
 remain (§2.2). Never quote a rising ceiling as progress without saying whether the reserve behind it
 is full or empty — this is the third time in the period that the same arithmetic has needed the same
 disclaimer.
+
+> **That third disclaimer is what retired the concept.** Later the same day the ceiling was dropped
+> from the model entirely (§2.2.1): a number that needed the same caveat on every single move, and
+> that could rise for a bad reason and fall for a good one, was costing more to explain than it was
+> worth. The three paragraphs above are kept as the record of why — they are history, not live
+> procedure. The open-debt figure in the header replaces them.
 
 The M1/M2 figures in the forward row are **projections, not commitments** — only a measured run can
 confirm them.
@@ -317,11 +381,11 @@ KR material, precisely because of the denominator problem MARI solves.
 
 | Metric | Definition | 2026-08-03 | 2026-08-05 | 2026-08-06 | 2026-08-10 | 2026-08-13 |
 |---|---|---|---|---|---|---|
-| **M5 — open items** | count(⚠️) + count(⏳) | 3 of 10 | 10 of 15 | 16 of 21 | 17 of 25 | **13 of 29** |
-| **M5a — open P1** | the same, restricted to P1 | 0 | 4 | 5 | 7 (IMP-1, 5, 11, 12, 16, 23, 24) | **5** (IMP-1, 16, 24, 26, 28) |
+| **M5 — open items** | count(⚠️) + count(⏳) | 3 of 10 | 10 of 15 | 16 of 21 | 17 of 25 | **17 of 33** |
+| **M5a — open P1** | the same, restricted to P1 | 0 | 4 | 5 | 7 (IMP-1, 5, 11, 12, 16, 23, 24) | **7** (IMP-1, 16, 24, 26, 28, 30, 31) |
 | **M5b — resolved** | count(✅) | 7 | 5 | 5 | 8 (IMP-2, 3, 6, 8, 9, 10, 15, 25) | **16** (IMP-2, 3, 5, 6, 8, 9, 10, 11, 12, 15, 17, 19, 21, 22, 23, 25) |
-| **M5c — added this run** | new IDs registered | — | 5 (IMP-11…IMP-15) | 6 (IMP-16…IMP-21) | 4 (IMP-22…IMP-25) | **2** (IMP-28, IMP-29) |
-| **M5d — cohort closure** | `earned / weight`, denominator frozen per cohort | — | C1 74 % · C2 0 % | C1 74 % · C2 0 % · C3 0 % | C1 80 % (32/40) · C2 55 % (11.5/21) · C3 13 % (2.5/20) · C4 19 % (3/16) | **C1 80 %** (32/40) · **C2 79 %** (16.5/21) · **C3 43 %** (8.5/20) · **C4 69 %** (11/16) · **C5 0 %** (0/8) · **C6 0 %** (0/8) |
+| **M5c — added this run** | new IDs registered | — | 5 (IMP-11…IMP-15) | 6 (IMP-16…IMP-21) | 4 (IMP-22…IMP-25) | **6** (IMP-28, IMP-29 in job B · IMP-30…IMP-33 in job A) |
+| **M5d — cohort closure** | `earned / weight`, denominator frozen per cohort | — | C1 74 % · C2 0 % | C1 74 % · C2 0 % · C3 0 % | C1 80 % (32/40) · C2 55 % (11.5/21) · C3 13 % (2.5/20) · C4 19 % (3/16) | **C1 80 %** (32/40) · **C2 79 %** (16.5/21) · **C3 65 %** (13/20) · **C4 84 %** (13.5/16) · **C5 0 %** (0/8) · **C6 11 %** (2.5/22) |
 
 > **2026-08-06 reads as a pure regression on every count-based line** — open items 10 → 16, added 6,
 > resolved flat at 5, a brand-new cohort at 0 %. Yet the run probed four surfaces for the first time,
@@ -496,16 +560,22 @@ Environment for all 2026-08-05 statuses: **`etendo-go-local`**, build `c597c7c2`
 | **IMP-29** | Entity identifiers leak the tenant's AD language | P2 | C6 | 0 / 3 | ♻️ | `schema_forge_core` + `com.etendoerp.go` | ⏳ open | **run report §9.3** · registered 2026-08-13. `neo_discover` derives entity names from AD tab names in the tenant's language, so the identifiers are **non-deterministic across tenants** (`general-ledger-configuration` exposes `Dimensiones`, `Cuentas generales`; `monitor-verifactu` exposes `cabeceraDeEmisor`, `facturasRechazadas`) — no recipe or doc can name one. They also contain **non-ASCII** (`facturasInválidas`, `sincronización`, `resultadoValidación`) in what is used as a path segment, and `sii-monitor` puts **parentheses** in an identifier (`issuedInvoices(previousPeriod)`). `Done when:` identifiers are ASCII, stable across AD language and free of characters needing URL encoding, with the display name kept separately for humans | run report §9.3 |
 | **IMP-30** | `neo_create` bypasses the read-only rejection path entirely | P1 | C6 | 0 / 5 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report §6.2** · registered 2026-08-13 (job A). `neo_create` on `sales-order/header` accepted and persisted `grandTotalAmount: 9999` and `documentStatus: "CO"` on a zero-line draft — a state Etendo cannot otherwise reach. Root cause is not curation (both fields are `isincluded=Y, isreadonly=Y, visibility=readOnly` in `ETGO_SF_FIELD` — hypothesis refuted with the query in the IMP file): `McpToolRouter.handleCreate` builds a `NeoFieldFilter` at line 488 but uses it only on the **response** (line 601); the body goes through `mapFieldsToDalProperties`, which carries no read-only logic. The only two production call sites of `filterCreateRequest` are `NeoCrudHelper.java:201` and `NeoCrudHandler.java:626` — **zero in `src/com/etendoerp/go/mcp/`**. So IMP-28 clause 2 is implemented, unit-tested (`NeoFieldFilterTest:405-524`, green) and unreachable from the verb it was written for. `Done when:` see [`imps/IMP-30.md`](imps/IMP-30.md) | [`imps/IMP-30.md`](imps/IMP-30.md) · run report §6.2 |
 | **IMP-31** | The `Java_Qualifier` read-only exemption is all-or-nothing per entity | P1 | C6 | 0 / 5 | ⚙️ | `com.etendoerp.go` | ⏳ open | **run report §6.3** · registered 2026-08-13 (job A). `NeoFieldFilter` exempts an **entire entity** from IMP-28 clause 2 as soon as it carries a non-blank `Java_Qualifier` (`NeoFieldFilter.java:156-157` → the `else if` at 222), without checking whether the handler supplies the specific field. `sales-order/header` carries `salesOrderHeaderHandler`, which never writes `documentStatus` or `grandTotalAmount` — yet both escape rejection. The naive fix (drop `!entityHasHandler`) breaks `InventoryLineHandler` (`bookQuantity`, comment at line 176), `AbstractInvoiceHeaderHandler:243` and `InvoiceLineHandler:89`, which legitimately rely on the blanket; the per-field signal `ETGO_SF_FIELD.java_qualifier` already exists in the schema. **Sequencing:** only observable end-to-end after IMP-30 — shipping IMP-30 alone looks complete and still lets the original probe through on this entity. `Done when:` see [`imps/IMP-31.md`](imps/IMP-31.md) | [`imps/IMP-31.md`](imps/IMP-31.md) · run report §6.3 |
+| **IMP-32** | `_identifier` renders dates day-first while the API demands ISO on input | P2 | C6 | 0 / 3 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report §7.2** · registered 2026-08-13 (job A), under the frozen-quota policy (§2.2.1). A9 returned `"_identifier": "1000035 - 13-08-2026 - 9999"` while A3 of the same run **rejected** `03-04-2026` as ambiguous and instructed `yyyy-MM-dd`. The server therefore hands an agent a day-first date in the human-readable field and refuses one on input: an agent that round-trips an identifier back into a write — a plausible thing for an agent to do — earns a 422 for echoing what the server just said. **Distinct from IMP-16**, which is about one date format across the *write* verbs; this is the *display* string contradicting that contract, so it is a new number rather than a clause folded into IMP-16. `Done when:` `_identifier` renders dates in the same `yyyy-MM-dd` form the write verbs accept, verified on a record whose identifier contains a date | run report §7.2 · A3, A9 |
+| **IMP-33** | Write-verb routing errors send the agent to the *reading* docs topic | P3 | C6 | 0 / 1 | ♻️ | `com.etendoerp.go` | ⏳ open | **run report §7.1** · registered 2026-08-13 (job A), under the frozen-quota policy (§2.2.1). A2 returned, on a **`neo_create`** failure, `"seeAlso": "docs(topic:\"reading records\")"` alongside `"tool": "neo_create"` — the envelope correctly identifies the failing tool as a write verb and then points the agent at the read recipe. A one-line mapping bug in an otherwise exemplary error body (the envelope IMP-5 and IMP-17 built), which is exactly why it is worth fixing: `seeAlso` is only useful if it is trustworthy, and one wrong topic teaches an agent to ignore the field. `Done when:` a write-verb error resolves `seeAlso` to a write topic, with a test pinning the verb→topic map | run report §7.1 · A2 |
 
-**Totals (2026-08-13, job A):** earned **77.5** of a known scope of **123** (C1 32/40 · C2 16.5/21 ·
-C3 13/20 · C4 13.5/16 · C5 0/8 · C6 2.5/18) against a quota of **126** (§2.2) → the Delivery component of
-MARI = **62** (§2.1). Verify the column sums before publishing; a `Pts` cell that disagrees with its
-`Status` mark makes MARI unauditable.
+**Totals (2026-08-13, job A):** earned **77.5** of a known scope of **127** (C1 32/40 · C2 16.5/21 ·
+C3 13/20 · C4 13.5/16 · C5 0/8 · C6 2.5/22) against the **frozen** quota of **126** (§2.2.1) → the Delivery
+component of MARI = **62** (§2.1). Verify the column sums before publishing; a `Pts` cell that disagrees with
+its `Status` mark makes MARI unauditable.
 
-**The quota was NOT re-based this run either.** Job A registered IMP-30 and IMP-31 (P1 + P1 = 10 points),
-taking known scope from 113 to **123** — still **3 points below** the quota, so the room check §3 demands was
-satisfied before any status was promised. Reserve: 13 → **3**. That is the last of it: a single further P1
-weighs 5 and would overrun, so the next run that finds one must stop and ask for a re-base.
+**Known scope now exceeds the quota — by design.** Job A registered IMP-30 and IMP-31 (P1 + P1 = 10 points),
+taking known scope 113 → 123, and then IMP-32 (P2) and IMP-33 (P3) took it to **127**, one point past the
+126 quota. Under the old rule that overrun would have forced a third re-base and cost ~3 MARI points for
+recording two real findings. **Under §2.2.1 the quota is frozen and the overrun is simply recorded:** the
+registration cost 0 MARI (both rows are ⏳, contributing 0 to `earned`), Delivery is unchanged at 62, and
+`known scope − earned` = **49.5 points of open debt** is the number that carries the meaning the old
+reserve used to. There is no room check any more, and no run will ever again have to choose *which* of
+its findings to number.
 
 *Previous totals — 2026-08-13, job B:* earned 68.0 of a known scope of 113 (C1 32/40 · C2 16.5/21 ·
 C3 8.5/20 · C4 11/16 · C5 0/8 · C6 0/8) against a quota of 126 → Delivery = 54.
@@ -536,18 +606,14 @@ reading §2.3 insists on for the 08-06 fall from 40 to 30.
 > leaving 13; 08-13 job A spent 10 more on IMP-30 and IMP-31, leaving 3.** The prediction one line
 > below was made before job A ran and turned out to be the exact case: a single P1 plus a P2 would
 > have taken it to 5, and *two P1s* is what job A found. It did not overrun — 123 ≤ 126 — but the
-> room is now gone. **The next run that finds a single P1 must stop and ask for a re-base**, because
-> 5 > 3. That is a human decision, not a run's. The
-> rule that produced this re-base stands unchanged and is the reason the room exists: **a run may
-> not widen the denominator on its own.** A run that finds a new defect and has no room for it must
-> stop and ask, exactly as the IMP-26 finding did — it sat written-up-but-unregistered until the
-> re-base was authorised, rather than being quietly absorbed into IMP-11 or left out of the file.
+> room was gone, and job A then found two more items it could not fit.
 >
-> Two guards for the next run, learned from this one: **check the room before promising a status**,
-> because a finding with no room cannot be registered in the same breath it is described; and
-> **do not let the score decide the numbering** — the marginal cost of a second registration after
-> an overrun is ~0.25 MARI points (§2.2), so "it would hurt the index" is almost never the real
-> argument. Registry hygiene is.
+> **That is where the re-base regime ended.** Rather than authorise a third re-base in eight days,
+> the human froze the quota at 126 permanently and uncapped Delivery (§2.2.1, 2026-08-13). Everything
+> in this blockquote about room checks, reserves and "stop and ask" is **history from here on**: there
+> is no denominator left to widen, so a run can never again be in the position of choosing which of
+> its findings to number. The surviving half of the lesson is the one that was never about the
+> arithmetic — **do not let the score decide the numbering.** It now cannot.
 
 *Previous totals — 2026-08-10:* earned 49.0 of a known scope of 97 (C1 32/40 · C2 11.5/21 ·
 C3 2.5/20 · C4 3/16) against a quota of 97 → Delivery = 51.
@@ -592,6 +658,30 @@ subquery).
 ---
 
 ## 4. Changelog
+
+### 2026-08-13 — metric policy: the quota is frozen and MARI becomes a score (**human decision, not a run**)
+
+No code changed, no probe ran, no status moved, and **MARI is unchanged at 80** — this entry records a
+change to how the number is defined, taken by the human after reading the job A totals.
+
+- **The quota is frozen at 126 for the rest of the period. No further re-bases, for any overrun.**
+  Three re-bases in eight days had each restated a metric that had not moved; the 08-12 one cost 3 MARI
+  points (73 → 70) with no code changed and no status moved. A denominator that grows every time the
+  registry gets more honest taxes honesty, so it stops growing.
+- **Delivery is uncapped** — `earned / 126 × 100` may exceed 100. §2.2 had never actually specified a
+  cap; it was moot while scope ≤ quota, and is now specified explicitly.
+- **MARI is a cumulative score, not a percentage of completeness.** It has no maximum. M1 was already
+  unbounded; M2 (30 %) and Coverage (15 %) remain hard-capped at 100 by their own nature, so 45 % of
+  the index cannot pass 100 and 55 % can.
+- **The scope-closed ceiling is retired.** It needed the same disclaimer on every move, could rise for
+  a bad reason and fall for a good one, and answered a question a score does not have. Replaced by
+  **open debt** (`known scope − earned`, in points) in the header.
+- **Consequence, immediately exercised:** IMP-32 and IMP-33 — written up but *unregistered* by job A
+  because 4 points did not fit in 3 of reserve — are registered here at **zero MARI cost**, taking
+  known scope 123 → **127**, one point past the frozen quota. Delivery stays at 62. That overrun is
+  the policy working, not a violation of it.
+- Full rule and the reading convention it obliges every run report to follow: **§2.2.1**. §2.2 above it
+  is preserved as the history of the regime it replaces.
 
 ### 2026-08-13 — job A verification run (`etendo-go-local`, build `0cb67084`, write-probe mode)
 

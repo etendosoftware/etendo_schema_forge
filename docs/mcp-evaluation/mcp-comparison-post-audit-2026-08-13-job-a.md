@@ -101,6 +101,11 @@ metric: the `sales-order` create cost **6 calls cold**, with the first `neo_crea
 * **Advanced IMP-28** — entity half verified, field half failed. ⏳ open → ⚠️ partial, 0 → 2.5/5.
 * **Added IMP-30** — `neo_create` bypasses the read-only rejection path entirely (P1, ♻️).
 * **Added IMP-31** — the `Java_Qualifier` read-only exemption is all-or-nothing per entity (P1, ⚙️).
+* **Added IMP-32** — `_identifier` renders dates day-first while the API demands ISO on input (P2, ♻️).
+* **Added IMP-33** — write-verb routing errors send the agent to the *reading* docs topic (P3, ♻️).
+
+The last two were registered **after** this run closed, once the human froze the quota (§7.4). They
+are listed here so §3 stays the complete delta for the day; neither moved MARI.
 
 ### 3.0 What was updated outside the registry
 
@@ -232,8 +237,10 @@ Shipping IMP-30 alone produces a fix that looks complete in the diff while A9 st
 
 ## 7. New improvement proposals (Step 3b)
 
-Three candidates surfaced. **None of them is registered**, and that is a deliberate call, not an
-oversight — see §7.4.
+Three candidates surfaced. **None was registered at the time the run closed**, and that was a
+deliberate call rather than an oversight — see §7.4, which also records how it was resolved: 7.1 and
+7.2 became **IMP-33** and **IMP-32** the same day, once the human froze the quota (registry §2.2.1).
+7.3 is a documentation change and was never a registry candidate.
 
 ### 7.1 The `seeAlso` on a write-verb routing error points at the read docs
 
@@ -265,16 +272,32 @@ predicted the opposite. **Base report §8 should gain a numbered strength for th
 method gate**, citing A8 verbatim. This costs no quota — it is a documentation change, and §8 is
 exactly where "anything the wave took from Holded's column" belongs.
 
-### 7.4 Why 7.1 and 7.2 are not registered
+### 7.4 Why 7.1 and 7.2 were not registered — and how that was resolved the same day
 
-The room check, run **before** promising anything: known scope after IMP-30/31 is **123 against a
-quota of 126 — 3 points of reserve.** A P2 (3) plus a P3 (1) is 4. **It does not fit.**
+**As written during the run:** the room check, run **before** promising anything, gave known scope
+after IMP-30/31 of **123 against a quota of 126 — 3 points of reserve.** A P2 (3) plus a P3 (1) is 4.
+**It did not fit.** Registering only 7.1 would have fit and left 2, but choosing *which* of two real
+findings to record on the basis of what the denominator can absorb is the score deciding the
+numbering — the exact failure the registry warns against. So both were written up unregistered, in
+the state IMP-26 sat in until its re-base was authorised, and listed in §10.4 as owed by the human.
 
-Registering only 7.1 would fit and would leave 2, but choosing *which* of two real findings to record
-on the basis of what the denominator can absorb is the score deciding the numbering — the exact
-failure the registry warns against. So both are written up here, unregistered, in the state IMP-26 sat
-in until its re-base was authorised. **Re-basing the quota is a human decision and this run does not
-make it.** They are listed in §10 as owed by the human.
+**Resolved the same day, and not by the re-base this section anticipated.** Presented with the
+choice, the human ended the regime instead: **the quota is frozen at 126 for the rest of the period,
+Delivery is uncapped, the scope-closed ceiling is retired, and MARI is redefined as a cumulative
+score rather than a percentage of completeness** (registry §2.2.1, changelog entry of the same date).
+
+The arithmetic that made this the right call is worth stating, because this section's own reasoning
+was weaker than it looked: **a ⏳ row contributes 0 to `earned`, so registering one never moved MARI
+at all.** The entire cost lived in the re-base — the ×1.20 multiplier widening the denominator — which
+is a cost incurred by *recording* work rather than by failing to do it. Freeze the denominator and the
+cost disappears completely. So:
+
+- **7.1 is now IMP-33** (P3, `com.etendoerp.go`) and **7.2 is now IMP-32** (P2, `com.etendoerp.go`).
+- Known scope 123 → **127**, one point past the frozen quota. Delivery is **unchanged at 62** and MARI
+  is **unchanged at 80** — registering both cost exactly nothing.
+- **No future run will face this section's dilemma.** There is no room to check and no denominator to
+  widen; a run finds a defect, numbers it, and moves on. The half of the old lesson that survives is
+  the half that was never arithmetic: *do not let the score decide the numbering.* It now cannot.
 
 ---
 
@@ -342,8 +365,20 @@ must not be mixed into the series.
 **KR verdict: met and holding.** The KR was cleared on 2026-08-10 (49 → 73) and has not fallen since.
 The +1 this run is small on purpose: **9.5 points were earned and 10 points of new scope were
 registered**, which is what a healthy verification run looks like — it finds roughly as much as it
-closes. Scope-closed ceiling is now **90** (was 88); that rise is the reserve draining, not new
-headroom.
+closes.
+
+**Reading the move by component**, as registry §2.2.1 now requires: the entire +1 came from
+**Delivery** (54 → 62). **M1 and M2 were carried, not re-measured**, so this run makes **no claim that
+the product got better for an agent** — it claims that more of the known backlog is now verified as
+closed. That distinction is the whole point of the convention; a run that moves only Delivery is
+bookkeeping, however welcome.
+
+> **Superseded the same day:** this section originally closed with *"Scope-closed ceiling is now 90
+> (was 88); that rise is the reserve draining, not new headroom."* The ceiling was **retired** hours
+> later (registry §2.2.1) — a number that needed that same disclaimer on every single move was costing
+> more to explain than it was worth. Its replacement is **open debt**: `known scope − earned` =
+> 127 − 77.5 = **49.5 points**, which falls only by shipping and rises only by discovery. MARI itself
+> is unchanged at 80; only the frame around it moved.
 
 ### 10.2 ACE (companion index, not part of MARI)
 
@@ -351,7 +386,7 @@ headroom.
 on the comparison target. ACE-v sits at roughly **14× median**. Job A does not move either component;
 they are measured in job B runs.
 
-### 10.3 The whole board — 31 registered items
+### 10.3 The whole board — 33 registered items
 
 **Resolved (16)**
 
@@ -386,7 +421,7 @@ they are measured in job B runs.
 | IMP-24 | ⚠️ 2.5/5 | Non-ISO dates are rejected rather than silently misparsed — done except on batch |
 | IMP-28 | ⚠️ 2.5/5 | Visibility and read-only contradict each other; the create view hides fields that then get rejected |
 
-**Pending — P2 (8)**
+**Pending — P2 (9)**
 
 | Item | | What it is |
 |---|---|---|
@@ -398,18 +433,32 @@ they are measured in job B runs.
 | IMP-7 | ⚠️ 1.5/3 | Defaults response is leaner and grouped — partly |
 | IMP-14 | ⚠️ 1.5/3 | The published docs match the real tool names — partly |
 | IMP-18 | ⚠️ 1.5/3 | Unknown field names are reported back; works on read, silently ignored on write |
+| IMP-32 | ⏳ 0/3 | The human-readable identifier prints dates day-first, in the format the write verbs refuse |
 
-16 + 7 + 8 = **31** — every registered item, none omitted.
+**Pending — P3 (1)**
+
+| Item | | What it is |
+|---|---|---|
+| IMP-33 | ⏳ 0/1 | A failed write points the agent at the docs topic for *reading* |
+
+16 + 7 + 9 + 1 = **33** — every registered item, none omitted.
+
+> **IMP-32 and IMP-33 were added after this report first closed**, once the quota was frozen (§7.4).
+> They are the first P3 the board has carried, which is why the grouping gained a fourth table rather
+> than folding a P3 in beside the P2s.
 
 ### 10.4 Owed by the human, not by a run
 
-1. **The quota decision.** Reserve is **3 points against a quota of 126**. §7's two findings (a P2 and
-   a P3) need 4 and are written up unregistered. **The next run that finds a single P1 cannot register
-   it.** Re-basing the quota — or explicitly deciding these two stay unregistered — is the call.
+1. ~~**The quota decision.**~~ **Made, same day, after this report was written — see §7.4.** The human
+   froze the quota at 126 permanently, uncapped Delivery, retired the scope-closed ceiling, and
+   redefined MARI as a cumulative score rather than a percentage (registry §2.2.1). §7's two findings
+   were registered as **IMP-32** (P2) and **IMP-33** (P3) at zero MARI cost, taking known scope to
+   **127** — one point past the frozen quota, which is now a recorded fact rather than a trigger.
+   Nothing here is owed any more.
 2. **Ship IMP-30 and IMP-31 together.** §6.3 explains why either alone is a fix that looks complete
    and is not.
-3. **Two branches are committed and unpushed** — `c30a22185` (schema_forge) and `0cb67084`
-   (com.etendoerp.go), both on `feature/ETP-4793`. This skill does not push.
+3. **`schema_forge` is committed and unpushed** on `feature/ETP-4793`; `com.etendoerp.go` `0cb67084`
+   is already pushed. This skill does not push.
 4. **`neo_batch` and `neo_action` remain unprobed** for the read-only-field question. `neo_action` will
    stay that way under the current rules: the actions worth probing complete or post documents.
 5. **ACE-p is still blocked** on the 401 at `tools/list`. It has been blocked across several runs and
