@@ -330,7 +330,8 @@ This substantially neutralizes §7.1 (naming), §7.6 (action discovery) and §7.
 7. **EU/Spanish fiscal compliance.** SII, VeriFactu, TicketBAI/Batuz, Modelo tax report, real tax engine (intracomunitarias, retenciones, bienes de inversión). Holded taxes are flat percentages — disqualifying for regulated ES/EU use.
 8. **Advanced inventory / costing / manufacturing**, **fixed assets & amortization**, **banking reconciliation / PSD2 / matching**, **structured returns/RMA** both directions.
 9. **Generic batch & action** (`neo_batch`, `neo_action`) and **8 dedicated report generators** — extensibility and analytics without growing the tool surface.
-10. **Semantic recipe retrieval (`docs`).** A Context7-style `docs(topic:…)` tool returns ready-to-run recipes (atomic batch header+lines, FK resolution, confirm-gated actions) from `etendo-go-docs`. Holded has no queryable recipe layer — its guidance is frozen into each tool's static description. (Caveat: today it's under-surfaced and the recipes use `etendo_neo_*` names vs the registered `neo_*` — see §7.9.)
+10. **Read-only entities are gated at the method level, with an error an agent can act on.** A CRUD write to an entity configured read-only returns **405** — not a silent 200, and not a generic refusal: *"Entity 'stock' of spec 'product' does not enable PUT. Enabled methods: GET. This entity is read-only by configuration — use `neo_list` or `neo_get` to read it. CRUD writes to it are not allowed; a separately configured `neo_action` may still be available. **Do not retry this CRUD operation.**"* It names the entity and spec, lists what *is* allowed, explains why, points at the two verbs that would work, flags the one escape hatch that might exist, and tells the agent not to burn a retry. Verified live 2026-08-13 (job A run §5 A8); it also *refutes* IMP-28 §8.4, which predicted a silent success here. Holded has no method-level contract to gate on. **Scope note:** this protects read-only *entities*. Read-only *fields on writable entities* are a different mechanism and currently have no equivalent protection — see IMP-30 / IMP-31.
+11. **Semantic recipe retrieval (`docs`).** A Context7-style `docs(topic:…)` tool returns ready-to-run recipes (atomic batch header+lines, FK resolution, confirm-gated actions) from `etendo-go-docs`. Holded has no queryable recipe layer — its guidance is frozen into each tool's static description. (Caveat: today it's under-surfaced and the recipes use `etendo_neo_*` names vs the registered `neo_*` — see §7.9.)
 
 **Example — read parity (where Holded has no tool at all):**
 ```jsonc
@@ -350,6 +351,13 @@ neo_list({ spec: "product", entity: "product", filters: { name: "Widget" } })
 //        key dates) — you MUST confirm these values with the user before creating or modifying records."
 // Holded has no equivalent signal; the agent decides on its own what is safe to write.
 ```
+
+> ⚠️ **Read this example as a signal, not a barrier.** The 2026-08-13 job A run wrote
+> `grandTotalAmount: 9999` — this exact field — through `neo_create` and the server persisted it, on a
+> zero-line draft order, together with `documentStatus: "CO"`. `businessCritical` is advice to a
+> cooperative agent; it stops nothing. The enforcement that *should* have stopped it is IMP-28
+> clause 2, and it never runs on the MCP path — see **IMP-30** and **IMP-31**. The strength above is
+> real and still the better design than having no signal at all; it is not yet a guarantee.
 
 ---
 
@@ -385,6 +393,23 @@ neo_list({ spec: "product", entity: "product", filters: { name: "Widget" } })
 - **PDF/print + attachment tools** (document delivery — currently absent).
 - **Convenience lookups** (find-by-document-number) and **per-verb permission/role** in the schema.
 - **Cursor pagination** alongside offset.
+
+### P1 — registered after ETP-4601 (see the registry for the full, current list)
+
+> The three lists above cover the original §7 wave only, and their ✅/⏳ marks are **historical** — the
+> registry supersedes them, per the note in §1. Items IMP-11 … IMP-31 were registered by later runs
+> and are not enumerated here; the registry's §3 master table is the list. The two below are called
+> out because they are P1 defects in *shipped* behaviour rather than missing features, and because
+> they must be worked as a pair.
+
+- **Enforce read-only fields on the MCP create path.** The rejection (IMP-28 clause 2) is implemented
+  and unit-tested but has **zero call sites in `src/com/etendoerp/go/mcp/`**, so `neo_create` accepts
+  and persists any curated read-only field — verified live 2026-08-13 with `grandTotalAmount: 9999`
+  and `documentStatus: "CO"` on a zero-line draft. — **IMP-30**
+- **Make the read-only exemption per-field instead of per-entity.** A single `Java_Qualifier` on an
+  entity today exempts *every* field on it, so the fix above would still not close the hole on the
+  entity it was found on. Three handlers legitimately rely on the current blanket, so the per-field
+  signal must be backfilled before the code change. — **IMP-31**
 
 ### P3 — Roadmap (expose as the ERP functionality ships — §9)
 - CRM leads/funnels · projects & time tracking · HR/employees · recurring documents & cashflow forecast · usage metering.
