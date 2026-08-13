@@ -88,6 +88,7 @@ import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
 import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { evaluateFieldCondition } from '@/lib/evaluateFieldCondition.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 
@@ -1262,6 +1263,7 @@ export function DetailView({
   deleteAction = null,
   customTabsAfterBottom = false,
   hidePrint = false,
+  hidePrintWhen = null,
   hideSaveStatuses = [],
   hideMoreMenu = false,
   hideMoreDetails = false,
@@ -3008,7 +3010,7 @@ export function DetailView({
                 </button>
               )}
               {/* Print document — shown when documentPreview is not provided */}
-              {!documentPreview && !hidePrint && !isNew && recordId && (
+              {!documentPreview && !hidePrint && !isNew && recordId && !evaluateFieldCondition(hidePrintWhen, data) && (
                 <button
                   onClick={() => setShowPrint(true)}
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors`}
