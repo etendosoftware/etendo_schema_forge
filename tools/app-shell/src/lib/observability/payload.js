@@ -44,7 +44,6 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'errorClass',
   'event',
   'hasComment',
-  'feedback',
   'flagKey',
   'flow',
   'functional_area',
@@ -54,6 +53,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'module',
   'mockMode',
   'operation',
+  'orgId',
   'position',
   'provider',
   'route',
@@ -64,12 +64,18 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'status',
   'step',
   'supportRequested',
-  'accountId',
   'tags',
   'timestamp',
   'total',
   'type',
-  'userId',
+  // 'username' is intentionally allowlisted here even though the ETP-4352 GDPR
+  // remediation removed it from every survey/session event payload (userId is
+  // gone entirely). It stays because epic/ETP-3504's flag-exposure.js reuses this
+  // already-sanctioned key for FEATURE_FLAG_EVALUATED's targeting-key property —
+  // an unrelated, already-shipped feature. Nothing in the survey/session code
+  // paths populates this key anymore, so keeping it allowlisted does not
+  // reintroduce the leak; removing it would silently break flag-exposure
+  // reporting instead.
   'username',
   'value',
   'variant',

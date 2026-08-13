@@ -67,19 +67,80 @@ The `SURVEYS` array in `surveys.js` is evaluated in order. The first survey that
 
 ---
 
+## CSAT Predefined Responses
+
+When a CSAT survey's score is <= 3, `SurveyModal` shows a `CannedResponseGrid` above the free-text
+textarea — a 2-column grid of phrases, each with a decorative icon. `resolveCannedOptions(survey,
+locale, ui, score)` prefers backend-configured responses (`getRemoteCannedResponses`) over a
+hardcoded per-survey fallback list in `surveys.js`.
+
+**Score ranges (backend-configured responses only):** each backoffice-configured response declares a
+`minScore`/`maxScore` band (e.g. 1–2 vs 3), and `resolveCannedOptions` filters to the entries whose
+range contains the score the user actually picked — so a 1-star and a 3-star CSAT can surface
+different phrases. This only applies to responses coming from the "Survey Configuration" backoffice
+window (`ETGO_Survey_Canned_Resp`, see [Configuration](#configuration)); the hardcoded fallback list
+in `surveys.js` has no ranges and keeps showing unconditionally within the followup phase — it's an
+offline-degradation path only, not expected to need this granularity.
+
+| Survey | Locale keys (fallback) | Topics |
+|---|---|---|
+| `csat_invoicing` | `surveyInvoicingCanned1..6` | Speed, usability, templates, VAT/tax handling, sending to the client, bugs |
+| `csat_order` | `surveyOrderCanned1..6` | Speed, usability, product search, order lines, confirmation, bugs |
+
+Icons are decorative only (`aria-hidden`), never in the translated strings — clicking a card calls
+`setFeedback(label)` with the plain text only (no icon), prefilling the textarea; the text remains
+fully editable afterward — same "click to fill, keep editing" pattern as `ConversationView`'s
+support-chat quick replies. This is presentation-only: no new state, no Mixpanel event of its own (a
+canned pick still surfaces via the `feedback` property on `survey_responded` once submitted).
+
+**Adding a canned option:** in the backoffice, add a row to the "Canned Responses" child tab under
+the survey's row in the "Surveys" tab, with its score range. For the offline fallback, add a locale
+key to both `en_US.json`/`es_ES.json`, then append `{ icon: '…', key: '…' }` to that survey's
+`canned` array in `surveys.js`. Keep phrases tied to concrete pain points in that specific flow —
+avoid generic complaints unrelated to the process being rated (e.g. pricing complaints do not
+belong in a workflow-usability survey).
+
+---
+
+## Back Navigation
+
+Both NPS and CSAT `followup` phases (Q2 free-text + canned responses / chips) show a **Back** button
+in the footer, next to Submit. Clicking it returns to the score-selection phase (`setPhase('initial')`)
+without resetting `score` — the previously picked NPS number / CSAT star stays selected, so the user
+can revise it and move forward again. No Mixpanel event fires on Back.
+
+`feedback` (and, for NPS, `tags`) ARE cleared on Back, unlike `score`. This matters most for CSAT:
+the initial phase routes `score <= 3` to `followup` and `score > 3` straight to `thanks`, so a user
+who types feedback against a low score, goes Back, and raises the score above 3 would otherwise
+resubmit via the `thanks` branch with the old feedback still attached to the new (unrelated) score —
+a data-integrity bug, not a UX nicety. Clearing `feedback`/`tags` in the `onBack` handler (before
+`setPhase('initial')`) ensures a resubmission after Back always starts the followup phase fresh.
+
+---
+
 ## Anti-Fatigue Rules
 
 `selectNextSurvey` applies these guards in order before any per-survey eligibility check:
 
-| Rule | Value | Implementation |
+| Rule | Default | Implementation |
 |------|-------|---------------|
 | Global cooldown | 30 days after any survey was shown | `isGlobalCooldownActive` in `survey-engine.js` |
 | Monthly cap | Max 2 surveys per calendar month | `isMonthlyLimitReached` — key format `"YYYY-MM"` |
 | Dismiss cooldown (per survey) | 21 days after a survey was dismissed | `isDismissedCooldownActive` in `survey-engine.js` |
+| NPS min tenure | Skip NPS if first login was < 60 days ago | `npsIsEligible` in `surveys.js` |
 | NPS inactivity guard | Skip NPS if user has not logged in for > 14 days | `npsIsEligible` in `surveys.js` |
-| Re-respond cooldown (per survey) | 90 days after last response | Inside each `csatIs*Eligible` / `npsIsEligible` function |
+| CSAT document minimum | Skip CSAT invoicing/order until >= 5 documents confirmed | `csatDocumentIsEligible` in `surveys.js` |
+| CSAT document gap | Re-eligible after 30 more documents since last response | `csatDocumentIsEligible` in `surveys.js` |
+| Re-respond cooldown (per survey) | 90 days after last response | Inside `csatDocumentIsEligible` / `npsIsEligible` |
 
 The global cooldown and monthly cap are checked first. If either fails, no survey is evaluated further. The dismiss cooldown is checked per survey in the loop, so one dismissed survey does not block others that have not been dismissed recently.
+
+The global rules (cooldown, monthly cap) read from `getSurveyConfig()`; the per-survey rules (min
+tenure, inactivity guard, document minimum/gap, re-respond cooldown) read from
+`getSurveyTypeConfig(surveyKey)` — both in `survey-config.js`, both preferring the "Survey
+Configuration" backoffice window at runtime, falling back to `VITE_SURVEY_*` build-time env vars,
+then to hardcoded defaults — see [Configuration](#configuration) below. This is an internal ops
+knob for the Etendo GO team, not a customer-facing setting.
 
 ---
 
@@ -208,6 +269,14 @@ The same pattern is used in `useEntity.js` for the generic document-complete flo
 
 ## Adding a New Survey
 
+If the new survey's eligibility follows an existing pattern (document-count-based like CSAT, or
+time-based like NPS), prefer reusing `csatDocumentIsEligible`/`npsIsEligible`'s shared helpers and
+reading tunables via `getSurveyTypeConfig(surveyId)` — then the only backend change needed is a new
+row in the "Surveys" tab (`ETGO_Survey_Type`, add the survey's key to the `ETGO Survey Key` list
+reference first) and, optionally, rows in "Canned Responses". No `AD_COLUMN` changes required. The
+steps below assume a genuinely new eligibility shape instead (hardcoded literals, no backoffice
+config) — write one only when the existing patterns don't fit.
+
 1. **Define the eligibility function** in `surveys.js`. Follow the existing pattern — the function receives `{ state, isAdmin, now }` and returns a boolean:
 
    ```js
@@ -250,7 +319,23 @@ The same pattern is used in `useEntity.js` for the generic document-complete flo
 
 ## Disabling a Survey
 
-Set `isEligible` to a function that always returns `false`. This is the pattern used for `csat_onboarding`:
+There are two ways to disable a survey, for two different situations:
+
+**1. Backoffice toggle (operational, reversible, no deploy) — the normal way.** Uncheck **Active**
+on the survey's row in the "Surveys" tab (`ETGO_Survey_Type.isactive = 'N'`). This is a real,
+data-driven kill switch, not just a tuning reset: `SurveyConfigServlet` reports that survey key
+with `"enabled": false` in `perSurvey` (the row is still returned, never silently dropped — see
+[Configuration](#configuration)), and `isSurveyTypeEnabled(surveyId)` in `survey-config.js` makes
+`selectNextSurvey` (`survey-engine.js`) skip the survey entirely — **before** its own
+`isEligible()` even runs. So an isactive='N' survey never shows, regardless of what its local
+eligibility rule would otherwise decide. Flip `isactive` back to 'Y' to re-enable it — no code
+change, no rebuild, takes effect on the next page load / login (same fetch as the rest of
+[Configuration](#configuration)). This is the mechanism to reach for when an Etendo GO team member
+needs to turn a survey off for all tenants (e.g. a survey type is temporarily noisy or broken)
+without touching code.
+
+**2. Hardcoded `isEligible: () => false` (permanent, code-level) — for surveys not ready to ship.**
+This is the pattern used for `csat_onboarding`:
 
 ```js
 function csatOnboardingIsEligible() {
@@ -258,13 +343,41 @@ function csatOnboardingIsEligible() {
 }
 ```
 
-The survey remains in the `SURVEYS` array (so its `id` and locale keys are not orphaned), but it will never be selected by `selectNextSurvey`. No state migrations are needed.
+The survey remains in the `SURVEYS` array (so its `id` and locale keys are not orphaned), but it
+will never be selected by `selectNextSurvey`. No state migrations are needed. Use this only when a
+survey isn't finished yet (no backoffice row makes sense for it either) — for a survey that is
+otherwise live and just needs to be turned off/on operationally, use the backoffice toggle above
+instead, since that doesn't require a code change to reverse.
 
 ---
 
 ## Mixpanel Events
 
-Three events are emitted via `track()` (from `tools/app-shell/src/lib/observability.js`). All three go to Mixpanel. `survey_shown` and `survey_responded` are also sent to the NPS channel.
+Four events are emitted via `track()` (from `tools/app-shell/src/lib/observability.js`), all sent to Mixpanel. `survey_shown` and `survey_responded` are also sent to the NPS channel.
+
+**GDPR remediation (ETP-4352, see [GDPR / Data Privacy Note](#gdpr--data-privacy-note-etp-4352)
+below):** none of these events identify an individual user anymore — there is no `userId` property
+and `identify()` is never called from the survey flow. `accountId` was renamed to **`orgId`** (it is
+the selected `AD_Org`, a different concept from the Client-level `account_id` Mixpanel Group set
+elsewhere — see `docs/ops/app-shell-observability.md`). `survey_responded`'s free-text `feedback`
+was replaced with a `hasComment` boolean; the actual text is persisted server-side instead (see
+[`POST /sws/survey-config/response`](#post-swssurvey-configresponse) below).
+
+### `survey_score_selected`
+
+Fired via `useSurveyEngine.handleScoreSelected` **only when the user selects a score/star and then
+abandons the survey without submitting** (close button, backdrop click, or Skip) — captures the vote
+that would otherwise be lost. `SurveyModal` tracks the score locally and calls this exactly once, at
+the moment of dismissal, with the last score selected (re-clicking the scale before dismissing does
+not fire it multiple times). It is never fired when the user submits — `survey_responded` already
+carries the score in that case, so there is no overlap between the two events.
+
+| Property | Value |
+|---|---|
+| `type` | Survey type: `'nps'` or `'csat'` |
+| `source` | Survey id |
+| `score` | Numeric score selected by the user |
+| `orgId` | Selected organization id (if available) |
 
 ### `survey_shown`
 
@@ -274,22 +387,21 @@ Fired by `useSurveyEngine.checkAndShowSurvey` immediately before setting the act
 |---|---|
 | `type` | Survey type: `'nps'` or `'csat'` |
 | `source` | Survey id (e.g. `'nps'`, `'csat_order'`) |
-| `userId` | Authenticated username |
-| `accountId` | Selected organization id (if available) |
+| `orgId` | Selected organization id (if available) |
 
 ### `survey_responded`
 
-Fired by `useSurveyEngine.handleRespond` when the user submits a score (triggered when the modal transitions to the `'thanks'` phase).
+Fired by `useSurveyEngine.handleRespond` when the user submits a score (triggered when the modal transitions to the `'thanks'` phase). The free-text feedback itself is **not** included — see
+`hasComment` below and [`POST /sws/survey-config/response`](#post-swssurvey-configresponse).
 
 | Property | Value |
 |---|---|
 | `type` | Survey type: `'nps'` or `'csat'` |
 | `source` | Survey id |
 | `score` | Numeric score selected by the user |
-| `feedback` | Free-text response (omitted if empty) |
+| `hasComment` | Boolean — whether the user typed any feedback text (the text itself is never sent to Mixpanel) |
 | `tags` | Comma-separated tag string (omitted if none selected) |
-| `userId` | Authenticated username |
-| `accountId` | Selected organization id (if available) |
+| `orgId` | Selected organization id (if available) |
 
 ### `survey_dismissed`
 
@@ -299,7 +411,213 @@ Fired by `useSurveyEngine.handleDismiss` when the user clicks the close button o
 |---|---|
 | `type` | Survey type: `'nps'` or `'csat'` |
 | `source` | Survey id |
-| `userId` | Authenticated username |
-| `accountId` | Selected organization id (if available) |
+| `orgId` | Selected organization id (if available) |
 
 **Note:** Clicking the backdrop or close button **after** the thank-you screen has appeared does not fire `survey_dismissed` — `SurveyModal.handleClose` routes through `onDismiss` only when `phase !== 'thanks'`.
+
+---
+
+## Configuration
+
+Survey tuning is layered, in this precedence order (highest wins):
+
+1. **Backoffice window** — "Survey Configuration" in com.etendoerp.go, three tabs:
+   - **Config** (`ETGO_Survey_Config`) — the truly-global settings, single row (`AD_Client_ID = '0'`).
+   - **Surveys** (`ETGO_Survey_Type`) — **one row per survey** (`survey_key`: `nps`, `csat_invoicing`,
+     `csat_order`, ...) holding that survey's own eligibility tunables. Adding a new survey with the
+     same kind of eligibility rule (time-based or document-based) is a new row, not a new `AD_COLUMN`
+     — this is the extensibility fix from the original single-row `ETGO_Survey_Config` design. The
+     row's standard **Active** field (`isactive`) is a real enable/disable switch for that survey
+     type — see [Disabling a Survey](#disabling-a-survey).
+   - **Canned Responses** (`ETGO_Survey_Canned_Resp`) — a **child tab** of Surveys (FK
+     `Etgo_Survey_Type_ID`), so responses are scoped to whichever survey row is selected.
+
+   Served read-only via `GET /sws/survey-config/` (JWT-protected, same auth as `/sws/neo/*`).
+   Fetched once via `loadRemoteSurveyConfig()` — called from `useSurveyEngine` as soon as the user
+   is authenticated — and cached in-memory in `survey-config.js`. Takes effect **at runtime**, no
+   rebuild needed: an Etendo GO team member edits a value in the window, and it's live for the next
+   page load / login.
+2. **`VITE_SURVEY_*` build-time env vars** — used only when the backoffice endpoint is
+   unreachable (offline dev, backend down) or a given field wasn't returned. Mirrors the
+   existing `VITE_RUM_SESSION_SAMPLE_RATE` pattern in `rum.js` (see
+   `docs/ops/app-shell-observability.md`).
+3. **Hardcoded defaults** in `survey-config.js` — the final fallback, always safe.
+
+**This is an internal ops knob for the Etendo GO team — not a customer-facing setting.** The
+window has no menu-driven customer visibility expectations; access is governed by normal Etendo
+role/window security, same as any other backoffice window.
+
+Canned CSAT responses (see [CSAT Predefined Responses](#csat-predefined-responses) above) follow
+the same precedence: `SurveyModal` calls `getRemoteCannedResponses(surveyId, locale)` first: if the
+backoffice has rows for that survey + language, their `text` (and score range) is used directly
+(already locale-specific, no `ui()` lookup); otherwise it falls back to the hardcoded `survey.canned`
+locale-key list in `surveys.js`.
+
+### Global parameters — `ETGO_Survey_Config` / `VITE_SURVEY_*`
+
+Read via `getSurveyConfig()` in `survey-config.js`.
+
+| Window field (`ETGO_Survey_Config`) | Env var fallback | Default | Resolves to |
+|---|---|---|---|
+| Global Cooldown (days) | `VITE_SURVEY_GLOBAL_COOLDOWN_DAYS` | `30` | `globalCooldownMs` — global cooldown after any survey shown |
+| Dismissed Cooldown (days) | `VITE_SURVEY_DISMISSED_COOLDOWN_DAYS` | `21` | `dismissedCooldownMs` — cooldown after a survey is dismissed |
+| Max Surveys Per Month | `VITE_SURVEY_MAX_PER_MONTH` | `2` | `maxPerMonth` — max surveys shown per calendar month |
+
+The servlet reads whichever active row was created first (`ORDER BY created LIMIT 1`) and ignores
+any others.
+
+### Per-survey parameters — `ETGO_Survey_Type` / `VITE_SURVEY_*`
+
+Read via `getSurveyTypeConfig(surveyKey)` in `survey-config.js` — pass the survey's `id` (`nps`,
+`csat_invoicing`, `csat_order`). Time-based fields (Min Account Age, Inactivity Guard) only apply to
+login-triggered surveys like NPS; document-based fields (Min Documents, Document Gap) only apply to
+trigger-based surveys like CSAT — a row leaves the fields its survey doesn't use empty.
+
+| Window field (`ETGO_Survey_Type`) | Env var fallback | Default | Resolves to |
+|---|---|---|---|
+| Min Account Age (days) | `VITE_SURVEY_NPS_MIN_AGE_DAYS` | `60` | `minAccountAgeMs` — minimum account age before this survey is eligible |
+| Inactivity Guard (days) | `VITE_SURVEY_NPS_INACTIVITY_DAYS` | `14` | `inactivityGuardMs` — skip if the user has been inactive longer than this |
+| Min Documents | `VITE_SURVEY_CSAT_MIN_DOCS` | `5` | `minDocuments` — minimum confirmed documents before this survey is eligible |
+| Document Gap | `VITE_SURVEY_CSAT_DOC_GAP` | `30` | `documentGap` — additional documents required before eligible again |
+| Response Cooldown (days) | `VITE_SURVEY_RESPONSE_COOLDOWN_DAYS` | `90` | `responseCooldownMs` — re-eligibility window after a response |
+
+`csat_invoicing` and `csat_order` each have their own row, so their Min Documents/Document Gap/
+Response Cooldown can now differ independently (previously one shared value for both).
+
+All day-based values are converted to milliseconds internally; `minDocuments`/`documentGap` are
+plain counts. Invalid values (non-numeric, zero, negative — from either the window or the env var)
+fall back to the next tier rather than disabling the guard.
+
+**`Active` (`isactive`) is the enable/disable switch, not a tuning fallback.** Unchecking it does
+not mean "use default thresholds instead" — it means "never show this survey, full stop", checked
+before the survey's own eligibility rule even runs. See [Disabling a Survey](#disabling-a-survey)
+above for how this flows end to end (servlet → `isSurveyTypeEnabled()` → `selectNextSurvey`).
+`getSurveyTypeConfig()` itself is unaffected by `isactive` — it only resolves the day/count
+tunables; the enable/disable check is a separate, earlier gate.
+
+### Canned responses — `ETGO_Survey_Canned_Resp`
+
+Each row (child of a `ETGO_Survey_Type` row): **Language** (`en_US` / `es_ES`), **Icon** (decorative,
+shown in the chip), **Response Text** (the actual phrase), **Min Score** / **Max Score** (inclusive
+score band this phrase applies to), **Line No** (display order). The servlet joins to the parent
+`ETGO_Survey_Type` row (for its `survey_key`) and groups active rows into
+`canned: { <surveyKey>: { <language>: [{icon, text, minScore, maxScore}] } }`.
+
+### `GET /sws/survey-config/`
+
+Implemented by `SurveyConfigServlet` (`com.etendoerp.go.schemaforge`), registered via
+`AD_MODEL_OBJECT` / `AD_MODEL_OBJECT_MAPPING` like the other lightweight `/sws/*` endpoints
+(`AppsServlet`, `SupportConversationsServlet`). JWT-protected — same `Authorization: Bearer <token>`
+as `/sws/neo/*` — returns 401 without a valid session. Read-only; there is no write endpoint —
+config is only edited through the backoffice window's native grid. Response shape:
+
+```jsonc
+{
+  "globalCooldownDays": 30, "dismissedCooldownDays": 21, "maxPerMonth": 2,
+  "perSurvey": {
+    "nps": { "minAccountAgeDays": 60, "inactivityGuardDays": 14, "responseCooldownDays": 90, "enabled": true },
+    "csat_invoicing": { "minDocuments": 5, "documentGap": 30, "responseCooldownDays": 90, "enabled": true },
+    "csat_order": { "minDocuments": 5, "documentGap": 30, "responseCooldownDays": 90, "enabled": false }
+  },
+  "canned": {
+    "csat_invoicing": { "en_US": [{ "icon": "🐢", "text": "Too slow", "minScore": 1, "maxScore": 3 }] }
+  }
+}
+```
+
+`perSurvey[key].enabled` mirrors `ETGO_Survey_Type.isactive` for every row that exists — the row is
+always reported (even when `isactive='N'`), it just carries `enabled: false` instead of being
+omitted. A survey key with no row at all simply has no entry in `perSurvey` (same as before) and is
+treated as enabled client-side, since "not configured yet" is not the same as "explicitly disabled".
+
+### `POST /sws/survey-config/response`
+
+Added in ETP-4352 (GDPR remediation, see [GDPR / Data Privacy Note](#gdpr--data-privacy-note-etp-4352)
+below) as the server-side destination for the free-text feedback that used to be sent to Mixpanel
+verbatim. Same servlet (`SurveyConfigServlet`), same JWT auth as the `GET` above. Called
+fire-and-forget from `useSurveyEngine.handleRespond` via `submitSurveyResponse()`
+(`tools/app-shell/src/lib/surveys/survey-config.js`) right alongside the (now PII-free) Mixpanel
+`survey_responded` track call — a failed POST never blocks or breaks the survey UI.
+
+Request body:
+
+```jsonc
+{ "surveyKey": "nps", "score": 9, "feedback": "free text, optional", "tags": ["fast", "easy"] }
+```
+
+`surveyKey` is required (400 if missing/blank); `score`, `feedback` and `tags` are all optional.
+Response: `{ "status": "ok" }` (201). Persists to `ETGO_Survey_Response` (module
+`com.etendoerp.go`, tenant-scoped via the same JWT client/org/user claims every other `/sws/*`
+endpoint uses): `survey_key`, `ad_user_id`, `score`, `feedback_text`, `tags` (stored as a
+comma-joined string, same shape it used to travel to Mixpanel as), `response_date`. Mirrors the
+architecture `SupportConversationsServlet#handleSubmitRating` already uses for support-chat CSAT
+(persist server-side, send only a boolean signal to Mixpanel) — see that class's `rating` endpoint
+for the sibling pattern.
+
+---
+
+## GDPR / Data Privacy Note (ETP-4352)
+
+The `docs/ops/mixpanel-gdpr-privacy-audit.md` review (in the `schema_forge` main checkout) found
+that survey events sent real user identity and free-text feedback to Mixpanel. Both gaps have been
+remediated as of this change; scope was `survey_shown`, `survey_score_selected`,
+`survey_responded`, `survey_dismissed`.
+
+**Identity: fixed by removal, not pseudonymization.** The survey flow no longer calls `identify()`
+at all (`useSurveyEngine.js`), and no event carries `userId`/`username` — the product decision was
+to stop identifying individual users to Mixpanel outright, not to hash or otherwise pseudonymize the
+login. `accountId` (the selected `AD_Org`) was renamed to **`orgId`** in the same change, to
+disambiguate it from the unrelated Client-level `account_id` Mixpanel Group (`group('account_id', …)`
+in `health-events.js`, which is untouched and stays exactly as it was — it identifies the tenant,
+not an individual, and was explicitly out of scope). IP-based geolocation
+(`providers/mixpanel.js`), consent gating, and the `identify`/`group`/`groupSet` sanitizer bypass
+remain separate, lower-priority findings from the same audit — still open, tracked there.
+
+**Follow-up gap: stopping `identify()` did not clear already-identified browsers.**
+`mixpanel-browser` persists `distinct_id` in a cookie (e.g. named `mp_<TOKEN>_mixpanel`) and
+keeps reusing it across page loads/sessions. For any browser/device that had already been
+`identify()`'d with a real username/email *before* the fix above shipped, simply no longer calling
+`identify()` did nothing to that already-persisted identity — the SDK kept sending the old,
+real-identity `distinct_id` on every subsequent `track()` call regardless, confirmed live in
+production (a fresh `survey_responded` event still showed the real email as `Distinct ID` /
+`User ID`, with Mixpanel's own `Identity Failure Reason: errAnonDistinctIdAssignedAlready`
+diagnostic). QA's earlier validation missed this because it used a brand-new, never-identified test
+account, which is exactly the unaffected case.
+
+The fix is a one-time, per-browser `reset()` — made **intrinsic to the Mixpanel provider's own
+client-acquisition path**, not orchestrated by an external call sequence:
+
+- An earlier version of this fix called the reset from `browser.js`'s
+  `initBrowserObservability()`, right after `initObservability()` resolved and before the first
+  `track()` call. That ordering assumption was **not actually safe**: `core.js`'s shared
+  `initialized` flag is set synchronously, long before providers finish initializing, so any other
+  call site sharing that gate — e.g. `ObservabilityRouteTracker`'s route-change `page()` call, which
+  fires on mount independently of `main.jsx`'s (unawaited) `initBrowserObservability()` call — could
+  reach the Mixpanel provider and fire a `track()` before `browser.js`'s reset step had run. Several
+  other call sites (`useSurveyEngine.js`, `health-events.js`, `SupportChatContext.jsx`,
+  `productUsageTelemetry.js`, `mcpConnectTelemetry.js`, `OnboardingPage.jsx`) shared the same
+  exposure, since none of them go through `browser.js`'s sequencing either.
+- The fix now lives entirely inside `providers/mixpanel.js`'s internal `getClient()` — the single
+  gate every provider method (`init`, `track`, `page`, `identify`, `group`, `groupSet`, `flush`)
+  already funnels through before it gets a usable SDK client. `getClient()` loads the SDK, calls the
+  SDK's own `client.init(token, options)` (required first — `reset()` reads persistence/session
+  state that `init()` sets up), then performs the one-time reset — `client.reset()`, gated behind a
+  `localStorage` flag (`sf_mixpanel_identity_reset_v1`) so legitimate anonymous ids are not churned
+  on every page load — and only then returns the client to its caller. Because `clientPromise` is
+  cached synchronously on the first call, every caller (regardless of which provider method reaches
+  `getClient()` first, present or future) awaits the exact same load-init-reset chain: the reset is
+  guaranteed to have completed before ANY of them can call a real SDK method, independent of
+  `core.js`'s `initialized` timing or any app-level call ordering. This is what makes the guarantee
+  airtight this time — it no longer depends on one file calling things in the right order relative
+  to another. The provider still exposes an explicit `reset()` method (an unconditional passthrough
+  to `client.reset()`, unrelated to the automatic gate) as a building block for any future on-demand
+  need (e.g. logout), but nothing in the app currently calls it. The gate — and the flag — remain
+  intentionally Mixpanel-specific (not a general observability concern): Sentry/RUM are untouched.
+
+**Free-text feedback: moved server-side, never sent to Mixpanel.** `survey_responded` used to
+forward the CSAT/NPS textarea verbatim as a `feedback` property — unconstrained user input that
+could contain names, emails, or other PII. It now sends only `hasComment` (a boolean), the same
+pattern `SUPPORT_CSAT_SUBMITTED`/`SupportChatContext.jsx` already used for support-chat ratings. The
+actual text is persisted through the new [`POST /sws/survey-config/response`](#post-swssurvey-configresponse)
+endpoint into `ETGO_Survey_Response`, so product can still read it — just not through an analytics
+vendor.
