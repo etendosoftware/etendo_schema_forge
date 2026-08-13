@@ -203,6 +203,13 @@ and nothing else. Meanwhile the module's own `src-db/database/sourcedata/ETGO_SF
 carry the column, on 4343 of its 6468 rows, so `export.database` and `update.database` are not the
 culprits here.
 
+**Observed on both halves in one operation — 2026-08-13.** A `sales-order` re-push (the
+`invoiceAddress` fix, [IMP-22 §7.2](IMP-22.md)) went out through the real writer: `etgo_sf_field`
+came back `VISIBILITY='editable'` and the exported XML's single changed pair was
+`discarded`→`editable` alongside `N`→`Y`. So the writer models the column and `--dump-delta` does
+not — the asymmetry above is now measured rather than inferred, and it points at the delta path,
+not at the writer.
+
 Two models of the same write, disagreeing about which columns exist, is the same shape of defect as
 the one this item registers — one column, two writers, no cross-check. It is recorded here rather
 than registered separately because the F11+ validator rule in §5.3 detects the *state* regardless of

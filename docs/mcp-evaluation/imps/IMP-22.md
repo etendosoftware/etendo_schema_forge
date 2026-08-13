@@ -186,6 +186,20 @@ right here and wrong on the first partner with separate billing and delivery add
 The fix therefore belongs in `decisions.json` and goes through the Window Change Integrity Protocol,
 not in `com.etendoerp.go`. Still not registered (the quota is the user's call, registry §2.2).
 
+**Fixed and live — 2026-08-13** (`f2c87f69e`, contract 0.26.0 → 0.27.0 additive). The override is
+gone; the field is back as an editable dependent selector filtered by `businessPartner`. Verified
+across all three layers after the user's push and `export.database`:
+
+| Layer | State |
+|---|---|
+| `etgo_sf_field` | `ISINCLUDED='Y'`, `ISREADONLY='N'`, `VISIBILITY='editable'` — exactly `mapVisibility('editable')` |
+| `ETGO_SF_FIELD.xml` | the *only* rows changed: `N`→`Y` and `discarded`→`editable`, nothing else touched |
+| `neo_schema view:"create"` | `invoiceAddress` now under **`required`**, `hasSelector:true`, `requiredCount: 4` |
+
+The last row is the one that closes the loop the §7.2 above opened: the create view now *asks* for
+the field whose 422 it previously could not explain, so an agent following the documented contract
+can create a sales order without breaking the rule the tool stated.
+
 A sweep of every artifact found **220** `discarded` fields that AD marks mandatory, of which **35**
 are not booleans-with-a-DB-default or audit columns the DAL fills. Those 35 are *candidates*, not
 confirmed defects — each needs its own tab-level display-and-default check, which is the shape of a
