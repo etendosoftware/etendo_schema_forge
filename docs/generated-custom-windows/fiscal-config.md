@@ -65,6 +65,90 @@ Changing the territory in either the main wizard screen or the manual screen res
 | `verifactu` | Only Verifactu record present |
 | `conflict` | Verifactu + SII or Verifactu + TBAI both exist |
 
+## Change SIF (switching the active fiscal system)
+
+Once an organization has a live fiscal configuration, the window lets the user **change the active SIF** — for example to move from Verifactu to SII+TBAI, or simply to leave the organization with no active fiscal system. The change is intentionally destructive-looking but non-destructive: the outgoing configuration is **deactivated and kept as a trace, never deleted**.
+
+### One active config per org (data model)
+
+The three SIF modules originally enforced "one config per org" through a UNIQUE constraint. To allow an inactive trace row to coexist with a live one, that constraint was **relaxed to "one *active* config per org"**, enforced by a `BEFORE INSERT/UPDATE` trigger in each module:
+
+| Module | Table | Trigger |
+|--------|-------|---------|
+| SII (`org.openbravo.module.sii`) | `AEATSII_CONFIG` | `AEATSII_ONE_ACTIVE_CONFIG_TRG` |
+| TicketBAI (`com.smf.ticketbai`) | `TBAI_CONFIG` | `TBAI_ONE_ACTIVE_CONFIG_TRG` |
+| Verifactu (`com.etendoerp.verifactu`) | `ETVFAC_VERIFACTU_CONFIG` | `ETVFAC_ONE_ACTIVE_CONFIG_TRG` |
+
+The invariant is therefore: **at most one active config record per system per org at any time**, with any number of inactive trace rows alongside it. Exactly one active config across all three systems is the "configured" state; zero active rows is the "no active SIF" state.
+
+### Button visibility
+
+The **"Change SIF"** button (`fiscal.changeSif.action`, `data-testid="FiscalConfigPage__changeSif"`) is rendered in the org bar next to Save/Cancel, and only when `canChangeSif` is true:
+
+```
+canChangeSif = !mockOverride && orgId && CONFIGURED_PROFILES.includes(effectiveProfile)
+```
+
+`CONFIGURED_PROFILES = ['sii', 'sii-navarra', 'sii+tbai', 'tbai', 'verifactu']`. It is therefore hidden when the org is unconfigured (the wizard is shown instead), in a `conflict` state, or when the page is running under a mock/debug profile override (mock records cannot be deactivated on the server).
+
+### Confirm dialog and deactivation
+
+Clicking the button opens `ChangeSifDialog` (`data-testid="ChangeSifDialog__content"`). On **Confirm** (`fiscal.changeSif.confirm`, "Deactivate and change"), the dialog deactivates each config record the active profile spans, using the **same NEO save path the section forms use for edits** — a `PUT` to `/{spec}/{entity}/{recordId}` with body `{ active: false }` (NEO writes `isactive='N'`). The row is retained as a trace; nothing is deleted.
+
+`getSystemsToDeactivate(profile)` in `fiscalConfig.utils.js` maps the profile to the systems that must be deactivated:
+
+| Profile | Systems deactivated | PUT endpoints (spec / entity) |
+|---------|---------------------|-------------------------------|
+| `sii`, `sii-navarra` | `sii` | `sii-config` / `siiConfiguration` |
+| `tbai` | `tbai` | `tbai-config` / `header` |
+| `verifactu` | `verifactu` | `verifactu-config` / `cabeceraDeConfiguraciónVerifactu` |
+| `sii+tbai` | `sii`, then `tbai` | both of the above, sequentially |
+
+On success the dialog closes and calls `onChanged` → `refetch`; with no active row left, `detectProfile` resolves the org to `unconfigured` and the **existing onboarding wizard reappears automatically** (see "Wizard reappearance" below).
+
+### sii+tbai — two-step deactivation and partial failure
+
+A combined `sii+tbai` profile spans two rows, deactivated **sequentially**. By design there is **no rollback**: if the second PUT fails after the first succeeded, the first system stays deactivated (e.g. `sii+tbai` degrades to `tbai`-only). No data is corrupted — a row is only flagged inactive — and the state is fully recoverable. In that case the dialog shows `fiscal.changeSif.err.partial` (`data-testid="ChangeSifDialog__error"`), naming which system(s) were already deactivated and instructing the user to **re-open the dialog to finish deactivating the rest**. Rollback is intentionally out of scope because the partial state is rare and self-recoverable.
+
+### Wizard reappearance
+
+Leaving the wizard without choosing a system is a **valid "no active SIF" state** — an org may legitimately carry only inactive trace rows. Picking and configuring a SIF from the wizard creates a new active config (possibly from a different SIF family than the one deactivated). Because the trigger enforces one active row per org per system, the new active config coexists cleanly with the old trace rows.
+
+### Informational notices — INFORM, never block
+
+Before confirming, the dialog shows a per-SIF **permanence notice** (`fiscal.changeSif.notice.*`, `data-testid="ChangeSifDialog__notice"`), chosen by `getChangeSifNoticeKey(profile)`:
+
+| Profile | Notice key | Gist |
+|---------|-----------|------|
+| `sii`, `sii-navarra` | `fiscal.changeSif.notice.sii` | Voluntary SII → one-natural-year permanence; renounce via form 036 in November of the prior year; mandatory SII cannot be renounced. |
+| `verifactu` | `fiscal.changeSif.notice.verifactu` | Free to change during the test period; once mandatory, stay until 31 Dec of that year unless obligated to SII. |
+| `tbai` | `fiscal.changeSif.notice.tbai` | No ordinary renunciation; may only leave when the foral obligation ceases; new software must still comply with TicketBAI. |
+| `sii+tbai` | `fiscal.changeSif.notice.siiTbai` | Both SII permanence and TicketBAI foral obligations apply. |
+
+These notices **inform only — they never block the change.** A generic soft warning (`fiscal.changeSif.softWarning`) is always shown, and the user **assumes legal responsibility on confirm**. The Verifactu `isReady` lock (which disables field *editing* in `VerifactuSection`) is respected but does **not** block the Change SIF flow — deactivating the config is always permitted.
+
+### Active-config resolution (client-side)
+
+NEO Headless reads fiscal-config records with `NO_ACTIVE_FILTER=true` (see `NeoCrudHelper#buildBaseParams`), so a deactivated trace row is still returned by the API. The client must therefore filter to the active row **before** resolving the profile. This relies on the DAL→JSON converter always serializing the `active` boolean (`NeoFieldFilter.java:139-144`). Two helpers in `fiscalConfig.utils.js` enforce this:
+
+- `isActiveRecord(record)` — false only when the record is explicitly inactive; a missing `active` property is treated as active (never hide a record on an absent flag).
+- `activeOrNull(record)` — returns the record only if active, else `null`.
+
+`fetchRecord` in `useFiscalConfig.js` pulls a small page (`_limit=10`) and prefers the active row (`rows.find(isActiveRecord) ?? rows[0]`) so a leftover trace never masks a real active config; the results are then passed through `activeOrNull` before `detectProfile`. The fiscal-monitor hook (`fiscal-monitor/useFiscalMonitor.js`) applies the identical gate, so an inactive trace row never resolves the monitor to a configured state either.
+
+### data-testids
+
+| `data-testid` | Element |
+|---------------|---------|
+| `FiscalConfigPage__changeSif` | "Change SIF" button in the org bar |
+| `ChangeSifDialog__content` | Dialog content container |
+| `ChangeSifDialog__title` / `__description` | Dialog heading and body |
+| `ChangeSifDialog__notice` / `__noticeIcon` | Per-SIF permanence notice card + icon |
+| `ChangeSifDialog__softWarning` | Generic soft warning line |
+| `ChangeSifDialog__error` | Error / partial-failure message |
+| `ChangeSifDialog__cancel` / `__confirm` | Footer buttons |
+| `ChangeSifDialog__spinner` | Spinner shown while deactivating |
+
 ## Interaction model
 
 - Route: `/fiscal-config` (custom window, not generated).
@@ -82,7 +166,7 @@ Three independent NEO Headless entities (one per system):
 | TBAI | `tbai-config` | `header` |
 | Verifactu | `verifactu-config` | `cabeceraDeConfiguraciónVerifactu` |
 
-Records are POST-created during wizard confirmation step and then edited in the detail step. `useFiscalConfig.js` parallelizes the 3 GET fetches and derives the profile client-side.
+Records are POST-created during wizard confirmation step and then edited in the detail step. `useFiscalConfig.js` parallelizes the 3 GET fetches and derives the profile client-side. Since the "Change SIF" feature (ETP-4785), each system can hold **at most one active row plus any number of inactive trace rows** per org; the client filters to the active row before resolving the profile (see "Change SIF" → "Active-config resolution").
 
 ## Certificate upload (CertModal + CertSection)
 
@@ -157,6 +241,10 @@ Without this fetch the wizard's top-level `cert` state would only update when th
 6. Open `/fiscal-config` with an org that already has an SII record and confirm the wizard is NOT shown — only SiiSection renders.
 7. Open `/fiscal-config` with an org that has both SII and Verifactu records and confirm the conflict warning renders.
 8. Press "Omitir por ahora" on the territory screen and confirm the skipped screen shows with a "← Volver al asistente" button that returns to territory selection.
+9. Open `/fiscal-config` with an org that has a single active SII (or Verifactu/TBAI) config. Confirm the **"Change SIF"** button appears in the org bar. Press it, confirm the dialog shows the matching permanence notice, press "Deactivate and change", and verify the onboarding wizard reappears (org resolved to `unconfigured`). Query the DB and confirm the old config row still exists with `isactive='N'`.
+10. Repeat with a `sii+tbai` org and confirm **both** the SII and TBAI rows are deactivated (two-step) and the wizard reappears.
+11. Open `/fiscal-config` with an org that has NO config, or one in a `conflict` state — confirm the "Change SIF" button is NOT shown.
+12. (Verifactu, `isReady=true`) Confirm the Verifactu section fields are locked for editing but the "Change SIF" button still works — the lock does not block the change.
 
 ## Automated evidence
 
@@ -167,9 +255,14 @@ Without this fetch the wizard's top-level `cert` state would only update when th
 - `tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx` — 6-screen wizard with territory groups, sub-questions, confirm, detail, applied, and skipped screens.
 - `tools/app-shell/src/windows/custom/fiscal-config/CertSection.jsx` — cert status widget with on-mount GET fetch to restore state after refresh.
 - `tools/app-shell/src/windows/custom/fiscal-config/CertModal.jsx` — PKCS#12 upload modal (pick → verify → confirmNif? → done).
-- `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js` — `detectProfile`, `resolveSystem`, `getTerritoryDefaults`, `getCertificateContext`.
+- `tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js` — `detectProfile`, `resolveSystem`, `getTerritoryDefaults`, `getCertificateContext`, plus the Change SIF helpers `isActiveRecord`, `activeOrNull`, `getChangeSifNoticeKey`, `getSystemsToDeactivate`, `getFiscalRecordId`.
+- `tools/app-shell/src/windows/custom/fiscal-config/ChangeSifDialog.jsx` — "Change SIF" confirm dialog: per-profile permanence notice, sequential deactivation via `PUT {active:false}`, partial-failure handling for `sii+tbai`.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/ChangeSifDialog.vitest.jsx` — dialog tests: notice selection per profile, deactivation PUT path, sii+tbai two-step, partial-failure message, INFORM-not-block posture.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — page tests including `canChangeSif` visibility gating (`CONFIGURED_PROFILES`, no mock override) and dialog wiring.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useFiscalConfig.activeRow.vitest.js` — active-row resolution: inactive trace rows dropped before `detectProfile`, `rows.find(isActiveRecord) ?? rows[0]` preference.
+- DB triggers (com.etendoerp.go SIF modules) — `AEATSII_ONE_ACTIVE_CONFIG_TRG`, `TBAI_ONE_ACTIVE_CONFIG_TRG`, `ETVFAC_ONE_ACTIVE_CONFIG_TRG` enforce one *active* config per org (relaxed from one config per org).
 - `cli/test/fiscal-config.utils.test.js` — 92 regression tests covering profile detection, onboarding payloads, contract-specific ids, Verifactu save guards, SII field mapping, CertModal upload flow, and confirmNif flow (all passing).
-- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records.
+- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records; filters inactive trace rows (`activeOrNull`) before `detectProfile` so a "Change SIF" leftover never masks the live config.
 - `cli/test/useFiscalConfig.test.js` — 16 tests covering source guards (named export, Promise.all, entity constants, detectProfile wiring), `fetchRecord` URL construction via `useApiFetch` (no manual Authorization header), response parsing (empty/missing data), and error handling.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/SiiSection.test.js` — 17 component source-guard tests: forwardRef/`useImperativeHandle`, navarra badge, form fields, PUT endpoint contract, hideSave/hideCert.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/TbaiSection.test.js` — 17 component source-guard tests: enroll date + invoice description validation, PUT endpoint, boolean serialization.

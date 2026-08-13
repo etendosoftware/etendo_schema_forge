@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Plug, Settings2, Calculator, ChevronDown, Trash2 } from 'lucide-react';
+import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -22,8 +22,9 @@ import { useHasCapability } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions';
 import { useFinancialAccountAccounting } from '@/hooks/useFinancialAccountAccounting.js';
-import { DateInput, Field } from '@/components/forms/fields';
+import { DateInput, Field, ChipSelect } from '@/components/forms/fields';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
+import { useGLItemLookup } from '@/hooks/useMovementLookups.js';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
@@ -40,7 +41,11 @@ const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 // Pure helpers (kept top-level so the component/hooks stay simple)
 // ---------------------------------------------------------------------------
 
-/** The tab a cash account (no General tab trigger/content) must open on. */
+/**
+ * The tab a cash account must open on. Unchanged by ETP-4795: even though the General tab now
+ * shows the GL Item Difference selector for cash too, Accounting stays the more relevant default
+ * landing tab for that account type — General remains one click away.
+ */
 export function initialEditTab(isCash) {
   return isCash ? EDIT_TAB_ACCOUNTING : EDIT_TAB_GENERAL;
 }
@@ -91,8 +96,8 @@ async function copyIbanToClipboard(account, ui) {
  * the Accounting tab's accounting configuration (ETP-4530) in one go.
  */
 async function persistAccountEdits({
-  account, fields, settings, reconciliation, accounting, updateAccount, saveImportSettings,
-  saveAccountingConfiguration,
+  account, fields, settings, reconciliation, glItemDifference, accounting, updateAccount,
+  saveImportSettings, saveAccountingConfiguration,
 }) {
   const updates = {};
   if (fields.nameDirty) updates.name = fields.name.trim();
@@ -102,6 +107,9 @@ async function persistAccountEdits({
   // The `*Value` fields, never the raw strings the inputs hold — see useReconciliationSettings.
   if (reconciliation?.dateDirty) updates.dateTolerance = reconciliation.dateToleranceValue;
   if (reconciliation?.amountDirty) updates.amountTolerance = reconciliation.amountToleranceValue;
+  // '' clears the limit back to "unset"; the mutation maps it to null.
+  if (reconciliation?.writeoffDirty) updates.writeoffLimit = reconciliation.writeoffLimit;
+  if (glItemDifference?.dirty) updates.glItemDifferenceId = glItemDifference.value?.id || '';
   if (Object.keys(updates).length > 0) {
     await updateAccount(account.id, updates);
   }
@@ -396,6 +404,34 @@ function toleranceValue(raw) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Highest amount tolerance that means anything: 100 % of the line is the whole line. */
+const MAX_AMOUNT_TOLERANCE_PCT = 100;
+
+/**
+ * Constrains the amount tolerance to 0…100 — the last line of defence for the saved value.
+ *
+ * The input carries `min={0} max={100}`, but on `<input type="number">` those only bound the spinner
+ * arrows and native form validation, and this modal saves through its own handler. Out-of-range
+ * input is REJECTED visibly by {@link isAmountToleranceInvalid} rather than clamped behind the
+ * user's back; this clamp stays as a belt-and-braces guard on the payload itself (the column is
+ * `numeric(10,2)`, so a wild value would otherwise overflow it) and mirrors the server-side bound in
+ * `FinancialAccountHandler.validateAmountTolerance`.
+ */
+function clampTolerancePct(value) {
+  return Math.min(MAX_AMOUNT_TOLERANCE_PCT, Math.max(0, value));
+}
+
+/**
+ * True when what the user typed is a real value outside 0…100. An empty box is not invalid — it
+ * means "no tolerance" and settles on 0 — so clearing the field never blocks saving.
+ */
+function isAmountToleranceInvalid(raw) {
+  const text = String(raw).trim();
+  if (text === '') return false;
+  const n = Number(text);
+  return !Number.isFinite(n) || n < 0 || n > MAX_AMOUNT_TOLERANCE_PCT;
+}
+
 /**
  * Both tolerances are held as the RAW STRING the user typed, not as a number, so the box can be
  * emptied while editing. Storing `Number(e.target.value)` instead made the field impossible to
@@ -407,28 +443,55 @@ function toleranceValue(raw) {
 function useReconciliationSettings(open, account) {
   const [dateTolerance, setDateTolerance] = useState('3');
   const [amountTolerance, setAmountTolerance] = useState('0');
-  const [snapshot, setSnapshot] = useState({ dateTolerance: 3, amountTolerance: 0 });
+  // ETP-4797. Kept as a STRING so the box can be emptied: '' means "no limit", which is a real,
+  // distinct value from a configured 0 (which would forbid every write-off). Coercing to a number
+  // here would collapse the two.
+  const [writeoffLimit, setWriteoffLimit] = useState('');
+  const [snapshot, setSnapshot] = useState({ dateTolerance: 3, amountTolerance: 0, writeoffLimit: '' });
 
   useEffect(() => {
     if (!open || !account) return;
     const { dateTolerance: dt, amountTolerance: at } = readTolerances(account);
+    const wl = account.writeoffLimit == null ? '' : String(account.writeoffLimit);
     setDateTolerance(String(dt));
     setAmountTolerance(String(at));
-    setSnapshot({ dateTolerance: dt, amountTolerance: at });
+    setWriteoffLimit(wl);
+    setSnapshot({ dateTolerance: dt, amountTolerance: at, writeoffLimit: wl });
   }, [open, account]);
 
   const dateToleranceValue = toleranceValue(dateTolerance);
-  const amountToleranceValue = toleranceValue(amountTolerance);
+  // Clamped here, at the single point where the raw string becomes the number that is both
+  // dirty-checked and sent in the payload — so an out-of-range value can never be persisted, however
+  // it was typed or pasted.
+  const amountToleranceValue = clampTolerancePct(toleranceValue(amountTolerance));
+  // Out-of-range input is surfaced, not silently rewritten: an earlier version clamped the text on
+  // blur, which meant typing 500 and pressing Save stored 100 with no explanation and the value
+  // "changed by itself" on reopening. The field now keeps what was typed, shows the error under it
+  // and blocks Save (same shape as accounting.assetAcctMissing).
+  const amountToleranceInvalid = isAmountToleranceInvalid(amountTolerance);
   // Compared numerically, so re-typing the stored value in a different shape ("03", "3.0")
   // correctly reads as unchanged rather than triggering a pointless write.
   const dateDirty = dateToleranceValue !== snapshot.dateTolerance;
   const amountDirty = amountToleranceValue !== snapshot.amountTolerance;
-  const dirty = dateDirty || amountDirty;
+  const writeoffDirty = String(writeoffLimit) !== String(snapshot.writeoffLimit);
+  const dirty = dateDirty || amountDirty || writeoffDirty;
   return {
     dateTolerance, setDateTolerance, amountTolerance, setAmountTolerance,
-    dateToleranceValue, amountToleranceValue, dateDirty, amountDirty, dirty,
+    dateToleranceValue, amountToleranceValue, dateDirty, amountDirty,
+    amountToleranceInvalid,
+    writeoffLimit, setWriteoffLimit, writeoffDirty, dirty,
   };
 }
+
+// ETP-4797 — Classic gates the Write-off Limit field behind the AD_Field display logic
+// `@WriteOffLimitPreference@='Y'`, and that preference does not exist in this instance, so Classic
+// hides it here too; this hand-written modal does not go through the generic EntityForm, so it was
+// rendering the field unconditionally. Hidden until functional confirms whether it should be exposed
+// at all. Everything BEHIND it stays in place — the core column, the contract field, the state and
+// save wiring below, and the server-side limit check in ReconciliationWriteoffSupport — so restoring
+// it is just flipping this to true. With it hidden the value can never change, so `writeoffDirty`
+// stays false and no write is ever attempted.
+const SHOW_WRITEOFF_LIMIT_FIELD = false;
 
 function ReconciliationSettingsSection({ ui, recon }) {
   return (
@@ -456,15 +519,83 @@ function ReconciliationSettingsSection({ ui, recon }) {
           <Input
             type="number"
             min={0}
-            max={100}
+            max={MAX_AMOUNT_TOLERANCE_PCT}
             step={0.1}
             value={recon.amountTolerance}
             onChange={(e) => recon.setAmountTolerance(e.target.value)}
             className={FIELD_INPUT}
             data-testid="recon-amount-tolerance-input"
           />
+          {recon.amountToleranceInvalid ? (
+            <p className="text-xs text-destructive" data-testid="recon-amount-tolerance-error">
+              {ui('financeAccountsReconciliationAmountToleranceInvalid')}
+            </p>
+          ) : null}
         </Field>
+        {SHOW_WRITEOFF_LIMIT_FIELD && (
+          <Field
+            label={ui('writeoffAccountLimitLabel')}
+            data-testid="Field__writeoff-limit">
+            <Input
+              type="number"
+              min={0}
+              step={0.01}
+              value={recon.writeoffLimit}
+              onChange={(e) => recon.setWriteoffLimit(e.target.value)}
+              className={FIELD_INPUT}
+              data-testid="recon-writeoff-limit-input"
+            />
+            <p className="text-xs text-[hsl(var(--text-disabled))]">
+              {ui('writeoffAccountLimitHint')}
+            </p>
+          </Field>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GL Item Difference hook + section (ETP-4795) — the accounting concept the
+// cash-close / reconciliation-difference flows post the residual against.
+// Unlike the tolerance fields above, this applies to every account type
+// (bank, card AND cash), so it renders unconditionally on the General tab.
+// ---------------------------------------------------------------------------
+
+function useGlItemDifference(open, account) {
+  const [value, setValue] = useState(null);
+  const [snapshot, setSnapshot] = useState(null);
+
+  useEffect(() => {
+    if (!open || !account) return;
+    const initial = account.glItemDifferenceId
+      ? { id: account.glItemDifferenceId, name: account.glItemDifferenceName || '' }
+      : null;
+    setValue(initial);
+    setSnapshot(initial);
+  }, [open, account]);
+
+  const dirty = (value?.id || '') !== (snapshot?.id || '');
+  return { value, setValue, dirty };
+}
+
+function GlItemDifferenceSection({ ui, glItemDifference }) {
+  return (
+    <div className="mt-6 border-b border-[hsl(var(--border-subtle))] pb-4" data-testid="gl-item-difference-section">
+      <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
+        {ui('financeAccountsGlItemDifferenceSection')}
+      </p>
+      <Field
+        label={ui('financeAccountsGlItemDifferenceLabel')}
+        data-testid="Field__gid73027d">
+        <ChipSelect
+          value={glItemDifference.value}
+          onChange={glItemDifference.setValue}
+          useLookup={useGLItemLookup}
+          placeholder={ui('financeAccountsGlItemDifferencePlaceholder')}
+          testId="gl-item-difference"
+          data-testid="ChipSelect__73027d" />
+      </Field>
     </div>
   );
 }
@@ -619,11 +750,13 @@ function AccountingConfigurationSection({ ui, accounting }) {
  * every state. The top section (Name | Type, IBAN | Currency) sits OUTSIDE both tabs, followed by
  * two tabs:
  *
- * - **General**: bank connection configuration, then reconciliation configuration. The tab itself
- *   is not rendered for cash accounts (`isCash`), which have no bank connection and no statement
- *   reconciliation — rendering an empty, blank-content tab for cash accounts was a QA regression
- *   fixed post-ETP-4530; the modal now defaults straight to Accounting when opened for a cash
- *   account.
+ * - **General**: bank connection configuration, then reconciliation configuration, then the GL
+ *   Item Difference selector (ETP-4795). The first two blocks are skipped for cash accounts
+ *   (`isCash`), which have no bank connection and no per-account amount/date tolerances to
+ *   configure, but the GL Item Difference selector renders for every account type — it backs
+ *   both the cash-close residual (ETP-4795) and the bank/card reconciliation-difference flow
+ *   (ETP-4796). The modal still defaults straight to Accounting when opened for a cash account
+ *   (see {@link initialEditTab}); General is one click away.
  * - **Accounting**: the accounting accounts used when generating transaction journal entries —
  *   asset account (required) and transitory account (optional). Backed by the
  *   `accountingConfiguration` entity / `FinancialAccountAccountingHandler` (ETP-4530). Gated by
@@ -678,26 +811,23 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   // field reflow when the Type is changed on an account without transactions.
   const isCash = fields.isCash;
   const recon = useReconciliationSettings(open, account);
+  const glItemDifference = useGlItemDifference(open, account);
   const accounting = useAccountingConfiguration(open, account);
   // ETP-4530 — the Accounting tab is only reachable for roles granted this capability (resolved
   // server-side, admin roles always pass). Fails closed to `false` until the capabilities map
   // loads, so it can flip false → true shortly after the modal mounts, or true → false mid-session
   // on a role switch — both handled by the reset effect below.
   const canSeeAccounting = useHasCapability('showAccountingFields');
-  // Initialize from account?.type (not a fixed EDIT_TAB_GENERAL default) so the very first
-  // render is already consistent for cash accounts — the General tab's trigger/content are
-  // not rendered for them, so an unconditional EDIT_TAB_GENERAL default would leave the first
-  // paint with no active trigger and no visible content until the effect below corrects it.
+  // Initialize from account?.type (not a fixed EDIT_TAB_GENERAL default) — cash still opens on
+  // Accounting by product decision (see initialEditTab), independent of General now always
+  // having content to show.
   const [editTab, setEditTab] = useState(() => initialEditTab(isCash));
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [confirmDeleteConnectionOpen, setConfirmDeleteConnectionOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Reset to the first AVAILABLE tab whenever the modal (re)opens for an account. Cash accounts
-  // have no bank connection and no statement reconciliation, so the General tab itself is not
-  // rendered for them — defaulting to it would leave the modal on a tab whose trigger doesn't
-  // exist, with no visible content and no tab shown as active.
+  // Reset to the default tab whenever the modal (re)opens for an account (see initialEditTab).
   useEffect(() => {
     if (open) setEditTab(initialEditTab(isCash));
   }, [open, account?.id, isCash]);
@@ -729,9 +859,10 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const typeLabel = formatTypeLabel(account.type, ui);
   const reauthMessage = buildReauthMessage(bankConnection.status, locale, ui);
   const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
-    || bankConnection.settingsDirty || (!isCash && recon.dirty) || accounting.dirty;
+    || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
+    || accounting.dirty;
   const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
-    && !accounting.assetAcctMissing;
+    && !accounting.assetAcctMissing && !recon.amountToleranceInvalid;
   const busy = saving || bankConnection.busy;
 
   const handleSave = async () => {
@@ -743,6 +874,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
         fields,
         settings: { dirty: bankConnection.settingsDirty, form: bankConnection.form },
         reconciliation: isCash ? null : recon,
+        glItemDifference,
         accounting,
         updateAccount,
         saveImportSettings,
@@ -811,14 +943,12 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
 
         <Tabs value={editTab} onValueChange={setEditTab} className="-mt-3" data-testid="EditAccountTabs__73027d">
           <TabsList className="w-full border-b border-border-subtle" data-testid="EditAccountTabsList__73027d">
-            {/* Cash accounts have no bank connection and no statement reconciliation, so the
-                General tab (bank connection + reconciliation config) has nothing to show for them — hide the
-                tab itself rather than rendering it with empty content. */}
-            {!isCash ? (
-              <TabsTrigger value={EDIT_TAB_GENERAL} icon={Settings2} data-testid="edit-account-tab-general">
-                {ui('financeAccountsEditTabGeneral')}
-              </TabsTrigger>
-            ) : null}
+            {/* ETP-4795: the General tab always renders now — a cash account has no bank
+                connection and no amount/date tolerances (see below), but it DOES have the GL
+                Item Difference concept used to close the difference of a cash-close. */}
+            <TabsTrigger value={EDIT_TAB_GENERAL} icon={Settings2} data-testid="edit-account-tab-general">
+              {ui('financeAccountsEditTabGeneral')}
+            </TabsTrigger>
             {/* ETP-4530 — the Accounting tab trigger itself must not render at all for a role
                 without the showAccountingFields capability (not just disabled/hidden via CSS). */}
             {canSeeAccounting ? (
@@ -828,23 +958,30 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
             ) : null}
           </TabsList>
 
-          {!isCash ? (
-            <TabsContent value={EDIT_TAB_GENERAL} className="pt-4" data-testid="edit-account-tabpanel-general">
-              <BankConnectionSection
-                ui={ui}
-                bankConnection={bankConnection}
-                busy={busy}
-                reauthMessage={reauthMessage}
-                onConnect={handleConnectClick}
-                onReconnect={bankConnection.handleReconnect}
-                data-testid="BankConnectionSection__73027d" />
+          <TabsContent value={EDIT_TAB_GENERAL} className="pt-4" data-testid="edit-account-tabpanel-general">
+            {!isCash ? (
+              <>
+                <BankConnectionSection
+                  ui={ui}
+                  bankConnection={bankConnection}
+                  busy={busy}
+                  reauthMessage={reauthMessage}
+                  onConnect={handleConnectClick}
+                  onReconnect={bankConnection.handleReconnect}
+                  data-testid="BankConnectionSection__73027d" />
 
-              <ReconciliationSettingsSection
-                ui={ui}
-                recon={recon}
-                data-testid="ReconciliationSettingsSection__73027d" />
-            </TabsContent>
-          ) : null}
+                <ReconciliationSettingsSection
+                  ui={ui}
+                  recon={recon}
+                  data-testid="ReconciliationSettingsSection__73027d" />
+              </>
+            ) : null}
+
+            <GlItemDifferenceSection
+              ui={ui}
+              glItemDifference={glItemDifference}
+              data-testid="GlItemDifferenceSection__73027d" />
+          </TabsContent>
 
           {/* ETP-4530 — panel is gated the same as its trigger, so it's never mounted for a
               role without the showAccountingFields capability. */}
@@ -1244,12 +1381,16 @@ function EditFooter({
   return (
     <div className="mt-2 flex items-center justify-between gap-2">
       <div className="flex items-center gap-3">
+        {/* Mirrors the row kebab: on an already-archived account the only useful action is the
+            inverse one, so the button flips to "restore" and drops the destructive treatment. */}
         <FooterButton
-          icon={Archive}
-          label={ui('financeAccountsBankConnectionEditArchive')}
+          icon={account?.active === false ? RotateCcw : Archive}
+          label={account?.active === false
+            ? ui('financeAccountsMenuUnarchive')
+            : ui('financeAccountsBankConnectionEditArchive')}
           onClick={() => onArchive?.(account)}
           disabled={busy}
-          danger
+          danger={account?.active !== false}
           data-testid="FooterButton__73027d" />
         {connected ? (
           <FooterSplitButton

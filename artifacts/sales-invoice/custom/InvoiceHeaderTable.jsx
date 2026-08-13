@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Check, Plus } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
-import { useLocale, useLocaleSwitch } from '@/i18n';
+import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import { formatCurrency } from '@/lib/formatCurrency';
@@ -14,15 +14,15 @@ import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
+import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { getArSubtype } from './invoiceSubtype';
 
 // ─── Invoice-specific status logic ───────────────────────────────
 
-// ETP-4737: the former separate credit-note (NC) and return-invoice (DEV)
-// subtypes are unified into a single RECTIFICATIVA subtype (see
-// invoiceSubtype.js). Both used negative-total/"Saldo a favor" treatment
-// identically, so a single predicate now covers what isCreditType used to.
-function isRectificativa(row) { return getArSubtype(row) === 'RECTIFICATIVA'; }
+// `getArSubtype` (ETP-4737's unified FAC | RECTIFICATIVA) drives only the
+// DOCUMENT-TYPE badge column below. Payment state — "Saldo a favor" vs payable —
+// is decided by the sign of the total via resolveInvoicePaymentBadge (ETP-4841),
+// never by the document type.
 
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -37,6 +37,7 @@ export default function InvoiceHeaderTable(props) {
   const { apiBaseUrl } = props;
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
+  const ui = useUI();
   const gl = dictionary?.genericLabels || {};
   const t = (key) => gl[key] || key;
 
@@ -114,7 +115,12 @@ export default function InvoiceHeaderTable(props) {
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
-          if (isRectificativa(row)) return <span className="text-muted-foreground">{formatCalendarDate(d, locale)}</span>;
+          // A credit instrument has no meaningful due date — no colour, no dot.
+          // Sign-based (ETP-4841), so a POSITIVE rectificativa keeps its due-date
+          // state like any other payable invoice.
+          if (resolveInvoicePaymentBadge(row).isCredit) {
+            return <span className="text-muted-foreground">{formatCalendarDate(d, locale)}</span>;
+          }
           const state = getDueDateState(d, row.outstandingAmount);
           return (
             <span className="inline-flex items-center gap-1.5" style={getDueDateTextStyle(state)}>
@@ -142,19 +148,21 @@ export default function InvoiceHeaderTable(props) {
         // renders empty (ETP-4681).
         filterMode: 'numeric',
         render: (row) => {
-          const outstanding = parseFloat(row.outstandingAmount ?? 0);
           const currency = row['currency$_identifier'] || 'EUR';
-          if (row.documentStatus !== 'CO') return <span className="text-muted-foreground">—</span>;
-          if (isRectificativa(row)) {
-            const outstandingAbs = Math.abs(outstanding);
-            if (outstandingAbs < 0.001) {
-              return (
-                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
-                  <Check size={12}/>Aplicada
-                </span>
-              );
-            }
-            // A credit note / return always represents money owed back to the
+          // ETP-4841: the badge follows the SIGN of the total, not the document type
+          // — a positive Factura Rectificativa is payable and a negative ordinary
+          // Factura is a credit. See shared/invoicePaymentBadge.js.
+          const badge = resolveInvoicePaymentBadge(row);
+          if (badge.kind === 'draft') return <span className="text-muted-foreground">—</span>;
+          if (badge.kind === 'credit-applied') {
+            return (
+              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
+                <Check size={12}/>{ui('cpCreditFullyApplied')}
+              </span>
+            );
+          }
+          if (badge.kind === 'credit-available') {
+            // A credit instrument always represents money owed back to the
             // customer, never money still owed by them — the label stays
             // "Saldo a favor" for any remaining unused balance, however much
             // of it has already been applied elsewhere.
@@ -165,11 +173,11 @@ export default function InvoiceHeaderTable(props) {
                 style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'hsl(var(--primary))',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
                 <span style={{width:8,height:8,borderRadius:'50%',background:'hsl(var(--primary))',flexShrink:0,display:'inline-block'}}/>
-                Saldo a favor · {fmtAmt(outstandingAbs, currency)}
+                {ui('cpFavorBadge')} · {fmtAmt(badge.amount, currency)}
               </button>
             );
           }
-          if (outstanding <= 0) {
+          if (badge.kind === 'paid') {
             return (
               <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
                 <Check size={12}/>{t('cobrada')}
@@ -184,7 +192,7 @@ export default function InvoiceHeaderTable(props) {
               style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-warning-bg)',border:'1px solid var(--status-warning-border)',color:'var(--status-warning-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
             >
               <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
-              {fmtAmt(outstanding, currency)}
+              {fmtAmt(badge.amount, currency)}
               <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13}/></span>
             </button>
           );
@@ -192,7 +200,7 @@ export default function InvoiceHeaderTable(props) {
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, locale, targets, siiColLabel, tbaiColLabel, vfColLabel]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel]);
 
   return (
     <>

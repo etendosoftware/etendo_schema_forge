@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.25.0",
   "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-05T11:53:18.060Z",
-  "contractChecksum": "a9520b6d9bac12e3",
+  "updatedAt": "2026-08-11T14:14:14.274Z",
+  "contractChecksum": "0ec1af3e8cd9a13c",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -61,6 +61,28 @@
         "listUrl": "/sws/neo/accounts/bankStatementLines",
         "detailUrl": "/sws/neo/accounts/bankStatementLines/{id}",
         "supportedFilters": []
+      },
+      "reconciliations": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/accounts/reconciliations",
+        "detailUrl": "/sws/neo/accounts/reconciliations/{id}",
+        "supportedFilters": []
+      },
+      "clearedItems": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/accounts/clearedItems",
+        "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
+        "supportedFilters": []
       }
     },
     "selectors": [
@@ -71,6 +93,14 @@
         "reference": "Currency",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/account/selectors/currency"
+      },
+      {
+        "entity": "account",
+        "field": "aprmGlitemDiff",
+        "column": "EM_Aprm_Glitem_Diff",
+        "reference": "Glitem",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/account/selectors/aprmGlitemDiff"
       },
       {
         "entity": "account",
@@ -191,6 +221,70 @@
         "reference": "Glitem",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/bankStatementLines/selectors/gLItem"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "financialAccountTransaction",
+        "column": "FIN_Finacc_Transaction_ID",
+        "reference": "Finacc_Transaction",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/financialAccountTransaction"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "bankStatementLine",
+        "column": "FIN_Bankstatementline_ID",
+        "reference": "Bankstatementline",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/bankStatementLine"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/currency"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "payment",
+        "column": "FIN_Payment_ID",
+        "reference": "Payment",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/payment"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "gLItem",
+        "column": "C_Glitem_ID",
+        "reference": "Glitem",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/gLItem"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/accounts/clearedItems/selectors/project"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "stDimension",
+        "column": "User1_ID",
+        "reference": "User1",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/clearedItems/selectors/stDimension"
+      },
+      {
+        "entity": "clearedItems",
+        "field": "ndDimension",
+        "column": "User2_ID",
+        "reference": "User2",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/clearedItems/selectors/ndDimension"
       }
     ],
     "actions": [
@@ -736,6 +830,200 @@
         ],
         "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
+      },
+      {
+        "name": "aPRMPrintDetailed",
+        "actionType": "paymentAction",
+        "entity": "reconciliations",
+        "column": "EM_APRM_PrintDetailed",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/aPRMPrintDetailed",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "3C4A5FB206B74C3CA9FE20116FCA0464",
+        "processType": "classic"
+      },
+      {
+        "name": "aPRMPrintSummary",
+        "actionType": "paymentAction",
+        "entity": "reconciliations",
+        "column": "EM_APRM_PrintSummary",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/aPRMPrintSummary",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "BBA11D1A061346459AF6148920FE6629",
+        "processType": "classic"
+      },
+      {
+        "name": "etprReactivateRecon",
+        "actionType": "documentAction",
+        "entity": "reconciliations",
+        "column": "EM_Etpr_Reactivate_Recon",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/etprReactivateRecon",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "B2A7F27C590546F38563C20CA9AD00B7",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aprmProcessRec",
+        "actionType": "paymentAction",
+        "entity": "reconciliations",
+        "column": "EM_Aprm_Process_Rec",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/aprmProcessRec",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "FF8080812E2F8EAE012E2F94CF470014",
+        "processType": "classic"
+      },
+      {
+        "name": "aPRMProcessReconciliationForce",
+        "actionType": "paymentAction",
+        "entity": "reconciliations",
+        "column": "EM_APRM_Process_Rec_Force",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/aPRMProcessReconciliationForce",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "6BF16EFC772843AC9A17552AE0B26AB7",
+        "processType": "classic"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "reconciliations",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etprRemoveReconciliation",
+        "actionType": "utilityAction",
+        "entity": "reconciliations",
+        "column": "EM_Etpr_Remove_Reconciliation",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/accounts/reconciliations/{id}/action/etprRemoveReconciliation",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "22C4DBA9FAC9444995EC27DD439A6F1B",
+        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -792,8 +1080,10 @@
             "required": true,
             "defaultValue": "0"
           },
+          "aprmGlitemDiff": {},
           "iBAN": {},
           "swiftCode": {},
+          "writeofflimit": {},
           "aPRMImportBankFile": {},
           "aPRMMatchTransactions": {},
           "aPRMMatchTransactionsForce": {},
@@ -1030,6 +1320,91 @@
           },
           "description": {}
         }
+      },
+      "reconciliations": {
+        "fields": {
+          "documentNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "endingDate": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "transactionDate": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "startingbalance": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "endingBalance": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "documentStatus": {
+            "readOnly": true,
+            "required": true
+          },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "clearedItems": {
+        "fields": {
+          "accountingDate": {
+            "readOnly": true
+          },
+          "transactionDate": {
+            "readOnly": true
+          },
+          "description": {
+            "readOnly": true
+          },
+          "financialAccountTransaction": {
+            "readOnly": true
+          },
+          "bankStatementLine": {
+            "readOnly": true
+          },
+          "transactionType": {
+            "readOnly": true
+          },
+          "currency": {
+            "readOnly": true
+          },
+          "payment": {
+            "readOnly": true
+          },
+          "gLItem": {
+            "readOnly": true
+          },
+          "depositAmount": {
+            "readOnly": true
+          },
+          "paymentAmount": {
+            "readOnly": true
+          },
+          "project": {
+            "readOnly": true
+          },
+          "stDimension": {
+            "readOnly": true
+          },
+          "ndDimension": {
+            "readOnly": true
+          }
+        }
       }
     },
     "requiredSessionVariables": [
@@ -1068,6 +1443,8 @@
       "etprReactivateTransaction",
       "etblkpBulkposting",
       "posted",
+      "etblkpBulkposting",
+      "etprReactivateRecon",
       "etblkpBulkposting"
     ],
     "workflow": [
@@ -1121,9 +1498,10 @@
     "warnings": [],
     "knownLimitations": [],
     "dangerousOperations": [
-      "etprReactivateTransaction"
+      "etprReactivateTransaction",
+      "etprReactivateRecon"
     ],
     "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
   },
-  "checksum": "79e61071a93345db"
+  "checksum": "b6736eb7c7cfd618"
 }

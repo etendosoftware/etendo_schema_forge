@@ -146,17 +146,22 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [formReady, setFormReady] = useState(false);
 
   useSetPageMeta({ title: ui('organizationPageTitle'), breadcrumb: `${ui('settings')} / ${ui('organizationPageTitle')}` });
 
   useEffect(() => {
     if (!loading && !error) {
       setForm(buildFormFromData(header, info));
+      setFormReady(true);
     }
   }, [loading, error, header, info]);
 
   const baseline = useMemo(() => buildFormFromData(header, info), [header, info]);
-  const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(baseline), [form, baseline]);
+  const isDirty = useMemo(
+    () => formReady && JSON.stringify(form) !== JSON.stringify(baseline),
+    [formReady, form, baseline],
+  );
 
   const updateField = (field, value) => {
     setForm(f => ({ ...f, [field]: value }));

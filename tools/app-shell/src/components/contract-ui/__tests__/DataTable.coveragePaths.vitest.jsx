@@ -52,6 +52,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
 vi.mock('@/lib/linesColumnWidth.js', () => ({
   columnMinWidthPx: () => 96,
   columnFlex: () => '1 1 120px',
+  isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 
 vi.mock('@/components/ui/select', () => ({

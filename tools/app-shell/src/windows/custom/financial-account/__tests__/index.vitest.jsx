@@ -46,6 +46,11 @@ vi.mock('sonner', () => {
 const useFinancialAccountMock = vi.fn();
 const useAccountMovementsMock = vi.fn();
 const useBankStatementsMock = vi.fn();
+const useReconciliationsMock = vi.fn();
+vi.mock('@/hooks/useReconciliationList', () => ({
+  useReconciliations: (...args) => useReconciliationsMock(...args),
+  useClearedItems: () => ({ items: [], loading: false }),
+}));
 vi.mock('@/hooks/useFinancialAccount', () => ({
   useFinancialAccount: (...args) => useFinancialAccountMock(...args),
 }));
@@ -119,10 +124,11 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 
 import FinancialAccountWindow from '../index.jsx';
 
-function setHooks({ account = { id: 'acc-1', name: 'BBVA', pendingCount: 4 }, movements = [], totals = { balance: 0, inflows: 0, outflows: 0, currency: 'EUR' }, loading = false, statements = [] } = {}) {
+function setHooks({ account = { id: 'acc-1', name: 'BBVA', pendingCount: 4 }, movements = [], totals = { balance: 0, inflows: 0, outflows: 0, currency: 'EUR' }, loading = false, statements = [], reconciliations = [] } = {}) {
   useFinancialAccountMock.mockReturnValue({ account, loading: false, error: null, reload: vi.fn() });
   useAccountMovementsMock.mockReturnValue({ movements, totals, loading, error: null, reload: vi.fn() });
   useBankStatementsMock.mockReturnValue({ statements, loading: false, error: null, reload: vi.fn() });
+  useReconciliationsMock.mockReturnValue({ reconciliations, loading: false });
 }
 
 describe('FinancialAccountWindow', () => {
@@ -136,6 +142,7 @@ describe('FinancialAccountWindow', () => {
     useFinancialAccountMock.mockReset();
     useAccountMovementsMock.mockReset();
     useBankStatementsMock.mockReset();
+    useReconciliationsMock.mockReset();
   });
 
   it('passes the recordId to all three data hooks', () => {
@@ -297,6 +304,23 @@ describe('FinancialAccountWindow', () => {
     // (The movements count badge "3" can collide with the stubbed tab content,
     // so we only assert on the unambiguous reconciliation badge here.)
     expect(screen.getByText('9')).toBeInTheDocument();
+  });
+
+  it('badges the reconciliations tab with the document count on a cash account', () => {
+    setHooks({
+      account: { id: 'acc-1', name: 'Caja', type: 'C', pendingCount: 0 },
+      reconciliations: [{ id: 'r1' }, { id: 'r2' }, { id: 'r3' }, { id: 'r4' }, { id: 'r5' }],
+    });
+    render(<FinancialAccountWindow recordId="acc-1" />);
+    expect(screen.getByText('5')).toBeInTheDocument();
+  });
+
+  it('leaves the reconciliations query idle on a non-cash account', () => {
+    setHooks({ account: { id: 'acc-1', name: 'BBVA', type: 'B', pendingCount: 0 } });
+    render(<FinancialAccountWindow recordId="acc-1" />);
+    // The tab is hidden for bank accounts, so the hook must be parked with a null id rather than
+    // fetching a list nothing will ever render.
+    expect(useReconciliationsMock).toHaveBeenCalledWith(null);
   });
 
   it('renders the statements tab trigger without a numeric badge', () => {

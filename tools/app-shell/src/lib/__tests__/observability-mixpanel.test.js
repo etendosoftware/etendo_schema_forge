@@ -4,6 +4,24 @@ import assert from 'node:assert/strict';
 import { buildBrowserObservabilityConfig } from '../observability/browser.js';
 import { createMixpanelProvider } from '../observability/providers/mixpanel.js';
 
+// Minimal localStorage-shaped fake, keyed only by the calls made against it —
+// deliberately does NOT hardcode the module-private flag key name, so these
+// tests stay decoupled from that implementation detail.
+function createFakeStorage() {
+  const store = new Map();
+  return {
+    getItem(key) {
+      return store.has(key) ? store.get(key) : null;
+    },
+    setItem(key, value) {
+      store.set(key, value);
+    },
+    get size() {
+      return store.size;
+    },
+  };
+}
+
 function createFakeMixpanel(calls) {
   return {
     init(token, options) {
@@ -284,6 +302,62 @@ describe('Mixpanel observability adapter', () => {
     assert.deepEqual(calls, [['identify', 'user-1']]);
   });
 
+  it('reset() calls client.reset() explicitly, independent of the automatic one-time gate', async () => {
+    // init() already triggers + persists the automatic one-time stale-identity
+    // reset via getClient() (see the dedicated describe block below). This test
+    // isolates the explicit, unconditional `reset()` method: it must still call
+    // client.reset() on demand regardless of whether the automatic gate already
+    // ran.
+    const calls = [];
+    const storage = createFakeStorage();
+    const provider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage,
+      loader: async () => ({
+        default: {
+          init() {},
+          reset() {
+            calls.push(['reset']);
+          },
+        },
+      }),
+    });
+
+    await provider.init(); // fires + persists the automatic reset
+    calls.length = 0; // isolate the explicit call below
+
+    await provider.reset();
+
+    assert.deepEqual(calls, [['reset']]);
+  });
+
+  it('reset is a no-op when the SDK has no reset function', async () => {
+    const provider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      loader: async () => ({ default: { init() {} } }),
+    });
+
+    await provider.init();
+    await assert.doesNotReject(() => provider.reset());
+  });
+
+  it('reset is a no-op when the provider is disabled (no client, SDK never loaded)', async () => {
+    let loadCount = 0;
+    const provider = createMixpanelProvider({
+      enabled: false,
+      token: 'token-123',
+      loader: async () => {
+        loadCount += 1;
+        return { default: { init() {}, reset() {} } };
+      },
+    });
+
+    await assert.doesNotReject(() => provider.reset());
+    assert.equal(loadCount, 0);
+  });
+
   it('registers Mixpanel from browser config only when env enables it', () => {
     const disabledConfig = buildBrowserObservabilityConfig({
       env: {},
@@ -301,5 +375,261 @@ describe('Mixpanel observability adapter', () => {
 
     assert.equal(disabledConfig.providers.find(provider => provider.name === 'mixpanel').enabled, false);
     assert.equal(enabledConfig.providers.find(provider => provider.name === 'mixpanel').enabled, true);
+  });
+});
+
+describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', () => {
+  it('runs after the SDK client.init() and before the client is handed to the first caller', async () => {
+    const calls = [];
+    const provider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage: createFakeStorage(),
+      loader: async () => ({
+        default: {
+          init(token) {
+            calls.push(['init', token]);
+          },
+          reset() {
+            calls.push(['reset']);
+          },
+          track(eventName) {
+            calls.push(['track', eventName]);
+          },
+        },
+      }),
+    });
+
+    // page() is the same call chain ObservabilityRouteTracker uses on mount —
+    // it must observe init() then reset() having already happened before its
+    // own track('page_view', ...) call fires.
+    await provider.page('/dashboard');
+
+    assert.deepEqual(calls, [['init', 'token-123'], ['reset'], ['track', 'page_view']]);
+  });
+
+  it('fires exactly once even when multiple provider methods race to call getClient() concurrently', async () => {
+    // Mirrors the real-world race that broke the previous (browser.js-level)
+    // architecture: several call sites reach the provider before anything has
+    // awaited a previous provider call. Because clientPromise is assigned
+    // synchronously on the first getClient() call, every one of these methods
+    // ends up awaiting the SAME load+init+reset chain.
+    const calls = [];
+    let loadCount = 0;
+    const provider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage: createFakeStorage(),
+      loader: async () => {
+        loadCount += 1;
+        return {
+          default: {
+            init() {
+              calls.push(['init']);
+            },
+            reset() {
+              calls.push(['reset']);
+            },
+            track(eventName, properties, _options, callback) {
+              calls.push(['track', eventName]);
+              callback?.();
+            },
+          },
+        };
+      },
+    });
+
+    await Promise.all([
+      provider.init(),
+      provider.track('a'),
+      provider.page('/b'),
+    ]);
+
+    assert.equal(loadCount, 1, 'the SDK module must only be loaded once');
+    assert.deepEqual(
+      calls.filter(c => c[0] === 'init'),
+      [['init']],
+      'client.init() must only run once'
+    );
+    assert.deepEqual(
+      calls.filter(c => c[0] === 'reset'),
+      [['reset']],
+      'the automatic reset must only run once, no matter how many callers race for it'
+    );
+    // init()/reset() must both precede every track() call triggered by the
+    // concurrent callers.
+    const resetIndex = calls.findIndex(c => c[0] === 'reset');
+    const trackIndexes = calls.map((c, i) => (c[0] === 'track' ? i : -1)).filter(i => i >= 0);
+    assert.ok(trackIndexes.every(i => i > resetIndex), 'every track() must happen after reset()');
+  });
+
+  it('persists the flag so a second provider instance (same storage) does not reset again', async () => {
+    const storage = createFakeStorage();
+
+    const firstCalls = [];
+    const firstProvider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage,
+      loader: async () => ({
+        default: { init() {}, reset: () => firstCalls.push(['reset']) },
+      }),
+    });
+    await firstProvider.init();
+    assert.deepEqual(firstCalls, [['reset']]);
+    assert.equal(storage.size, 1, 'the reset flag must be persisted after a successful reset');
+
+    // A second page load creates a brand-new provider (and clientPromise) but
+    // shares the same underlying browser storage.
+    const secondCalls = [];
+    const secondProvider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage,
+      loader: async () => ({
+        default: { init() {}, reset: () => secondCalls.push(['reset']) },
+      }),
+    });
+    await secondProvider.init();
+
+    assert.deepEqual(secondCalls, [], 'reset must not be called again once the flag is already persisted');
+  });
+
+  it('does not persist the flag when the reset throws, so the next provider instance retries it', async () => {
+    const storage = createFakeStorage();
+    const warnings = [];
+
+    const failingCalls = [];
+    const failingProvider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage,
+      logger: { warn: (...args) => warnings.push(args) },
+      loader: async () => ({
+        default: {
+          init() {},
+          reset() {
+            failingCalls.push(['reset']);
+            throw new Error('mixpanel SDK unavailable');
+          },
+        },
+      }),
+    });
+    await failingProvider.init();
+
+    assert.deepEqual(failingCalls, [['reset']]);
+    assert.equal(storage.size, 0, 'a failed reset must not persist the flag');
+    assert.equal(warnings.length, 1, 'the failure must be logged');
+
+    const retryCalls = [];
+    const retryProvider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage,
+      loader: async () => ({
+        default: { init() {}, reset: () => retryCalls.push(['reset']) },
+      }),
+    });
+    await retryProvider.init();
+
+    assert.deepEqual(retryCalls, [['reset']], 'the next load must retry the reset since the flag was never persisted');
+    assert.equal(storage.size, 1, 'the retried, successful reset must now persist the flag');
+  });
+
+  it('is skipped when the SDK exposes no reset function: no error, no flag set', async () => {
+    const storage = createFakeStorage();
+    const provider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage,
+      loader: async () => ({ default: { init() {} } }),
+    });
+
+    await assert.doesNotReject(() => provider.init());
+    assert.equal(storage.size, 0);
+  });
+
+  it('treats a throwing storage.getItem as "not reset yet" and still attempts the reset (harmless retry)', async () => {
+    const calls = [];
+    const throwingStorage = {
+      getItem() {
+        throw new Error('storage inaccessible (private mode)');
+      },
+      setItem(key, value) {
+        calls.push(['setItem', key, value]);
+      },
+    };
+    const provider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage: throwingStorage,
+      loader: async () => ({
+        default: {
+          init() {},
+          reset() {
+            calls.push(['reset']);
+          },
+        },
+      }),
+    });
+
+    await assert.doesNotReject(() => provider.init());
+
+    // readResetFlag() swallowing the throw (returning null) is what let the reset
+    // proceed at all — reset() firing (and the flag write attempt after it) is the
+    // observable proof of that "not reset yet" fallback.
+    assert.deepEqual(calls.filter(c => c[0] === 'reset'), [['reset']]);
+    assert.equal(calls.filter(c => c[0] === 'setItem').length, 1);
+  });
+
+  it('swallows a throwing storage.setItem silently: reset still runs, no exception propagates', async () => {
+    const calls = [];
+    const throwingStorage = {
+      getItem() {
+        return null;
+      },
+      setItem() {
+        throw new Error('storage full / disabled cookies');
+      },
+    };
+    const provider = createMixpanelProvider({
+      enabled: 'true',
+      token: 'token-123',
+      storage: throwingStorage,
+      loader: async () => ({
+        default: {
+          init() {},
+          reset() {
+            calls.push(['reset']);
+          },
+        },
+      }),
+    });
+
+    await assert.doesNotReject(() => provider.init());
+
+    // The reset itself succeeded; only persisting the flag afterwards failed and
+    // was swallowed by writeResetFlag()'s own try/catch — no warning is logged for
+    // this path (unlike a failing client.reset(), which does warn).
+    assert.deepEqual(calls, [['reset']]);
+  });
+
+  it('is skipped entirely when the provider is disabled: SDK never loaded, no flag set', async () => {
+    const storage = createFakeStorage();
+    let loadCount = 0;
+    const provider = createMixpanelProvider({
+      enabled: false,
+      token: 'token-123',
+      storage,
+      loader: async () => {
+        loadCount += 1;
+        return { default: { init() {}, reset() {} } };
+      },
+    });
+
+    await provider.init();
+
+    assert.equal(loadCount, 0);
+    assert.equal(storage.size, 0);
   });
 });

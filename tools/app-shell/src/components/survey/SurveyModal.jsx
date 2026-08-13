@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useUI } from '@/i18n/index.js';
+import { useUI, useLocaleSwitch } from '@/i18n/index.js';
+import { getRemoteCannedResponses } from '@/lib/surveys/survey-config.js';
 
 // ─── Design tokens (mapped from Etendo design system) ───────────────────────
 const T = {
@@ -41,6 +42,15 @@ function ArrowRight() {
   return (
     <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 7h10M8 3l4 4-4 4"/>
+    </svg>
+  );
+}
+
+// ─── Arrow left icon ──────────────────────────────────────────────────────────
+function ArrowLeft() {
+  return (
+    <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 7H2M6 3 2 7l4 4"/>
     </svg>
   );
 }
@@ -210,8 +220,40 @@ function ChipGroup({ options, value, onChange }) {
   );
 }
 
+// ─── Canned-response grid (CSAT Q2) ──────────────────────────────────────────
+// Click a phrase to prefill the free-text field below — same "click to fill, then keep
+// editing" pattern as ConversationView's support-chat quick replies (onQuickReply sets the
+// draft text, doesn't lock it). Fulfills ETP-4352's "predefined answers, still editable" ask.
+// options is [{ icon, label }] — icon is decorative only (aria-hidden), onPick always
+// receives the plain translated label, never the icon, so feedback data/Mixpanel payloads
+// stay icon-free. Content is per-survey (survey.canned in surveys.js), not a shared generic
+// list, so invoicing and order surveys each surface phrases tied to their own flow.
+function CannedResponseGrid({ options, onPick }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+      {options.map(({ icon, label }) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => onPick(label)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 12px', borderRadius: 10, textAlign: 'left',
+            border: `1px solid ${T.border2}`,
+            background: 'hsl(var(--card))', color: T.fg2,
+            font: font(12, 500), cursor: 'pointer',
+          }}
+        >
+          <span aria-hidden="true">{icon}</span>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Ghost button (skip) ─────────────────────────────────────────────────────
-function GhostBtn({ children, onClick }) {
+function GhostBtn({ children, onClick, ...rest }) {
   return (
     <button
       onClick={onClick}
@@ -220,6 +262,7 @@ function GhostBtn({ children, onClick }) {
         border: 'none', background: 'transparent', color: T.fg3,
         font: font(12, 500), cursor: 'pointer',
       }}
+      {...rest}
     >
       {children}
     </button>
@@ -248,13 +291,22 @@ function PrimaryBtn({ children, onClick, disabled }) {
 }
 
 // ─── Survey footer ────────────────────────────────────────────────────────────
-function SurveyFooter({ onSkip, onSubmit, submitLabel, disabled, skipLabel }) {
+function SurveyFooter({ onBack, backLabel, onSkip, onSubmit, submitLabel, disabled, skipLabel }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-      {onSkip && <GhostBtn onClick={onSkip} data-testid="GhostBtn__91aeca">{skipLabel}</GhostBtn>}
-      <PrimaryBtn onClick={onSubmit} disabled={disabled} data-testid="PrimaryBtn__91aeca">
-        {submitLabel} <ArrowRight data-testid="ArrowRight__91aeca" />
-      </PrimaryBtn>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: onBack ? 'space-between' : 'flex-end', gap: 8, marginTop: 16 }}>
+      {onBack ? (
+        <GhostBtn onClick={onBack} data-testid="SurveyModal__back">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <ArrowLeft data-testid="ArrowLeft__91aeca" /> {backLabel}
+          </span>
+        </GhostBtn>
+      ) : <span />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {onSkip && <GhostBtn onClick={onSkip} data-testid="GhostBtn__91aeca">{skipLabel}</GhostBtn>}
+        <PrimaryBtn onClick={onSubmit} disabled={disabled} data-testid="PrimaryBtn__91aeca">
+          {submitLabel} <ArrowRight data-testid="ArrowRight__91aeca" />
+        </PrimaryBtn>
+      </div>
     </div>
   );
 }
@@ -334,6 +386,15 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
             data-testid="ChipGroup__91aeca" />
         </div>
         <SurveyFooter
+          onBack={() => {
+            // Clear followup input before returning to score selection: otherwise a stale
+            // feedback/tags combo typed against the previous score/segment could be resubmitted
+            // unchanged against a new score picked after Back (see docs/surveys.md "Back Navigation").
+            setFeedback('');
+            setTags([]);
+            setPhase('initial');
+          }}
+          backLabel={ui('surveyBack')}
           onSubmit={() => setPhase('thanks')}
           submitLabel={ui('surveySubmit')}
           data-testid="SurveyFooter__91aeca" />
@@ -364,7 +425,26 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
 }
 
 // ─── CSAT survey content ──────────────────────────────────────────────────────
+// Prefers canned responses configured in the backoffice "Survey Configuration" window
+// (already resolved to plain, language-specific text — no ui() lookup needed) over the
+// hardcoded locale-key list in surveys.js, which only serves as an offline/unreachable-
+// backend fallback. Remote entries carry a { minScore, maxScore } band (configurable per
+// phrase in the backoffice) — filtered against the score the user actually picked, so e.g.
+// a 1-star and a 3-star CSAT response can surface different phrases. The hardcoded fallback
+// list has no ranges and keeps showing unconditionally within the followup phase (offline
+// degradation only, not expected to need this granularity).
+function resolveCannedOptions(survey, locale, ui, score) {
+  const remote = getRemoteCannedResponses(survey.id, locale);
+  if (remote) {
+    return remote
+      .filter(({ minScore, maxScore }) => score >= minScore && score <= maxScore)
+      .map(({ icon, text }) => ({ icon, label: text }));
+  }
+  return (survey.canned ?? []).map(({ icon, key }) => ({ icon, label: ui(key) }));
+}
+
 function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback, setFeedback, onDismiss, ui }) {
+  const { locale } = useLocaleSwitch();
 
   if (phase === 'thanks') {
     return (
@@ -382,6 +462,10 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
           {ui(survey.q2TitleKey)}
         </div>
         <div style={{ font: font(13, 400, 18), color: T.fg3, marginBottom: 14 }}>{ui('surveyQ2Optional')}</div>
+        <CannedResponseGrid
+          options={resolveCannedOptions(survey, locale, ui, score)}
+          onPick={setFeedback}
+          data-testid="CannedResponseGrid__91aeca" />
         <textarea
           value={feedback}
           onChange={e => setFeedback(e.target.value)}
@@ -395,6 +479,15 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
           }}
         />
         <SurveyFooter
+          onBack={() => {
+            // Clear the typed feedback before returning to star selection. CSAT's initial-phase
+            // submit branches on score (<=3 -> followup, >3 -> thanks), so without this a score
+            // typed against e.g. a 2-star rating could be silently resubmitted attached to a
+            // 5-star rating that skips followup entirely (see docs/surveys.md "Back Navigation").
+            setFeedback('');
+            setPhase('initial');
+          }}
+          backLabel={ui('surveyBack')}
           onSubmit={() => setPhase('thanks')}
           submitLabel={ui('surveySubmit')}
           data-testid="SurveyFooter__91aeca" />
@@ -429,7 +522,7 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
 }
 
 // ─── Main SurveyModal ─────────────────────────────────────────────────────────
-export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
+export function SurveyModal({ survey, open, onScoreSelected, onRespond, onDismiss, onClose }) {
   const ui = useUI();
   const [score, setScore] = useState(null);
   const [phase, setPhase] = useState('initial');
@@ -449,8 +542,22 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
 
   const isNps = survey.type === 'nps';
 
+  function handleScoreSelect(n) {
+    setScore(n);
+  }
+
+  // Fires the "abandoned vote" signal exactly once, only when the survey is left without a
+  // final submit — never on every click (that would fire N times for N score changes) and
+  // never when the user actually submits (survey_responded already carries the score there).
+  function handleDismissWithScore() {
+    if (score !== null) {
+      onScoreSelected?.(score);
+    }
+    onDismiss();
+  }
+
   function handleClose() {
-    if (phase !== 'thanks') onDismiss();
+    if (phase !== 'thanks') handleDismissWithScore();
   }
 
   function handleSetPhase(next) {
@@ -506,12 +613,12 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
               phase={phase}
               setPhase={handleSetPhase}
               score={score}
-              setScore={setScore}
+              setScore={handleScoreSelect}
               feedback={feedback}
               setFeedback={setFeedback}
               tags={tags}
               setTags={setTags}
-              onDismiss={onDismiss}
+              onDismiss={handleDismissWithScore}
               ui={ui}
               data-testid="NPSSurveyContent__91aeca" />
           ) : (
@@ -520,10 +627,10 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
               phase={phase}
               setPhase={handleSetPhase}
               score={score}
-              setScore={setScore}
+              setScore={handleScoreSelect}
               feedback={feedback}
               setFeedback={setFeedback}
-              onDismiss={onDismiss}
+              onDismiss={handleDismissWithScore}
               ui={ui}
               data-testid="CSATSurveyContent__91aeca" />
           )}
