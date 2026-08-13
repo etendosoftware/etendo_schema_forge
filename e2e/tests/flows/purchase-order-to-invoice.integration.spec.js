@@ -4,7 +4,8 @@ import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
 
   addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
-  expectSaveResponse, waitForConfirmResponse, dismissSuccessModal, safeReload,
+  expectSaveResponse, waitForConfirmResponse, waitForDocumentActionResponse,
+  dismissSuccessModal, safeReload,
   readDocumentTotals, verifyTotalsConsistency,
 } from '../helpers/purchase-helpers.js';
 
@@ -136,7 +137,12 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
     // no invoice/receipt option checked, matching this test's intent.
     const modalConfirmBtn = page.getByRole('button', { name: /^confirmar pedido$|^confirm order$/i });
     await expect(modalConfirmBtn).toBeVisible({ timeout: 10_000 });
+    const documentActionResponse = waitForDocumentActionResponse(page);
     await modalConfirmBtn.click();
+    const confirmationResponse = await documentActionResponse;
+    expect(confirmationResponse.ok(),
+      `Purchase order confirmation should succeed (HTTP ${confirmationResponse.status()})`,
+    ).toBeTruthy();
     await slow(page);
 
     // ═══════════════════════════════════════════════════════════════════════

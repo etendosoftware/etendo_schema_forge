@@ -92,6 +92,16 @@ export async function waitForConfirmResponse(page) {
   await page.waitForTimeout(1_000);
 }
 
+/** Wait for the purchase-order documentAction confirmation request itself. */
+export function waitForDocumentActionResponse(page) {
+  return page.waitForResponse(
+    (resp) => resp.url().includes('/purchase-order/header/')
+      && resp.url().includes('/action/documentAction')
+      && resp.request().method() === 'POST',
+    { timeout: 30_000 },
+  );
+}
+
 // ── Common interactions ──────────────────────────────────────────────────────
 
 /**
