@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useState } from 'react';
 import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
@@ -202,6 +202,10 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   const modalRef = useRef(null);
   const p = useInvoicePreview({ invoice, token, apiBaseUrl, specName, onInvoiceUpdated });
   const ratePrecision = useCurrencyPrecision();
+  // ETP-4789 (reject-cycle fix): see OrderPreview.jsx — the cached attachment
+  // (GET /preview-file) resolves ahead of the jsreport regeneration behind
+  // p.pdfUrl; capturing it here lets Download gate on whichever resolves first.
+  const [cachedAttachment, setCachedAttachment] = useState(null);
 
   // Dual-currency: fetch exchange rate when doc currency differs from org currency.
   // When the invoice has a per-document custom rate (eTGOCurrencyRate = org→doc multiplyRate,
@@ -257,6 +261,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     autoFetch: true,
     token,
     apiBaseUrl,
+    onFileChange: setCachedAttachment,
   } : {
     documentId: invoice.id,
     specName,
@@ -264,6 +269,22 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     autoFetch: false,
     token,
     apiBaseUrl,
+    onFileChange: setCachedAttachment,
+  };
+
+  // Prefer the cached attachment when available — already fetched, resolves
+  // ahead of the jsreport regeneration and closes the preview/button gap.
+  const hasPdf = !!p.pdfUrl || !!cachedAttachment;
+
+  const handleDownloadPdf = () => {
+    if (cachedAttachment) {
+      const a = document.createElement('a');
+      a.href = cachedAttachment.objectUrl;
+      a.download = cachedAttachment.fileName || `invoice-${p.displayInvoice?.documentNo || 'document'}.pdf`;
+      a.click();
+      return;
+    }
+    p.handleDownloadPdf();
   };
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
@@ -331,8 +352,8 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       canAddPayment={p.canAddPayment}
       onAddPayment={() => p.setShowPaymentModal(true)}
       isSalesInvoice={p.isSalesInvoice}
-      onDownloadPdf={isSendable ? p.handleDownloadPdf : undefined}
-      hasPdf={!!p.pdfUrl}
+      onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
+      hasPdf={hasPdf}
       data-testid="InvoiceActionButtons__cf88e6" />
   );
 
