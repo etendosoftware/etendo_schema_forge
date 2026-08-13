@@ -450,7 +450,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
   };
 
   return (
-    <div onClick={handleClose} style={overlayStyle}>
+    <div data-testid="sales-order-confirm-modal" onClick={handleClose} style={overlayStyle}>
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
         {/* Title row */}
@@ -501,7 +501,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateShipmentTitle')}
             subtitle={shipmentResult ? ui('soAlreadyCreated') : ui('soCreateShipmentCheckDesc')}
             disabled={Boolean(shipmentResult)}
-            data-testid="SoCheckboxCard__18d1f0" />
+            testId="sales-order-confirm-shipment-card" />
           <SoCheckboxCard
             checked={createInvoice || Boolean(invoiceResult)}
             onChange={() => !invoiceResult && setCreateInvoice(v => !v)}
@@ -509,7 +509,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateInvoiceTitle')}
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('soCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
-            data-testid="SoCheckboxCard__18d1f0" />
+            testId="sales-order-confirm-invoice-card" />
         </div>
 
         {error && (
@@ -522,8 +522,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           <button type="button" onClick={handleClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
-          <button type="button" onClick={handleConfirm} disabled={loading}
-            data-testid="order-confirm-modal-submit"
+          <button type="button" data-testid="sales-order-confirm-submit" onClick={handleConfirm} disabled={loading}
             style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__18d1f0" />}
             {loading ? ui('soProcessing') : primaryLabel}
@@ -536,9 +535,10 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
 // ── SoCheckboxCard ─────────────────────────────────────────────────────────────
 
-function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) {
+function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, testId }) {
   return (
     <div
+      data-testid={testId}
       onClick={disabled ? undefined : onChange}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
@@ -652,7 +652,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
   const canCreate = createShipment || createInvoice;
 
   return (
-    <div onClick={onClose} style={overlayStyle}>
+    <div data-testid="sales-order-manage-docs-modal" onClick={onClose} style={overlayStyle}>
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
         {/* Title row */}
@@ -689,7 +689,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🚚"
               title={ui('soCreateShipmentTitle')}
               subtitle={shipmentSubtitle}
-              data-testid="SoCheckboxCard__18d1f0" />
+            testId="sales-order-manage-shipment-card" />
           )}
           {needsInvoice && (
             <SoCheckboxCard
@@ -698,7 +698,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🧾"
               title={ui('soCreateInvoiceTitle')}
               subtitle={invoiceSubtitle}
-              data-testid="SoCheckboxCard__18d1f0" />
+            testId="sales-order-manage-invoice-card" />
           )}
         </div>
 
@@ -712,7 +712,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
-          <button type="button" onClick={handleCreate} disabled={loading || !canCreate}
+          <button type="button" data-testid="sales-order-manage-docs-submit" onClick={handleCreate} disabled={loading || !canCreate}
             style={{ ...btnPrimaryStyle, opacity: (loading || !canCreate) ? 0.6 : 1, cursor: (loading || !canCreate) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {loading && <Spinner data-testid="Spinner__18d1f0" />}
             {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}

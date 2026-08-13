@@ -387,12 +387,26 @@ make dev
 # → http://localhost:3100
 ```
 
-By default it runs with mock data (`VITE_MOCK=true`). To connect to a live Etendo instance, edit `tools/app-shell/.env.development`:
+By default it runs with mock data (`VITE_MOCK=true`). To connect to a live Etendo instance, create `tools/app-shell/.env.development.local` (gitignored — never `.env.development`, which is committed):
 
 ```env
 VITE_MOCK=false
-VITE_API_BASE=http://localhost:8080/etendo
+ETENDO_URL=http://localhost:8080/etendo
 ```
+
+`ETENDO_URL` is the Vite dev proxy target (`server.proxy` in `vite.config.js` forwards
+`/sws`, `/oauth2`, `/webhooks` to it) — it is read at server start, so restart `make dev`
+after changing it. **Do not also set `VITE_API_BASE` to that same absolute URL.**
+`VITE_API_BASE` is read by the browser (`detectBaseUrl()`, `menuTree.js`, `rolesApi.js`,
+etc.) to build every fetch URL; an absolute `http://localhost:8080/...` value there makes
+the *browser* call port 8080 directly, bypassing the proxy entirely and hitting a CORS
+error, since the backend does not allow `localhost:3100` as an origin. Leave it unset
+(defaults to `''`, so every call stays a same-origin relative path proxied server-side —
+no CORS involved) unless your Tomcat context name differs from the proxy's default
+(`/etendo`), in which case set it to the **relative** context path only, e.g.
+`VITE_API_BASE=/etendo_sf2` — never the full `host:port` form. See the
+[Frontend (Vite / React)](#frontend-vite--react) table above for the same rule stated for
+production.
 
 ### 5. Legacy deploy to Etendo (optional)
 
