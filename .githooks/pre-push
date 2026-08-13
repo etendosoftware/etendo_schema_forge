@@ -526,7 +526,9 @@ run_playwright() {
   fi
 
   # 1. Mocked specs — backend mocked at the browser level (no live backend needed).
-  if [ "$RUN_PW_MOCKED" = "1" ]; then
+  if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
+    echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (integration-only resume)"
+  elif [ "$RUN_PW_MOCKED" = "1" ]; then
     echo "==> Playwright E2E — mocked specs (${workers} workers)..."
     set +e
     ( cd "$REPO_DIR/e2e" && CI=true npx playwright test --project=mocked --workers="$workers" )
@@ -552,11 +554,21 @@ run_playwright() {
       echo "   then re-push. WIP bypass: 'git push --no-verify'."
       exit 1
     fi
-    echo "==> Playwright E2E — integration specs (${workers} workers)..."
+    if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
+      echo "==> Playwright E2E — integration specs (${workers} workers, no onboarding dependency)..."
+    else
+      echo "==> Playwright E2E — integration specs (${workers} workers)..."
+    fi
     set +e
-    ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$password" \
-        E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 \
-        npx playwright test --project=onboarding-setup --project=integration "integration.spec" --workers="$workers" )
+    if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
+      ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$password" \
+          E2E_ONBOARDING_INTEGRATION=0 E2E_SALES_INTEGRATION=1 \
+          npx playwright test --project=integration --no-deps "integration.spec" --workers="$workers" )
+    else
+      ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$password" \
+          E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 \
+          npx playwright test --project=onboarding-setup --project=integration "integration.spec" --workers="$workers" )
+    fi
     st=$?
     set -e
     if [ "$st" -ne 0 ]; then
@@ -802,11 +814,19 @@ if [ -n "$LAST_FAILED_STEP" ]; then
   esac
 fi
 
-run_step_0
-run_step_1
-run_step_2
-run_step_3
-run_step_4
+if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ] || [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
+  if [ "${PRE_PUSH_INTEGRATION_ONLY:-0}" = "1" ]; then
+    echo "==> Resuming at integration stage (--from=integration): stages 0-4 and onboarding skipped by request."
+  else
+    echo "==> Resuming at Playwright stage (--from=playwright): stages 0-4 skipped by request."
+  fi
+else
+  run_step_0
+  run_step_1
+  run_step_2
+  run_step_3
+  run_step_4
+fi
 
 # Steps 0-4 passed — now the mandatory Playwright E2E suites (mocked + integration).
 run_playwright
