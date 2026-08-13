@@ -171,18 +171,21 @@ export function DifferenceModal({ open, info, currency, defaultGlItem, busy, onC
             label={ui('financeReconcileDiffRowStatement')}
             amount={Math.abs(info?.lineTotal ?? 0)}
             currency={currency}
-            testId="recon-difference-row-statement" />
+            testId="recon-difference-row-statement"
+            data-testid="BreakdownRow__recon-difference-statement" />
           <BreakdownRow
             label={ui('financeReconcileDiffRowMatched')}
             amount={Math.abs(info?.reconciled ?? 0)}
             currency={currency}
-            testId="recon-difference-row-matched" />
+            testId="recon-difference-row-matched"
+            data-testid="BreakdownRow__recon-difference-matched" />
           <BreakdownRow
             label={ui('financeReconcileDiffRowDifference')}
             amount={remainder}
             currency={currency}
             emphasis
-            testId="recon-difference-row-difference" />
+            testId="recon-difference-row-difference"
+            data-testid="BreakdownRow__recon-difference-remainder" />
         </div>
 
         <div className="flex flex-col gap-1.5">
