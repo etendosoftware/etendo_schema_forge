@@ -304,7 +304,9 @@ test.describe('return-material-receipt — DR form actions', () => {
     // with the invoice document number FC/00100 (from our mock)
     // Wait for the result card or at minimum the modal to disappear and something to update
     // The ConfirmResultModal shows rmrInvoiceCreatedTitle or the invoice card
-    await expect(page.getByText(/FC\/00100/).or(page.getByTestId('confirm-result-modal'))).toBeVisible({ timeout: 8_000 });
+    const resultModal = page.getByTestId('confirm-result-modal');
+    await expect(resultModal).toBeVisible({ timeout: 8_000 });
+    await expect(resultModal).toContainText('FC/00100');
 
     // ETP-4737: the rectificativa invoice is created with a negative total (return
     // flow) — the result card must render the negative amount as returned by the
@@ -379,7 +381,9 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
     await footerConfirmBtn.click();
 
     // createReturnInvoice POST returns FC/00100 → ConfirmResultModal shows it
-    await expect(page.getByText(/FC\/00100/).or(page.getByTestId('confirm-result-modal'))).toBeVisible({ timeout: 8_000 });
+    const resultModal = page.getByTestId('confirm-result-modal');
+    await expect(resultModal).toBeVisible({ timeout: 8_000 });
+    await expect(resultModal).toContainText('FC/00100');
 
     // ETP-4737: same negative-total contract applies from the CO (already confirmed)
     // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.

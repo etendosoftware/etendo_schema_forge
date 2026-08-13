@@ -28,6 +28,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'accuracy',
   'app',
   'attempt',
+  'branch',
   'category',
   'channel',
   'client',
@@ -42,6 +43,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'entityType',
   'environment',
   'errorClass',
+  'errorCode',
   'event',
   'hasComment',
   'flagKey',
@@ -56,6 +58,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'orgId',
   'position',
   'provider',
+  'reason',
   'route',
   'routePattern',
   'score',
@@ -68,6 +71,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'timestamp',
   'total',
   'type',
+  'upgradeAction',
   // 'username' is intentionally allowlisted here even though the ETP-4352 GDPR
   // remediation removed it from every survey/session event payload (userId is
   // gone entirely). It stays because epic/ETP-3504's flag-exposure.js reuses this
