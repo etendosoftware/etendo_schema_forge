@@ -146,6 +146,10 @@ export default defineConfig(({ mode }) => {
   // Target Etendo instance for dev proxy. Override via ETENDO_URL in .env.local
   // if your instance uses a different context.name (e.g. ETENDO_URL=http://localhost:8080/mycontext)
   const ETENDO_URL = env.ETENDO_URL || process.env.ETENDO_URL || readEnvFile() || 'http://localhost:8080/etendo';
+  // Origin only (no path) — `vite preview` proxies the built bundle's *relative*
+  // VITE_API_BASE (e.g. "/etendo") verbatim to Tomcat, so the target here must not
+  // duplicate the context path already baked into the request.
+  const ETENDO_ORIGIN = new URL(ETENDO_URL).origin;
 
   // LOCAL_CORE dev mode: when set (via `make dev-local-core`), resolve
   // @etendosoftware/app-shell-core from the sibling ../schema_forge_core source
@@ -302,6 +306,50 @@ export default defineConfig(({ mode }) => {
     ...(LOCAL_CORE ? { fs: { allow: [resolve(__dirname, '../..'), CORE_REPO] } } : {}),
     port: 3100,
     proxy: {
+      '/etendo_sf': {
+        target: ETENDO_URL,
+        changeOrigin: true,
+      },
+      '/oauth2': {
+        target: ETENDO_URL,
+        changeOrigin: true,
+      },
+      '/sws': {
+        target: ETENDO_URL,
+        changeOrigin: true,
+      },
+      '/webhooks': {
+        target: ETENDO_URL,
+        changeOrigin: true,
+      },
+      '/jsreport': {
+        target: 'http://localhost:5488',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/jsreport/, ''),
+      },
+    },
+  },
+  // `npm run build && npm run preview` — a production-mode build (VITE_API_BASE=/etendo,
+  // a relative path meant for same-origin deployment inside Tomcat) served on its own
+  // port. Without this, the browser calls Tomcat cross-origin and CORS blocks it, since
+  // com.etendoerp.go's CorsUtils only allowlists a fixed set of dev origins server-side.
+  // Same fix as the dev server's proxy above: keep the request same-origin so the
+  // browser never sees a cross-origin call in the first place, no backend change needed.
+  //
+  // Two calling conventions coexist in the built bundle: tenant-level NEO Headless
+  // calls go out already prefixed with VITE_API_BASE ("/etendo/sws/neo/..."), while the
+  // platform/onboarding layer (etendo-go-core's /sws/go/*, e.g. login, register,
+  // checkout) always calls a bare "/sws/go/..." regardless of build mode. The "/etendo"
+  // rule below forwards the former as-is (context path already in the request path);
+  // the rest mirror the dev server's rules 1:1 so the latter gets it prepended via
+  // ETENDO_URL (which already includes it).
+  preview: {
+    port: 3100,
+    proxy: {
+      '/etendo': {
+        target: ETENDO_ORIGIN,
+        changeOrigin: true,
+      },
       '/etendo_sf': {
         target: ETENDO_URL,
         changeOrigin: true,

@@ -5,6 +5,7 @@ import {
   isDismissedCooldownActive,
   selectNextSurvey,
 } from '../survey-engine.js';
+import { setRemoteSurveyConfig } from '../survey-config.js';
 
 const MS_DAY = 86_400_000;
 const NOW = new Date('2026-06-26T12:00:00.000Z').getTime();
@@ -43,6 +44,12 @@ describe('isGlobalCooldownActive', () => {
     const state = makeState({ lastShownAt: isoAgo(31 * MS_DAY) });
     expect(isGlobalCooldownActive(state, NOW)).toBe(false);
   });
+
+  it('respects VITE_SURVEY_GLOBAL_COOLDOWN_DAYS override', () => {
+    const state = makeState({ lastShownAt: isoAgo(15 * MS_DAY) });
+    // Default (30d) would still be active at 15 days; a shortened 10-day cooldown should not be.
+    expect(isGlobalCooldownActive(state, NOW, { VITE_SURVEY_GLOBAL_COOLDOWN_DAYS: '10' })).toBe(false);
+  });
 });
 
 describe('isMonthlyLimitReached', () => {
@@ -63,6 +70,18 @@ describe('isMonthlyLimitReached', () => {
   it('ignores counts from other months', () => {
     const state = makeState({ shownThisMonth: { '2026-05': 5 } });
     expect(isMonthlyLimitReached(state, NOW)).toBe(false);
+  });
+
+  it('respects VITE_SURVEY_MAX_PER_MONTH override', () => {
+    const state = makeState({ shownThisMonth: { '2026-06': 3 } });
+    // Default cap (2) would already be reached at 3, but a raised cap of 5 should not be.
+    expect(isMonthlyLimitReached(state, NOW, { VITE_SURVEY_MAX_PER_MONTH: '5' })).toBe(false);
+    expect(isMonthlyLimitReached(state, NOW, { VITE_SURVEY_MAX_PER_MONTH: '3' })).toBe(true);
+  });
+
+  it('falls back to the default cap when the override is invalid', () => {
+    const state = makeState({ shownThisMonth: { '2026-06': 2 } });
+    expect(isMonthlyLimitReached(state, NOW, { VITE_SURVEY_MAX_PER_MONTH: 'not-a-number' })).toBe(true);
   });
 });
 
@@ -85,6 +104,12 @@ describe('isDismissedCooldownActive', () => {
     const state = makeState({ dismissals: { nps: isoAgo(5 * MS_DAY) } });
     expect(isDismissedCooldownActive(state, 'csat_invoicing', NOW)).toBe(false);
   });
+
+  it('respects VITE_SURVEY_DISMISSED_COOLDOWN_DAYS override', () => {
+    const state = makeState({ dismissals: { nps: isoAgo(10 * MS_DAY) } });
+    // Default (21d) would still be active at 10 days; a shortened 5-day cooldown should not be.
+    expect(isDismissedCooldownActive(state, 'nps', NOW, { VITE_SURVEY_DISMISSED_COOLDOWN_DAYS: '5' })).toBe(false);
+  });
 });
 
 describe('selectNextSurvey', () => {
@@ -105,6 +130,7 @@ describe('selectNextSurvey', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    setRemoteSurveyConfig(null);
   });
 
   it('returns null when no survey is due', () => {
@@ -285,5 +311,77 @@ describe('selectNextSurvey', () => {
     vi.stubGlobal('window', {}); // no localStorage property
     expect(() => selectNextSurvey({ isAdmin: false, now: NOW })).not.toThrow();
     expect(selectNextSurvey({ isAdmin: false, now: NOW })).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // env threading: selectNextSurvey passes env down to per-survey isEligible
+  // -------------------------------------------------------------------------
+
+  it('threads a custom env into NPS eligibility (shortened min-age)', () => {
+    mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+      firstLoginAt: new Date(NOW - 10 * MS_DAY).toISOString(),
+      counters: { invoicing: 0, order: 0 },
+    }));
+    // Default min-age (60d) would reject a 10-day-old account; override lowers it to 5d.
+    const survey = selectNextSurvey({
+      isAdmin: false,
+      now: NOW,
+      env: { VITE_SURVEY_NPS_MIN_AGE_DAYS: '5' },
+    });
+    expect(survey?.id).toBe('nps');
+  });
+
+  it('threads a custom env into CSAT document-minimum eligibility', () => {
+    mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+      counters: { invoicing: 2, order: 0 },
+    }));
+    // Default min-docs (5) would reject 2 invoices; override lowers it to 2.
+    const survey = selectNextSurvey({
+      isAdmin: false,
+      now: NOW,
+      env: { VITE_SURVEY_CSAT_MIN_DOCS: '2' },
+    });
+    expect(survey?.id).toBe('csat_invoicing');
+  });
+
+  // -------------------------------------------------------------------------
+  // Backend-side kill switch (ETGO_Survey_Type.isactive) always wins over
+  // local isEligible() — checked before any per-survey eligibility logic runs.
+  // -------------------------------------------------------------------------
+
+  describe('backend-side survey disable (isSurveyTypeEnabled)', () => {
+    it('skips a survey whose isSurveyTypeEnabled() is false even when its own isEligible() would be true', () => {
+      // Both nps and csat_invoicing are locally eligible; disabling nps via the
+      // remote config must skip it and fall through to the next eligible survey.
+      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+        firstLoginAt: new Date(NOW - 61 * MS_DAY).toISOString(),
+        counters: { invoicing: 5, order: 0 },
+      }));
+      setRemoteSurveyConfig({ perSurvey: { nps: { enabled: false } } });
+
+      const survey = selectNextSurvey({ isAdmin: false, now: NOW });
+      expect(survey?.id).toBe('csat_invoicing');
+    });
+
+    it('returns null when the only otherwise-eligible survey is backend-disabled', () => {
+      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+        firstLoginAt: new Date(NOW - 61 * MS_DAY).toISOString(),
+        counters: { invoicing: 0, order: 0 },
+      }));
+      setRemoteSurveyConfig({ perSurvey: { nps: { enabled: false } } });
+
+      expect(selectNextSurvey({ isAdmin: false, now: NOW })).toBeNull();
+    });
+
+    it('regression guard: an enabled survey with isEligible() === true is still selected', () => {
+      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+        firstLoginAt: new Date(NOW - 61 * MS_DAY).toISOString(),
+        counters: { invoicing: 0, order: 0 },
+      }));
+      setRemoteSurveyConfig({ perSurvey: { nps: { enabled: true } } });
+
+      const survey = selectNextSurvey({ isAdmin: false, now: NOW });
+      expect(survey?.id).toBe('nps');
+    });
   });
 });
