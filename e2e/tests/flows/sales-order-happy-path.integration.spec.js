@@ -264,7 +264,7 @@ test.describe('Sales Order — Happy path (integration)', () => {
     await slow(page);
 
     // Check "Crear factura" in the confirm modal
-    const invoiceCard = page.getByText(/crear factura|create.*invoice/i).first();
+    const invoiceCard = page.getByText(/Crear factura|Create.*invoice/i).first();
     const invoiceCardVisible = await invoiceCard.isVisible({ timeout: 5_000 }).catch(() => false);
     if (invoiceCardVisible) {
       await invoiceCard.click();
