@@ -316,14 +316,32 @@ Event `feature_flag_evaluated` (Mixpanel channel, declared in
 | `flagKey` | The flag key, e.g. `tenant-upgrade` |
 | `enabled` | The resolved boolean value |
 | `variant` | The variant name, e.g. `on` / `off` |
-| `provider` | Registered provider, e.g. `in-memory` |
+| `provider` | Registered provider: `in-memory` or `configcat` |
 | `username` | The targeting key |
+
+`provider` is a label `createFlagProvider` pins itself (`CONFIGCAT_PROVIDER_NAME`
+in `lib/flags/bootstrap.js`), not whatever the underlying SDK reports. ConfigCat's
+own provider derives its default name from the JS class name
+(`ConfigCatWebProvider.name`), which a production minifier is free to rename per
+build — observed in the wild as both `_ConfigCatWebProvider` and `ut` across
+different deploys, fragmenting any report grouped by provider. Pinning it keeps
+the value stable regardless of how a given build was minified.
 
 Two behaviours are deliberate:
 
-- **Deduplicated** — one event per flag/value combination per session, not one
-  per render. `useFeatureFlag` re-evaluates on every render, so without this the
-  event would be uncountable. A flag that flips reports each distinct value once.
+- **Deduplicated per flag/value/provider** — one event per combination per
+  session, not one per render. `useFeatureFlag` re-evaluates on every render, so
+  without this the event would be uncountable. But the provider is part of the
+  key on purpose: `initFeatureFlags` registers this hook *before* the real
+  provider is ready (`createFlagProvider` awaits a dynamic import and, for
+  ConfigCat, a network round-trip), so the very first evaluation on every page
+  load — for effectively every session, since React's initial render is
+  synchronous and always wins that race — goes through OpenFeature's built-in
+  no-op default. Deduplicating on `flagKey:value` alone let that transient
+  no-op result permanently claim the session's report for a value, silently
+  swallowing every later evaluation once the real provider took over, even when
+  it resolved the exact same boolean. A flag that flips reports each distinct
+  value once *per provider that produced it*, not just the first to answer.
 - **Never disturbs evaluation** — the hook runs inside flag resolution. It never
   awaits and never throws; a reporting failure cannot change what a flag
   resolves to.
@@ -367,7 +385,7 @@ tenant selection happens at sign-in and there is no in-app tenant switcher in v1
 | Re-submitting a `clientName` the account already owns **resumes** that tenant and is not charged | The page rejects a name that matches an existing tenant, so a "success" never silently hands back an existing tenant. |
 | The backend re-evaluates `tenant-upgrade` and is **authoritative** | The frontend flag is presentation only, consistent with rule 3 above. |
 | Backend targeting key is the **account email**, now returned as `accountEmail` at the top level of `GET /sws/go/environments` | Not consumed yet — see below. |
-| `GET /sws/go/environments` items now carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Not consumed yet — see below. |
+| `GET /sws/go/environments` items now carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Consumed by the app-shell company selector; missing values render as `Demo`. |
 
 **Closed (ETP-4693): both ends target the same identity.** The backend buckets on
 the account, and the frontend now reads that same account from
@@ -392,10 +410,11 @@ Onboarding composes that username from the account email, and `+` is legal in an
 address — splitting on it would mangle plus-addressed users and surface as a rare
 unexplained mismatch instead of an obvious failure.
 
-**Open: `plan` is not shown anywhere.** The natural place to badge it is the
-environment picker, which lives in `@etendosoftware/etendo-go-core`
-(`onboarding/steps/EnvSelectStep.jsx`), not in this repo. It needs a change in
-the core package.
+The app-shell company selector now badges each environment as `Demo` or
+`Productive` and sorts productive environments first. The backend applies the
+same ordering to the post-login environment list, so an account with both plans
+enters its productive tenant by default. The shared core onboarding chooser may
+still need the same badge when its package is upgraded independently.
 
 `lib/upgrade/api.js` deliberately does not reuse `runOnboardingStream` from
 `@etendosoftware/etendo-go-core`: that helper serialises a fixed allowlist of

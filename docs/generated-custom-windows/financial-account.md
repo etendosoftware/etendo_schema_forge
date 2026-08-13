@@ -678,6 +678,99 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 - When a **reconciled** line is selected, the `Conciliar` button label switches to `Reactivar`. On success, the backend undoes the reconciliation as a unit and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
 
+#### Posting the unreconciled remainder to an accounting concept (ETP-4796)
+
+When a statement line is only PARTIALLY reconciled — statement of 12,50 € matched against a 12,00 €
+transaction — the leftover 0,50 € used to have no resolution path: the line stayed pending forever.
+It can now be closed by posting the remainder to an accounting concept (GL item), the same primitive
+the cash close uses (ETP-4795), applied to a statement line. Classic does the same thing at
+`Reconciliation.java:290-300`.
+
+- **Where it appears.** An amber banner at the top of the RIGHT panel (design option 1B — the offer
+  sits where the problem is, not in the bottom action bar, whose `Conciliar` button stays
+  independent). `DifferenceBanner` / `DifferenceModal` live in
+  `components/contract-ui/ReconciliationDifference.jsx`; the decision logic is a separate pure module,
+  `components/contract-ui/reconciliationDifferenceMath.js` (a plain `.js` so the `node:test` runner
+  can import it — the same split as `writeoffMath.js` and `CashClose/cashCloseMath.js`).
+- **`Dejar pendiente`** hides the banner for that line for the current session only and changes no
+  data; reselecting the line brings it back. **`Llevar a concepto contable`** opens the confirmation
+  modal (breakdown + GL-item picker + optional description).
+- **The amount is NOT editable.** The backend recomputes the remainder from the statement line and
+  ignores any amount in the body, so the modal shows the figure in its "Diferencia a ajustar"
+  breakdown row rather than offering a field that would promise control the server does not grant.
+  (The design prototype had an editable amount; it was dropped for this reason.)
+- **A missing account default is not a dead end.** The account's `Concepto contable` only
+  *preselects* the modal's picker; the banner's action is always enabled and the user can choose any
+  concept there. This mirrors the backend, which accepts whatever `glItemId` the modal sends and only
+  falls back to the account default when none is given. The real guard is the modal's own confirm,
+  disabled until a concept is picked — an adjustment is never posted without a destination account.
+  (An earlier iteration disabled the banner and told the user to go configure the account; that was
+  wrong, since the concept is choosable right there in the modal.)
+- **The remainder is its own physical row.** A partially reconciled *logical* line is several
+  `FIN_BankStatementLine` rows sharing a match-group id, and the pending one is exposed as
+  `remainderLineId`. Both the panel (`candidateLineId`) and this action target that row, never the
+  merged head — sending the head gets a 409 whose body carries the correct `remainderLineId` so the
+  client can retarget. `EM_ETGO_Pending_Amount` is deliberately NOT used for the amount: it is
+  `abs()`-valued (it would post a deposit for an outflow difference) and observer-maintained, so
+  older rows may have none. The signed `cramount - dramount` of the remainder row is authoritative.
+
+**Tolerance — the gate, and a divergence worth knowing.** The action is offered only when
+`|remainder| <= |original line amount| * EM_ETGO_Amount_Tolerance / 100`. Two things follow:
+
+1. **The denominator is the match-group total, not the remainder row's own amount.** Since the
+   remainder is its own row, taking a percentage of it would compare a number against itself: always
+   false below 100 %, and — worse — always TRUE at 100 %, which would authorise posting an entire
+   line of any size through an endpoint meant to move cents.
+2. **`EM_ETGO_Amount_Tolerance` defaults to 0, and is 0 in every account of the local instance, so
+   the banner does not appear until an administrator raises it.** This is configuration, not a
+   defect, but note that the SAME column is read with the OPPOSITE convention by
+   `AutoMatchSupport.computeAmountTolerance`, where 0 means "one cent of slack, never zero". One field
+   with two meanings is a support trap ("why does the panel suggest this match but refuse to close
+   it?"), so the server's 400 spells out the configured percentage and the resulting limit.
+
+**Backend.** New POST action `reconcileDifference` (`?action=`, like every other one — the dispatcher
+is the `ROUTES` map, now `Map.ofEntries` because `Map.of` caps at 10 pairs and it had reached 9).
+Payload `{ financialAccountId, statementLineId, glItemId?, description? }` — no amount.
+
+The logic lives in **`ReconciliationDifferenceSupport`**, not on `ReconciliationHandler`: that class
+sits at 34 methods against Sonar S1448's threshold of 35, which is why
+`ReconciliationWriteoffSupport`, `ReactivationSupport`, `ReconciliationHandlerSupport` and
+`ReconciliationSupport` all exist. It is the one dispatch `case` that calls a support class instead
+of the handler.
+
+**Order of operations is the safety mechanism, not a style choice.** A returned
+`NeoResponse.error(...)` does NOT roll back — it commits: `DalThreadHandler.doFinal` only takes the
+rollback branch when an exception escapes the filter chain, and `runPostAction` catches everything
+and *returns*. So every validation (account, line, belongs-to-account, already-reconciled, is-partial,
+one-pending-row, non-negligible remainder, tolerance, GL item) runs BEFORE the single write. Two
+consequences worth keeping in mind when editing this code:
+
+- The negligible-remainder guard is load-bearing: `createTransactionForRule` treats a zero spec
+  amount as "not supplied" and substitutes the WHOLE line amount.
+- Success delegates to `reconcileGroup` with a synthesized single-operation body, reusing its guards,
+  match-group tagging and 201 envelope. A defensive `doRollbackAndClose()` runs if that delegate ever
+  returns an error, because the invariant that it cannot is a property of today's `reconcileGroup`.
+
+**Concurrency.** The action takes a `SELECT … FOR UPDATE NOWAIT` row lock on the statement line as
+its first DB statement. Core does not reject a re-match — `APRM_MatchingUtility` silently
+`unmatch()`es the previous one — so without the lock a double click would leave two processed
+adjustments and an orphaned match. The second request now exits with a 409 having written nothing.
+
+**Un-reconciling removes the adjustment, with no new code.** `createTransactionForRule` already calls
+`ReactivationSupport.markAutoCreated`, and the payment-less branch of
+`ReconciliationHandlerSupport.reverseMatchedTransaction` deletes such transactions via
+`TransactionRemovalUtil.reactivateAndRemove`. The remainder row returns to unmatched keeping its
+match-group tag, so the group goes back to PARTIAL.
+
+**Account configuration (previously undocumented anywhere).** Both reconciliation tolerances and the
+difference concept are edited in **Editar cuenta → General**: `Tolerancia de fecha (días)`
+(`EM_ETGO_Date_Tolerance`, default 3) and `Tolerancia de importe (%)`
+(`EM_ETGO_Amount_Tolerance`, default 0) under "Configuración de conciliación", and `Concepto contable`
+(`EM_Aprm_Glitem_Diff`) under "Configuración de diferencias". Until ETP-4796 the amount tolerance fed
+only the automatch engine. They reach the modal under two different key spellings depending on where
+it was opened from — see `EditAccountModal.readTolerances`; `ReconciliationTab` does the same dual
+read (`eTGOAmountTolerance ?? amountTolerance ?? 0`) when threading the value to the panel.
+
 #### Multi-currency reconciliation (ETP-4502)
 
 When a statement line (in the account currency) is reconciled against one or more invoices, possibly
