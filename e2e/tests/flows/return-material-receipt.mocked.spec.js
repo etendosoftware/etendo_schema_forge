@@ -7,11 +7,13 @@ import { login } from '../helpers/auth.js';
  * Covers ETP-4033:
  *   - List view: columns, row quick-actions (edit/delete for DR; clone for CO)
  *   - Preview panel: row click opens GenericPreviewModal, shows documentNo, closes
- *   - DR detail: ConfirmWithCreditButton renders "Confirmar", Print button visible,
- *     modal opens on click, Cancel dismisses it, Confirm fires documentAction POST
+ *   - DR detail: ConfirmWithCreditButton renders "Confirmar", Print button absent
+ *     (ETP-4714 — decisions.json hidePrintWhen: true), modal opens on click,
+ *     Cancel dismisses it, Confirm fires documentAction POST
  *   - CO detail (no invoice): "Crear factura de devolución" button visible,
- *     Clone button visible, Print button visible, clicking "Crear factura" opens modal,
- *     confirming fires createReturnInvoice POST and shows ConfirmResultModal
+ *     Clone button visible, Print button absent (ETP-4714 — decisions.json
+ *     hidePrintWhen: true), clicking "Crear factura" opens modal, confirming
+ *     fires createReturnInvoice POST and shows ConfirmResultModal
  *
  * Mock mode only — no backend required.
  */
@@ -256,11 +258,11 @@ test.describe('return-material-receipt — DR form actions', () => {
     const confirmBtn = page.getByTestId('action-confirm-with-credit');
     await expect(confirmBtn).toBeVisible({ timeout: 8_000 });
 
-    // --- Print button is visible (no data-testid — match by accessible text) ---
-    // The PrintButton renders ui('print'), which via i18n returns the key "print"
-    // or the translated value ("Imprimir" in es_ES). Match both.
+    // --- Print button must NOT be rendered in the detail/form view (ETP-4714) ---
+    // decisions.json sets window.hidePrintWhen: true, which unconditionally
+    // suppresses DetailView's generic icon-only Print button regardless of status.
     const printBtn = page.getByRole('button', { name: /imprimir|print/i });
-    await expect(printBtn).toBeVisible();
+    await expect(printBtn).toHaveCount(0);
 
     // --- Click "Confirmar" → modal opens ---
     await confirmBtn.click();
@@ -339,9 +341,10 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
     // confirm-modal's toggle card (asserted above in the DR flow test).
     await expect(createInvoiceBtn).toHaveText('Crear Factura Rectificativa');
 
-    // --- Print button is visible ---
+    // --- Print button must NOT be rendered in the detail/form view (ETP-4714) ---
+    // window.hidePrintWhen: true suppresses it unconditionally, including CO.
     const printBtn = page.getByRole('button', { name: /imprimir|print/i });
-    await expect(printBtn).toBeVisible();
+    await expect(printBtn).toHaveCount(0);
 
     // Clone is a list-view row action (row-quick-action-clone), not a detail-view
     // button — ConfirmWithCreditButtonBase renders no clone control here.

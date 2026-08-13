@@ -446,6 +446,16 @@ function useReconciliationSettings(open, account) {
   };
 }
 
+// ETP-4797 — Classic gates the Write-off Limit field behind the AD_Field display logic
+// `@WriteOffLimitPreference@='Y'`, and that preference does not exist in this instance, so Classic
+// hides it here too; this hand-written modal does not go through the generic EntityForm, so it was
+// rendering the field unconditionally. Hidden until functional confirms whether it should be exposed
+// at all. Everything BEHIND it stays in place — the core column, the contract field, the state and
+// save wiring below, and the server-side limit check in ReconciliationWriteoffSupport — so restoring
+// it is just flipping this to true. With it hidden the value can never change, so `writeoffDirty`
+// stays false and no write is ever attempted.
+const SHOW_WRITEOFF_LIMIT_FIELD = false;
+
 function ReconciliationSettingsSection({ ui, recon }) {
   return (
     <div className="mt-6 border-b border-[hsl(var(--border-subtle))] pb-4" data-testid="reconciliation-settings-section">
@@ -480,22 +490,24 @@ function ReconciliationSettingsSection({ ui, recon }) {
             data-testid="recon-amount-tolerance-input"
           />
         </Field>
-        <Field
-          label={ui('writeoffAccountLimitLabel')}
-          data-testid="Field__writeoff-limit">
-          <Input
-            type="number"
-            min={0}
-            step={0.01}
-            value={recon.writeoffLimit}
-            onChange={(e) => recon.setWriteoffLimit(e.target.value)}
-            className={FIELD_INPUT}
-            data-testid="recon-writeoff-limit-input"
-          />
-          <p className="text-xs text-[hsl(var(--text-disabled))]">
-            {ui('writeoffAccountLimitHint')}
-          </p>
-        </Field>
+        {SHOW_WRITEOFF_LIMIT_FIELD && (
+          <Field
+            label={ui('writeoffAccountLimitLabel')}
+            data-testid="Field__writeoff-limit">
+            <Input
+              type="number"
+              min={0}
+              step={0.01}
+              value={recon.writeoffLimit}
+              onChange={(e) => recon.setWriteoffLimit(e.target.value)}
+              className={FIELD_INPUT}
+              data-testid="recon-writeoff-limit-input"
+            />
+            <p className="text-xs text-[hsl(var(--text-disabled))]">
+              {ui('writeoffAccountLimitHint')}
+            </p>
+          </Field>
+        )}
       </div>
     </div>
   );
@@ -542,9 +554,6 @@ function GlItemDifferenceSection({ ui, glItemDifference }) {
           testId="gl-item-difference"
           data-testid="ChipSelect__73027d" />
       </Field>
-      <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
-        {ui('financeAccountsGlItemDifferenceHint')}
-      </p>
     </div>
   );
 }

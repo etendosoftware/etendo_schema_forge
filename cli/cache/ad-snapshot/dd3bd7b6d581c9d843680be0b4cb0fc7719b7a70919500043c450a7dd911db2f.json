@@ -2759,7 +2759,7 @@
       ]
     },
     "2c192ed1fd61bfc29555d591a90f82a61e76e7e3ce4614eb85abad856a74bacd": {
-      "checksum": "60d5bd529de52d23f1fbf1234699e309277a5d54329a4e303772e82afe612227",
+      "checksum": "9dea8683ff6908fdc1bea4a4ab00fb7e616b41f41da11aa293f713e32ad67688",
       "params": [
         [
           "131",
@@ -3045,7 +3045,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Cost Not Calculated",
-          "name_es": null,
+          "name_es": "Coste No Calculado",
           "value": "NC"
         },
         {
@@ -3063,7 +3063,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Disabled For Background",
-          "name_es": null,
+          "name_es": "Deshabilitado Para Background",
           "value": "d"
         },
         {
@@ -3075,13 +3075,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Disabled",
-          "name_es": null,
+          "name_es": "Documento Deshabilitado",
           "value": "D"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Locked",
-          "name_es": null,
+          "name_es": "Documento Bloqueado",
           "value": "L"
         },
         {
@@ -3111,13 +3111,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error",
-          "name_es": null,
+          "name_es": "Error",
           "value": "E"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error, No cost",
-          "name_es": null,
+          "name_es": "Error, No hay coste",
           "value": "C"
         },
         {
@@ -3201,7 +3201,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Invalid Account",
-          "name_es": null,
+          "name_es": "Cuenta No Válida",
           "value": "i"
         },
         {
@@ -3291,19 +3291,19 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Accounting Date",
-          "name_es": null,
+          "name_es": "Sin Fecha Contable",
           "value": "AD"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Document Type",
-          "name_es": null,
+          "name_es": "Sin tipo de Documento",
           "value": "DT"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Related PO",
-          "name_es": null,
+          "name_es": "Sin PO Relacionada",
           "value": "NO"
         },
         {
@@ -3315,13 +3315,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Balanced",
-          "name_es": null,
+          "name_es": "No Balanceado",
           "value": "b"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Convertible (no rate)",
-          "name_es": null,
+          "name_es": "No Convertible (no hay rango)",
           "value": "c"
         },
         {
@@ -3417,13 +3417,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Pending Refresh",
-          "name_es": null,
+          "name_es": "Pendiente de Actualización",
           "value": "l"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Period Closed",
-          "name_es": null,
+          "name_es": "Periodo Cerrado",
           "value": "p"
         },
         {
@@ -3435,7 +3435,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Post Prepared",
-          "name_es": null,
+          "name_es": "Contabilidad Preparada",
           "value": "y"
         },
         {
@@ -3447,7 +3447,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Posted",
-          "name_es": null,
+          "name_es": "Contabilizado",
           "value": "Y"
         },
         {
@@ -3603,7 +3603,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Table Disabled",
-          "name_es": null,
+          "name_es": "Tabla Deshabilitada",
           "value": "T"
         },
         {
@@ -3645,7 +3645,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Unposted",
-          "name_es": null,
+          "name_es": "No Contabilizado",
           "value": "N"
         },
         {
@@ -4180,7 +4180,7 @@
       ]
     },
     "518bc71f3c5600c82be1f355a91bf2aa0a5ee50531e8abd1f9f73ba244952ddb": {
-      "checksum": "797f164615fb41c2279f803f18575e451fa93cf85c6cee16194192f3dcd27317",
+      "checksum": "dbc923f5a0ee8156b7fdf83db3a3a4ef32e91103ff261cdc1b82aaa25b1e37c2",
       "params": [
         [
           "131",
@@ -4653,7 +4653,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Cost Not Calculated",
-          "name_es": null,
+          "name_es": "Coste No Calculado",
           "value": "NC"
         },
         {
@@ -4677,7 +4677,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Disabled For Background",
-          "name_es": null,
+          "name_es": "Deshabilitado Para Background",
           "value": "d"
         },
         {
@@ -4689,13 +4689,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Disabled",
-          "name_es": null,
+          "name_es": "Documento Deshabilitado",
           "value": "D"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Locked",
-          "name_es": null,
+          "name_es": "Documento Bloqueado",
           "value": "L"
         },
         {
@@ -4725,13 +4725,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error",
-          "name_es": null,
+          "name_es": "Error",
           "value": "E"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error, No cost",
-          "name_es": null,
+          "name_es": "Error, No hay coste",
           "value": "C"
         },
         {
@@ -4869,7 +4869,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Invalid Account",
-          "name_es": null,
+          "name_es": "Cuenta No Válida",
           "value": "i"
         },
         {
@@ -4977,19 +4977,19 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Accounting Date",
-          "name_es": null,
+          "name_es": "Sin Fecha Contable",
           "value": "AD"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Document Type",
-          "name_es": null,
+          "name_es": "Sin tipo de Documento",
           "value": "DT"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Related PO",
-          "name_es": null,
+          "name_es": "Sin PO Relacionada",
           "value": "NO"
         },
         {
@@ -5001,13 +5001,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Balanced",
-          "name_es": null,
+          "name_es": "No Balanceado",
           "value": "b"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Convertible (no rate)",
-          "name_es": null,
+          "name_es": "No Convertible (no hay rango)",
           "value": "c"
         },
         {
@@ -5121,7 +5121,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Pending Refresh",
-          "name_es": null,
+          "name_es": "Pendiente de Actualización",
           "value": "l"
         },
         {
@@ -5133,7 +5133,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Period Closed",
-          "name_es": null,
+          "name_es": "Periodo Cerrado",
           "value": "p"
         },
         {
@@ -5151,7 +5151,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Post Prepared",
-          "name_es": null,
+          "name_es": "Contabilidad Preparada",
           "value": "y"
         },
         {
@@ -5163,7 +5163,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Posted",
-          "name_es": null,
+          "name_es": "Contabilizado",
           "value": "Y"
         },
         {
@@ -5427,7 +5427,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Table Disabled",
-          "name_es": null,
+          "name_es": "Tabla Deshabilitada",
           "value": "T"
         },
         {
@@ -5469,7 +5469,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Unposted",
-          "name_es": null,
+          "name_es": "No Contabilizado",
           "value": "N"
         },
         {
@@ -6962,7 +6962,7 @@
       ]
     },
     "7f2e773ac3dc6c98a3afce1787a549a48607aa6aa44274b7fb2193bcc6cde8d2": {
-      "checksum": "a76d4ee1a226e614b955a98258e0b90e1e655c611f50790697c4c56b4d2c3a8f",
+      "checksum": "eabdef031d6ff8fa8ba35a3fe984cfa75824555c1803d96f360ae1deb863b236",
       "params": [
         [
           "A6BDFA712FF948CE903C4C463E832FC1",
@@ -6989,25 +6989,25 @@
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "New statement each run",
-          "name_es": "One per run",
+          "name_es": "New statement each run",
           "value": "1BE"
         },
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "Within 1 day",
-          "name_es": "One per day",
+          "name_es": "Within 1 day",
           "value": "1BD"
         },
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "Within 7 days",
-          "name_es": "One per week",
+          "name_es": "Within 7 days",
           "value": "1BW"
         },
         {
           "ad_reference_id": "86F92F3C04C148E69F12FF84F50AD51D",
           "name": "Within 30 days",
-          "name_es": "One per month",
+          "name_es": "Within 30 days",
           "value": "1BM"
         },
         {
@@ -7745,7 +7745,7 @@
       ]
     },
     "7ff7dcc4bc5a95d6f62f104b471f65bdb0a2e5225d3f7cebe8f1e4ba4c63dbc4": {
-      "checksum": "3f3624302cbc8c18fe26683fd55a7264574ab2454280bc85b6bb3c479da06d4e",
+      "checksum": "6f646f7b9972611156fe940e70e49be7861c386231c5b1e01a688a2b312f79c9",
       "params": [
         [
           "131",
@@ -7863,7 +7863,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Cost Not Calculated",
-          "name_es": null,
+          "name_es": "Coste No Calculado",
           "value": "NC"
         },
         {
@@ -7875,19 +7875,19 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Disabled For Background",
-          "name_es": null,
+          "name_es": "Deshabilitado Para Background",
           "value": "d"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Disabled",
-          "name_es": null,
+          "name_es": "Documento Deshabilitado",
           "value": "D"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Locked",
-          "name_es": null,
+          "name_es": "Documento Bloqueado",
           "value": "L"
         },
         {
@@ -7899,13 +7899,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error",
-          "name_es": null,
+          "name_es": "Error",
           "value": "E"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error, No cost",
-          "name_es": null,
+          "name_es": "Error, No hay coste",
           "value": "C"
         },
         {
@@ -7923,7 +7923,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Invalid Account",
-          "name_es": null,
+          "name_es": "Cuenta No Válida",
           "value": "i"
         },
         {
@@ -7941,19 +7941,19 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Accounting Date",
-          "name_es": null,
+          "name_es": "Sin Fecha Contable",
           "value": "AD"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Document Type",
-          "name_es": null,
+          "name_es": "Sin tipo de Documento",
           "value": "DT"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Related PO",
-          "name_es": null,
+          "name_es": "Sin PO Relacionada",
           "value": "NO"
         },
         {
@@ -7965,13 +7965,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Balanced",
-          "name_es": null,
+          "name_es": "No Balanceado",
           "value": "b"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Convertible (no rate)",
-          "name_es": null,
+          "name_es": "No Convertible (no hay rango)",
           "value": "c"
         },
         {
@@ -7983,13 +7983,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Pending Refresh",
-          "name_es": null,
+          "name_es": "Pendiente de Actualización",
           "value": "l"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Period Closed",
-          "name_es": null,
+          "name_es": "Periodo Cerrado",
           "value": "p"
         },
         {
@@ -8001,13 +8001,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Post Prepared",
-          "name_es": null,
+          "name_es": "Contabilidad Preparada",
           "value": "y"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Posted",
-          "name_es": null,
+          "name_es": "Contabilizado",
           "value": "Y"
         },
         {
@@ -8025,7 +8025,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Table Disabled",
-          "name_es": null,
+          "name_es": "Tabla Deshabilitada",
           "value": "T"
         },
         {
@@ -8049,7 +8049,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Unposted",
-          "name_es": null,
+          "name_es": "No Contabilizado",
           "value": "N"
         },
         {
@@ -12035,7 +12035,7 @@
       ]
     },
     "e675cc87c0936f75350dec06efba52ab6cef9055721b77d2d8834793493ca5e7": {
-      "checksum": "c61eebf6ffe093611788fdd63d52da7b96628c3e09af5ed8f6d26be6c65d5c0e",
+      "checksum": "e964941e49f973851ffc3b497480729700ac61f60526f8abe11d4cde6a54a10c",
       "params": [
         [
           "131",
@@ -12173,7 +12173,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Cost Not Calculated",
-          "name_es": null,
+          "name_es": "Coste No Calculado",
           "value": "NC"
         },
         {
@@ -12185,7 +12185,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Disabled For Background",
-          "name_es": null,
+          "name_es": "Deshabilitado Para Background",
           "value": "d"
         },
         {
@@ -12197,13 +12197,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Disabled",
-          "name_es": null,
+          "name_es": "Documento Deshabilitado",
           "value": "D"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Document Locked",
-          "name_es": null,
+          "name_es": "Documento Bloqueado",
           "value": "L"
         },
         {
@@ -12221,13 +12221,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error",
-          "name_es": null,
+          "name_es": "Error",
           "value": "E"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Error, No cost",
-          "name_es": null,
+          "name_es": "Error, No hay coste",
           "value": "C"
         },
         {
@@ -12251,7 +12251,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Invalid Account",
-          "name_es": null,
+          "name_es": "Cuenta No Válida",
           "value": "i"
         },
         {
@@ -12269,19 +12269,19 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Accounting Date",
-          "name_es": null,
+          "name_es": "Sin Fecha Contable",
           "value": "AD"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Document Type",
-          "name_es": null,
+          "name_es": "Sin tipo de Documento",
           "value": "DT"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "No Related PO",
-          "name_es": null,
+          "name_es": "Sin PO Relacionada",
           "value": "NO"
         },
         {
@@ -12293,13 +12293,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Balanced",
-          "name_es": null,
+          "name_es": "No Balanceado",
           "value": "b"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Not Convertible (no rate)",
-          "name_es": null,
+          "name_es": "No Convertible (no hay rango)",
           "value": "c"
         },
         {
@@ -12317,13 +12317,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Pending Refresh",
-          "name_es": null,
+          "name_es": "Pendiente de Actualización",
           "value": "l"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Period Closed",
-          "name_es": null,
+          "name_es": "Periodo Cerrado",
           "value": "p"
         },
         {
@@ -12335,13 +12335,13 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Post Prepared",
-          "name_es": null,
+          "name_es": "Contabilidad Preparada",
           "value": "y"
         },
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Posted",
-          "name_es": null,
+          "name_es": "Contabilizado",
           "value": "Y"
         },
         {
@@ -12371,7 +12371,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Table Disabled",
-          "name_es": null,
+          "name_es": "Tabla Deshabilitada",
           "value": "T"
         },
         {
@@ -12395,7 +12395,7 @@
         {
           "ad_reference_id": "D431058F6B7345598D1E0709DFF3B5DD",
           "name": "Unposted",
-          "name_es": null,
+          "name_es": "No Contabilizado",
           "value": "N"
         },
         {

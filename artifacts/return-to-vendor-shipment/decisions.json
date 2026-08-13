@@ -9,6 +9,7 @@
     "linesLayout": "inlineEditable",
     "noHeaderBorder": true,
     "hideDeleteWhenComplete": true,
+    "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
     "maxDetailLines": 0,
     "customComponents": {
       "bottomSection": "ReturnToVendorShipmentBottomPanel",

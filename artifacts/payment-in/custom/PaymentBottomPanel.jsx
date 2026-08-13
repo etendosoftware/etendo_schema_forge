@@ -1,14 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { formatAmount } from '@/lib/formatAmount.js';
 import PaymentDraftBanner from './PaymentDraftBanner';
 
 /* eslint-disable react/prop-types */
 
-function fmtAmt(val) {
+/**
+ * Formats a line amount in the PAYMENT's own currency. The amounts on these rows come from
+ * FIN_Payment_ScheduleDetail, which stores them in the payment/invoice currency — so a 21.34 USD
+ * payment from a EUR bank account must read "21,34 $", not "21,34 €". This used to be a hand-rolled
+ * formatter with a hardcoded ' €' suffix and no currency parameter at all, which mislabelled every
+ * non-EUR payment regardless of the account (the ETP-4314 sweep centralized this everywhere else but
+ * missed this panel and its payment-out twin). Delegates to the canonical formatAmount/formatCurrency
+ * — never re-add a local Intl or symbol-concatenation path here.
+ */
+function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  const abs = Math.abs(n).toFixed(2).split('.');
-  abs[0] = abs[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' €';
+  return formatAmount(n, currency);
 }
 
 function fmtDate(raw) {
@@ -130,6 +138,8 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
     return () => { cancelled = true; };
   }, [data?.id, token, apiBaseUrl]);
 
+  // Line amounts are stored in the payment's own currency (see fmtAmt).
+  const currency = data?.['currency$_identifier'];
   const thStyle = { font: '600 12px/16px Inter', color: 'hsl(var(--foreground))' };
   const thRStyle = { ...thStyle, textAlign: 'right' };
   const noLines = !data?.id || (lines !== null && lines.length === 0);
@@ -172,8 +182,8 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
                     <div style={{ font: '600 14px/20px Inter', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invoiceNo}</div>
                     {dueLabel && <div style={{ font: '500 12px/16px Inter', color: 'hsl(var(--muted-foreground))' }}>{dueLabel}</div>}
                   </div>
-                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{importe > 0 ? fmtAmt(importe) : '—'}</div>
-                  <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied)}</div>
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{importe > 0 ? fmtAmt(importe, currency) : '—'}</div>
+                  <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied, currency)}</div>
                 </div>
                 {i < lines.length - 1 && <div style={{ borderTop: '1px solid var(--status-neutral-border)' }} />}
               </div>
@@ -183,8 +193,8 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
           <div style={{ borderTop: '1px solid var(--status-neutral-border)' }} />
           <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, alignItems: 'center', height: 40 }}>
             <div style={{ padding: '0 12px', font: '600 12px/16px Inter', color: 'hsl(var(--foreground))' }}>{ui('totalApplied')}</div>
-            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalImporte)}</div>
-            <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied)}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '400 14px/20px Inter', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalImporte, currency)}</div>
+            <div style={{ padding: '0 12px', textAlign: 'right', font: '600 14px/20px Inter', color: 'var(--status-success-fg)', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied, currency)}</div>
           </div>
         </div>
       )}

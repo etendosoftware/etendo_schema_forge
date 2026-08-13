@@ -85,7 +85,9 @@ vi.mock('../preview-cards/SummaryCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/PaymentsCard.jsx', () => ({
-  default: () => <div data-testid="payments-card" />,
+  // vi.fn (not a plain arrow) so tests can inspect the isCreditNote prop
+  // InvoicePreview derives, mirroring the SummaryCard prop-inspection pattern.
+  default: vi.fn(() => <div data-testid="payments-card" />),
 }));
 
 vi.mock('../preview-cards/EmailsCard.jsx', () => ({
@@ -113,6 +115,7 @@ import { useInvoicePreview } from '../useInvoicePreview.js';
 import { useDocumentCurrency } from '../useDocumentCurrency.js';
 import SummaryCard from '../preview-cards/SummaryCard.jsx';
 import EmailsCard from '../preview-cards/EmailsCard.jsx';
+import PaymentsCard from '../preview-cards/PaymentsCard.jsx';
 import {
   expectPresenceGatedByStatus,
   expectEmailsCardOnSendGatedByStatus,
@@ -409,6 +412,64 @@ describe('InvoicePreview', () => {
   // 'CO'). The download button only renders at all for sales invoices
   // (isSalesInvoice), so these cases must set that flag. These cases must
   // FAIL against the current (unfixed) source.
+
+  // ── ETP-4841: credit detection follows the SIGN of the total ───────────────
+  // `isCreditNote()` in InvoicePreview used to compare `arInvoiceSubtype`
+  // against the pre-ETP-4737 values 'NC'/'DEV', which no longer exist — the
+  // check was silently always false and fell through to keyword matching on the
+  // document-type name. It now delegates to resolveInvoicePaymentBadge, so the
+  // sign of the total is the only input.
+  describe('credit-note detection by sign of the total (ETP-4841)', () => {
+    function renderWithInvoice(invoice, overrides = {}) {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ displayInvoice: invoice, ...overrides }));
+      return renderInvoicePreview({ invoice });
+    }
+
+    function lastIsCreditNoteProp() {
+      const calls = vi.mocked(PaymentsCard).mock.calls;
+      expect(calls.length, 'expected PaymentsCard to have been rendered').toBeGreaterThan(0);
+      return calls[calls.length - 1][0].isCreditNote;
+    }
+
+    it('flags an invoice with a NEGATIVE total as a credit note', () => {
+      renderWithInvoice({ ...defaultInvoice, grandTotalAmount: -1000 });
+      expect(lastIsCreditNoteProp()).toBe(true);
+    });
+
+    it('does NOT flag a rectificativa with a POSITIVE total as a credit note', () => {
+      renderWithInvoice({
+        ...defaultInvoice,
+        grandTotalAmount: 1000,
+        arInvoiceSubtype: 'RECTIFICATIVA',
+        'transactionDocument$_identifier': 'Factura Rectificativa',
+      });
+      expect(lastIsCreditNoteProp()).toBe(false);
+    });
+
+    it('flags an ordinary Factura with a NEGATIVE total as a credit note', () => {
+      renderWithInvoice({
+        ...defaultInvoice,
+        grandTotalAmount: -500,
+        arInvoiceSubtype: 'FAC',
+        'transactionDocument$_identifier': 'ARInvoice',
+      });
+      expect(lastIsCreditNoteProp()).toBe(true);
+    });
+
+    it('does not flag an ordinary positive invoice as a credit note', () => {
+      renderWithInvoice(defaultInvoice);
+      expect(lastIsCreditNoteProp()).toBe(false);
+    });
+
+    it('still flags a DRAFT negative invoice as a credit note (document-level property)', () => {
+      renderWithInvoice(
+        { ...defaultInvoice, documentStatus: 'DR', grandTotalAmount: -300 },
+        { isDraft: true, isCompleted: false, status: 'DR' },
+      );
+      expect(lastIsCreditNoteProp()).toBe(true);
+    });
+  });
+
   describe('Download PDF gating by documentStatus (ETP-4789)', () => {
     function renderSalesInvoiceWithPdf(status) {
       const invoice = { ...defaultInvoice, documentStatus: status };
