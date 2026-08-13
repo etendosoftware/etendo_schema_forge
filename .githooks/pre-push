@@ -528,78 +528,71 @@ check_go_module_push_sync() {
 # ----------------------------------------------------------------------------
 # Playwright E2E tests (MANDATORY) — mocked + integration must pass before push.
 # ----------------------------------------------------------------------------
-# The experimental CI no longer runs these on PRs, so they gate here. The developer
-# must ALREADY have the stack running — this hook starts nothing: the app on :3100,
-# Tomcat + Etendo backend, and PostgreSQL. A missing piece is reported and the push
-# is aborted; a failing test also blocks the push.
-# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, WORKERS. WIP bypass: git push --no-verify.
+# Delegates to scripts/run-e2e-full.sh (ETP-4883): it owns the whole server
+# lifecycle itself (builds a dedicated no-PWA bundle, serves it with `vite
+# preview` on its own port, tears it down on exit) instead of assuming a
+# developer's own `make dev` is already up on :3100 — no more stale-dev-server
+# drift between what pre-push validates and what actually ships.
+# Mocked and integration run as TWO SEPARATE invocations (not E2E_SUITE=all)
+# so a mocked failure never prevents integration from also running and being
+# reported — same "collect everything, don't stop at the first problem"
+# contract as the rest of this hook.
+# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS. WIP bypass: git push --no-verify.
 run_playwright() {
   local password="${E2E_PASSWORD:-12345}"
-  local workers="${WORKERS:-5}"
   local backend_url="${E2E_BACKEND_URL:-http://localhost:8080/etendo}"
-  local st=0
 
-  # Relevance-gated (per suite). Neither relevant → nothing to run.
   if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ]; then
     echo "==> Playwright E2E... SKIPPED ⏭️  (no UI/spec changes relevant to these tests)"
     return 0
   fi
 
-  # The app on :3100 is a prerequisite for BOTH suites (this hook starts nothing).
-  # It's a local-environment gap, not a content problem with this push — record
-  # it and skip Playwright specifically, instead of aborting the checks below
-  # that don't need it. Playwright is still mandatory: this still blocks the
-  # push at the final summary, same as a real test failure would.
-  if ! curl -sf -o /dev/null --max-time 5 http://localhost:3100 2>/dev/null; then
-    echo "❌ App dev server is not running on http://localhost:3100 — Playwright SKIPPED (still blocks the push)."
-    echo "   Bring your dev server up on :3100, then re-push to actually run these tests."
-    record_failure "Playwright E2E — dev server not running on :3100"
-    return 0
-  fi
-
-  # 1. Mocked specs — backend mocked at the browser level (no live backend needed).
   if [ "$RUN_PW_MOCKED" = "1" ]; then
-    echo "==> Playwright E2E — mocked specs (${workers} workers)..."
-    set +e
-    ( cd "$REPO_DIR/e2e" && CI=true npx playwright test --project=mocked --workers="$workers" )
-    st=$?
-    set -e
-    if [ "$st" -ne 0 ]; then
-      echo "==> Playwright E2E — mocked specs... FAILED ❌ (exit $st)"
-      record_failure "Playwright E2E — mocked specs"
-    fi
+    run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
   else
     echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (no mocked-spec / UI changes)"
   fi
 
-  # 2. Integration specs — real auth against the live backend behind :3100 (mirrors CI;
-  # no BASE_URL, E2E_USE_MOCK=0). Only this suite needs the live backend, so its
-  # reachability is checked here — a mocked-only push never requires the stack.
-  # Override E2E_PASSWORD if your local admin pass differs.
   if [ "$RUN_PW_INTEGRATION" = "1" ]; then
-    if ! curl -sf -o /dev/null --max-time 10 "$backend_url" 2>/dev/null; then
-      echo "❌ Etendo backend is not reachable at $backend_url — integration specs SKIPPED (still blocks the push)."
-      echo "   Bring up Tomcat + PostgreSQL (set E2E_BACKEND_URL if your context path differs),"
-      echo "   then re-push to actually run these tests."
-      record_failure "Playwright E2E — integration specs (backend not reachable)"
-    else
-      echo "==> Playwright E2E — integration specs (${workers} workers)..."
-      set +e
-      ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$password" \
-          E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 \
-          npx playwright test --project=onboarding-setup --project=integration "integration.spec" --workers="$workers" )
-      st=$?
-      set -e
-      if [ "$st" -ne 0 ]; then
-        echo "==> Playwright E2E — integration specs... FAILED ❌ (exit $st)"
-        record_failure "Playwright E2E — integration specs"
-      fi
-    fi
+    run_e2e_suite integration "integration specs" "$password" "$backend_url"
   else
     echo "==> Playwright E2E — integration specs... SKIPPED ⏭️  (no integration-spec / UI changes)"
   fi
 
   return 0
+}
+
+# Runs one E2E_SUITE value through run-e2e-full.sh, streaming output live
+# (via `tee`, not just captured — a multi-minute suite with silent output
+# looks hung) while also keeping a copy to classify the failure reason below.
+# $1 suite (mocked|integration)  $2 label for echo/record_failure  $3 password
+# $4 backend url (also passed as ETENDO_URL — the built bundle's proxy target
+# must point at the same instance the reachability check just verified).
+run_e2e_suite() {
+  local suite="$1" label="$2" password="$3" backend_url="$4" st
+  local log="$REPO_DIR/tmp/pre-push/e2e-${suite}.log"
+  mkdir -p "$REPO_DIR/tmp/pre-push"
+
+  echo "==> Playwright E2E — ${label}..."
+  set +e
+  ( cd "$REPO_DIR" && E2E_SUITE="$suite" E2E_PASSWORD="$password" \
+      E2E_BACKEND_URL="$backend_url" ETENDO_URL="$backend_url" \
+      ./scripts/run-e2e-full.sh ) 2>&1 | tee "$log"
+  st=${PIPESTATUS[0]}
+  set -e
+
+  if [ "$st" -ne 0 ]; then
+    local reason="Playwright E2E — ${label}"
+    if grep -q "backend is not reachable" "$log"; then
+      reason="${reason} (backend not reachable)"
+    elif grep -q "Build failed" "$log"; then
+      reason="${reason} (E2E build failed)"
+    elif grep -q "Preview server did not come up" "$log"; then
+      reason="${reason} (preview server didn't start)"
+    fi
+    echo "==> Playwright E2E — ${label}... FAILED ❌ (exit $st)"
+    record_failure "$reason"
+  fi
 }
 
 check_base_conflicts
