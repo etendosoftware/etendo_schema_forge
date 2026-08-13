@@ -111,8 +111,10 @@ had two behaviours, and a differently-named report would have left it that way.
 - [x] `./gradlew test` on the full module — run by the user 2026-08-10, green
 - [ ] Corpus row for `neo_list`/`neo_get` in `etendo-go-docs` mentions `unknownFields` (separate
       repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
-  - **Drafted 2026-08-13**, uncommitted in the `etendo-go-docs` working tree — see §8. Left
-    unticked deliberately: text in a working tree is not a corpus an agent can read.
+  - **Written and submitted 2026-08-13** — `etendo-go-docs` `25d787a`, PR
+    [#35](https://github.com/etendosoftware/etendo-go-docs/pull/35) → `main`, open. See §8. Left
+    unticked deliberately: an unmerged PR is not a corpus an agent can read, and the index only
+    refreshes on merge to `main` ([IMP-14](IMP-14.md)).
 
 ## 7. Live verification (2026-08-10, after a user-run compile + deploy)
 
@@ -140,7 +142,7 @@ Note, not a defect: the MCP client's cached tool list still showed the pre-fix `
 during this run — the client fetches the listing once at session start. The server serves the
 updated `ToolRegistry` text; it becomes visible in the next session.
 
-## 8. The corpus row — drafted, not delivered (2026-08-13)
+## 8. The corpus row — submitted, not delivered (2026-08-13)
 
 Two pages in `etendo-go-docs` carry the addition, both **extended rather than created**:
 
@@ -173,5 +175,9 @@ Worth naming the failure mode: the draft was cross-checked against `neo-headless
 it, because both describe the same layer. Document-to-document agreement was never going to catch a
 layer mismatch. Only the call did.
 
-Delivery still needs a commit, a PR in that repo, and the Context7 reindex ([IMP-14](IMP-14.md)) —
-none of which this run performed.
+Both pages landed in `etendo-go-docs` `25d787a` (2 files, +5 −2), submitted as PR
+[#35](https://github.com/etendosoftware/etendo-go-docs/pull/35) against `main`. The branch was
+reconciled on top of the already-merged PR #33, so it is one commit ahead of `main` and zero behind.
+
+Delivery still needs the merge and the Context7 reindex ([IMP-14](IMP-14.md)) — the third gate, and
+the one IMP-14 exists to name, since a merged PR still is not an indexed corpus.

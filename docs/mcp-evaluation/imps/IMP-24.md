@@ -130,8 +130,10 @@ fixing precisely because the lenient parser **succeeds** on them.
 - [x] `./gradlew test` on the full module — run by the user 2026-08-10, green. This is the check that counts — after IMP-16 §9.2, a standalone run does not
 - [ ] The `neo_update` call site probed live (§7, probe 6 — blocked, not run)
 - [ ] Corpus row in `etendo-go-docs` mentioning the 422 (separate repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
-  - **Drafted 2026-08-13**, uncommitted in the `etendo-go-docs` working tree — see §8. Left unticked
-    deliberately: text in a working tree is not a corpus an agent can read.
+  - **Written and submitted 2026-08-13** — `etendo-go-docs` `25d787a`, PR
+    [#35](https://github.com/etendosoftware/etendo-go-docs/pull/35) → `main`, open. See §9. Left
+    unticked deliberately: an unmerged PR is not a corpus an agent can read, and the index only
+    refreshes on merge to `main` ([IMP-14](IMP-14.md)).
 
 ## 7. Live verification (2026-08-10, after a user-run compile + deploy)
 
@@ -188,7 +190,7 @@ the gate asked to see. Two caveats keep it open: the traffic is my own probe tra
 production, and it is exactly the traffic a fix's author would generate, so it cannot speak for shapes
 I did not think to send. The gate should still be re-read against real traffic.
 
-## 9. The corpus row — drafted, not delivered (2026-08-13)
+## 9. The corpus row — submitted, not delivered (2026-08-13)
 
 Two pages in `etendo-go-docs` carry the addition, both **extended rather than created**:
 
@@ -223,5 +225,9 @@ The two rows tell an agent something the envelope alone does not: on a multi-dat
 *every* entry in `invalidDates`, and resend only the fields it names. An agent that retries by
 reformatting everything it sent is the failure this row exists to prevent.
 
-Delivery still needs a commit, a PR in that repo, and the Context7 reindex ([IMP-14](IMP-14.md)) —
-none of which this run performed.
+Both pages landed in `etendo-go-docs` `25d787a` — the same commit that carries
+[IMP-18](IMP-18.md)'s `unknownFields` row, since the two additions touch the same two pages —
+submitted as PR [#35](https://github.com/etendosoftware/etendo-go-docs/pull/35) against `main`.
+
+Delivery still needs the merge and the Context7 reindex ([IMP-14](IMP-14.md)) — the third gate, and
+the one IMP-14 exists to name, since a merged PR still is not an indexed corpus.
