@@ -1065,3 +1065,57 @@
   failure) but it mocks away every real DAL/native-SQL call, so it was never going to catch a live
   DB-shape issue — the live-tenant DB comparison above is the evidence that actually closes the gap,
   not the unit test.**
+
+## ETP-4854 — K1: `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'`, "Dimensiones contables" screen a no-op (2026-08-11)
+
+- **2026-08-11 — `DimensionDisplayUtility.getAccountingDimensionConfiguration()` does NOT check
+  `IsAcctDimCentrally` at all — it is called ONLY when the caller (`LoginUtils.doLogin`,
+  `NeoDisplayLogicHelper.resolveAccountingDimensionFlags`) already knows the client is `'Y'`.**
+  The `'N'`/`'Y'` branch lives entirely in the CALLER, not inside `DimensionDisplayUtility` itself.
+  Read the method signature carefully before assuming it self-guards on the flag — it always
+  computes and returns the full `AD_Client.<Dim>_Acctdim_*` matrix regardless of the flag's value;
+  the caller decides whether to use the result.
+- **2026-08-11 — `C_AcctSchema_Element.isactive` defaults to `'Y'` at the SQL schema level, and
+  every live tenant checked (14 `'Y'`-mode clients) actually has it `'Y'` for ALL 7 configurable
+  dimensions (OO/PJ/BP/PR/CC/U1/U2) regardless of that client's own `<Dim>_Acctdim_IsEnable`
+  value.** This means the flat mechanism's data is essentially always "everything visible" by
+  default, independent of what the fine-grained `AD_Client` matrix says — the two mechanisms do
+  NOT start from the same baseline. **Apply:** any fix or feature that flips a client from `'Y'`
+  to `'N'` (or vice versa) MUST explicitly reconcile `C_AcctSchema_Element.isactive` against the
+  `AD_Client` per-dimension config first — never assume the flat mechanism's existing state
+  already reflects what the client intends, or the flip will silently change visibility.
+- **2026-08-11 — Chosen effective-visibility formula for the Y→N collapse: `IsEnable='Y' AND
+  (Header='Y' OR Lines='Y' OR Breakdown='Y')`, per dimension.** Flat mode has no level
+  granularity (one flag governs Header/Lines/Breakdown simultaneously), so an exact 1:1 mapping
+  from the 3-level matrix is impossible. Chose OR-of-levels (err toward showing, never toward
+  hiding something the client currently sees on some level/doctype) over AND-of-levels or
+  Header-only. On this DB, `Breakdown` is `'N'` everywhere for every dimension/client today, so in
+  practice the formula currently collapses to `IsEnable='Y' AND (Header='Y' OR Lines='Y')` — but
+  the general OR-of-3 formula is what ships, for correctness against any future client shape.
+- **2026-08-11 — `NeoDisplayLogicHelper` (com.etendoerp.go) is a THIRD, previously-undocumented
+  consumer of `AcctdimCentrallyMaintained` beyond classic core's `DimensionDisplayUtility`/
+  `LoginUtils`/`InitialSetupUtility`.** `resolveAccountingDimensionFlags` faithfully mirrors the
+  classic 'N'/'Y' branch (confirmed by reading both side by side), with its own documented
+  ETP-4529 comment explaining WHY it re-implements the 'N' branch's `C_AcctSchema_Element` query
+  live per-request instead of relying on session state the way classic `LoginUtils` does (NEO
+  Headless is stateless/JWT-based, no `HttpSession` to populate at login time). This does not
+  contradict "no security impact" — it's the SAME logic Etendo GO already runs; the finding
+  confirms GO's own field-visibility engine benefits from (does not break under) the `'N'` flip.
+- **2026-08-11 — `schema_forge_core` (sibling repo, `../schema_forge_core`) carries its OWN
+  `cli/src/data-fixes/sql/` directory but it is STALE on this local checkout — tops out at `R8`,
+  6 fixes behind `etendo_schema_forge`'s actual latest (`R22` at the time of this ticket).** Per
+  the repo-topology note the data-fixes framework is duplicated in BOTH SF repos, but this
+  checkout's copy in `schema_forge_core` was clearly not kept in sync post-split. Did not touch it
+  for R23 (out of scope, no branch there related to this ticket) — flagged here so a future run
+  does not assume it is current without checking `ls` first.
+- **2026-08-11 — Compiling `com.etendoerp.go`'s main sources (`:modules:com.etendoerp.go
+  :compileJava`) DOES work in this environment and is a fast, reliable syntax/type-check** (unlike
+  the module's `test`/`compileTestJava` tasks, which report `NO-SOURCE` even for pre-existing,
+  presumably-passing test files like `OnboardingBaselineServiceTest` — see the ETP-4515 section
+  above for the established root cause). **Apply:** always run `./gradlew ":modules:com.etendoerp
+  .go:compileJava"` after any change to this module's `src/` as a cheap correctness gate, even
+  though the equivalent test-compile gate is unavailable locally. **Addendum (Alex, REVIEW,
+  git-stash repro):** this only works invoked from the etendo root wrapper — running it from
+  inside `modules/com.etendoerp.go` fails with a Gradle-version mismatch (module pins Gradle
+  9.4.1, root pins 8.12.1), a pre-existing, diff-independent quirk; always run it as
+  `./gradlew ":modules:com.etendoerp.go:compileJava"` from the etendo root.

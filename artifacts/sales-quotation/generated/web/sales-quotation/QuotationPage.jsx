@@ -475,6 +475,7 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
+        hidePrintWhen={{"documentStatus":{"notIn":["UE","CA","ETGO_CI","CJ"]}}}
         hideSaveStatuses={["CA","ETGO_CI","CL","VO","CJ"]}
         noHeaderBorder
         notesField="description"

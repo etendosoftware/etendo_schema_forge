@@ -291,3 +291,23 @@ The **Imprimir** button and `hidePrint` flag are unaffected — that is a separa
 action. Regenerated via `make regen ONLY=contacts`.
 
 **Out of scope for this ticket, confirmed by design (Financial Account precedent):** `financial-account`'s equivalent "Contabilidad" tab (`accountingConfiguration` entity) already satisfies both single-record and non-deletable requirements structurally — `FinancialAccountAccountingHandler` always resolves a find-or-create single row per ledger (no "Add" affordance exists) and no delete UI was ever built for it. No decisions.json change was needed there; see the ETP-4565 coordinator report for the full per-window breakdown.
+
+## ETP-4835 — Stray VIES status badge hidden from header
+
+A red "✕ P" status pill rendered next to the Cancelar button in the header, but only on
+**new** (unsaved) Contact records — existing records never showed it. Root cause: the
+window has no real document-status column, so the generator's `statusField` resolution
+(`generate-frontend.js`) fell back to name-sniffing the first `readOnly` field whose name
+contains "status" — which for `businessPartner` is `oBTIKVIESStatus` (the EU VIES tax-ID
+validation status), an unrelated field that happens to default to `'P'` ("Pendiente") via
+`/businessPartner/defaults`. On existing records that field is usually `null`, so the pill
+never appeared there — matching the "only on new records" symptom exactly.
+
+**Fix is scoped to this window only** — `decisions.json` → `window.statusField: "none"`,
+which uses the existing explicit-override escape hatch in `generate-frontend.js` (already
+shipped for `assets` since ETP-4103) to force `statusField = null` for `businessPartner`,
+bypassing the name-sniffing fallback entirely. No generator change was made: the fallback
+itself is still frágil for other windows in principle, but tightening it for every window
+is a separate, cross-window concern with its own risk budget — out of scope here. Verified
+with `make regen ONLY=contacts` (published core, no `LOCAL_CORE` needed): `BusinessPartnerPage.jsx`'s
+`statusField` resolves to `null` and the pill no longer renders on new or existing records.
