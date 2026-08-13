@@ -120,9 +120,51 @@ outcome by a path that could not generalize.
 - [x] An unresolved sibling never leaks into the selector context as a parent id
 - [x] A genuinely absent value still reports `not_found` once, without looping
 - [x] Unit tests green, no regression to IMP-15's format matrix
-- [ ] **Compiled and deployed** (the user's step)
-- [ ] **C4 / C5 re-run live** — the same `partnerAddress` label that returned 422 now creates the record
+- [x] **Compiled and deployed** (the user's step) — 2026-08-13
+- [x] **C4 / C5 re-run live** — the same `partnerAddress` label that returned 422 now creates the record
 - [ ] Registry re-scored by a `/mcp-comparison` run (+3, and IMP-4 1.5 → 3)
+
+### 7.1 The live C4/C5 run — 2026-08-13
+
+Ran against the deployed build, `sales-order` / `header`, exactly the vector that opened the item:
+
+```
+neo_selectors partnerAddress recordContext:{businessPartner:"6BD084B9C1744044B9691AD373F96A93"}
+  → { id: "20363AD155354047AD5E52D8A93D9465",
+      label: "San Sebastian, C/ EUSTASIO AMILIBIA 10, 7º 4ª" }
+
+neo_create fields:{ businessPartner: "Tercero España",
+                    partnerAddress:  "San Sebastian, C/ EUSTASIO AMILIBIA 10, 7º 4ª", … }
+  → 200, C_Order 79441FC15F3742088DC94BE0D435CD92, documentNo 1000030, DR
+     partnerAddress = 20363AD155354047AD5E52D8A93D9465
+```
+
+Both FK values were sent as **display names**, so the resolution ran through the multi-pass path —
+`partnerAddress` cannot be looked up until `businessPartner` has been resolved to an id and fed to
+the selector as context. That is the §7 line "resolves when both are display names", now confirmed
+live rather than against a stub. The label also carries a `/` and the ordinals `7º 4ª`, so the run
+incidentally covers the value-format path IMP-15 pinned.
+
+The remaining §7 box is not ours: the registry is only re-scored by a `/mcp-comparison` run.
+
+### 7.2 A different field blocked the same call — `invoiceAddress`
+
+The first `neo_create` attempt, carrying every `userRequired` field, still failed:
+
+```
+422 validation_error — "Missing required fields that could not be auto-resolved"
+missingFields: [ { name: "invoiceAddress", column: "BillTo_ID", type: "foreignKey" } ]
+```
+
+`invoiceAddress` is `required: true` in `neo_schema` but `visibility: "discarded"`, and the same
+response's own hint says *"Fields with visibility=discarded are excluded — do not send them"*. The
+call only succeeded once I sent it anyway. So an agent that follows the documented contract cannot
+create a sales order, and the only way through is to break the rule the tool just stated.
+
+This is **not** an IMP-22 regression — it is on the create path, not the FK resolver, and the 422
+names a different field. It is recorded here because this run is where it surfaced; it belongs to
+whoever owns the discarded-but-DB-required class, and it is not registered (the quota is the user's
+call, registry §2.2).
 
 ## 8. What this does not settle
 
@@ -137,5 +179,12 @@ What the unit tests cannot show is that the selector **agrees with the live AD d
 against a deployed build can close that, and it is the same vector that opened the item — which is
 the right property for a reproducer to have.
 
+> **2026-08-13** — the two paragraphs above are now historical: the build is deployed and §7.1 is
+> that live call, so the selector is confirmed to agree with real AD data. The row is still worth
+> zero until a `/mcp-comparison` run re-scores it, but for a bookkeeping reason now, not an
+> evidentiary one.
+
 Also unverified: the multi-pass path on a body with **three or more** chained dependencies (e.g.
 partner → address → tax), and the O(n²) worst case has been reasoned about rather than measured.
+§7.1's body chains **two** deep (partner → address); the other four FK names in it resolve without
+context, so they exercise pass 0, not the retry loop.
