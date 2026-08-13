@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import HeaderTable from './HeaderTable';
 import HeaderForm from './HeaderForm';
 import LinesTable from './LinesTable';
@@ -92,7 +93,7 @@ export const api = {
       "entity": "header",
       "field": "businessPartner",
       "column": "C_BPartner_ID",
-      "reference": "BPartner",
+      "reference": "BusinessPartner",
       "inputMode": "search",
       "url": "/sws/neo/return-to-vendor-shipment/header/selectors/businessPartner"
     },
@@ -100,9 +101,18 @@ export const api = {
       "entity": "header",
       "field": "partnerAddress",
       "column": "C_BPartner_Location_ID",
-      "reference": "BPartner_Location",
-      "inputMode": "selector",
-      "url": "/sws/neo/return-to-vendor-shipment/header/selectors/partnerAddress"
+      "reference": "BusinessPartnerLocation",
+      "inputMode": "dependent",
+      "url": "/sws/neo/return-to-vendor-shipment/header/selectors/partnerAddress",
+      "context": {
+        "required": [
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
@@ -118,7 +128,20 @@ export const api = {
       "column": "C_Project_ID",
       "reference": "Project",
       "inputMode": "search",
-      "url": "/sws/neo/return-to-vendor-shipment/header/selectors/project"
+      "url": "/sws/neo/return-to-vendor-shipment/header/selectors/project",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
@@ -158,7 +181,20 @@ export const api = {
       "column": "C_Aum",
       "reference": "UOM",
       "inputMode": "search",
-      "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/operativeUOM"
+      "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/operativeUOM",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "M_Product_ID",
+            "source": "field",
+            "field": "product"
+          }
+        ]
+      }
     },
     {
       "entity": "lines",
@@ -174,7 +210,16 @@ export const api = {
       "column": "M_Locator_ID",
       "reference": "Locator",
       "inputMode": "selector",
-      "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/storageBin"
+      "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/storageBin",
+      "context": {
+        "required": [
+          {
+            "param": "M_Warehouse_ID",
+            "source": "parentField",
+            "field": "warehouse"
+          }
+        ]
+      }
     },
     {
       "entity": "lines",

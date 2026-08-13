@@ -1,68 +1,40 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DocChip, RelatedDocumentsShell, STATUS_KEYS, CHIP_ICONS, CHIP_COLORS, fetchById } from '@/components/related-documents';
+import { DocChip, RelatedDocumentsShell, docChipProps } from '@/components/related-documents';
 import { useUI } from '@/i18n';
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
-  const [rma, setRma] = useState(null);
-  const [order, setOrder] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
+export default function RelatedDocuments({ data }) {
   const navigate = useNavigate();
   const ui = useUI();
 
-  useEffect(() => {
-    if (!recordId || !data) { setLoading(false); return; }
-    setLoading(true);
-    const rmaId = data.returnReason;
-    const orderId = data.orderReference;
+  // sourceReceipts and returnInvoices are injected by ReturnToVendorShipmentHeaderHandler.afterHandle
+  // with full data: {id, documentNo, documentStatus} for receipts and
+  // {id, documentNo, documentStatus, grandTotalAmount, currency$_identifier} for invoices.
+  const sourceReceipts = Array.isArray(data?.sourceReceipts) ? data.sourceReceipts : [];
+  const returnInvoices = Array.isArray(data?.returnInvoices) ? data.returnInvoices : [];
 
-    const fetches = [];
-    if (rmaId) {
-      fetches.push(
-        fetchById('return-to-vendor', 'header', rmaId, token, apiBaseUrl)
-          .then(setRma)
-          .catch(() => {})
-      );
-    }
-    if (orderId) {
-      fetches.push(
-        fetchById('purchase-order', 'header', orderId, token, apiBaseUrl)
-          .then(setOrder)
-          .catch(() => {})
-      );
-    }
+  const chips = [];
 
-    if (fetches.length === 0) { setLoading(false); return; }
-    Promise.all(fetches).finally(() => setLoading(false));
-  }, [recordId, data, token, apiBaseUrl, refreshKey]);
+  sourceReceipts.forEach((receipt) => {
+    chips.push(
+      <DocChip
+        key={`source-receipt-${receipt.id}`}
+        {...docChipProps({ type: 'goods-receipt', doc: receipt, ui, navigate })}
+      />
+    );
+  });
+
+  returnInvoices.forEach((inv) => {
+    chips.push(
+      <DocChip
+        key={`return-invoice-${inv.id}`}
+        {...docChipProps({ type: 'purchase-invoice', doc: inv, ui, navigate })}
+      />
+    );
+  });
 
   return (
-    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
-      {rma && (
-        <DocChip
-          key="rma"
-          icon={CHIP_ICONS.order}
-          iconColor={CHIP_COLORS.order}
-          title={ui('returnDoc', { number: rma.documentNo })}
-          status={rma.docStatus}
-          statusLabel={ui(STATUS_KEYS[rma.docStatus] || rma.docStatus)}
-          onClick={() => navigate(`/return-to-vendor/${rma.id}`)}
-        />
-      )}
-      {order && (
-        <DocChip
-          key="order"
-          icon={CHIP_ICONS.order}
-          iconColor={CHIP_COLORS.order}
-          title={ui('orderDoc', { number: order.documentNo })}
-          amount={order.grandTotalAmount}
-          currency={order['currency$_identifier']}
-          status={order.documentStatus}
-          statusLabel={ui(STATUS_KEYS[order.documentStatus] || order.documentStatus)}
-          onClick={() => navigate(`/purchase-order/${order.id}`)}
-        />
-      )}
+    <RelatedDocumentsShell loading={false}>
+      {chips}
     </RelatedDocumentsShell>
   );
 }

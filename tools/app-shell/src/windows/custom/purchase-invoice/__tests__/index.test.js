@@ -23,9 +23,11 @@ describe('PurchaseInvoiceWindow — LABEL_OVERRIDES', () => {
     assert.match(src, /en_US:\s*\{[\s\S]*?OutstandingAmt:\s*'Pending Payment'/);
   });
 
-  it('renames em_etgo_delivery_status to "Estado de entrega" / "Delivery Status"', () => {
-    assert.match(src, /es_ES:\s*\{[\s\S]*?em_etgo_delivery_status:\s*'Estado de entrega'/);
-    assert.match(src, /en_US:\s*\{[\s\S]*?em_etgo_delivery_status:\s*'Delivery Status'/);
+  // ETP-4303: the AP delivery-status column is a reception status from the buyer's
+  // perspective, so it was renamed from "Estado de entrega" to "Estado de recepción".
+  it('renames em_etgo_delivery_status to "Estado de recepción" / "Reception Status"', () => {
+    assert.match(src, /es_ES:\s*\{[\s\S]*?em_etgo_delivery_status:\s*'Estado de recepción'/);
+    assert.match(src, /en_US:\s*\{[\s\S]*?em_etgo_delivery_status:\s*'Reception Status'/);
   });
 
   it('passes LABEL_OVERRIDES into the ListView', () => {

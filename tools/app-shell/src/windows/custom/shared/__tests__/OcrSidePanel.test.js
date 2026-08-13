@@ -40,11 +40,11 @@ describe('OcrSidePanel — structure', () => {
 describe('OcrSidePanel — FileTab gating', () => {
   it('renders the OcrInlineUploader when isNew (new record path)', () => {
     assert.match(src, /if \(props\.isNew\)/);
-    assert.match(src, /<LazyOcrInlineUploader\s+\{\.\.\.props\}\s*\/>/);
+    assert.match(src, /<LazyOcrInlineUploader[\s\S]*?\{\.\.\.props\}[\s\S]*?\/>/);
   });
 
   it('renders the AttachmentsView when not isNew (edit path)', () => {
-    assert.match(src, /return <AttachmentsView \{\.\.\.props\} \/>/);
+    assert.match(src, /return <AttachmentsView[\s\S]*?\{\.\.\.props\}[\s\S]*?\/>/);
   });
 });
 

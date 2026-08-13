@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
-  "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-05-15T16:00:23.886Z",
-  "checksum": "9f67b1a0e223cab2",
+  "version": "0.1.1",
+  "generatedAt": "2026-07-31T19:26:42.054Z",
+  "updatedAt": "2026-08-05T02:33:56.657Z",
+  "checksum": "c5aa960de3723932",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -10,15 +10,36 @@
       "primaryEntity": "product",
       "category": "inventory",
       "sidebarLayout": true,
-      "customTabsAfterBottom": true,
       "hidePrint": true,
       "hideMoreMenu": true,
-      "contentBg": "bg-slate-50",
+      "contentBg": "bg-card",
+      "hideLink": true,
       "breadcrumb": "Inventory / Product",
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "accounting": {
+          "tabOrder": 1000,
+          "label": "Accounting",
+          "addLineFields": [
+            "fixedAsset",
+            "productExpense",
+            "productRevenue",
+            "productCOGS"
+          ],
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
+        }
+      },
       "detailEntity": null,
-      "headerExtra": {
-        "customForm": "ProductPriceBar"
+      "headerExtra": {},
+      "labelOverrides": {
+        "en_US": {
+          "M_Product_Category_ID": "Category",
+          "ProductType": "Type"
+        },
+        "es_ES": {
+          "M_Product_Category_ID": "Categoría",
+          "ProductType": "Tipo"
+        }
       },
       "primaryTabs": [
         {
@@ -31,8 +52,88 @@
           "panel": "ProductAdditionalInfoPanel"
         }
       ],
+      "noHeaderBorder": true,
+      "toolbarBorderBottom": true,
+      "compactSidebarPadding": true,
+      "whiteFormBackground": true,
+      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
+      "formCardPadding": "px-2",
+      "tabsBarPaddingX": "px-2",
+      "primaryTabsVariant": "pill",
+      "toolbarPaddingX": "px-2",
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2",
       "attachments": true,
-      "layoutType": "gallery"
+      "customPanelTabs": [
+        {
+          "key": "pricing",
+          "labelKey": "price",
+          "component": "ProductPriceBar"
+        }
+      ],
+      "layoutType": "gallery",
+      "import": {
+        "enabled": true,
+        "spec": "product",
+        "entity": "product",
+        "descriptor": "product",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "searchKey"
+          ]
+        },
+        "fields": [
+          {
+            "target": "searchKey",
+            "aliases": [
+              "codigo",
+              "código",
+              "sku"
+            ],
+            "label": "Search Key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "name",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "description",
+            "aliases": [
+              "descripcion",
+              "descripción"
+            ],
+            "label": "Description",
+            "required": false,
+            "type": "textarea"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "price",
+            "aliases": [
+              "precio"
+            ],
+            "label": "Price"
+          }
+        ]
+      },
+      "autoSaveOnBlur": true
     },
     "entities": {
       "product": {
@@ -54,7 +155,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -69,7 +174,35 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 2
+            "seq": 2,
+            "multiField": {
+              "subtitle": "searchKey",
+              "media": {
+                "field": "image",
+                "kind": "neoImage",
+                "fallback": "box"
+              },
+              "parts": [
+                {
+                  "field": "searchKey",
+                  "labels": {
+                    "en_US": "Identifier",
+                    "es_ES": "Identificador"
+                  }
+                },
+                {
+                  "field": "name",
+                  "labels": {
+                    "en_US": "Name",
+                    "es_ES": "Nombre"
+                  }
+                }
+              ]
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "image",
@@ -83,7 +216,11 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 7
+            "seq": 8,
+            "explicitType": true,
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "uOM",
@@ -98,9 +235,13 @@
             "form": true,
             "sourceRequired": true,
             "reference": "UOM",
-            "inputMode": "selector",
+            "inputMode": "search",
             "section": "principal",
-            "seq": 6
+            "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "productCategory",
@@ -122,7 +263,11 @@
             "inputMode": "selector",
             "defaultValue": "@SQL=SELECT MAX(M_PRODUCT_CATEGORY_ID) FROM M_PRODUCT_CATEGORY WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@ AND ISSUMMARY='N'",
             "section": "principal",
-            "seq": 5,
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "Issummary='N'",
               "contextParams": [],
@@ -143,7 +288,11 @@
             "sourceRequired": true,
             "reference": "TaxCategory",
             "inputMode": "selector",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "purchase",
@@ -162,7 +311,11 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "sale",
@@ -181,7 +334,11 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "description",
@@ -195,7 +352,12 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 3
+            "seq": 7,
+            "span": 3,
+            "explicitType": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "productType",
@@ -216,29 +378,45 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Expense type"
+                "name": "Expense type",
+                "labels": {
+                  "es_ES": "Gasto"
+                }
               },
               {
                 "value": "I",
-                "name": "Item"
+                "name": "Item",
+                "labels": {
+                  "es_ES": "Artículo"
+                }
               },
               {
                 "value": "R",
-                "name": "Resource"
+                "name": "Resource",
+                "labels": {
+                  "es_ES": "Recurso"
+                }
               },
               {
                 "value": "S",
-                "name": "Service"
+                "name": "Service",
+                "labels": {
+                  "es_ES": "Servicio"
+                }
               }
             ],
             "defaultValue": "I",
             "section": "principal",
-            "seq": 4,
+            "seq": 3,
             "enumVariants": {
               "I": "blue",
               "S": "purple",
               "R": "teal",
               "E": "orange"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Product_Type"
@@ -262,6 +440,10 @@
             },
             "defaultValue": "Y",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "readOnlyLogic": {
               "raw": "@ProductType@='R' | @ProductType@='E' | @ProductType@='O'",
               "evaluable": true,
@@ -280,6 +462,9 @@
             "grid": false,
             "form": true,
             "section": "other",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N' & @ProductType@='I'",
               "evaluable": true
@@ -299,6 +484,9 @@
             "reference": "UOM",
             "inputMode": "selector",
             "section": "other",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N' & @ProductType@='I'",
               "evaluable": true
@@ -317,7 +505,34 @@
             "form": true,
             "reference": "AttributeSet",
             "inputMode": "selector",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            },
+            "defaultValue": "Y",
+            "section": "principal",
+            "seq": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "uPCEAN",
@@ -330,7 +545,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 30
+            }
           },
           {
             "name": "brand",
@@ -345,7 +563,10 @@
             "form": true,
             "reference": "Brand",
             "inputMode": "selector",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "returnable",
@@ -364,7 +585,11 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "mProductStatusID",
@@ -379,7 +604,70 @@
             "form": true,
             "reference": "ProductStatus",
             "inputMode": "selector",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "eTGOPurchasePrice",
+            "apiKey": "eTGOPurchasePrice",
+            "column": "EM_ETGO_Purchase_Price",
+            "label": "EM_ETGO_Purchase_Price",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "section": "other",
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "eTGOSalePrice",
+            "apiKey": "eTGOSalePrice",
+            "column": "EM_ETGO_Sale_Price",
+            "label": "EM_ETGO_Sale_Price",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "section": "other",
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "eTGOStock",
+            "apiKey": "eTGOStock",
+            "column": "EM_ETGO_Stock",
+            "label": "EM_ETGO_Stock",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "section": "other",
+            "computed": {
+              "mode": "stored",
+              "refresh": "queued"
+            },
+            "validation": {
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [
@@ -426,13 +714,22 @@
             }
           },
           {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            }
+          },
+          {
             "name": "returnable",
             "derivation": {
               "type": "computed",
               "source": "Y"
             }
           }
-        ]
+        ],
+        "javaQualifier": "productDefaultsHandler",
+        "formCols": 3
       },
       "price": {
         "tableName": "M_ProductPrice",
@@ -454,6 +751,10 @@
             "sourceRequired": true,
             "reference": "PriceListVersion",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 \n        FROM AD_ROLE_ORGACCESS A_R_O\n        INNER JOIN ad_role r ON (A_R_O.AD_ROLE_ID = r.AD_ROLE_ID)\n        WHERE A_R_O.ISACTIVE = 'Y'\n        AND r.ISACTIVE = 'Y'\n        and r.ad_role_id = @#AD_Role_ID@\n        AND (A_R_O.AD_ORG_ID = td0.AD_Org_ID \n             OR (SUBSTR(TO_CHAR(r.USERLEVEL), 2, 1) = 'C' AND td0.AD_ORG_ID = '0')\n             )\n        )",
               "contextParams": [
@@ -473,7 +774,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "listPrice",
@@ -486,7 +791,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "cost",
@@ -504,7 +813,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -541,7 +854,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "validFromDate",
@@ -554,7 +871,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "servicePriceRule",
@@ -569,7 +890,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "ServicePriceRule",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -581,6 +906,100 @@
               "source": "Y"
             }
           }
+        ]
+      },
+      "accounting": {
+        "tableName": "M_Product_Acct",
+        "tabId": "210",
+        "tabName": "Accounting",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "fixedAsset",
+            "apiKey": "fixedAsset",
+            "column": "P_Asset_Acct",
+            "label": "Product Asset",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 1,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "productExpense",
+            "apiKey": "productExpense",
+            "column": "P_Expense_Acct",
+            "label": "Product Expense",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 2,
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "productRevenue",
+            "apiKey": "productRevenue",
+            "column": "P_Revenue_Acct",
+            "label": "Product Revenue",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 3,
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "productCOGS",
+            "apiKey": "productCOGS",
+            "column": "P_Cogs_Acct",
+            "label": "Product COGS",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 4,
+            "grow": true,
+            "validation": {
+              "maxLength": 32
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [],
+        "javaQualifier": "productAccountingHandler",
+        "hideDelete": true,
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
         ]
       },
       "billOfMaterials": {
@@ -605,7 +1024,11 @@
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_Product_BOM WHERE M_Product_ID=@M_Product_ID@"
             },
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_Product_BOM WHERE M_Product_ID=@M_Product_ID@"
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_Product_BOM WHERE M_Product_ID=@M_Product_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "bOMProduct",
@@ -620,7 +1043,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Product",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "bOMQuantity",
@@ -638,7 +1065,11 @@
               "type": "computed",
               "source": "1"
             },
-            "defaultValue": "1"
+            "defaultValue": "1",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "bomprice",
@@ -650,7 +1081,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "description",
@@ -662,7 +1096,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           }
         ],
         "searchableFields": [],
@@ -704,13 +1141,23 @@
             "enumValues": [
               {
                 "value": "AVA",
-                "name": "Average"
+                "name": "Average",
+                "labels": {
+                  "es_ES": "Promedio"
+                }
               },
               {
                 "value": "STA",
-                "name": "Standard"
+                "name": "Standard",
+                "labels": {
+                  "es_ES": "Estándar"
+                }
               }
-            ]
+            ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "cost",
@@ -722,7 +1169,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "startingDate",
@@ -735,7 +1185,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "endingDate",
@@ -748,7 +1202,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "quantity",
@@ -760,7 +1218,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "warehouse",
@@ -774,7 +1235,10 @@
             "grid": true,
             "form": true,
             "reference": "Warehouse",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "cCurrencyID",
@@ -794,7 +1258,11 @@
             },
             "reference": "Currency",
             "inputMode": "selector",
-            "defaultValue": "100"
+            "defaultValue": "100",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "originalCost",
@@ -806,7 +1274,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -837,7 +1308,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "cost",
@@ -850,7 +1325,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "cCurrencyID",
@@ -865,7 +1344,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Currency",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "costAdjustmentLine",
@@ -879,7 +1362,10 @@
             "grid": false,
             "form": true,
             "reference": "Costadjustmentline",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "unitCost",
@@ -897,7 +1383,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "accountingDate",
@@ -910,7 +1400,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           }
         ],
         "searchableFields": [],
@@ -948,7 +1442,11 @@
             },
             "reference": "Organization",
             "inputMode": "selector",
-            "defaultValue": "@AD_Org_ID@"
+            "defaultValue": "@AD_Org_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "storageBin",
@@ -963,7 +1461,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "StorageBin",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "movementQuantity",
@@ -976,7 +1478,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "movementDate",
@@ -989,7 +1495,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "movementType",
@@ -1006,45 +1516,79 @@
             "enumValues": [
               {
                 "value": "V+",
-                "name": "Vendor Receipts"
+                "name": "Vendor Receipts",
+                "labels": {
+                  "es_ES": "Albarán proveedor"
+                }
               },
               {
                 "value": "I+",
-                "name": "Inventory In"
+                "name": "Inventory In",
+                "labels": {
+                  "es_ES": "Entrada inventario"
+                }
               },
               {
                 "value": "M-",
-                "name": "Movement From"
+                "name": "Movement From",
+                "labels": {
+                  "es_ES": "Mover desde"
+                }
               },
               {
                 "value": "M+",
-                "name": "Movement To"
+                "name": "Movement To",
+                "labels": {
+                  "es_ES": "Mover a"
+                }
               },
               {
                 "value": "I-",
-                "name": "Inventory Out"
+                "name": "Inventory Out",
+                "labels": {
+                  "es_ES": "Salida inventario"
+                }
               },
               {
                 "value": "P-",
-                "name": "Production -"
+                "name": "Production -",
+                "labels": {
+                  "es_ES": "Producción -"
+                }
               },
               {
                 "value": "P+",
-                "name": "Production +"
+                "name": "Production +",
+                "labels": {
+                  "es_ES": "Producción +"
+                }
               },
               {
                 "value": "C-",
-                "name": "Customer Shipment"
+                "name": "Customer Shipment",
+                "labels": {
+                  "es_ES": "Albarán cliente"
+                }
               },
               {
                 "value": "D-",
-                "name": "Internal Consumption -"
+                "name": "Internal Consumption -",
+                "labels": {
+                  "es_ES": "Consumo Interno -"
+                }
               },
               {
                 "value": "D+",
-                "name": "Internal Consumption +"
+                "name": "Internal Consumption +",
+                "labels": {
+                  "es_ES": "Consumo Interno +"
+                }
               }
-            ]
+            ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "totalCost",
@@ -1057,6 +1601,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsCostCalculated@='Y'",
               "evaluable": true
@@ -1075,7 +1622,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "UOM",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [],
@@ -1111,7 +1662,11 @@
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(SEQNO),0)+10 AS DefaultValue FROM M_PRODUCT_CH WHERE m_product_id=@m_product_id@"
             },
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQNO),0)+10 AS DefaultValue FROM M_PRODUCT_CH WHERE m_product_id=@m_product_id@"
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQNO),0)+10 AS DefaultValue FROM M_PRODUCT_CH WHERE m_product_id=@m_product_id@",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "characteristic",
@@ -1127,6 +1682,10 @@
             "sourceRequired": true,
             "reference": "Characteristic",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_ProductCh_Characteristic"
             }
@@ -1147,7 +1706,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "explodeConfigurationTab",
@@ -1166,6 +1729,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@isVariant@='Y'&@IsGeneric@='Y'",
               "evaluable": true
@@ -1187,7 +1754,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "priceListType",
@@ -1208,14 +1779,24 @@
             "enumValues": [
               {
                 "value": "PURCHASE",
-                "name": "Purchase Price List"
+                "name": "Purchase Price List",
+                "labels": {
+                  "es_ES": "Tarifa de ventas"
+                }
               },
               {
                 "value": "SALES",
-                "name": "Sales Price List"
+                "name": "Sales Price List",
+                "labels": {
+                  "es_ES": "Tarifa de ventas"
+                }
               }
             ],
             "defaultValue": "SALES",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@isGeneric@='Y' & @Define_Price@='Y'",
               "evaluable": true
@@ -1237,7 +1818,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "characteristicSubset",
@@ -1251,7 +1836,10 @@
             "grid": false,
             "form": true,
             "reference": "CharacteristicSubset",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "active",
@@ -1269,7 +1857,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -1344,7 +1936,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "StorageBin",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "attributeSetValue",
@@ -1356,7 +1952,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "uOM",
@@ -1371,7 +1970,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "UOM",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "quantityOnHand",
@@ -1384,7 +1987,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "reservedQty",
@@ -1402,7 +2009,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            }
           },
           {
             "name": "allocatedQuantity",
@@ -1420,7 +2031,11 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            }
           }
         ],
         "searchableFields": [],
@@ -1464,7 +2079,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "validFromDate",
@@ -1477,7 +2096,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "servicePriceRule",
@@ -1492,7 +2115,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "ServicePriceRule",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -1526,6 +2153,10 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.AUM_ConversionRate"
             }
@@ -1542,6 +2173,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@EXISTS_CONVERSION@='Y'",
               "evaluable": true,
@@ -1559,6 +2194,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.GtinFormat"
             }
@@ -1582,18 +2220,31 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
-            "defaultValue": "S"
+            "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "purchase",
@@ -1614,18 +2265,31 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
-            "defaultValue": "S"
+            "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "logistics",
@@ -1646,18 +2310,31 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
-            "defaultValue": "S"
+            "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [],
@@ -1694,15 +2371,36 @@
       "primaryEntity": "product",
       "category": "inventory",
       "sidebarLayout": true,
-      "customTabsAfterBottom": true,
       "hidePrint": true,
       "hideMoreMenu": true,
-      "contentBg": "bg-slate-50",
+      "contentBg": "bg-card",
+      "hideLink": true,
       "breadcrumb": "Inventory / Product",
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "accounting": {
+          "tabOrder": 1000,
+          "label": "Accounting",
+          "addLineFields": [
+            "fixedAsset",
+            "productExpense",
+            "productRevenue",
+            "productCOGS"
+          ],
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
+        }
+      },
       "detailEntity": null,
-      "headerExtra": {
-        "customForm": "ProductPriceBar"
+      "headerExtra": {},
+      "labelOverrides": {
+        "en_US": {
+          "M_Product_Category_ID": "Category",
+          "ProductType": "Type"
+        },
+        "es_ES": {
+          "M_Product_Category_ID": "Categoría",
+          "ProductType": "Tipo"
+        }
       },
       "primaryTabs": [
         {
@@ -1715,8 +2413,88 @@
           "panel": "ProductAdditionalInfoPanel"
         }
       ],
+      "noHeaderBorder": true,
+      "toolbarBorderBottom": true,
+      "compactSidebarPadding": true,
+      "whiteFormBackground": true,
+      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
+      "formCardPadding": "px-2",
+      "tabsBarPaddingX": "px-2",
+      "primaryTabsVariant": "pill",
+      "toolbarPaddingX": "px-2",
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2",
       "attachments": true,
-      "layoutType": "gallery"
+      "customPanelTabs": [
+        {
+          "key": "pricing",
+          "labelKey": "price",
+          "component": "ProductPriceBar"
+        }
+      ],
+      "layoutType": "gallery",
+      "import": {
+        "enabled": true,
+        "spec": "product",
+        "entity": "product",
+        "descriptor": "product",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "searchKey"
+          ]
+        },
+        "fields": [
+          {
+            "target": "searchKey",
+            "aliases": [
+              "codigo",
+              "código",
+              "sku"
+            ],
+            "label": "Search Key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "name",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "description",
+            "aliases": [
+              "descripcion",
+              "descripción"
+            ],
+            "label": "Description",
+            "required": false,
+            "type": "textarea"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "price",
+            "aliases": [
+              "precio"
+            ],
+            "label": "Price"
+          }
+        ]
+      },
+      "autoSaveOnBlur": true
     },
     "entities": {
       "product": {
@@ -1889,7 +2667,7 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1957,20 +2735,20 @@
             "required": false
           },
           {
-            "name": "aeat347Isleasebusiness",
-            "apiKey": "aeat347Isleasebusiness",
-            "column": "EM_Aeat347_Isleasebusiness",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "summaryLevel",
             "apiKey": "summaryLevel",
             "column": "IsSummary",
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "aeat347Isleasebusiness",
+            "apiKey": "aeat347Isleasebusiness",
+            "column": "EM_Aeat347_Isleasebusiness",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
           },
           {
             "name": "storageBin",
@@ -2061,19 +2839,19 @@
             "required": false
           },
           {
-            "name": "aeat347Streetnumber",
-            "apiKey": "aeat347Streetnumber",
-            "column": "EM_Aeat347_Streetnumber",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "discontinued",
             "apiKey": "discontinued",
             "column": "Discontinued",
             "type": "boolean",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "aeat347Streetnumber",
+            "apiKey": "aeat347Streetnumber",
+            "column": "EM_Aeat347_Streetnumber",
+            "type": "string",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2093,14 +2871,6 @@
             "required": false
           },
           {
-            "name": "aeat347Building",
-            "apiKey": "aeat347Building",
-            "column": "EM_Aeat347_Building",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "billOfMaterials",
             "apiKey": "billOfMaterials",
             "column": "IsBOM",
@@ -2109,9 +2879,9 @@
             "required": true
           },
           {
-            "name": "aeat347Hall",
-            "apiKey": "aeat347Hall",
-            "column": "EM_Aeat347_Hall",
+            "name": "aeat347Building",
+            "apiKey": "aeat347Building",
+            "column": "EM_Aeat347_Building",
             "type": "string",
             "visibility": "discarded",
             "required": false
@@ -2125,9 +2895,9 @@
             "required": true
           },
           {
-            "name": "aeat347Hallway",
-            "apiKey": "aeat347Hallway",
-            "column": "EM_Aeat347_Hallway",
+            "name": "aeat347Hall",
+            "apiKey": "aeat347Hall",
+            "column": "EM_Aeat347_Hall",
             "type": "string",
             "visibility": "discarded",
             "required": false
@@ -2139,6 +2909,14 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "aeat347Hallway",
+            "apiKey": "aeat347Hallway",
+            "column": "EM_Aeat347_Hallway",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           },
           {
             "name": "bOMVerified",
@@ -2173,18 +2951,18 @@
             "required": false
           },
           {
-            "name": "aeat347Complement",
-            "apiKey": "aeat347Complement",
-            "column": "EM_Aeat347_Complement",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "expenseType",
             "apiKey": "expenseType",
             "column": "S_ExpenseType_ID",
             "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Complement",
+            "apiKey": "aeat347Complement",
+            "column": "EM_Aeat347_Complement",
+            "type": "string",
             "visibility": "discarded",
             "required": false
           },
@@ -2213,20 +2991,20 @@
             "required": false
           },
           {
-            "name": "aeat347County",
-            "apiKey": "aeat347County",
-            "column": "EM_Aeat347_County",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "returnable",
             "apiKey": "returnable",
             "column": "Returnable",
             "type": "boolean",
             "visibility": "editable",
             "required": true
+          },
+          {
+            "name": "aeat347County",
+            "apiKey": "aeat347County",
+            "column": "EM_Aeat347_County",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           },
           {
             "name": "overdueReturnDays",
@@ -2557,36 +3335,12 @@
             "required": true
           },
           {
-            "name": "guaranteedDays",
-            "apiKey": "guaranteedDays",
-            "column": "GuaranteeDays",
-            "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "sKU",
-            "apiKey": "sKU",
-            "column": "SKU",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "id",
             "apiKey": "id",
             "column": "M_Product_ID",
             "type": "id",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "versionNo",
-            "apiKey": "versionNo",
-            "column": "VersionNo",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
           },
           {
             "name": "client",
@@ -2597,10 +3351,66 @@
             "required": true
           },
           {
-            "name": "name2",
-            "apiKey": "name2",
-            "column": "Name2",
+            "name": "sKU",
+            "apiKey": "sKU",
+            "column": "SKU",
             "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "classification",
+            "apiKey": "classification",
+            "column": "Classification",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "comments",
+            "apiKey": "comments",
+            "column": "DocumentNote",
+            "type": "text",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "helpComment",
+            "apiKey": "helpComment",
+            "column": "Help",
+            "type": "text",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "versionNo",
+            "apiKey": "versionNo",
+            "column": "VersionNo",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "guaranteedDays",
+            "apiKey": "guaranteedDays",
+            "column": "GuaranteeDays",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "downloadURL",
+            "apiKey": "downloadURL",
+            "column": "DownloadURL",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "freightCategory",
+            "apiKey": "freightCategory",
+            "column": "M_FreightCategory_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -2609,6 +3419,14 @@
             "apiKey": "printPrice",
             "column": "Ispriceprinted",
             "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "name2",
+            "apiKey": "name2",
+            "column": "Name2",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -2629,46 +3447,6 @@
             "required": false
           },
           {
-            "name": "helpComment",
-            "apiKey": "helpComment",
-            "column": "Help",
-            "type": "text",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "freightCategory",
-            "apiKey": "freightCategory",
-            "column": "M_FreightCategory_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "downloadURL",
-            "apiKey": "downloadURL",
-            "column": "DownloadURL",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "comments",
-            "apiKey": "comments",
-            "column": "DocumentNote",
-            "type": "text",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "classification",
-            "apiKey": "classification",
-            "column": "Classification",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -2683,6 +3461,30 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOPurchasePrice",
+            "apiKey": "eTGOPurchasePrice",
+            "column": "EM_ETGO_Purchase_Price",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGOSalePrice",
+            "apiKey": "eTGOSalePrice",
+            "column": "EM_ETGO_Sale_Price",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGOStock",
+            "apiKey": "eTGOStock",
+            "column": "EM_ETGO_Stock",
+            "type": "decimal",
+            "visibility": "readOnly",
+            "required": false
           },
           {
             "name": "updated",
@@ -2700,7 +3502,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "productDefaultsHandler"
       },
       "price": {
         "tableName": "M_ProductPrice",
@@ -2756,14 +3559,6 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_ProductPrice_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -2784,6 +3579,14 @@
             "apiKey": "organization",
             "column": "AD_Org_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_ProductPrice_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -2884,8 +3687,8 @@
             "required": true
           },
           {
-            "name": "mServicepriceruleVersionID",
-            "apiKey": "mServicepriceruleVersionID",
+            "name": "id",
+            "apiKey": "id",
             "column": "M_Servicepricerule_Version_ID",
             "type": "id",
             "visibility": "system",
@@ -2908,17 +3711,17 @@
             "required": true
           },
           {
-            "name": "relatedProductCategory",
-            "apiKey": "relatedProductCategory",
-            "column": "M_Relatedproductcategory_ID",
+            "name": "relatedProduct",
+            "apiKey": "relatedProduct",
+            "column": "M_Relatedproduct_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "relatedProduct",
-            "apiKey": "relatedProduct",
-            "column": "M_Relatedproduct_ID",
+            "name": "relatedProductCategory",
+            "apiKey": "relatedProductCategory",
+            "column": "M_Relatedproductcategory_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -2940,6 +3743,190 @@
             "required": true
           }
         ]
+      },
+      "accounting": {
+        "tableName": "M_Product_Acct",
+        "tabId": "210",
+        "tabName": "Accounting",
+        "fields": [
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "fixedAsset",
+            "apiKey": "fixedAsset",
+            "column": "P_Asset_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "productExpense",
+            "apiKey": "productExpense",
+            "column": "P_Expense_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "pDefExpenseAcct",
+            "apiKey": "pDefExpenseAcct",
+            "column": "P_Def_Expense_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "productRevenue",
+            "apiKey": "productRevenue",
+            "column": "P_Revenue_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "productDeferredRevenue",
+            "apiKey": "productDeferredRevenue",
+            "column": "P_Def_Revenue_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "productCOGS",
+            "apiKey": "productCOGS",
+            "column": "P_Cogs_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "invoicePriceVariance",
+            "apiKey": "invoicePriceVariance",
+            "column": "P_InvoicePriceVariance_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "productRevenueReturn",
+            "apiKey": "productRevenueReturn",
+            "column": "P_Revenue_Return_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "productCOGSReturn",
+            "apiKey": "productCOGSReturn",
+            "column": "P_Cogs_Return_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "purchasePriceVariance",
+            "apiKey": "purchasePriceVariance",
+            "column": "P_PurchasePriceVariance_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "tradeDiscountReceived",
+            "apiKey": "tradeDiscountReceived",
+            "column": "P_TradeDiscountRec_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "tradeDiscountGranted",
+            "apiKey": "tradeDiscountGranted",
+            "column": "P_TradeDiscountGrant_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Product_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ],
+        "javaQualifier": "productAccountingHandler"
       },
       "billOfMaterials": {
         "tableName": "M_Product_BOM",
@@ -3003,9 +3990,17 @@
             "required": false
           },
           {
-            "name": "product",
-            "apiKey": "product",
-            "column": "M_Product_ID",
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Product_BOM_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -3019,18 +4014,10 @@
             "required": true
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_Product_BOM_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -3202,12 +4189,12 @@
             "required": false
           },
           {
-            "name": "invoiceLine",
-            "apiKey": "invoiceLine",
-            "column": "C_InvoiceLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
           },
           {
             "name": "id",
@@ -3234,12 +4221,12 @@
             "required": true
           },
           {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": true
+            "name": "invoiceLine",
+            "apiKey": "invoiceLine",
+            "column": "C_InvoiceLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "creationDate",
@@ -3329,17 +4316,17 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_Transaction_Cost_ID",
-            "type": "id",
+            "name": "inventoryTransaction",
+            "apiKey": "inventoryTransaction",
+            "column": "M_Transaction_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "inventoryTransaction",
-            "apiKey": "inventoryTransaction",
-            "column": "M_Transaction_ID",
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -3353,10 +4340,10 @@
             "required": true
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Transaction_Cost_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -3584,6 +4571,14 @@
             "required": false
           },
           {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "product",
             "apiKey": "product",
             "column": "M_Product_ID",
@@ -3608,11 +4603,11 @@
             "required": false
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -3645,14 +4640,6 @@
             "column": "CreatedBy",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "uOM",
-            "apiKey": "uOM",
-            "column": "C_UOM_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
             "required": true
           },
           {
@@ -3775,14 +4762,6 @@
             "required": true
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "id",
             "apiKey": "id",
             "column": "M_Product_Ch_ID",
@@ -3791,9 +4770,9 @@
             "required": true
           },
           {
-            "name": "product",
-            "apiKey": "product",
-            "column": "M_Product_ID",
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -3802,6 +4781,14 @@
             "name": "organization",
             "apiKey": "organization",
             "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -3958,18 +4945,18 @@
             "required": true
           },
           {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "id",
             "apiKey": "id",
             "column": "M_Storage_Detail_ID",
             "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
@@ -3988,6 +4975,22 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoCost",
+            "apiKey": "etgoCost",
+            "column": "EM_Etgo_Cost",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "etgoValuation",
+            "apiKey": "etgoValuation",
+            "column": "EM_Etgo_Valuation",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "referencedInventory",
@@ -4070,18 +5073,18 @@
             "required": false
           },
           {
-            "name": "mServicepriceruleVersionID",
-            "apiKey": "mServicepriceruleVersionID",
-            "column": "M_Servicepricerule_Version_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Servicepricerule_Version_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -4205,18 +5208,18 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_Product_Aum_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Product_Aum_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -4350,6 +5353,36 @@
         "method": "DELETE",
         "path": "/priceRuleVersion/:id",
         "entity": "priceRuleVersion",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/accounting/:id",
+        "entity": "accounting",
         "supportedFilters": []
       },
       {
@@ -4638,6 +5671,17 @@
         "detailUrl": "/sws/neo/product/priceRuleVersion/{id}",
         "supportedFilters": []
       },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/product/accounting",
+        "detailUrl": "/sws/neo/product/accounting/{id}",
+        "supportedFilters": []
+      },
       "billOfMaterials": {
         "get": true,
         "getById": true,
@@ -4733,7 +5777,7 @@
         "field": "uOM",
         "column": "C_UOM_ID",
         "reference": "UOM",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/product/product/selectors/uOM"
       },
       {
@@ -4799,6 +5843,38 @@
         "reference": "ServicePriceRule",
         "inputMode": "selector",
         "url": "/sws/neo/product/priceRuleVersion/selectors/servicePriceRule"
+      },
+      {
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "column": "P_Asset_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/fixedAsset"
+      },
+      {
+        "entity": "accounting",
+        "field": "productExpense",
+        "column": "P_Expense_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productExpense"
+      },
+      {
+        "entity": "accounting",
+        "field": "productRevenue",
+        "column": "P_Revenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productRevenue"
+      },
+      {
+        "entity": "accounting",
+        "field": "productCOGS",
+        "column": "P_Cogs_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productCOGS"
       },
       {
         "entity": "billOfMaterials",
@@ -5002,6 +6078,16 @@
     },
     "window": {
       "category": "inventory"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "M_Product_Category_ID": "Category",
+        "ProductType": "Type"
+      },
+      "es_ES": {
+        "M_Product_Category_ID": "Categoría",
+        "ProductType": "Tipo"
+      }
     }
   },
   "testManifest": {
@@ -5077,6 +6163,13 @@
         "field": "manualcostadjustment",
         "runner": "node",
         "description": "Action endpoint for 'manualcostadjustment' in transactions should exist"
+      },
+      {
+        "id": "t-crud-flags-accounting",
+        "category": "crud-flags",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "CRUD flags for 'accounting' should all be booleans"
       },
       {
         "id": "t-crud-flags-alternateUom",
@@ -5226,6 +6319,14 @@
         "field": "active",
         "runner": "node",
         "description": "Default value for 'active' in priceRuleVersion should be a string"
+      },
+      {
+        "id": "t-default-value-type-product-active",
+        "category": "default-value-type",
+        "entity": "product",
+        "field": "active",
+        "runner": "node",
+        "description": "Default value for 'active' in product should be a string"
       },
       {
         "id": "t-default-value-type-product-productCategory",
@@ -5442,6 +6543,38 @@
         "field": "totalCost",
         "runner": "node",
         "description": "Display logic for 'totalCost' in transactions should be valid JS"
+      },
+      {
+        "id": "t-field-presence-accounting-fixedAsset",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "runner": "node",
+        "description": "Field 'fixedAsset' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-productCOGS",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "productCOGS",
+        "runner": "node",
+        "description": "Field 'productCOGS' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-productExpense",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "productExpense",
+        "runner": "node",
+        "description": "Field 'productExpense' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-productRevenue",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "productRevenue",
+        "runner": "node",
+        "description": "Field 'productRevenue' should be present in accounting"
       },
       {
         "id": "t-field-presence-alternateUom-conversionRate",
@@ -5676,6 +6809,14 @@
         "description": "Field 'validFromDate' should be present in priceRuleVersion"
       },
       {
+        "id": "t-field-presence-product-active",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in product"
+      },
+      {
         "id": "t-field-presence-product-attributeSet",
         "category": "field-presence",
         "entity": "product",
@@ -5698,6 +6839,30 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should be present in product"
+      },
+      {
+        "id": "t-field-presence-product-eTGOPurchasePrice",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOPurchasePrice",
+        "runner": "node",
+        "description": "Field 'eTGOPurchasePrice' should be present in product"
+      },
+      {
+        "id": "t-field-presence-product-eTGOSalePrice",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOSalePrice",
+        "runner": "node",
+        "description": "Field 'eTGOSalePrice' should be present in product"
+      },
+      {
+        "id": "t-field-presence-product-eTGOStock",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOStock",
+        "runner": "node",
+        "description": "Field 'eTGOStock' should be present in product"
       },
       {
         "id": "t-field-presence-product-image",
@@ -6044,6 +7209,38 @@
         "description": "Field 'uOM' should be present in transactions"
       },
       {
+        "id": "t-field-type-accounting-fixedAsset",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "runner": "node",
+        "description": "Field 'fixedAsset' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-productCOGS",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "productCOGS",
+        "runner": "node",
+        "description": "Field 'productCOGS' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-productExpense",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "productExpense",
+        "runner": "node",
+        "description": "Field 'productExpense' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-productRevenue",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "productRevenue",
+        "runner": "node",
+        "description": "Field 'productRevenue' should have type 'string' in accounting"
+      },
+      {
         "id": "t-field-type-alternateUom-conversionRate",
         "category": "field-type",
         "entity": "alternateUom",
@@ -6276,6 +7473,14 @@
         "description": "Field 'validFromDate' should have type 'string' in priceRuleVersion"
       },
       {
+        "id": "t-field-type-product-active",
+        "category": "field-type",
+        "entity": "product",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in product"
+      },
+      {
         "id": "t-field-type-product-attributeSet",
         "category": "field-type",
         "entity": "product",
@@ -6298,6 +7503,30 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOPurchasePrice",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOPurchasePrice",
+        "runner": "node",
+        "description": "Field 'eTGOPurchasePrice' should have type 'number' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOSalePrice",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOSalePrice",
+        "runner": "node",
+        "description": "Field 'eTGOSalePrice' should have type 'number' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOStock",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOStock",
+        "runner": "node",
+        "description": "Field 'eTGOStock' should have type 'number' in product"
       },
       {
         "id": "t-field-type-product-image",
@@ -7703,6 +8932,38 @@
         "description": "Field 'uPCEAN' should be a supported filter for product"
       },
       {
+        "id": "t-selector-endpoint-accounting-fixedAsset",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "runner": "node",
+        "description": "Selector endpoint for 'fixedAsset' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-productCOGS",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "productCOGS",
+        "runner": "node",
+        "description": "Selector endpoint for 'productCOGS' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-productExpense",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "productExpense",
+        "runner": "node",
+        "description": "Selector endpoint for 'productExpense' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-productRevenue",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "productRevenue",
+        "runner": "node",
+        "description": "Selector endpoint for 'productRevenue' in accounting should exist"
+      },
+      {
         "id": "t-selector-endpoint-alternateUom-uOM",
         "category": "selector-endpoint",
         "entity": "alternateUom",
@@ -7887,6 +9148,150 @@
         "description": "Selector endpoint for 'uOM' in transactions should exist"
       },
       {
+        "id": "t-system-field-accounting-accountingSchema",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-active",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-client",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-createdBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-creationDate",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-id",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-invoicePriceVariance",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "runner": "node",
+        "description": "System field 'invoicePriceVariance' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-organization",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-pDefExpenseAcct",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "pDefExpenseAcct",
+        "runner": "node",
+        "description": "System field 'pDefExpenseAcct' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-product",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "product",
+        "runner": "node",
+        "description": "System field 'product' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-productCOGSReturn",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "productCOGSReturn",
+        "runner": "node",
+        "description": "System field 'productCOGSReturn' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-productDeferredRevenue",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "productDeferredRevenue",
+        "runner": "node",
+        "description": "System field 'productDeferredRevenue' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-productRevenueReturn",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "productRevenueReturn",
+        "runner": "node",
+        "description": "System field 'productRevenueReturn' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-purchasePriceVariance",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "purchasePriceVariance",
+        "runner": "node",
+        "description": "System field 'purchasePriceVariance' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-tradeDiscountGranted",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "tradeDiscountGranted",
+        "runner": "node",
+        "description": "System field 'tradeDiscountGranted' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-tradeDiscountReceived",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "tradeDiscountReceived",
+        "runner": "node",
+        "description": "System field 'tradeDiscountReceived' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updated",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updatedBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
+      },
+      {
         "id": "t-system-field-alternateUom-active",
         "category": "system-field",
         "entity": "alternateUom",
@@ -8063,12 +9468,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for categoryPriceRuleVersion"
       },
       {
-        "id": "t-system-field-categoryPriceRuleVersion-mServicepriceruleVersionID",
+        "id": "t-system-field-categoryPriceRuleVersion-id",
         "category": "system-field",
         "entity": "categoryPriceRuleVersion",
-        "field": "mServicepriceruleVersionID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'mServicepriceruleVersionID' should exist in backend but not frontend for categoryPriceRuleVersion"
+        "description": "System field 'id' should exist in backend but not frontend for categoryPriceRuleVersion"
       },
       {
         "id": "t-system-field-categoryPriceRuleVersion-organization",
@@ -8367,12 +9772,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for priceRuleVersion"
       },
       {
-        "id": "t-system-field-priceRuleVersion-mServicepriceruleVersionID",
+        "id": "t-system-field-priceRuleVersion-id",
         "category": "system-field",
         "entity": "priceRuleVersion",
-        "field": "mServicepriceruleVersionID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'mServicepriceruleVersionID' should exist in backend but not frontend for priceRuleVersion"
+        "description": "System field 'id' should exist in backend but not frontend for priceRuleVersion"
       },
       {
         "id": "t-system-field-priceRuleVersion-organization",
@@ -8421,14 +9826,6 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for priceRuleVersion"
-      },
-      {
-        "id": "t-system-field-product-active",
-        "category": "system-field",
-        "entity": "product",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for product"
       },
       {
         "id": "t-system-field-product-aeat347Apartment",
@@ -9351,6 +10748,22 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for stock"
       },
       {
+        "id": "t-system-field-stock-etgoCost",
+        "category": "system-field",
+        "entity": "stock",
+        "field": "etgoCost",
+        "runner": "node",
+        "description": "System field 'etgoCost' should exist in backend but not frontend for stock"
+      },
+      {
+        "id": "t-system-field-stock-etgoValuation",
+        "category": "system-field",
+        "entity": "stock",
+        "field": "etgoValuation",
+        "runner": "node",
+        "description": "System field 'etgoValuation' should exist in backend but not frontend for stock"
+      },
+      {
         "id": "t-system-field-stock-id",
         "category": "system-field",
         "entity": "stock",
@@ -9743,6 +11156,13 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for transactions"
       },
       {
+        "id": "t-visibility-accounting",
+        "category": "visibility",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "Entity 'accounting' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-alternateUom",
         "category": "visibility",
         "entity": "alternateUom",
@@ -9821,25 +11241,25 @@
       }
     ],
     "summary": {
-      "total": 622,
+      "total": 664,
       "byCategory": {
         "action-endpoint": 9,
-        "crud-flags": 11,
-        "default-value-type": 26,
+        "crud-flags": 12,
+        "default-value-type": 27,
         "displaylogic-evaluable": 5,
         "displaylogic-valid": 5,
-        "field-presence": 75,
-        "field-type": 75,
+        "field-presence": 83,
+        "field-type": 83,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 141,
         "searchable-filters": 5,
-        "selector-endpoint": 23,
-        "system-field": 232,
-        "visibility": 11
+        "selector-endpoint": 27,
+        "system-field": 251,
+        "visibility": 12
       },
       "byRunner": {
-        "node": 622,
+        "node": 664,
         "junit": 0
       }
     }

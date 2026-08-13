@@ -8,6 +8,7 @@ import SifSendingModal from './SifSendingModal.jsx';
 export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) {
   const ui = useUI();
   const [modalOpen, setModalOpen] = useState(false);
+  const [sentSuccessfully, setSentSuccessfully] = useState(false);
   const specName = apiBaseUrl?.split('/').filter(Boolean).pop() || 'sales-invoice';
   const updateEventName = `${specName}:invoice-updated`;
 
@@ -27,11 +28,10 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) 
         type="button"
         onClick={() => setModalOpen(true)}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
-        style={{ padding: '0 12px', borderRadius: '8px', border: '1px solid #e2e8f0', color: '#374151', background: '#fff' }}
+        style={{ padding: '0 12px', borderRadius: '8px', border: '1px solid hsl(var(--border-subtle))', color: 'hsl(var(--foreground))', background: 'hsl(var(--card))' }}
       >
         {ui('sendToSif')}
       </button>
-
       {modalOpen && (
         <SifSendingModal
           pendingTargets={pendingTargets}
@@ -39,13 +39,17 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) 
           base={base}
           specName={specName}
           recordId={recordId}
-          onClose={() => setModalOpen(false)}
-          onAfterSend={(next) => {
-            if (Object.values(next).some(r => r?.ok)) {
+          onClose={() => {
+            setModalOpen(false);
+            if (sentSuccessfully) {
               window.dispatchEvent(new CustomEvent(updateEventName, { detail: { invoiceId: recordId } }));
+              setSentSuccessfully(false);
             }
           }}
-        />
+          onAfterSend={(next) => {
+            if (Object.values(next).some((r) => r?.ok)) setSentSuccessfully(true);
+          }}
+          data-testid="SifSendingModal__1d018f" />
       )}
     </>
   );

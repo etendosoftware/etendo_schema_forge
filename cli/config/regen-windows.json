@@ -2,16 +2,52 @@
   "$comment": "Canonical registry of windows the regen pipeline must process. Single source of truth for regen-all.js. Each entry: { name (kebab-case, must match artifacts/<name>/), windowId (AD_Window_ID), menuName (optional, AD label when it differs from name) }. To add a window: append here and run make regen ONLY=<name>.",
   "windows": [
     {
+      "name": "amortization",
+      "windowId": "800026"
+    },
+    {
+      "name": "organization",
+      "windowId": "110",
+      "menuName": "Organization"
+    },
+    {
+      "name": "conversion-rates",
+      "windowId": "116"
+    },
+    {
+      "name": "conversion-rate-downloader-log",
+      "windowId": "6FEBA130CDE24CC09041FFA6117ADFA9"
+    },
+    {
+      "name": "asset-group",
+      "windowId": "252",
+      "menuName": "Asset Group"
+    },
+    {
       "name": "assets",
       "windowId": "800027"
+    },
+    {
+      "name": "business-partner-category",
+      "windowId": "192",
+      "menuName": "Business Partner Category"
     },
     {
       "name": "chart-of-accounts",
       "windowId": "118"
     },
     {
+      "name": "general-ledger-configuration",
+      "windowId": "125"
+    },
+    {
       "name": "contacts",
       "windowId": "123"
+    },
+    {
+      "name": "financial-account",
+      "windowId": "94EAA455D2644E04AB25D93BE5157B6D",
+      "menuName": "Financial Account"
     },
     {
       "name": "goods-movements",
@@ -30,9 +66,19 @@
       "windowId": "800076"
     },
     {
+      "name": "match-rule",
+      "windowId": "24963D64E83B4543A7F6BD248CF944EE",
+      "menuName": "Match Rule"
+    },
+    {
       "name": "monitor-verifactu",
       "windowId": "F4675DAB02134762B66881DAE4672AD0",
       "menuName": "Monitor Verifactu"
+    },
+    {
+      "name": "open-close-period-control",
+      "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A",
+      "menuName": "Open/Close Period Control"
     },
     {
       "name": "payment-in",
@@ -75,16 +121,8 @@
       "windowId": "181"
     },
     {
-      "name": "return-from-customer",
-      "windowId": "FF808081330213E60133021822E40007"
-    },
-    {
       "name": "return-material-receipt",
       "windowId": "123271B9AD60469BAE8A924841456B63"
-    },
-    {
-      "name": "return-to-vendor",
-      "windowId": "C50A8AEE6F044825B5EF54FAAE76826F"
     },
     {
       "name": "return-to-vendor-shipment",
@@ -103,6 +141,10 @@
       "windowId": "6CB5B67ED33F47DFA334079D3EA2340E"
     },
     {
+      "name": "simple-g-l-journal",
+      "windowId": "B917E8A7B0864ACEA9D941E3B7494E53"
+    },
+    {
       "name": "sii-config",
       "windowId": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A",
       "menuName": "SII Configuration"
@@ -117,6 +159,10 @@
       "windowId": "137"
     },
     {
+      "name": "tax-category",
+      "windowId": "138"
+    },
+    {
       "name": "tbai-config",
       "windowId": "C327DE215AC945F69363905840118177",
       "menuName": "Configuración TBAI"
@@ -125,6 +171,10 @@
       "name": "tbai-facturas-enviadas",
       "windowId": "71F24BF89DE748B483BE87594747D6FB",
       "menuName": "TBAI Facturas Enviadas"
+    },
+    {
+      "name": "transaction-type",
+      "windowId": "82922976BB524D1BAA3CF8462B9219FE"
     },
     {
       "name": "unit-of-measure",
@@ -142,6 +192,15 @@
     {
       "name": "warehouse",
       "windowId": "139"
+    },
+    {
+      "name": "fiscal-calendar",
+      "windowId": "117"
+    },
+    {
+      "name": "end-year-close",
+      "windowId": "B5673F73F613496C8BEA22FB55E4E1E4",
+      "menuName": "End Year Close"
     }
   ]
 }

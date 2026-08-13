@@ -49,6 +49,17 @@ export function normalizeCalloutQty(formState) {
   return formState;
 }
 
+function combosNorm(calloutData, result) {
+  for (const [k, combo] of Object.entries(calloutData.combos)) {
+    // Empty selected means "no change" — backend returns selected:"" when
+    // the callout does not explicitly set the combo (e.g. tax on SL_Order_Product).
+    if (combo.selected != null && combo.selected !== '') {
+      result[k] = combo.selected;
+      if (combo._identifier) result[k + '$_identifier'] = combo._identifier;
+    }
+  }
+}
+
 /**
  * Flattens calloutData.updates + calloutData.combos into a plain result object.
  *
@@ -73,14 +84,7 @@ export function normalizeCalloutResponse(calloutData, rowValues) {
   }
 
   if (calloutData.combos) {
-    for (const [k, combo] of Object.entries(calloutData.combos)) {
-      // Empty selected means "no change" — backend returns selected:"" when
-      // the callout does not explicitly set the combo (e.g. tax on SL_Order_Product).
-      if (combo.selected != null && combo.selected !== '') {
-        result[k] = combo.selected;
-        if (combo._identifier) result[k + '$_identifier'] = combo._identifier;
-      }
-    }
+    combosNorm(calloutData, result);
   }
 
   return result;
@@ -96,6 +100,22 @@ export function applyQtyZeroGuard(result, rowValues) {
     if (result[key] === 0 && Number(rowValues[key]) > 0) {
       delete result[key];
     }
+  }
+}
+
+/**
+ * Resets the manually-entered line description when the product changes.
+ *
+ * Classic product callouts (SL_Order_Product / SL_Invoice_Product) recompute
+ * price, discount and tax on product change but never touch description, so
+ * without this guard the grid keeps showing the previous product's
+ * description instead of clearing it for re-entry (ETP-4723).
+ *
+ * Mutates result in place.
+ */
+export function resetDescriptionOnProductChange(result, field) {
+  if (field === 'product' && result.description == null) {
+    result.description = '';
   }
 }
 

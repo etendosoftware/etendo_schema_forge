@@ -10,25 +10,25 @@ import { Star, GripVertical } from 'lucide-react';
  * Maps color name strings to Tailwind border/bg classes.
  */
 const COLOR_MAP = {
-  blue: 'border-t-blue-500 bg-blue-500/10',
-  green: 'border-t-emerald-500 bg-emerald-500/10',
-  red: 'border-t-red-500 bg-red-500/10',
-  yellow: 'border-t-amber-500 bg-amber-500/10',
-  purple: 'border-t-purple-500 bg-purple-500/10',
-  orange: 'border-t-orange-500 bg-orange-500/10',
-  pink: 'border-t-pink-500 bg-pink-500/10',
-  gray: 'border-t-gray-400 bg-gray-500/10',
+  blue: 'border-t-blue-500 bg-status-info/10',
+  green: 'border-t-emerald-500 bg-status-success/10',
+  red: 'border-t-red-500 bg-destructive/10',
+  yellow: 'border-t-amber-500 bg-status-warning/10',
+  purple: 'border-t-purple-500 bg-primary',
+  orange: 'border-t-orange-500 bg-status-warning/10',
+  pink: 'border-t-pink-500 bg-destructive/10',
+  gray: 'border-t-gray-400 bg-muted',
 };
 
 const COLOR_DOT_MAP = {
-  blue: 'bg-blue-500',
-  green: 'bg-emerald-500',
-  red: 'bg-red-500',
-  yellow: 'bg-amber-500',
-  purple: 'bg-purple-500',
-  orange: 'bg-orange-500',
-  pink: 'bg-pink-500',
-  gray: 'bg-gray-400',
+  blue: 'bg-status-info',
+  green: 'bg-status-success',
+  red: 'bg-destructive',
+  yellow: 'bg-status-warning',
+  purple: 'bg-primary',
+  orange: 'bg-status-warning',
+  pink: 'bg-destructive',
+  gray: 'bg-muted',
 };
 
 /**
@@ -57,9 +57,9 @@ function PriorityStars({ priority }) {
           key={i}
           className={cn(
             'h-3 w-3',
-            i < count ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'
+            i < count ? 'fill-status-warning-foreground text-status-warning-foreground' : 'text-muted-foreground/30'
           )}
-        />
+          data-testid="Star__22de88" />
       ))}
     </div>
   );
@@ -94,19 +94,21 @@ function DefaultCard({ card }) {
             <p className="text-xs text-muted-foreground mt-0.5 truncate">{card.subtitle}</p>
           )}
         </div>
-        {card.avatar && <AvatarCircle name={card.avatar} />}
+        {card.avatar && <AvatarCircle name={card.avatar} data-testid="AvatarCircle__22de88" />}
       </div>
-
       {card.badges && card.badges.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {card.badges.map((badge, i) => (
-            <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0">
+          {card.badges.map((badge) => (
+            <Badge
+              key={typeof badge === 'string' ? badge : badge.label}
+              variant="secondary"
+              className="text-[10px] px-1.5 py-0"
+              data-testid="Badge__22de88">
               {typeof badge === 'string' ? badge : badge.label}
             </Badge>
           ))}
         </div>
       )}
-
       {(card.value != null || card.priority) && (
         <div className="flex items-center justify-between gap-2 pt-1">
           {card.value != null && (
@@ -114,7 +116,7 @@ function DefaultCard({ card }) {
               {formatCurrency(card.value)}
             </span>
           )}
-          {card.priority && <PriorityStars priority={card.priority} />}
+          {card.priority && <PriorityStars priority={card.priority} data-testid="PriorityStars__22de88" />}
         </div>
       )}
     </div>
@@ -144,9 +146,9 @@ function KanbanCard({ card, onCardClick, renderCard, isDragging }) {
       )}
       role="listitem"
       aria-label={card.title}
-    >
-      <CardContent className="p-3">
-        {renderCard ? renderCard(card) : <DefaultCard card={card} />}
+      data-testid="Card__22de88">
+      <CardContent className="p-3" data-testid="CardContent__22de88">
+        {renderCard ? renderCard(card) : <DefaultCard card={card} data-testid="DefaultCard__22de88" />}
       </CardContent>
     </Card>
   );
@@ -158,7 +160,7 @@ function KanbanCard({ card, onCardClick, renderCard, isDragging }) {
 function KanbanColumn({ column, cards, onDragEnd, onCardClick, renderCard, emptyMessage, dragOverColumnId, setDragOverColumnId }) {
   const isOver = dragOverColumnId === column.id;
   const colorClasses = column.color ? COLOR_MAP[column.color] : '';
-  const dotColor = column.color ? COLOR_DOT_MAP[column.color] : 'bg-gray-400';
+  const dotColor = column.color ? COLOR_DOT_MAP[column.color] : 'bg-muted';
 
   const handleDragOver = useCallback(
     (e) => {
@@ -218,9 +220,7 @@ function KanbanColumn({ column, cards, onDragEnd, onCardClick, renderCard, empty
           {cards.length}
         </span>
       </div>
-
-      <Separator />
-
+      <Separator data-testid="Separator__22de88" />
       {/* Scrollable card list */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-220px)]">
         {cards.length === 0 ? (
@@ -234,7 +234,7 @@ function KanbanColumn({ column, cards, onDragEnd, onCardClick, renderCard, empty
               card={card}
               onCardClick={onCardClick}
               renderCard={renderCard}
-            />
+              data-testid="KanbanCard__22de88" />
           ))
         )}
       </div>
@@ -285,7 +285,7 @@ export function KanbanBoard({
             emptyMessage={emptyMessage}
             dragOverColumnId={dragOverColumnId}
             setDragOverColumnId={setDragOverColumnId}
-          />
+            data-testid="KanbanColumn__22de88" />
         );
       })}
     </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
-import { FileText } from 'lucide-react';
+import { FileText, Upload } from 'lucide-react';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertModal from './CertModal.jsx';
@@ -11,10 +11,11 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [cert, setCert]   = useState(null);
   const [open, setOpen]   = useState(false);
+  const [drag, setDrag]   = useState(false);
 
   useEffect(() => {
     if (!orgId || !apiBaseUrl) return;
-    apiFetch(`/certificate`)
+    apiFetch(`/certificate?${new URLSearchParams({ orgId })}`)
       .then(r => r.json())
       .then(data => {
         if (data?.exists) setCert({ name: ui('fiscal.cert.loaded'), validTo: data.validTo ?? '' });
@@ -22,36 +23,65 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
       .catch(() => {});
   }, [apiFetch, ui, orgId, apiBaseUrl]);
 
+  if (cert) {
+    return (
+      <>
+        <div className="flex items-center justify-between rounded-xl border border-border bg-muted/10 px-4 py-3 gap-4">
+          <div className="flex items-center gap-2.5">
+            <FileText
+              size={16}
+              className="text-muted-foreground flex-shrink-0"
+              data-testid="FileText__e7cbc5" />
+            <div>
+              <div className="text-sm font-medium">{cert.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {ui('fiscal.cert.validUntil', { date: cert.validTo })}
+              </div>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOpen(true)}
+            data-testid="Button__e7cbc5">
+            {ui('fiscal.cert.replace')}
+          </Button>
+        </div>
+        {open && (
+          <CertModal
+            context={context}
+            orgId={orgId}
+            apiBaseUrl={apiBaseUrl}
+            onClose={() => setOpen(false)}
+            onUpload={(c) => { setCert(c); setOpen(false); }}
+            data-testid="CertModal__e7cbc5" />
+        )}
+      </>
+    );
+  }
+
   return (
     <>
-      <fieldset className="space-y-3 border-0 p-0 m-0">
-        <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{ui('fiscal.cert.section.legend')}</legend>
-
-        {cert ? (
-          <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-3 gap-4">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="w-7 h-7 rounded-lg bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0"><FileText size={15} strokeWidth={1.75} /></span>
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-green-800 truncate">{cert.name}</div>
-                <div className="text-xs text-green-700/70 mt-0.5">{ui('fiscal.cert.validUntil', { date: cert.validTo })}</div>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" className="flex-shrink-0" onClick={() => setOpen(true)}>{ui('fiscal.cert.replace')}</Button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3 gap-4">
-            <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-lg bg-muted text-muted-foreground flex items-center justify-center flex-shrink-0"><FileText size={15} strokeWidth={1.75} /></span>
-              <div>
-                <div className="text-sm font-medium">{ui('fiscal.cert.none.title')}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">{ui('fiscal.cert.none.hint')}</div>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" className="flex-shrink-0" onClick={() => setOpen(true)}>{ui('fiscal.cert.upload')}</Button>
-          </div>
-        )}
-      </fieldset>
-
+      <div
+        onClick={() => setOpen(true)}
+        onDragOver={e => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={e => { e.preventDefault(); setDrag(false); setOpen(true); }}
+        className={`rounded-xl border border-dashed cursor-pointer py-5 px-8 text-center transition-all
+          ${drag
+            ? 'border-foreground bg-muted/40'
+            : 'border-[hsl(var(--border-control))] hover:border-foreground/40 hover:bg-muted/20'}`}
+      >
+        <div className="mx-auto mb-2 w-9 h-9 rounded-xl border border-[hsl(var(--border-subtle))] bg-card flex items-center justify-center shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
+          <Upload
+            size={16}
+            strokeWidth={1.75}
+            className="text-[hsl(var(--text-disabled))]"
+            data-testid="Upload__e7cbc5" />
+        </div>
+        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{ui('fiscal.cert.dropzone.drag')}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{ui('fiscal.cert.dropzone.formats')}</p>
+      </div>
       {open && (
         <CertModal
           context={context}
@@ -59,7 +89,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
           apiBaseUrl={apiBaseUrl}
           onClose={() => setOpen(false)}
           onUpload={(c) => { setCert(c); setOpen(false); }}
-        />
+          data-testid="CertModal__e7cbc5" />
       )}
     </>
   );

@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CabeceraDeConfiguracionVerifactuTable from './CabeceraDeConfiguracionVerifactuTable';
 import CabeceraDeConfiguracionVerifactuForm from './CabeceraDeConfiguracionVerifactuForm';
 import catalogs from './mockCatalogs';
@@ -14,14 +16,15 @@ const summary = [
   { key: 'systemStartat', column: 'System_Startat', type: 'string' },
   { key: 'systemStopat', column: 'System_Stopat', type: 'string' },
   { key: 'incidentReport', column: 'Incident_Report', type: 'string' },
-  { key: 'inVfactuSystem', column: 'IN_Vfactu_System', type: 'string' },
 ];
 
 const statusField = null;
 // @sf-generated-end summary:cabeceraDeConfiguraciónVerifactu
 
 // @sf-generated-start extraBadges:cabeceraDeConfiguraciónVerifactu
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:cabeceraDeConfiguraciónVerifactu
 
 // @sf-generated-start processes:cabeceraDeConfiguraciónVerifactu
@@ -66,14 +69,6 @@ export const api = {
       "url": "/sws/neo/verifactu-config/cabeceraDeConfiguraciónVerifactu/{id}/action/isReady",
       "processId": "D995FA46EEDB4DAF9F414E661FB13E43",
       "processType": "obuiapp"
-    },
-    {
-      "entity": "cabeceraDeConfiguraciónVerifactu",
-      "field": "refreshData",
-      "column": "Refresh_Data",
-      "url": "/sws/neo/verifactu-config/cabeceraDeConfiguraciónVerifactu/{id}/action/refreshData",
-      "processId": "E0D681117A1843C5B9D525701087D7DC",
-      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -96,8 +91,16 @@ export const api = {
 
 // @sf-generated-start component:CabeceraDeConfiguracionVerifactuPage
 export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('27A453FA86974745977672F1A8DCCEFF');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="27A453FA86974745977672F1A8DCCEFF" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="cabeceraDeConfiguraciónVerifactu"
         Form={CabeceraDeConfiguracionVerifactuForm}
@@ -112,8 +115,9 @@ export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recor
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -126,7 +130,7 @@ export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recor
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

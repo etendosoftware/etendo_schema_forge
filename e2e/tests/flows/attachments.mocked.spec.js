@@ -158,7 +158,10 @@ async function openAttachmentsTab(page) {
 
 // ─── Suite A: Tab presence ─────────────────────────────────────────────────────
 
-test.describe('Suite A — Attachments tab presence (Payment In, mocked)', () => {
+// Payment In/Out set `attachments: false` in decisions.json (commit 5bd640b91) —
+// the attachments tab is intentionally disabled for these windows, so Suites
+// A-D (which drive the tab via gotoPayment) no longer apply.
+test.describe.skip('Suite A — Attachments tab presence (Payment In, mocked)', () => {
   test('A1: tab button is visible in the detail view', async ({ page }) => {
     await login(page);
     await installPaymentMocks(page, { items: [] });
@@ -196,7 +199,7 @@ test.describe('Suite A — Attachments tab presence (Payment In, mocked)', () =>
 
 // ─── Suite B: Upload ───────────────────────────────────────────────────────────
 
-test.describe('Suite B — Upload (mocked)', () => {
+test.describe.skip('Suite B — Upload (mocked)', () => {
   test('B1: uploading a valid PDF adds it to the attachments table', async ({ page }) => {
     await login(page);
     await installPaymentMocks(page, { items: [] });
@@ -298,7 +301,7 @@ test.describe('Suite B — Upload (mocked)', () => {
 
 // ─── Suite C: Delete ──────────────────────────────────────────────────────────
 
-test.describe('Suite C — Delete (mocked)', () => {
+test.describe.skip('Suite C — Delete (mocked)', () => {
   test('C1: confirming delete removes the row from the table', async ({ page }) => {
     await login(page);
     await installPaymentMocks(page, { items: [ATT_1] });
@@ -371,14 +374,14 @@ test.describe('Suite C — Delete (mocked)', () => {
 
 // ─── Suite D: Download ────────────────────────────────────────────────────────
 
-test.describe('Suite D — Download (mocked)', () => {
+test.describe.skip('Suite D — Download (mocked)', () => {
   test('D1: clicking download on a row calls the file download endpoint', async ({ page }) => {
     let downloadCalled = false;
     await login(page);
     await installPaymentMocks(page, { items: [ATT_1] });
 
     // Register a more specific route after installPaymentMocks so it wins.
-    await page.route(`**/sws/neo/attachments/file/${ATT_1.id}**`, async (route) => {
+    await page.route(`**/sws/neo/attachments/file/${ATT_1.id}{/**,}**`, async (route) => {
       if (route.request().method() === 'GET') {
         downloadCalled = true;
         await route.fulfill({
@@ -408,7 +411,7 @@ test.describe('Suite D — Download (mocked)', () => {
     await installPaymentMocks(page, { items: [ATT_1, ATT_2] });
 
     // Register after installPaymentMocks so it takes priority for /zip requests.
-    await page.route('**/sws/neo/attachments/**/zip**', async (route) => {
+    await page.route('**/sws/neo/attachments/**/zip{/**,}**', async (route) => {
       zipCalled = true;
       await route.fulfill({
         status: 200,
@@ -554,7 +557,7 @@ async function installSalesOrderMocks(page, { items = [], onUpload = null, onDel
   });
 
   // Lines GET — return empty so the Lines tab renders cleanly
-  await page.route('**/sws/neo/sales-order/lines**', async (route) => {
+  await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({
       status: 200,
@@ -816,7 +819,7 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1] });
 
-    await page.route(`**/sws/neo/attachments/file/${SO_ATT_1.id}**`, async (route) => {
+    await page.route(`**/sws/neo/attachments/file/${SO_ATT_1.id}{/**,}**`, async (route) => {
       if (route.request().method() === 'GET') {
         downloadCalled = true;
         await route.fulfill({
@@ -845,7 +848,7 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1, SO_ATT_2] });
 
-    await page.route('**/sws/neo/attachments/**/zip**', async (route) => {
+    await page.route('**/sws/neo/attachments/**/zip{/**,}**', async (route) => {
       zipCalled = true;
       await route.fulfill({
         status: 200,

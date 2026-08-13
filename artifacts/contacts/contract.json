@@ -1,15 +1,15 @@
 {
-  "version": "0.9.0",
-  "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-05-20T18:19:49.410Z",
-  "checksum": "71169ede1419e12b",
+  "version": "0.48.0",
+  "generatedAt": "2026-07-31T19:26:59.736Z",
+  "updatedAt": "2026-08-07T11:54:28.394Z",
+  "checksum": "3199e5602e3ebad9",
   "frontendContract": {
     "window": {
       "id": "123",
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
-      "sidebarLayout": true,
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -56,6 +56,30 @@
           "label": "Location",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
+        },
+        "customerAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 4,
+          "label": "Customer Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "customerReceivablesNo",
+            "customerPrepayment"
+          ],
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
+        },
+        "vendorAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 5,
+          "label": "Vendor Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "vendorLiability",
+            "vendorPrepayment"
+          ],
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -67,7 +91,8 @@
           "PO_Financial_Account_ID": "Expense Account",
           "EM_Etgo_Web": "Website",
           "EM_Etgo_Firstname": "First Name",
-          "EM_Etgo_Lastname": "Last Name"
+          "EM_Etgo_Lastname": "Last Name",
+          "C_BP_Group_ID": "Contact Category"
         },
         "es_ES": {
           "Name": "Razón Social",
@@ -76,7 +101,8 @@
           "PO_Financial_Account_ID": "Cuenta contable de gastos",
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
-          "EM_Etgo_Lastname": "Apellidos"
+          "EM_Etgo_Lastname": "Apellidos",
+          "C_BP_Group_ID": "Categoría de contacto"
         }
       },
       "primaryTabs": [
@@ -92,7 +118,6 @@
       ],
       "listViewOptions": {
         "hidePrint": true,
-        "hideEye": true,
         "hideCounter": true,
         "hideLink": true
       },
@@ -111,7 +136,179 @@
         }
       ],
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "import": {
+        "enabled": true,
+        "spec": "contacts",
+        "entity": "businessPartner",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "etgoEmail"
+          ]
+        },
+        "descriptor": "contacts",
+        "fields": [
+          {
+            "target": "name",
+            "aliases": [
+              "nombre comercial",
+              "razon social"
+            ],
+            "label": "Commercial Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoFirstname",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "First Name (Company)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoLastname",
+            "aliases": [
+              "apellido",
+              "apellidos"
+            ],
+            "label": "Last Name (Company)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoEmail",
+            "aliases": [
+              "email",
+              "correo",
+              "e-mail"
+            ],
+            "isEmail": true,
+            "label": "Email (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoPhone",
+            "aliases": [
+              "telefono",
+              "teléfono"
+            ],
+            "label": "Phone (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "email",
+            "aliases": [
+              "email de contacto"
+            ],
+            "isEmail": true,
+            "label": "Email (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "firstName",
+            "aliases": [
+              "nombre de contacto"
+            ],
+            "label": "First Name (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "lastName",
+            "aliases": [
+              "apellido de contacto"
+            ],
+            "label": "Last Name (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "phone",
+            "aliases": [
+              "telefono de contacto"
+            ],
+            "label": "Phone (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "position",
+            "aliases": [
+              "cargo"
+            ],
+            "label": "Position",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "address",
+            "aliases": [
+              "direccion",
+              "dirección"
+            ],
+            "label": "Address"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "city",
+            "aliases": [
+              "ciudad"
+            ],
+            "label": "City"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "postal",
+            "aliases": [
+              "codigo postal",
+              "código postal",
+              "cp"
+            ],
+            "label": "Postal Code"
+          },
+          {
+            "target": "country",
+            "aliases": [
+              "pais",
+              "país"
+            ],
+            "label": "Country",
+            "matchEntity": "Country",
+            "required": false,
+            "type": "foreignKey",
+            "reference": "Country"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "region",
+            "aliases": [
+              "provincia",
+              "region",
+              "región"
+            ],
+            "label": "Region"
+          }
+        ]
+      }
     },
     "entities": {
       "businessPartner": {
@@ -131,7 +328,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "searchKey",
@@ -145,7 +345,11 @@
             "grid": false,
             "form": false,
             "sourceRequired": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -159,7 +363,36 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "businessPartnerCategory",
+            "apiKey": "businessPartnerCategory",
+            "column": "C_BP_Group_ID",
+            "label": "Contact Category",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+            },
+            "reference": "BusinessPartnerCategory",
+            "inputMode": "selector",
+            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@",
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "etgoFirstname",
@@ -173,6 +406,10 @@
             "grid": false,
             "form": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
               "evaluable": true
@@ -190,6 +427,10 @@
             "grid": false,
             "form": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
               "evaluable": true
@@ -214,34 +455,59 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "NIF"
+                "name": "NIF",
+                "labels": {
+                  "es_ES": "NIF"
+                }
               },
               {
                 "value": "2",
-                "name": "NOI"
+                "name": "NOI",
+                "labels": {
+                  "es_ES": "NOI"
+                }
               },
               {
                 "value": "3",
-                "name": "Pasaporte"
+                "name": "Pasaporte",
+                "labels": {
+                  "es_ES": "Pasaporte"
+                }
               },
               {
                 "value": "4",
-                "name": "Documento oficial de identificación expedido por el país"
+                "name": "Documento oficial de identificación expedido por el país",
+                "labels": {
+                  "es_ES": "Documento oficial de identificación expedido por el país"
+                }
               },
               {
                 "value": "5",
-                "name": "Certificado de residencia fiscal"
+                "name": "Certificado de residencia fiscal",
+                "labels": {
+                  "es_ES": "Certificado de residencia fiscal"
+                }
               },
               {
                 "value": "6",
-                "name": "Otro documento probatorio"
+                "name": "Otro documento probatorio",
+                "labels": {
+                  "es_ES": "Otro documento probatorio"
+                }
               },
               {
                 "value": "7",
-                "name": "No Censado"
+                "name": "No Censado",
+                "labels": {
+                  "es_ES": "No Censado"
+                }
               }
             ],
-            "defaultValue": "'1'"
+            "defaultValue": "'1'",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "taxID",
@@ -254,7 +520,59 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "label": "Estado VIES",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "P"
+            },
+            "enumValues": [
+              {
+                "value": "P",
+                "name": "Pendiente",
+                "labels": {
+                  "es_ES": "Pendiente"
+                }
+              },
+              {
+                "value": "V",
+                "name": "Válido",
+                "labels": {
+                  "es_ES": "Válido"
+                }
+              },
+              {
+                "value": "I",
+                "name": "No válido",
+                "labels": {
+                  "es_ES": "No válido"
+                }
+              }
+            ],
+            "defaultValue": "P",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "record.oBTIKTaxIDKey === '2'",
+              "evaluable": true,
+              "js": "record.oBTIKTaxIDKey === '2'"
+            }
           },
           {
             "name": "etgoWeb",
@@ -267,7 +585,11 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "inputPrefix": "https://",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "etgoEmail",
@@ -280,7 +602,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "etgoPhone",
@@ -293,28 +618,32 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
-            "name": "businessPartnerCategory",
-            "apiKey": "businessPartnerCategory",
-            "column": "C_BP_Group_ID",
-            "label": "Business Partner Category",
-            "type": "foreignKey",
-            "tsType": "string",
+            "name": "etgoIsperson",
+            "apiKey": "etgoIsperson",
+            "column": "EM_Etgo_Isperson",
+            "label": "Is Person",
+            "type": "boolean",
+            "tsType": "boolean",
             "visibility": "editable",
             "required": true,
             "grid": false,
             "form": false,
             "sourceRequired": true,
             "derivation": {
-              "type": "lookup",
-              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+              "type": "computed",
+              "source": "N"
             },
-            "reference": "BusinessPartnerCategory",
-            "inputMode": "selector",
-            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@",
-            "section": "principal"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "name2",
@@ -326,7 +655,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -339,7 +671,10 @@
             "required": false,
             "grid": false,
             "form": false,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "uRL",
@@ -351,7 +686,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 120
+            }
           },
           {
             "name": "referenceNo",
@@ -363,7 +701,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "consumptionDays",
@@ -380,7 +721,10 @@
               "type": "computed",
               "source": "1000"
             },
-            "defaultValue": "1000"
+            "defaultValue": "1000",
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "active",
@@ -399,7 +743,11 @@
               "source": "true"
             },
             "defaultValue": "Y",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "greeting",
@@ -413,7 +761,10 @@
             "grid": false,
             "form": false,
             "reference": "Greeting",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "customer",
@@ -433,6 +784,10 @@
             },
             "defaultValue": "Y",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -452,6 +807,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -470,6 +829,10 @@
             "grid": false,
             "form": false,
             "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -492,7 +855,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "creditLimit",
@@ -507,6 +874,10 @@
             "form": true,
             "sourceRequired": true,
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y' | @IsVendor@='Y'",
               "evaluable": true
@@ -525,6 +896,9 @@
             "form": false,
             "reference": "Currency",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y' | @IsVendor@='Y'",
               "evaluable": true
@@ -545,25 +919,10 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
-          },
-          {
-            "name": "etgoIsperson",
-            "apiKey": "etgoIsperson",
-            "column": "EM_Etgo_Isperson",
-            "label": "Is Person",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "operator",
@@ -580,7 +939,10 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "creditUsed",
@@ -595,6 +957,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y' | @IsVendor@='Y'",
               "evaluable": true
@@ -614,6 +980,9 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -632,7 +1001,10 @@
             "grid": false,
             "form": false,
             "reference": "Salary_Category",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "customerBlocking",
@@ -652,6 +1024,10 @@
             },
             "defaultValue": "N",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -672,6 +1048,9 @@
             "reference": "FIN_Financial_Account",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
               "contextParams": [],
@@ -699,6 +1078,9 @@
             "reference": "PaymentMethod",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -726,7 +1108,11 @@
             "required": true,
             "grid": false,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "priceList",
@@ -742,6 +1128,9 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -762,42 +1151,15 @@
             "reference": "FIN_Financial_Account",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
               "contextParams": [],
               "cascadeParams": [
                 "PO_Paymentmethod_ID"
               ]
-            },
-            "displayLogic": {
-              "raw": "record.vendor",
-              "evaluable": true,
-              "js": "record.vendor"
-            }
-          },
-          {
-            "name": "pOPaymentMethod",
-            "apiKey": "pOPaymentMethod",
-            "column": "PO_Paymentmethod_ID",
-            "label": "PO_Paymentmethod_ID",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "PaymentMethod",
-            "inputMode": "selector",
-            "section": "principal",
-            "validationRule": {
-              "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
-              "contextParams": [],
-              "cascadeParams": [
-                "FIN_ISRECEIPT"
-              ]
-            },
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_PaymentMethod_FinAccount"
             },
             "displayLogic": {
               "raw": "record.vendor",
@@ -819,6 +1181,42 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
+            "displayLogic": {
+              "raw": "record.vendor",
+              "evaluable": true,
+              "js": "record.vendor"
+            }
+          },
+          {
+            "name": "pOPaymentMethod",
+            "apiKey": "pOPaymentMethod",
+            "column": "PO_Paymentmethod_ID",
+            "label": "PO_Paymentmethod_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "reference": "PaymentMethod",
+            "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
+            "validationRule": {
+              "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+              "contextParams": [],
+              "cascadeParams": [
+                "FIN_ISRECEIPT"
+              ]
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_PaymentMethod_FinAccount"
+            },
             "displayLogic": {
               "raw": "record.vendor",
               "evaluable": true,
@@ -839,6 +1237,9 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "record.vendor",
               "evaluable": true,
@@ -863,6 +1264,10 @@
             },
             "defaultValue": "N",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "record.vendor",
               "evaluable": true,
@@ -879,13 +1284,23 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": false
+            "form": false,
+            "validation": {
+              "maxLength": 0
+            }
           }
         ],
         "searchableFields": [
           "name"
         ],
         "computedFields": [
+          {
+            "name": "businessPartnerCategory",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+            }
+          },
           {
             "name": "oBTIKTaxIDKey",
             "derivation": {
@@ -894,10 +1309,17 @@
             }
           },
           {
-            "name": "businessPartnerCategory",
+            "name": "oBTIKVIESStatus",
             "derivation": {
-              "type": "lookup",
-              "source": "SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+              "type": "computed",
+              "source": "P"
+            }
+          },
+          {
+            "name": "etgoIsperson",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           },
           {
@@ -930,13 +1352,6 @@
           },
           {
             "name": "isCustomerConsent",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
-            "name": "etgoIsperson",
             "derivation": {
               "type": "computed",
               "source": "N"
@@ -988,7 +1403,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "priceList",
@@ -1003,6 +1422,9 @@
             "form": true,
             "reference": "PriceList",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1021,6 +1443,9 @@
             "form": true,
             "reference": "PaymentMethod",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -1049,6 +1474,9 @@
             "form": true,
             "reference": "PaymentTerm",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1067,6 +1495,9 @@
             "form": true,
             "reference": "Financial_Account",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
               "contextParams": [],
@@ -1092,6 +1523,9 @@
             "form": true,
             "reference": "BPartner",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1115,26 +1549,44 @@
             "enumValues": [
               {
                 "value": "D",
-                "name": "After Delivery"
+                "name": "After Delivery",
+                "labels": {
+                  "es_ES": "Después de entregado"
+                }
               },
               {
                 "value": "O",
-                "name": "After Order Delivered"
+                "name": "After Order Delivered",
+                "labels": {
+                  "es_ES": "Pedido completamente entregado"
+                }
               },
               {
                 "value": "S",
-                "name": "Customer Schedule After Delivery"
+                "name": "Customer Schedule After Delivery",
+                "labels": {
+                  "es_ES": "Periódico después de entregado"
+                }
               },
               {
                 "value": "N",
-                "name": "Do Not Invoice"
+                "name": "Do Not Invoice",
+                "labels": {
+                  "es_ES": "No facturar"
+                }
               },
               {
                 "value": "I",
-                "name": "Immediate"
+                "name": "Immediate",
+                "labels": {
+                  "es_ES": "Inmediato"
+                }
               }
             ],
             "defaultValue": "I",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1153,6 +1605,9 @@
             "form": true,
             "reference": "InvoiceSchedule",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'&@InvoiceRule@='S'",
               "evaluable": true
@@ -1169,6 +1624,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1191,6 +1649,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1213,6 +1675,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1235,6 +1701,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1257,6 +1727,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1279,6 +1753,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Customer_Blocking@='Y'",
               "evaluable": true
@@ -1297,6 +1775,9 @@
             "form": true,
             "reference": "BP_TaxCategory",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1313,6 +1794,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1329,6 +1815,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1345,6 +1836,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsCustomer@='Y'",
               "evaluable": true
@@ -1360,7 +1856,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 19
+            }
           },
           {
             "name": "birthPlace",
@@ -1372,7 +1871,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "aeatsiiDefaultsiikey",
@@ -1390,7 +1892,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "aeatsiiSiikeylist",
@@ -1410,22 +1916,37 @@
             "enumValues": [
               {
                 "value": "R",
-                "name": "Corrective invoice"
+                "name": "Corrective invoice",
+                "labels": {
+                  "es_ES": "Factura rectificativa"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               },
               {
                 "value": "F2",
-                "name": "Simplified invoice"
+                "name": "Simplified invoice",
+                "labels": {
+                  "es_ES": "Factura simplificada"
+                }
               },
               {
                 "value": "F4",
-                "name": "Simplified invoices summary"
+                "name": "Simplified invoices summary",
+                "labels": {
+                  "es_ES": "Asiento resumen facturas simplificadas"
+                }
               }
             ],
             "defaultValue": "F1",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@EM_Aeatsii_Defaultsiikey@='Y'",
               "evaluable": true
@@ -1506,21 +2027,6 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "accountingSchema",
-            "apiKey": "accountingSchema",
-            "column": "C_AcctSchema_ID",
-            "label": "General Ledger",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "AcctSchema",
-            "inputMode": "selector"
-          },
-          {
             "name": "customerReceivablesNo",
             "apiKey": "customerReceivablesNo",
             "column": "C_Receivable_Acct",
@@ -1529,11 +2035,20 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Receivables Account",
+              "es_ES": "Cuenta a Cobrar"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "customerPrepayment",
@@ -1544,14 +2059,27 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Prepayment Account",
+              "es_ES": "Cuenta de Anticipos"
+            },
+            "validation": {
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "customerAccountingHandler",
+        "hideDelete": true,
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
+        ]
       },
       "intrastatShipments": {
         "tableName": "INTR_C_BPARTNER",
@@ -1572,7 +2100,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "BPartner",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "sOTransportationType",
@@ -1588,37 +2120,64 @@
             "enumValues": [
               {
                 "value": "4",
-                "name": "Air transport"
+                "name": "Air transport",
+                "labels": {
+                  "es_ES": "Transporte Aéreo"
+                }
               },
               {
                 "value": "7",
-                "name": "Fixed transport installations"
+                "name": "Fixed transport installations",
+                "labels": {
+                  "es_ES": "Instalaciones fijas de transporte"
+                }
               },
               {
                 "value": "8",
-                "name": "Inland waterway transport"
+                "name": "Inland waterway transport",
+                "labels": {
+                  "es_ES": "Transporte de navegación interior"
+                }
               },
               {
                 "value": "9",
-                "name": "Own propulsion"
+                "name": "Own propulsion",
+                "labels": {
+                  "es_ES": "Autopropulsión"
+                }
               },
               {
                 "value": "5",
-                "name": "Postal consignment"
+                "name": "Postal consignment",
+                "labels": {
+                  "es_ES": "Envíos postales"
+                }
               },
               {
                 "value": "2",
-                "name": "Rail transport"
+                "name": "Rail transport",
+                "labels": {
+                  "es_ES": "Transporte por ferrocaril"
+                }
               },
               {
                 "value": "3",
-                "name": "Road transport"
+                "name": "Road transport",
+                "labels": {
+                  "es_ES": "Transporte por Carretera"
+                }
               },
               {
                 "value": "1",
-                "name": "Sea transport"
+                "name": "Sea transport",
+                "labels": {
+                  "es_ES": "Transporte marítimo"
+                }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "port",
@@ -1634,241 +2193,421 @@
             "enumValues": [
               {
                 "value": "INTRES_0101",
-                "name": "ALAVA AEROPUERTO"
+                "name": "ALAVA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALAVA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0717",
-                "name": "ALCUDIA MARITIMA"
+                "name": "ALCUDIA MARITIMA",
+                "labels": {
+                  "es_ES": "ALCUDIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1131",
-                "name": "ALGECIRAS MARITIMA"
+                "name": "ALGECIRAS MARITIMA",
+                "labels": {
+                  "es_ES": "ALGECIRAS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0301",
-                "name": "ALICANTE AEROPUERTO"
+                "name": "ALICANTE AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALICANTE AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0311",
-                "name": "ALICANTE MARITIMA"
+                "name": "ALICANTE MARITIMA",
+                "labels": {
+                  "es_ES": "ALICANTE MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0401",
-                "name": "ALMERIA AEROPUERTO"
+                "name": "ALMERIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALMERIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0411",
-                "name": "ALMERIA MARITIMA"
+                "name": "ALMERIA MARITIMA",
+                "labels": {
+                  "es_ES": "ALMERIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3301",
-                "name": "ASTURIAS AEROPUERTO"
+                "name": "ASTURIAS AEROPUERTO",
+                "labels": {
+                  "es_ES": "ASTURIAS AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3331",
-                "name": "AVILES MARITIMA"
+                "name": "AVILES MARITIMA",
+                "labels": {
+                  "es_ES": "AVILES MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0801",
-                "name": "BARCELONA AEROPUERTO"
+                "name": "BARCELONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "BARCELONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_812",
-                "name": "BARCELONA MARITIMA EXP"
+                "name": "BARCELONA MARITIMA EXP",
+                "labels": {
+                  "es_ES": "BARCELONA MARITIMA EXP"
+                }
               },
               {
                 "value": "INTRES_0811",
-                "name": "BARCELONA MARITIMA IMP"
+                "name": "BARCELONA MARITIMA IMP",
+                "labels": {
+                  "es_ES": "BARCELONA MARITIMA IMP"
+                }
               },
               {
                 "value": "INTRES_4801",
-                "name": "BILBAO AEROPUERTO"
+                "name": "BILBAO AEROPUERTO",
+                "labels": {
+                  "es_ES": "BILBAO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4811",
-                "name": "BILBAO MARITIMA"
+                "name": "BILBAO MARITIMA",
+                "labels": {
+                  "es_ES": "BILBAO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1111",
-                "name": "CADIZ MARITIMA"
+                "name": "CADIZ MARITIMA",
+                "labels": {
+                  "es_ES": "CADIZ MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3011",
-                "name": "CARTAGENA MARITIMA"
+                "name": "CARTAGENA MARITIMA",
+                "labels": {
+                  "es_ES": "CARTAGENA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1211",
-                "name": "CASTELLON MARIMA"
+                "name": "CASTELLON MARIMA",
+                "labels": {
+                  "es_ES": "CASTELLON MARIMA"
+                }
               },
               {
                 "value": "INTRES_1521",
-                "name": "EL FERROL MARITIMA"
+                "name": "EL FERROL MARITIMA",
+                "labels": {
+                  "es_ES": "EL FERROL MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4631",
-                "name": "GANDIA MARITIMA"
+                "name": "GANDIA MARITIMA",
+                "labels": {
+                  "es_ES": "GANDIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1701",
-                "name": "GERONA AEROPUERTO"
+                "name": "GERONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GERONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3311",
-                "name": "GIJON MARITIMA"
+                "name": "GIJON MARITIMA",
+                "labels": {
+                  "es_ES": "GIJON MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1801",
-                "name": "GRANDA AEROPUERTO"
+                "name": "GRANDA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GRANDA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2001",
-                "name": "GUIPUZCOA AEROPUERTO"
+                "name": "GUIPUZCOA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GUIPUZCOA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2111",
-                "name": "HUELVA MARITIMA"
+                "name": "HUELVA MARITIMA",
+                "labels": {
+                  "es_ES": "HUELVA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0707",
-                "name": "IBIZA AEROPUERTO"
+                "name": "IBIZA AEROPUERTO",
+                "labels": {
+                  "es_ES": "IBIZA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0721",
-                "name": "IBIZA MARITIMA"
+                "name": "IBIZA MARITIMA",
+                "labels": {
+                  "es_ES": "IBIZA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1101",
-                "name": "JEREZ AEROPUERTO"
+                "name": "JEREZ AEROPUERTO",
+                "labels": {
+                  "es_ES": "JEREZ AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1501",
-                "name": "LA CORUNA AEROPUERTO"
+                "name": "LA CORUNA AEROPUERTO",
+                "labels": {
+                  "es_ES": "LA CORUNA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1511",
-                "name": "LA CORUNA MARITIMA"
+                "name": "LA CORUNA MARITIMA",
+                "labels": {
+                  "es_ES": "LA CORUNA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_2801",
-                "name": "MADRID AEROPUERTO"
+                "name": "MADRID AEROPUERTO",
+                "labels": {
+                  "es_ES": "MADRID AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2901",
-                "name": "MALAGA AEROPUERTO"
+                "name": "MALAGA AEROPUERTO",
+                "labels": {
+                  "es_ES": "MALAGA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2911",
-                "name": "MALAGA MARITIMA"
+                "name": "MALAGA MARITIMA",
+                "labels": {
+                  "es_ES": "MALAGA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3621",
-                "name": "MARTIN MARITIMA"
+                "name": "MARTIN MARITIMA",
+                "labels": {
+                  "es_ES": "MARTIN MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0708",
-                "name": "MOHAN AEROPUERTO"
+                "name": "MOHAN AEROPUERTO",
+                "labels": {
+                  "es_ES": "MOHAN AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0731",
-                "name": "MOHAN MARITIMA"
+                "name": "MOHAN MARITIMA",
+                "labels": {
+                  "es_ES": "MOHAN MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1811",
-                "name": "MORIL MARIMA"
+                "name": "MORIL MARIMA",
+                "labels": {
+                  "es_ES": "MORIL MARIMA"
+                }
               },
               {
                 "value": "INTRES_3001",
-                "name": "MURCIA AEROPUERTO"
+                "name": "MURCIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "MURCIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0711",
-                "name": "P . MALLORCA MARITIMA"
+                "name": "P . MALLORCA MARITIMA",
+                "labels": {
+                  "es_ES": "P . MALLORCA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0701",
-                "name": "P. MALLORCA AEROPUERTO"
+                "name": "P. MALLORCA AEROPUERTO",
+                "labels": {
+                  "es_ES": "P. MALLORCA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1711",
-                "name": "PALAMOS MARITIMA"
+                "name": "PALAMOS MARITIMA",
+                "labels": {
+                  "es_ES": "PALAMOS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_2011",
-                "name": "PASAJES MARITIMA"
+                "name": "PASAJES MARITIMA",
+                "labels": {
+                  "es_ES": "PASAJES MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1121",
-                "name": "PUERTO DE SANTA MARIA"
+                "name": "PUERTO DE SANTA MARIA",
+                "labels": {
+                  "es_ES": "PUERTO DE SANTA MARIA"
+                }
               },
               {
                 "value": "INTRES_2711",
-                "name": "RIBADEO MARITIMA"
+                "name": "RIBADEO MARITIMA",
+                "labels": {
+                  "es_ES": "RIBADEO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4621",
-                "name": "SAGUNTO MARITIMA"
+                "name": "SAGUNTO MARITIMA",
+                "labels": {
+                  "es_ES": "SAGUNTO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4321",
-                "name": "SAN CARLOS MARITIMA"
+                "name": "SAN CARLOS MARITIMA",
+                "labels": {
+                  "es_ES": "SAN CARLOS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3901",
-                "name": "SANTANDER AUEROPUERTO"
+                "name": "SANTANDER AUEROPUERTO",
+                "labels": {
+                  "es_ES": "SANTANDER AUEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3911",
-                "name": "SANTANDER MARITIMA"
+                "name": "SANTANDER MARITIMA",
+                "labels": {
+                  "es_ES": "SANTANDER MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1507",
-                "name": "SANTIAGO AEROPUERTO"
+                "name": "SANTIAGO AEROPUERTO",
+                "labels": {
+                  "es_ES": "SANTIAGO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4101",
-                "name": "SEVILLA AEROPUERTO"
+                "name": "SEVILLA AEROPUERTO",
+                "labels": {
+                  "es_ES": "SEVILLA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4111",
-                "name": "SEVILLA MARITIMA"
+                "name": "SEVILLA MARITIMA",
+                "labels": {
+                  "es_ES": "SEVILLA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4301",
-                "name": "TARRAGONA AEROPUERTO"
+                "name": "TARRAGONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "TARRAGONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4311",
-                "name": "TARRAGONA MARITIMA"
+                "name": "TARRAGONA MARITIMA",
+                "labels": {
+                  "es_ES": "TARRAGONA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4601",
-                "name": "VALENCIA AEROPUERTO"
+                "name": "VALENCIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "VALENCIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4611",
-                "name": "VALENCIA MARITIMA"
+                "name": "VALENCIA MARITIMA",
+                "labels": {
+                  "es_ES": "VALENCIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4701",
-                "name": "VALLADOLID AEROPUERTO"
+                "name": "VALLADOLID AEROPUERTO",
+                "labels": {
+                  "es_ES": "VALLADOLID AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3601",
-                "name": "VIGO AEROPUERTO"
+                "name": "VIGO AEROPUERTO",
+                "labels": {
+                  "es_ES": "VIGO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3611",
-                "name": "VIGO MARITIMA"
+                "name": "VIGO MARITIMA",
+                "labels": {
+                  "es_ES": "VIGO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3631",
-                "name": "VILLAGARCIA MARITIMA"
+                "name": "VILLAGARCIA MARITIMA",
+                "labels": {
+                  "es_ES": "VILLAGARCIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_5001",
-                "name": "ZARAGOZA AEROPUERTO"
+                "name": "ZARAGOZA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ZARAGOZA AEROPUERTO"
+                }
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@SO_Transportation_Type@='1' | @SO_Transportation_Type@='4'",
               "evaluable": true
@@ -1884,7 +2623,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "privateCustomer",
@@ -1902,7 +2644,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -1933,7 +2679,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "purchasePricelist",
@@ -1948,6 +2698,9 @@
             "form": true,
             "reference": "PriceList",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -1966,6 +2719,9 @@
             "form": true,
             "reference": "PaymentMethod",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -1994,6 +2750,9 @@
             "form": true,
             "reference": "PaymentTerm",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2012,6 +2771,9 @@
             "form": true,
             "reference": "Financial_Account",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
               "contextParams": [],
@@ -2035,6 +2797,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2051,6 +2818,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2067,6 +2839,11 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 2,
+              "minimum": 1,
+              "maximum": 31
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2085,6 +2862,9 @@
             "form": true,
             "reference": "BP_TaxCategory",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2107,6 +2887,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2129,6 +2913,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsVendor@='Y'",
               "evaluable": true
@@ -2151,6 +2939,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2173,6 +2965,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2195,6 +2991,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2217,6 +3017,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Vendor_Blocking@='Y'",
               "evaluable": true
@@ -2276,21 +3080,6 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "accountingSchema",
-            "apiKey": "accountingSchema",
-            "column": "C_AcctSchema_ID",
-            "label": "General Ledger",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "AcctSchema",
-            "inputMode": "selector"
-          },
-          {
             "name": "vendorLiability",
             "apiKey": "vendorLiability",
             "column": "V_Liability_Acct",
@@ -2299,11 +3088,20 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Liability Account",
+              "es_ES": "Cuenta a Pagar"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "vendorPrepayment",
@@ -2314,14 +3112,27 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Prepayment Account",
+              "es_ES": "Cuenta de Anticipos"
+            },
+            "validation": {
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "vendorAccountingHandler",
+        "hideDelete": true,
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
+        ]
       },
       "intrastatAdquisitions": {
         "tableName": "INTR_C_BPARTNER",
@@ -2342,7 +3153,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "BPartner",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "country",
@@ -2356,7 +3171,10 @@
             "grid": false,
             "form": true,
             "reference": "Country",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "transportationType",
@@ -2372,37 +3190,64 @@
             "enumValues": [
               {
                 "value": "4",
-                "name": "Air transport"
+                "name": "Air transport",
+                "labels": {
+                  "es_ES": "Transporte Aéreo"
+                }
               },
               {
                 "value": "7",
-                "name": "Fixed transport installations"
+                "name": "Fixed transport installations",
+                "labels": {
+                  "es_ES": "Instalaciones fijas de transporte"
+                }
               },
               {
                 "value": "8",
-                "name": "Inland waterway transport"
+                "name": "Inland waterway transport",
+                "labels": {
+                  "es_ES": "Transporte de navegación interior"
+                }
               },
               {
                 "value": "9",
-                "name": "Own propulsion"
+                "name": "Own propulsion",
+                "labels": {
+                  "es_ES": "Autopropulsión"
+                }
               },
               {
                 "value": "5",
-                "name": "Postal consignment"
+                "name": "Postal consignment",
+                "labels": {
+                  "es_ES": "Envíos postales"
+                }
               },
               {
                 "value": "2",
-                "name": "Rail transport"
+                "name": "Rail transport",
+                "labels": {
+                  "es_ES": "Transporte por ferrocaril"
+                }
               },
               {
                 "value": "3",
-                "name": "Road transport"
+                "name": "Road transport",
+                "labels": {
+                  "es_ES": "Transporte por Carretera"
+                }
               },
               {
                 "value": "1",
-                "name": "Sea transport"
+                "name": "Sea transport",
+                "labels": {
+                  "es_ES": "Transporte marítimo"
+                }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "portAirport",
@@ -2418,241 +3263,421 @@
             "enumValues": [
               {
                 "value": "INTRES_0101",
-                "name": "ALAVA AEROPUERTO"
+                "name": "ALAVA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALAVA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0717",
-                "name": "ALCUDIA MARITIMA"
+                "name": "ALCUDIA MARITIMA",
+                "labels": {
+                  "es_ES": "ALCUDIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1131",
-                "name": "ALGECIRAS MARITIMA"
+                "name": "ALGECIRAS MARITIMA",
+                "labels": {
+                  "es_ES": "ALGECIRAS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0301",
-                "name": "ALICANTE AEROPUERTO"
+                "name": "ALICANTE AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALICANTE AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0311",
-                "name": "ALICANTE MARITIMA"
+                "name": "ALICANTE MARITIMA",
+                "labels": {
+                  "es_ES": "ALICANTE MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0401",
-                "name": "ALMERIA AEROPUERTO"
+                "name": "ALMERIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALMERIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0411",
-                "name": "ALMERIA MARITIMA"
+                "name": "ALMERIA MARITIMA",
+                "labels": {
+                  "es_ES": "ALMERIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3301",
-                "name": "ASTURIAS AEROPUERTO"
+                "name": "ASTURIAS AEROPUERTO",
+                "labels": {
+                  "es_ES": "ASTURIAS AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3331",
-                "name": "AVILES MARITIMA"
+                "name": "AVILES MARITIMA",
+                "labels": {
+                  "es_ES": "AVILES MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0801",
-                "name": "BARCELONA AEROPUERTO"
+                "name": "BARCELONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "BARCELONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_812",
-                "name": "BARCELONA MARITIMA EXP"
+                "name": "BARCELONA MARITIMA EXP",
+                "labels": {
+                  "es_ES": "BARCELONA MARITIMA EXP"
+                }
               },
               {
                 "value": "INTRES_0811",
-                "name": "BARCELONA MARITIMA IMP"
+                "name": "BARCELONA MARITIMA IMP",
+                "labels": {
+                  "es_ES": "BARCELONA MARITIMA IMP"
+                }
               },
               {
                 "value": "INTRES_4801",
-                "name": "BILBAO AEROPUERTO"
+                "name": "BILBAO AEROPUERTO",
+                "labels": {
+                  "es_ES": "BILBAO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4811",
-                "name": "BILBAO MARITIMA"
+                "name": "BILBAO MARITIMA",
+                "labels": {
+                  "es_ES": "BILBAO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1111",
-                "name": "CADIZ MARITIMA"
+                "name": "CADIZ MARITIMA",
+                "labels": {
+                  "es_ES": "CADIZ MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3011",
-                "name": "CARTAGENA MARITIMA"
+                "name": "CARTAGENA MARITIMA",
+                "labels": {
+                  "es_ES": "CARTAGENA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1211",
-                "name": "CASTELLON MARIMA"
+                "name": "CASTELLON MARIMA",
+                "labels": {
+                  "es_ES": "CASTELLON MARIMA"
+                }
               },
               {
                 "value": "INTRES_1521",
-                "name": "EL FERROL MARITIMA"
+                "name": "EL FERROL MARITIMA",
+                "labels": {
+                  "es_ES": "EL FERROL MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4631",
-                "name": "GANDIA MARITIMA"
+                "name": "GANDIA MARITIMA",
+                "labels": {
+                  "es_ES": "GANDIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1701",
-                "name": "GERONA AEROPUERTO"
+                "name": "GERONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GERONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3311",
-                "name": "GIJON MARITIMA"
+                "name": "GIJON MARITIMA",
+                "labels": {
+                  "es_ES": "GIJON MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1801",
-                "name": "GRANDA AEROPUERTO"
+                "name": "GRANDA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GRANDA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2001",
-                "name": "GUIPUZCOA AEROPUERTO"
+                "name": "GUIPUZCOA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GUIPUZCOA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2111",
-                "name": "HUELVA MARITIMA"
+                "name": "HUELVA MARITIMA",
+                "labels": {
+                  "es_ES": "HUELVA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0707",
-                "name": "IBIZA AEROPUERTO"
+                "name": "IBIZA AEROPUERTO",
+                "labels": {
+                  "es_ES": "IBIZA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0721",
-                "name": "IBIZA MARITIMA"
+                "name": "IBIZA MARITIMA",
+                "labels": {
+                  "es_ES": "IBIZA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1101",
-                "name": "JEREZ AEROPUERTO"
+                "name": "JEREZ AEROPUERTO",
+                "labels": {
+                  "es_ES": "JEREZ AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1501",
-                "name": "LA CORUNA AEROPUERTO"
+                "name": "LA CORUNA AEROPUERTO",
+                "labels": {
+                  "es_ES": "LA CORUNA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1511",
-                "name": "LA CORUNA MARITIMA"
+                "name": "LA CORUNA MARITIMA",
+                "labels": {
+                  "es_ES": "LA CORUNA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_2801",
-                "name": "MADRID AEROPUERTO"
+                "name": "MADRID AEROPUERTO",
+                "labels": {
+                  "es_ES": "MADRID AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2901",
-                "name": "MALAGA AEROPUERTO"
+                "name": "MALAGA AEROPUERTO",
+                "labels": {
+                  "es_ES": "MALAGA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2911",
-                "name": "MALAGA MARITIMA"
+                "name": "MALAGA MARITIMA",
+                "labels": {
+                  "es_ES": "MALAGA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3621",
-                "name": "MARTIN MARITIMA"
+                "name": "MARTIN MARITIMA",
+                "labels": {
+                  "es_ES": "MARTIN MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0708",
-                "name": "MOHAN AEROPUERTO"
+                "name": "MOHAN AEROPUERTO",
+                "labels": {
+                  "es_ES": "MOHAN AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0731",
-                "name": "MOHAN MARITIMA"
+                "name": "MOHAN MARITIMA",
+                "labels": {
+                  "es_ES": "MOHAN MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1811",
-                "name": "MORIL MARIMA"
+                "name": "MORIL MARIMA",
+                "labels": {
+                  "es_ES": "MORIL MARIMA"
+                }
               },
               {
                 "value": "INTRES_3001",
-                "name": "MURCIA AEROPUERTO"
+                "name": "MURCIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "MURCIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0711",
-                "name": "P . MALLORCA MARITIMA"
+                "name": "P . MALLORCA MARITIMA",
+                "labels": {
+                  "es_ES": "P . MALLORCA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0701",
-                "name": "P. MALLORCA AEROPUERTO"
+                "name": "P. MALLORCA AEROPUERTO",
+                "labels": {
+                  "es_ES": "P. MALLORCA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1711",
-                "name": "PALAMOS MARITIMA"
+                "name": "PALAMOS MARITIMA",
+                "labels": {
+                  "es_ES": "PALAMOS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_2011",
-                "name": "PASAJES MARITIMA"
+                "name": "PASAJES MARITIMA",
+                "labels": {
+                  "es_ES": "PASAJES MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1121",
-                "name": "PUERTO DE SANTA MARIA"
+                "name": "PUERTO DE SANTA MARIA",
+                "labels": {
+                  "es_ES": "PUERTO DE SANTA MARIA"
+                }
               },
               {
                 "value": "INTRES_2711",
-                "name": "RIBADEO MARITIMA"
+                "name": "RIBADEO MARITIMA",
+                "labels": {
+                  "es_ES": "RIBADEO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4621",
-                "name": "SAGUNTO MARITIMA"
+                "name": "SAGUNTO MARITIMA",
+                "labels": {
+                  "es_ES": "SAGUNTO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4321",
-                "name": "SAN CARLOS MARITIMA"
+                "name": "SAN CARLOS MARITIMA",
+                "labels": {
+                  "es_ES": "SAN CARLOS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3901",
-                "name": "SANTANDER AUEROPUERTO"
+                "name": "SANTANDER AUEROPUERTO",
+                "labels": {
+                  "es_ES": "SANTANDER AUEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3911",
-                "name": "SANTANDER MARITIMA"
+                "name": "SANTANDER MARITIMA",
+                "labels": {
+                  "es_ES": "SANTANDER MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1507",
-                "name": "SANTIAGO AEROPUERTO"
+                "name": "SANTIAGO AEROPUERTO",
+                "labels": {
+                  "es_ES": "SANTIAGO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4101",
-                "name": "SEVILLA AEROPUERTO"
+                "name": "SEVILLA AEROPUERTO",
+                "labels": {
+                  "es_ES": "SEVILLA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4111",
-                "name": "SEVILLA MARITIMA"
+                "name": "SEVILLA MARITIMA",
+                "labels": {
+                  "es_ES": "SEVILLA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4301",
-                "name": "TARRAGONA AEROPUERTO"
+                "name": "TARRAGONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "TARRAGONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4311",
-                "name": "TARRAGONA MARITIMA"
+                "name": "TARRAGONA MARITIMA",
+                "labels": {
+                  "es_ES": "TARRAGONA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4601",
-                "name": "VALENCIA AEROPUERTO"
+                "name": "VALENCIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "VALENCIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4611",
-                "name": "VALENCIA MARITIMA"
+                "name": "VALENCIA MARITIMA",
+                "labels": {
+                  "es_ES": "VALENCIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4701",
-                "name": "VALLADOLID AEROPUERTO"
+                "name": "VALLADOLID AEROPUERTO",
+                "labels": {
+                  "es_ES": "VALLADOLID AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3601",
-                "name": "VIGO AEROPUERTO"
+                "name": "VIGO AEROPUERTO",
+                "labels": {
+                  "es_ES": "VIGO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3611",
-                "name": "VIGO MARITIMA"
+                "name": "VIGO MARITIMA",
+                "labels": {
+                  "es_ES": "VIGO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3631",
-                "name": "VILLAGARCIA MARITIMA"
+                "name": "VILLAGARCIA MARITIMA",
+                "labels": {
+                  "es_ES": "VILLAGARCIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_5001",
-                "name": "ZARAGOZA AEROPUERTO"
+                "name": "ZARAGOZA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ZARAGOZA AEROPUERTO"
+                }
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@PO_Transportation_Type@='1' | @PO_Transportation_Type@='4'",
               "evaluable": true
@@ -2668,7 +3693,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [],
@@ -2691,7 +3719,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "isSalesRepresentative",
@@ -2704,7 +3736,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "operator",
@@ -2722,6 +3758,9 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsEmployee@='Y' & @showMRPandProductionFields@='Y'",
               "evaluable": true
@@ -2740,6 +3779,9 @@
             "form": true,
             "reference": "Salary_Category",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsEmployee@='Y'",
               "evaluable": true
@@ -2776,7 +3818,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "AcctSchema",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           }
         ],
         "searchableFields": [],
@@ -2799,7 +3845,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "salaryCategory",
@@ -2814,7 +3864,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Salary_Category",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           }
         ],
         "searchableFields": [],
@@ -2837,7 +3891,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 50
+            }
           },
           {
             "name": "country",
@@ -2857,7 +3914,10 @@
             "reference": "Country",
             "inputMode": "selector",
             "defaultValue": "@COUNTRYDEF@",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "userContact",
@@ -2872,6 +3932,9 @@
             "form": true,
             "reference": "User",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
               "contextParams": [],
@@ -2899,23 +3962,44 @@
             "enumValues": [
               {
                 "value": "GENERIC",
-                "name": "Use Generic Account No."
+                "name": "Use Generic Account No.",
+                "labels": {
+                  "es_ES": "Utilizar Número Genérico de Cuenta"
+                }
               },
               {
                 "value": "IBAN",
-                "name": "Use IBAN"
+                "name": "Use IBAN",
+                "labels": {
+                  "es_ES": "Utilizar IBAN"
+                }
               },
               {
                 "value": "SWIFT",
-                "name": "Use SWIFT + Generic Account No."
+                "name": "Use SWIFT + Generic Account No.",
+                "labels": {
+                  "es_ES": "Usar código SWIFT + Número Genérico de Cuenta"
+                }
               },
               {
                 "value": "SPANISH",
-                "name": "Use Spanish"
+                "name": "Use Spanish",
+                "labels": {
+                  "es_ES": "Utilizar Español"
+                }
               }
             ],
             "defaultValue": "GENERIC",
             "section": "principal",
+            "labels": {
+              "en_US": "Format",
+              "es_ES": "Formato"
+            },
+            "columnWidth": 320,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "UPPER(Value)<>'SPANISH'",
               "contextParams": [],
@@ -2933,7 +4017,11 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "columnWidth": 360,
+            "validation": {
+              "maxLength": 100
+            }
           },
           {
             "name": "iBAN",
@@ -2946,7 +4034,11 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "columnWidth": 400,
+            "validation": {
+              "maxLength": 34
+            }
           },
           {
             "name": "swiftCode",
@@ -2959,7 +4051,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "displayedAccount",
@@ -2972,7 +4067,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 120
+            }
           }
         ],
         "searchableFields": [],
@@ -3014,17 +4112,30 @@
             "enumValues": [
               {
                 "value": "ORD",
-                "name": "Order"
+                "name": "Order",
+                "labels": {
+                  "es_ES": "Order"
+                }
               },
               {
                 "value": "INV",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Invoice"
+                }
               },
               {
                 "value": "SHIP",
-                "name": "Shipment/Receipt"
+                "name": "Shipment/Receipt",
+                "labels": {
+                  "es_ES": "Shipment/Receipt"
+                }
               }
             ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.BusinessPartnerDocTypeValidation"
             }
@@ -3046,6 +4157,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.BusinessPartnerDocTypeValidation"
             }
@@ -3063,7 +4178,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "DocType",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "active",
@@ -3081,7 +4200,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -3122,6 +4245,10 @@
             "sourceRequired": true,
             "reference": "Location",
             "inputMode": "search",
+            "validation": {
+              "required": true,
+              "maxLength": 120
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_BPartnerLocation"
             }
@@ -3137,7 +4264,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "alternativePhone",
@@ -3149,7 +4279,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -3172,6 +4305,10 @@
             "labels": {
               "en_US": "Location / Address",
               "es_ES": "Dirección"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
             }
           },
           {
@@ -3184,7 +4321,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "shipToAddress",
@@ -3207,6 +4347,10 @@
             "labels": {
               "en_US": "Shipping Address",
               "es_ES": "Dir.envíos"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -3230,6 +4374,10 @@
             "labels": {
               "en_US": "Invoicing Address",
               "es_ES": "Dir.factura"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
             }
           },
           {
@@ -3248,7 +4396,11 @@
               "type": "computed",
               "source": "true"
             },
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "taxLocation",
@@ -3267,6 +4419,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_BPartnerLocation"
             }
@@ -3332,6 +4488,9 @@
             "grid": true,
             "form": true,
             "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -3348,6 +4507,9 @@
             "grid": true,
             "form": true,
             "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -3365,6 +4527,10 @@
             "form": false,
             "sourceRequired": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -3380,7 +4546,11 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "columnWidth": 320,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "phone",
@@ -3393,7 +4563,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "alternativePhone",
@@ -3406,7 +4579,10 @@
             "required": false,
             "grid": false,
             "form": false,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "position",
@@ -3419,7 +4595,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "comments",
@@ -3431,7 +4610,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "active",
@@ -3449,7 +4631,11 @@
               "type": "computed",
               "source": "true"
             },
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "isdefaultfordocs",
@@ -3468,7 +4654,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "grantPortalAccess",
@@ -3487,6 +4677,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@isPortalRolePresent@!0",
               "evaluable": true
@@ -3509,7 +4703,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "viasms",
@@ -3529,6 +4727,10 @@
             },
             "defaultValue": "N",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Commercialauth@='Y'",
               "evaluable": true
@@ -3552,6 +4754,10 @@
             },
             "defaultValue": "N",
             "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Commercialauth@='Y'",
               "evaluable": true
@@ -3605,7 +4811,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "javaQualifier": "contactHandler"
       },
       "basicDiscount": {
         "tableName": "C_BPartner_Discount",
@@ -3630,7 +4837,11 @@
               "source": "SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_BPARTNER_DISCOUNT WHERE C_BPARTNER_ID=@C_BPARTNER_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_BPARTNER_DISCOUNT WHERE C_BPARTNER_ID=@C_BPARTNER_ID@",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "discount",
@@ -3646,7 +4857,11 @@
             "sourceRequired": true,
             "reference": "Discount",
             "inputMode": "selector",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "customer",
@@ -3665,7 +4880,11 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "vendor",
@@ -3684,7 +4903,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "applyInOrder",
@@ -3702,7 +4925,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "cascade",
@@ -3720,7 +4947,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -3770,7 +5001,7 @@
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
-      "sidebarLayout": true,
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -3817,6 +5048,30 @@
           "label": "Location",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
+        },
+        "customerAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 4,
+          "label": "Customer Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "customerReceivablesNo",
+            "customerPrepayment"
+          ],
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
+        },
+        "vendorAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 5,
+          "label": "Vendor Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "vendorLiability",
+            "vendorPrepayment"
+          ],
+          "requireSavedRecord": true,
+          "maxDetailLines": 1
         }
       },
       "detailEntity": null,
@@ -3828,7 +5083,8 @@
           "PO_Financial_Account_ID": "Expense Account",
           "EM_Etgo_Web": "Website",
           "EM_Etgo_Firstname": "First Name",
-          "EM_Etgo_Lastname": "Last Name"
+          "EM_Etgo_Lastname": "Last Name",
+          "C_BP_Group_ID": "Contact Category"
         },
         "es_ES": {
           "Name": "Razón Social",
@@ -3837,7 +5093,8 @@
           "PO_Financial_Account_ID": "Cuenta contable de gastos",
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
-          "EM_Etgo_Lastname": "Apellidos"
+          "EM_Etgo_Lastname": "Apellidos",
+          "C_BP_Group_ID": "Categoría de contacto"
         }
       },
       "primaryTabs": [
@@ -3853,7 +5110,6 @@
       ],
       "listViewOptions": {
         "hidePrint": true,
-        "hideEye": true,
         "hideCounter": true,
         "hideLink": true
       },
@@ -3871,7 +5127,179 @@
           "filter": "criteria=%5B%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
         }
       ],
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "import": {
+        "enabled": true,
+        "spec": "contacts",
+        "entity": "businessPartner",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "etgoEmail"
+          ]
+        },
+        "descriptor": "contacts",
+        "fields": [
+          {
+            "target": "name",
+            "aliases": [
+              "nombre comercial",
+              "razon social"
+            ],
+            "label": "Commercial Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoFirstname",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "First Name (Company)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoLastname",
+            "aliases": [
+              "apellido",
+              "apellidos"
+            ],
+            "label": "Last Name (Company)",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoEmail",
+            "aliases": [
+              "email",
+              "correo",
+              "e-mail"
+            ],
+            "isEmail": true,
+            "label": "Email (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoPhone",
+            "aliases": [
+              "telefono",
+              "teléfono"
+            ],
+            "label": "Phone (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "email",
+            "aliases": [
+              "email de contacto"
+            ],
+            "isEmail": true,
+            "label": "Email (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "firstName",
+            "aliases": [
+              "nombre de contacto"
+            ],
+            "label": "First Name (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "lastName",
+            "aliases": [
+              "apellido de contacto"
+            ],
+            "label": "Last Name (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "phone",
+            "aliases": [
+              "telefono de contacto"
+            ],
+            "label": "Phone (Contact)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "position",
+            "aliases": [
+              "cargo"
+            ],
+            "label": "Position",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "address",
+            "aliases": [
+              "direccion",
+              "dirección"
+            ],
+            "label": "Address"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "city",
+            "aliases": [
+              "ciudad"
+            ],
+            "label": "City"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "postal",
+            "aliases": [
+              "codigo postal",
+              "código postal",
+              "cp"
+            ],
+            "label": "Postal Code"
+          },
+          {
+            "target": "country",
+            "aliases": [
+              "pais",
+              "país"
+            ],
+            "label": "Country",
+            "matchEntity": "Country",
+            "required": false,
+            "type": "foreignKey",
+            "reference": "Country"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "region",
+            "aliases": [
+              "provincia",
+              "region",
+              "región"
+            ],
+            "label": "Region"
+          }
+        ]
+      }
     },
     "entities": {
       "businessPartner": {
@@ -3885,7 +5313,8 @@
             "column": "EM_Etgo_Identifier",
             "type": "string",
             "visibility": "readOnly",
-            "required": false
+            "required": false,
+            "order": 0
           },
           {
             "name": "searchKey",
@@ -3893,7 +5322,8 @@
             "column": "Value",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 1
           },
           {
             "name": "name",
@@ -3901,7 +5331,17 @@
             "column": "Name",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 2
+          },
+          {
+            "name": "businessPartnerCategory",
+            "apiKey": "businessPartnerCategory",
+            "column": "C_BP_Group_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true,
+            "order": 3
           },
           {
             "name": "etgoFirstname",
@@ -3909,7 +5349,8 @@
             "column": "EM_Etgo_Firstname",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 4
           },
           {
             "name": "etgoLastname",
@@ -3917,7 +5358,8 @@
             "column": "EM_Etgo_Lastname",
             "type": "string",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 5
           },
           {
             "name": "oBTIKTaxIDKey",
@@ -3925,7 +5367,8 @@
             "column": "EM_OBTIK_Tax_ID_Key",
             "type": "enum",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "order": 6
           },
           {
             "name": "taxID",
@@ -3933,7 +5376,17 @@
             "column": "TaxID",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 7
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false,
+            "order": 8
           },
           {
             "name": "etgoWeb",
@@ -3941,7 +5394,8 @@
             "column": "EM_Etgo_Web",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 9
           },
           {
             "name": "etgoEmail",
@@ -3949,7 +5403,8 @@
             "column": "EM_Etgo_Email",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 10
           },
           {
             "name": "etgoPhone",
@@ -3957,7 +5412,8 @@
             "column": "EM_Etgo_Phone",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "order": 11
           },
           {
             "name": "organization",
@@ -3968,10 +5424,10 @@
             "required": true
           },
           {
-            "name": "businessPartnerCategory",
-            "apiKey": "businessPartnerCategory",
-            "column": "C_BP_Group_ID",
-            "type": "foreignKey",
+            "name": "etgoIsperson",
+            "apiKey": "etgoIsperson",
+            "column": "EM_Etgo_Isperson",
+            "type": "boolean",
             "visibility": "editable",
             "required": true
           },
@@ -4216,14 +5672,6 @@
             "required": true
           },
           {
-            "name": "etgoIsperson",
-            "apiKey": "etgoIsperson",
-            "column": "EM_Etgo_Isperson",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
             "name": "invoiceTerms",
             "apiKey": "invoiceTerms",
             "column": "InvoiceRule",
@@ -4328,6 +5776,14 @@
             "required": false
           },
           {
+            "name": "partnerParent",
+            "apiKey": "partnerParent",
+            "column": "BPartner_Parent_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "birthDay",
             "apiKey": "birthDay",
             "column": "Birthday",
@@ -4340,14 +5796,6 @@
             "apiKey": "birthPlace",
             "column": "Birthplace",
             "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "partnerParent",
-            "apiKey": "partnerParent",
-            "column": "BPartner_Parent_ID",
-            "type": "id",
             "visibility": "system",
             "required": false
           },
@@ -4368,6 +5816,14 @@
             "required": false
           },
           {
+            "name": "salaryCategory",
+            "apiKey": "salaryCategory",
+            "column": "C_Salary_Category_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -4382,14 +5838,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "salaryCategory",
-            "apiKey": "salaryCategory",
-            "column": "C_Salary_Category_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
           },
           {
             "name": "customerBlocking",
@@ -4488,14 +5936,6 @@
             "required": false
           },
           {
-            "name": "cashVAT",
-            "apiKey": "cashVAT",
-            "column": "Iscashvat",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "printDiscount",
             "apiKey": "printDiscount",
             "column": "IsDiscountPrinted",
@@ -4520,6 +5960,14 @@
             "required": false
           },
           {
+            "name": "cashVAT",
+            "apiKey": "cashVAT",
+            "column": "Iscashvat",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "priceList",
             "apiKey": "priceList",
             "column": "M_PriceList_ID",
@@ -4528,26 +5976,10 @@
             "required": false
           },
           {
-            "name": "formOfPayment",
-            "apiKey": "formOfPayment",
-            "column": "PaymentRule",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "pOFormOfPayment",
-            "apiKey": "pOFormOfPayment",
-            "column": "PaymentRulePO",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "bankAccount",
-            "apiKey": "bankAccount",
-            "column": "PO_Bankaccount_ID",
-            "type": "foreignKey",
+            "name": "orderReference",
+            "apiKey": "orderReference",
+            "column": "POReference",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -4555,6 +5987,14 @@
             "name": "taxCategory",
             "apiKey": "taxCategory",
             "column": "PO_BP_TaxCategory_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "bankAccount",
+            "apiKey": "bankAccount",
+            "column": "PO_Bankaccount_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -4624,6 +6064,14 @@
             "required": true
           },
           {
+            "name": "pOPaymentTerms",
+            "apiKey": "pOPaymentTerms",
+            "column": "PO_PaymentTerm_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
             "name": "paymentOut",
             "apiKey": "paymentOut",
             "column": "PO_Payment_Blocking",
@@ -4640,14 +6088,6 @@
             "required": false
           },
           {
-            "name": "pOPaymentTerms",
-            "apiKey": "pOPaymentTerms",
-            "column": "PO_PaymentTerm_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
             "name": "purchasePricelist",
             "apiKey": "purchasePricelist",
             "column": "PO_PriceList_ID",
@@ -4656,18 +6096,18 @@
             "required": false
           },
           {
-            "name": "orderReference",
-            "apiKey": "orderReference",
-            "column": "POReference",
-            "type": "string",
+            "name": "formOfPayment",
+            "apiKey": "formOfPayment",
+            "column": "PaymentRule",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "salesRepresentative",
-            "apiKey": "salesRepresentative",
-            "column": "SalesRep_ID",
-            "type": "foreignKey",
+            "name": "pOFormOfPayment",
+            "apiKey": "pOFormOfPayment",
+            "column": "PaymentRulePO",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
@@ -4734,6 +6174,14 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "updated",
@@ -5104,22 +6552,6 @@
             "required": false
           },
           {
-            "name": "acquisitionCost",
-            "apiKey": "acquisitionCost",
-            "column": "AcqusitionCost",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "lifetimeRevenueToDate",
-            "apiKey": "lifetimeRevenueToDate",
-            "column": "ActualLifeTimeValue",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "forcedOrg",
             "apiKey": "forcedOrg",
             "column": "AD_Forced_Org_ID",
@@ -5136,10 +6568,18 @@
             "required": false
           },
           {
-            "name": "partnerParent",
-            "apiKey": "partnerParent",
-            "column": "BPartner_Parent_ID",
-            "type": "id",
+            "name": "acquisitionCost",
+            "apiKey": "acquisitionCost",
+            "column": "AcqusitionCost",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "lifetimeRevenueToDate",
+            "apiKey": "lifetimeRevenueToDate",
+            "column": "ActualLifeTimeValue",
+            "type": "amount",
             "visibility": "system",
             "required": false
           },
@@ -5148,6 +6588,14 @@
             "apiKey": "bPCurrencyID",
             "column": "BP_Currency_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "partnerParent",
+            "apiKey": "partnerParent",
+            "column": "BPartner_Parent_ID",
+            "type": "id",
             "visibility": "system",
             "required": false
           },
@@ -5163,6 +6611,14 @@
             "name": "greeting",
             "apiKey": "greeting",
             "column": "C_Greeting_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salaryCategory",
+            "apiKey": "salaryCategory",
+            "column": "C_Salary_Category_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -5184,10 +6640,10 @@
             "required": true
           },
           {
-            "name": "salaryCategory",
-            "apiKey": "salaryCategory",
-            "column": "C_Salary_Category_ID",
-            "type": "foreignKey",
+            "name": "dUNS",
+            "apiKey": "dUNS",
+            "column": "DUNS",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -5195,14 +6651,6 @@
             "name": "description",
             "apiKey": "description",
             "column": "Description",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "dUNS",
-            "apiKey": "dUNS",
-            "column": "DUNS",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -5288,6 +6736,14 @@
             "required": true
           },
           {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "tbaiIssimplifiedinv",
             "apiKey": "tbaiIssimplifiedinv",
             "column": "EM_Tbai_Issimplifiedinv",
@@ -5320,36 +6776,12 @@
             "required": false
           },
           {
-            "name": "cashVAT",
-            "apiKey": "cashVAT",
-            "column": "Iscashvat",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "isCustomerConsent",
-            "apiKey": "isCustomerConsent",
-            "column": "Is_Customer_Consent",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "employee",
             "apiKey": "employee",
             "column": "IsEmployee",
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "isofiscalcode",
-            "apiKey": "isofiscalcode",
-            "column": "Isofiscalcode",
-            "type": "string",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "oneTimeTransaction",
@@ -5392,6 +6824,30 @@
             "required": true
           },
           {
+            "name": "isCustomerConsent",
+            "apiKey": "isCustomerConsent",
+            "column": "Is_Customer_Consent",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "cashVAT",
+            "apiKey": "cashVAT",
+            "column": "Iscashvat",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "isofiscalcode",
+            "apiKey": "isofiscalcode",
+            "column": "Isofiscalcode",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "operator",
             "apiKey": "operator",
             "column": "Isworker",
@@ -5432,10 +6888,10 @@
             "required": false
           },
           {
-            "name": "pOFormOfPayment",
-            "apiKey": "pOFormOfPayment",
-            "column": "PaymentRulePO",
-            "type": "enum",
+            "name": "taxCategory",
+            "apiKey": "taxCategory",
+            "column": "PO_BP_TaxCategory_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -5443,14 +6899,6 @@
             "name": "bankAccount",
             "apiKey": "bankAccount",
             "column": "PO_Bankaccount_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "taxCategory",
-            "apiKey": "taxCategory",
-            "column": "PO_BP_TaxCategory_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -5512,6 +6960,14 @@
             "required": true
           },
           {
+            "name": "pOPaymentTerms",
+            "apiKey": "pOPaymentTerms",
+            "column": "PO_PaymentTerm_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "paymentOut",
             "apiKey": "paymentOut",
             "column": "PO_Payment_Blocking",
@@ -5528,18 +6984,18 @@
             "required": false
           },
           {
-            "name": "pOPaymentTerms",
-            "apiKey": "pOPaymentTerms",
-            "column": "PO_PaymentTerm_ID",
+            "name": "purchasePricelist",
+            "apiKey": "purchasePricelist",
+            "column": "PO_PriceList_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "purchasePricelist",
-            "apiKey": "purchasePricelist",
-            "column": "PO_PriceList_ID",
-            "type": "foreignKey",
+            "name": "pOFormOfPayment",
+            "apiKey": "pOFormOfPayment",
+            "column": "PaymentRulePO",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
@@ -5568,6 +7024,14 @@
             "required": false
           },
           {
+            "name": "creditStatus",
+            "apiKey": "creditStatus",
+            "column": "SOCreditStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "volumeOfSales",
             "apiKey": "volumeOfSales",
             "column": "SalesVolume",
@@ -5592,14 +7056,6 @@
             "required": true
           },
           {
-            "name": "creditStatus",
-            "apiKey": "creditStatus",
-            "column": "SOCreditStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "taxID",
             "apiKey": "taxID",
             "column": "TaxID",
@@ -5611,6 +7067,14 @@
             "name": "uPCEAN",
             "apiKey": "uPCEAN",
             "column": "UPC",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uRL",
+            "apiKey": "uRL",
+            "column": "URL",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -5640,14 +7104,6 @@
             "required": true
           },
           {
-            "name": "uRL",
-            "apiKey": "uRL",
-            "column": "URL",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "vendorBlocking",
             "apiKey": "vendorBlocking",
             "column": "Vendor_Blocking",
@@ -5675,7 +7131,7 @@
             "apiKey": "accountingSchema",
             "column": "C_AcctSchema_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -5735,8 +7191,8 @@
             "required": true
           },
           {
-            "name": "cBpCustomerAcctID",
-            "apiKey": "cBpCustomerAcctID",
+            "name": "id",
+            "apiKey": "id",
             "column": "C_Bp_Customer_Acct_ID",
             "type": "id",
             "visibility": "system",
@@ -5774,7 +7230,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "customerAccountingHandler"
       },
       "intrastatShipments": {
         "tableName": "INTR_C_BPARTNER",
@@ -5862,8 +7319,8 @@
             "required": false
           },
           {
-            "name": "intrCBpartner",
-            "apiKey": "intrCBpartner",
+            "name": "id",
+            "apiKey": "id",
             "column": "Intr_C_Bpartner_ID",
             "type": "id",
             "visibility": "system",
@@ -6125,22 +7582,6 @@
             "required": false
           },
           {
-            "name": "acquisitionCost",
-            "apiKey": "acquisitionCost",
-            "column": "AcqusitionCost",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "lifetimeRevenueToDate",
-            "apiKey": "lifetimeRevenueToDate",
-            "column": "ActualLifeTimeValue",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "forcedOrg",
             "apiKey": "forcedOrg",
             "column": "AD_Forced_Org_ID",
@@ -6157,18 +7598,26 @@
             "required": false
           },
           {
-            "name": "birthDay",
-            "apiKey": "birthDay",
-            "column": "Birthday",
-            "type": "date",
+            "name": "acquisitionCost",
+            "apiKey": "acquisitionCost",
+            "column": "AcqusitionCost",
+            "type": "amount",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "birthPlace",
-            "apiKey": "birthPlace",
-            "column": "Birthplace",
-            "type": "string",
+            "name": "lifetimeRevenueToDate",
+            "apiKey": "lifetimeRevenueToDate",
+            "column": "ActualLifeTimeValue",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "bPCurrencyID",
+            "apiKey": "bPCurrencyID",
+            "column": "BP_Currency_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -6181,10 +7630,18 @@
             "required": false
           },
           {
-            "name": "bPCurrencyID",
-            "apiKey": "bPCurrencyID",
-            "column": "BP_Currency_ID",
-            "type": "foreignKey",
+            "name": "birthDay",
+            "apiKey": "birthDay",
+            "column": "Birthday",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "birthPlace",
+            "apiKey": "birthPlace",
+            "column": "Birthplace",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -6221,6 +7678,14 @@
             "required": false
           },
           {
+            "name": "salaryCategory",
+            "apiKey": "salaryCategory",
+            "column": "C_Salary_Category_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -6237,20 +7702,20 @@
             "required": true
           },
           {
-            "name": "salaryCategory",
-            "apiKey": "salaryCategory",
-            "column": "C_Salary_Category_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "customerBlocking",
             "apiKey": "customerBlocking",
             "column": "Customer_Blocking",
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "dUNS",
+            "apiKey": "dUNS",
+            "column": "DUNS",
+            "type": "string",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "deliveryTerms",
@@ -6281,14 +7746,6 @@
             "apiKey": "numberOfCopies",
             "column": "DocumentCopies",
             "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "dUNS",
-            "apiKey": "dUNS",
-            "column": "DUNS",
-            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -6389,6 +7846,14 @@
             "required": true
           },
           {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "tbaiIssimplifiedinv",
             "apiKey": "tbaiIssimplifiedinv",
             "column": "EM_Tbai_Issimplifiedinv",
@@ -6453,9 +7918,9 @@
             "required": false
           },
           {
-            "name": "invoiceGrouping",
-            "apiKey": "invoiceGrouping",
-            "column": "Invoicegrouping",
+            "name": "invoiceTerms",
+            "apiKey": "invoiceTerms",
+            "column": "InvoiceRule",
             "type": "enum",
             "visibility": "system",
             "required": false
@@ -6469,9 +7934,9 @@
             "required": false
           },
           {
-            "name": "invoiceTerms",
-            "apiKey": "invoiceTerms",
-            "column": "InvoiceRule",
+            "name": "invoiceGrouping",
+            "apiKey": "invoiceGrouping",
+            "column": "Invoicegrouping",
             "type": "enum",
             "visibility": "system",
             "required": false
@@ -6483,14 +7948,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "isCustomerConsent",
-            "apiKey": "isCustomerConsent",
-            "column": "Is_Customer_Consent",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "printDiscount",
@@ -6507,14 +7964,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "isofiscalcode",
-            "apiKey": "isofiscalcode",
-            "column": "Isofiscalcode",
-            "type": "string",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "oneTimeTransaction",
@@ -6553,6 +8002,22 @@
             "apiKey": "taxExempt",
             "column": "IsTaxExempt",
             "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "isCustomerConsent",
+            "apiKey": "isCustomerConsent",
+            "column": "Is_Customer_Consent",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "isofiscalcode",
+            "apiKey": "isofiscalcode",
+            "column": "Isofiscalcode",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -6605,18 +8070,18 @@
             "required": false
           },
           {
-            "name": "formOfPayment",
-            "apiKey": "formOfPayment",
-            "column": "PaymentRule",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "orderReference",
             "apiKey": "orderReference",
             "column": "POReference",
             "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "formOfPayment",
+            "apiKey": "formOfPayment",
+            "column": "PaymentRule",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
@@ -6645,36 +8110,12 @@
             "required": false
           },
           {
-            "name": "salesRepresentative",
-            "apiKey": "salesRepresentative",
-            "column": "SalesRep_ID",
-            "type": "foreignKey",
+            "name": "creditStatus",
+            "apiKey": "creditStatus",
+            "column": "SOCreditStatus",
+            "type": "enum",
             "visibility": "system",
             "required": false
-          },
-          {
-            "name": "volumeOfSales",
-            "apiKey": "volumeOfSales",
-            "column": "SalesVolume",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "share",
-            "apiKey": "share",
-            "column": "ShareOfCustomer",
-            "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "pricesShownInOrder",
-            "apiKey": "pricesShownInOrder",
-            "column": "ShowPriceInOrder",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "transactionalBankAccount",
@@ -6699,14 +8140,6 @@
             "type": "amount",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "creditStatus",
-            "apiKey": "creditStatus",
-            "column": "SOCreditStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "creditUsed",
@@ -6757,6 +8190,38 @@
             "required": true
           },
           {
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "volumeOfSales",
+            "apiKey": "volumeOfSales",
+            "column": "SalesVolume",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "share",
+            "apiKey": "share",
+            "column": "ShareOfCustomer",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "pricesShownInOrder",
+            "apiKey": "pricesShownInOrder",
+            "column": "ShowPriceInOrder",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "taxID",
             "apiKey": "taxID",
             "column": "TaxID",
@@ -6768,6 +8233,14 @@
             "name": "uPCEAN",
             "apiKey": "uPCEAN",
             "column": "UPC",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uRL",
+            "apiKey": "uRL",
+            "column": "URL",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -6797,14 +8270,6 @@
             "required": true
           },
           {
-            "name": "uRL",
-            "apiKey": "uRL",
-            "column": "URL",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "eTGOLocation",
             "apiKey": "eTGOLocation",
             "column": "em_etgo_location",
@@ -6824,7 +8289,7 @@
             "apiKey": "accountingSchema",
             "column": "C_AcctSchema_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -6892,8 +8357,8 @@
             "required": true
           },
           {
-            "name": "cBpVendorAcctID",
-            "apiKey": "cBpVendorAcctID",
+            "name": "id",
+            "apiKey": "id",
             "column": "C_Bp_Vendor_Acct_ID",
             "type": "id",
             "visibility": "system",
@@ -6931,7 +8396,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "vendorAccountingHandler"
       },
       "intrastatAdquisitions": {
         "tableName": "INTR_C_BPARTNER",
@@ -7019,8 +8485,8 @@
             "required": true
           },
           {
-            "name": "intrCBpartner",
-            "apiKey": "intrCBpartner",
+            "name": "id",
+            "apiKey": "id",
             "column": "Intr_C_Bpartner_ID",
             "type": "id",
             "visibility": "system",
@@ -7162,22 +8628,6 @@
             "required": true
           },
           {
-            "name": "acquisitionCost",
-            "apiKey": "acquisitionCost",
-            "column": "AcqusitionCost",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "lifetimeRevenueToDate",
-            "apiKey": "lifetimeRevenueToDate",
-            "column": "ActualLifeTimeValue",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "forcedOrg",
             "apiKey": "forcedOrg",
             "column": "AD_Forced_Org_ID",
@@ -7194,18 +8644,26 @@
             "required": false
           },
           {
-            "name": "birthDay",
-            "apiKey": "birthDay",
-            "column": "Birthday",
-            "type": "date",
+            "name": "acquisitionCost",
+            "apiKey": "acquisitionCost",
+            "column": "AcqusitionCost",
+            "type": "amount",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "birthPlace",
-            "apiKey": "birthPlace",
-            "column": "Birthplace",
-            "type": "string",
+            "name": "lifetimeRevenueToDate",
+            "apiKey": "lifetimeRevenueToDate",
+            "column": "ActualLifeTimeValue",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "bPCurrencyID",
+            "apiKey": "bPCurrencyID",
+            "column": "BP_Currency_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -7218,10 +8676,18 @@
             "required": false
           },
           {
-            "name": "bPCurrencyID",
-            "apiKey": "bPCurrencyID",
-            "column": "BP_Currency_ID",
-            "type": "foreignKey",
+            "name": "birthDay",
+            "apiKey": "birthDay",
+            "column": "Birthday",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "birthPlace",
+            "apiKey": "birthPlace",
+            "column": "Birthplace",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -7282,6 +8748,14 @@
             "required": true
           },
           {
+            "name": "dUNS",
+            "apiKey": "dUNS",
+            "column": "DUNS",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "deliveryTerms",
             "apiKey": "deliveryTerms",
             "column": "DeliveryRule",
@@ -7310,14 +8784,6 @@
             "apiKey": "numberOfCopies",
             "column": "DocumentCopies",
             "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "dUNS",
-            "apiKey": "dUNS",
-            "column": "DUNS",
-            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -7418,6 +8884,14 @@
             "required": true
           },
           {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "tbaiIssimplifiedinv",
             "apiKey": "tbaiIssimplifiedinv",
             "column": "EM_Tbai_Issimplifiedinv",
@@ -7482,9 +8956,9 @@
             "required": false
           },
           {
-            "name": "invoiceGrouping",
-            "apiKey": "invoiceGrouping",
-            "column": "Invoicegrouping",
+            "name": "invoiceTerms",
+            "apiKey": "invoiceTerms",
+            "column": "InvoiceRule",
             "type": "enum",
             "visibility": "system",
             "required": false
@@ -7498,20 +8972,12 @@
             "required": false
           },
           {
-            "name": "invoiceTerms",
-            "apiKey": "invoiceTerms",
-            "column": "InvoiceRule",
+            "name": "invoiceGrouping",
+            "apiKey": "invoiceGrouping",
+            "column": "Invoicegrouping",
             "type": "enum",
             "visibility": "system",
             "required": false
-          },
-          {
-            "name": "cashVAT",
-            "apiKey": "cashVAT",
-            "column": "Iscashvat",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "customer",
@@ -7522,26 +8988,10 @@
             "required": true
           },
           {
-            "name": "isCustomerConsent",
-            "apiKey": "isCustomerConsent",
-            "column": "Is_Customer_Consent",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "printDiscount",
             "apiKey": "printDiscount",
             "column": "IsDiscountPrinted",
             "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "isofiscalcode",
-            "apiKey": "isofiscalcode",
-            "column": "Isofiscalcode",
-            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -7586,6 +9036,30 @@
             "required": true
           },
           {
+            "name": "isCustomerConsent",
+            "apiKey": "isCustomerConsent",
+            "column": "Is_Customer_Consent",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "cashVAT",
+            "apiKey": "cashVAT",
+            "column": "Iscashvat",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "isofiscalcode",
+            "apiKey": "isofiscalcode",
+            "column": "Isofiscalcode",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "consumptionDays",
             "apiKey": "consumptionDays",
             "column": "Last_Days",
@@ -7626,26 +9100,10 @@
             "required": false
           },
           {
-            "name": "formOfPayment",
-            "apiKey": "formOfPayment",
-            "column": "PaymentRule",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "pOFormOfPayment",
-            "apiKey": "pOFormOfPayment",
-            "column": "PaymentRulePO",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "bankAccount",
-            "apiKey": "bankAccount",
-            "column": "PO_Bankaccount_ID",
-            "type": "foreignKey",
+            "name": "orderReference",
+            "apiKey": "orderReference",
+            "column": "POReference",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -7653,6 +9111,14 @@
             "name": "taxCategory",
             "apiKey": "taxCategory",
             "column": "PO_BP_TaxCategory_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "bankAccount",
+            "apiKey": "bankAccount",
+            "column": "PO_Bankaccount_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
@@ -7722,6 +9188,14 @@
             "required": true
           },
           {
+            "name": "pOPaymentTerms",
+            "apiKey": "pOPaymentTerms",
+            "column": "PO_PaymentTerm_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "paymentOut",
             "apiKey": "paymentOut",
             "column": "PO_Payment_Blocking",
@@ -7738,14 +9212,6 @@
             "required": false
           },
           {
-            "name": "pOPaymentTerms",
-            "apiKey": "pOPaymentTerms",
-            "column": "PO_PaymentTerm_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "purchasePricelist",
             "apiKey": "purchasePricelist",
             "column": "PO_PriceList_ID",
@@ -7754,10 +9220,18 @@
             "required": false
           },
           {
-            "name": "orderReference",
-            "apiKey": "orderReference",
-            "column": "POReference",
-            "type": "string",
+            "name": "formOfPayment",
+            "apiKey": "formOfPayment",
+            "column": "PaymentRule",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "pOFormOfPayment",
+            "apiKey": "pOFormOfPayment",
+            "column": "PaymentRulePO",
+            "type": "enum",
             "visibility": "system",
             "required": false
           },
@@ -7786,36 +9260,12 @@
             "required": false
           },
           {
-            "name": "salesRepresentative",
-            "apiKey": "salesRepresentative",
-            "column": "SalesRep_ID",
-            "type": "foreignKey",
+            "name": "creditStatus",
+            "apiKey": "creditStatus",
+            "column": "SOCreditStatus",
+            "type": "enum",
             "visibility": "system",
             "required": false
-          },
-          {
-            "name": "volumeOfSales",
-            "apiKey": "volumeOfSales",
-            "column": "SalesVolume",
-            "type": "amount",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "share",
-            "apiKey": "share",
-            "column": "ShareOfCustomer",
-            "type": "integer",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "pricesShownInOrder",
-            "apiKey": "pricesShownInOrder",
-            "column": "ShowPriceInOrder",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "transactionalBankAccount",
@@ -7848,14 +9298,6 @@
             "type": "amount",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "creditStatus",
-            "apiKey": "creditStatus",
-            "column": "SOCreditStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "creditUsed",
@@ -7906,6 +9348,38 @@
             "required": true
           },
           {
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "volumeOfSales",
+            "apiKey": "volumeOfSales",
+            "column": "SalesVolume",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "share",
+            "apiKey": "share",
+            "column": "ShareOfCustomer",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "pricesShownInOrder",
+            "apiKey": "pricesShownInOrder",
+            "column": "ShowPriceInOrder",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "taxID",
             "apiKey": "taxID",
             "column": "TaxID",
@@ -7917,6 +9391,14 @@
             "name": "uPCEAN",
             "apiKey": "uPCEAN",
             "column": "UPC",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uRL",
+            "apiKey": "uRL",
+            "column": "URL",
             "type": "string",
             "visibility": "system",
             "required": false
@@ -7944,14 +9426,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "uRL",
-            "apiKey": "uRL",
-            "column": "URL",
-            "type": "string",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "vendorBlocking",
@@ -8136,8 +9610,8 @@
             "required": true
           },
           {
-            "name": "cBpSalcategoryID",
-            "apiKey": "cBpSalcategoryID",
+            "name": "id",
+            "apiKey": "id",
             "column": "C_Bp_Salcategory_ID",
             "type": "id",
             "visibility": "system",
@@ -8510,8 +9984,8 @@
             "required": true
           },
           {
-            "name": "cBpartnerDoctypeID",
-            "apiKey": "cBpartnerDoctypeID",
+            "name": "id",
+            "apiKey": "id",
             "column": "C_Bpartner_Doctype_ID",
             "type": "id",
             "visibility": "system",
@@ -9053,20 +10527,20 @@
             "required": false
           },
           {
-            "name": "isPasswordExpired",
-            "apiKey": "isPasswordExpired",
-            "column": "Isexpiredpassword",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "locked",
             "apiKey": "locked",
             "column": "IsLocked",
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "isPasswordExpired",
+            "apiKey": "isPasswordExpired",
+            "column": "Isexpiredpassword",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "lastPasswordUpdate",
@@ -9100,7 +10574,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "contactHandler"
       },
       "basicDiscount": {
         "tableName": "C_BPartner_Discount",
@@ -9164,8 +10639,8 @@
             "required": true
           },
           {
-            "name": "cBpartnerDiscountID",
-            "apiKey": "cBpartnerDiscountID",
+            "name": "id",
+            "apiKey": "id",
             "column": "C_Bpartner_Discount_ID",
             "type": "id",
             "visibility": "system",
@@ -9725,7 +11200,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/customerAccounting",
         "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
         "supportedFilters": []
@@ -9758,7 +11233,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/contacts/vendorAccounting",
         "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
         "supportedFilters": []
@@ -9939,15 +11414,16 @@
         "column": "PO_Financial_Account_ID",
         "reference": "FIN_Financial_Account",
         "inputMode": "selector",
-        "url": "/sws/neo/contacts/businessPartner/selectors/pOFinancialAccount"
-      },
-      {
-        "entity": "businessPartner",
-        "field": "pOPaymentMethod",
-        "column": "PO_Paymentmethod_ID",
-        "reference": "PaymentMethod",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
+        "url": "/sws/neo/contacts/businessPartner/selectors/pOFinancialAccount",
+        "context": {
+          "required": [
+            {
+              "param": "PO_Paymentmethod_ID",
+              "source": "field",
+              "field": "pOPaymentMethod"
+            }
+          ]
+        }
       },
       {
         "entity": "businessPartner",
@@ -9956,6 +11432,14 @@
         "reference": "PaymentTerm",
         "inputMode": "selector",
         "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentTerms"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "pOPaymentMethod",
+        "column": "PO_Paymentmethod_ID",
+        "reference": "PaymentMethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
       },
       {
         "entity": "businessPartner",
@@ -10023,14 +11507,6 @@
       },
       {
         "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/customerAccounting/selectors/accountingSchema"
-      },
-      {
-        "entity": "customerAccounting",
         "field": "customerReceivablesNo",
         "column": "C_Receivable_Acct",
         "reference": "ValidCombination",
@@ -10083,7 +11559,16 @@
         "column": "PO_Financial_Account_ID",
         "reference": "Financial_Account",
         "inputMode": "search",
-        "url": "/sws/neo/contacts/vendorCreditor/selectors/pOFinancialAccount"
+        "url": "/sws/neo/contacts/vendorCreditor/selectors/pOFinancialAccount",
+        "context": {
+          "required": [
+            {
+              "param": "PO_Paymentmethod_ID",
+              "source": "parentField",
+              "field": "pOPaymentMethod"
+            }
+          ]
+        }
       },
       {
         "entity": "vendorCreditor",
@@ -10092,14 +11577,6 @@
         "reference": "BP_TaxCategory",
         "inputMode": "search",
         "url": "/sws/neo/contacts/vendorCreditor/selectors/taxCategory"
-      },
-      {
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/vendorAccounting/selectors/accountingSchema"
       },
       {
         "entity": "vendorAccounting",
@@ -10269,7 +11746,8 @@
         "PO_Financial_Account_ID": "Expense Account",
         "EM_Etgo_Web": "Website",
         "EM_Etgo_Firstname": "First Name",
-        "EM_Etgo_Lastname": "Last Name"
+        "EM_Etgo_Lastname": "Last Name",
+        "C_BP_Group_ID": "Contact Category"
       },
       "es_ES": {
         "Name": "Razón Social",
@@ -10278,7 +11756,8 @@
         "PO_Financial_Account_ID": "Cuenta contable de gastos",
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
-        "EM_Etgo_Lastname": "Apellidos"
+        "EM_Etgo_Lastname": "Apellidos",
+        "C_BP_Group_ID": "Categoría de contacto"
       }
     }
   },
@@ -10556,6 +12035,14 @@
         "field": "oBTIKTaxIDKey",
         "runner": "node",
         "description": "Default value for 'oBTIKTaxIDKey' in businessPartner should be a string"
+      },
+      {
+        "id": "t-default-value-type-businessPartner-oBTIKVIESStatus",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Default value for 'oBTIKVIESStatus' in businessPartner should be a string"
       },
       {
         "id": "t-default-value-type-businessPartner-operator",
@@ -10876,6 +12363,14 @@
         "field": "etgoLastname",
         "runner": "node",
         "description": "Display logic for 'etgoLastname' in businessPartner should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-businessPartner-oBTIKVIESStatus",
+        "category": "displaylogic-evaluable",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Display logic for 'oBTIKVIESStatus' in businessPartner should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-businessPartner-paymentMethod",
@@ -11332,6 +12827,14 @@
         "field": "etgoLastname",
         "runner": "node",
         "description": "Display logic for 'etgoLastname' in businessPartner should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-businessPartner-oBTIKVIESStatus",
+        "category": "displaylogic-valid",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Display logic for 'oBTIKVIESStatus' in businessPartner should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-businessPartner-paymentMethod",
@@ -12030,6 +13533,14 @@
         "description": "Field 'oBTIKTaxIDKey' should be present in businessPartner"
       },
       {
+        "id": "t-field-presence-businessPartner-oBTIKVIESStatus",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Field 'oBTIKVIESStatus' should be present in businessPartner"
+      },
+      {
         "id": "t-field-presence-businessPartner-operator",
         "category": "field-presence",
         "entity": "businessPartner",
@@ -12462,14 +13973,6 @@
         "description": "Field 'taxExempt' should be present in customer"
       },
       {
-        "id": "t-field-presence-customerAccounting-accountingSchema",
-        "category": "field-presence",
-        "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should be present in customerAccounting"
-      },
-      {
         "id": "t-field-presence-customerAccounting-customerPrepayment",
         "category": "field-presence",
         "entity": "customerAccounting",
@@ -12708,14 +14211,6 @@
         "field": "taxLocation",
         "runner": "node",
         "description": "Field 'taxLocation' should be present in locationAddress"
-      },
-      {
-        "id": "t-field-presence-vendorAccounting-accountingSchema",
-        "category": "field-presence",
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should be present in vendorAccounting"
       },
       {
         "id": "t-field-presence-vendorAccounting-vendorLiability",
@@ -13166,6 +14661,14 @@
         "description": "Field 'oBTIKTaxIDKey' should have type 'string' in businessPartner"
       },
       {
+        "id": "t-field-type-businessPartner-oBTIKVIESStatus",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Field 'oBTIKVIESStatus' should have type 'string' in businessPartner"
+      },
+      {
         "id": "t-field-type-businessPartner-operator",
         "category": "field-type",
         "entity": "businessPartner",
@@ -13598,14 +15101,6 @@
         "description": "Field 'taxExempt' should have type 'boolean' in customer"
       },
       {
-        "id": "t-field-type-customerAccounting-accountingSchema",
-        "category": "field-type",
-        "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should have type 'string' in customerAccounting"
-      },
-      {
         "id": "t-field-type-customerAccounting-customerPrepayment",
         "category": "field-type",
         "entity": "customerAccounting",
@@ -13844,14 +15339,6 @@
         "field": "taxLocation",
         "runner": "node",
         "description": "Field 'taxLocation' should have type 'boolean' in locationAddress"
-      },
-      {
-        "id": "t-field-type-vendorAccounting-accountingSchema",
-        "category": "field-type",
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should have type 'string' in vendorAccounting"
       },
       {
         "id": "t-field-type-vendorAccounting-vendorLiability",
@@ -14107,6 +15594,13 @@
         "rule": "contacts-Business Partner-EM_Etgo_Lastname-displayLogic",
         "runner": "node",
         "description": "Rule 'contacts-Business Partner-EM_Etgo_Lastname-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-contacts-Business-Partner-EM-OBTIK-VIESStatus-displayLogic",
+        "category": "rule-declared",
+        "rule": "contacts-Business Partner-EM_OBTIK_VIESStatus-displayLogic",
+        "runner": "node",
+        "description": "Rule 'contacts-Business Partner-EM_OBTIK_VIESStatus-displayLogic' (displayLogic) should be declared"
       },
       {
         "id": "t-rule-declared-contacts-Business-Partner-FirstSale-displayLogic",
@@ -14927,14 +16421,6 @@
         "description": "Selector endpoint for 'sOBPTaxCategory' in customer should exist"
       },
       {
-        "id": "t-selector-endpoint-customerAccounting-accountingSchema",
-        "category": "selector-endpoint",
-        "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Selector endpoint for 'accountingSchema' in customerAccounting should exist"
-      },
-      {
         "id": "t-selector-endpoint-customerAccounting-customerPrepayment",
         "category": "selector-endpoint",
         "entity": "customerAccounting",
@@ -15005,14 +16491,6 @@
         "field": "locationAddress",
         "runner": "node",
         "description": "Selector endpoint for 'locationAddress' in locationAddress should exist"
-      },
-      {
-        "id": "t-selector-endpoint-vendorAccounting-accountingSchema",
-        "category": "selector-endpoint",
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Selector endpoint for 'accountingSchema' in vendorAccounting should exist"
       },
       {
         "id": "t-selector-endpoint-vendorAccounting-vendorLiability",
@@ -15287,14 +16765,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for basicDiscount"
       },
       {
-        "id": "t-system-field-basicDiscount-cBpartnerDiscountID",
-        "category": "system-field",
-        "entity": "basicDiscount",
-        "field": "cBpartnerDiscountID",
-        "runner": "node",
-        "description": "System field 'cBpartnerDiscountID' should exist in backend but not frontend for basicDiscount"
-      },
-      {
         "id": "t-system-field-basicDiscount-client",
         "category": "system-field",
         "entity": "basicDiscount",
@@ -15317,6 +16787,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for basicDiscount"
+      },
+      {
+        "id": "t-system-field-basicDiscount-id",
+        "category": "system-field",
+        "entity": "basicDiscount",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for basicDiscount"
       },
       {
         "id": "t-system-field-basicDiscount-organization",
@@ -16175,14 +17653,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for costSalaryCategory"
       },
       {
-        "id": "t-system-field-costSalaryCategory-cBpSalcategoryID",
-        "category": "system-field",
-        "entity": "costSalaryCategory",
-        "field": "cBpSalcategoryID",
-        "runner": "node",
-        "description": "System field 'cBpSalcategoryID' should exist in backend but not frontend for costSalaryCategory"
-      },
-      {
         "id": "t-system-field-costSalaryCategory-client",
         "category": "system-field",
         "entity": "costSalaryCategory",
@@ -16205,6 +17675,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for costSalaryCategory"
+      },
+      {
+        "id": "t-system-field-costSalaryCategory-id",
+        "category": "system-field",
+        "entity": "costSalaryCategory",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for costSalaryCategory"
       },
       {
         "id": "t-system-field-costSalaryCategory-organization",
@@ -16639,6 +18117,14 @@
         "description": "System field 'oBTIKTaxIDKey' should exist in backend but not frontend for customer"
       },
       {
+        "id": "t-system-field-customer-oBTIKVIESStatus",
+        "category": "system-field",
+        "entity": "customer",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "System field 'oBTIKVIESStatus' should exist in backend but not frontend for customer"
+      },
+      {
         "id": "t-system-field-customer-oneTimeTransaction",
         "category": "system-field",
         "entity": "customer",
@@ -16943,6 +18429,14 @@
         "description": "System field 'volumeOfSales' should exist in backend but not frontend for customer"
       },
       {
+        "id": "t-system-field-customerAccounting-accountingSchema",
+        "category": "system-field",
+        "entity": "customerAccounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for customerAccounting"
+      },
+      {
         "id": "t-system-field-customerAccounting-active",
         "category": "system-field",
         "entity": "customerAccounting",
@@ -16957,14 +18451,6 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "System field 'businessPartner' should exist in backend but not frontend for customerAccounting"
-      },
-      {
-        "id": "t-system-field-customerAccounting-cBpCustomerAcctID",
-        "category": "system-field",
-        "entity": "customerAccounting",
-        "field": "cBpCustomerAcctID",
-        "runner": "node",
-        "description": "System field 'cBpCustomerAcctID' should exist in backend but not frontend for customerAccounting"
       },
       {
         "id": "t-system-field-customerAccounting-client",
@@ -16989,6 +18475,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for customerAccounting"
+      },
+      {
+        "id": "t-system-field-customerAccounting-id",
+        "category": "system-field",
+        "entity": "customerAccounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for customerAccounting"
       },
       {
         "id": "t-system-field-customerAccounting-organization",
@@ -17031,14 +18525,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for documentType"
       },
       {
-        "id": "t-system-field-documentType-cBpartnerDoctypeID",
-        "category": "system-field",
-        "entity": "documentType",
-        "field": "cBpartnerDoctypeID",
-        "runner": "node",
-        "description": "System field 'cBpartnerDoctypeID' should exist in backend but not frontend for documentType"
-      },
-      {
         "id": "t-system-field-documentType-client",
         "category": "system-field",
         "entity": "documentType",
@@ -17061,6 +18547,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for documentType"
+      },
+      {
+        "id": "t-system-field-documentType-id",
+        "category": "system-field",
+        "entity": "documentType",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for documentType"
       },
       {
         "id": "t-system-field-documentType-isForceAutomation",
@@ -17591,6 +19085,14 @@
         "description": "System field 'oBTIKTaxIDKey' should exist in backend but not frontend for employee"
       },
       {
+        "id": "t-system-field-employee-oBTIKVIESStatus",
+        "category": "system-field",
+        "entity": "employee",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "System field 'oBTIKVIESStatus' should exist in backend but not frontend for employee"
+      },
+      {
         "id": "t-system-field-employee-oneTimeTransaction",
         "category": "system-field",
         "entity": "employee",
@@ -18071,12 +19573,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for intrastatAdquisitions"
       },
       {
-        "id": "t-system-field-intrastatAdquisitions-intrCBpartner",
+        "id": "t-system-field-intrastatAdquisitions-id",
         "category": "system-field",
         "entity": "intrastatAdquisitions",
-        "field": "intrCBpartner",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'intrCBpartner' should exist in backend but not frontend for intrastatAdquisitions"
+        "description": "System field 'id' should exist in backend but not frontend for intrastatAdquisitions"
       },
       {
         "id": "t-system-field-intrastatAdquisitions-organization",
@@ -18175,12 +19677,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for intrastatShipments"
       },
       {
-        "id": "t-system-field-intrastatShipments-intrCBpartner",
+        "id": "t-system-field-intrastatShipments-id",
         "category": "system-field",
         "entity": "intrastatShipments",
-        "field": "intrCBpartner",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'intrCBpartner' should exist in backend but not frontend for intrastatShipments"
+        "description": "System field 'id' should exist in backend but not frontend for intrastatShipments"
       },
       {
         "id": "t-system-field-intrastatShipments-organization",
@@ -18327,6 +19829,14 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for locationAddress"
       },
       {
+        "id": "t-system-field-vendorAccounting-accountingSchema",
+        "category": "system-field",
+        "entity": "vendorAccounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for vendorAccounting"
+      },
+      {
         "id": "t-system-field-vendorAccounting-active",
         "category": "system-field",
         "entity": "vendorAccounting",
@@ -18341,14 +19851,6 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "System field 'businessPartner' should exist in backend but not frontend for vendorAccounting"
-      },
-      {
-        "id": "t-system-field-vendorAccounting-cBpVendorAcctID",
-        "category": "system-field",
-        "entity": "vendorAccounting",
-        "field": "cBpVendorAcctID",
-        "runner": "node",
-        "description": "System field 'cBpVendorAcctID' should exist in backend but not frontend for vendorAccounting"
       },
       {
         "id": "t-system-field-vendorAccounting-client",
@@ -18373,6 +19875,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for vendorAccounting"
+      },
+      {
+        "id": "t-system-field-vendorAccounting-id",
+        "category": "system-field",
+        "entity": "vendorAccounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for vendorAccounting"
       },
       {
         "id": "t-system-field-vendorAccounting-organization",
@@ -18911,6 +20421,14 @@
         "description": "System field 'oBTIKTaxIDKey' should exist in backend but not frontend for vendorCreditor"
       },
       {
+        "id": "t-system-field-vendorCreditor-oBTIKVIESStatus",
+        "category": "system-field",
+        "entity": "vendorCreditor",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "System field 'oBTIKVIESStatus' should exist in backend but not frontend for vendorCreditor"
+      },
+      {
         "id": "t-system-field-vendorCreditor-oneTimeTransaction",
         "category": "system-field",
         "entity": "vendorCreditor",
@@ -19289,23 +20807,23 @@
       }
     ],
     "summary": {
-      "total": 1142,
+      "total": 1147,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
-        "default-value-type": 46,
-        "displaylogic-evaluable": 57,
-        "displaylogic-valid": 57,
-        "field-presence": 142,
-        "field-type": 142,
-        "rule-declared": 103,
+        "default-value-type": 47,
+        "displaylogic-evaluable": 58,
+        "displaylogic-valid": 58,
+        "field-presence": 141,
+        "field-type": 141,
+        "rule-declared": 104,
         "searchable-filters": 4,
-        "selector-endpoint": 41,
-        "system-field": 514,
+        "selector-endpoint": 39,
+        "system-field": 519,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1142,
+        "node": 1147,
         "junit": 0
       }
     }

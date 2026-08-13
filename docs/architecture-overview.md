@@ -87,6 +87,21 @@ Schema Forge decides **what** to expose. Etendo Go decides **how** to serve it.
 | Contract tests | Node.js (JSON assertions) | Schema Forge |
 | Integration tests | JUnit (extends OBBaseTest) | Etendo Go |
 
+## Transactional Email Boundary
+
+Transactional email is a NEO Headless runtime capability, not a frontend/provider integration. Schema Forge documents contract methodology and app-shell integration rules; Etendo Go executes sends through server-side email contracts.
+
+Required boundary:
+
+```
+React SPA -> /sws/neo/email-contracts/{contractName}/send
+  -> EmailContractExecutor
+  -> Provider adapter
+  -> External email provider
+```
+
+The SPA sends a contract command. It must not receive provider secrets or send arbitrary `to/template/data` provider payloads. See [transactional-email-framework.md](transactional-email-framework.md), [email-contracts.md](email-contracts.md), and [ops/transactional-email-security.md](ops/transactional-email-security.md).
+
 ## Repository Structure
 
 ```

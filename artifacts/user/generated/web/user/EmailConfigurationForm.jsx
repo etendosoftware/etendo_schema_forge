@@ -8,7 +8,7 @@ const fields = [
   { key: 'smtpServerAccount', column: 'Smtpserveraccount', type: 'text', label: 'Smtp Server Account', section: 'auth' },
   { key: 'smtpServerPassword', column: 'Smtpserverpassword', type: 'text', label: 'Smtp Server Password', section: 'auth' },
   { key: 'smtpServerSenderAddress', column: 'Smtpserversenderaddress', type: 'text', label: 'Smtp Server Sender Address', section: 'sender' },
-  { key: 'smtpConnectionSecurity', column: 'Smtpconnectionsecurity', type: 'select', label: 'SMTP Connection Security', required: true, section: 'server', options: [{ value: 'N', label: 'None' }, { value: 'STARTTLS', label: 'STARTTLS' }, { value: 'SSL', label: 'SSL' }] },
+  { key: 'smtpConnectionSecurity', column: 'Smtpconnectionsecurity', type: 'select', label: 'SMTP Connection Security', required: true, section: 'server', options: [{ value: 'N', label: 'None', labels: {"es_ES":"Ninguna"} }, { value: 'STARTTLS', label: 'STARTTLS', labels: {"es_ES":"STARTTLS"} }, { value: 'SSL', label: 'SSL', labels: {"es_ES":"SSL"} }] },
   { key: 'smtpPort', column: 'Smtpport', type: 'number', label: 'Smtp Port', required: true, section: 'server', defaultValue: '25' },
   { key: 'smtpConnectionTimeout', column: 'SmtpTimeout', type: 'number', label: 'Smtp Connection Timeout', section: 'server', defaultValue: '600' },
   { key: 'fromName', column: 'Smtpserverfromname', type: 'text', label: 'From Name', section: 'sender' },

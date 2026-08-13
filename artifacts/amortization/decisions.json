@@ -1,0 +1,738 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "finance",
+    "name": "Amortization",
+    "breadcrumb": "Finance / Amortization",
+    "titleField": "name",
+    "linesLayout": "inlineEditable",
+    "statusField": "processed",
+    "hideDeleteButton": true,
+    "hideCreate": true,
+    "summaryFields": [],
+    "hidePrint": true,
+    "hideLink": true,
+    "toolbarButtonSize": "default",
+    "noHeaderBorder": true,
+    "whiteFormBackground": true,
+    "listbarPaddingX": "px-2",
+    "tablePaddingX": "px-2",
+    "customLinesComponent": "AmortizationLinesTable",
+    "customLinesLabel": "Lines",
+    "relatedDocuments": false,
+    "draftMode": {
+      "enabled": true,
+      "processField": "Processed",
+      "processValue": "Y",
+      "label": "confirm",
+      "confirmModal": "AmortizationConfirmModal",
+      "disableWhenEmpty": true
+    },
+    "menuActions": [
+      {
+        "key": "reactivate",
+        "label": "Reactivate",
+        "labelKey": "reactivate",
+        "visibleWhenFieldTrue": "processed",
+        "preUnpost": true,
+        "columnName": "Processed"
+      },
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      }
+    ],
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Nombre",
+        "Description": "Descripción",
+        "DateAcct": "Fecha contable",
+        "StartDate": "Fecha de inicio",
+        "Totalamortization": "Amortización total",
+        "C_Currency_ID": "Moneda",
+        "A_Asset_ID": "Activo",
+        "Amortization_Percentage": "% Amortización",
+        "Amortizationamt": "Importe amortización",
+        "Line": "Nº línea",
+        "C_Project_ID": "Proyecto",
+        "C_Costcenter_ID": "Centro de costo",
+        "User1_ID": "1ª Dimensión",
+        "User2_ID": "2ª Dimensión",
+        "EM_Etadas_C_Bpartner_ID": "Contacto",
+        "EM_Etadas_Salesregion_ID": "Región de ventas",
+        "EM_Etadas_C_Activity_ID": "Actividad",
+        "EM_Etadas_Campaign_ID": "Campaña"
+      },
+      "en_US": {
+        "Name": "Name",
+        "Description": "Description",
+        "DateAcct": "Accounting Date",
+        "StartDate": "Starting Date",
+        "Totalamortization": "Total Amortization",
+        "C_Currency_ID": "Currency",
+        "A_Asset_ID": "Asset",
+        "Amortization_Percentage": "Amortization %",
+        "Amortizationamt": "Amortization Amount",
+        "Line": "Line No.",
+        "C_Project_ID": "Project",
+        "C_Costcenter_ID": "Cost Center",
+        "User1_ID": "1st Dimension",
+        "User2_ID": "2nd Dimension",
+        "EM_Etadas_C_Bpartner_ID": "Contact",
+        "EM_Etadas_Salesregion_ID": "Sales Region",
+        "EM_Etadas_C_Activity_ID": "Activity",
+        "EM_Etadas_Campaign_ID": "Sales Campaign"
+      }
+    },
+    "processOverrides": {
+      "etblkpBulkposting": {
+        "exclude": true
+      }
+    },
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ]
+  },
+  "entities": {
+    "header": {
+      "javaQualifier": "amortizationHeaderHandler",
+      "fields": {
+        "name": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "seq": 10,
+          "section": "principal"
+        },
+        "description": {
+          "form": true,
+          "grid": false,
+          "seq": 50,
+          "section": "principal"
+        },
+        "accountingDate": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "seq": 20,
+          "dot": false,
+          "defaultExpr": "@#Date@",
+          "section": "principal",
+          "_note": "ETP-4531: exception confirmed 2026-07-17 (see Jira comment) — Amortización is NOT a duplicate document-date/accounting-date pair like Facturas/Albaranes/Pedidos. accountingDate is already not independently editable by the user (auto-defaulted via @#Date@), which satisfies the spirit of unification. startingDate is a distinct schedule concept, not a duplicate of this field. No functional change made under this ticket."
+        },
+        "startingDate": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "seq": 30,
+          "dot": false,
+          "section": "principal"
+        },
+        "totalAmortization": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "seq": 40,
+          "columnType": "amount",
+          "summable": true
+        },
+        "currency": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": true,
+          "seq": 35,
+          "section": "principal",
+          "defaultExpr": "@$C_Currency_ID@",
+          "inputMode": "selector",
+          "reference": "Currency"
+        },
+        "processed": {
+          "visibility": "editable",
+          "grid": true,
+          "form": false,
+          "filterOnly": true,
+          "searchable": false,
+          "columnType": "status",
+          "enumValues": [
+            {
+              "value": "N",
+              "name": "statusDraft"
+            },
+            {
+              "value": "Y",
+              "name": "statusProcessed"
+            }
+          ]
+        },
+        "etblkpAccountingstatus": {
+          "visibility": "discarded",
+          "reason": "Accounting Status — removes the empty 'Others' tab; out of MVP scope"
+        },
+        "etblkpBulkposting": {
+          "visibility": "discarded",
+          "reason": "Bulk Posting accounting process — button already excluded via processOverrides; discard removes the stale label from the SummaryBar and requiredHeaderFields"
+        },
+        "project": {
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@), promoted from discarded to match TC-104. Moved from \"other\" to \"principal\", same convention as sales-invoice/goods-shipment/purchase-invoice/goods-receipt header.project."
+        },
+        "salesCampaign": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — only visible when @$Element_MC@='Y'"
+        },
+        "activity": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — only visible when @$Element_AY@='Y'"
+        },
+        "stDimension": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
+        },
+        "ndDimension": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
+        },
+        "posted": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "en_US": "Posted",
+              "es_ES": "Contabilizado"
+            },
+            "false": {
+              "en_US": "Not posted",
+              "es_ES": "Sin contabilizar"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
+        }
+      }
+    },
+    "lines": {
+      "fields": {
+        "lineNo": {
+          "visibility": "system",
+          "reason": "Auto-incremented sequence per parent amortization document"
+        },
+        "asset": {
+          "grid": true,
+          "form": true,
+          "inputMode": "selector",
+          "reference": "Asset",
+          "grow": true
+        },
+        "amortizationPercentage": {
+          "grid": true,
+          "form": true,
+          "grow": true
+        },
+        "amortizationAmount": {
+          "grid": true,
+          "form": true,
+          "noTrailing": true,
+          "required": true
+        },
+        "currency": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "inputMode": "selector",
+          "reference": "Currency",
+          "reason": "Inherited from header — shown in the header form, redundant on each line"
+        },
+        "project": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 4,
+          "form": true,
+          "lookup": true
+        },
+        "costcenter": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 5,
+          "form": true,
+          "lookup": true
+        },
+        "stDimension": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
+        },
+        "ndDimension": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
+        },
+        "eTADASBpartner": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 8,
+          "form": true,
+          "lookup": true
+        },
+        "eTADASSalesRegion": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
+        },
+        "eTADASActivity": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
+        },
+        "eTADASSalesCampaign": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — out of MVP scope"
+        }
+      }
+    },
+    "accounting": {
+      "exclude": true
+    }
+  },
+  "rules": {
+    "AD_Org show child organizations": {
+      "type": "validation",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Restrict organization selector to child orgs of the active client",
+      "reason": "Standard org-tree filter applied everywhere in Etendo — keeping it ensures data consistency"
+    },
+    "A_Amortization-AD_Org_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Lock Organization once processed",
+      "reason": "Simple flag check, locks the field after the document is processed"
+    },
+    "A_Amortization-Name-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Lock Name once processed",
+      "reason": "Prevents renaming after the document is processed"
+    },
+    "A_Amortization-Description-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Lock Description once processed",
+      "reason": "Same processed-lock pattern"
+    },
+    "A_Amortization-DateAcct-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Lock Accounting Date once processed",
+      "reason": "Date locks once accounting entry is generated"
+    },
+    "A_Amortization-StartDate-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Lock Starting Date once processed",
+      "reason": "Date locks once accounting entry is generated"
+    },
+    "A_Amortization-Totalamortization-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Lock Total Amortization once processed",
+      "reason": "Computed total locks with the rest of the document"
+    },
+    "A_Amortization-C_Currency_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Lock Currency once processed",
+      "reason": "Currency cannot change once amortization lines exist"
+    },
+    "A_Amortization-AD_Client_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Lock Client once processed",
+      "reason": "Standard processed-lock applied to all internal-category columns"
+    },
+    "A_Amortization-EndDate-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Keep",
+      "description": "Lock Ending Date once processed",
+      "reason": "Date locks once accounting entry is generated"
+    },
+    "amortization-Header-Posted-displayLogic": {
+      "type": "displayLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Show Posted button only when processed and accounting view is enabled",
+      "impactIfOmitted": "Posted button is always hidden in the simplified UI",
+      "reason": "Posted button is part of the classic-only accounting UX, not exposed in the MVP"
+    },
+    "amortization-Header-C_Project_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Accounting dimension visibility flag",
+      "impactIfOmitted": "Dimension field is hidden — matches the discarded visibility decision",
+      "reason": "Dimension fields are discarded for MVP, rule is moot"
+    },
+    "A_Amortization-C_Project_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Lock Project dimension once posted",
+      "reason": "Field is discarded in MVP"
+    },
+    "amortization-Header-C_Campaign_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Sales Campaign visibility flag",
+      "reason": "Dimension field is discarded for MVP"
+    },
+    "A_Amortization-C_Campaign_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Lock Sales Campaign once posted",
+      "reason": "Field is discarded in MVP"
+    },
+    "amortization-Header-C_Activity_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Activity dimension visibility flag",
+      "reason": "Dimension field is discarded for MVP"
+    },
+    "A_Amortization-C_Activity_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Lock Activity once posted",
+      "reason": "Field is discarded in MVP"
+    },
+    "amortization-Header-User1_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "1st Dimension visibility flag",
+      "reason": "Dimension field is discarded for MVP"
+    },
+    "A_Amortization-User1_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Lock 1st Dimension once posted",
+      "reason": "Field is discarded in MVP"
+    },
+    "amortization-Header-User2_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "2nd Dimension visibility flag",
+      "reason": "Dimension field is discarded for MVP"
+    },
+    "A_Amortization-User2_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Lock 2nd Dimension once posted",
+      "reason": "Field is discarded in MVP"
+    },
+    "A_Amortizationline-Line-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Line No. once processed",
+      "reason": "Sequence cannot change after processing"
+    },
+    "A_Amortizationline-A_Asset_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Asset once posted",
+      "reason": "Asset reference is part of the accounting entry"
+    },
+    "A_Amortizationline-Amortization_Percentage-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Amortization Percentage once processed",
+      "reason": "Percentage is fixed once the depreciation entry is generated"
+    },
+    "A_Amortizationline-Amortizationamt-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Amortization Amount once processed",
+      "reason": "Amount is fixed once the depreciation entry is generated"
+    },
+    "A_Amortizationline-C_Currency_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Currency once processed",
+      "reason": "Currency is inherited from header and cannot change"
+    },
+    "A_Amortizationline-IsActive-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Active flag once processed",
+      "reason": "Standard processed-lock"
+    },
+    "amortization-Lines-AD_Org_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "lines",
+      "decision": "Omit",
+      "description": "Lines Organization visibility",
+      "reason": "Organization is system-derived in MVP, dimension flag not relevant"
+    },
+    "A_Amortizationline-AD_Org_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Organization once processed",
+      "reason": "Standard processed-lock"
+    },
+    "amortization-Lines-C_Project_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "lines",
+      "decision": "Omit",
+      "description": "Lines Project dimension visibility",
+      "reason": "Dimension field is discarded for MVP"
+    },
+    "A_Amortizationline-C_Project_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Project once posted",
+      "reason": "Field is now visible — lock when accounting entry is posted"
+    },
+    "amortization-Lines-C_Costcenter_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "lines",
+      "decision": "Omit",
+      "description": "Lines Cost Center dimension visibility",
+      "reason": "Dimension field is discarded for MVP"
+    },
+    "A_Amortizationline-C_Costcenter_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Cost Center once posted",
+      "reason": "Field is now visible — lock when accounting entry is posted"
+    },
+    "amortization-Lines-User1_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "lines",
+      "decision": "Omit",
+      "description": "Lines 1st Dimension visibility",
+      "reason": "Dimension field is discarded for MVP"
+    },
+    "A_Amortizationline-User1_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock 1st Dimension once posted",
+      "reason": "Field is now visible — lock when accounting entry is posted"
+    },
+    "amortization-Lines-User2_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "lines",
+      "decision": "Omit",
+      "description": "Lines 2nd Dimension visibility",
+      "reason": "Dimension field is discarded for MVP"
+    },
+    "A_Amortizationline-User2_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock 2nd Dimension once posted",
+      "reason": "Field is now visible — lock when accounting entry is posted"
+    },
+    "A_Amortizationline-A_Amortizationline_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock line PK once processed",
+      "reason": "PK is system-managed, lock is automatic"
+    },
+    "A_Amortizationline-AD_Client_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "lines",
+      "decision": "Keep",
+      "description": "Lock Client once processed",
+      "reason": "Standard processed-lock applied to all internal-category columns"
+    },
+    "A_Amortline_Acctdimension-Isactive-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "description": "Accounting dimension lock",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-Amt-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "description": "Accounting dimension amount lock",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-AD_Org_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-C_Bpartner_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-C_Bpartner_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-M_Product_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-M_Product_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-C_Project_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-C_Project_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-C_Costcenter_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-C_Costcenter_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-A_Asset_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-A_Asset_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-C_Activity_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-C_Activity_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-C_Campaign_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-C_Campaign_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-User1_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-User1_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "amortization-Accounting dimension-User2_ID-displayLogic": {
+      "type": "displayLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "A_Amortline_Acctdimension-User2_ID-readOnlyLogic": {
+      "type": "readOnlyLogic",
+      "entity": "accounting",
+      "decision": "Omit",
+      "reason": "Accounting tab is excluded from the MVP"
+    },
+    "process_PostAmortization_Processing": {
+      "type": "process",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Post Amortization (Processing column trigger)",
+      "impactIfOmitted": "Users cannot post the accounting entry from this MVP — process available from classic UI",
+      "reason": "MVP scope agreed — Process/Unprocess flow deferred to iteration 2"
+    },
+    "process_PostAmortization_Processed": {
+      "type": "process",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Post Amortization (Processed column trigger)",
+      "impactIfOmitted": "No Process button surfaced in MVP",
+      "reason": "MVP scope agreed — Process/Unprocess flow deferred to iteration 2"
+    },
+    "process_Posted_hardcoded": {
+      "type": "process",
+      "entity": "header",
+      "decision": "Omit",
+      "description": "Posted hardcoded process trigger",
+      "impactIfOmitted": "No accounting-post button surfaced in MVP",
+      "reason": "MVP scope agreed — accounting flow deferred to iteration 2"
+    }
+  },
+  "version": 2
+}

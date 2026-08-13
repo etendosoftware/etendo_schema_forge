@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Edit2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
@@ -8,13 +8,14 @@ import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
 import { PreviewPdfPanel } from '../shared/PreviewActionButtons.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import { useShipmentPdf } from './useShipmentPdf.js';
-import RelatedDocuments from '@generated/goods-shipment/custom/RelatedDocuments';
 import { STATUS_BADGE, STATUS_KEYS } from '@/components/related-documents/constants.jsx';
 import { InfoRow, CardShell, PercentBar } from '../shared/preview-cards/SummaryCard.jsx';
+import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
+import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
 function EmptyPanel({ icon, text }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400 py-20">
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
       <span className="text-3xl">{icon}</span>
       <p className="text-sm">{text}</p>
     </div>
@@ -23,47 +24,45 @@ function EmptyPanel({ icon, text }) {
 
 // ── Tab content components ────────────────────────────────────────────────────
 
-function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui, onOrderClick }) {
+function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
   const invoiceStatusPct = Number(shipment.invoiceStatus ?? 0);
   const warehouseLabel = shipment['warehouse$_identifier'] || '—';
   const docStatus = shipment.documentStatus;
   const statusLabel = ui(STATUS_KEYS[docStatus]) || shipment['documentStatus$_identifier'] || docStatus || '—';
-  const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-gray-50 text-gray-600 border-gray-200';
-  const salesOrderNo = shipment['salesOrder$_identifier']?.split(' ')[0] || null;
+  const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-muted text-muted-foreground border-border-subtle';
 
   return (
-    <div className="pb-4">
-      <CardShell>
-        <div className="px-4 py-3 border-b border-gray-100">
-          <span className="font-bold text-gray-900 text-sm">{ui('shipmentPreviewStatus')}</span>
-        </div>
-        <div className="px-4 py-2">
-          <InfoRow label={ui('shipmentPreviewDocNo')} value={shipment.documentNo || '—'} />
-          <InfoRow label={ui('shipmentPreviewContact')} value={partnerName} />
-          <InfoRow label={ui('shipmentPreviewWarehouse')} value={warehouseLabel} />
-          <InfoRow label={ui('shipmentPreviewDate')} value={movementDate} />
-          <InfoRow label={ui('shipmentPreviewStatus')}>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass}`}>
-              {statusLabel}
-            </span>
-          </InfoRow>
-          <InfoRow label={ui('shipmentPreviewSalesOrder')}>
-            {salesOrderNo ? (
-              <button
-                type="button"
-                onClick={onOrderClick}
-                className="text-blue-600 font-medium text-right max-w-[55%] truncate hover:underline bg-transparent border-none p-0 cursor-pointer"
-              >
-                {salesOrderNo}
-              </button>
-            ) : null}
-          </InfoRow>
-          <InfoRow label={ui('shipmentPreviewInvoiceStatus')}>
-            <PercentBar value={invoiceStatusPct} />
-          </InfoRow>
-        </div>
-      </CardShell>
-    </div>
+    <CardShell data-testid="CardShell__5d626b">
+      <div className="px-4 py-3 border-b border-border-subtle">
+        <span className="font-bold text-foreground text-sm">{ui('shipmentPreviewStatus')}</span>
+      </div>
+      <div className="px-4 py-2">
+        <InfoRow
+          label={ui('shipmentPreviewDocNo')}
+          value={shipment.documentNo || '—'}
+          data-testid="InfoRow__5d626b" />
+        <InfoRow
+          label={ui('shipmentPreviewContact')}
+          value={partnerName}
+          data-testid="InfoRow__5d626b" />
+        <InfoRow
+          label={ui('shipmentPreviewWarehouse')}
+          value={warehouseLabel}
+          data-testid="InfoRow__5d626b" />
+        <InfoRow
+          label={ui('shipmentPreviewDate')}
+          value={movementDate}
+          data-testid="InfoRow__5d626b" />
+        <InfoRow label={ui('shipmentPreviewStatus')} data-testid="InfoRow__5d626b">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass}`}>
+            {statusLabel}
+          </span>
+        </InfoRow>
+        <InfoRow label={ui('shipmentPreviewInvoiceStatus')} data-testid="InfoRow__5d626b">
+          <PercentBar value={invoiceStatusPct} data-testid="PercentBar__5d626b" />
+        </InfoRow>
+      </div>
+    </CardShell>
   );
 }
 
@@ -90,7 +89,33 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
     token,
   );
 
+  // Fetch the full header record once; all 3 specs share 1 HTTP call via the cached promise.
+  const shipmentDocSpecs = useMemo(() => {
+    let detailPromise = null;
+    const getDetail = (id, tok, base) => {
+      if (!detailPromise) {
+        detailPromise = fetch(`${base}/goodsShipment/${id}`, {
+          headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(j => j?.response?.data?.[0] ?? {})
+          .catch(() => ({}));
+      }
+      return detailPromise;
+    };
+    return [
+      { key: 'orders',   type: 'sales-order',            fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.linkedOrders   ?? []) },
+      { key: 'invoices', type: 'sales-invoice',           fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.linkedInvoices ?? []) },
+      { key: 'returns',  type: 'return-material-receipt', fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.returnReceipts ?? []) },
+    ];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipment?.id]);
+
   if (!shipment) return null;
+
+  // ETP-4717 — Send is only available once the shipment is Confirmed (CO),
+  // matching the Grid row quick-action and Form-view topbar gates.
+  const isSendable = shipment.documentStatus === 'CO';
 
   // ── Left panel ──────────────────────────────────────────────────────────────
 
@@ -101,7 +126,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       pdfUrl={pdfUrl}
       generatingText={ui('shipmentPdfGenerating')}
       errorText={ui('shipmentPdfError')}
-    />
+      data-testid="PreviewPdfPanel__5d626b" />
   );
 
   // ── Derived values ──────────────────────────────────────────────────────────
@@ -111,7 +136,6 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
     ? formatCalendarDate(shipment.movementDate, locale)
     : '—';
   const windowLabel = tMenu('Goods Shipment');
-  const salesOrderId = shipment.salesOrder || null;
 
   // ── Action buttons ──────────────────────────────────────────────────────────
 
@@ -129,31 +153,33 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
 
   const actionButtons = (
     <>
-      <Button
-        size="sm"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[#121217] hover:bg-[#2a2a30] text-white [&_svg]:size-5"
-        onClick={openEmailModal}
-      >
-        <Mail />
-        {ui('invoicePreviewSend')}
-      </Button>
+      {isSendable && (
+        <Button
+          size="sm"
+          className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
+          onClick={openEmailModal}
+          data-testid="Button__5d626b">
+          <Mail data-testid="Mail__5d626b" />
+          {ui('invoicePreviewSend')}
+        </Button>
+      )}
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
-        disabled={!pdfBlob}
-        onClick={pdfBlob ? handleDownload : undefined}
-      >
-        <Download className="text-[#828FA3]" />
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
+        disabled={!pdfBlob || !isSendable}
+        onClick={pdfBlob && isSendable ? handleDownload : undefined}
+        data-testid="Button__5d626b">
+        <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__5d626b" />
         {ui('invoicePreviewDownloadPdf')}
       </Button>
       <Button
         size="sm"
         variant="outline"
-        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+        className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={() => modalRef.current?.triggerEdit?.()}
-      >
-        <Edit2 className="text-[#828FA3]" />
+        data-testid="Button__5d626b">
+        <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__5d626b" />
         {ui('invoicePreviewEdit')}
       </Button>
     </>
@@ -166,36 +192,38 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       key: 'general',
       label: ui('invoicePreviewGeneral'),
       content: (
-        <ShipmentStatsPanel
-          shipment={shipment}
-          partnerName={partnerName}
-          movementDate={movementDate}
-          ui={ui}
-          onOrderClick={salesOrderId ? () => { onClose?.(); navigate(`/sales-order/${salesOrderId}`); } : undefined}
-        />
+        <div className="pb-4">
+          <ShipmentStatsPanel
+            shipment={shipment}
+            partnerName={partnerName}
+            movementDate={movementDate}
+            ui={ui}
+            data-testid="ShipmentStatsPanel__5d626b" />
+          <EmailsCard onSend={isSendable ? openEmailModal : undefined} data-testid="EmailsCard__5d626b" />
+          <RelatedDocumentsCard
+            documentId={shipment.id}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            specs={shipmentDocSpecs}
+            data-testid="RelatedDocumentsCard__5d626b" />
+        </div>
       ),
     },
     {
       key: 'messages',
       label: ui('invoicePreviewMessages'),
-      content: <EmptyPanel icon="💬" text={ui('invoicePreviewNoMessagesYet')} />,
+      content: <EmptyPanel
+        icon="💬"
+        text={ui('invoicePreviewNoMessagesYet')}
+        data-testid="EmptyPanel__5d626b" />,
     },
     {
       key: 'history',
       label: ui('invoicePreviewHistory'),
-      content: <EmptyPanel icon="🕐" text={ui('invoicePreviewNoActivityRecorded')} />,
-    },
-    {
-      key: 'documents',
-      label: ui('shipmentPreviewDocuments'),
-      content: (
-        <RelatedDocuments
-          recordId={shipment.id}
-          data={shipment}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-        />
-      ),
+      content: <EmptyPanel
+        icon="🕐"
+        text={ui('invoicePreviewNoActivityRecorded')}
+        data-testid="EmptyPanel__5d626b" />,
     },
   ];
 
@@ -212,7 +240,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         onEdit={() => onEdit?.(shipment.id)}
         tabs={tabs}
         actionButtons={actionButtons}
-      />
+        data-testid="GenericPreviewModal__5d626b" />
       {showSendModal && (
         <SendDocumentModal
           documentType={windowLabel}
@@ -226,7 +254,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
           pdfBlobUrl={pdfUrl}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}
-        />
+          data-testid="SendDocumentModal__5d626b" />
       )}
     </>
   );

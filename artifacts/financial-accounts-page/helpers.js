@@ -1,0 +1,4 @@
+// financial-accounts-page is a JSON-only NEO Headless endpoint consumed by the
+// Cuentas React page (ETP-4095). It does not render a Jasper / HTML report.
+// This file exists only to satisfy the F8 pipeline validator and is never used.
+export default {};

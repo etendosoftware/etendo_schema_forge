@@ -27,8 +27,10 @@ export function AttachmentChips({ attachments = [], onRemove }) {
             variant="outline"
             className="gap-2"
             title={`${attachment.tabTitle} — ${label}`}
-          >
-            <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+            data-testid="Badge__5836c2">
+            <FileText
+              className="h-3 w-3 shrink-0 text-muted-foreground"
+              data-testid="FileText__5836c2" />
             <span className="max-w-[220px] truncate">
               {attachment.tabTitle} — {label}
             </span>
@@ -38,7 +40,7 @@ export function AttachmentChips({ attachments = [], onRemove }) {
               className="text-muted-foreground hover:text-foreground"
               aria-label={ui('copilotRemoveAttachment')}
             >
-              <X className="h-3 w-3" />
+              <X className="h-3 w-3" data-testid="X__5836c2" />
             </button>
           </Badge>
         );

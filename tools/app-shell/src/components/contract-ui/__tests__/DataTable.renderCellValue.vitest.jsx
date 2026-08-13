@@ -41,6 +41,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
   getStatusDotColor: (raw) => `dot-${raw ?? 'none'}`,
   getStatusGridPillClass: () => '',
   getStatusPillClass: () => '',
+  getStatusTone: () => 'neutral',
   statusLabel: (raw) => `status-label-${raw}`,
 }));
 vi.mock('@/components/ui/status-tag', () => ({
@@ -77,7 +78,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),
 }));
 vi.mock('../ProductSearchDrawer.jsx', () => ({ default: () => null }));
-vi.mock('../InternalConsumptionProductSearchDrawer.jsx', () => ({ default: () => null }));
+vi.mock('../ProductStockSearchDrawer.jsx', () => ({ default: () => null }));
 vi.mock('../SelectorInput.jsx', () => ({ SelectorInput: () => <div data-testid="selector-input" /> }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -215,22 +216,22 @@ describe('renderCellValue — status-cell', () => {
 describe('renderCellValue — percent-cell', () => {
   const columns = [{ key: 'progress', label: 'Progress', type: 'percent' }];
 
-  it('renders 0% for value 0 with slate styling', () => {
+  it('renders 0% for value 0 with semantic muted styling', () => {
     const { container } = renderTable(columns, [{ id: '1', progress: 0 }]);
     expect(screen.getByText('0%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-slate-200')).toBeTruthy();
+    expect(container.querySelector('.bg-muted')).toBeTruthy();
   });
 
-  it('renders partial values with amber styling', () => {
+  it('renders partial values with semantic warning styling', () => {
     const { container } = renderTable(columns, [{ id: '1', progress: 45 }]);
     expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-amber-400')).toBeTruthy();
+    expect(container.querySelector('.bg-status-warning')).toBeTruthy();
   });
 
-  it('renders >= 100 with emerald styling', () => {
+  it('renders >= 100 with semantic success styling', () => {
     const { container } = renderTable(columns, [{ id: '1', progress: 120 }]);
     expect(screen.getByText('120%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-emerald-500')).toBeTruthy();
+    expect(container.querySelector('.bg-status-success')).toBeTruthy();
   });
 
   it('treats NaN as 0', () => {
@@ -314,16 +315,16 @@ describe('renderCellValue — boolean-cell (badge with variants)', () => {
 describe('renderCellValue — boolean-cell (fallback yes/no/em-dash)', () => {
   const columns = [{ key: 'active', label: 'Active', type: 'boolean' }];
 
-  it('renders "yes" with emerald color for truthy', () => {
+  it('renders "yes" with semantic success color for truthy', () => {
     const { container } = renderTable(columns, [{ id: '1', active: true }]);
     expect(screen.getByText('yes')).toBeInTheDocument();
-    expect(container.querySelector('.text-emerald-600')).toBeTruthy();
+    expect(container.querySelector('.text-status-success-foreground')).toBeTruthy();
   });
 
-  it('renders "no" with slate color for falsy', () => {
+  it('renders "no" with semantic muted color for falsy', () => {
     const { container } = renderTable(columns, [{ id: '1', active: false }]);
     expect(screen.getByText('no')).toBeInTheDocument();
-    expect(container.querySelector('.text-slate-400')).toBeTruthy();
+    expect(container.querySelector('.text-muted-foreground')).toBeTruthy();
   });
 
   it('renders em-dash for null / undefined / unrecognized values', () => {
@@ -364,13 +365,14 @@ describe('renderCellValue — date-cell', () => {
 // amount-cell
 // ────────────────────────────────────────────────────────────────────────────
 describe('renderCellValue — amount-cell', () => {
-  it('renders formatAmount(value, currency$_identifier) inside a tabular-nums span', () => {
+  it('renders formatAmount(value) inside a tabular-nums span (no currency symbol at cell level)', () => {
     const columns = [{ key: 'total', label: 'Total', type: 'amount' }];
     renderTable(columns, [
       { id: '1', total: 1234.5, 'currency$_identifier': 'USD' },
     ]);
     const cell = screen.getByTestId('cell-1-total');
-    expect(cell.textContent).toBe('USD1234.5');
+    // Currency is shown at header level, not on individual line-amount cells (ETP-4027)
+    expect(cell.textContent).toMatch(/1[\s,.]?234/);
     expect(cell.querySelector('span.tabular-nums')).toBeTruthy();
   });
 });

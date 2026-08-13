@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.11.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-05-15T16:00:56.382Z",
-  "checksum": "a066722139e468a9",
+  "updatedAt": "2026-07-21T12:35:25.028Z",
+  "checksum": "da73f53efb58144a",
   "frontendContract": {
     "window": {
       "id": "27A453FA86974745977672F1A8DCCEFF",
@@ -45,6 +45,10 @@
                 "name": "IVA"
               }
             ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@IS_Ready@='Y'",
               "evaluable": true,
@@ -67,7 +71,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "issuerNIF",
@@ -79,7 +87,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "systemStartat",
@@ -91,7 +102,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "systemStopat",
@@ -103,7 +117,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "incidentReport",
@@ -115,7 +132,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "isReady",
@@ -134,22 +154,14 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IS_Ready@='N'",
               "evaluable": true
             }
-          },
-          {
-            "name": "inVfactuSystem",
-            "apiKey": "inVfactuSystem",
-            "column": "IN_Vfactu_System",
-            "label": "Fecha de Acogida",
-            "type": "dateTime",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true
           }
         ],
         "searchableFields": [],
@@ -168,7 +180,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "javaQualifier": "verifactu-config-ready-handler"
       }
     }
   },
@@ -263,7 +276,7 @@
             "apiKey": "inVfactuSystem",
             "column": "IN_Vfactu_System",
             "type": "dateTime",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -271,14 +284,6 @@
             "apiKey": "client",
             "column": "AD_Client_ID",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "verifactuConfig",
-            "apiKey": "verifactuConfig",
-            "column": "Etvfac_Verifactu_Config_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -315,14 +320,6 @@
             "required": true
           },
           {
-            "name": "refreshData",
-            "apiKey": "refreshData",
-            "column": "Refresh_Data",
-            "type": "button",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "updated",
             "apiKey": "updated",
             "column": "Updated",
@@ -337,8 +334,17 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Etvfac_Verifactu_Config_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
-        ]
+        ],
+        "javaQualifier": "verifactu-config-ready-handler"
       }
     },
     "endpoints": [
@@ -400,14 +406,6 @@
         "url": "/sws/neo/verifactu-config/cabeceraDeConfiguraciónVerifactu/{id}/action/isReady",
         "processId": "D995FA46EEDB4DAF9F414E661FB13E43",
         "processType": "obuiapp"
-      },
-      {
-        "entity": "cabeceraDeConfiguraciónVerifactu",
-        "field": "refreshData",
-        "column": "Refresh_Data",
-        "url": "/sws/neo/verifactu-config/cabeceraDeConfiguraciónVerifactu/{id}/action/refreshData",
-        "processId": "E0D681117A1843C5B9D525701087D7DC",
-        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -436,14 +434,6 @@
         "field": "isReady",
         "runner": "node",
         "description": "Action endpoint for 'isReady' in cabeceraDeConfiguraciónVerifactu should exist"
-      },
-      {
-        "id": "t-action-endpoint-cabeceraDeConfiguraci-nVerifactu-refreshData",
-        "category": "action-endpoint",
-        "entity": "cabeceraDeConfiguraciónVerifactu",
-        "field": "refreshData",
-        "runner": "node",
-        "description": "Action endpoint for 'refreshData' in cabeceraDeConfiguraciónVerifactu should exist"
       },
       {
         "id": "t-crud-flags-cabeceraDeConfiguraci-nVerifactu",
@@ -501,14 +491,6 @@
         "description": "Field 'incidentReport' should be present in cabeceraDeConfiguraciónVerifactu"
       },
       {
-        "id": "t-field-presence-cabeceraDeConfiguraci-nVerifactu-inVfactuSystem",
-        "category": "field-presence",
-        "entity": "cabeceraDeConfiguraciónVerifactu",
-        "field": "inVfactuSystem",
-        "runner": "node",
-        "description": "Field 'inVfactuSystem' should be present in cabeceraDeConfiguraciónVerifactu"
-      },
-      {
         "id": "t-field-presence-cabeceraDeConfiguraci-nVerifactu-isReady",
         "category": "field-presence",
         "entity": "cabeceraDeConfiguraciónVerifactu",
@@ -563,14 +545,6 @@
         "field": "incidentReport",
         "runner": "node",
         "description": "Field 'incidentReport' should have type 'string' in cabeceraDeConfiguraciónVerifactu"
-      },
-      {
-        "id": "t-field-type-cabeceraDeConfiguraci-nVerifactu-inVfactuSystem",
-        "category": "field-type",
-        "entity": "cabeceraDeConfiguraciónVerifactu",
-        "field": "inVfactuSystem",
-        "runner": "node",
-        "description": "Field 'inVfactuSystem' should have type 'string' in cabeceraDeConfiguraciónVerifactu"
       },
       {
         "id": "t-field-type-cabeceraDeConfiguraci-nVerifactu-isReady",
@@ -650,13 +624,6 @@
         "description": "Rule 'Marcar Como Listo' (process) should be declared"
       },
       {
-        "id": "t-rule-declared-Refrescar-monitor-Verifactu",
-        "category": "rule-declared",
-        "rule": "Refrescar monitor Verifactu",
-        "runner": "node",
-        "description": "Rule 'Refrescar monitor Verifactu' (process) should be declared"
-      },
-      {
         "id": "t-rule-declared-verifactu-config-Cabecera-de-Configuraci-n-Verifactu-IS-Ready-displayLogic",
         "category": "rule-declared",
         "rule": "verifactu-config-Cabecera de Configuración Verifactu-IS_Ready-displayLogic",
@@ -696,6 +663,22 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
       },
       {
+        "id": "t-system-field-cabeceraDeConfiguraci-nVerifactu-id",
+        "category": "system-field",
+        "entity": "cabeceraDeConfiguraciónVerifactu",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
+      },
+      {
+        "id": "t-system-field-cabeceraDeConfiguraci-nVerifactu-inVfactuSystem",
+        "category": "system-field",
+        "entity": "cabeceraDeConfiguraciónVerifactu",
+        "field": "inVfactuSystem",
+        "runner": "node",
+        "description": "System field 'inVfactuSystem' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
+      },
+      {
         "id": "t-system-field-cabeceraDeConfiguraci-nVerifactu-isDevEnv",
         "category": "system-field",
         "entity": "cabeceraDeConfiguraciónVerifactu",
@@ -720,14 +703,6 @@
         "description": "System field 'organization' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
       },
       {
-        "id": "t-system-field-cabeceraDeConfiguraci-nVerifactu-refreshData",
-        "category": "system-field",
-        "entity": "cabeceraDeConfiguraciónVerifactu",
-        "field": "refreshData",
-        "runner": "node",
-        "description": "System field 'refreshData' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
-      },
-      {
         "id": "t-system-field-cabeceraDeConfiguraci-nVerifactu-updated",
         "category": "system-field",
         "entity": "cabeceraDeConfiguraciónVerifactu",
@@ -744,14 +719,6 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
       },
       {
-        "id": "t-system-field-cabeceraDeConfiguraci-nVerifactu-verifactuConfig",
-        "category": "system-field",
-        "entity": "cabeceraDeConfiguraciónVerifactu",
-        "field": "verifactuConfig",
-        "runner": "node",
-        "description": "System field 'verifactuConfig' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
-      },
-      {
         "id": "t-visibility-cabeceraDeConfiguraci-nVerifactu",
         "category": "visibility",
         "entity": "cabeceraDeConfiguraciónVerifactu",
@@ -760,23 +727,23 @@
       }
     ],
     "summary": {
-      "total": 42,
+      "total": 38,
       "byCategory": {
-        "action-endpoint": 2,
+        "action-endpoint": 1,
         "crud-flags": 1,
         "default-value-type": 2,
         "displaylogic-evaluable": 1,
         "displaylogic-valid": 1,
-        "field-presence": 8,
-        "field-type": 8,
+        "field-presence": 7,
+        "field-type": 7,
         "readonlylogic-evaluable": 1,
         "readonlylogic-valid": 1,
-        "rule-declared": 5,
+        "rule-declared": 4,
         "system-field": 11,
         "visibility": 1
       },
       "byRunner": {
-        "node": 42,
+        "node": 38,
         "junit": 0
       }
     }

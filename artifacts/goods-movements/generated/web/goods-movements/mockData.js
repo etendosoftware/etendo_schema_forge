@@ -6,108 +6,120 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-15",
     "description": "Standard order for Q1 delivery",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00001",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00001"
   },
   {
     "id": "mock-movement-002",
     "name": "Sample name",
     "movementDate": "2026-01-16",
     "description": "Rush order - priority shipping required",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00002",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00002"
   },
   {
     "id": "mock-movement-003",
     "name": "Sample name",
     "movementDate": "2026-01-17",
     "description": "Bulk purchase for warehouse restocking",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00003",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00003"
   },
   {
     "id": "mock-movement-004",
     "name": "Sample name",
     "movementDate": "2026-01-18",
     "description": "Sample order for client evaluation",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00004",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00004"
   },
   {
     "id": "mock-movement-005",
     "name": "Sample name",
     "movementDate": "2026-01-19",
     "description": "Recurring monthly supply order",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00005",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00005"
   },
   {
     "id": "mock-movement-006",
     "name": "Sample name",
     "movementDate": "2026-01-20",
     "description": "Special pricing agreement applies",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00006",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00006"
   },
   {
     "id": "mock-movement-007",
     "name": "Sample name",
     "movementDate": "2026-01-21",
     "description": "Consolidated order from multiple requests",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00007",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00007"
   },
   {
     "id": "mock-movement-008",
     "name": "Sample name",
     "movementDate": "2026-01-22",
     "description": "Trial order for new product line",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00008",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00008"
   },
   {
     "id": "mock-movement-009",
     "name": "Sample name",
     "movementDate": "2026-01-23",
     "description": "Replacement for damaged goods",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00009",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00009"
   },
   {
     "id": "mock-movement-010",
     "name": "Sample name",
     "movementDate": "2026-01-24",
     "description": "Pre-season inventory build-up",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00010",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00010"
   },
   {
     "id": "mock-movement-011",
     "name": "Sample name",
     "movementDate": "2026-01-25",
     "description": "Customer-specific configuration",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00011",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00011"
   },
   {
     "id": "mock-movement-012",
     "name": "Sample name",
     "movementDate": "2026-01-26",
     "description": "Government contract fulfillment",
-    "processNow": "Sample processNow",
-    "documentNo": "MO-00012",
-    "processed": "Sample processed"
+    "project": "Sample project",
+    "costCenter": "Sample costCenter",
+    "processed": "Sample processed",
+    "documentNo": "MO-00012"
   }
 ];
 

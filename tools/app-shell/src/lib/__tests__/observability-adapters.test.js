@@ -2,8 +2,19 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildBrowserObservabilityConfig } from '../observability/browser.js';
-import { createRumProvider, resolveRumConfig } from '../rum.js';
-import { createSentryProvider, resolveSentryEnvironment } from '../sentry.js';
+import {
+  createRumProvider,
+  DEFAULT_RUM_SESSION_SAMPLE_RATE,
+  resolveRumConfig,
+  resolveRumSessionSampleRate,
+} from '../rum.js';
+import {
+  createSentryProvider,
+  DEFAULT_SENTRY_SEND_DEFAULT_PII,
+  resolveSentryEnvironment,
+  resolveSentryRelease,
+  resolveSentrySendDefaultPii,
+} from '../sentry.js';
 
 describe('sentry observability adapter', () => {
   it('preserves hostname to environment mapping', () => {
@@ -13,7 +24,7 @@ describe('sentry observability adapter', () => {
     assert.equal(resolveSentryEnvironment('localhost'), 'development');
   });
 
-  it('initializes Sentry with the existing tracing and PII config', () => {
+  it('initializes Sentry with tracing, release metadata, and privacy-safe PII defaults', () => {
     const calls = [];
     const fakeSentry = {
       browserTracingIntegration() {
@@ -28,6 +39,9 @@ describe('sentry observability adapter', () => {
       dsn: 'dsn-123',
       hostname: 'go.staging.etendo.cloud',
       sentry: fakeSentry,
+      env: {
+        VITE_SENTRY_RELEASE: 'release-from-env',
+      },
     });
     provider.init();
 
@@ -35,9 +49,10 @@ describe('sentry observability adapter', () => {
     assert.equal(provider.enabled, true);
     assert.equal(calls[0].dsn, 'dsn-123');
     assert.equal(calls[0].environment, 'staging');
+    assert.equal(calls[0].release, 'release-from-env');
     assert.deepEqual(calls[0].integrations, ['browser-tracing']);
     assert.equal(calls[0].tracesSampleRate, 0.1);
-    assert.equal(calls[0].sendDefaultPii, true);
+    assert.equal(calls[0].sendDefaultPii, false);
     assert.deepEqual(calls[0].tracePropagationTargets, [/core\..+\.etendo\.cloud/, 'core.etendo.cloud']);
   });
 
@@ -45,6 +60,32 @@ describe('sentry observability adapter', () => {
     const provider = createSentryProvider({ dsn: '' });
 
     assert.equal(provider.enabled, false);
+  });
+
+  it('enables Sentry PII only when explicitly requested via env', () => {
+    assert.equal(resolveSentrySendDefaultPii(undefined), DEFAULT_SENTRY_SEND_DEFAULT_PII);
+    assert.equal(resolveSentrySendDefaultPii('true'), true);
+    assert.equal(resolveSentrySendDefaultPii('1'), true);
+    assert.equal(resolveSentrySendDefaultPii('false'), false);
+    assert.equal(resolveSentrySendDefaultPii('unexpected'), DEFAULT_SENTRY_SEND_DEFAULT_PII);
+  });
+
+  it('resolves Sentry release from env first and then build metadata', () => {
+    assert.equal(
+      resolveSentryRelease(
+        { VITE_SENTRY_RELEASE: 'env-release' },
+        { SENTRY_RELEASE: { id: 'build-release' } }
+      ),
+      'env-release'
+    );
+    assert.equal(
+      resolveSentryRelease({}, { SENTRY_RELEASE: { id: 'build-release' } }),
+      'build-release'
+    );
+    assert.equal(
+      resolveSentryRelease({}, { __APP_VERSION__: '0.1.0+sha.abc123' }),
+      '0.1.0+sha.abc123'
+    );
   });
 });
 
@@ -55,6 +96,8 @@ describe('AWS RUM observability adapter', () => {
       VITE_RUM_IDENTITY_POOL_ID_STAGING: 'staging-pool',
       VITE_RUM_APP_MONITOR_ID_EXPERIMENTAL: 'experimental-monitor',
       VITE_RUM_IDENTITY_POOL_ID_EXPERIMENTAL: 'experimental-pool',
+      VITE_RUM_APP_MONITOR_ID_PROD: 'prod-monitor',
+      VITE_RUM_IDENTITY_POOL_ID_PROD: 'prod-pool',
     };
 
     assert.deepEqual(resolveRumConfig('go.staging.etendo.cloud', env), {
@@ -65,10 +108,13 @@ describe('AWS RUM observability adapter', () => {
       appMonitorId: 'experimental-monitor',
       identityPoolId: 'experimental-pool',
     });
-    assert.equal(resolveRumConfig('go.etendo.cloud', env), undefined);
+    assert.deepEqual(resolveRumConfig('go.etendo.cloud', env), {
+      appMonitorId: 'prod-monitor',
+      identityPoolId: 'prod-pool',
+    });
   });
 
-  it('initializes AWS RUM with the existing region, endpoint, and telemetries', () => {
+  it('initializes AWS RUM with the existing region, endpoint, telemetries, and bounded sample rate', () => {
     const calls = [];
     class FakeAwsRum {
       constructor(...args) {
@@ -81,6 +127,7 @@ describe('AWS RUM observability adapter', () => {
       env: {
         VITE_RUM_APP_MONITOR_ID_EXPERIMENTAL: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID_EXPERIMENTAL: 'pool-id',
+        VITE_RUM_SESSION_SAMPLE_RATE: '0.25',
       },
       AwsRumCtor: FakeAwsRum,
       logger: { warn() {} },
@@ -94,7 +141,7 @@ describe('AWS RUM observability adapter', () => {
       '1.0.0',
       'eu-west-3',
       {
-        sessionSampleRate: 1,
+        sessionSampleRate: 0.25,
         identityPoolId: 'pool-id',
         endpoint: 'https://dataplane.rum.eu-west-3.amazonaws.com',
         telemetries: ['performance', 'errors', 'http'],
@@ -148,6 +195,39 @@ describe('AWS RUM observability adapter', () => {
     assert.equal(provider.enabled, false);
     assert.doesNotThrow(() => provider.init());
     assert.deepEqual(calls, []);
+
+    const nullEnvProvider = createRumProvider({
+      hostname: 'localhost',
+      env: null,
+      AwsRumCtor: FakeAwsRum,
+      logger: { warn() {} },
+    });
+
+    assert.equal(nullEnvProvider.enabled, false);
+    assert.doesNotThrow(() => nullEnvProvider.init());
+    assert.deepEqual(calls, []);
+  });
+
+  it('bounds the RUM session sample rate and falls back conservatively', () => {
+    assert.equal(
+      resolveRumSessionSampleRate(undefined),
+      DEFAULT_RUM_SESSION_SAMPLE_RATE
+    );
+    assert.equal(
+      resolveRumSessionSampleRate(''),
+      DEFAULT_RUM_SESSION_SAMPLE_RATE
+    );
+    assert.equal(
+      resolveRumSessionSampleRate('   '),
+      DEFAULT_RUM_SESSION_SAMPLE_RATE
+    );
+    assert.equal(resolveRumSessionSampleRate('0.5'), 0.5);
+    assert.equal(resolveRumSessionSampleRate('2'), 1);
+    assert.equal(resolveRumSessionSampleRate('-1'), 0);
+    assert.equal(
+      resolveRumSessionSampleRate('not-a-number'),
+      DEFAULT_RUM_SESSION_SAMPLE_RATE
+    );
   });
 });
 

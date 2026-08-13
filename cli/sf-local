@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+#
+# sf-local — run a published `sf-*` CLI command from the sibling schema_forge_core
+# SOURCE instead of the installed @etendosoftware/schema-forge-cli package.
+#
+# This is used only by `make <target> LOCAL_CORE=1` (see the `SF` variable in the
+# Makefile). The DEFAULT path is `npx sf-*` against the published package — this
+# script is never invoked unless a developer explicitly opts into local-core mode,
+# so servers/CI (where schema_forge_core is typically not cloned) are unaffected.
+#
+# Mechanism:
+#   1. Resolve the bin name -> script path using the PUBLISHED package's own bin
+#      map (node_modules/@etendosoftware/schema-forge-cli/package.json). That map
+#      is the single source of truth (e.g. sf-push-neo -> ./src/push-to-neo.js).
+#   2. Run that same script from ../schema_forge_core/cli/ so it executes the
+#      local core source.
+#   3. Keep the current working directory at the functional repo, so the CLI
+#      operates on THIS repo's artifacts/ and config (core CODE over local DATA).
+#
+# The core CLI is ESM (`"type": "module"`), so its bare imports resolve from the
+# core repo's own node_modules — schema_forge_core must therefore have its deps
+# installed (`npm install` in that repo). NODE_PATH does not help for ESM.
+#
+# Override the core location with SCHEMA_FORGE_CORE=/abs/path if it is not the
+# default sibling directory.
+set -euo pipefail
+
+bin="${1:?usage: sf-local <sf-bin-name> [args...]}"
+shift
+
+# Functional repo root = parent of this script's directory (cli/).
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+core="${SCHEMA_FORGE_CORE:-$(cd "$repo_root/.." && pwd)/schema_forge_core}"
+map="$repo_root/node_modules/@etendosoftware/schema-forge-cli/package.json"
+
+if [ ! -d "$core/cli/src" ]; then
+  echo "sf-local: schema_forge_core CLI source not found at $core/cli/src" >&2
+  echo "  Clone schema_forge_core as a sibling of this repo, or drop LOCAL_CORE to use the published CLI." >&2
+  exit 1
+fi
+if [ ! -d "$core/node_modules" ] && [ ! -d "$core/cli/node_modules" ]; then
+  echo "sf-local: schema_forge_core has no node_modules — its ESM CLI cannot resolve its deps." >&2
+  echo "  Run 'npm install' inside $core first, or drop LOCAL_CORE to use the published CLI." >&2
+  exit 1
+fi
+if [ ! -f "$map" ]; then
+  echo "sf-local: published bin map not found ($map)." >&2
+  echo "  Run 'npm install' in this repo so the bin-name -> script mapping is available." >&2
+  exit 1
+fi
+
+# Resolve the bin name from the published map first, then fall back to the CORE's
+# own map. The fallback is what makes a bin added in core runnable before it is
+# published: without it, LOCAL_CORE — the profile whose entire purpose is running
+# unpublished core source — would still demand a release first.
+script="$(node -e '
+const [pub, local, bin] = process.argv.slice(1);
+const read = (p) => { try { return require(p).bin || {}; } catch { return {}; } };
+const s = read(pub)[bin] || read(local)[bin];
+if (!s) { console.error(`sf-local: unknown bin ${bin} (not in the published map nor in core)`); process.exit(2); }
+process.stdout.write(s);
+' "$map" "$core/cli/package.json" "$bin")"
+
+# The core CLI scripts resolve the repo root as `process.env.SF_ROOT || <__dirname-relative>`.
+# Run from the core source, that fallback would point at schema_forge_core itself, so the
+# CLI would read/write the CORE's artifacts. Export SF_ROOT = this (functional) repo so the
+# core CODE operates on this repo's DATA. The Makefile already exports SF_ROOT for `make`
+# targets; setting it here makes `./cli/sf-local` correct when invoked directly too.
+export SF_ROOT="${SF_ROOT:-$repo_root}"
+
+exec node "$core/cli/$script" "$@"

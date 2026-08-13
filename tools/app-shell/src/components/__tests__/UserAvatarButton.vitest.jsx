@@ -1,0 +1,189 @@
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+const logoutMock = vi.fn();
+const setLocaleMock = vi.fn();
+const navigateMock = vi.fn();
+
+// The component is always rendered inside the app router; these tests mount it
+// on its own, so router context has to be supplied here.
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigateMock,
+}));
+
+let authOverrides = {};
+let localeOverrides = {};
+
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({
+    username: 'x',
+    logout: logoutMock,
+    selectedRole: null,
+    selectedOrg: null,
+    ...authOverrides,
+  }),
+}));
+
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock, ...localeOverrides }),
+}));
+
+vi.mock('@/i18n/index.js', () => ({
+  useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock, ...localeOverrides }),
+}));
+
+// Render dropdown content unconditionally so menu items can be asserted
+// without driving Radix pointer events in jsdom.
+vi.mock('@/components/ui/dropdown-menu.jsx', () => ({
+  DropdownMenu: ({ children }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }) => <div data-testid="avatar-menu-trigger">{children}</div>,
+  DropdownMenuContent: ({ children }) => <div data-testid="avatar-menu-content">{children}</div>,
+  DropdownMenuItem: ({ children, onSelect, onClick, ...props }) => (
+    <button type="button" onClick={onSelect ?? onClick} {...props}>
+      {children}
+    </button>
+  ),
+  DropdownMenuSeparator: () => <hr />,
+}));
+
+vi.mock('../ChangePasswordDialog.jsx', () => ({
+  ChangePasswordDialog: ({ open, onSuccess }) =>
+    open ? (
+      <div data-testid="change-password-dialog">
+        <button type="button" data-testid="change-password-success" onClick={onSuccess}>
+          success
+        </button>
+      </div>
+    ) : null,
+}));
+
+import { UserAvatarButton } from '../UserAvatarButton.jsx';
+
+describe('UserAvatarButton', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    authOverrides = {};
+    localeOverrides = {};
+  });
+
+  it('shows the Change Password menu item when a platform token exists and the auth method is password', () => {
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    localStorage.setItem('sf_platform_auth_method', 'password');
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByTestId('menu-change-password')).toBeInTheDocument();
+  });
+
+  it('shows the Change Password menu item when the auth method key is absent (legacy sessions)', () => {
+    localStorage.setItem('sf_platform_token', 'platform-token');
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByTestId('menu-change-password')).toBeInTheDocument();
+  });
+
+  it('hides the Change Password menu item for SSO sessions', () => {
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    localStorage.setItem('sf_platform_auth_method', 'sso');
+
+    render(<UserAvatarButton />);
+
+    expect(screen.queryByTestId('menu-change-password')).not.toBeInTheDocument();
+  });
+
+  it('hides the Change Password menu item when no platform token exists', () => {
+    localStorage.setItem('sf_platform_auth_method', 'password');
+
+    render(<UserAvatarButton />);
+
+    expect(screen.queryByTestId('menu-change-password')).not.toBeInTheDocument();
+  });
+
+  it('opens the change password dialog when the menu item is selected', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    localStorage.setItem('sf_platform_auth_method', 'password');
+
+    render(<UserAvatarButton />);
+
+    expect(screen.queryByTestId('change-password-dialog')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('menu-change-password'));
+    expect(screen.getByTestId('change-password-dialog')).toBeInTheDocument();
+  });
+
+  it('sets both one-shot onboarding flags and logs out after a successful password change', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    localStorage.setItem('sf_platform_auth_method', 'password');
+
+    render(<UserAvatarButton />);
+
+    await user.click(screen.getByTestId('menu-change-password'));
+    await user.click(screen.getByTestId('change-password-success'));
+
+    expect(localStorage.getItem('sf_onboarding_initial_view')).toBe('login');
+    expect(localStorage.getItem('sf_onboarding_notice')).toBe('password-changed');
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches the locale when a language option is clicked', async () => {
+    const user = userEvent.setup();
+
+    render(<UserAvatarButton />);
+
+    await user.click(screen.getByRole('button', { name: /Español/ }));
+
+    expect(setLocaleMock).toHaveBeenCalledWith('es_ES');
+  });
+
+  it('exposes the full role and organization names via title when truncated', () => {
+    const longRole = 'A Very Long Role Name That Overflows The Container';
+    const longOrg = 'A Very Long Organization Name That Also Overflows';
+    authOverrides = {
+      selectedRole: { name: longRole },
+      selectedOrg: { name: longOrg },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText(`role: ${longRole}`)).toHaveAttribute('title', longRole);
+    expect(screen.getByText(`organization: ${longOrg}`)).toHaveAttribute('title', longOrg);
+  });
+
+  it('renders the expanded sidebar-footer row with username and chevron', () => {
+    render(<UserAvatarButton expanded />);
+
+    const trigger = screen.getByTestId('topbar-user-menu');
+    expect(trigger).toHaveTextContent('x');
+    expect(screen.getByTestId('ChevronRight__9f3744')).toBeInTheDocument();
+  });
+
+  it('falls back to the account label and em dash when there is no username', () => {
+    authOverrides = { username: null };
+
+    render(<UserAvatarButton expanded />);
+
+    expect(screen.getByTestId('topbar-user-menu')).toHaveAttribute('aria-label', 'account');
+    expect(screen.getByTestId('topbar-user-menu')).toHaveTextContent('—');
+  });
+
+  it('shows the role-initial badge on the compact avatar when a role is selected', () => {
+    authOverrides = { selectedRole: { name: 'Admin' } };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('A')).toBeInTheDocument();
+  });
+
+  it('hides the language section when locale switching is unavailable', () => {
+    localeOverrides = { setLocale: null };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.queryByText('language')).not.toBeInTheDocument();
+  });
+});

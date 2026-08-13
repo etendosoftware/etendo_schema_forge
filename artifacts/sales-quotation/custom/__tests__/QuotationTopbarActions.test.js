@@ -13,7 +13,7 @@ describe('QuotationTopbarActions', () => {
   });
 
   it('accepts data, recordId, token, and apiBaseUrl props', () => {
-    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl\s*\}/);
+    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl.*\}/);
   });
 
   it('returns null when documentStatus is missing', () => {
@@ -94,6 +94,33 @@ describe('QuotationTopbarActions', () => {
     it('has a setShowReject state setter wired to onClose', () => {
       assert.match(src, /setShowReject\(true\)/);
       assert.match(src, /onClose=\{\(\)\s*=>\s*setShowReject\(false\)\}/);
+    });
+  });
+
+  // ETP-4468: "Confirmar" must not discard an unsaved header edit — this
+  // component is the topbarRight custom component and must thread the new
+  // onSave prop down to QuotationConfirmModal.
+  describe('force-save before confirm (ETP-4468)', () => {
+    it('accepts an onSave prop', () => {
+      assert.match(src, /export default function QuotationTopbarActions\(\{[^}]*onSave[^}]*\}\)/);
+    });
+
+    it('threads onSave down to QuotationConfirmModal', () => {
+      assert.match(src, /<QuotationConfirmModal[\s\S]*?onSave=\{onSave\}[\s\S]*?\/>/);
+    });
+  });
+
+  // ETP-4717 (Pair 2 — P2): the Send button must NOT be available while the
+  // quotation is still Draft (DR) — it must be visible from "Bajo evaluación"
+  // (UE) onward. Today it renders unconditionally, with zero status gating.
+  describe('Send button visibility gated by document status (ETP-4717)', () => {
+    it('gates the Send button so it does not render while status is DR', () => {
+      assert.match(
+        src,
+        /status\s*!==\s*['"]DR['"]\s*&&\s*<SendDocumentButton/,
+        'SendDocumentButton must be gated behind a `status !== \'DR\'` check — today it renders ' +
+          'unconditionally regardless of documentStatus',
+      );
     });
   });
 });

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "reportId": "financial-accounts-page",
+  "category": "finance",
+  "type": "custom",
+  "source": "neo",
+  "title": {
+    "en_US": "Financial Accounts Page",
+    "es_ES": "Página de Cuentas"
+  },
+  "description": {
+    "en_US": "Powers the Cuentas landing page (ETP-4095): returns the active financial accounts visible to the current user plus the aggregated sidebar widgets (total balance, balance by currency, pending reconciliations).",
+    "es_ES": "Endpoint que alimenta la página Cuentas (ETP-4095): devuelve las cuentas financieras activas visibles para el usuario actual y los agregados del panel lateral (saldo total, saldo por moneda, pendientes de conciliar)."
+  },
+  "neo": {
+    "endpoint": "/sws/neo/financial-accounts-page",
+    "method": "GET",
+    "dataPath": "response.data",
+    "handler": "financial-accounts-page"
+  },
+  "outputs": ["json"],
+  "parameters": [],
+  "columns": []
+}

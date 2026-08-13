@@ -168,7 +168,7 @@ async function installContactMocks(page) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     }
   });
-  await page.route('**/sws/contacts/locationAddress**', async route => {
+  await page.route('**/sws/contacts/locationAddress{/**,}**', async route => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) });
   });
   // Use a regex (not a glob) so this intercepts before the login() catch-all
@@ -181,56 +181,55 @@ async function installContactMocks(page) {
   });
 }
 
-// ── 8.1 Verifactu date column ─────────────────────────────────────────────────
+// ── 8.1 Verifactu table structure ────────────────────────────────────────────
+// Note: date column was removed (field not available in VF contract entities).
 
-test.describe('Verifactu date column — ETP-3778', () => {
-  test('accepted row shows invoiceDate formatted as dd/mm/yyyy', async ({ page }) => {
+test.describe('Verifactu table structure — ETP-3778', () => {
+  test('accepted row renders the invoice number in the table', async ({ page }) => {
     await loginWithOrg(page);
     await installVfMocksWithRows(page, [VF_ROW_ACCEPTED]);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.verifactu.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('verifactu-tablecard')).toBeVisible({ timeout: 8_000 });
 
-    // The ISO date 2025-04-14 must be displayed as 14/04/2025
-    await expect(page.getByText('14/04/2025')).toBeVisible({ timeout: 6_000 });
+    // Invoice number cell must be visible (FK field falls back to raw value)
+    await expect(page.getByText('SV-2025-1001')).toBeVisible({ timeout: 6_000 });
   });
 
-  test('date column header is visible in the Aceptadas tab', async ({ page }) => {
+  test('invoice number column header is visible in the Aceptadas tab', async ({ page }) => {
     await loginWithOrg(page);
     await installVfMocksWithRows(page, [VF_ROW_ACCEPTED]);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.verifactu.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('verifactu-tablecard')).toBeVisible({ timeout: 8_000 });
 
     const table = page.getByTestId('fm-data-table').first();
-    await expect(table.getByText(t('fiscalMonitor.col.date'))).toBeVisible({ timeout: 6_000 });
+    await expect(table.getByText(t('fiscalMonitor.col.invoiceNumber'))).toBeVisible({ timeout: 6_000 });
   });
 
-  test('empty tab shows a single cell that spans all 9 columns — no layout shift', async ({ page }) => {
+  test('empty tab shows the empty-state message — no layout shift', async ({ page }) => {
     await loginWithOrg(page);
-    // Start on accepted tab which will have 0 rows after we switch to rejected
     await installVfMocksWithRows(page, []);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.verifactu.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('verifactu-tablecard')).toBeVisible({ timeout: 8_000 });
 
-    // The empty-state cell should exist (colSpan=9 is structural; we verify no broken columns)
     await expect(page.getByText(t('fiscalMonitor.empty'))).toBeVisible({ timeout: 6_000 });
   });
 
-  test('date column is present in the Rechazadas tab', async ({ page }) => {
+  test('invoice number column is present in the Con problemas filter', async ({ page }) => {
     await loginWithOrg(page);
     await installVfMocksWithRows(page, [VF_ROW_REJECTED]);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.verifactu.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('verifactu-tablecard')).toBeVisible({ timeout: 8_000 });
 
-    // Switch to Rechazadas tab
-    const rejectedTab = page.getByTestId('fm-tabs').locator('button').filter({ hasText: t('fiscalMonitor.verifactu.tab.rejected') }).first();
-    await rejectedTab.click();
+    // Switch to "Con problemas" filter pill (shows rejected/partial/invalid rows)
+    const problemsTab = page.getByTestId('fm-tabs').locator('button').filter({ hasText: t('fiscalMonitor.verifactu.pill.problems') }).first();
+    await problemsTab.click();
 
     const table = page.getByTestId('fm-data-table').first();
-    await expect(table.getByText(t('fiscalMonitor.col.date'))).toBeVisible({ timeout: 6_000 });
+    await expect(table.getByText(t('fiscalMonitor.col.invoiceNumber'))).toBeVisible({ timeout: 6_000 });
   });
 });
 
@@ -243,7 +242,7 @@ test.describe('Error status pill → Contact Detail popup — ETP-3778', () => {
     await installContactMocks(page);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     // Find and click the error status pill for the AE row
     const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
@@ -260,7 +259,7 @@ test.describe('Error status pill → Contact Detail popup — ETP-3778', () => {
     await installContactMocks(page);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
     await pill.click();
@@ -274,7 +273,7 @@ test.describe('Error status pill → Contact Detail popup — ETP-3778', () => {
     await installSiiMocksWithRows(page, [SII_ROW_OK]);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     // The CO success pill must not have role="button" (no onClick applied)
     const successPill = page.locator('[data-testid="status-pill"][data-status="success"]').first();
@@ -288,7 +287,7 @@ test.describe('Error status pill → Contact Detail popup — ETP-3778', () => {
     await installContactMocks(page);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
     await pill.click();
@@ -307,7 +306,7 @@ test.describe('Error status pill → Contact Detail popup — ETP-3778', () => {
     await installContactMocks(page);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
     await pill.click();
@@ -328,7 +327,7 @@ test.describe('TaxIDKeyPicker dropdown — ETP-3778', () => {
     await installContactMocks(page);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     // Open the modal
     const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
@@ -349,7 +348,7 @@ test.describe('TaxIDKeyPicker dropdown — ETP-3778', () => {
     await installContactMocks(page);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
     await pill.click();
@@ -370,7 +369,7 @@ test.describe('TaxIDKeyPicker dropdown — ETP-3778', () => {
     await installContactMocks(page);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
     await pill.click();
@@ -395,7 +394,7 @@ test.describe('TaxIDKeyPicker dropdown — ETP-3778', () => {
     await installContactMocks(page);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
     await pill.click();
@@ -415,7 +414,7 @@ test.describe('TaxIDKeyPicker dropdown — ETP-3778', () => {
     await installContactMocks(page);
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
 
     const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
     await pill.click();

@@ -1,0 +1,313 @@
+{
+  "version": "0.14.0",
+  "generatedAt": "2026-06-26T00:48:58.290Z",
+  "updatedAt": "2026-06-26T02:39:48.121Z",
+  "contractChecksum": "7c6e0d2e00c5047f",
+  "apiPrediction": {
+    "specName": "internal-consumption",
+    "baseUrl": "/sws/neo/internal-consumption",
+    "crud": {
+      "internalConsumption": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/internal-consumption/internalConsumption",
+        "detailUrl": "/sws/neo/internal-consumption/internalConsumption/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      },
+      "internalConsumptionLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/internal-consumption/internalConsumptionLine",
+        "detailUrl": "/sws/neo/internal-consumption/internalConsumptionLine/{id}",
+        "supportedFilters": [
+          "product"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "internalConsumptionLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/internal-consumption/internalConsumptionLine/selectors/product"
+      },
+      {
+        "entity": "internalConsumptionLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/internal-consumption/internalConsumptionLine/selectors/uOM"
+      },
+      {
+        "entity": "internalConsumptionLine",
+        "field": "storageBin",
+        "column": "M_Locator_ID",
+        "reference": "Locator",
+        "inputMode": "search",
+        "url": "/sws/neo/internal-consumption/internalConsumptionLine/selectors/storageBin"
+      }
+    ],
+    "actions": [
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "internalConsumption",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "800131",
+        "processType": "classic"
+      },
+      {
+        "name": "posted",
+        "actionType": "documentAction",
+        "entity": "internalConsumption",
+        "column": "Posted",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/posted",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "internalConsumption",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "inventory"
+    }
+  },
+  "formState": {
+    "entities": {
+      "internalConsumption": {
+        "fields": {
+          "movementDate": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "name": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "status": {
+            "required": true,
+            "defaultValue": "DR"
+          }
+        }
+      },
+      "internalConsumptionLine": {
+        "fields": {
+          "lineNo": {
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM M_INTERNAL_CONSUMPTIONLINE WHERE M_INTERNAL_CONSUMPTION_ID=@M_INTERNAL_CONSUMPTION_ID@"
+          },
+          "product": {
+            "required": true
+          },
+          "movementQuantity": {
+            "required": true,
+            "defaultValue": "0"
+          },
+          "uOM": {
+            "readOnly": true
+          },
+          "storageBin": {
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage internal consumption inventory operations.",
+    "whenToUse": [
+      "Use for stock and warehouse operations."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "movementDate",
+        "name",
+        "status"
+      ],
+      "lineFields": [
+        "product",
+        "movementQuantity",
+        "storageBin"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "processNow",
+      "posted",
+      "etblkpBulkposting"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required field without default value must be provided",
+      "Validate the current form state before running lifecycle actions",
+      "Do not run destructive lifecycle actions without explicit user confirmation"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "movementDate",
+          "name",
+          "status"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "product",
+          "movementQuantity",
+          "storageBin"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "processNow"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "ae10ac2d3dabfd92"
+}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Mock i18n hooks — return the key as-is
@@ -111,6 +111,34 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
     expect(onChangeSpy).toHaveBeenCalledWith('', '');
   });
 
+  it('clicking the X focuses the input so a later outside click closes the dropdown (regression)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    render(<Harness initialValue="ADDR-1" initialDisplay="123 Main St" />);
+
+    const chip = screen.getByTestId('field-address-chip');
+    const clearBtn = chip.querySelector('[aria-label="clear"]');
+    await user.click(clearBtn);
+
+    // Chip unmounts and the input mounts (setOpen(true) in handleClear signals reopen intent).
+    const input = await screen.findByTestId('field-address');
+
+    // Without the fix, focus never moves to the input after clear — this assertion is
+    // exactly what was broken: the input never receives focus, so onBlur never fires.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(input);
+    });
+
+    // Simulate the user clicking a different field entirely (outside click) — should
+    // fire onBlur on the now-focused input, which closes the dropdown after 200ms.
+    input.blur();
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+
+    vi.useRealTimers();
+  });
+
   it('renders the ChevronDown icon with ml-auto (right-anchored, parity with SearchInput)', async () => {
     const { container } = render(<Harness />);
     // The component fires a lazy fetch on mount → loading=true initially (renders Loader2).
@@ -120,7 +148,7 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
       expect(chevron).not.toBeNull();
     });
     const chevron = container.querySelector('svg.lucide-chevron-down');
-    expect(chevron.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+    expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
   });
 
   it('chevron stays right-anchored when the chip is shown', async () => {
@@ -132,6 +160,28 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
       expect(chevron).not.toBeNull();
     });
     const chevron = container.querySelector('svg.lucide-chevron-down');
-    expect(chevron.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+    expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+  });
+
+  it('applies the same full-field hover background to an empty field as to a populated chip (regression)', async () => {
+    const { container: emptyContainer } = render(<Harness initialValue="" initialDisplay="" />);
+    const emptyInput = screen.getByTestId('field-address');
+    // Wrapper is the input's grandparent (input -> flex row -> outer wrapper div).
+    const emptyWrapper = emptyInput.closest('.group.relative');
+    expect(emptyWrapper.className).toMatch(/hover:bg-\[hsl\(var\(--muted\)\)\]/);
+
+    const { container: chipContainer } = render(
+      <Harness initialValue="ADDR-1" initialDisplay="123 Main St" />
+    );
+    const chip = within(chipContainer).getByTestId('field-address-chip');
+    const chipWrapper = chip.closest('.group.relative');
+    expect(chipWrapper.className).toMatch(/hover:bg-\[hsl\(var\(--muted\)\)\]/);
+
+    // both non-disabled states resolve to the exact same hover class
+    expect(emptyWrapper.className).toContain('bg-card hover:bg-[hsl(var(--muted))]');
+    expect(chipWrapper.className).toContain('bg-card hover:bg-[hsl(var(--muted))]');
+
+    // sanity check container is unused directly but rendered without error
+    expect(emptyContainer).toBeTruthy();
   });
 });

@@ -5,7 +5,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export { daysUntil };
 
-export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null } = {}) {
+export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null, orgId = null } = {}) {
   const [daysLeft, setDaysLeft] = useState(null);
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
 
@@ -14,10 +14,13 @@ export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null } = {}) {
       setDaysLeft(mockDaysLeft);
       return;
     }
-    if (!apiBaseUrl) return;
+    if (!apiBaseUrl || !orgId) {
+      setDaysLeft(null);
+      return;
+    }
     setDaysLeft(null);
     const controller = new AbortController();
-    apiFetch('/certificate', { signal: controller.signal })
+    apiFetch(`/certificate?${new URLSearchParams({ orgId })}`, { signal: controller.signal })
       .then(r => r.json())
       .then(data => {
         if (controller.signal.aborted) return;
@@ -29,7 +32,7 @@ export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null } = {}) {
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [apiFetch, mockDaysLeft, apiBaseUrl]);
+  }, [apiFetch, mockDaysLeft, apiBaseUrl, orgId]);
 
   return { daysLeft };
 }

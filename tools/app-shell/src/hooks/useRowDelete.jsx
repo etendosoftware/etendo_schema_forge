@@ -17,8 +17,13 @@ import { extractErrorMessage } from '@/hooks/useEntity';
  *   - deleteDialog: JSX node the host must render once (e.g. before its modals/portals).
  *
  * On confirm: DELETE ${apiBaseUrl}/${entity}/${row.id} → toast + onSuccess refresh.
+ *
+ * `deleteFn` (optional): overrides the network call for windows where a plain DELETE
+ * isn't always the right request (e.g. a processed record needs a dedicated removal
+ * action instead). Receives the pending row, must throw on failure — the dialog keeps
+ * its shared copy/styling either way.
  */
-export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess }) {
+export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess, deleteFn }) {
   const ui = useUI();
   const [pending, setPending] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -37,35 +42,49 @@ export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess }
     if (!pending?.id || !apiBaseUrl) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${pending.id}`, {
-        method: 'DELETE',
-        headers: buildHeaders(token),
-      });
-      if (res.ok) {
-        toast.success(ui('recordDeleted'));
-        setPending(null);
-        onSuccess?.();
+      if (deleteFn) {
+        await deleteFn(pending);
       } else {
-        const msg = await extractErrorMessage(res, ui);
-        toast.error(msg || `${res.status} ${res.statusText}`);
+        const res = await fetch(`${apiBaseUrl}/${entity}/${pending.id}`, {
+          method: 'DELETE',
+          headers: buildHeaders(token),
+        });
+        if (!res.ok) {
+          const msg = await extractErrorMessage(res, ui);
+          throw new Error(msg || `${res.status} ${res.statusText}`);
+        }
       }
+      toast.success(ui('recordDeleted'));
+      setPending(null);
+      onSuccess?.();
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
+      // Close the dialog on failure too — the toast already communicates the
+      // error, so leaving the confirm popup open on top of it is confusing
+      // (standardized delete behavior, ETP-4656).
+      setPending(null);
     } finally {
       setDeleting(false);
     }
-  }, [pending, apiBaseUrl, entity, token, onSuccess, ui]);
+  }, [pending, apiBaseUrl, entity, token, onSuccess, ui, deleteFn]);
 
   const deleteDialog = (
-    <Dialog open={Boolean(pending)} onOpenChange={(open) => { if (!open) close(); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{ui('deleteConfirmTitle')}</DialogTitle>
-          <DialogDescription>{ui('deleteConfirmMessage')}</DialogDescription>
+    <Dialog
+      open={Boolean(pending)}
+      onOpenChange={(open) => { if (!open) close(); }}
+      data-testid="Dialog__ab22b5">
+      <DialogContent className="max-w-sm" data-testid="DialogContent__ab22b5">
+        <DialogHeader data-testid="DialogHeader__ab22b5">
+          <DialogTitle data-testid="DialogTitle__ab22b5">{ui('deleteConfirmTitle')}</DialogTitle>
+          <DialogDescription data-testid="DialogDescription__ab22b5">{ui('deleteConfirmMessage')}</DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" size="sm" disabled={deleting}>{ui('cancel')}</Button>
+        <DialogFooter data-testid="DialogFooter__ab22b5">
+          <DialogClose asChild data-testid="DialogClose__ab22b5">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deleting}
+              data-testid="Button__ab22b5">{ui('cancel')}</Button>
           </DialogClose>
           <Button
             variant="destructive"

@@ -92,15 +92,15 @@ describe('InvoiceTopbarExtra', () => {
 
   // ── Payment modal ──────────────────────────────────────────────────────────
 
-  it('renders InvoicePaymentModal for the payments modal', () => {
-    assert.match(src, /InvoicePaymentModal/);
+  it('renders the shared InvoicePaymentHistoryModal for the payments modal', () => {
+    assert.match(src, /InvoicePaymentHistoryModal/);
   });
 
-  it('passes specName="sales-invoice" to InvoicePaymentModal', () => {
+  it('passes specName="sales-invoice" to InvoicePaymentHistoryModal', () => {
     assert.match(src, /specName="sales-invoice"/);
   });
 
-  it('passes onPaymentAdded={fetchInstallments} to InvoicePaymentModal', () => {
+  it('passes onPaymentAdded={fetchInstallments} to InvoicePaymentHistoryModal', () => {
     assert.match(src, /onPaymentAdded=\{fetchInstallments\}/);
   });
 
@@ -137,5 +137,27 @@ describe('InvoiceTopbarExtra', () => {
     assert.match(src, /recordId=\{recordId\}/);
     assert.match(src, /token=\{token\}/);
     assert.match(src, /apiBaseUrl=\{apiBaseUrl\}/);
+  });
+
+  // ETP-4717 (Pair 2 — P2): the Send button must NOT be available while the
+  // invoice is still Draft (DR) — only once it is Completed (CO). The current
+  // early-return `if (isDraft) { ... }` block renders a SendDocumentButton,
+  // which is the bug.
+  describe('Send button visibility gated by document status (ETP-4717)', () => {
+    it('does NOT render the Send button in the Draft (isDraft) early-return block', () => {
+      const draftBlockMatch = src.match(/if\s*\(isDraft\)\s*\{\s*return\s*\(([\s\S]*?)\);\s*\}/);
+      assert.ok(draftBlockMatch, 'expected an `if (isDraft) { return (...); }` block in the source');
+      assert.doesNotMatch(
+        draftBlockMatch[1],
+        /<SendDocumentButton/,
+        'the Draft early-return block must not render SendDocumentButton — Send must only be ' +
+          'available once the invoice is Completed (CO)',
+      );
+    });
+
+    it('still renders a SendDocumentButton once the invoice is Completed (existing behavior, must not regress)', () => {
+      const afterDraftBlock = src.slice(src.indexOf('if (isCompleted && isCreditInstrument)'));
+      assert.match(afterDraftBlock, /<SendDocumentButton/);
+    });
   });
 });

@@ -1,0 +1,208 @@
+{
+  "version": "0.4.0",
+  "generatedAt": "2026-07-07T11:18:10.164Z",
+  "updatedAt": "2026-07-13T18:35:22.869Z",
+  "contractChecksum": "cf3b1051c306dcc3",
+  "apiPrediction": {
+    "specName": "fiscal-calendar",
+    "baseUrl": "/sws/neo/fiscal-calendar",
+    "crud": {
+      "year": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/fiscal-calendar/year",
+        "detailUrl": "/sws/neo/fiscal-calendar/year/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "year",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/fiscal-calendar/year/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "100",
+        "processType": "classic"
+      },
+      {
+        "name": "createRegFactAcct",
+        "actionType": "createFrom",
+        "entity": "year",
+        "column": "Create_Reg_Fact_Acct",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/fiscal-calendar/year/{id}/action/createRegFactAcct",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "800036",
+        "processType": "classic"
+      },
+      {
+        "name": "dropRegFactAcct",
+        "actionType": "utilityAction",
+        "entity": "year",
+        "column": "Drop_Reg_Fact_Acct",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/fiscal-calendar/year/{id}/action/dropRegFactAcct",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "800038",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Year": "Año fiscal",
+        "PeriodNo": "N.º período",
+        "StartDate": "Fecha inicio",
+        "EndDate": "Fecha fin",
+        "PeriodType": "Tipo",
+        "Status": "Estado"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "year": {
+        "fields": {
+          "fiscalYear": {
+            "required": true
+          },
+          "description": {},
+          "processNow": {
+            "defaultValue": "N"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage fiscal calendar financial records.",
+    "whenToUse": [
+      "Use for fiscal calendar management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "fiscalYear"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "processNow",
+      "createRegFactAcct"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "fiscalYear"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "processNow"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "6e9f2614bff9da8e"
+}

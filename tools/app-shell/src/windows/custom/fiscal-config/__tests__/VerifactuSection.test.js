@@ -21,25 +21,25 @@ describe('VerifactuSection — structure', () => {
   });
 });
 
-describe('VerifactuSection — locked/unlocked badge', () => {
+describe('VerifactuSection — locked/unlocked state', () => {
   it('derives isLocked from record.isReady via isEtendoTrue', () => {
     assert.match(src, /isEtendoTrue\(record\?\.isReady\)/);
   });
 
-  it('renders the locked badge when isLocked is true', () => {
-    assert.match(src, /fiscal\.verifactu\.locked\.badge/);
+  it('does not render a locked badge (badge was removed, lock behavior remains)', () => {
+    assert.doesNotMatch(src, /fiscal\.verifactu\.locked\.badge/);
   });
 
-  it('renders the unlocked badge when isLocked is false', () => {
-    assert.match(src, /fiscal\.verifactu\.unlocked\.badge/);
+  it('still gates rendering/behavior on isLocked', () => {
+    assert.match(src, /isLocked/);
   });
 
   it('disables the switches when record is locked', () => {
     assert.match(src, /disabled=\{isLocked\}/);
   });
 
-  it('hides the save button when record is locked', () => {
-    assert.match(src, /!isLocked/);
+  it('passes locked state to save button', () => {
+    assert.match(src, /locked=\{isLocked\}/);
   });
 });
 
@@ -58,10 +58,9 @@ describe('VerifactuSection — form fields', () => {
     assert.match(src, /defaultQR/);
   });
 
-  it('renders read-only fields for issuerNIF, systemStart, systemStop', () => {
-    assert.match(src, /issuerNIF/);
-    assert.match(src, /systemStartat/);
-    assert.match(src, /systemStopat/);
+  it('does not render the removed enrollment date field (inVfactuSystem)', () => {
+    assert.doesNotMatch(src, /inVfactuSystem/);
+    assert.doesNotMatch(src, /fiscal\.verifactu\.field\.enrollDate/);
   });
 });
 

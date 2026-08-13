@@ -1,0 +1,99 @@
+{
+  "version": "0.4.0",
+  "generatedAt": "2026-05-26T14:01:54.525Z",
+  "updatedAt": "2026-07-15T18:13:15.971Z",
+  "contractChecksum": "855ec7fd6298ff5e",
+  "apiPrediction": {
+    "specName": "conversion-rate-downloader-log",
+    "baseUrl": "/sws/neo/conversion-rate-downloader-log",
+    "crud": {
+      "conversionRateDownloaderLog": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/conversion-rate-downloader-log/conversionRateDownloaderLog",
+        "detailUrl": "/sws/neo/conversion-rate-downloader-log/conversionRateDownloaderLog/{id}",
+        "supportedFilters": [
+          "syncDate",
+          "status"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "settings",
+      "readOnly": true
+    }
+  },
+  "formState": {
+    "entities": {
+      "conversionRateDownloaderLog": {
+        "fields": {
+          "active": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "syncDate": {
+            "readOnly": true
+          },
+          "pairsUpdated": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "pairsFailed": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "errorDetail": {
+            "readOnly": true
+          },
+          "durationms": {
+            "readOnly": true
+          },
+          "status": {
+            "readOnly": true,
+            "defaultValue": "SUCCESS"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage conversion rate downloader log records.",
+    "whenToUse": [
+      "Use for conversion rate downloader log management."
+    ],
+    "minimumCreate": {},
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [],
+    "examples": [],
+    "warnings": [
+      "This spec appears read-only from generated form metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "35ed21777672441a"
+}

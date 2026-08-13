@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.43.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-05-12T19:44:17.750Z",
-  "checksum": "8c7c01cd5d0bc19e",
+  "updatedAt": "2026-08-06T17:20:38.808Z",
+  "checksum": "323eb4ee09a6f034",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -13,39 +13,96 @@
       "hidePrint": true,
       "hideMoreMenu": true,
       "hideMoreDetails": true,
-      "contentBg": "bg-slate-50",
-      "hideListFilters": true,
+      "contentBg": "bg-card",
       "hideLink": true,
-      "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
       "processOverrides": {
         "processAsset": {
           "add": true,
           "label": "Create Amortization",
+          "labelToggle": {
+            "field": "processed",
+            "equals": "Y",
+            "label": "Recalculate Amortization"
+          },
           "style": "positive",
-          "displayLogicRaw": "@Depreciate@='Y'"
+          "displayLogicRaw": "@Depreciate@='Y' AND @etgoAmortizationStatus@!='100'",
+          "requiresFieldMax": [
+            {
+              "field": "annualDepreciation",
+              "max": 100,
+              "conditionalOnField": "calculateType",
+              "conditionalValue": "PE",
+              "errorKey": "assetsValidationAnnualDepreciationMax"
+            }
+          ]
         }
       },
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "assetAcct": {
+          "tabOrder": 1000,
+          "label": "Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "accumulatedDepreciation",
+            "depreciation"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
+      "statusField": "none",
       "detailSortBy": "sEQNoAsset asc",
       "headerExtra": {
-        "customForm": "AssetsAmortizationPanel"
+        "customForm": "AssetsDetailPanel"
       },
-      "primaryTabs": [
-        {
-          "key": "general",
-          "label": "Overview"
+      "labelOverrides": {
+        "es_ES": {
+          "C_Project_ID": "Proyecto",
+          "EM_Etadas_Costcenter_ID": "Centro de coste",
+          "C_BPartner_ID": "Contacto",
+          "EM_Etadas_User1_ID": "1ª Dimensión",
+          "EM_Etadas_User2_ID": "2ª Dimensión",
+          "EM_Etadas_Salesregion_ID": "Región de ventas",
+          "EM_Etadas_C_Activity_ID": "Actividad",
+          "EM_Etadas_Campaign_ID": "Campaña",
+          "EM_Etgo_Amortization_Status": "Estado de amortización",
+          "M_Product_ID": "Producto"
         },
-        {
-          "key": "configuration",
-          "label": "Depreciation Setup",
-          "panel": "AssetsConfigPanel"
+        "en_US": {
+          "C_Project_ID": "Project",
+          "EM_Etadas_Costcenter_ID": "Cost Center",
+          "C_BPartner_ID": "Business Partner",
+          "EM_Etadas_User1_ID": "1st Dimension",
+          "EM_Etadas_User2_ID": "2nd Dimension",
+          "EM_Etadas_Salesregion_ID": "Sales Region",
+          "EM_Etadas_C_Activity_ID": "Activity",
+          "EM_Etadas_Campaign_ID": "Sales Campaign",
+          "EM_Etgo_Amortization_Status": "Amortization Status",
+          "M_Product_ID": "Product"
         }
-      ],
+      },
       "disableProcessedLock": true,
       "titleField": "name",
-      "dateFilterKey": "purchaseDate",
+      "toolbarBorderBottom": true,
+      "compactSidebarPadding": true,
+      "whiteFormBackground": true,
+      "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
+      "sidebarClassName": "w-[30%] shrink-0 border-l border-border-subtle p-2",
+      "formScrollPaddingX": "px-2",
+      "toolbarPaddingX": "px-2",
+      "toolbarButtonSize": "default",
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2",
+      "customPanelTabs": [
+        {
+          "key": "amortizationPlan",
+          "labelKey": "assetsAmortizationPlanTab",
+          "component": "AssetsAmortizationPanel"
+        }
+      ],
       "layoutType": "default"
     },
     "entities": {
@@ -64,9 +121,13 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 40
+            }
           },
           {
             "name": "name",
@@ -78,8 +139,12 @@
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true,
-            "sourceRequired": true
+            "form": false,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "assetCategory",
@@ -91,10 +156,15 @@
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "reference": "AssetGroup",
             "inputMode": "selector",
+            "businessCritical": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Depreciate"
             }
@@ -109,7 +179,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "currency",
@@ -118,7 +191,7 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": false,
             "form": false,
@@ -129,10 +202,35 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
+            "validation": {
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@existAmortizationLines@ = 'Y'",
-              "evaluable": true,
-              "js": "Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0"
+              "evaluable": false,
+              "reason": "untranslatable-token",
+              "js": null
+            }
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "label": "Product",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "search",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Asset_Product"
             }
           },
           {
@@ -146,7 +244,11 @@
             "required": true,
             "grid": false,
             "form": false,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "depreciationType",
@@ -163,9 +265,17 @@
             "enumValues": [
               {
                 "value": "LI",
-                "name": "Linear"
+                "name": "Linear",
+                "labels": {
+                  "es_ES": "Lineal"
+                }
               }
             ],
+            "businessCritical": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -187,13 +297,24 @@
             "enumValues": [
               {
                 "value": "PE",
-                "name": "Percentage"
+                "name": "Percentage",
+                "labels": {
+                  "es_ES": "Porcentaje"
+                }
               },
               {
                 "value": "TI",
-                "name": "Time"
+                "name": "Time",
+                "labels": {
+                  "es_ES": "Tiempo"
+                }
               }
             ],
+            "businessCritical": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -211,6 +332,12 @@
             "required": false,
             "grid": false,
             "form": false,
+            "businessCritical": true,
+            "min": 1,
+            "validation": {
+              "maxLength": 12,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@!'TI'",
               "evaluable": true,
@@ -232,13 +359,24 @@
             "enumValues": [
               {
                 "value": "MO",
-                "name": "Monthly"
+                "name": "Monthly",
+                "labels": {
+                  "es_ES": "Mensualmente"
+                }
               },
               {
                 "value": "YE",
-                "name": "Yearly"
+                "name": "Yearly",
+                "labels": {
+                  "es_ES": "Anualmente"
+                }
               }
             ],
+            "businessCritical": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI'",
               "evaluable": true,
@@ -256,6 +394,13 @@
             "required": false,
             "grid": false,
             "form": false,
+            "businessCritical": true,
+            "min": 1,
+            "integer": true,
+            "validation": {
+              "maxLength": 10,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'  & @Amortizationcalctype@ = 'TI' & @Assetschedule@='YE'",
               "evaluable": true,
@@ -273,6 +418,13 @@
             "required": false,
             "grid": false,
             "form": false,
+            "businessCritical": true,
+            "min": 1,
+            "integer": true,
+            "validation": {
+              "maxLength": 10,
+              "minimum": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & @Assetschedule@!'YE'",
               "evaluable": true,
@@ -296,6 +448,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & (@Assetschedule@='YE' | @Assetschedule@='MO')",
               "evaluable": true,
@@ -313,6 +469,10 @@
             "required": false,
             "grid": true,
             "form": false,
+            "dot": false,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -330,6 +490,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -347,6 +510,11 @@
             "required": false,
             "grid": true,
             "form": false,
+            "businessCritical": true,
+            "dot": false,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -364,6 +532,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -382,13 +553,12 @@
             "grid": true,
             "form": false,
             "summable": true,
+            "businessCritical": true,
+            "validation": {
+              "maxLength": 12
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
-            },
-            "displayLogic": {
-              "raw": "@IsDepreciated@='Y'",
-              "evaluable": true,
-              "js": "record.depreciate === true || record.depreciate === 'Y'"
             }
           },
           {
@@ -402,6 +572,10 @@
             "required": false,
             "grid": false,
             "form": false,
+            "businessCritical": true,
+            "validation": {
+              "maxLength": 12
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
             },
@@ -420,8 +594,14 @@
             "tsType": "number",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": false,
+            "summable": true,
+            "businessCritical": true,
+            "gridOrder": 6,
+            "validation": {
+              "maxLength": 12
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
             },
@@ -447,6 +627,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "businessCritical": true,
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -470,6 +654,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
@@ -492,6 +680,9 @@
             },
             "defaultValue": "0",
             "summable": true,
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
@@ -513,32 +704,36 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
             }
           },
           {
-            "name": "fullyDepreciated",
-            "apiKey": "fullyDepreciated",
-            "column": "IsFullyDepreciated",
-            "label": "Fully Depreciated",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "search",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
             },
-            "defaultValue": "N",
-            "cellType": "depreciationProgress",
             "displayLogic": {
-              "raw": "@IsDepreciated@='Y'",
-              "evaluable": true
+              "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
+              "evaluable": false,
+              "reason": "accounting-dimension",
+              "js": null
             }
           },
           {
@@ -558,9 +753,35 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "etgoAmortizationStatus",
+            "apiKey": "etgoAmortizationStatus",
+            "column": "EM_Etgo_Amortization_Status",
+            "label": "Amortization Status",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "columnType": "number",
+            "defaultValue": "0",
+            "cellType": "depreciationProgress",
+            "validation": {
+              "maxLength": 12
             }
           }
         ],
@@ -568,8 +789,7 @@
           "searchKey",
           "name",
           "assetCategory",
-          "depreciate",
-          "fullyDepreciated"
+          "depreciate"
         ],
         "computedFields": [
           {
@@ -615,20 +835,21 @@
             }
           },
           {
-            "name": "fullyDepreciated",
+            "name": "processAsset",
             "derivation": {
               "type": "computed",
               "source": "N"
             }
           },
           {
-            "name": "processAsset",
+            "name": "etgoAmortizationStatus",
             "derivation": {
               "type": "computed",
-              "source": "N"
+              "source": "0"
             }
           }
-        ]
+        ],
+        "javaQualifier": "assetsHandler"
       },
       "amortizationLine": {
         "tableName": "A_Amortizationline",
@@ -651,7 +872,10 @@
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(SEQ_No_Asset),0)+10 AS DefaultValue FROM A_AMORTIZATIONLINE WHERE A_ASSET_ID=@A_ASSET_ID@"
             },
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQ_No_Asset),0)+10 AS DefaultValue FROM A_AMORTIZATIONLINE WHERE A_ASSET_ID=@A_ASSET_ID@"
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQ_No_Asset),0)+10 AS DefaultValue FROM A_AMORTIZATIONLINE WHERE A_ASSET_ID=@A_ASSET_ID@",
+            "validation": {
+              "maxLength": 12
+            }
           },
           {
             "name": "amortization",
@@ -665,7 +889,10 @@
             "grid": true,
             "form": true,
             "reference": "Amortization",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "amortizationPercentage",
@@ -678,6 +905,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "validation": {
+              "maxLength": 6
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -695,6 +925,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "validation": {
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -714,6 +947,9 @@
             "form": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 12
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -751,7 +987,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "AcctSchema",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            }
           },
           {
             "name": "accumulatedDepreciation",
@@ -766,7 +1006,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
             "name": "depreciation",
@@ -781,7 +1025,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -799,39 +1047,96 @@
       "hidePrint": true,
       "hideMoreMenu": true,
       "hideMoreDetails": true,
-      "contentBg": "bg-slate-50",
-      "hideListFilters": true,
+      "contentBg": "bg-card",
       "hideLink": true,
-      "hideEyeCount": true,
       "breadcrumb": "Finance / Assets",
       "processOverrides": {
         "processAsset": {
           "add": true,
           "label": "Create Amortization",
+          "labelToggle": {
+            "field": "processed",
+            "equals": "Y",
+            "label": "Recalculate Amortization"
+          },
           "style": "positive",
-          "displayLogicRaw": "@Depreciate@='Y'"
+          "displayLogicRaw": "@Depreciate@='Y' AND @etgoAmortizationStatus@!='100'",
+          "requiresFieldMax": [
+            {
+              "field": "annualDepreciation",
+              "max": 100,
+              "conditionalOnField": "calculateType",
+              "conditionalValue": "PE",
+              "errorKey": "assetsValidationAnnualDepreciationMax"
+            }
+          ]
         }
       },
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "assetAcct": {
+          "tabOrder": 1000,
+          "label": "Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "accumulatedDepreciation",
+            "depreciation"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
+      "statusField": "none",
       "detailSortBy": "sEQNoAsset asc",
       "headerExtra": {
-        "customForm": "AssetsAmortizationPanel"
+        "customForm": "AssetsDetailPanel"
       },
-      "primaryTabs": [
-        {
-          "key": "general",
-          "label": "Overview"
+      "labelOverrides": {
+        "es_ES": {
+          "C_Project_ID": "Proyecto",
+          "EM_Etadas_Costcenter_ID": "Centro de coste",
+          "C_BPartner_ID": "Contacto",
+          "EM_Etadas_User1_ID": "1ª Dimensión",
+          "EM_Etadas_User2_ID": "2ª Dimensión",
+          "EM_Etadas_Salesregion_ID": "Región de ventas",
+          "EM_Etadas_C_Activity_ID": "Actividad",
+          "EM_Etadas_Campaign_ID": "Campaña",
+          "EM_Etgo_Amortization_Status": "Estado de amortización",
+          "M_Product_ID": "Producto"
         },
-        {
-          "key": "configuration",
-          "label": "Depreciation Setup",
-          "panel": "AssetsConfigPanel"
+        "en_US": {
+          "C_Project_ID": "Project",
+          "EM_Etadas_Costcenter_ID": "Cost Center",
+          "C_BPartner_ID": "Business Partner",
+          "EM_Etadas_User1_ID": "1st Dimension",
+          "EM_Etadas_User2_ID": "2nd Dimension",
+          "EM_Etadas_Salesregion_ID": "Sales Region",
+          "EM_Etadas_C_Activity_ID": "Activity",
+          "EM_Etadas_Campaign_ID": "Sales Campaign",
+          "EM_Etgo_Amortization_Status": "Amortization Status",
+          "M_Product_ID": "Product"
         }
-      ],
+      },
       "disableProcessedLock": true,
       "titleField": "name",
-      "dateFilterKey": "purchaseDate"
+      "toolbarBorderBottom": true,
+      "compactSidebarPadding": true,
+      "whiteFormBackground": true,
+      "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
+      "sidebarClassName": "w-[30%] shrink-0 border-l border-border-subtle p-2",
+      "formScrollPaddingX": "px-2",
+      "toolbarPaddingX": "px-2",
+      "toolbarButtonSize": "default",
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2",
+      "customPanelTabs": [
+        {
+          "key": "amortizationPlan",
+          "labelKey": "assetsAmortizationPlanTab",
+          "component": "AssetsAmortizationPanel"
+        }
+      ]
     },
     "entities": {
       "assets": {
@@ -869,7 +1174,8 @@
             "column": "A_Asset_Group_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "documentNo",
@@ -892,7 +1198,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -900,7 +1206,7 @@
             "apiKey": "product",
             "column": "M_Product_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -933,7 +1239,8 @@
             "column": "Amortizationtype",
             "type": "enum",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "calculateType",
@@ -941,7 +1248,8 @@
             "column": "Amortizationcalctype",
             "type": "enum",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "annualDepreciation",
@@ -949,7 +1257,8 @@
             "column": "Annualamortizationpercentage",
             "type": "decimal",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "businessCritical": true
           },
           {
             "name": "amortize",
@@ -957,7 +1266,8 @@
             "column": "Assetschedule",
             "type": "enum",
             "visibility": "editable",
-            "required": true
+            "required": true,
+            "businessCritical": true
           },
           {
             "name": "usableLifeYears",
@@ -965,7 +1275,8 @@
             "column": "UseLifeYears",
             "type": "integer",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "businessCritical": true
           },
           {
             "name": "usableLifeMonths",
@@ -973,7 +1284,8 @@
             "column": "UseLifeMonths",
             "type": "integer",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "businessCritical": true
           },
           {
             "name": "everyMonthIs30Days",
@@ -1005,7 +1317,8 @@
             "column": "Amortizationstartdate",
             "type": "date",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "businessCritical": true
           },
           {
             "name": "depreciationEndDate",
@@ -1021,7 +1334,8 @@
             "column": "AssetValueAmt",
             "type": "amount",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "businessCritical": true
           },
           {
             "name": "residualAssetValue",
@@ -1029,7 +1343,8 @@
             "column": "Residualassetvalueamt",
             "type": "amount",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "businessCritical": true
           },
           {
             "name": "depreciationAmt",
@@ -1037,7 +1352,8 @@
             "column": "Amortizationvalueamt",
             "type": "amount",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "businessCritical": true
           },
           {
             "name": "previouslyDepreciatedAmt",
@@ -1045,7 +1361,8 @@
             "column": "Depreciatedpreviousamt",
             "type": "amount",
             "visibility": "editable",
-            "required": false
+            "required": false,
+            "businessCritical": true
           },
           {
             "name": "processed",
@@ -1076,7 +1393,7 @@
             "apiKey": "fullyDepreciated",
             "column": "IsFullyDepreciated",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -1108,7 +1425,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1120,19 +1437,19 @@
             "required": true
           },
           {
-            "name": "businessPartner",
-            "apiKey": "businessPartner",
-            "column": "C_BPartner_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "assetDepreciationDate",
             "apiKey": "assetDepreciationDate",
             "column": "AssetDepreciationDate",
             "type": "date",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1334,8 +1651,65 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTADASActivity",
+            "apiKey": "eTADASActivity",
+            "column": "EM_Etadas_C_Activity_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTADASSalesCampaign",
+            "apiKey": "eTADASSalesCampaign",
+            "column": "EM_Etadas_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTADASSalesRegion",
+            "apiKey": "eTADASSalesRegion",
+            "column": "EM_Etadas_Salesregion_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTADASUser1",
+            "apiKey": "eTADASUser1",
+            "column": "EM_Etadas_User1_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTADASUser2",
+            "apiKey": "eTADASUser2",
+            "column": "EM_Etadas_User2_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTADASCostCenter",
+            "apiKey": "eTADASCostCenter",
+            "column": "EM_Etadas_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "etgoAmortizationStatus",
+            "apiKey": "etgoAmortizationStatus",
+            "column": "EM_Etgo_Amortization_Status",
+            "type": "decimal",
+            "visibility": "readOnly",
+            "required": false
           }
-        ]
+        ],
+        "javaQualifier": "assetsHandler"
       },
       "amortizationLine": {
         "tableName": "A_Amortizationline",
@@ -1493,6 +1867,38 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "eTADASActivity",
+            "apiKey": "eTADASActivity",
+            "column": "EM_Etadas_C_Activity_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTADASBpartner",
+            "apiKey": "eTADASBpartner",
+            "column": "EM_Etadas_C_Bpartner_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTADASSalesCampaign",
+            "apiKey": "eTADASSalesCampaign",
+            "column": "EM_Etadas_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTADASSalesRegion",
+            "apiKey": "eTADASSalesRegion",
+            "column": "EM_Etadas_Salesregion_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
           }
         ]
       },
@@ -1625,8 +2031,7 @@
           "searchKey",
           "name",
           "assetCategory",
-          "depreciate",
-          "fullyDepreciated"
+          "depreciate"
         ]
       },
       {
@@ -1733,8 +2138,7 @@
           "searchKey",
           "name",
           "assetCategory",
-          "depreciate",
-          "fullyDepreciated"
+          "depreciate"
         ]
       },
       "amortizationLine": {
@@ -1776,6 +2180,22 @@
         "reference": "Currency",
         "inputMode": "selector",
         "url": "/sws/neo/assets/assets/selectors/currency"
+      },
+      {
+        "entity": "assets",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/product"
+      },
+      {
+        "entity": "assets",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/project"
       },
       {
         "entity": "amortizationLine",
@@ -1832,8 +2252,8 @@
         "field": "processAsset",
         "column": "Process_Asset",
         "url": "/sws/neo/assets/assets/{id}/action/processAsset",
-        "processId": "85601427EAEE401FA0250FF0A6DD62EF",
-        "processType": "classic"
+        "processId": "D1E4EC58B04D4D3FA0060FF28094B39B",
+        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -1851,6 +2271,32 @@
     },
     "window": {
       "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "C_Project_ID": "Proyecto",
+        "EM_Etadas_Costcenter_ID": "Centro de coste",
+        "C_BPartner_ID": "Contacto",
+        "EM_Etadas_User1_ID": "1ª Dimensión",
+        "EM_Etadas_User2_ID": "2ª Dimensión",
+        "EM_Etadas_Salesregion_ID": "Región de ventas",
+        "EM_Etadas_C_Activity_ID": "Actividad",
+        "EM_Etadas_Campaign_ID": "Campaña",
+        "EM_Etgo_Amortization_Status": "Estado de amortización",
+        "M_Product_ID": "Producto"
+      },
+      "en_US": {
+        "C_Project_ID": "Project",
+        "EM_Etadas_Costcenter_ID": "Cost Center",
+        "C_BPartner_ID": "Business Partner",
+        "EM_Etadas_User1_ID": "1st Dimension",
+        "EM_Etadas_User2_ID": "2nd Dimension",
+        "EM_Etadas_Salesregion_ID": "Sales Region",
+        "EM_Etadas_C_Activity_ID": "Activity",
+        "EM_Etadas_Campaign_ID": "Sales Campaign",
+        "EM_Etgo_Amortization_Status": "Amortization Status",
+        "M_Product_ID": "Product"
+      }
     }
   },
   "testManifest": {
@@ -1925,20 +2371,20 @@
         "description": "Default value for 'depreciatedValue' in assets should be a string"
       },
       {
+        "id": "t-default-value-type-assets-etgoAmortizationStatus",
+        "category": "default-value-type",
+        "entity": "assets",
+        "field": "etgoAmortizationStatus",
+        "runner": "node",
+        "description": "Default value for 'etgoAmortizationStatus' in assets should be a string"
+      },
+      {
         "id": "t-default-value-type-assets-everyMonthIs30Days",
         "category": "default-value-type",
         "entity": "assets",
         "field": "everyMonthIs30Days",
         "runner": "node",
         "description": "Default value for 'everyMonthIs30Days' in assets should be a string"
-      },
-      {
-        "id": "t-default-value-type-assets-fullyDepreciated",
-        "category": "default-value-type",
-        "entity": "assets",
-        "field": "fullyDepreciated",
-        "runner": "node",
-        "description": "Default value for 'fullyDepreciated' in assets should be a string"
       },
       {
         "id": "t-default-value-type-assets-previouslyDepreciatedAmt",
@@ -1979,14 +2425,6 @@
         "field": "annualDepreciation",
         "runner": "node",
         "description": "Display logic for 'annualDepreciation' in assets should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-assets-assetValue",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "assetValue",
-        "runner": "node",
-        "description": "Display logic for 'assetValue' in assets should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-assets-calculateType",
@@ -2061,14 +2499,6 @@
         "description": "Display logic for 'everyMonthIs30Days' in assets should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-assets-fullyDepreciated",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "fullyDepreciated",
-        "runner": "node",
-        "description": "Display logic for 'fullyDepreciated' in assets should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-assets-previouslyDepreciatedAmt",
         "category": "displaylogic-evaluable",
         "entity": "assets",
@@ -2091,6 +2521,14 @@
         "field": "processed",
         "runner": "node",
         "description": "Display logic for 'processed' in assets should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-assets-project",
+        "category": "displaylogic-evaluable",
+        "entity": "assets",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in assets should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-assets-purchaseDate",
@@ -2139,14 +2577,6 @@
         "field": "annualDepreciation",
         "runner": "node",
         "description": "Display logic for 'annualDepreciation' in assets should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-assets-assetValue",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "assetValue",
-        "runner": "node",
-        "description": "Display logic for 'assetValue' in assets should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-assets-calculateType",
@@ -2221,14 +2651,6 @@
         "description": "Display logic for 'everyMonthIs30Days' in assets should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-assets-fullyDepreciated",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "fullyDepreciated",
-        "runner": "node",
-        "description": "Display logic for 'fullyDepreciated' in assets should be valid JS"
-      },
-      {
         "id": "t-displaylogic-valid-assets-previouslyDepreciatedAmt",
         "category": "displaylogic-valid",
         "entity": "assets",
@@ -2251,6 +2673,14 @@
         "field": "processed",
         "runner": "node",
         "description": "Display logic for 'processed' in assets should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-assets-project",
+        "category": "displaylogic-valid",
+        "entity": "assets",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in assets should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-assets-purchaseDate",
@@ -2469,20 +2899,20 @@
         "description": "Field 'description' should be present in assets"
       },
       {
+        "id": "t-field-presence-assets-etgoAmortizationStatus",
+        "category": "field-presence",
+        "entity": "assets",
+        "field": "etgoAmortizationStatus",
+        "runner": "node",
+        "description": "Field 'etgoAmortizationStatus' should be present in assets"
+      },
+      {
         "id": "t-field-presence-assets-everyMonthIs30Days",
         "category": "field-presence",
         "entity": "assets",
         "field": "everyMonthIs30Days",
         "runner": "node",
         "description": "Field 'everyMonthIs30Days' should be present in assets"
-      },
-      {
-        "id": "t-field-presence-assets-fullyDepreciated",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "fullyDepreciated",
-        "runner": "node",
-        "description": "Field 'fullyDepreciated' should be present in assets"
       },
       {
         "id": "t-field-presence-assets-name",
@@ -2515,6 +2945,22 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should be present in assets"
+      },
+      {
+        "id": "t-field-presence-assets-product",
+        "category": "field-presence",
+        "entity": "assets",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in assets"
+      },
+      {
+        "id": "t-field-presence-assets-project",
+        "category": "field-presence",
+        "entity": "assets",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in assets"
       },
       {
         "id": "t-field-presence-assets-purchaseDate",
@@ -2741,20 +3187,20 @@
         "description": "Field 'description' should have type 'string' in assets"
       },
       {
+        "id": "t-field-type-assets-etgoAmortizationStatus",
+        "category": "field-type",
+        "entity": "assets",
+        "field": "etgoAmortizationStatus",
+        "runner": "node",
+        "description": "Field 'etgoAmortizationStatus' should have type 'number' in assets"
+      },
+      {
         "id": "t-field-type-assets-everyMonthIs30Days",
         "category": "field-type",
         "entity": "assets",
         "field": "everyMonthIs30Days",
         "runner": "node",
         "description": "Field 'everyMonthIs30Days' should have type 'boolean' in assets"
-      },
-      {
-        "id": "t-field-type-assets-fullyDepreciated",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "fullyDepreciated",
-        "runner": "node",
-        "description": "Field 'fullyDepreciated' should have type 'boolean' in assets"
       },
       {
         "id": "t-field-type-assets-name",
@@ -2787,6 +3233,22 @@
         "field": "processed",
         "runner": "node",
         "description": "Field 'processed' should have type 'string' in assets"
+      },
+      {
+        "id": "t-field-type-assets-product",
+        "category": "field-type",
+        "entity": "assets",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in assets"
+      },
+      {
+        "id": "t-field-type-assets-project",
+        "category": "field-type",
+        "entity": "assets",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in assets"
       },
       {
         "id": "t-field-type-assets-purchaseDate",
@@ -2935,11 +3397,11 @@
         "description": "Rule 'process_Processing' (process) should be declared"
       },
       {
-        "id": "t-rule-declared-readOnlyLogic-Currency-existAmortizationLines",
+        "id": "t-rule-declared-readOnlyLogic-Currency-alwaysReadOnly",
         "category": "rule-declared",
-        "rule": "readOnlyLogic_Currency_existAmortizationLines",
+        "rule": "readOnlyLogic_Currency_alwaysReadOnly",
         "runner": "node",
-        "description": "Rule 'readOnlyLogic_Currency_existAmortizationLines' (readOnlyLogic) should be declared"
+        "description": "Rule 'readOnlyLogic_Currency_alwaysReadOnly' (readOnlyLogic) should be declared"
       },
       {
         "id": "t-rule-declared-readOnlyLogic-Processed-AmortizationLine",
@@ -2998,14 +3460,6 @@
         "field": "depreciate",
         "runner": "node",
         "description": "Field 'depreciate' should be a supported filter for assets"
-      },
-      {
-        "id": "t-searchable-filters-assets-fullyDepreciated",
-        "category": "searchable-filters",
-        "entity": "assets",
-        "field": "fullyDepreciated",
-        "runner": "node",
-        "description": "Field 'fullyDepreciated' should be a supported filter for assets"
       },
       {
         "id": "t-searchable-filters-assets-name",
@@ -3080,6 +3534,22 @@
         "description": "Selector endpoint for 'currency' in assets should exist"
       },
       {
+        "id": "t-selector-endpoint-assets-product",
+        "category": "selector-endpoint",
+        "entity": "assets",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in assets should exist"
+      },
+      {
+        "id": "t-selector-endpoint-assets-project",
+        "category": "selector-endpoint",
+        "entity": "assets",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in assets should exist"
+      },
+      {
         "id": "t-system-field-amortizationLine-active",
         "category": "system-field",
         "entity": "amortizationLine",
@@ -3126,6 +3596,38 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for amortizationLine"
+      },
+      {
+        "id": "t-system-field-amortizationLine-eTADASActivity",
+        "category": "system-field",
+        "entity": "amortizationLine",
+        "field": "eTADASActivity",
+        "runner": "node",
+        "description": "System field 'eTADASActivity' should exist in backend but not frontend for amortizationLine"
+      },
+      {
+        "id": "t-system-field-amortizationLine-eTADASBpartner",
+        "category": "system-field",
+        "entity": "amortizationLine",
+        "field": "eTADASBpartner",
+        "runner": "node",
+        "description": "System field 'eTADASBpartner' should exist in backend but not frontend for amortizationLine"
+      },
+      {
+        "id": "t-system-field-amortizationLine-eTADASSalesCampaign",
+        "category": "system-field",
+        "entity": "amortizationLine",
+        "field": "eTADASSalesCampaign",
+        "runner": "node",
+        "description": "System field 'eTADASSalesCampaign' should exist in backend but not frontend for amortizationLine"
+      },
+      {
+        "id": "t-system-field-amortizationLine-eTADASSalesRegion",
+        "category": "system-field",
+        "entity": "amortizationLine",
+        "field": "eTADASSalesRegion",
+        "runner": "node",
+        "description": "System field 'eTADASSalesRegion' should exist in backend but not frontend for amortizationLine"
       },
       {
         "id": "t-system-field-amortizationLine-id",
@@ -3368,12 +3870,68 @@
         "description": "System field 'documentNo' should exist in backend but not frontend for assets"
       },
       {
+        "id": "t-system-field-assets-eTADASActivity",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASActivity",
+        "runner": "node",
+        "description": "System field 'eTADASActivity' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASCostCenter",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASCostCenter",
+        "runner": "node",
+        "description": "System field 'eTADASCostCenter' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASSalesCampaign",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASSalesCampaign",
+        "runner": "node",
+        "description": "System field 'eTADASSalesCampaign' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASSalesRegion",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASSalesRegion",
+        "runner": "node",
+        "description": "System field 'eTADASSalesRegion' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASUser1",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASUser1",
+        "runner": "node",
+        "description": "System field 'eTADASUser1' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-eTADASUser2",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "eTADASUser2",
+        "runner": "node",
+        "description": "System field 'eTADASUser2' should exist in backend but not frontend for assets"
+      },
+      {
         "id": "t-system-field-assets-expirationDate",
         "category": "system-field",
         "entity": "assets",
         "field": "expirationDate",
         "runner": "node",
         "description": "System field 'expirationDate' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-system-field-assets-fullyDepreciated",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "fullyDepreciated",
+        "runner": "node",
+        "description": "System field 'fullyDepreciated' should exist in backend but not frontend for assets"
       },
       {
         "id": "t-system-field-assets-helpComment",
@@ -3464,28 +4022,12 @@
         "description": "System field 'partnerAddress' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-system-field-assets-product",
-        "category": "system-field",
-        "entity": "assets",
-        "field": "product",
-        "runner": "node",
-        "description": "System field 'product' should exist in backend but not frontend for assets"
-      },
-      {
         "id": "t-system-field-assets-profit",
         "category": "system-field",
         "entity": "assets",
         "field": "profit",
         "runner": "node",
         "description": "System field 'profit' should exist in backend but not frontend for assets"
-      },
-      {
-        "id": "t-system-field-assets-project",
-        "category": "system-field",
-        "entity": "assets",
-        "field": "project",
-        "runner": "node",
-        "description": "System field 'project' should exist in backend but not frontend for assets"
       },
       {
         "id": "t-system-field-assets-quantity",
@@ -3590,25 +4132,25 @@
       }
     ],
     "summary": {
-      "total": 219,
+      "total": 231,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 9,
-        "displaylogic-evaluable": 20,
-        "displaylogic-valid": 20,
-        "field-presence": 34,
-        "field-type": 34,
+        "displaylogic-evaluable": 19,
+        "displaylogic-valid": 19,
+        "field-presence": 36,
+        "field-type": 36,
         "readonlylogic-evaluable": 4,
         "readonlylogic-valid": 4,
         "rule-declared": 13,
-        "searchable-filters": 5,
-        "selector-endpoint": 7,
-        "system-field": 61,
+        "searchable-filters": 4,
+        "selector-endpoint": 9,
+        "system-field": 70,
         "visibility": 3
       },
       "byRunner": {
-        "node": 219,
+        "node": 231,
         "junit": 0
       }
     }

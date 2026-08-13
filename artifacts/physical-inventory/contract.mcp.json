@@ -1,0 +1,425 @@
+{
+  "version": "0.34.0",
+  "generatedAt": "2026-07-29T14:51:09.380Z",
+  "contractChecksum": "8844096a88781b84",
+  "apiPrediction": {
+    "specName": "physical-inventory",
+    "baseUrl": "/sws/neo/physical-inventory",
+    "crud": {
+      "inventory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/physical-inventory/inventory",
+        "detailUrl": "/sws/neo/physical-inventory/inventory/{id}",
+        "supportedFilters": [
+          "movementDate",
+          "warehouse"
+        ]
+      },
+      "inventoryLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/physical-inventory/inventoryLine",
+        "detailUrl": "/sws/neo/physical-inventory/inventoryLine/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "inventory",
+        "field": "warehouse",
+        "column": "M_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "search",
+        "url": "/sws/neo/physical-inventory/inventory/selectors/warehouse"
+      },
+      {
+        "entity": "inventory",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/physical-inventory/inventory/selectors/project"
+      },
+      {
+        "entity": "inventory",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/physical-inventory/inventory/selectors/costCenter"
+      },
+      {
+        "entity": "inventoryLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/physical-inventory/inventoryLine/selectors/product"
+      },
+      {
+        "entity": "inventoryLine",
+        "field": "storageBin",
+        "column": "M_Locator_ID",
+        "reference": "Locator",
+        "inputMode": "search",
+        "url": "/sws/neo/physical-inventory/inventoryLine/selectors/storageBin",
+        "context": {
+          "required": [
+            {
+              "param": "M_Warehouse_ID",
+              "source": "parentField",
+              "field": "warehouse"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "inventoryLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/physical-inventory/inventoryLine/selectors/uOM"
+      }
+    ],
+    "actions": [
+      {
+        "name": "generateList",
+        "actionType": "createFrom",
+        "entity": "inventory",
+        "column": "GenerateList",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/physical-inventory/inventory/{id}/action/generateList",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "105",
+        "processType": "classic"
+      },
+      {
+        "name": "updateQuantities",
+        "actionType": "utilityAction",
+        "entity": "inventory",
+        "column": "UpdateQty",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/physical-inventory/inventory/{id}/action/updateQuantities",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "106",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "inventory",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/physical-inventory/inventory/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "107",
+        "processType": "classic"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "inventory",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/physical-inventory/inventory/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "inventory"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "Processed": "Status"
+      },
+      "es_ES": {
+        "Processed": "Estado"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "inventory": {
+        "fields": {
+          "movementDate": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "name": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "warehouse": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "description": {},
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "inventoryType": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costCenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "processed": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "inventoryLine": {
+        "fields": {
+          "lineNo": {
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InventoryLine WHERE M_Inventory_ID=@M_Inventory_ID@"
+          },
+          "product": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "storageBin": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL=SELECT M_LOCATOR_ID AS DEFAULTVALUE FROM M_LOCATOR WHERE AD_ISORGINCLUDED(@AD_Org_ID@, M_LOCATOR.AD_Org_ID, @#AD_Client_ID@) <> -1 AND ISACTIVE='Y' AND M_WAREHOUSE_ID=@M_WAREHOUSE_ID@  ORDER BY M_LOCATOR.ISDEFAULT DESC"
+          },
+          "description": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "quantityOrderBook": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "quantityCount": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true
+          },
+          "bookQuantity": {
+            "readOnly": true,
+            "required": true
+          },
+          "cost": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "etgoQtydiff": {
+            "readOnly": true,
+            "defaultValue": "0"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage physical inventory inventory operations.",
+    "whenToUse": [
+      "Use for stock and warehouse operations."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "movementDate",
+        "name",
+        "warehouse"
+      ],
+      "lineFields": [
+        "product",
+        "storageBin",
+        "quantityCount"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "inventoryLine",
+        "field": "storageBin",
+        "context": {
+          "required": [
+            {
+              "param": "M_Warehouse_ID",
+              "source": "parentField",
+              "field": "warehouse"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [
+      "generateList",
+      "processNow",
+      "etblkpBulkposting"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "movementDate",
+          "name",
+          "warehouse"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "product",
+          "storageBin",
+          "quantityCount"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "generateList"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "8a82b4156250bf0a"
+}

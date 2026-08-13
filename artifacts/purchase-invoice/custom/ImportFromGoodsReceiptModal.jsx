@@ -110,19 +110,42 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     }
   }
 
-  let documents = [];
+  let candidates = [];
   if (receiptRes.ok) {
     const all = (await receiptRes.json())?.response?.data || [];
-    documents = all.filter(r =>
+    candidates = all.filter(r =>
       r.documentStatus === 'CO'
       && r.businessPartner === bpId
       && r.invoiced !== true
     );
   }
 
+  // Receipts have no currency of their own (M_InOut has no C_Currency_ID column) —
+  // resolve it via the linked purchase order. Receipts with no linked order can't be
+  // compared, so they're never excluded by this filter.
+  const invoiceCurrency = invoiceHeader.currency || null;
+  let documents = candidates;
+  let excludedByCurrency = false;
+  if (invoiceCurrency) {
+    const orderIds = [...new Set(candidates.filter(r => r.salesOrder).map(r => r.salesOrder))];
+    const orderCurrencyMap = {};
+    await Promise.all(orderIds.map(async (id) => {
+      try {
+        const r = await fetch(`${base}/purchase-order/header/${id}`, { headers });
+        if (r.ok) {
+          const o = (await r.json())?.response?.data?.[0];
+          if (o) orderCurrencyMap[id] = o.currency;
+        }
+      } catch { /* ignore — treat as unresolved, don't exclude */ }
+    }));
+    documents = candidates.filter(r => !r.salesOrder || orderCurrencyMap[r.salesOrder] === invoiceCurrency);
+    excludedByCurrency = documents.length === 0 && candidates.length > 0;
+  }
+
   return {
     documents,
     sharedContext: { invoiceHeader, productAuxMap, alreadyImportedReceiptLines, alreadyImportedOrderLines },
+    excludedByCurrency,
   };
 };
 
@@ -217,6 +240,7 @@ export default function ImportFromGoodsReceiptModal(props) {
       searchPlaceholderKey="searchGoodsReceipt"
       emptyMessageKey="noPendingGoodsReceiptsForSupplier"
       noSearchResultsKey="noGoodsReceiptsMatchYourSearch"
+      noCurrencyMatchMessageKey="noGoodsReceiptsMatchCurrency"
       successMessageKey="linesImportedFromGoodsReceipt"
       showPriceColumns={false}
       fetchDocuments={fetchDocuments}

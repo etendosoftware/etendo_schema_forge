@@ -1,8 +1,12 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import WarehouseTable from './WarehouseTable';
 import WarehouseForm from './WarehouseForm';
 import WarehouseTransactionsTable from '@/windows/custom/warehouse/WarehouseTransactionsTable';
+import AccountingTable from './AccountingTable';
+import AccountingForm from './AccountingForm';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -19,7 +23,9 @@ const statusField = null;
 // @sf-generated-end summary:warehouse
 
 // @sf-generated-start extraBadges:warehouse
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:warehouse
 
 // @sf-generated-start processes:warehouse
@@ -33,7 +39,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:warehouse
 
 // @sf-generated-start requiredHeaderFields:warehouse
-const requiredHeaderFields = ['searchKey', 'name', 'locationAddress', 'allocated'];
+const requiredHeaderFields = ['searchKey', 'name', 'locationAddress'];
 // @sf-generated-end requiredHeaderFields:warehouse
 
 
@@ -88,6 +94,17 @@ export const api = {
       "listUrl": "/sws/neo/warehouse/binContents",
       "detailUrl": "/sws/neo/warehouse/binContents/{id}",
       "supportedFilters": []
+    },
+    "accounting": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": false,
+      "listUrl": "/sws/neo/warehouse/accounting",
+      "detailUrl": "/sws/neo/warehouse/accounting/{id}",
+      "supportedFilters": []
     }
   },
   "selectors": [
@@ -98,14 +115,6 @@ export const api = {
       "reference": "Location",
       "inputMode": "search",
       "url": "/sws/neo/warehouse/warehouse/selectors/locationAddress"
-    },
-    {
-      "entity": "warehouse",
-      "field": "warehouseRule",
-      "column": "M_Warehouse_Rule_ID",
-      "reference": "Warehouse_Rule",
-      "inputMode": "selector",
-      "url": "/sws/neo/warehouse/warehouse/selectors/warehouseRule"
     },
     {
       "entity": "storageBin",
@@ -194,6 +203,14 @@ export const api = {
       "reference": "RefInventory",
       "inputMode": "selector",
       "url": "/sws/neo/warehouse/binContents/selectors/referencedInventory"
+    },
+    {
+      "entity": "accounting",
+      "field": "warehouseDifferences",
+      "column": "W_Differences_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/warehouse/accounting/selectors/warehouseDifferences"
     }
   ],
   "actions": [
@@ -234,8 +251,16 @@ export const api = {
 
 // @sf-generated-start component:WarehousePage
 export default function WarehousePage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('139');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="139" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="warehouse"
         Form={WarehouseForm}
@@ -250,12 +275,15 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'productTransactions', label: 'Transactions', Panel: WarehouseTransactionsTable },
+          { key: 'productTransactions', label: 'Transactions', Panel: WarehouseTransactionsTable, tabOrder: 1 },
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, tabOrder: 2 },
         ]}
+        hidePrint
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Warehouse", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -267,8 +295,12 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listbarPaddingX="px-2"
+      tablePaddingX="px-2"
+      hidePrint
+      hideLink
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

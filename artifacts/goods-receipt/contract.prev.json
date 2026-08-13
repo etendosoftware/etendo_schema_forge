@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
-  "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-05-12T19:44:00.759Z",
-  "checksum": "e9f9e44061d83f00",
+  "version": "0.30.0",
+  "generatedAt": "2026-07-30T22:14:36.474Z",
+  "updatedAt": "2026-08-07T12:18:02.094Z",
+  "checksum": "e15091d290bd10a5",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -10,15 +10,56 @@
       "primaryEntity": "goodsReceipt",
       "category": "purchases",
       "relatedDocuments": true,
+      "hideDeleteWhenComplete": true,
+      "hidePrint": true,
       "customComponents": {
-        "bottomSection": "GoodsReceiptBottomPanel"
+        "topbarRight": "GoodsReceiptActions",
+        "bottomSection": "GoodsReceiptBottomPanel",
+        "topbarExtra": "GoodsReceiptDraftChips"
+      },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
+        }
+      ],
+      "labelOverrides": {
+        "en_US": {
+          "EM_ETGO_Currency_ID": "Currency"
+        },
+        "es_ES": {
+          "EM_ETGO_Currency_ID": "Moneda"
+        }
       },
       "dateFilterKey": "movementDate",
+      "noHeaderBorder": true,
       "sendDocument": {
-        "allowEmail": false
+        "enabled": false
       },
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "goodsReceipt": {
@@ -36,15 +77,17 @@
             "tsType": "string",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
-            "form": true,
+            "grid": false,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "sequence",
               "source": "documentType.sequence"
             },
-            "section": "principal",
-            "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -67,6 +110,10 @@
             "inputMode": "selector",
             "section": "principal",
             "seq": 40,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_InOut_Warehouse"
             },
@@ -91,7 +138,11 @@
             "reference": "BusinessPartner",
             "inputMode": "search",
             "section": "principal",
-            "seq": 20,
+            "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
             },
@@ -111,7 +162,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "reference": "BusinessPartnerLocation",
             "inputMode": "dependent",
@@ -119,8 +170,10 @@
               "field": "businessPartner",
               "filterKey": "C_BPartner_ID"
             },
-            "section": "principal",
-            "seq": 30,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -152,7 +205,11 @@
             },
             "defaultValue": "@#Date@",
             "section": "principal",
-            "seq": 50,
+            "seq": 30,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate"
             },
@@ -163,41 +220,21 @@
             }
           },
           {
-            "name": "accountingDate",
-            "apiKey": "accountingDate",
-            "column": "DateAcct",
-            "label": "Accounting Date",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
-            },
-            "defaultValue": "@#Date@",
-            "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
-              "evaluable": true,
-              "js": "record['posted'] === 'Y'"
-            }
-          },
-          {
             "name": "salesOrder",
             "apiKey": "salesOrder",
             "column": "C_Order_ID",
             "label": "Purchase Order",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false,
             "grid": false,
             "form": false,
             "reference": "Order",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "orderReference",
@@ -211,7 +248,10 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "seq": 60,
+            "seq": 20,
+            "validation": {
+              "maxLength": 20
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -231,6 +271,9 @@
             "form": true,
             "section": "collapsed",
             "seq": 70,
+            "validation": {
+              "maxLength": 255
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -256,46 +299,124 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
-            "defaultValue": "DR"
+            "defaultValue": "DR",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
           },
           {
             "name": "project",
@@ -307,9 +428,13 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
               "contextParams": [],
@@ -319,10 +444,16 @@
                 "c_project_id"
               ]
             },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -335,13 +466,23 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "section": "principal",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -357,10 +498,13 @@
             "form": false,
             "reference": "Asset",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -376,10 +520,13 @@
             "form": false,
             "reference": "UserDimension1",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -395,10 +542,13 @@
             "form": false,
             "reference": "UserDimension2",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -410,8 +560,54 @@
             "tsType": "number",
             "visibility": "readOnly",
             "required": false,
+            "grid": true,
+            "form": false,
+            "validation": {
+              "maxLength": 4
+            }
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "label": "Processed",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
             "grid": false,
-            "form": false
+            "form": false,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "label": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Currency",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 45,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
           }
         ],
         "searchableFields": [
@@ -437,20 +633,21 @@
             }
           },
           {
-            "name": "accountingDate",
-            "derivation": {
-              "type": "computed",
-              "source": "@#Date@"
-            }
-          },
-          {
             "name": "documentStatus",
             "derivation": {
               "type": "computed",
               "source": "DR"
             }
+          },
+          {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            }
           }
         ],
+        "javaQualifier": "goodsReceiptHeaderHandler",
         "draftMode": {
           "enabled": true,
           "processField": "documentAction",
@@ -473,7 +670,7 @@
             "tsType": "number",
             "visibility": "editable",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": false,
             "sourceRequired": true,
             "derivation": {
@@ -481,6 +678,10 @@
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -495,13 +696,17 @@
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
-            "required": false,
+            "required": true,
             "grid": true,
             "form": true,
             "reference": "Product",
             "inputMode": "search",
             "section": "principal",
             "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
             },
@@ -521,9 +726,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
-            "section": "principal",
-            "seq": 20,
+            "form": false,
+            "validation": {
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -541,6 +747,9 @@
             "required": false,
             "grid": false,
             "form": false,
+            "validation": {
+              "maxLength": 2
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.OperativeQuantity_To_BaseQuantity"
             },
@@ -563,6 +772,9 @@
             "form": false,
             "reference": "UOM",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "validationRule": {
               "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
               "contextParams": [],
@@ -596,9 +808,13 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0",
+            "defaultValue": "1",
             "section": "principal",
-            "seq": 40,
+            "seq": 20,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
@@ -614,13 +830,15 @@
             "tsType": "string",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
-            "form": true,
+            "grid": false,
+            "form": false,
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
-            "section": "principal",
-            "seq": 30,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@UomManagement@='Y'",
               "evaluable": true,
@@ -636,8 +854,8 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": true,
-            "form": true,
+            "grid": false,
+            "form": false,
             "derivation": {
               "type": "fromConfig",
               "source": "context.onHandLocatorDefault"
@@ -645,8 +863,9 @@
             "reference": "Locator",
             "inputMode": "selector",
             "defaultValue": "@OnHandLocatorDefault@",
-            "section": "principal",
-            "seq": 50,
+            "validation": {
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
               "contextParams": [],
@@ -670,9 +889,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
-            "section": "principal",
-            "seq": 60
+            "form": false,
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "salesOrderLine",
@@ -681,30 +901,44 @@
             "label": "Purchase Order Line",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "reference": "OrderLine",
-            "inputMode": "search"
-          },
-          {
-            "name": "businessPartner",
-            "apiKey": "businessPartner",
-            "column": "C_Bpartner_ID",
-            "label": "Business Partner",
-            "type": "foreignKey",
-            "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
             "form": false,
-            "reference": "BusinessPartner",
+            "reference": "OrderLine",
             "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "orderQuantity",
+            "apiKey": "orderQuantity",
+            "column": "QuantityOrder",
+            "label": "Order Quantity",
+            "type": "quantity",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "seq": 30,
+            "gridReadOnly": true,
+            "validation": {
+              "maxLength": 10
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_Conversion"
+            },
+            "displayLogic": {
+              "raw": "(@HASSECONDUOM@=1 & @UomManagement@!'Y')  | (@UomManagement@='Y' & @M_Product_Uom_Id@!'')",
+              "evaluable": true
+            },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['processed'] === true"
             }
           },
           {
@@ -717,13 +951,23 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "dimensionsPanel": true,
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -736,13 +980,23 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
             "reference": "CostCenter",
             "inputMode": "selector",
+            "dimensionsPanel": true,
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -758,10 +1012,13 @@
             "form": false,
             "reference": "Asset",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -777,10 +1034,13 @@
             "form": false,
             "reference": "UserDimension1",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -796,10 +1056,13 @@
             "form": false,
             "reference": "UserDimension2",
             "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -811,14 +1074,18 @@
             "tsType": "number",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "0"
+            "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           }
         ],
         "searchableFields": [],
@@ -851,7 +1118,8 @@
               "source": "0"
             }
           }
-        ]
+        ],
+        "javaQualifier": "goodsReceiptLineHandler"
       }
     }
   },
@@ -862,14 +1130,55 @@
       "primaryEntity": "goodsReceipt",
       "category": "purchases",
       "relatedDocuments": true,
+      "hideDeleteWhenComplete": true,
+      "hidePrint": true,
       "customComponents": {
-        "bottomSection": "GoodsReceiptBottomPanel"
+        "topbarRight": "GoodsReceiptActions",
+        "bottomSection": "GoodsReceiptBottomPanel",
+        "topbarExtra": "GoodsReceiptDraftChips"
+      },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
+        }
+      ],
+      "labelOverrides": {
+        "en_US": {
+          "EM_ETGO_Currency_ID": "Currency"
+        },
+        "es_ES": {
+          "EM_ETGO_Currency_ID": "Moneda"
+        }
       },
       "dateFilterKey": "movementDate",
+      "noHeaderBorder": true,
       "sendDocument": {
-        "allowEmail": false
+        "enabled": false
       },
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "goodsReceipt": {
@@ -946,7 +1255,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -954,7 +1263,7 @@
             "apiKey": "salesOrder",
             "column": "C_Order_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1025,8 +1334,8 @@
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
-            "visibility": "system",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1214,11 +1523,99 @@
             "required": false
           },
           {
-            "name": "receiveMaterials",
-            "apiKey": "receiveMaterials",
-            "column": "RM_Receipt_PickEdit",
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
             "type": "button",
             "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "orderDate",
+            "apiKey": "orderDate",
+            "column": "DateOrdered",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_InOut_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "datePrinted",
+            "apiKey": "datePrinted",
+            "column": "DatePrinted",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesTransaction",
+            "apiKey": "salesTransaction",
+            "column": "IsSOTrx",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "print",
+            "apiKey": "print",
+            "column": "IsPrinted",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": false
           },
           {
@@ -1226,6 +1623,14 @@
             "apiKey": "pickDate",
             "column": "PickDate",
             "type": "dateTime",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "trackingNo",
+            "apiKey": "trackingNo",
+            "column": "TrackingNo",
+            "type": "string",
             "visibility": "system",
             "required": false
           },
@@ -1262,27 +1667,11 @@
             "required": false
           },
           {
-            "name": "print",
-            "apiKey": "print",
-            "column": "IsPrinted",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "salesTransaction",
-            "apiKey": "salesTransaction",
-            "column": "IsSOTrx",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "invoice",
-            "apiKey": "invoice",
-            "column": "C_Invoice_ID",
-            "type": "foreignKey",
-            "visibility": "system",
+            "name": "receiveMaterials",
+            "apiKey": "receiveMaterials",
+            "column": "RM_Receipt_PickEdit",
+            "type": "button",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1292,70 +1681,6 @@
             "type": "button",
             "visibility": "discarded",
             "required": false
-          },
-          {
-            "name": "processed",
-            "apiKey": "processed",
-            "column": "Processed",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "datePrinted",
-            "apiKey": "datePrinted",
-            "column": "DatePrinted",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "processNow",
-            "apiKey": "processNow",
-            "column": "Processing",
-            "type": "boolean",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_InOut_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "orderDate",
-            "apiKey": "orderDate",
-            "column": "DateOrdered",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "trackingNo",
-            "apiKey": "trackingNo",
-            "column": "TrackingNo",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "externalBusinessPartnerReference",
@@ -1420,8 +1745,17 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
           }
-        ]
+        ],
+        "javaQualifier": "goodsReceiptHeaderHandler"
       },
       "goodsReceiptLine": {
         "tableName": "M_InOutLine",
@@ -1442,7 +1776,7 @@
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": false
+            "required": true
           },
           {
             "name": "mConditionGoodsID",
@@ -1513,7 +1847,7 @@
             "apiKey": "salesOrderLine",
             "column": "C_OrderLine_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1529,7 +1863,7 @@
             "apiKey": "orderQuantity",
             "column": "QuantityOrder",
             "type": "quantity",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1561,7 +1895,7 @@
             "apiKey": "businessPartner",
             "column": "C_Bpartner_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1629,14 +1963,6 @@
             "required": true
           },
           {
-            "name": "shipmentReceipt",
-            "apiKey": "shipmentReceipt",
-            "column": "M_InOut_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "reinvoice",
             "apiKey": "reinvoice",
             "column": "IsInvoiced",
@@ -1657,6 +1983,14 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "shipmentReceipt",
+            "apiKey": "shipmentReceipt",
+            "column": "M_InOut_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
@@ -1708,7 +2042,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "goodsReceiptLineHandler"
       }
     },
     "endpoints": [
@@ -1837,7 +2172,16 @@
         "column": "C_BPartner_Location_ID",
         "reference": "BusinessPartnerLocation",
         "inputMode": "dependent",
-        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/partnerAddress"
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/partnerAddress",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
       },
       {
         "entity": "goodsReceipt",
@@ -1853,7 +2197,20 @@
         "column": "C_Project_ID",
         "reference": "Project",
         "inputMode": "search",
-        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/project"
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
       },
       {
         "entity": "goodsReceipt",
@@ -1888,6 +2245,14 @@
         "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/ndDimension"
       },
       {
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "column": "EM_ETGO_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/etgoCurrency"
+      },
+      {
         "entity": "goodsReceiptLine",
         "field": "product",
         "column": "M_Product_ID",
@@ -1901,7 +2266,20 @@
         "column": "C_Aum",
         "reference": "UOM",
         "inputMode": "selector",
-        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/operativeUOM"
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/operativeUOM",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "M_Product_ID",
+              "source": "field",
+              "field": "product"
+            }
+          ]
+        }
       },
       {
         "entity": "goodsReceiptLine",
@@ -1917,7 +2295,16 @@
         "column": "M_Locator_ID",
         "reference": "Locator",
         "inputMode": "selector",
-        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/storageBin"
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/storageBin",
+        "context": {
+          "required": [
+            {
+              "param": "M_Warehouse_ID",
+              "source": "parentField",
+              "field": "warehouse"
+            }
+          ]
+        }
       },
       {
         "entity": "goodsReceiptLine",
@@ -1926,14 +2313,6 @@
         "reference": "OrderLine",
         "inputMode": "search",
         "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/salesOrderLine"
-      },
-      {
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "column": "C_Bpartner_ID",
-        "reference": "BusinessPartner",
-        "inputMode": "search",
-        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/businessPartner"
       },
       {
         "entity": "goodsReceiptLine",
@@ -2009,12 +2388,6 @@
       },
       {
         "entity": "goodsReceipt",
-        "field": "posted",
-        "column": "Posted",
-        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/posted"
-      },
-      {
-        "entity": "goodsReceipt",
         "field": "calculateFreight",
         "column": "Calculate_Freight",
         "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/calculateFreight",
@@ -2023,10 +2396,10 @@
       },
       {
         "entity": "goodsReceipt",
-        "field": "receiveMaterials",
-        "column": "RM_Receipt_PickEdit",
-        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
-        "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -2036,6 +2409,14 @@
         "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/updateLines",
         "processId": "800010",
         "processType": "classic"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "receiveMaterials",
+        "column": "RM_Receipt_PickEdit",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
+        "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+        "processType": "obuiapp"
       },
       {
         "entity": "goodsReceipt",
@@ -2085,6 +2466,14 @@
     },
     "window": {
       "category": "purchases"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
     }
   },
   "testManifest": {
@@ -2114,6 +2503,14 @@
         "description": "Action endpoint for 'documentAction' in goodsReceipt should exist"
       },
       {
+        "id": "t-action-endpoint-goodsReceipt-etblkpBulkposting",
+        "category": "action-endpoint",
+        "entity": "goodsReceipt",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Action endpoint for 'etblkpBulkposting' in goodsReceipt should exist"
+      },
+      {
         "id": "t-action-endpoint-goodsReceipt-generateTo",
         "category": "action-endpoint",
         "entity": "goodsReceipt",
@@ -2128,14 +2525,6 @@
         "field": "invoicefromshipment",
         "runner": "node",
         "description": "Action endpoint for 'invoicefromshipment' in goodsReceipt should exist"
-      },
-      {
-        "id": "t-action-endpoint-goodsReceipt-posted",
-        "category": "action-endpoint",
-        "entity": "goodsReceipt",
-        "field": "posted",
-        "runner": "node",
-        "description": "Action endpoint for 'posted' in goodsReceipt should exist"
       },
       {
         "id": "t-action-endpoint-goodsReceipt-processGoodsJava",
@@ -2200,14 +2589,6 @@
         "description": "CRUD flags for 'goodsReceiptLine' should all be booleans"
       },
       {
-        "id": "t-default-value-type-goodsReceipt-accountingDate",
-        "category": "default-value-type",
-        "entity": "goodsReceipt",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Default value for 'accountingDate' in goodsReceipt should be a string"
-      },
-      {
         "id": "t-default-value-type-goodsReceipt-documentStatus",
         "category": "default-value-type",
         "entity": "goodsReceipt",
@@ -2222,6 +2603,14 @@
         "field": "movementDate",
         "runner": "node",
         "description": "Default value for 'movementDate' in goodsReceipt should be a string"
+      },
+      {
+        "id": "t-default-value-type-goodsReceipt-posted",
+        "category": "default-value-type",
+        "entity": "goodsReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in goodsReceipt should be a string"
       },
       {
         "id": "t-default-value-type-goodsReceiptLine-invoiceQuantity",
@@ -2256,12 +2645,100 @@
         "description": "Default value for 'storageBin' in goodsReceiptLine should be a string"
       },
       {
-        "id": "t-field-presence-goodsReceipt-accountingDate",
-        "category": "field-presence",
+        "id": "t-displaylogic-evaluable-goodsReceipt-costcenter",
+        "category": "displaylogic-evaluable",
         "entity": "goodsReceipt",
-        "field": "accountingDate",
+        "field": "costcenter",
         "runner": "node",
-        "description": "Field 'accountingDate' should be present in goodsReceipt"
+        "description": "Display logic for 'costcenter' in goodsReceipt should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-goodsReceipt-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in goodsReceipt should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-goodsReceipt-project",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsReceipt",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsReceipt should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-goodsReceiptLine-costcenter",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsReceiptLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsReceiptLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-goodsReceiptLine-orderQuantity",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsReceiptLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Display logic for 'orderQuantity' in goodsReceiptLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-goodsReceiptLine-project",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsReceiptLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsReceiptLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsReceipt-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceipt",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsReceipt should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsReceipt-posted",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in goodsReceipt should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsReceipt-project",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceipt",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsReceipt should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsReceiptLine-costcenter",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceiptLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Display logic for 'costcenter' in goodsReceiptLine should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsReceiptLine-orderQuantity",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceiptLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Display logic for 'orderQuantity' in goodsReceiptLine should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-goodsReceiptLine-project",
+        "category": "displaylogic-valid",
+        "entity": "goodsReceiptLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in goodsReceiptLine should be valid JS"
       },
       {
         "id": "t-field-presence-goodsReceipt-asset",
@@ -2312,6 +2789,14 @@
         "description": "Field 'documentStatus' should be present in goodsReceipt"
       },
       {
+        "id": "t-field-presence-goodsReceipt-etgoCurrency",
+        "category": "field-presence",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Field 'etgoCurrency' should be present in goodsReceipt"
+      },
+      {
         "id": "t-field-presence-goodsReceipt-invoiceStatus",
         "category": "field-presence",
         "entity": "goodsReceipt",
@@ -2350,6 +2835,22 @@
         "field": "partnerAddress",
         "runner": "node",
         "description": "Field 'partnerAddress' should be present in goodsReceipt"
+      },
+      {
+        "id": "t-field-presence-goodsReceipt-posted",
+        "category": "field-presence",
+        "entity": "goodsReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in goodsReceipt"
+      },
+      {
+        "id": "t-field-presence-goodsReceipt-processed",
+        "category": "field-presence",
+        "entity": "goodsReceipt",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should be present in goodsReceipt"
       },
       {
         "id": "t-field-presence-goodsReceipt-project",
@@ -2398,14 +2899,6 @@
         "field": "attributeSetValue",
         "runner": "node",
         "description": "Field 'attributeSetValue' should be present in goodsReceiptLine"
-      },
-      {
-        "id": "t-field-presence-goodsReceiptLine-businessPartner",
-        "category": "field-presence",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should be present in goodsReceiptLine"
       },
       {
         "id": "t-field-presence-goodsReceiptLine-costcenter",
@@ -2472,6 +2965,14 @@
         "description": "Field 'operativeUOM' should be present in goodsReceiptLine"
       },
       {
+        "id": "t-field-presence-goodsReceiptLine-orderQuantity",
+        "category": "field-presence",
+        "entity": "goodsReceiptLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Field 'orderQuantity' should be present in goodsReceiptLine"
+      },
+      {
         "id": "t-field-presence-goodsReceiptLine-product",
         "category": "field-presence",
         "entity": "goodsReceiptLine",
@@ -2518,14 +3019,6 @@
         "field": "uOM",
         "runner": "node",
         "description": "Field 'uOM' should be present in goodsReceiptLine"
-      },
-      {
-        "id": "t-field-type-goodsReceipt-accountingDate",
-        "category": "field-type",
-        "entity": "goodsReceipt",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Field 'accountingDate' should have type 'string' in goodsReceipt"
       },
       {
         "id": "t-field-type-goodsReceipt-asset",
@@ -2576,6 +3069,14 @@
         "description": "Field 'documentStatus' should have type 'string' in goodsReceipt"
       },
       {
+        "id": "t-field-type-goodsReceipt-etgoCurrency",
+        "category": "field-type",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Field 'etgoCurrency' should have type 'string' in goodsReceipt"
+      },
+      {
         "id": "t-field-type-goodsReceipt-invoiceStatus",
         "category": "field-type",
         "entity": "goodsReceipt",
@@ -2614,6 +3115,22 @@
         "field": "partnerAddress",
         "runner": "node",
         "description": "Field 'partnerAddress' should have type 'string' in goodsReceipt"
+      },
+      {
+        "id": "t-field-type-goodsReceipt-posted",
+        "category": "field-type",
+        "entity": "goodsReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in goodsReceipt"
+      },
+      {
+        "id": "t-field-type-goodsReceipt-processed",
+        "category": "field-type",
+        "entity": "goodsReceipt",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should have type 'boolean' in goodsReceipt"
       },
       {
         "id": "t-field-type-goodsReceipt-project",
@@ -2662,14 +3179,6 @@
         "field": "attributeSetValue",
         "runner": "node",
         "description": "Field 'attributeSetValue' should have type 'string' in goodsReceiptLine"
-      },
-      {
-        "id": "t-field-type-goodsReceiptLine-businessPartner",
-        "category": "field-type",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should have type 'string' in goodsReceiptLine"
       },
       {
         "id": "t-field-type-goodsReceiptLine-costcenter",
@@ -2736,6 +3245,14 @@
         "description": "Field 'operativeUOM' should have type 'string' in goodsReceiptLine"
       },
       {
+        "id": "t-field-type-goodsReceiptLine-orderQuantity",
+        "category": "field-type",
+        "entity": "goodsReceiptLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Field 'orderQuantity' should have type 'number' in goodsReceiptLine"
+      },
+      {
         "id": "t-field-type-goodsReceiptLine-product",
         "category": "field-type",
         "entity": "goodsReceiptLine",
@@ -2784,14 +3301,6 @@
         "description": "Field 'uOM' should have type 'string' in goodsReceiptLine"
       },
       {
-        "id": "t-readonlylogic-evaluable-goodsReceipt-accountingDate",
-        "category": "readonlylogic-evaluable",
-        "entity": "goodsReceipt",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in goodsReceipt should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-goodsReceipt-asset",
         "category": "readonlylogic-evaluable",
         "entity": "goodsReceipt",
@@ -2830,6 +3339,14 @@
         "field": "documentNo",
         "runner": "node",
         "description": "Read-only logic for 'documentNo' in goodsReceipt should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-goodsReceipt-etgoCurrency",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Read-only logic for 'etgoCurrency' in goodsReceipt should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-goodsReceipt-movementDate",
@@ -2904,14 +3421,6 @@
         "description": "Read-only logic for 'attributeSetValue' in goodsReceiptLine should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-goodsReceiptLine-businessPartner",
-        "category": "readonlylogic-evaluable",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Read-only logic for 'businessPartner' in goodsReceiptLine should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-goodsReceiptLine-costcenter",
         "category": "readonlylogic-evaluable",
         "entity": "goodsReceiptLine",
@@ -2960,6 +3469,14 @@
         "description": "Read-only logic for 'operativeUOM' in goodsReceiptLine should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-goodsReceiptLine-orderQuantity",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsReceiptLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Read-only logic for 'orderQuantity' in goodsReceiptLine should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-goodsReceiptLine-product",
         "category": "readonlylogic-evaluable",
         "entity": "goodsReceiptLine",
@@ -3000,14 +3517,6 @@
         "description": "Read-only logic for 'uOM' in goodsReceiptLine should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-valid-goodsReceipt-accountingDate",
-        "category": "readonlylogic-valid",
-        "entity": "goodsReceipt",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "Read-only logic for 'accountingDate' in goodsReceipt should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-goodsReceipt-asset",
         "category": "readonlylogic-valid",
         "entity": "goodsReceipt",
@@ -3046,6 +3555,14 @@
         "field": "documentNo",
         "runner": "node",
         "description": "Read-only logic for 'documentNo' in goodsReceipt should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsReceipt-etgoCurrency",
+        "category": "readonlylogic-valid",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Read-only logic for 'etgoCurrency' in goodsReceipt should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsReceipt-movementDate",
@@ -3120,14 +3637,6 @@
         "description": "Read-only logic for 'attributeSetValue' in goodsReceiptLine should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-goodsReceiptLine-businessPartner",
-        "category": "readonlylogic-valid",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Read-only logic for 'businessPartner' in goodsReceiptLine should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-goodsReceiptLine-costcenter",
         "category": "readonlylogic-valid",
         "entity": "goodsReceiptLine",
@@ -3174,6 +3683,14 @@
         "field": "operativeUOM",
         "runner": "node",
         "description": "Read-only logic for 'operativeUOM' in goodsReceiptLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsReceiptLine-orderQuantity",
+        "category": "readonlylogic-valid",
+        "entity": "goodsReceiptLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Read-only logic for 'orderQuantity' in goodsReceiptLine should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsReceiptLine-product",
@@ -3546,6 +4063,14 @@
         "description": "Selector endpoint for 'costcenter' in goodsReceipt should exist"
       },
       {
+        "id": "t-selector-endpoint-goodsReceipt-etgoCurrency",
+        "category": "selector-endpoint",
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "Selector endpoint for 'etgoCurrency' in goodsReceipt should exist"
+      },
+      {
         "id": "t-selector-endpoint-goodsReceipt-ndDimension",
         "category": "selector-endpoint",
         "entity": "goodsReceipt",
@@ -3600,14 +4125,6 @@
         "field": "asset",
         "runner": "node",
         "description": "Selector endpoint for 'asset' in goodsReceiptLine should exist"
-      },
-      {
-        "id": "t-selector-endpoint-goodsReceiptLine-businessPartner",
-        "category": "selector-endpoint",
-        "entity": "goodsReceiptLine",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Selector endpoint for 'businessPartner' in goodsReceiptLine should exist"
       },
       {
         "id": "t-selector-endpoint-goodsReceiptLine-costcenter",
@@ -3680,6 +4197,14 @@
         "field": "uOM",
         "runner": "node",
         "description": "Selector endpoint for 'uOM' in goodsReceiptLine should exist"
+      },
+      {
+        "id": "t-system-field-goodsReceipt-accountingDate",
+        "category": "system-field",
+        "entity": "goodsReceipt",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "System field 'accountingDate' should exist in backend but not frontend for goodsReceipt"
       },
       {
         "id": "t-system-field-goodsReceipt-active",
@@ -3808,6 +4333,22 @@
         "field": "documentType",
         "runner": "node",
         "description": "System field 'documentType' should exist in backend but not frontend for goodsReceipt"
+      },
+      {
+        "id": "t-system-field-goodsReceipt-etblkpAccountingstatus",
+        "category": "system-field",
+        "entity": "goodsReceipt",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for goodsReceipt"
+      },
+      {
+        "id": "t-system-field-goodsReceipt-etblkpBulkposting",
+        "category": "system-field",
+        "entity": "goodsReceipt",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "System field 'etblkpBulkposting' should exist in backend but not frontend for goodsReceipt"
       },
       {
         "id": "t-system-field-goodsReceipt-externalBusinessPartnerReference",
@@ -3946,14 +4487,6 @@
         "description": "System field 'pickDate' should exist in backend but not frontend for goodsReceipt"
       },
       {
-        "id": "t-system-field-goodsReceipt-posted",
-        "category": "system-field",
-        "entity": "goodsReceipt",
-        "field": "posted",
-        "runner": "node",
-        "description": "System field 'posted' should exist in backend but not frontend for goodsReceipt"
-      },
-      {
         "id": "t-system-field-goodsReceipt-print",
         "category": "system-field",
         "entity": "goodsReceipt",
@@ -3968,14 +4501,6 @@
         "field": "priority",
         "runner": "node",
         "description": "System field 'priority' should exist in backend but not frontend for goodsReceipt"
-      },
-      {
-        "id": "t-system-field-goodsReceipt-processed",
-        "category": "system-field",
-        "entity": "goodsReceipt",
-        "field": "processed",
-        "runner": "node",
-        "description": "System field 'processed' should exist in backend but not frontend for goodsReceipt"
       },
       {
         "id": "t-system-field-goodsReceipt-processGoodsJava",
@@ -4114,6 +4639,14 @@
         "description": "System field 'bOMParentID' should exist in backend but not frontend for goodsReceiptLine"
       },
       {
+        "id": "t-system-field-goodsReceiptLine-businessPartner",
+        "category": "system-field",
+        "entity": "goodsReceiptLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "System field 'businessPartner' should exist in backend but not frontend for goodsReceiptLine"
+      },
+      {
         "id": "t-system-field-goodsReceiptLine-canceledInoutLine",
         "category": "system-field",
         "entity": "goodsReceiptLine",
@@ -4186,14 +4719,6 @@
         "description": "System field 'mConditionGoodsID' should exist in backend but not frontend for goodsReceiptLine"
       },
       {
-        "id": "t-system-field-goodsReceiptLine-orderQuantity",
-        "category": "system-field",
-        "entity": "goodsReceiptLine",
-        "field": "orderQuantity",
-        "runner": "node",
-        "description": "System field 'orderQuantity' should exist in backend but not frontend for goodsReceiptLine"
-      },
-      {
         "id": "t-system-field-goodsReceiptLine-orderUOM",
         "category": "system-field",
         "entity": "goodsReceiptLine",
@@ -4257,23 +4782,25 @@
       }
     ],
     "summary": {
-      "total": 276,
+      "total": 293,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
         "default-value-type": 7,
-        "field-presence": 33,
-        "field-type": 33,
+        "displaylogic-evaluable": 6,
+        "displaylogic-valid": 6,
+        "field-presence": 35,
+        "field-type": 35,
         "readonlylogic-evaluable": 27,
         "readonlylogic-valid": 27,
         "rule-declared": 38,
         "searchable-filters": 5,
         "selector-endpoint": 20,
-        "system-field": 70,
+        "system-field": 71,
         "visibility": 2
       },
       "byRunner": {
-        "node": 276,
+        "node": 293,
         "junit": 0
       }
     }

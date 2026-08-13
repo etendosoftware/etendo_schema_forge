@@ -11,8 +11,9 @@ Let a sales user prepare a customer quotation, review commercial terms before co
 - Render Net List Price in the quotation grid as a currency-formatted `amount` column backed by `PriceList`, instead of exposing the derived `unitPrice` (`PriceActual`) as the visible price column.
 - Keep the quotation in draft while the commercial proposal is being prepared, then explicitly send that draft into an `Under Evaluation` state before final conversion.
 - From `Under Evaluation`, create a downstream sales order and, in the current custom overlay, optionally create a draft sales invoice.
-- Send the quotation document from the record view.
+- Send the quotation document by email from the record view, once it is no longer in `Draft` (from `Under Evaluation` onward).
 - Inspect related downstream sales orders and invoices from the quotation record when those documents exist.
+- Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.
 
 ## Interaction model
 
@@ -36,18 +37,22 @@ Let a sales user prepare a customer quotation, review commercial terms before co
 - Header defaulting and callouts: the contract keeps business-partner, address, price-list, order-date, and valid-until callouts. Current evidence supports customer-driven address and price-list autofill expectations, and it also records an intended default of `validUntil = orderDate + 30 days` for new quotations.
 - Pricing dependency: line product selection auto-fills `listPrice` (Net List Price), `tax`, `uOM`, `grossUnitPrice`, and `discount` from the active price list via the `SL_Order_Product` callout. The `forceCalloutFields: ["listPrice","unitPrice","tax","uOM","grossUnitPrice","discount"]` declaration on the `product` field bypasses the `touchedFieldsRef` guard so callout-returned values are applied even when the user has not directly touched those fields. `discount` is included because product/price-list callouts may return a customer- or product-specific discount on product selection. The Classic callout returns the price as `standardPrice` (PriceStd); `DetailView.jsx` maps it to `listPrice` when the callout zeroes out the `listPrice` field.
 - Line recalculation — client-side model (ETP-3662): `orderedQuantity`, `listPrice`, and `discount` changes are computed entirely in the browser via `useLineGrossAmount` — no callout round-trip is fired for those fields. The formula is `lineGrossAmount = orderedQuantity × listPrice × (1 − discount/100) × taxFactor`, where `taxFactor` is resolved from (in priority order) the product callout response, the tax selector aux data, an in-memory cache, or a ratio derived from sibling lines. The `tax` field still fires a callout (to obtain `taxRate`), but `orderedQuantity`, `listPrice`, and `discount` are pure client-side. After save, `unitPrice = listPrice × (1 − discount/100)` is injected into the POST body as Classic's `priceActual`; `lineGrossAmount` is trusted by `NeoDefaultsService` and stored as-is. Saved lines trigger the `Line_Recalc_Totals` event handler to refresh header totals.
-- Status-driven behavior: editable header fields become read-only when the quotation is processed, and the generated detail page hides delete/print affordances for completed records.
+- Status-driven behavior: editable header fields become read-only when the quotation is processed. The generated detail page still hides the delete affordance for completed records; the print action was previously hidden as well but is now shown (see ETP-4729 note under "Automated evidence" — `hidePrint` was removed).
 - Topbar button order: matches `sales-order` and `sales-invoice` — `Clonar` (icon-only, Secondary Outline style, `#D1D4DB` border, `#64748B` icon color, hover background `#F1F5F9`) and the send-document icon come from `QuotationTopbarActions` (the `topbarRight` slot), then the framework renders the trash icon and the kebab `⋮` menu, and finally the `Guardar` (outline) and `Confirmar` (primary) pair come from the framework's `draftMode` block. The previous layout rendered a hardcoded blue `Confirmar` at the start of the topbar; that button was removed and the same flow is now driven through `draftMode` so the visual order matches the rest of the sales windows. `decisions.json` declares `entities.header.draftMode.enabled = true` and `window.hideSaveStatuses = ["CA","ETGO_CI","CL","VO","CJ"]` so the save/confirm pair only renders in DR/UE and disappears once the quotation is closed.
 - Confirm flow dispatch: the wrapper at `tools/app-shell/src/windows/custom/sales-quotation/index.jsx` overrides the generated `draftMode` with a `draftModeWithModal` whose `onConfirm` dispatches the DOM event `sales-quotation:open-confirm-modal`. `QuotationTopbarActions.jsx` listens for that event and routes to the right modal: `SendToEvaluationModal` when `documentStatus === 'DR'` (DR → UE), `QuotationConfirmModal` when `documentStatus === 'UE'` (UE → CA / ETGO_CI). This keeps the bespoke two-state flow without renouncing the standard sales-window topbar layout.
 - Save/Confirm visibility during Under Evaluation: standard Etendo flips the `processed` flag to `Y` once the quotation transitions to `UE`, which would normally trigger the framework's `isDraftModeCompleted` shortcut (defined as `processed=Y || documentStatus='CO'`) and hide the Save/Confirm pair. Because the quotation must still expose `Confirmar` in `UE` to drive the convert-to-order/invoice modal, the window declares `entities.header.draftMode.completedStatuses = ["CA","ETGO_CI","CL","VO","CJ"]`. With that explicit list, `DetailView` only treats those terminal codes as completed and keeps Save/Confirm rendered for `DR` and `UE`. Generic windows that omit `completedStatuses` still get the original `processed=Y || CO` behavior — see `tools/app-shell/src/components/contract-ui/DetailView.jsx`.
 - Reject flow (UE only): the kebab (⋮) on a quotation in `UE` exposes a `Reject` item with the `XCircle` icon (Figma redesign), declared in `decisions.json → window.menuActions[reject]` (`visibleWhenStatus: ["UE"]`). The wrapper at `tools/app-shell/src/windows/custom/sales-quotation/index.jsx` overrides the generated `menuActions` with a function so the `onClick` can dispatch the DOM event `sales-quotation:open-reject-modal` (decisions.json is JSON and cannot carry functions). `QuotationTopbarActions.jsx` listens for that event and renders `RejectQuotationModal` via portal. The modal exposes a search-typeahead — modelled after the `businessPartner` selector — that fetches the `C_Reject_Reason` list from `${apiBaseUrl}/quotation/selectors/C_Reject_Reason_ID`. A "+ Crear razón" button at the top of the dropdown opens `CreateRejectReasonModal`, which POSTs `{ name }` to `${apiBaseUrl}/quotation/{id}/action/createRejectReason` (handled by `CreateRejectReasonHandler` in `com.etendoerp.go`); on success the new row is appended to the typeahead cache and preselected. Confirming the parent modal POSTs to `${apiBaseUrl}/quotation/{id}/action/rejectQuotation` with `{ rejectReason: "<id>" }`. The `RejectQuotationHandler` flips DocStatus to `CJ`, persists `rejectReason`, and sets `processed = true`. After success the modal reloads the page; once the quotation is in `CJ`, `hideSaveStatuses` and `completedStatuses` both list `CJ`, so the Save/Confirm pair disappears, the `Reject` kebab item hides (its `visible` predicate excludes `CJ`), and the field-level `readOnlyLogic` (`@DocStatus@='CJ'|@DocStatus@='CA'`, inherited from the AD column rules) renders the form fully read-only.
 - Reject reason visible on the form (ETP-3893 follow-up): once a quotation is in `CJ`, the `rejectReason` field surfaces in the principal section of the header form so the user can see WHY it was rejected. `decisions.json → entities.header.fields.rejectReason` declares `visibility: "readOnly"`, `form: true`, `section: "principal"`, and `displayLogic: "record.documentStatus === 'CJ'"` so the field renders only on rejected quotations and stays hidden in DR/UE/CO/CA/etc. The label is translated via `window.labelOverrides.C_Reject_Reason_ID` ("Razón de rechazo" / "Reject Reason") since the AD locale dictionary stores the raw column name. The `visibility: "readOnly"` classification is what locks the field from form input — the user only sets the value through the rejection action modal, never by typing into the form (ETP-4006: changed from `editable` to prevent the defaults endpoint from auto-picking the first reject reason on every new draft, which silently populated `C_Reject_Reason_ID` even though the field was hidden by displayLogic).
-- Send Email recipient resolution: the Send Email modal (`SendDocumentModal`) pre-fills the `Para` field by fetching `GET /sws/neo/contacts/businessPartner/{businessPartner}` when the modal opens, reading `etgoEmail` (`C_BPartner.EM_Etgo_Email`) from the contacts spec. The field is left empty if no email is registered for the business partner. The modal title uses `useMenuLabel()` so it renders in the active UI language (e.g. "Factura de Venta" in Spanish instead of "Invoice").
-- Preview panel behavior: clicking a row in the sales-quotation list opens a lateral `QuotationPreview` panel via `GenericPreviewModal`. The preview has three tabs: `General`, `Messages` (placeholder), and `History` (placeholder). The General tab stacks: `SummaryCard` (totals, status, contact, order date, valid-until), `EmailsCard` (placeholder), `CategorizationCard` (hidden — `rows=[]`), and `RelatedDocumentsCard`. The `RelatedDocumentsCard` fetches related sales orders via `fetchByCriteria('sales-order','header','quotation',id,...)`, showing each order's document number, total, and status as a clickable chip. A refresh button re-triggers the fetch. For non-draft quotations, the PDF is auto-cached on first open; drafts always regenerate live. The PDF includes conditional discount breakdown rows and uses `Precio tarifa` / `List Price` as the price column header. All numeric amounts use period as the decimal separator (`en-US` locale in the shared `fmt` Handlebars helper), consistent with the form view.
+- Send Email recipient resolution: the Send Email modal (`SendDocumentModal`) pre-fills the `Para` field by fetching `GET /sws/neo/contacts/businessPartner/{businessPartner}` when the modal opens, reading `etgoEmail` (`C_BPartner.EM_Etgo_Email`) from the contacts spec. The field is left empty if no email is registered for the business partner. Sending posts only the contract command to the backend `sales-quotation-send` email contract; the backend resolves the final recipient and builds the default document payload (`document_type`, `document_number`, and `download_link`) instead of accepting recipient/template/provider fields from the browser. The modal title uses `useMenuLabel()` so it renders in the active UI language (e.g. "Factura de Venta" in Spanish instead of "Invoice").
+- Send Email editable subject/message (ETP-4717): the `Asunto` (subject, auto-derived as `${documentType} #${documentNo} — ${bpName}`) and `Mensaje` fields in the Send Email modal are editable text inputs, not read-only display fields. If the user leaves both untouched, the outgoing command is byte-identical to the legacy payload (no `messageEdits` key is sent). If either is changed, `SendDocumentModal` sends `messageEdits: { subject, message }` alongside the existing `recipientEdits`.
+- Send status gating (ETP-4717): `QuotationTopbarActions.jsx` gates `SendDocumentButton` on `status !== 'DR'` — Send is available from `Under Evaluation` (`UE`) onward, not while the quotation is still `Draft` (`DR`). This differs from the other four document windows (which gate on `CO`) because a quotation's first non-draft status is `UE`, not `CO`. It matches the grid row quick-action's `rowQuickActions.actions.email.visibleWhen: "@DocumentStatus@!='DR'"` in `decisions.json`, so "Enviar" shows or hides consistently between the list and the detail topbar.
+- Download PDF status gating (ETP-4789): the preview-panel Download PDF button (`QuotationPreview.jsx`, rendered via the shared `PreviewActionButtons.jsx`) reuses the same `isSendable` variable already computed for Send (`documentStatus !== 'DR'` — available from `Under Evaluation` onward, same rule as the bullet above) — previously it was gated only by `hasPdf`, so a draft quotation with an already-generated preview PDF could still be downloaded. The shared `PreviewActionButtons.jsx` component was fixed generically as part of this ticket: the Download button now also disables whenever `onDownloadPdf` itself is falsy, not just when `hasPdf` is false, so any caller that gates the prop (rather than hiding the whole button) gets the same protection automatically. Locked in by `tools/app-shell/src/windows/custom/shared/__tests__/QuotationPreview.vitest.jsx` (`Download PDF gating by documentStatus (ETP-4789)`) and `tools/app-shell/src/windows/custom/shared/__tests__/PreviewActionButtons.vitest.jsx`.
+- Preview panel behavior: clicking a row in the sales-quotation list opens a lateral `QuotationPreview` panel via `GenericPreviewModal`. The preview has three tabs: `General`, `Messages` (placeholder), and `History` (placeholder). The General tab stacks: `SummaryCard` (totals, status, contact, order date, valid-until), `EmailsCard` (placeholder), and `RelatedDocumentsCard`. The `RelatedDocumentsCard` fetches related sales orders via `fetchByCriteria('sales-order','header','quotation',id,...)`, showing each order's document number, total, and status as a clickable chip. A refresh button re-triggers the fetch. For non-draft quotations, the PDF is auto-cached on first open; drafts always regenerate live. The PDF includes conditional discount breakdown rows and uses `Precio tarifa` / `List Price` as the price column header. All numeric amounts use period as the decimal separator (`en-US` locale in the shared `fmt` Handlebars helper), consistent with the form view.
 - Related downstream behavior: the Related Documents tab is intended to surface sales orders and invoices tied to the quotation so the user can navigate into fulfillment and billing from the quotation record.
 - Line amount recalculation for `orderedQuantity`, `listPrice`, and `discount` is client-side and instantaneous — no server round-trip is required. The `tax` field change still fires a callout (to obtain `taxRate` and update `lineGrossAmount` via the same `useLineGrossAmount` hook), and product selection fires a callout to fill price, tax, and UOM. Header total fields (`summedLineAmount`, `grandTotalAmount`) refresh only after save, since they are computed server-side by the `Line_Recalc_Totals` event handler. The `DocumentTotalsPanel` in the detail footer aggregates from live lines plus the in-progress add-row in real time, so the user sees an accurate running total without saving — it does not read from the server-side totals.
 - Discount panel: the `DocumentTotalsPanel` in the detail footer always keeps the `discount` column visible in the lines grid and add-row — there is no toggle. "Subtotal sin descuento" and "Descuento por producto" rows auto-appear when `discountAmt > 0` (at least one line has a non-zero discount); both are read-only computed rows. A `+ Añadir descuento total` button appears below the totals when no total discount is active and at least one line exists; clicking it opens an interactive "Descuento total" section with a checkbox, computed amount, and a percentage input. Unchecking the checkbox collapses the section and restores the button. On `onBlur`, `DetailView` fires `handleTotalDiscountChange(pct)` → `PATCH { etgoTotalDiscount: N }` → persists in `EM_Etgo_Total_Discount` on the `C_Order` header (best-effort, no reload). Total discount is synced on two paths: (1) `documentAction=CO` via CRUD or ACTION — `SalesQuotationHeaderHandler` calls `AbstractOrderHeaderHandler.applyTotalDiscountBeforeComplete()` which intercepts PATCH with `{ documentAction: "CO" }` or POST to `/action/documentAction`; (2) `DocAction` process button — `SendToEvaluationModal` sends `POST /action/DocAction { fieldValues: {} }` (the DR→UE path), intercepted by `AbstractOrderHeaderHandler.syncTotalDiscountOnDocAction()` called explicitly from `SalesQuotationHeaderHandler`. Both paths delegate to `TotalDiscountService.recalculate()`: it deletes any existing `ETGO_DTO` discount lines, then creates one negative line per tax group (`GROUP BY c_tax_id`), proportional to each group's net subtotal — mirroring Classic `C_ORDER_POST1`. `OrderLineHandler` filters `ETGO_DTO` lines from all GET responses so they are never visible in the frontend. When the quotation is read-only (completed/rejected), `DocumentTotalsPanel` shows a static "Descuento total (X%) −Y€" row instead of the interactive panel.
 - Save button dirty-state tracking: the "Guardar" ("Save Draft") and "Confirmar" pair is managed by draftMode, but the Save button specifically is disabled whenever there are no pending unsaved changes (`isDirty = false`). Four independent sources make `isDirty` true: (1) any header field value differs from the last-saved record; (2) an add-row form is open on the primary lines tab; (3) an add-row form is open on a secondary child tab; (4) a sidebar line edit is open. The "Confirmar" button is never blocked by dirty state — sending a quotation to Under Evaluation or converting it is always allowed regardless of whether header changes are pending. New records always have Save active because backend defaults populate the form immediately on open. After a successful save, `selected` syncs to the server response and the button disables automatically. Reverting a changed field back to its original value also disables the button. When a line is added, `refreshHeaderTotals` updates server-computed totals in `editing` without overwriting fields the user explicitly changed, so pending header edits survive line operations.
+- Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears only when exactly one row is selected — hidden with 0 or 2+ rows selected. In the detail topbar, `Copy link` is visible whenever the record has a persisted `recordId` (not the unsaved `'new'` sentinel), with no selection gate since detail always represents a single record. Both copy `{origin}/{windowName}/{recordId}` to the clipboard, show a `Link copied` / `Enlace copiado` toast, and display a `Copy link` / `Copiar enlace` tooltip on hover. The legacy dead link icon previously shown in the idle-state (no-selection) grid toolbar is now hidden via the `hideLink` prop passed to `<ListView>`.
 
 ## Invoice creation flow
 
@@ -119,7 +124,7 @@ the discount. The earlier client-side factor double-applied it.
 2. Create a draft quotation and verify that selecting a business partner narrows the partner-address selector to that customer.
 3. Set or change the price list, add a line, choose a product, and verify that Net List Price and tax are auto-filled from the price list. Confirm `lineGrossAmount` appears immediately (before save) using `qty × listPrice × (1 − discount/100) × taxFactor`.
 4. Change quantity, Net List Price, and discount on a line and verify that `lineGrossAmount` refreshes instantly in the grid without a server round-trip. Verify that header totals (`Subtotal`, `Tax`, `Total`) update only after saving the line.
-5. While the quotation remains in draft, confirm the top bar shows the quotation confirmation action and the send-document action.
+5. While the quotation remains in draft (`DR`), confirm the top bar shows the quotation confirmation action but **not** the send-document action, neither in the topbar nor as a row quick action in the list. Send the quotation to evaluation (`UE`) and confirm the send-document action now appears in both places.
 6. Use the confirmation flow to create a downstream document, then verify whether the resulting order or invoice opens in the expected status and whether the quotation remains usable afterward.
 7. Open Related Documents after downstream conversion and verify that order chips appear, invoice chips appear when applicable, and each chip navigates to the correct route.
 8. Open the kebab (⋮) menu on a quotation in `UE` and confirm only the destructive `Reject` action is listed (regression: `Duplicate` and `Cancel` placeholders used to appear there). On other statuses the kebab is empty / closed.
@@ -127,17 +132,23 @@ the discount. The earlier client-side factor double-applied it.
 8c. Inline-create flow: open the reject modal, click `+ Crear razón`/`+ Create reason`. The sub-modal pre-fills the input with the current search text, lets the user edit, and disables the confirm button until the name is non-blank. On confirm, the new reason appears in the parent dropdown, is preselected, and the parent confirm button is now enabled. Cancelling the sub-modal closes only the sub-modal, leaving the reject modal open. Repeat in the alternate locale.
 9. From the list view, select one or more quotations, run `Clone`, close the result modal and confirm the cloned drafts appear in the list without manually pressing `Refresh`.
 10. On a draft quotation with a business partner already chosen, change `Payment Terms` to a different value than the BP default and save. Reopen the record and confirm the chosen value persisted (regression: it used to revert to the BP default).
-11. Open the Send Email modal from the topbar and confirm: the `Para` field is pre-filled with the business partner's email when one is registered in `EM_Etgo_Email`; the field is empty (showing the "no email found" hint) when none is registered; and the modal title reads the translated document name in the active UI language.
+11. Open the Send Email modal from the topbar and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language. Also confirm the `Asunto` and `Mensaje` fields are editable (not greyed-out/read-only), that they pre-fill with the auto-derived subject and an empty message, and that sending without touching either still succeeds normally.
 12. Open an existing draft quotation without touching any field and confirm the "Guardar" (Save Draft) button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirmar" button stays enabled throughout all these states.
 13. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+14. In the list, select 0, then 1, then 2+ quotations and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/sales-quotation/<id>`. Open a saved quotation and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
 
 ## Validation & Error Handling — ETP-4005
 
 ### Inline line validation (min: 0 constraint)
 
-Fields with a `min: 0` constraint — `orderedQuantity` and `discount` — now show a red border when the user types a negative value during inline edit. The row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
+The `discount` field keeps a `min: 0` constraint and shows a red border when the user types a negative value during inline edit; the row remains open and the save/confirm path for that row is blocked until the value is corrected or the edit is cancelled. The constraint is enforced client-side by `InlineLinesPanel` using the `min` metadata from the contract field definition.
 
 See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#shared-validation--ux-changes--etp-4005) for behaviors common to all document windows (required field validation, single confirmation toast, callout message sanitization).
+
+### Negative quantity/price and price-list label — ETP-4567
+
+- `orderedQuantity` and `listPrice` no longer declare `min: 0` in `decisions.json`. Both the add-line row and inline grid edit now accept negative values — needed for returns and credit adjustments modeled as negative-quantity or negative-price lines. `discount` is unaffected and keeps its `min: 0, max: 100` range.
+- The `listPrice` (AD `PriceList` column) label is now overridden to **"Precio"** in Spanish via `window.labelOverrides.es_ES.PriceList` in `decisions.json` (English label unchanged). Same declarative mechanism already used for `C_BPartner_ID`, `C_Reject_Reason_ID`, and `DateOrdered` on this window.
 
 ## Automated evidence
 
@@ -145,11 +156,13 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - Menu visibility for Sales Quotation is grounded in `tools/app-shell/src/menu.json`.
 - Window registration is grounded in `tools/app-shell/src/windows/registry.js`, where `sales-quotation` resolves to a custom wrapper over the generated window.
 - Header/line fields, selectors, actions, related-documents enablement, and retained callout/process expectations are grounded in `artifacts/sales-quotation/contract.json` and `artifacts/sales-quotation/decisions.json`.
-- Detail-page composition, including related-documents tab, top-bar actions, summary fields, hidden print/delete behavior, and currently empty duplicate/cancel handlers, is grounded in `artifacts/sales-quotation/generated/web/sales-quotation/QuotationPage.jsx`.
+- Detail-page composition, including related-documents tab, top-bar actions, summary fields, hidden delete behavior (delete stays hidden for completed records), and currently empty duplicate/cancel handlers, is grounded in `artifacts/sales-quotation/generated/web/sales-quotation/QuotationPage.jsx`.
+- **ETP-4729 — Print action unified across sales/purchase documents**: `hidePrint` was removed from this window's decisions/custom wrapper, so the generic print icon is now visible in both the list row and the detail top bar, replacing the previously hidden state described above.
 - Draft-only confirmation and send-document behavior are grounded in `artifacts/sales-quotation/custom/QuotationTopbarActions.jsx` and `artifacts/sales-quotation/custom/QuotationConfirmModal.jsx`.
 - The only quotation-specific automated test evidence currently observed is source-shape coverage for the top-bar actions component in `artifacts/sales-quotation/custom/__tests__/QuotationTopbarActions.test.js`; no browser-level automation was found for pricing reactions, conversion flow, or related-documents navigation.
 - `artifacts/sales-quotation/generated/web/sales-quotation/LinesTable.jsx` — the `unitPrice` column (`PriceActual`) uses `type: 'amount'` so the net unit price renders as a formatted currency value rather than a raw number.
-- `artifacts/sales-quotation/custom/QuotationTopbarActions.jsx` proves the Send Email modal is wired with `bPartnerId` and `apiBaseUrl` so the recipient email is resolved from the contacts spec at open time, and `documentType` is translated via `useMenuLabel()`.
+- `artifacts/sales-quotation/custom/QuotationTopbarActions.jsx` proves the Send Email modal is wired with `bPartnerId`, `apiBaseUrl`, and `windowName="sales-quotation"` so the recipient email is resolved from the contacts spec at open time and proposed as an editable `To` chip (removable, with additional To/CC recipients supported per ETP-4226 — edits reach the backend only through the allowlisted `recipientEdits` command field), `documentType` is translated via `useMenuLabel()`, and backend delivery routes to the `sales-quotation-send` transactional email contract.
+- **ETP-4717 — editable subject/message and status-gated Send:** `tools/app-shell/src/components/contract-ui/__tests__/SendDocumentModal.vitest.jsx` and `documentEmailSend.vitest.js` cover the editable `Asunto`/`Mensaje` fields and the opt-in `messageEdits` command field (present only when the operator actually changes subject or message; omitted — byte-identical legacy payload — otherwise). `e2e/tests/flows/document-send-recipients.mocked.spec.js` adds browser-level coverage that a typed message reaches the backend as `messageEdits.message`. `artifacts/sales-quotation/custom/__tests__/QuotationTopbarActions.test.js` locks `status !== 'DR'` gating `SendDocumentButton` in source. `artifacts/__tests__/etp-4717-send-email-visibility.test.js` asserts `contract.json → frontendContract.window.rowQuickActions.actions.email.visibleWhen === "@DocumentStatus@!='DR'"` — the one window gated to non-Draft rather than Completed — so the grid row quick-action agrees with the Form-view topbar gate.
 - `tools/app-shell/src/hooks/__tests__/useEntity-dirty-state.test.js` verifies the `isDirtyHeader` computation (dirty when editing differs from selected, clean when they match, new-record initial state) and the `refreshHeaderTotals` selective merge (server-computed totals update while user-edited fields in `editing` are preserved using `userChangedKeysRef`).
 - `tools/app-shell/src/components/contract-ui/__tests__/DetailView.dirtyState.test.js` guards the `isDirty` composite expression, the `additionalDirtyState` extension prop, and the save-button disabled conditions (new record always active, existing record gated by `!isDirty`, Confirm button never gated by dirty state).
 - `artifacts/sales-quotation/__tests__/contract-integrity.test.js` locks the rejectReason surface change for the CJ-form display: it asserts `form: true`, `section: 'principal'`, an evaluable `displayLogic.js` that gates on `documentStatus === 'CJ'`, the read-only logic still covers CJ and CA, and `window.labelOverrides.C_Reject_Reason_ID` carries both Spanish and English translations.
@@ -159,3 +172,141 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - The generated `QuotationPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `C_Order` AD table.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
 - `tools/app-shell/src/windows/custom/shared/QuotationPreview.jsx` and `useQuotationPdf.js` prove the lateral preview panel with PDF generation (including `validUntil` conditional row), `RelatedDocumentsCard` wiring (related sales orders via quotation FK), and `!isDraft` caching strategy.
+- **ETP-4096 — Restore `rejectReason` to `readOnly`**: commit `c4907e08` (ETP-4070 mass regen, 2026-05-22) accidentally reverted `decisions.json → entities.header.fields.rejectReason.visibility` from `"readOnly"` back to `"editable"`, re-introducing the regression that ETP-4006 had fixed. ETP-4096 restores it to `"readOnly"`, regenerates the contract and frontend, and updates the contract-integrity test assertion to match.
+
+- **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.
+- **ETP-4468 — Confirm no longer discards an unsaved header edit**: previously, editing a header field and clicking **Confirmar** (UE status, opens `QuotationConfirmModal`) without hitting **Save** first silently converted the quotation with the OLD header values — the modal fetched its own stale server copy (`freshData`) and prioritized it over the in-memory `data` prop, and neither conversion path (`Convertquotation` nor `createDraftInvoice`) triggered a save. Fixed by (1) `DetailView.jsx` now passes `onSave={() => hook.handleSave({ silent: true })}` into the `topbarRight` slot alongside `onProcess`/`onRefresh`; (2) `QuotationTopbarActions.jsx` (the `topbarRight` component for this window) threads `onSave` into `QuotationConfirmModal`, which force-saves (`await onSave()`, aborting with an error if it fails) once before either conversion POST; (3) the modal's data-source priority was flipped to `const d = data || freshData || {}` so the in-memory (possibly unsaved-but-present) `data` wins over the stale fetch. `artifacts/sales-quotation/custom/__tests__/QuotationConfirmModal.test.js` and `QuotationTopbarActions.test.js` lock the prop threading, the `data`-over-`freshData` priority, and the save-before-confirm ordering via source-reading regex assertions.
+- **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/sales-quotation/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`; `artifacts/sales-quotation/custom/QuotationTopbarActions.jsx` (the `topbarRight` component for this window) wires `CopyRecordLinkButton` into the detail topbar.
+
+## Currency selector and quotation-to-order conversion — ETP-4027
+
+### CurrencyRatePicker on quotations
+
+`EntityForm.jsx` wires `CurrencyRatePicker` for the `C_Currency_ID` field when
+`entity === 'quotation'` and `apiBaseUrl` matches `/sales-quotation`. The
+condition is:
+
+```js
+f.column === 'C_Currency_ID' &&
+(entity === 'header' || entity === 'quotation') &&
+/\/(sales-order|purchase-order|sales-quotation)(\/|$)/.test(apiBaseUrl || '')
+```
+
+The component (`tools/app-shell/src/components/contract-ui/CurrencyRatePicker.jsx`)
+replaces the standard `SelectorInput` and:
+
+- Renders each option as `{isoCode} — {rate}` (e.g. `USD — 1.1523`), where
+  `rate` is the conversion from the org currency to that currency for the
+  quotation's `dateOrdered`.
+- Fetches options lazily from
+  `GET {apiBaseUrl}/quotation/{id}/action/currencyOptions`
+  when the user opens the dropdown. The entity path `'quotation'` is passed via
+  the `entityPath` prop, so the URL differs from the sales-order equivalent
+  (`header/{id}/action/currencyOptions`).
+- Also fires an eager fetch when `hasRecord` becomes `true` (i.e., after the
+  quotation is first saved and a real `id` is available), so the rate is
+  immediately visible in the trigger without requiring the user to open the
+  dropdown.
+- Shows a pencil icon (`data-testid="currency-rate-pencil"`) when `value &&
+  hasRecord`. Clicking it enters inline-edit mode with a numeric input
+  (`data-testid="currency-rate-input"`). Enter confirms and calls
+  `onChange('eTGOCurrencyRate', rate, 'EM_ETGO_Currency_Rate')` to stage the
+  overridden rate. Escape cancels without change.
+- The displayed rate is the staged `eTGOCurrencyRate` value (if present in
+  `formData`) or the rate returned by `currencyOptions` for the currently
+  selected currency.
+- The field `eTGOCurrencyRate` is declared in `decisions.json` as
+  `form: false, grid: false` — it is invisible to the user; only
+  `CurrencyRatePicker` manages it.
+
+The `currencyOptions` endpoint is the same one used by sales-order —
+implemented in `CurrencyOptionsHandler.java` (`com.etendoerp.go`). It filters
+by client and org, returns only currencies that have an active exchange rate for
+the document date, and always includes the org currency with `rate: 1.0`.
+
+### Convertquotation — preserved prices
+
+`SalesQuotationHeaderHandler.handle()` intercepts the `Convertquotation` action
+before it reaches NEO's generic button handler and calls:
+
+```java
+Order newOrder = convertQuotationProcess.convertQuotationIntoSalesOrder(false, quotationId);
+```
+
+The `false` parameter is `recalculatePrices`. Standard Etendo passes `true`
+(re-fetches prices from the active price list), which overwrites the amounts
+agreed in the quotation. With `false`, `ConvertQuotationIntoOrder.java` copies
+lines directly without touching `PriceActual` or `ListPrice`. Returning a
+non-null `NeoResponse` from `handle()` short-circuits the default NEO handler,
+so the overriding parameter is guaranteed to take effect.
+
+The backend action response body is `{ "salesOrderId": "<id>" }`. The frontend
+(`QuotationConfirmModal.jsx`) does not read `salesOrderId` from this response —
+instead it fires a follow-up
+`GET {baseNeoUrl}/sales-order/header?criteria=[{fieldName:'quotation',operator:'equals',value:quotationId}]`
+to resolve the created order and display its document number and total in the
+success state. If the order was auto-completed (`documentStatus === 'CO'`), the
+modal issues a best-effort `POST DocAction { docAction: 'RE' }` to reactivate it
+to Draft before surfacing the result.
+
+`afterHandle()` copies `EM_ETGO_Currency_Rate` from the quotation header to the
+new order header via JDBC:
+
+```java
+UPDATE c_order SET em_etgo_currency_rate = ?
+WHERE c_order_id = (
+  SELECT c_order_id FROM c_order
+  WHERE quotation_id = ? AND issotrx = 'Y' AND em_etgo_currency_rate IS NULL
+  ORDER BY created DESC LIMIT 1
+)
+```
+
+This ensures that an exchange rate agreed during the quotation stage is
+carried forward to the resulting sales order without the user having to
+re-enter it.
+
+### Currency change on quotations
+
+The behavior is identical to Sales Order — see
+`docs/generated-custom-windows/sales-order.md` under "Currency change handling
+(ETP-4027 functional model)". Briefly:
+
+- The `currency` field is always editable on quotations in `DR` or `UE` status.
+- When the user picks a new currency in the dropdown, `DetailView.jsx` validates
+  exchange-rate availability via `validate-exchange-rate` before applying the
+  change. If no rate exists, the dropdown reverts to the previous value and
+  shows a toast.
+- A `useEffect` in `DetailView.jsx` keeps `activeCurrencyConversionRef`
+  synchronized with the saved currency/date so that newly added lines have their
+  prices converted automatically from the pricelist currency to the order
+  currency.
+
+### Automated evidence
+
+- `e2e/tests/flows/sales-quotation-convert-prices.mocked.spec.js` — Playwright
+  mocked spec: modal selection, POST to `Convertquotation`, total display in the
+  blue summary card, and success state showing the new order's `documentNo`.
+- `e2e/tests/flows/sales-order-currency-rate-picker.mocked.spec.js` — covers
+  `CurrencyRatePicker` behavior (rate display in the trigger, pencil-edit flow,
+  rate confirm/cancel, currency change with and without an available rate). This
+  spec targets the sales-order entity but the component is shared; the quotation
+  path (`entityPath='quotation'`) is wired identically.
+
+## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
+
+`com.etendoerp.go` now depends on the **PSD2** module, which adds the
+`EM_Psd2_Generate_Bank_Payment` ("Generate Bank Payment") column to the shared
+core table this window sits on (`C_Order` / `C_Invoice` / `FIN_Payment`). Because
+Schema Forge extracts from AD, that column surfaces in this window's contract as a
+**system field** — present in the backend contract but **not** rendered in the
+frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
+this note only records why the contract was regenerated when the PSD2 dependency
+was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

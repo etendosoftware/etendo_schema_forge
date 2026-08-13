@@ -1,0 +1,26 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "settings",
+    "name": "Conversion Rate Downloader Log",
+    "detailEntity": null,
+    "readOnly": true
+  },
+  "entities": {
+    "header": {
+      "name": "conversionRateDownloaderLog",
+      "fields": {
+        "syncDate": { "visibility": "readOnly", "grid": true, "form": true, "searchable": true, "section": "principal" },
+        "status": { "visibility": "readOnly", "grid": true, "form": true, "searchable": true, "section": "principal" },
+        "pairsUpdated": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" },
+        "pairsFailed": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" },
+        "durationms": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" },
+        "errorDetail": { "visibility": "readOnly", "grid": false, "form": true, "section": "principal" },
+        "active": { "visibility": "readOnly", "grid": false, "form": true, "section": "principal" }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": [],
+  "version": 2
+}

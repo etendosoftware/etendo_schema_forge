@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.4.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-05-15T11:47:05.032Z",
-  "checksum": "155149782fc838d1",
+  "updatedAt": "2026-07-29T15:55:52.952Z",
+  "checksum": "f6412bc60aa81588",
   "frontendContract": {
     "window": {
       "id": "C327DE215AC945F69363905840118177",
@@ -56,6 +56,9 @@
                 "name": "Navarra (Hacienda Foral de Navarra)"
               }
             ],
+            "validation": {
+              "maxLength": 60
+            },
             "validationRule": {
               "code": "AD_Ref_List.Value IN ('ARABA', 'BIZKAIA', 'GIPUZKOA')",
               "contextParams": [],
@@ -78,7 +81,11 @@
               "type": "computed",
               "source": "@#Date@"
             },
-            "defaultValue": "@#Date@"
+            "defaultValue": "@#Date@",
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           },
           {
             "name": "productionEnv",
@@ -96,7 +103,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "invoiceDescription",
@@ -114,7 +125,11 @@
               "type": "computed",
               "source": "Descripcion Factura"
             },
-            "defaultValue": "Descripcion Factura"
+            "defaultValue": "Descripcion Factura",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "uSEAsproductDesc",
@@ -132,7 +147,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "autoSendInvoices",
@@ -150,7 +169,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "jasperreportPath",
@@ -162,7 +185,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "validatePreviousInvoice",
@@ -180,7 +206,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -227,7 +257,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "javaQualifier": "tbai-config-sequence-handler"
       }
     }
   },
@@ -326,14 +357,6 @@
             "required": true
           },
           {
-            "name": "tbaiConfigID",
-            "apiKey": "tbaiConfigID",
-            "column": "Tbai_Config_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -372,8 +395,33 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Tbai_Config_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "emailPassword",
+            "apiKey": "emailPassword",
+            "column": "Email_Password",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "emailUser",
+            "apiKey": "emailUser",
+            "column": "Email_User",
+            "type": "string",
+            "visibility": "system",
+            "required": false
           }
-        ]
+        ],
+        "javaQualifier": "tbai-config-sequence-handler"
       }
     },
     "endpoints": [
@@ -677,20 +725,36 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-emailPassword",
+        "category": "system-field",
+        "entity": "header",
+        "field": "emailPassword",
+        "runner": "node",
+        "description": "System field 'emailPassword' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-emailUser",
+        "category": "system-field",
+        "entity": "header",
+        "field": "emailUser",
+        "runner": "node",
+        "description": "System field 'emailUser' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-id",
+        "category": "system-field",
+        "entity": "header",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-organization",
         "category": "system-field",
         "entity": "header",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-tbaiConfigID",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiConfigID",
-        "runner": "node",
-        "description": "System field 'tbaiConfigID' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-updated",
@@ -717,18 +781,18 @@
       }
     ],
     "summary": {
-      "total": 34,
+      "total": 36,
       "byCategory": {
         "crud-flags": 1,
         "default-value-type": 6,
         "field-presence": 8,
         "field-type": 8,
         "rule-declared": 2,
-        "system-field": 8,
+        "system-field": 10,
         "visibility": 1
       },
       "byRunner": {
-        "node": 34,
+        "node": 36,
         "junit": 0
       }
     }

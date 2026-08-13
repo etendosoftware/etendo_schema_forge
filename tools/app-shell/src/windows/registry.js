@@ -8,23 +8,28 @@ import { APP_CATALOG } from '../apps-registry.js';
  * Enterprise windows (removed): commission, commission-payment, requisition,
  * manage-requisitions, landed-cost, inventory-quality-inspection, bom-production,
  * packing, warehouse-picking-list, stock-reservation, cost-adjustment
+ *
+ * Out-of-scope windows (removed, ETP-4191): payment-method, unit-of-measure.
+ * Not part of the 1st iteration. The C_UOM_ID / FIN_PaymentMethod_ID selectors
+ * used by product / payment-in / payment-out resolve against AD_Column metadata,
+ * not these specs, so removal does not affect them.
  */
 const windowLoaders = {
   'sales-order': () => import('@generated/sales-order/generated/web/sales-order/index.jsx'),
+  'match-rule': () => import('@generated/match-rule/generated/web/match-rule/index.jsx'),
   'business-partner': () => import('@generated/business-partner/generated/web/business-partner/index.jsx'),
   'contacts': () => import('@/windows/custom/contacts/index.jsx'),
   'warehouse': () => import('@generated/warehouse/generated/web/warehouse/index.jsx'),
   'price-list': () => import('@generated/price-list/generated/web/price-list/index.jsx'),
   'payment-term': () => import('@generated/payment-term/generated/web/payment-term/index.jsx'),
-  'payment-method': () => import('@generated/payment-method/generated/web/payment-method/index.jsx'),
-  'product': () => import('@generated/product/generated/web/product/index.jsx'),
-  'product-category': () => import('@generated/product-category/generated/web/product-category/index.jsx'),
+  'product': () => import('@/windows/custom/product/index.jsx'),
+  'product-category': () => import('@/windows/custom/product-category/index.jsx'),
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
-  'unit-of-measure': () => import('@generated/unit-of-measure/generated/web/unit-of-measure/index.jsx'),
+  'tax-category': () => import('@generated/tax-category/generated/web/tax-category/index.jsx'),
+  'business-partner-category': () => import('@generated/business-partner-category/generated/web/business-partner-category/index.jsx'),
   'user': () => import('@generated/user/generated/web/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
-  'return-to-vendor': () => import('@generated/return-to-vendor/generated/web/return-to-vendor/index.jsx'),
   'return-to-vendor-shipment': () => import('@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/index.jsx'),
   'physical-inventory': () => import('@generated/physical-inventory/generated/web/physical-inventory/index.jsx'),
   'goods-movements': () => import('@generated/goods-movements/generated/web/goods-movements/index.jsx'),
@@ -32,8 +37,7 @@ const windowLoaders = {
   'warehouse-storage-bins': () => import('@generated/warehouse-storage-bins/generated/web/warehouse-storage-bins/index.jsx'),
   'sales-quotation': () => import('@generated/sales-quotation/generated/web/sales-quotation/index.jsx'),
   'goods-shipment': () => import('@/windows/custom/goods-shipment/index.jsx'),
-  'return-from-customer': () => import('@generated/return-from-customer/generated/web/return-from-customer/index.jsx'),
-  'return-material-receipt': () => import('@generated/return-material-receipt/generated/web/return-material-receipt/index.jsx'),
+  'return-material-receipt': () => import('@/windows/custom/return-material-receipt/index.jsx'),
   'sales-invoice': () => import('@generated/sales-invoice/generated/web/sales-invoice/index.jsx'),
   'deal': () => import('@generated/deal/generated/web/deal/index.jsx'),
   'activity': () => import('@generated/activity/generated/web/activity/index.jsx'),
@@ -46,10 +50,59 @@ const windowLoaders = {
   'recurring-invoice': () => import('@generated/recurring-invoice/generated/web/recurring-invoice/index.jsx'),
   'payment-in': () => import('@generated/payment-in/generated/web/payment-in/index.jsx'),
   'payment-out': () => import('@generated/payment-out/generated/web/payment-out/index.jsx'),
-  'bank-reconciliation': () => import('@generated/bank-reconciliation/generated/web/bank-reconciliation/index.jsx'),
   'chart-of-accounts': () => import('@generated/chart-of-accounts/generated/web/chart-of-accounts/index.jsx'),
   'assets': () => import('@generated/assets/generated/web/assets/index.jsx'),
+  'asset-group': () => import('@generated/asset-group/generated/web/asset-group/index.jsx'),
+  'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
+  'conversion-rate-downloader-log': () => import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/index.jsx'),
+  'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
+  'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
+  'open-close-period-control': () => import('@/windows/custom/open-close-period-control-redirect/index.jsx'),
+  'fiscal-calendar': () => import('@/windows/custom/fiscal-calendar-redirect/index.jsx'),
+  'end-year-close': () => import('@generated/end-year-close/generated/web/end-year-close/index.jsx'),
 };
+
+/**
+ * Filters an already-built menuGroups array (see buildMenuGroups) down to what
+ * the current role can reach, per SFListMenu (com.etendoerp.go docs/neo-headless.md
+ * §8). Items carrying no windowId/processId/obuiappProcessId (dashboard, custom
+ * pages, installed SDK apps) are never filtered on that axis — this mirrors
+ * SFListMenu's own "leave unfiltered" rule for nodes with no AD_Window/AD_Process
+ * link. A group emptied by filtering is dropped entirely, except `Favorites`
+ * (which starts empty regardless and is populated client-side).
+ *
+ * A second, independent axis (ETP-4513) lets a menu.json item declare
+ * `"capability": "<key>"` for entries that have no backing AD_Window/AD_Process
+ * to check against but still must be admin/client-admin-gated — e.g. the
+ * "Configuración > Roles" entry, gated on `capabilities.isAdminOrClientAdmin`
+ * from the `SFWindowAccessMap` webhook. This check fails CLOSED: an item with a
+ * `capability` key is hidden unless `capabilities[item.capability] === true`
+ * (a missing/not-yet-loaded `capabilities` map hides it, same convention as
+ * `isCapabilityVisible` in `@/lib/capabilityVisibility.js`).
+ *
+ * @param {Array} groups — output of buildMenuGroups.
+ * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
+ *   the windowId/processId/obuiappProcessId filtering axis.
+ * @param {Record<string, boolean>|null} [capabilities] — from `useAuth()`/
+ *   `useCapabilitiesSafe()`. `null`/omitted disables the capability filtering
+ *   axis. When both `allowedIds` and `capabilities` are falsy, `groups` is
+ *   returned unchanged (matches this function's pre-ETP-4513 behavior).
+ */
+export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null) {
+  if (!allowedIds && !capabilities) return groups;
+  const itemIds = item => [item.windowId, item.processId, item.obuiappProcessId].filter(Boolean);
+  return groups
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => {
+        if (item.capability && capabilities?.[item.capability] !== true) return false;
+        if (!allowedIds) return true;
+        const ids = itemIds(item);
+        return ids.length === 0 || ids.some(id => allowedIds.has(String(id)));
+      }),
+    }))
+    .filter(group => group.group === 'Favorites' || group.items.length > 0);
+}
 
 /**
  * Return the 2-level menu groups, merging installed SDK apps into the
@@ -60,8 +113,13 @@ const windowLoaders = {
  * @param {string[]} [installedAppIds] — appIds present in the installed-apps
  *   store. External apps only appear in the menu when their id is here.
  * @param {{ appStoreUnlocked?: boolean }} [options]
+ * @param {Set<string>|null} [allowedIds] — see filterMenuGroupsByAccess. Most
+ *   callers should leave this `null` here and instead call
+ *   filterMenuGroupsByAccess() separately on the result, from a component
+ *   inside the AuthProvider tree (AuthContext isn't available at the level
+ *   buildMenuGroups is normally called from — see AppLayout.jsx).
  */
-export function buildMenuGroups(installedAppIds = [], options = {}) {
+export function buildMenuGroups(installedAppIds = [], options = {}, allowedIds = null) {
   const { appStoreUnlocked = false } = options;
   const installedSet = new Set(installedAppIds);
   const extraByGroup = new Map();
@@ -77,7 +135,7 @@ export function buildMenuGroups(installedAppIds = [], options = {}) {
     }
   }
 
-  return menuConfig.menu
+  const groups = menuConfig.menu
     .filter(group => {
       if (group.hidden && group.group === 'Marketplace' && appStoreUnlocked) return true;
       return !group.hidden;
@@ -92,6 +150,8 @@ export function buildMenuGroups(installedAppIds = [], options = {}) {
         ],
       };
     });
+
+  return filterMenuGroupsByAccess(groups, allowedIds);
 }
 
 /**
@@ -131,7 +191,9 @@ export const apiOnlyWindows = new Set([
  * Developers can also add entries manually for fully custom windows.
  */
 const customLoaders = {
-  // Auto-registered by pipeline when layoutType: "custom"
+  // Auto-registered by pipeline
+  'organization': () => import('./custom/organization/index.jsx'),
+  'calendar': () => import('./custom/calendar/index.jsx'),
   'fiscal-config': () => import('./custom/fiscal-config/index.jsx'),
   'fiscal-monitor': () => import('./custom/fiscal-monitor/index.jsx'),
   'fiscal-models': () => import('./custom/fiscal-models/index.jsx'),
@@ -149,6 +211,11 @@ const customLoaders = {
   'spike-hello-app': () => import('./spike-apps-host/index.jsx'),
   'quick-order-sales': () => import('./quick-order/index.jsx'),
   'quick-order-purchase': () => import('./quick-order/index.jsx'),
+  'financial-account': () => import('./custom/financial-account/index.jsx'),
+  'general-ledger-configuration': () => import('./custom/general-ledger-configuration/index.jsx'),
+  'return-to-vendor-shipment': () => import('./custom/return-to-vendor-shipment/index.jsx'),
+  'not-posted-documents': () => import('./custom/not-posted-documents/index.jsx'),
+  'assets': () => import('./custom/assets/index.jsx'),
 };
 
 /**

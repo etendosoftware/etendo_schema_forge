@@ -39,11 +39,11 @@ describe('QuotationConfirmModal', () => {
     });
 
     it('appends the currency to the invoice total (regression: invoice branch used to drop the currency suffix)', () => {
-      // Both order and invoice setCreatedDoc({ ... total: `${fmtNum(...)} ${currency}` ... }) shapes.
-      const matches = src.match(/total:\s*`\$\{fmtNum\([^)]+\)\}\s+\$\{currency\}`/g) || [];
+      // Both order and invoice setCreatedDoc({ ... total: formatCurrency(currency, ...) ... }) shapes.
+      const matches = src.match(/total:\s*formatCurrency\(currency,\s*[^)]+\),/g) || [];
       assert.ok(
         matches.length >= 2,
-        `Expected at least 2 currency-suffixed totals (order + invoice); found ${matches.length}`,
+        `Expected at least 2 currency-formatted totals (order + invoice); found ${matches.length}`,
       );
     });
   });
@@ -67,6 +67,51 @@ describe('QuotationConfirmModal', () => {
     it('does not hardcode the English strings "Order #" or "Invoice #"', () => {
       assert.doesNotMatch(src, /['"`]\s*Order\s+#/);
       assert.doesNotMatch(src, /['"`]\s*Invoice\s+#/);
+    });
+  });
+
+  // ETP-4312: the arrow on the "go to document" button comes from code (a literal
+  // " →" glyph after the label in JSX), never baked into the translatable label.
+  describe('go-to-document button arrow (ETP-4312)', () => {
+    it('renders the derived label followed by a literal " →" glyph in JSX', () => {
+      assert.match(src, /\{goLabel\}\s*→/);
+    });
+
+    it('derives goLabel from createdDoc.type (sqViewOrder / soViewInvoice)', () => {
+      assert.match(src, /createdDoc\.type\s*===\s*'order'\s*\?\s*ui\('sqViewOrder'\)\s*:\s*ui\('soViewInvoice'\)/);
+    });
+  });
+
+  // ETP-4468: "Confirmar" must not discard an unsaved header edit — force-save
+  // first (both order and invoice conversion paths), and the in-memory data
+  // prop must win over the stale server fetch.
+  describe('force-save before confirm (ETP-4468)', () => {
+    it('accepts an onSave prop', () => {
+      assert.match(src, /export default function QuotationConfirmModal\(\{[\s\S]*?onSave,?[\s\S]*?\}\)/);
+    });
+
+    it('in-memory data wins over the stale freshData fetch', () => {
+      assert.match(src, /const d\s*=\s*data \|\| freshData \|\| \{\}/);
+      assert.doesNotMatch(src, /const d\s*=\s*freshData \|\| data \|\| \{\}/);
+    });
+
+    it('calls onSave before either conversion POST and aborts on failure', () => {
+      assert.match(
+        src,
+        /if\s*\(onSave\)\s*\{\s*const saved\s*=\s*await onSave\(\);\s*if\s*\(!saved\?\.id\)\s*\{[\s\S]*?setError\([\s\S]*?setLoading\(false\);\s*return;\s*\}\s*\}/,
+      );
+      // The onSave guard runs before both the order-conversion and the
+      // invoice-conversion POST (single guard placed before the branch).
+      const saveGuardIdx = src.indexOf('if (onSave) {');
+      const orderPostIdx = src.indexOf('Convertquotation');
+      const invoicePostIdx = src.indexOf('createDraftInvoice');
+      assert.ok(saveGuardIdx >= 0 && orderPostIdx >= 0 && invoicePostIdx >= 0);
+      assert.ok(saveGuardIdx < orderPostIdx);
+      assert.ok(saveGuardIdx < invoicePostIdx);
+    });
+
+    it('shows the dedicated sqSaveBeforeConfirmError message on save-guard failure (not the generic soErrorOccurred)', () => {
+      assert.match(src, /if\s*\(!saved\?\.id\)\s*\{\s*setError\(ui\('sqSaveBeforeConfirmError'\)\);/);
     });
   });
 });

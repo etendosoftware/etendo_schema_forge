@@ -137,7 +137,7 @@ export function Chatter({
   }
 
   return (
-    <Card className="mt-4">
+    <Card className="mt-4" data-testid="Card__a26193">
       <CardHeader
         className="cursor-pointer select-none p-4"
         onClick={() => setIsCollapsed((v) => !v)}
@@ -151,13 +151,18 @@ export function Chatter({
             setIsCollapsed((v) => !v);
           }
         }}
-      >
+        data-testid="CardHeader__a26193">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            <MessageSquare
+              className="h-4 w-4 text-muted-foreground"
+              data-testid="MessageSquare__a26193" />
             <span className="text-sm font-medium">Notes &amp; Activity</span>
             {allMessages.length > 0 && (
-              <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+              <Badge
+                variant="secondary"
+                className="text-[11px] px-1.5 py-0"
+                data-testid="Badge__a26193">
                 {allMessages.length}
               </Badge>
             )}
@@ -167,13 +172,12 @@ export function Chatter({
               'h-4 w-4 text-muted-foreground transition-transform duration-200',
               !isCollapsed && 'rotate-180'
             )}
-          />
+            data-testid="ChevronDown__a26193" />
         </div>
       </CardHeader>
-
       {!isCollapsed && (
-        <CardContent className="p-4 pt-0">
-          <Separator className="mb-3" />
+        <CardContent className="p-4 pt-0" data-testid="CardContent__a26193">
+          <Separator className="mb-3" data-testid="Separator__a26193" />
 
           {/* Message list */}
           <div
@@ -188,7 +192,7 @@ export function Chatter({
               </p>
             ) : (
               allMessages.map((msg) => (
-                <MessageItem key={msg.id} message={msg} />
+                <MessageItem key={msg.id} message={msg} data-testid="MessageItem__a26193" />
               ))
             )}
           </div>
@@ -201,14 +205,14 @@ export function Chatter({
               placeholder="Add a note..."
               className="flex-1 text-sm"
               aria-label="Note text"
-            />
+              data-testid="Input__a26193" />
             <Button
               type="submit"
               size="sm"
               disabled={!inputValue.trim()}
               aria-label="Send note"
-            >
-              <Send className="h-4 w-4" />
+              data-testid="Button__a26193">
+              <Send className="h-4 w-4" data-testid="Send__a26193" />
             </Button>
           </form>
         </CardContent>

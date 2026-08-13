@@ -60,3 +60,5 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - `linesLayout: "classic"` is now written explicitly to `contract.json`; previously the classic layout was the implicit default.
 - `requiredHeaderFields` is now emitted in the page component; this window has no required header fields so the array is empty and there is no behavioral change.
 - LinesTable template updated in ETP-3908 to include the inline-editable add-row alignment fix. This window uses `linesLayout: "classic"` so the new template branch is dead code here — no behavioral change.
+
+- **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.

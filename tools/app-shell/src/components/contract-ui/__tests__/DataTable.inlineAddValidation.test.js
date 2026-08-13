@@ -20,7 +20,18 @@ describe('DataTable — inline-add-row validation (ETP-4005)', () => {
   // ── Pure helpers ──────────────────────────────────────────────────────────
 
   it('declares the isMissingRequired helper', () => {
-    assert.match(src, /function isMissingRequired\s*\(\s*f\s*,\s*valuesRef\s*\)/);
+    assert.match(src, /function isMissingRequired\s*\(\s*f\s*,\s*valuesRef\s*,\s*fields\s*=\s*\[\]\s*\)/);
+  });
+
+  it('isMissingRequired never flags a required checkbox/boolean (unchecked is valid)', () => {
+    assert.match(src, /if \(f\.type === 'checkbox' \|\| f\.type === 'boolean'\) return false;/);
+  });
+
+  it('isMissingRequired honours the clearsField mutually-exclusive group', () => {
+    // The empty member of a one-of pair must not be flagged while its partner
+    // (the field it clears, or a sibling that clears it) carries a value.
+    assert.match(src, /if \(f\.clearsField && hasVal\(f\.clearsField\)\) return false;/);
+    assert.match(src, /if \(g\.clearsField === f\.key && hasVal\(g\.key\)\) return false;/);
   });
 
   it('isMissingRequired returns false when the field is not required', () => {
@@ -53,7 +64,7 @@ describe('DataTable — inline-add-row validation (ETP-4005)', () => {
   // ── submitLine wiring ─────────────────────────────────────────────────────
 
   it('submitLine runs the missing-required check BEFORE the below-min check', () => {
-    const idxMissing = src.indexOf('const missing = fields.filter(f => isMissingRequired(f, valuesRef));');
+    const idxMissing = src.indexOf('const missing = fields.filter(f => isMissingRequired(f, valuesRef, fields));');
     const idxBelow   = src.indexOf('const belowMin = fields.filter(f => isBelowMin(f, valuesRef));');
     assert.ok(idxMissing > 0, 'missing-required check not found');
     assert.ok(idxBelow > idxMissing, 'below-min check must come after missing-required check');
@@ -70,7 +81,7 @@ describe('DataTable — inline-add-row validation (ETP-4005)', () => {
   it('keeps the inline-add row open on below-min and toasts fieldMinValueError', () => {
     const block = src.slice(src.indexOf('const belowMin = fields.filter'), src.indexOf('setIsSaving(true);'));
     assert.match(block, /setInvalidFields\(new Set\(belowMin\.map\(f => f\.key\)\)\)/);
-    assert.match(block, /toast\.error\(ui\('fieldMinValueError'\)\)/);
+    assert.match(block, /toast\.error\(ui\('fieldMinValueError', \{ min: belowMin\[0\]\.min \}\)\)/);
     assert.match(block, /return Promise\.resolve\(false\);/);
   });
 
@@ -82,7 +93,8 @@ describe('DataTable — inline-add-row validation (ETP-4005)', () => {
 
   it('uses i18n hooks (no hardcoded English) for both validation messages', () => {
     assert.match(src, /ui\('requiredFieldsMissing'\)/);
-    assert.match(src, /ui\('fieldMinValueError'\)/);
+    // The min value is interpolated so the message reads "Value must be at least N".
+    assert.match(src, /ui\('fieldMinValueError', \{ min: belowMin\[0\]\.min \}\)/);
     assert.doesNotMatch(src, /toast\.error\(['"`]Required fields are missing/);
     assert.doesNotMatch(src, /toast\.error\(['"`]Value cannot be negative/);
   });

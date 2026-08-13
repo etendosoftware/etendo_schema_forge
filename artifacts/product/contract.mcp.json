@@ -1,0 +1,1078 @@
+{
+  "version": "0.1.1",
+  "generatedAt": "2026-07-31T19:26:42.054Z",
+  "updatedAt": "2026-07-31T19:26:59.908Z",
+  "contractChecksum": "c5aa960de3723932",
+  "apiPrediction": {
+    "specName": "product",
+    "baseUrl": "/sws/neo/product",
+    "crud": {
+      "product": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/product",
+        "detailUrl": "/sws/neo/product/product/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name",
+          "productCategory",
+          "productType",
+          "uPCEAN"
+        ]
+      },
+      "price": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/price",
+        "detailUrl": "/sws/neo/product/price/{id}",
+        "supportedFilters": []
+      },
+      "priceRuleVersion": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/priceRuleVersion",
+        "detailUrl": "/sws/neo/product/priceRuleVersion/{id}",
+        "supportedFilters": []
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/product/accounting",
+        "detailUrl": "/sws/neo/product/accounting/{id}",
+        "supportedFilters": []
+      },
+      "billOfMaterials": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/billOfMaterials",
+        "detailUrl": "/sws/neo/product/billOfMaterials/{id}",
+        "supportedFilters": []
+      },
+      "costing": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/costing",
+        "detailUrl": "/sws/neo/product/costing/{id}",
+        "supportedFilters": []
+      },
+      "transactionAdjustments": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/transactionAdjustments",
+        "detailUrl": "/sws/neo/product/transactionAdjustments/{id}",
+        "supportedFilters": []
+      },
+      "transactions": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/transactions",
+        "detailUrl": "/sws/neo/product/transactions/{id}",
+        "supportedFilters": []
+      },
+      "productCharacteristic": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/productCharacteristic",
+        "detailUrl": "/sws/neo/product/productCharacteristic/{id}",
+        "supportedFilters": []
+      },
+      "stock": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/stock",
+        "detailUrl": "/sws/neo/product/stock/{id}",
+        "supportedFilters": []
+      },
+      "categoryPriceRuleVersion": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/categoryPriceRuleVersion",
+        "detailUrl": "/sws/neo/product/categoryPriceRuleVersion/{id}",
+        "supportedFilters": []
+      },
+      "alternateUom": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product/alternateUom",
+        "detailUrl": "/sws/neo/product/alternateUom/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "product",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "search",
+        "url": "/sws/neo/product/product/selectors/uOM"
+      },
+      {
+        "entity": "product",
+        "field": "productCategory",
+        "column": "M_Product_Category_ID",
+        "reference": "ProductCategory",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/product/selectors/productCategory"
+      },
+      {
+        "entity": "product",
+        "field": "taxCategory",
+        "column": "C_TaxCategory_ID",
+        "reference": "TaxCategory",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/product/selectors/taxCategory"
+      },
+      {
+        "entity": "product",
+        "field": "uOMForWeight",
+        "column": "C_Uom_Weight_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/product/selectors/uOMForWeight"
+      },
+      {
+        "entity": "product",
+        "field": "attributeSet",
+        "column": "M_AttributeSet_ID",
+        "reference": "AttributeSet",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/product/selectors/attributeSet"
+      },
+      {
+        "entity": "product",
+        "field": "brand",
+        "column": "M_Brand_ID",
+        "reference": "Brand",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/product/selectors/brand"
+      },
+      {
+        "entity": "product",
+        "field": "mProductStatusID",
+        "column": "M_Product_Status_ID",
+        "reference": "ProductStatus",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/product/selectors/mProductStatusID"
+      },
+      {
+        "entity": "price",
+        "field": "priceListVersion",
+        "column": "M_PriceList_Version_ID",
+        "reference": "PriceListVersion",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/price/selectors/priceListVersion"
+      },
+      {
+        "entity": "priceRuleVersion",
+        "field": "servicePriceRule",
+        "column": "M_Servicepricerule_ID",
+        "reference": "ServicePriceRule",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/priceRuleVersion/selectors/servicePriceRule"
+      },
+      {
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "column": "P_Asset_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/fixedAsset"
+      },
+      {
+        "entity": "accounting",
+        "field": "productExpense",
+        "column": "P_Expense_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productExpense"
+      },
+      {
+        "entity": "accounting",
+        "field": "productRevenue",
+        "column": "P_Revenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productRevenue"
+      },
+      {
+        "entity": "accounting",
+        "field": "productCOGS",
+        "column": "P_Cogs_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/productCOGS"
+      },
+      {
+        "entity": "billOfMaterials",
+        "field": "bOMProduct",
+        "column": "M_ProductBOM_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/product/billOfMaterials/selectors/bOMProduct"
+      },
+      {
+        "entity": "costing",
+        "field": "warehouse",
+        "column": "M_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/costing/selectors/warehouse"
+      },
+      {
+        "entity": "costing",
+        "field": "cCurrencyID",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/costing/selectors/cCurrencyID"
+      },
+      {
+        "entity": "transactionAdjustments",
+        "field": "cCurrencyID",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/transactionAdjustments/selectors/cCurrencyID"
+      },
+      {
+        "entity": "transactionAdjustments",
+        "field": "costAdjustmentLine",
+        "column": "M_Costadjustmentline_ID",
+        "reference": "Costadjustmentline",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/transactionAdjustments/selectors/costAdjustmentLine"
+      },
+      {
+        "entity": "transactions",
+        "field": "organization",
+        "column": "AD_Org_ID",
+        "reference": "Organization",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/transactions/selectors/organization"
+      },
+      {
+        "entity": "transactions",
+        "field": "storageBin",
+        "column": "M_Locator_ID",
+        "reference": "StorageBin",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/transactions/selectors/storageBin"
+      },
+      {
+        "entity": "transactions",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/transactions/selectors/uOM"
+      },
+      {
+        "entity": "productCharacteristic",
+        "field": "characteristic",
+        "column": "M_Characteristic_ID",
+        "reference": "Characteristic",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/productCharacteristic/selectors/characteristic"
+      },
+      {
+        "entity": "productCharacteristic",
+        "field": "characteristicSubset",
+        "column": "M_Ch_Subset_ID",
+        "reference": "CharacteristicSubset",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/productCharacteristic/selectors/characteristicSubset"
+      },
+      {
+        "entity": "stock",
+        "field": "storageBin",
+        "column": "M_Locator_ID",
+        "reference": "StorageBin",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/stock/selectors/storageBin"
+      },
+      {
+        "entity": "stock",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/stock/selectors/uOM"
+      },
+      {
+        "entity": "categoryPriceRuleVersion",
+        "field": "servicePriceRule",
+        "column": "M_Servicepricerule_ID",
+        "reference": "ServicePriceRule",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/categoryPriceRuleVersion/selectors/servicePriceRule"
+      },
+      {
+        "entity": "alternateUom",
+        "field": "uOM",
+        "column": "C_Uom_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/alternateUom/selectors/uOM"
+      }
+    ],
+    "actions": [
+      {
+        "name": "manageVariants",
+        "actionType": "utilityAction",
+        "entity": "product",
+        "column": "ManageVariants",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/product/product/{id}/action/manageVariants",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "FE3A8C134D41488DB3A69837BD54B56A",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "product",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/product/product/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "136",
+        "processType": "classic"
+      },
+      {
+        "name": "createVariants",
+        "actionType": "createFrom",
+        "entity": "product",
+        "column": "CreateVariants",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/product/product/{id}/action/createVariants",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "3C386BC12832466790E50F2F8C5EBD85",
+        "processType": "classic"
+      },
+      {
+        "name": "updateInvariants",
+        "actionType": "utilityAction",
+        "entity": "product",
+        "column": "Updateinvariants",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/product/product/{id}/action/updateInvariants",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "7DC2C8DC186B4C1DB18E147911950861",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "relateprodcattoservice",
+        "actionType": "utilityAction",
+        "entity": "product",
+        "column": "Relateprodcattoservice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/product/product/{id}/action/relateprodcattoservice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "8E5996F1F3154B498468938B5341A0CB",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "relateprodtoservice",
+        "actionType": "utilityAction",
+        "entity": "product",
+        "column": "Relateprodtoservice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/product/product/{id}/action/relateprodtoservice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "E66C669B0B01498C8EB3F99CD371CF9A",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "relateprodcattaxtoservice",
+        "actionType": "utilityAction",
+        "entity": "product",
+        "column": "Relateprodcattaxtoservice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/product/product/{id}/action/relateprodcattaxtoservice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "E0870062F05F4DC88E589ABC6A45DF4C",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "copyservicemodifytaxconfig",
+        "actionType": "utilityAction",
+        "entity": "product",
+        "column": "Copyservicemodifytaxconfig",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/product/product/{id}/action/copyservicemodifytaxconfig",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "CBBD7BB6BDFE4705B68DD3D9FF788D4E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "manualcostadjustment",
+        "actionType": "utilityAction",
+        "entity": "transactions",
+        "column": "Manualcostadjustment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/product/transactions/{id}/action/manualcostadjustment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "D395B727675C45C98320F8A40E0768E7",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "inventory"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "M_Product_Category_ID": "Category",
+        "ProductType": "Type"
+      },
+      "es_ES": {
+        "M_Product_Category_ID": "Categoría",
+        "ProductType": "Tipo"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "product": {
+        "fields": {
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "image": {},
+          "uOM": {
+            "required": true
+          },
+          "productCategory": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT MAX(M_PRODUCT_CATEGORY_ID) FROM M_PRODUCT_CATEGORY WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@ AND ISSUMMARY='N'"
+          },
+          "taxCategory": {
+            "required": true
+          },
+          "purchase": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "sale": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "description": {},
+          "productType": {
+            "required": true,
+            "defaultValue": "I"
+          },
+          "stocked": {
+            "required": true,
+            "readOnlyLogic": "@ProductType@='R' | @ProductType@='E' | @ProductType@='O'",
+            "defaultValue": "Y"
+          },
+          "weight": {},
+          "uOMForWeight": {},
+          "attributeSet": {},
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "uPCEAN": {},
+          "brand": {},
+          "returnable": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "mProductStatusID": {},
+          "eTGOPurchasePrice": {
+            "readOnly": true
+          },
+          "eTGOSalePrice": {
+            "readOnly": true
+          },
+          "eTGOStock": {
+            "readOnly": true
+          }
+        }
+      },
+      "price": {
+        "fields": {
+          "priceListVersion": {
+            "required": true
+          },
+          "standardPrice": {
+            "required": true
+          },
+          "listPrice": {
+            "required": true
+          },
+          "cost": {
+            "required": true,
+            "defaultValue": "0"
+          }
+        }
+      },
+      "priceRuleVersion": {
+        "fields": {
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "validFromDate": {
+            "required": true
+          },
+          "servicePriceRule": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "accounting": {
+        "fields": {
+          "fixedAsset": {},
+          "productExpense": {
+            "required": true
+          },
+          "productRevenue": {
+            "required": true
+          },
+          "productCOGS": {}
+        }
+      },
+      "billOfMaterials": {
+        "fields": {
+          "lineNo": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_Product_BOM WHERE M_Product_ID=@M_Product_ID@"
+          },
+          "bOMProduct": {
+            "required": true
+          },
+          "bOMQuantity": {
+            "required": true,
+            "defaultValue": "1"
+          },
+          "bomprice": {},
+          "description": {}
+        }
+      },
+      "costing": {
+        "fields": {
+          "costType": {
+            "readOnly": true,
+            "required": true
+          },
+          "cost": {
+            "readOnly": true
+          },
+          "startingDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "endingDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "quantity": {
+            "readOnly": true
+          },
+          "warehouse": {
+            "readOnly": true
+          },
+          "cCurrencyID": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "100"
+          },
+          "originalCost": {
+            "readOnly": true
+          }
+        }
+      },
+      "transactionAdjustments": {
+        "fields": {
+          "costDate": {
+            "required": true
+          },
+          "cost": {
+            "required": true
+          },
+          "cCurrencyID": {
+            "required": true
+          },
+          "costAdjustmentLine": {},
+          "unitCost": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "accountingDate": {
+            "required": true
+          }
+        }
+      },
+      "transactions": {
+        "fields": {
+          "organization": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "@AD_Org_ID@"
+          },
+          "storageBin": {
+            "readOnly": true,
+            "required": true
+          },
+          "movementQuantity": {
+            "readOnly": true,
+            "required": true
+          },
+          "movementDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "movementType": {
+            "readOnly": true,
+            "required": true
+          },
+          "totalCost": {
+            "readOnly": true
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "productCharacteristic": {
+        "fields": {
+          "sequenceNumber": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQNO),0)+10 AS DefaultValue FROM M_PRODUCT_CH WHERE m_product_id=@m_product_id@"
+          },
+          "characteristic": {
+            "required": true
+          },
+          "variant": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "explodeConfigurationTab": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "definesPrice": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "priceListType": {
+            "required": true,
+            "defaultValue": "SALES"
+          },
+          "definesImage": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "characteristicSubset": {},
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      },
+      "stock": {
+        "fields": {
+          "storageBin": {
+            "readOnly": true,
+            "required": true
+          },
+          "attributeSetValue": {
+            "readOnly": true
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true
+          },
+          "quantityOnHand": {
+            "readOnly": true,
+            "required": true
+          },
+          "reservedQty": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "allocatedQuantity": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          }
+        }
+      },
+      "categoryPriceRuleVersion": {
+        "fields": {
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "validFromDate": {
+            "required": true
+          },
+          "servicePriceRule": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "alternateUom": {
+        "fields": {
+          "uOM": {
+            "required": true
+          },
+          "conversionRate": {
+            "required": true,
+            "readOnlyLogic": "@EXISTS_CONVERSION@='Y'"
+          },
+          "gtin": {},
+          "sales": {
+            "required": true,
+            "defaultValue": "S"
+          },
+          "purchase": {
+            "required": true,
+            "defaultValue": "S"
+          },
+          "logistics": {
+            "required": true,
+            "defaultValue": "S"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage product inventory operations.",
+    "whenToUse": [
+      "Use for stock and warehouse operations."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "uOM",
+        "productCategory",
+        "taxCategory",
+        "purchase",
+        "sale",
+        "productType",
+        "stocked",
+        "active",
+        "returnable"
+      ],
+      "lineFields": [
+        "priceListVersion",
+        "standardPrice",
+        "listPrice",
+        "cost",
+        "active",
+        "validFromDate",
+        "productExpense",
+        "productRevenue",
+        "lineNo",
+        "bOMProduct",
+        "bOMQuantity",
+        "costDate",
+        "cost",
+        "cCurrencyID",
+        "unitCost",
+        "accountingDate",
+        "sequenceNumber",
+        "characteristic",
+        "variant",
+        "explodeConfigurationTab",
+        "definesPrice",
+        "priceListType",
+        "definesImage",
+        "active",
+        "active",
+        "validFromDate",
+        "uOM",
+        "conversionRate",
+        "sales",
+        "purchase",
+        "logistics"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "processNow",
+      "createVariants"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "uOM",
+          "productCategory",
+          "taxCategory",
+          "purchase",
+          "sale",
+          "productType",
+          "stocked",
+          "active",
+          "returnable"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "priceListVersion",
+          "standardPrice",
+          "listPrice",
+          "cost",
+          "active",
+          "validFromDate",
+          "productExpense",
+          "productRevenue",
+          "lineNo",
+          "bOMProduct",
+          "bOMQuantity",
+          "costDate",
+          "cost",
+          "cCurrencyID",
+          "unitCost",
+          "accountingDate",
+          "sequenceNumber",
+          "characteristic",
+          "variant",
+          "explodeConfigurationTab",
+          "definesPrice",
+          "priceListType",
+          "definesImage",
+          "active",
+          "active",
+          "validFromDate",
+          "uOM",
+          "conversionRate",
+          "sales",
+          "purchase",
+          "logistics"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "processNow"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "ef6d3b34680e4841"
+}

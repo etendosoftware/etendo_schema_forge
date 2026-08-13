@@ -1,0 +1,120 @@
+{
+  "version": "0.4.0",
+  "generatedAt": "2026-04-28T16:08:39.756Z",
+  "updatedAt": "2026-05-19T17:03:46.462Z",
+  "contractChecksum": "f6412bc60aa81588",
+  "apiPrediction": {
+    "specName": "tbai-config",
+    "baseUrl": "/sws/neo/tbai-config",
+    "crud": {
+      "header": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/tbai-config/header",
+        "detailUrl": "/sws/neo/tbai-config/header/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "configuration"
+    }
+  },
+  "formState": {
+    "entities": {
+      "header": {
+        "fields": {
+          "etsgSifTerritory": {
+            "readOnly": true
+          },
+          "tbaisystemdate": {
+            "required": true,
+            "defaultValue": "@#Date@"
+          },
+          "productionEnv": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "invoiceDescription": {
+            "required": true,
+            "defaultValue": "Descripcion Factura"
+          },
+          "uSEAsproductDesc": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "autoSendInvoices": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "jasperreportPath": {},
+          "validatePreviousInvoice": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage tbai config records.",
+    "whenToUse": [
+      "Use for tbai config management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "tbaisystemdate",
+        "productionEnv",
+        "invoiceDescription",
+        "uSEAsproductDesc",
+        "autoSendInvoices",
+        "validatePreviousInvoice"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "tbaisystemdate",
+          "productionEnv",
+          "invoiceDescription",
+          "uSEAsproductDesc",
+          "autoSendInvoices",
+          "validatePreviousInvoice"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "819ae4ad1b2bdde5"
+}

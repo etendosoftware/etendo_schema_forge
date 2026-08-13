@@ -1,0 +1,29 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "finance",
+    "name": "Conversion Rates",
+    "detailEntity": null,
+    "readOnly": true
+  },
+  "entities": {
+    "header": {
+      "name": "conversionRate",
+      "fields": {
+        "organization": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "currency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "toCurrency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "conversionRateType": { "grid": true, "form": true, "searchable": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "validFromDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "validToDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "multipleRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "divideRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "active": { "grid": false, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "sMFCRSynced": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": [],
+  "version": 2
+}

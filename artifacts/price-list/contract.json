@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-05-15T16:00:23.299Z",
-  "checksum": "b0c07294925ffebf",
+  "updatedAt": "2026-07-23T13:43:58.733Z",
+  "checksum": "382886c1cf629dbd",
   "frontendContract": {
     "window": {
       "id": "146",
@@ -15,9 +15,11 @@
         "es_ES": {
           "Name": "Nombre",
           "C_Currency_ID": "Moneda",
+          "IsSOPriceList": "Tarifa de venta",
           "Costbased": "Basado en coste",
           "IsTaxIncluded": "Precio incluye impuesto",
-          "IsDefault": "Por defecto"
+          "IsDefault": "Por defecto",
+          "IsActive": "Activo"
         }
       },
       "layoutType": "default"
@@ -42,38 +44,11 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
-          },
-          {
-            "name": "currency",
-            "apiKey": "currency",
-            "column": "C_Currency_ID",
-            "label": "Currency",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Currency",
-            "inputMode": "selector",
-            "section": "principal",
-            "seq": 2
-          },
-          {
-            "name": "description",
-            "apiKey": "description",
-            "column": "Description",
-            "label": "Description",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "section": "principal",
-            "seq": 3
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "salesPriceList",
@@ -108,54 +83,12 @@
               "es_ES": "Tipo",
               "en_US": "Type"
             },
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Sales_Pricelist"
-            }
-          },
-          {
-            "name": "costBasedPriceList",
-            "apiKey": "costBasedPriceList",
-            "column": "Costbased",
-            "label": "Price list based on cost",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "section": "principal",
-            "seq": 5,
-            "displayLogic": {
-              "raw": "@IsSOPriceList@='Y'",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "priceIncludesTax",
-            "apiKey": "priceIncludesTax",
-            "column": "IsTaxIncluded",
-            "label": "Price includes Tax",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "section": "principal",
-            "seq": 6,
-            "validationRule": {
-              "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
-              "contextParams": [
-                "User_Client"
-              ],
-              "cascadeParams": []
             }
           },
           {
@@ -167,11 +100,135 @@
             "tsType": "boolean",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 7
+            "seq": 7,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "labels": {
+              "es_ES": "Por defecto",
+              "en_US": "Default"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "etgoProductcount",
+            "apiKey": "etgoProductcount",
+            "column": "EM_Etgo_Productcount",
+            "label": "Product Count",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "defaultValue": "0",
+            "section": "principal",
+            "seq": 8,
+            "labels": {
+              "es_ES": "Nº de productos",
+              "en_US": "Product Count"
+            },
+            "validation": {
+              "maxLength": 12
+            }
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "true"
+            },
+            "section": "principal",
+            "seq": 9,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "labels": {
+              "es_ES": "Activo",
+              "en_US": "Active"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_Pricelist_Active"
+            }
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "label": "Currency",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Currency",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 3,
+            "validation": {
+              "maxLength": 255
+            }
           }
         ],
         "searchableFields": [
@@ -179,10 +236,17 @@
         ],
         "computedFields": [
           {
-            "name": "costBasedPriceList",
+            "name": "etgoProductcount",
             "derivation": {
               "type": "computed",
-              "source": "N"
+              "source": "0"
+            }
+          },
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "true"
             }
           }
         ],
@@ -210,7 +274,11 @@
               "type": "computed",
               "source": "@#Date@"
             },
-            "defaultValue": "@#Date@"
+            "defaultValue": "@#Date@",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "validFromDate",
@@ -228,7 +296,11 @@
               "type": "computed",
               "source": "@#Date@"
             },
-            "defaultValue": "@#Date@"
+            "defaultValue": "@#Date@",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "priceListSchema",
@@ -244,6 +316,10 @@
             "sourceRequired": true,
             "reference": "DiscountSchema",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "M_DiscountSchema.DiscountType='P'",
               "contextParams": [],
@@ -262,7 +338,10 @@
             "grid": false,
             "form": true,
             "reference": "PriceList_Version",
-            "inputMode": "search"
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "description",
@@ -274,7 +353,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "create",
@@ -286,7 +368,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -327,7 +412,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Product",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
             "name": "standardPrice",
@@ -340,7 +429,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "listPrice",
@@ -353,7 +446,11 @@
             "required": true,
             "grid": false,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
           },
           {
             "name": "cost",
@@ -372,6 +469,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 12
+            },
             "displayLogic": {
               "raw": "@Costbased@='Y'",
               "evaluable": true
@@ -396,10 +497,17 @@
             "enumValues": [
               {
                 "value": "S",
-                "name": "Standard"
+                "name": "Standard",
+                "labels": {
+                  "es_ES": "Estándar"
+                }
               }
             ],
             "defaultValue": "S",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "(@numberOfAlgorithms@>1)",
               "evaluable": true
@@ -438,9 +546,11 @@
         "es_ES": {
           "Name": "Nombre",
           "C_Currency_ID": "Moneda",
+          "IsSOPriceList": "Tarifa de venta",
           "Costbased": "Basado en coste",
           "IsTaxIncluded": "Precio incluye impuesto",
-          "IsDefault": "Por defecto"
+          "IsDefault": "Por defecto",
+          "IsActive": "Activo"
         }
       }
     },
@@ -451,6 +561,51 @@
         "tabName": "Price List",
         "fields": [
           {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true,
+            "order": 1
+          },
+          {
+            "name": "salesPriceList",
+            "apiKey": "salesPriceList",
+            "column": "IsSOPriceList",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "order": 2
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "order": 3
+          },
+          {
+            "name": "etgoProductcount",
+            "apiKey": "etgoProductcount",
+            "column": "EM_Etgo_Productcount",
+            "type": "decimal",
+            "visibility": "readOnly",
+            "required": false,
+            "order": 4
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "order": 5
+          },
+          {
             "name": "organization",
             "apiKey": "organization",
             "column": "AD_Org_ID",
@@ -459,19 +614,11 @@
             "required": true
           },
           {
-            "name": "name",
-            "apiKey": "name",
-            "column": "Name",
-            "type": "string",
-            "visibility": "editable",
-            "required": true
-          },
-          {
             "name": "currency",
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -483,22 +630,6 @@
             "required": false
           },
           {
-            "name": "salesPriceList",
-            "apiKey": "salesPriceList",
-            "column": "IsSOPriceList",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "costBasedPriceList",
-            "apiKey": "costBasedPriceList",
-            "column": "Costbased",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
             "name": "basePricelist",
             "apiKey": "basePricelist",
             "column": "BasePriceList_ID",
@@ -507,9 +638,9 @@
             "required": false
           },
           {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
+            "name": "costBasedPriceList",
+            "apiKey": "costBasedPriceList",
+            "column": "Costbased",
             "type": "boolean",
             "visibility": "discarded",
             "required": true
@@ -527,15 +658,7 @@
             "apiKey": "priceIncludesTax",
             "column": "IsTaxIncluded",
             "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "default",
-            "apiKey": "default",
-            "column": "IsDefault",
-            "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -1061,9 +1184,11 @@
       "es_ES": {
         "Name": "Nombre",
         "C_Currency_ID": "Moneda",
+        "IsSOPriceList": "Tarifa de venta",
         "Costbased": "Basado en coste",
         "IsTaxIncluded": "Precio incluye impuesto",
-        "IsDefault": "Por defecto"
+        "IsDefault": "Por defecto",
+        "IsActive": "Activo"
       }
     }
   },
@@ -1107,12 +1232,12 @@
         "description": "CRUD flags for 'productPrice' should all be booleans"
       },
       {
-        "id": "t-default-value-type-priceList-costBasedPriceList",
+        "id": "t-default-value-type-priceList-etgoProductcount",
         "category": "default-value-type",
         "entity": "priceList",
-        "field": "costBasedPriceList",
+        "field": "etgoProductcount",
         "runner": "node",
-        "description": "Default value for 'costBasedPriceList' in priceList should be a string"
+        "description": "Default value for 'etgoProductcount' in priceList should be a string"
       },
       {
         "id": "t-default-value-type-priceListVersion-name",
@@ -1147,14 +1272,6 @@
         "description": "Default value for 'cost' in productPrice should be a string"
       },
       {
-        "id": "t-displaylogic-evaluable-priceList-costBasedPriceList",
-        "category": "displaylogic-evaluable",
-        "entity": "priceList",
-        "field": "costBasedPriceList",
-        "runner": "node",
-        "description": "Display logic for 'costBasedPriceList' in priceList should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-productPrice-algorithm",
         "category": "displaylogic-evaluable",
         "entity": "productPrice",
@@ -1169,14 +1286,6 @@
         "field": "cost",
         "runner": "node",
         "description": "Display logic for 'cost' in productPrice should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-valid-priceList-costBasedPriceList",
-        "category": "displaylogic-valid",
-        "entity": "priceList",
-        "field": "costBasedPriceList",
-        "runner": "node",
-        "description": "Display logic for 'costBasedPriceList' in priceList should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-productPrice-algorithm",
@@ -1195,12 +1304,12 @@
         "description": "Display logic for 'cost' in productPrice should be valid JS"
       },
       {
-        "id": "t-field-presence-priceList-costBasedPriceList",
+        "id": "t-field-presence-priceList-active",
         "category": "field-presence",
         "entity": "priceList",
-        "field": "costBasedPriceList",
+        "field": "active",
         "runner": "node",
-        "description": "Field 'costBasedPriceList' should be present in priceList"
+        "description": "Field 'active' should be present in priceList"
       },
       {
         "id": "t-field-presence-priceList-currency",
@@ -1227,20 +1336,20 @@
         "description": "Field 'description' should be present in priceList"
       },
       {
+        "id": "t-field-presence-priceList-etgoProductcount",
+        "category": "field-presence",
+        "entity": "priceList",
+        "field": "etgoProductcount",
+        "runner": "node",
+        "description": "Field 'etgoProductcount' should be present in priceList"
+      },
+      {
         "id": "t-field-presence-priceList-name",
         "category": "field-presence",
         "entity": "priceList",
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should be present in priceList"
-      },
-      {
-        "id": "t-field-presence-priceList-priceIncludesTax",
-        "category": "field-presence",
-        "entity": "priceList",
-        "field": "priceIncludesTax",
-        "runner": "node",
-        "description": "Field 'priceIncludesTax' should be present in priceList"
       },
       {
         "id": "t-field-presence-priceList-salesPriceList",
@@ -1339,12 +1448,12 @@
         "description": "Field 'standardPrice' should be present in productPrice"
       },
       {
-        "id": "t-field-type-priceList-costBasedPriceList",
+        "id": "t-field-type-priceList-active",
         "category": "field-type",
         "entity": "priceList",
-        "field": "costBasedPriceList",
+        "field": "active",
         "runner": "node",
-        "description": "Field 'costBasedPriceList' should have type 'boolean' in priceList"
+        "description": "Field 'active' should have type 'boolean' in priceList"
       },
       {
         "id": "t-field-type-priceList-currency",
@@ -1371,20 +1480,20 @@
         "description": "Field 'description' should have type 'string' in priceList"
       },
       {
+        "id": "t-field-type-priceList-etgoProductcount",
+        "category": "field-type",
+        "entity": "priceList",
+        "field": "etgoProductcount",
+        "runner": "node",
+        "description": "Field 'etgoProductcount' should have type 'number' in priceList"
+      },
+      {
         "id": "t-field-type-priceList-name",
         "category": "field-type",
         "entity": "priceList",
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should have type 'string' in priceList"
-      },
-      {
-        "id": "t-field-type-priceList-priceIncludesTax",
-        "category": "field-type",
-        "entity": "priceList",
-        "field": "priceIncludesTax",
-        "runner": "node",
-        "description": "Field 'priceIncludesTax' should have type 'boolean' in priceList"
       },
       {
         "id": "t-field-type-priceList-salesPriceList",
@@ -1600,14 +1709,6 @@
         "description": "Selector endpoint for 'product' in productPrice should exist"
       },
       {
-        "id": "t-system-field-priceList-active",
-        "category": "system-field",
-        "entity": "priceList",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for priceList"
-      },
-      {
         "id": "t-system-field-priceList-basePricelist",
         "category": "system-field",
         "entity": "priceList",
@@ -1622,6 +1723,14 @@
         "field": "client",
         "runner": "node",
         "description": "System field 'client' should exist in backend but not frontend for priceList"
+      },
+      {
+        "id": "t-system-field-priceList-costBasedPriceList",
+        "category": "system-field",
+        "entity": "priceList",
+        "field": "costBasedPriceList",
+        "runner": "node",
+        "description": "System field 'costBasedPriceList' should exist in backend but not frontend for priceList"
       },
       {
         "id": "t-system-field-priceList-createdBy",
@@ -1662,6 +1771,14 @@
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for priceList"
+      },
+      {
+        "id": "t-system-field-priceList-priceIncludesTax",
+        "category": "system-field",
+        "entity": "priceList",
+        "field": "priceIncludesTax",
+        "runner": "node",
+        "description": "System field 'priceIncludesTax' should exist in backend but not frontend for priceList"
       },
       {
         "id": "t-system-field-priceList-updated",
@@ -1862,23 +1979,23 @@
       }
     ],
     "summary": {
-      "total": 101,
+      "total": 100,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 5,
-        "displaylogic-evaluable": 3,
-        "displaylogic-valid": 3,
+        "displaylogic-evaluable": 2,
+        "displaylogic-valid": 2,
         "field-presence": 18,
         "field-type": 18,
         "rule-declared": 11,
         "searchable-filters": 1,
         "selector-endpoint": 4,
-        "system-field": 30,
+        "system-field": 31,
         "visibility": 3
       },
       "byRunner": {
-        "node": 101,
+        "node": 100,
         "junit": 0
       }
     }

@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import OrganizationsTable from './OrganizationsTable';
 import OrganizationsForm from './OrganizationsForm';
 import IssuedInvoicesTable from './IssuedInvoicesTable';
@@ -19,7 +21,9 @@ const statusField = null;
 // @sf-generated-end summary:organizations
 
 // @sf-generated-start extraBadges:organizations
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:organizations
 
 // @sf-generated-start processes:organizations
@@ -27,6 +31,17 @@ const processes = [
   { name: 'updateInvoices', label: 'Update pre-SII invoices', style: 'positive' },
 ];
 // @sf-generated-end processes:organizations
+
+// @sf-generated-start detailProcesses:issuedInvoices
+const detailProcesses = [
+  { name: 'aeatsiiSend', label: 'Send to SII', style: 'positive',
+    displayLogicRaw: "@EM_Aeatsii_Error_Registral@='N'" },
+  { name: 'aeatsiiModif', label: 'Modification in SII', style: 'positive',
+    displayLogicRaw: "@EM_Aeatsii_Error_Registral@='Y'" },
+  { name: 'aeatsiiDup', label: 'Correct synchronization error', style: 'positive',
+    displayLogicRaw: "@EM_Aeatsii_Error_Code@='3000'" },
+];
+// @sf-generated-end detailProcesses:issuedInvoices
 
 // @sf-generated-start draftMode:organizations
 const draftMode = null;
@@ -71,10 +86,10 @@ export const api = {
     "organizations": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/organizations",
       "detailUrl": "/sws/neo/sii-monitor/organizations/{id}",
       "supportedFilters": []
@@ -82,10 +97,10 @@ export const api = {
     "issuedInvoices": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/issuedInvoices",
       "detailUrl": "/sws/neo/sii-monitor/issuedInvoices/{id}",
       "supportedFilters": []
@@ -93,10 +108,10 @@ export const api = {
     "issuedInvoicesSiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/issuedInvoicesSiiData",
       "detailUrl": "/sws/neo/sii-monitor/issuedInvoicesSiiData/{id}",
       "supportedFilters": []
@@ -104,10 +119,10 @@ export const api = {
     "receivedInvoices": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/receivedInvoices",
       "detailUrl": "/sws/neo/sii-monitor/receivedInvoices/{id}",
       "supportedFilters": []
@@ -115,10 +130,10 @@ export const api = {
     "receivedInvoicesSiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/receivedInvoicesSiiData",
       "detailUrl": "/sws/neo/sii-monitor/receivedInvoicesSiiData/{id}",
       "supportedFilters": []
@@ -126,10 +141,10 @@ export const api = {
     "cashCriterionPayments": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/cashCriterionPayments",
       "detailUrl": "/sws/neo/sii-monitor/cashCriterionPayments/{id}",
       "supportedFilters": []
@@ -137,10 +152,10 @@ export const api = {
     "paymentsSiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/paymentsSiiData",
       "detailUrl": "/sws/neo/sii-monitor/paymentsSiiData/{id}",
       "supportedFilters": []
@@ -148,10 +163,10 @@ export const api = {
     "issuedInvoices(previousPeriod)": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)",
       "detailUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}",
       "supportedFilters": []
@@ -159,10 +174,10 @@ export const api = {
     "issuedInvoices(previousPeriod)SiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData",
       "detailUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData/{id}",
       "supportedFilters": []
@@ -170,10 +185,10 @@ export const api = {
     "receivedInvoices(previousPeriod)": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)",
       "detailUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}",
       "supportedFilters": []
@@ -181,10 +196,10 @@ export const api = {
     "receivedInvoices(previousPeriod)SiiData": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData",
       "detailUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData/{id}",
       "supportedFilters": []
@@ -213,7 +228,15 @@ export const api = {
       "column": "FIN_Paymentmethod_ID",
       "reference": "Paymentmethod",
       "inputMode": "selector",
-      "url": "/sws/neo/sii-monitor/issuedInvoices/selectors/paymentMethod"
+      "url": "/sws/neo/sii-monitor/issuedInvoices/selectors/paymentMethod",
+      "context": {
+        "optional": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
     },
     {
       "entity": "issuedInvoicesSiiData",
@@ -253,7 +276,15 @@ export const api = {
       "column": "FIN_Paymentmethod_ID",
       "reference": "Paymentmethod",
       "inputMode": "selector",
-      "url": "/sws/neo/sii-monitor/receivedInvoices/selectors/paymentMethod"
+      "url": "/sws/neo/sii-monitor/receivedInvoices/selectors/paymentMethod",
+      "context": {
+        "optional": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
     },
     {
       "entity": "receivedInvoicesSiiData",
@@ -357,7 +388,15 @@ export const api = {
       "column": "FIN_Paymentmethod_ID",
       "reference": "Paymentmethod",
       "inputMode": "selector",
-      "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/selectors/paymentMethod"
+      "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/selectors/paymentMethod",
+      "context": {
+        "optional": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
     },
     {
       "entity": "issuedInvoices(previousPeriod)SiiData",
@@ -397,7 +436,15 @@ export const api = {
       "column": "FIN_Paymentmethod_ID",
       "reference": "Paymentmethod",
       "inputMode": "selector",
-      "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/selectors/paymentMethod"
+      "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/selectors/paymentMethod",
+      "context": {
+        "optional": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
     },
     {
       "entity": "receivedInvoices(previousPeriod)SiiData",
@@ -598,6 +645,30 @@ export const api = {
       "processType": "classic"
     },
     {
+      "entity": "issuedInvoices",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "issuedInvoices",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "issuedInvoices",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
+      "processType": "obuiapp"
+    },
+    {
       "entity": "receivedInvoices",
       "field": "aeatsiiSend",
       "column": "EM_Aeatsii_Send",
@@ -744,6 +815,30 @@ export const api = {
       "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/processNow",
       "processId": "111",
       "processType": "classic"
+    },
+    {
+      "entity": "receivedInvoices",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "receivedInvoices",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "receivedInvoices",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
+      "processType": "obuiapp"
     },
     {
       "entity": "cashCriterionPayments",
@@ -902,6 +997,30 @@ export const api = {
       "processType": "classic"
     },
     {
+      "entity": "issuedInvoices(previousPeriod)",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "issuedInvoices(previousPeriod)",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "issuedInvoices(previousPeriod)",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
+      "processType": "obuiapp"
+    },
+    {
       "entity": "receivedInvoices(previousPeriod)",
       "field": "aeatsiiSend",
       "column": "EM_Aeatsii_Send",
@@ -1048,6 +1167,30 @@ export const api = {
       "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/processNow",
       "processId": "111",
       "processType": "classic"
+    },
+    {
+      "entity": "receivedInvoices(previousPeriod)",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "receivedInvoices(previousPeriod)",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "receivedInvoices(previousPeriod)",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -1064,14 +1207,23 @@ export const api = {
     "parentFilter": "parentId={id} for child entities"
   },
   "window": {
-    "category": "monitor"
+    "category": "monitor",
+    "readOnly": true
   }
 };
 
 // @sf-generated-start component:OrganizationsPage
 export default function OrganizationsPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('FEF76C3E0F104F06A89AAD15A4A4A35C');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="FEF76C3E0F104F06A89AAD15A4A4A35C" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="organizations"
         detailEntity="issuedInvoices"
@@ -1082,6 +1234,7 @@ export default function OrganizationsPage({ windowName, recordId, ...props }) {
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        detailProcesses={detailProcesses}
         addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Organizations"
@@ -1091,8 +1244,9 @@ export default function OrganizationsPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -1104,8 +1258,9 @@ export default function OrganizationsPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hideCreate
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

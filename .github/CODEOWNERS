@@ -1,12 +1,62 @@
-# Core review ownership.
-#
-# Branch protection/rulesets should enable "Require review from Code Owners".
-# With that setting, changes outside artifacts/ block merge until the required
-# branch-rule approvals are present, without failing a CI check.
+# Monorepo ownership follows the same intent scopes enforced by
+# domain-boundary-check. Replace these handles with narrower GitHub teams as
+# they become available; branch protection should require CODEOWNER review.
 * @sebastianbarrozo @valenvivaldi
 
-# Generated/window artifacts do not need the core owner gate by themselves.
-/artifacts/
+# App shell / platform.
+/tools/app-shell/ @sebastianbarrozo @valenvivaldi
+
+# CLI, generators, contracts, schemas, and pipeline tooling.
+/cli/ @sebastianbarrozo @valenvivaldi
+/schemas/ @sebastianbarrozo @valenvivaldi
+/templates/ @sebastianbarrozo @valenvivaldi
+/core-maps/ @sebastianbarrozo @valenvivaldi
+/quality-gate.config.json @sebastianbarrozo @valenvivaldi
+
+# SDK and external app surfaces.
+/packages/ @sebastianbarrozo @valenvivaldi
+/packages/app-shell-core/ @sebastianbarrozo @valenvivaldi
+/tools/quick-order-app/ @sebastianbarrozo @valenvivaldi
+/tools/spike-hello-app/ @sebastianbarrozo @valenvivaldi
+
+# Window and vertical artifacts. These entries intentionally group by delivery
+# domain while the CI gate enforces per-window intent.
+/artifacts/sales*/ @sebastianbarrozo @valenvivaldi
+/artifacts/print-sales*/ @sebastianbarrozo @valenvivaldi
+/artifacts/goods-shipment/ @sebastianbarrozo @valenvivaldi
+/artifacts/purchase*/ @sebastianbarrozo @valenvivaldi
+/artifacts/print-purchase*/ @sebastianbarrozo @valenvivaldi
+/artifacts/goods-receipt/ @sebastianbarrozo @valenvivaldi
+/artifacts/inventory*/ @sebastianbarrozo @valenvivaldi
+/artifacts/warehouse*/ @sebastianbarrozo @valenvivaldi
+/artifacts/physical-inventory/ @sebastianbarrozo @valenvivaldi
+/artifacts/product*/ @sebastianbarrozo @valenvivaldi
+/artifacts/fiscal*/ @sebastianbarrozo @valenvivaldi
+/artifacts/sii*/ @sebastianbarrozo @valenvivaldi
+/artifacts/tbai*/ @sebastianbarrozo @valenvivaldi
+/artifacts/verifactu*/ @sebastianbarrozo @valenvivaldi
+/artifacts/monitor-verifactu/ @sebastianbarrozo @valenvivaldi
+/artifacts/tax*/ @sebastianbarrozo @valenvivaldi
+/artifacts/payment*/ @sebastianbarrozo @valenvivaldi
+/artifacts/bank-reconciliation/ @sebastianbarrozo @valenvivaldi
+/artifacts/chart-of-accounts/ @sebastianbarrozo @valenvivaldi
+/artifacts/report*/ @sebastianbarrozo @valenvivaldi
+/artifacts/balance-sheet/ @sebastianbarrozo @valenvivaldi
+/artifacts/profit-loss/ @sebastianbarrozo @valenvivaldi
+/artifacts/contacts/ @sebastianbarrozo @valenvivaldi
+/artifacts/business-partner/ @sebastianbarrozo @valenvivaldi
+/artifacts/lead/ @sebastianbarrozo @valenvivaldi
+/artifacts/activity/ @sebastianbarrozo @valenvivaldi
+/artifacts/deal/ @sebastianbarrozo @valenvivaldi
+
+# Repo infrastructure and CI policy.
+/.github/ @sebastianbarrozo @valenvivaldi
+/pipelines/ @sebastianbarrozo @valenvivaldi
+/infra/ @sebastianbarrozo @valenvivaldi
+/scripts/ @sebastianbarrozo @valenvivaldi
+/Makefile @sebastianbarrozo @valenvivaldi
+/package.json @sebastianbarrozo @valenvivaldi
+/package-lock.json @sebastianbarrozo @valenvivaldi
 
 # Keep ownership on this policy file explicit.
 /.github/CODEOWNERS @sebastianbarrozo @valenvivaldi

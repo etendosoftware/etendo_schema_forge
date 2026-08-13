@@ -1,0 +1,283 @@
+// Auto-generated mock data - do not edit manually
+
+export const header = [
+  {
+    "id": "mock-header-001",
+    "name": "Sample name",
+    "description": "Standard order for Q1 delivery",
+    "accountingDate": "2026-01-15",
+    "startingDate": "2026-01-15",
+    "totalAmortization": 99.44,
+    "currency": "USD",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-002",
+    "name": "Sample name",
+    "description": "Rush order - priority shipping required",
+    "accountingDate": "2026-01-16",
+    "startingDate": "2026-01-16",
+    "totalAmortization": 96.94,
+    "currency": "EUR",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-003",
+    "name": "Sample name",
+    "description": "Bulk purchase for warehouse restocking",
+    "accountingDate": "2026-01-17",
+    "startingDate": "2026-01-17",
+    "totalAmortization": 12.48,
+    "currency": "GBP",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-004",
+    "name": "Sample name",
+    "description": "Sample order for client evaluation",
+    "accountingDate": "2026-01-18",
+    "startingDate": "2026-01-18",
+    "totalAmortization": 96.31,
+    "currency": "USD",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-005",
+    "name": "Sample name",
+    "description": "Recurring monthly supply order",
+    "accountingDate": "2026-01-19",
+    "startingDate": "2026-01-19",
+    "totalAmortization": 31.27,
+    "currency": "EUR",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-006",
+    "name": "Sample name",
+    "description": "Special pricing agreement applies",
+    "accountingDate": "2026-01-20",
+    "startingDate": "2026-01-20",
+    "totalAmortization": 76.52,
+    "currency": "GBP",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-007",
+    "name": "Sample name",
+    "description": "Consolidated order from multiple requests",
+    "accountingDate": "2026-01-21",
+    "startingDate": "2026-01-21",
+    "totalAmortization": 2.66,
+    "currency": "USD",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-008",
+    "name": "Sample name",
+    "description": "Trial order for new product line",
+    "accountingDate": "2026-01-22",
+    "startingDate": "2026-01-22",
+    "totalAmortization": 10.03,
+    "currency": "EUR",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-009",
+    "name": "Sample name",
+    "description": "Replacement for damaged goods",
+    "accountingDate": "2026-01-23",
+    "startingDate": "2026-01-23",
+    "totalAmortization": 93.97,
+    "currency": "GBP",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-010",
+    "name": "Sample name",
+    "description": "Pre-season inventory build-up",
+    "accountingDate": "2026-01-24",
+    "startingDate": "2026-01-24",
+    "totalAmortization": 1.1,
+    "currency": "USD",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-011",
+    "name": "Sample name",
+    "description": "Customer-specific configuration",
+    "accountingDate": "2026-01-25",
+    "startingDate": "2026-01-25",
+    "totalAmortization": 79.99,
+    "currency": "EUR",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  },
+  {
+    "id": "mock-header-012",
+    "name": "Sample name",
+    "description": "Government contract fulfillment",
+    "accountingDate": "2026-01-26",
+    "startingDate": "2026-01-26",
+    "totalAmortization": 53.61,
+    "currency": "GBP",
+    "processed": "Sample processed",
+    "posted": "Sample posted",
+    "project": "Sample project"
+  }
+];
+
+export const lines = [
+  {
+    "id": "mock-lines-001",
+    "asset": "Sample asset",
+    "amortizationPercentage": 99.44,
+    "amortizationAmount": 38907,
+    "currency": "USD",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Acme Corp",
+    "headerId": "mock-header-001"
+  },
+  {
+    "id": "mock-lines-002",
+    "asset": "Sample asset",
+    "amortizationPercentage": 96.94,
+    "amortizationAmount": 9306,
+    "currency": "EUR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "TechFlow Inc",
+    "headerId": "mock-header-002"
+  },
+  {
+    "id": "mock-lines-003",
+    "asset": "Sample asset",
+    "amortizationPercentage": 12.48,
+    "amortizationAmount": 11544,
+    "currency": "GBP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Global Trade Ltd",
+    "headerId": "mock-header-003"
+  },
+  {
+    "id": "mock-lines-004",
+    "asset": "Sample asset",
+    "amortizationPercentage": 96.31,
+    "amortizationAmount": 11872,
+    "currency": "USD",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Summit Industries",
+    "headerId": "mock-header-004"
+  },
+  {
+    "id": "mock-lines-005",
+    "asset": "Sample asset",
+    "amortizationPercentage": 31.27,
+    "amortizationAmount": 48460,
+    "currency": "EUR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Pacific Partners",
+    "headerId": "mock-header-005"
+  },
+  {
+    "id": "mock-lines-006",
+    "asset": "Sample asset",
+    "amortizationPercentage": 76.52,
+    "amortizationAmount": 45418,
+    "currency": "GBP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Alpine Solutions",
+    "headerId": "mock-header-006"
+  },
+  {
+    "id": "mock-lines-007",
+    "asset": "Sample asset",
+    "amortizationPercentage": 2.66,
+    "amortizationAmount": 33840,
+    "currency": "USD",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Meridian Group",
+    "headerId": "mock-header-007"
+  },
+  {
+    "id": "mock-lines-008",
+    "asset": "Sample asset",
+    "amortizationPercentage": 10.03,
+    "amortizationAmount": 25716,
+    "currency": "EUR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Vertex Systems",
+    "headerId": "mock-header-008"
+  },
+  {
+    "id": "mock-lines-009",
+    "asset": "Sample asset",
+    "amortizationPercentage": 93.97,
+    "amortizationAmount": 44780,
+    "currency": "GBP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Atlas Manufacturing",
+    "headerId": "mock-header-009"
+  },
+  {
+    "id": "mock-lines-010",
+    "asset": "Sample asset",
+    "amortizationPercentage": 1.1,
+    "amortizationAmount": 12483,
+    "currency": "USD",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Nova Enterprises",
+    "headerId": "mock-header-010"
+  },
+  {
+    "id": "mock-lines-011",
+    "asset": "Sample asset",
+    "amortizationPercentage": 79.99,
+    "amortizationAmount": 46022,
+    "currency": "EUR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Pinnacle Services",
+    "headerId": "mock-header-011"
+  },
+  {
+    "id": "mock-lines-012",
+    "asset": "Sample asset",
+    "amortizationPercentage": 53.61,
+    "amortizationAmount": 38634,
+    "currency": "GBP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
+    "eTADASBpartner": "Horizon Labs",
+    "headerId": "mock-header-012"
+  }
+];

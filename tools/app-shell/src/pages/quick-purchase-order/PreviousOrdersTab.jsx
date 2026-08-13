@@ -15,7 +15,9 @@ export default function PreviousOrdersTab({ supplierId, onRepeatOrder, orders: a
   if (orders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-        <Package className="h-10 w-10 text-muted-foreground/30 mb-3" />
+        <Package
+          className="h-10 w-10 text-muted-foreground/30 mb-3"
+          data-testid="Package__1c6dc4" />
         <p className="text-sm font-medium text-muted-foreground">{ui('qpoNoPreviousOrders')}</p>
         <p className="text-xs text-muted-foreground/60 mt-1">{ui('qpoNoPreviousOrdersHint')}</p>
       </div>
@@ -35,7 +37,7 @@ export default function PreviousOrdersTab({ supplierId, onRepeatOrder, orders: a
             <Badge
               variant={order.status === 'delivered' ? 'secondary' : order.status === 'voided' ? 'destructive' : 'outline'}
               className="text-[10px]"
-            >
+              data-testid="Badge__1c6dc4">
               {order.status}
             </Badge>
           </div>
@@ -63,8 +65,8 @@ export default function PreviousOrdersTab({ supplierId, onRepeatOrder, orders: a
               size="sm"
               className="h-7 text-xs gap-1"
               onClick={() => onRepeatOrder(order)}
-            >
-              <RotateCcw className="h-3 w-3" />
+              data-testid="Button__1c6dc4">
+              <RotateCcw className="h-3 w-3" data-testid="RotateCcw__1c6dc4" />
               {ui('qpoRepeatOrder')}
             </Button>
           </div>

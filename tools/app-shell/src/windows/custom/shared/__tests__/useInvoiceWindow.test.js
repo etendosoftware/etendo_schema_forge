@@ -28,6 +28,23 @@ describe('useInvoiceWindow', () => {
     it('resolves the label via the ui() translator', () => {
       assert.equal(getInvoiceDraftMode(fakeUi).label, '__confirm__');
     });
+
+    describe('processingModal (Verifactu ~8s GenerateRF loading modal)', () => {
+      it('returns a processingModal with the i18n-resolved body when showVerifactuProcessingModal is true', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, { showVerifactuProcessingModal: true });
+        assert.deepEqual(draftMode.processingModal, { body: '__fiscal.verifactu.processing.body__' });
+      });
+
+      it('returns processingModal: null when showVerifactuProcessingModal is explicitly false', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, { showVerifactuProcessingModal: false });
+        assert.equal(draftMode.processingModal, null);
+      });
+
+      it('returns processingModal: null when called with no options arg (existing purchase-invoice call shape)', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi);
+        assert.equal(draftMode.processingModal, null);
+      });
+    });
   });
 
   describe('buildInvoiceRowQuickActions', () => {
@@ -84,6 +101,20 @@ describe('useInvoiceWindow', () => {
     it('accepts null as setEmailRow when showEmail is false (no ReferenceError)', () => {
       const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, null, () => {}, { showEmail: false });
       assert.equal(result.onEmail, undefined);
+    });
+
+    // ETP-4717 — this function builds rowQuickActions by hand (bypassing the
+    // generated contract's rowQuickActions.actions.email.visibleWhen), so the
+    // gate must be asserted here directly. Regression: without it, the Grid
+    // "Enviar" (email) quick action shows on every row regardless of status.
+    it('gates the row-hover email quick action to Confirmed invoices (CO) when showEmail is true (default, sales-invoice)', () => {
+      const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+      assert.equal(result.actions.email.visibleWhen, "@DocumentStatus@='CO'");
+    });
+
+    it('does not set visibleWhen on the email action when showEmail is false (purchase-invoice stays unaffected)', () => {
+      const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, { showEmail: false });
+      assert.equal('visibleWhen' in result.actions.email, false);
     });
   });
 

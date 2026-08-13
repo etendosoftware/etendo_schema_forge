@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, FileText, Truck, DollarSign, CreditCard, ShoppingBag, Box, Circle } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
+import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 
 const CATEGORY_MAP = {
   overdueInvoices:               { category: 'sales',       icon: FileText,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'   },
@@ -20,12 +21,12 @@ const CATEGORY_MAP = {
 };
 
 const STATUS_BADGE_STYLES = {
-  sales:       { backgroundColor: '#FEF0F4', color: '#D50B3E', borderColor: '#FBB1C4' },
-  collections: { backgroundColor: '#FFF9EB', color: '#8A6100', borderColor: '#FFDA85' },
-  payments:    { backgroundColor: '#FFF9EB', color: '#8A6100', borderColor: '#FFDA85' },
-  purchases:   { backgroundColor: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' },
-  stock:       { backgroundColor: '#FFF7ED', color: '#C2410C', borderColor: '#FED7AA' },
-  other:       { backgroundColor: '#F5F7F9', color: '#6C6C89', borderColor: '#E8EAEF' },
+  sales:       { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))', borderColor: 'hsl(var(--destructive) / 0.3)' },
+  collections: { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
+  payments:    { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
+  purchases:   { backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', borderColor: 'var(--status-info-border)' },
+  stock:       { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
+  other:       { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border-subtle))' },
 };
 
 function resolveTaskMeta(task) {
@@ -45,13 +46,13 @@ export function PendingTasksRail({ tasks = [] }) {
   };
 
   return (
-    <div className="rounded-lg border overflow-hidden bg-white flex flex-col h-full">
-      {/* Cabecera: #F5F7F9 bg, 48px, border-bottom #E8EAEF, padding 8px 12px */}
+    <div className="rounded-lg border overflow-hidden bg-card flex flex-col h-full">
+      {/* Cabecera: hsl(var(--muted)) bg, 48px, border-bottom hsl(var(--border-subtle)), padding 8px 12px */}
       <div
         className="flex items-center justify-between border-b"
-        style={{ backgroundColor: '#F5F7F9', borderBottomColor: '#E8EAEF', padding: '8px 12px', minHeight: '48px' }}
+        style={{ backgroundColor: 'hsl(var(--muted))', borderBottomColor: 'hsl(var(--border-subtle))', padding: '8px 12px', minHeight: '48px' }}
       >
-        <span className="text-xs font-medium uppercase" style={{ color: '#282833', letterSpacing: 0 }}>
+        <span className="text-xs font-medium uppercase" style={{ color: 'hsl(var(--foreground))', letterSpacing: 0 }}>
           {ui('pendingTasksTitle')}
         </span>
         {tasks.length > 0 && (
@@ -59,29 +60,34 @@ export function PendingTasksRail({ tasks = [] }) {
             <button
               type="button"
               onClick={() => scroll(-1)}
-              className="h-8 w-8 rounded-full border bg-white flex items-center justify-center hover:bg-gray-50 transition-colors"
+              className="h-8 w-8 rounded-full border bg-card flex items-center justify-center hover:bg-muted transition-colors"
             >
-              <ChevronLeft className="h-3.5 w-3.5" style={{ color: '#6C6C89' }} />
+              <ChevronLeft
+                className="h-3.5 w-3.5"
+                style={{ color: 'hsl(var(--muted-foreground))' }}
+                data-testid="ChevronLeft__7e1000" />
             </button>
             <button
               type="button"
               onClick={() => scroll(1)}
-              className="h-8 w-8 rounded-full border bg-white flex items-center justify-center hover:bg-gray-50 transition-colors"
+              className="h-8 w-8 rounded-full border bg-card flex items-center justify-center hover:bg-muted transition-colors"
             >
-              <ChevronRight className="h-3.5 w-3.5" style={{ color: '#6C6C89' }} />
+              <ChevronRight
+                className="h-3.5 w-3.5"
+                style={{ color: 'hsl(var(--muted-foreground))' }}
+                data-testid="ChevronRight__7e1000" />
             </button>
           </div>
         )}
       </div>
-
       {/* Cards rail / empty state */}
       {tasks.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center" style={{ gap: '4px', width: '340px' }}>
-            <p style={{ fontSize: '20px', fontWeight: 600, lineHeight: '28px', textAlign: 'center', color: '#121217' }}>
+            <p style={{ fontSize: '20px', fontWeight: 600, lineHeight: '28px', textAlign: 'center', color: 'hsl(var(--foreground))' }}>
               {ui('pendingTasksEmptyTitle')}
             </p>
-            <p style={{ fontSize: '12px', fontWeight: 400, lineHeight: '16px', textAlign: 'center', color: '#282833' }}>
+            <p style={{ fontSize: '12px', fontWeight: 400, lineHeight: '16px', textAlign: 'center', color: 'hsl(var(--foreground))' }}>
               {ui('pendingTasksEmptySubtitle')}
             </p>
           </div>
@@ -105,9 +111,15 @@ export function PendingTasksRail({ tasks = [] }) {
                 <Link
                   key={i}
                   to={target}
-                  className="flex-none flex flex-col rounded-lg border bg-white hover:bg-[#F5F7F9] hover:shadow-sm transition-colors transition-shadow"
-                  style={{ minWidth: '185px', height: '154px', borderColor: '#E8EAEF' }}
-                >
+                  onClick={() => trackDashboardKpi('pending_task_opened', {
+                    kpiId: DASHBOARD_KPI_IDS.pendingTasks,
+                    action: 'open_pending_task',
+                    source: 'dashboard_pending_tasks',
+                    type: meta.category === 'stock' ? 'inventory' : meta.category,
+                  })}
+                  className="flex-none flex flex-col rounded-lg border bg-card hover:bg-[hsl(var(--muted))] hover:shadow-sm transition-colors transition-shadow"
+                  style={{ minWidth: '185px', height: '154px', borderColor: 'hsl(var(--border-subtle))' }}
+                  data-testid="Link__7e1000">
                   {/* Cabecera de tarjeta: 44px fijo, padding top 4px / right 4px / left 16px, gap 10px */}
                   <div
                     className="flex items-center shrink-0"
@@ -115,21 +127,23 @@ export function PendingTasksRail({ tasks = [] }) {
                   >
                     <div
                       className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: 'rgba(18,18,23,0.05)' }}
+                      style={{ backgroundColor: 'hsl(var(--foreground) / 0.05)' }}
                     >
-                      <Icon className="h-3.5 w-3.5" style={{ color: '#3F3F50' }} />
+                      <Icon
+                        className="h-3.5 w-3.5"
+                        style={{ color: 'hsl(var(--muted-foreground))' }}
+                        data-testid="Icon__7e1000" />
                     </div>
-                    <span className="text-sm font-normal" style={{ color: '#3F3F50' }}>
+                    <span className="text-sm font-normal" style={{ color: 'hsl(var(--muted-foreground))' }}>
                       {subjectLabel}
                     </span>
                   </div>
-
                   {/* Contenido: fill ~110px, padding 0 16px 16px 16px, número arriba, badge abajo */}
                   <div
                     className="flex flex-col justify-between flex-1"
                     style={{ padding: '0 16px 16px 16px' }}
                   >
-                    <p className="text-5xl font-medium tabular-nums leading-none" style={{ color: '#121217' }}>
+                    <p className="text-5xl font-medium tabular-nums leading-none" style={{ color: 'hsl(var(--foreground))' }}>
                       {task.count ?? 0}
                     </p>
                     <span

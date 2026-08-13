@@ -12,7 +12,14 @@ export const finPayment = [
     "amount": 38907,
     "account": "Sample account",
     "currency": "USD",
-    "status": "DR"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "DR",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-002",
@@ -25,7 +32,14 @@ export const finPayment = [
     "amount": 9306,
     "account": "Sample account",
     "currency": "EUR",
-    "status": "CO"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "CO",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-003",
@@ -38,7 +52,14 @@ export const finPayment = [
     "amount": 11544,
     "account": "Sample account",
     "currency": "GBP",
-    "status": "VO"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "VO",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-004",
@@ -51,7 +72,14 @@ export const finPayment = [
     "amount": 11872,
     "account": "Sample account",
     "currency": "USD",
-    "status": "IP"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "IP",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-005",
@@ -64,7 +92,14 @@ export const finPayment = [
     "amount": 48460,
     "account": "Sample account",
     "currency": "EUR",
-    "status": "DR"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "DR",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-006",
@@ -77,7 +112,14 @@ export const finPayment = [
     "amount": 45418,
     "account": "Sample account",
     "currency": "GBP",
-    "status": "CO"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "CO",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-007",
@@ -90,7 +132,14 @@ export const finPayment = [
     "amount": 33840,
     "account": "Sample account",
     "currency": "USD",
-    "status": "VO"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "VO",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-008",
@@ -103,7 +152,14 @@ export const finPayment = [
     "amount": 25716,
     "account": "Sample account",
     "currency": "EUR",
-    "status": "IP"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "IP",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-009",
@@ -116,7 +172,14 @@ export const finPayment = [
     "amount": 44780,
     "account": "Sample account",
     "currency": "GBP",
-    "status": "DR"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "DR",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-010",
@@ -129,7 +192,14 @@ export const finPayment = [
     "amount": 12483,
     "account": "Sample account",
     "currency": "USD",
-    "status": "CO"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "CO",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-011",
@@ -142,7 +212,14 @@ export const finPayment = [
     "amount": 46022,
     "account": "Sample account",
     "currency": "EUR",
-    "status": "VO"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "VO",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-012",
@@ -155,7 +232,14 @@ export const finPayment = [
     "amount": 38634,
     "account": "Sample account",
     "currency": "GBP",
-    "status": "IP"
+    "aPRMProcessPayment": "Sample aPRMProcessPayment",
+    "status": "IP",
+    "creationDate": "Sample creationDate",
+    "updated": "Sample updated",
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   }
 ];
 
@@ -163,85 +247,109 @@ export const finPaymentScheduleDetail = [
   {
     "id": "mock-finPaymentScheduleDetail-001",
     "dueDate": "2026-01-15",
+    "expected": 38907,
     "amount": 38907,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00001",
     "finPaymentId": "mock-finPayment-001"
   },
   {
     "id": "mock-finPaymentScheduleDetail-002",
     "dueDate": "2026-01-16",
+    "expected": 9306,
     "amount": 9306,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00002",
     "finPaymentId": "mock-finPayment-002"
   },
   {
     "id": "mock-finPaymentScheduleDetail-003",
     "dueDate": "2026-01-17",
+    "expected": 11544,
     "amount": 11544,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00003",
     "finPaymentId": "mock-finPayment-003"
   },
   {
     "id": "mock-finPaymentScheduleDetail-004",
     "dueDate": "2026-01-18",
+    "expected": 11872,
     "amount": 11872,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00004",
     "finPaymentId": "mock-finPayment-004"
   },
   {
     "id": "mock-finPaymentScheduleDetail-005",
     "dueDate": "2026-01-19",
+    "expected": 48460,
     "amount": 48460,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00005",
     "finPaymentId": "mock-finPayment-005"
   },
   {
     "id": "mock-finPaymentScheduleDetail-006",
     "dueDate": "2026-01-20",
+    "expected": 45418,
     "amount": 45418,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00006",
     "finPaymentId": "mock-finPayment-006"
   },
   {
     "id": "mock-finPaymentScheduleDetail-007",
     "dueDate": "2026-01-21",
+    "expected": 33840,
     "amount": 33840,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00007",
     "finPaymentId": "mock-finPayment-007"
   },
   {
     "id": "mock-finPaymentScheduleDetail-008",
     "dueDate": "2026-01-22",
+    "expected": 25716,
     "amount": 25716,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00008",
     "finPaymentId": "mock-finPayment-008"
   },
   {
     "id": "mock-finPaymentScheduleDetail-009",
     "dueDate": "2026-01-23",
+    "expected": 44780,
     "amount": 44780,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00009",
     "finPaymentId": "mock-finPayment-009"
   },
   {
     "id": "mock-finPaymentScheduleDetail-010",
     "dueDate": "2026-01-24",
+    "expected": 12483,
     "amount": 12483,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00010",
     "finPaymentId": "mock-finPayment-010"
   },
   {
     "id": "mock-finPaymentScheduleDetail-011",
     "dueDate": "2026-01-25",
+    "expected": 46022,
     "amount": 46022,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00011",
     "finPaymentId": "mock-finPayment-011"
   },
   {
     "id": "mock-finPaymentScheduleDetail-012",
     "dueDate": "2026-01-26",
+    "expected": 38634,
     "amount": 38634,
     "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "invoiceDocumentNo": "FI-00012",
     "finPaymentId": "mock-finPayment-012"
   }
 ];

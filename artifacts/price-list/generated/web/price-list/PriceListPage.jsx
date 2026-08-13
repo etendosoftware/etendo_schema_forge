@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import PriceListTable from './PriceListTable';
 import PriceListForm from './PriceListForm';
 import PriceListVersionTable from './PriceListVersionTable';
@@ -10,27 +12,19 @@ import catalogs from './mockCatalogs';
 
 const breadcrumb = 'Settings / Price List';
 
-const labelOverrides = {
-  "es_ES": {
-    "Name": "Nombre",
-    "C_Currency_ID": "Moneda",
-    "Costbased": "Basado en coste",
-    "IsTaxIncluded": "Precio incluye impuesto",
-    "IsDefault": "Por defecto"
-  }
-};
-
 
 // @sf-generated-start summary:priceList
 const summary = [
-
+  { key: 'currency', column: 'C_Currency_ID', type: 'selector' },
 ];
 
 const statusField = null;
 // @sf-generated-end summary:priceList
 
 // @sf-generated-start extraBadges:priceList
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:priceList
 
 // @sf-generated-start processes:priceList
@@ -39,12 +33,18 @@ const processes = [
 ];
 // @sf-generated-end processes:priceList
 
+// @sf-generated-start detailProcesses:priceListVersion
+const detailProcesses = [
+  { name: 'create', label: 'Create Price List', style: 'positive' },
+];
+// @sf-generated-end detailProcesses:priceListVersion
+
 // @sf-generated-start draftMode:priceList
 const draftMode = null;
 // @sf-generated-end draftMode:priceList
 
 // @sf-generated-start requiredHeaderFields:priceList
-const requiredHeaderFields = ['name', 'currency', 'salesPriceList', 'costBasedPriceList', 'priceIncludesTax', 'default'];
+const requiredHeaderFields = ['name', 'salesPriceList', 'default', 'active', 'currency'];
 // @sf-generated-end requiredHeaderFields:priceList
 
 // @sf-generated-start addLineFields:priceListVersion
@@ -178,17 +178,29 @@ export const api = {
     "es_ES": {
       "Name": "Nombre",
       "C_Currency_ID": "Moneda",
+      "IsSOPriceList": "Tarifa de venta",
       "Costbased": "Basado en coste",
       "IsTaxIncluded": "Precio incluye impuesto",
-      "IsDefault": "Por defecto"
+      "IsDefault": "Por defecto",
+      "IsActive": "Activo"
     }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:PriceListPage
 export default function PriceListPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('146');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="146" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="priceList"
         detailEntity="priceListVersion"
@@ -199,6 +211,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        detailProcesses={detailProcesses}
         addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Price List"
@@ -212,8 +225,9 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_PriceList", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
-        {...props}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -229,7 +243,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
       hideMoreMenu
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

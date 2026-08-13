@@ -54,6 +54,17 @@ With 35+ windows, the total built output (before gzip) is expected in the 2-4 MB
 - `buildWindowMap()` -- maps each slug to a `{ name, label, loader }` object
 - `getAllWindowNames()` -- flat list of all window slugs
 
+The sidebar additionally filters itself by the current role's actual window/process
+access, sourced from the `SFListMenu` webhook. `AppLayout.jsx` calls `useRoleMenu()`
+(`hooks/useRoleMenu.js`), which fetches the role-pruned AD_Menu tree once per
+authenticated session and reduces it to an allowed-id set (`lib/menuTree.js`).
+`registry.js`'s `filterMenuGroupsByAccess()` then filters the `buildMenuGroups()`
+output against that set. See
+[docs/generated-custom-windows/app-shell-functional-flows.md](../generated-custom-windows/app-shell-functional-flows.md#2-authenticated-shell-and-navigation-chrome)
+for the full behavioral contract, and
+[07 -- Authentication and Security: Window Access](07-auth-and-security.md#window-access)
+for the RBAC model it mirrors.
+
 The registry is evaluated once at boot (`useState(() => buildWindowMap())`). Adding a new window requires:
 1. Adding the window to `menu.json`
 2. Adding a loader entry in `windowLoaders` (or it falls back to `PlaceholderWindow`)
@@ -129,6 +140,7 @@ This means:
 - Registration is injected by the plugin in the built HTML; the app entrypoint does not call `navigator.serviceWorker.register(...)` directly
 - New service workers activate immediately once installed
 - `cleanupOutdatedCaches: true` removes old precache entries on activation
+- The default `maximumFileSizeToCacheInBytes` (2 MiB) applies; assets larger than that (e.g. the app-shell bundle with generated runtime and injected locale dictionaries) are skipped from precache rather than raising the limit, which lengthens the SW install window in production and widens the race window for `useServiceWorker`'s `controllerchange` reload to land mid-navigation (see ETP-4425)
 - The app polls `registration.update()` on tab focus and route changes; once the controller changes, it reloads automatically
 
 ### Service Worker Lifecycle

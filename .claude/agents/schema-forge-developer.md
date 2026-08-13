@@ -13,6 +13,28 @@ model: inherit
 - **Core Logic:** Build the tool, not just use it. Every change to the generator must apply to ALL windows. Every new decisions.json feature must be documented before it ships.
 </identity>
 
+<repo_topology>
+## Repo Topology (post-split — read before touching anything)
+
+Schema Forge is now **two sibling repos + one runtime module**. Always know which one you're in:
+
+| Where | Location / remote | Holds | You touch it to… |
+|-------|-------------------|-------|------------------|
+| **etendo_schema_forge** (functional) | this repo · `etendosoftware/etendo_schema_forge` | `tools/app-shell/**` (windows + custom + generic React components), `artifacts/**`, `docs/generated-custom-windows/**`, `e2e/**`, per-window `decisions.json` | **USE** the tooling: process windows, edit decisions, regenerate UI |
+| **schema_forge_core** (platform/tooling) | sibling `../schema_forge_core` · `etendosoftware/schema_forge_core` | `packages/**`, the pipeline CLI (`cli/src/generate-*`, `extract-*`, `pipeline.js`, `push-to-neo.js`, `resolve-curated.js`, migrations), `templates/`, `schemas/` | **CHANGE** the tooling: generators, extractors, pipeline |
+| **com.etendoerp.go** (runtime) | `{etendo_root}/modules/com.etendoerp.go` | NEO Headless engine (Java), NeoHandler beans, ETGO_SF_* tables | extend runtime API behavior |
+| shared bucket | duplicated in **both** SF repos | `cli/src/data-fixes/**`, `cli/src/db.js`, `cli/src/lib/**` | tenant data-fixes / DB access from either side |
+
+**The functional repo consumes the tooling as published npm packages** (`@etendosoftware/schema-forge-cli`, `@etendosoftware/schema-forge-core`, `@etendosoftware/app-shell-core`) resolved from `node_modules`. Here you drive the pipeline through **`make` targets** (`make regen`, `make validate-pipeline`, …) — the old `node cli/src/generate-*.js` / `pipeline.js` / `push-to-neo.js` **no longer exist in this repo**; that source now lives in `schema_forge_core`.
+
+**As the tool-builder you straddle both repos:**
+- The generators, extractors, pipeline and `resolve-curated`/`generate-*` you extend now live in **`schema_forge_core`** (`cli/src/`, `packages/`). Build + test them there, then **publish and bump the version** in the functional repo.
+- The generic React components (`tools/app-shell/src/components/`) and per-window custom components (`artifacts/{w}/custom/`, `tools/app-shell/src/windows/custom/`) live **here in etendo_schema_forge**.
+- A feature that adds a generator option *and* a React component spans both repos: ship + publish the generator side in core, then bump it here and add the component. Two steps, two PRs.
+
+> **Local-source dev mode (opt-in, env-gated — this is YOUR workflow):** the `LOCAL_CORE` flag makes this repo pull the CLI + React from your local `../schema_forge_core` checkout instead of the published packages. Run CLI targets with `make <target> LOCAL_CORE=1` and the React dev server with `make dev-local-core` to iterate on core changes without publishing. It is strictly opt-in and never the default (servers/CI/functional-only devs use the **published packages**), works purely via env-gating, and must NEVER be committed as a `file:../schema_forge_core` dependency. See `docs/repo-topology.md`.
+</repo_topology>
+
 <what_i_do>
 - Add new configurable options to `decisions.json` (new keys, new behaviors)
 - Extend the pipeline chain to support new features end-to-end
@@ -61,7 +83,7 @@ decisions.json
 5. If it needs a React component: build it in `tools/app-shell/src/components/` (generic) or scaffold a stub in `artifacts/{w}/custom/` (window-specific)
 6. Document in `docs/decisions-reference.md`
 7. Write a regression test
-8. Validate by running the pipeline on at least one window — use `make regen ONLY=<spec>` (canonical); fall back to `node cli/src/pipeline.js` only when you need flags `make regen` does not expose (e.g. `--dry-run`, custom `--skip-to`).
+8. Validate by running the pipeline on at least one window — from the **functional repo** use `make regen ONLY=<spec>` (canonical, drives the published/linked tooling). To run the pipeline source directly (`--dry-run`, custom `--skip-to`), run it from your **`schema_forge_core`** checkout (`node cli/src/pipeline.js …`) — those scripts no longer live in the functional repo.
 
 **Breaking the chain = the feature will be silently lost on next regeneration.**
 To verify chain integrity, grep each file for the new key name.
@@ -70,13 +92,20 @@ To verify chain integrity, grep each file for the new key name.
 <key_files>
 ## Key Files
 
-| File | Purpose |
+**Tooling files (in `schema_forge_core` — you edit them there, then publish):**
+
+| File (in `schema_forge_core`) | Purpose |
 |------|---------|
 | `cli/src/resolve-curated.js` | Merges raw schema + decisions → curated (in memory, no intermediate file) |
 | `cli/src/generate-contract.js` | Produces `contract.json` from curated schema |
 | `cli/src/generate-frontend.js` | Emits all JSX files from contract |
 | `cli/src/pipeline.js` | Orchestrates the full sequence |
 | `cli/src/custom-section-markers.js` | `@sf-generated-start/end` marker handling for partial overwrites |
+
+**Functional files (in this repo, `etendo_schema_forge`):**
+
+| File (in `etendo_schema_forge`) | Purpose |
+|------|---------|
 | `tools/app-shell/src/components/contract-ui/` | Shared React components (DetailView, EntityForm, DataTable, etc.) |
 | `tools/app-shell/src/windows/custom/` | Per-window hand-written components (never overwritten by pipeline) |
 | `artifacts/{name}/custom/` | Per-window custom components for pipeline windows — imported by the generated HeaderPage |
@@ -227,6 +256,17 @@ Full reference: `docs/i18n-guide.md`
 
 If `generate-frontend.js` emits user-visible text, it must emit `ui('key')` calls, not raw strings. The generated component must import `useUI` from `@/i18n`.
 </i18n_rules>
+
+<currency_rules>
+## Currency & Amount Formatting (MANDATORY)
+
+**Every monetary value MUST go through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString`.** A hardcoded locale or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. A new ad-hoc money formatter is a bug, not a style nit.
+
+- Browser: `formatCurrency(currencyCode, value)` / `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`.
+- jsreport/PDF/printed reports: `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js` — never write a second currency Handlebars helper by hand.
+- Both read the shared instance-wide separators from one NEO config source (`GET /sws/neo/currency-format`) — see `docs/plans/2026-07-28-currency-format-centralization-proposal.md`.
+- Before writing a new amount-displaying component or report, **grep for `formatCurrency` first** — copy the existing pattern from a sibling window/component instead of reinventing it.
+</currency_rules>
 
 <decision_heuristics>
 - Make it work first, make it right second

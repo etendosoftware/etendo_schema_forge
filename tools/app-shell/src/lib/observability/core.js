@@ -86,6 +86,26 @@ export function createObservability(options = {}) {
       );
     },
 
+    async group(groupKey, groupId, traits = {}) {
+      if (!initialized || !groupKey || !groupId) return;
+
+      await Promise.all(
+        providers.map(provider =>
+          callProvider(provider, 'group', [groupKey, groupId, { ...traits }, { context: getContext() }])
+        )
+      );
+    },
+
+    async groupSet(groupKey, groupId, properties = {}) {
+      if (!initialized || !groupKey || !groupId) return;
+
+      await Promise.allSettled(
+        providers.map(provider =>
+          callProvider(provider, 'groupSet', [groupKey, groupId, { ...properties }, { context: getContext() }])
+        )
+      );
+    },
+
     async captureException(error, details = {}) {
       if (!initialized || !error) return;
 

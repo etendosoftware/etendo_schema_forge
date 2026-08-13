@@ -24,6 +24,49 @@ npm install -g agent-browser && agent-browser install   # Optional: install agen
 | `make test-e2e-ui` | Interactive Playwright UI |
 | `make test-e2e-report` | View last HTML test report |
 | `make test-e2e-record` | Open recorder — you click, it generates code |
+| `make test-e2e-onboarding-integration` | Run the live onboarding integration spec only (requires a live backend, see below) |
+
+---
+
+## Etendo GO Contextual Selector Smoke
+
+`e2e/tests/flows/etendogo-contextual-selectors.integration.spec.js` validates the non-MCP Etendo GO integration risk for contextual FK selectors. It is skipped by default because it requires a live Etendo backend, a loaded F&B dataset, and a JWT-capable test user.
+
+Run it explicitly against local Etendo:
+
+```bash
+cd e2e
+ETENDO_URL=http://localhost:8080/etendo npm run test:etendogo-contextual-selectors
+```
+
+The smoke gets a read JWT through `scripts/neo-token-groupadmin.sh` unless `E2E_ETENDOGO_JWT` is already set. It verifies that generated selector identifiers work at runtime for the highest-risk document contexts:
+
+- sales/purchase partner address from selected business partner;
+- sales/purchase price list from `isSOTrx`;
+- sales/purchase tax from transaction side plus date;
+- goods receipt/shipment partner address from selected business partner.
+
+If this smoke fails because generated field-name selector URLs return `404 Field not found or not included`, track it under [ETP-4058](https://etendoproject.atlassian.net/browse/ETP-4058). That bug is intentionally separate from the integration-test scope: the test detects the runtime/generator contract mismatch, but the fix belongs to the Etendo GO / Schema Forge selector URL compatibility task.
+
+---
+
+## Onboarding Register Integration Smoke
+
+`e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.
+
+Run it explicitly:
+
+```bash
+make test-e2e-onboarding-integration
+```
+
+This sets `E2E_ONBOARDING_INTEGRATION=1` and runs only that spec file against `BASE_URL` (default `http://localhost:3100`). Override the backend with:
+
+```bash
+BASE_URL=http://localhost:8080/etendo/web/com.etendoerp.go make test-e2e-onboarding-integration
+```
+
+Each run creates a unique user (random suffix), so the test is repeatable without manual cleanup.
 
 ---
 
@@ -506,6 +549,88 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `row-quick-action-delete-confirm` | — | Destructive button inside the row delete confirm dialog |
 | `generic-preview-modal` | — | `GenericPreviewModal` card (the right-anchored panel) |
 | `preview-drop-zone` | — | Drop zone inside GenericPreviewModal managed left panel |
+| `filter-{name}` | `filter-todos`, `filter-personas` | ListView subset filter buttons |
+| `quick-filter-{name}` | `quick-filter-active` | ListView quick filter toggle buttons |
+| `selection-count` | — | ListView selection bar (count of selected rows) |
+| `list-progress-bar` | — | ListView loading progress indicator |
+| `global-search-trigger` | — | CommandPalette trigger button |
+| `global-search-input` | — | CommandPalette search input |
+| `menu-item-{slug}` | `menu-item-sales-order` | SideMenu navigation items |
+| `topbar-user-menu` | — | UserAvatarButton trigger |
+| `topbar-notifications` | — | TopBar notification bell |
+| `topbar-back` | — | TopBar back navigation button |
+| `topbar-more-actions` | — | TopBar kebab / 3-dot menu |
+| `user-menu-logout` | — | User menu logout button |
+| `user-menu-language-{code}` | `user-menu-language-en_US` | User menu language option |
+| `location-field-{name}` | `location-field-city`, `location-field-postalCode` | Location modal input fields |
+| `location-country-picker` | — | Location modal country select |
+| `location-save` | — | Location modal save button |
+| `field-{type}-{name}` | `field-select-warehouse`, `field-number-qty` | Generic typed field inputs |
+
+## Stable IDs — Public Contract
+
+The following element `id` attributes are used by E2E tests and **must not change** without
+updating the corresponding test files. They are a public API.
+
+| ID | Screen | Usage |
+|----|--------|-------|
+| `#reg-name` | Register | Full name input |
+| `#reg-email` | Register | Email input |
+| `#reg-password` | Register | Password input |
+| `#login-email` | Login | Email input |
+| `#login-password` | Login | Password input |
+| `#forgot-email` | Forgot Password | Email input |
+| `#fullName` | Profile step | Full name input |
+| `#countryCode` | Profile step | Country code selector |
+| `#clientName` | Company step | Company name input |
+| `#fiscalIdValue` | Company step | Fiscal ID input |
+| `#onboarding-language` | Onboarding | Language selector |
+
+## Component Testability Checklist (MANDATORY for new components)
+
+Every new UI component MUST include:
+
+- [ ] `data-testid` on interactive elements (buttons, inputs, selects, toggles)
+- [ ] `data-testid` on container elements E2E tests need to locate (rows, cards, panels, modals)
+- [ ] `data-testid` on action triggers (save, delete, cancel, confirm, submit)
+- [ ] `aria-label` on icon-only buttons (buttons with only an SVG/icon and no visible text)
+- [ ] `role` attributes on semantic containers that use `<div>` instead of native HTML
+- [ ] No `data-testid` uses dynamic CSS classes or translated text
+
+### Naming convention
+
+`{context}-{element}` or `{context}-{element}-{identifier}`
+
+Examples: `filter-todos`, `subtab-row-{id}`, `location-field-city`, `action-bulk-delete`
+
+### Codemod
+
+Run `npm run check:data-testid` to verify all React components have baseline `data-testid`.
+Run `npm run apply:data-testid` to auto-add missing testids (generates `ComponentName__hash`).
+Files can opt out with `// @data-testid-ignore`.
+
+## Document status attributes
+
+Document-aware components expose status via `data-*` attributes for test assertions:
+
+| Attribute | Element | Values |
+|-----------|---------|--------|
+| `data-doc-status` | Detail view container (`data-testid="detail-view"`) | `DR` (draft), `CO` (completed), `VO` (voided), `CL` (closed) |
+| `data-row-status` | List view rows (`data-testid="row-{id}"`) | Same as above |
+| `data-status` | Status badge (`data-testid="document-status-pill"`) | Same as above |
+
+## Toast selectors
+
+Sonner v2 renders `data-type` on each toast element. Use these selectors in E2E tests:
+
+| Selector | Matches |
+|----------|---------|
+| `[data-type="error"]` | Error toasts (`role="alert"`) |
+| `[data-type="success"]` | Success toasts |
+| `[data-type="warning"]` | Warning toasts |
+| `[data-type="info"]` | Info toasts |
+
+The global `<Toaster />` also adds CSS class hooks: `toast-error`, `toast-success`, `toast-warning`, `toast-info`.
 
 ## Writing a mocked list/detail spec
 
@@ -571,6 +696,34 @@ test.describe('My feature — sales-order', () => {
 - **Match list vs detail by regex on the URL** — `/\/header\/[^/?]+/.test(url)` is the detail GET.
 - **Custom field keys** — some windows expose the document number under a different field (e.g. purchase-invoice uses `orderReference`, not `documentNo`). Mirror the value into both keys when mocking so a single locator works across windows.
 - **Per-window expected buttons** — if your overlay/feature is gated by the custom window file (`onClone`, `onEmail`, `menuActions`, `documentPreview`), parametrize the asserts so each window verifies its own wiring (catches regressions where a custom window stops passing a handler).
+- **Numeric field clearing normalises to `defaultValue`** — when a user clears a numeric inline-add or inline-edit field and moves focus away, `DataTable.jsx` and `InlineLinesPanel.jsx` automatically substitute the field's `defaultValue` (or `min` if `defaultValue` is absent) before the save payload is built. In tests, assert the intercepted POST/PATCH body contains the expected numeric value (e.g. `0` for discount, `1` for quantity), never `undefined` or `''`. Do not assert that the input displays empty after blur — it will display the normalised value. See `docs/feedback.md` (ETP-4277) for the full root-cause explanation.
+
+### Gotcha: a route pattern ending in a bare `word**` does NOT match a sub-path after `word`
+
+Playwright's glob matcher treats `**` as "any characters" only where it is written — `**` glued directly onto a literal (no `/` immediately before it) does **not** cross path separators the way you'd expect. `page.route('**/sws/neo/<entity>/header**', ...)` matches `/header` bare and `/header?query=...` (query string is still "more characters" after the literal), but **not** `/header/{id}`, `/header/defaults`, or `/header/action/...` — any URL with an actual `/` after the literal falls through to whatever more-generic route was registered before it (commonly the catch-all `**/sws/**` installed by `login()`), which silently returns an empty/default payload. The failure this produces looks nothing like a mocking bug: disabled buttons, empty tabs, hidden "Add Line", timeouts waiting for data that was "definitely mocked" — because the specific route handler is just never invoked for that request.
+
+**Fix — register TWO separate routes, do not use a brace pattern:**
+
+```js
+await page.route('**/sws/neo/<entity>/header/**', handler); // any sub-path: /header/{id}, /header/action/post
+await page.route('**/sws/neo/<entity>/header**', handler);  // bare /header and /header?query=...
+```
+
+`word/**` (with the `/` written explicitly before the trailing `**`) correctly crosses path separators for a sub-path of **any depth**, including multi-segment ones like `/header/{id}/action/invoiceAccounts`. `word**` (glued, no `/`) still covers the bare/query-string case as before. Register both under the same handler function if the logic is identical.
+
+**Do NOT use the brace-alternation form `word{/**,}**`** that an earlier version of this note recommended — it looks like it should behave the same, but doesn't: Playwright's `globToRegex` (`playwright-core/lib/utils/isomorphic/urlMatch.js`) only treats `**` as "crosses `/`" when it is immediately preceded **and followed** by `/` (or the start/end of the whole glob). Inside `{/**,}`, the `**` right before the closing `,`/`}` is followed by a brace character, not `/`, so it silently degrades to `[^/]*` — matching exactly **one** path segment past the literal (`/header/{id}` — passes) but not two-or-more (`/header/{id}/action/invoiceAccounts` — silently falls through to the generic catch-all, same symptom as the original bug). This bit three files (`multi-currency-payment-modal`, `not-posted-documents`, `return-material-receipt`) that had already "correctly" applied the brace fix, because their real endpoints hit `/action/<name>` — two segments deep.
+
+Patterns that already end in `/**` (e.g. the generic `**/sws/**` catch-all) are unaffected — a `/` immediately before `**` already crosses path separators correctly, at any depth. Patterns intentionally scoped to query-string-only variants (ending in a literal `?**`, e.g. `**/sws/neo/session?**`) are also a different, deliberate case — leave them as-is unless the endpoint also needs a sub-path.
+
+This was diagnosed against a large batch of pre-existing `.mocked.spec.js` failures (55 tests across ~22 files, then 5 more once the first fix landed) that had nothing to do with the PRs under test — the bug pre-dated them. Reach for the two-route pattern by default in any new `page.route()` call whose real endpoint can receive a sub-path (detail GET by id, `/action/...`, `/defaults`, `/selectors/...`) — especially anything under `/action/<name>`, which is always 2+ segments deep.
+
+### Root cause of the above: a silently downgraded `@playwright/test` pin
+
+The glob-crossing bug described above is not a permanent Playwright limitation — it's specific to `@playwright/test` `1.50.0`. Verified empirically: the exact same isolated repro (two `page.route()` calls, no app code) fails on `1.50.0` and passes cleanly on `1.58.2`.
+
+`e2e/package.json` was pinned to `"1.50.0"` (no caret) by an unrelated commit that was only trying to bump the `schema_forge_core` preview pin (`7c38d5cf2`, ETP-4763) — the Playwright downgrade from `"^1.50.0"` was accidental collateral. Because `e2e/` has **no committed lockfile**, this silently forced every fresh `npm install` onto that exact old version from then on, with no warning. It also explains why the 55-test failure wasn't reproducible for everyone on the team: anyone who ran `npm install` before that commit landed, or who had a stale `node_modules` with a newer resolved version already on disk, never hit it.
+
+**Current pin:** exact `"1.58.2"` (still no caret, deliberately — see reasoning below). If you ever need to bump this again, pin exactly and verify the new version doesn't reintroduce glob-matching regressions before merging; don't switch to a caret range, since a caret + no lockfile is what let this drift happen unnoticed in the first place. Do not remove the two-route fixes above when bumping — they're correct regardless of Playwright version and are cheap insurance against this exact class of regression recurring silently.
 
 ### Canonical reference
 
@@ -613,6 +766,12 @@ The locale defaults to `es_ES` in mock mode (no real `LocaleProvider` data). Use
 ```js
 page.getByRole('button', { name: /cerrar|close/i })
 ```
+
+### Gotcha: `VITE_MOCK=true` silently bypasses `page.route()` mocks
+
+`make dev-mock` starts the dev server with `VITE_MOCK=true`, which makes the app shell replace `window.fetch` with a wrapper that serves data straight out of the generated `mockData.js` files, before the request ever reaches the network layer. Playwright's `page.route()` intercepts real network requests — with `VITE_MOCK=true` there is no network request to intercept, so a carefully installed `.mocked.spec.js` route mock is silently ignored and the page renders whatever `mockData.js` happens to contain instead. This broke even the canonical `document-posting.mocked.spec.js` for reasons that had nothing to do with the test's own correctness, until the dev server was restarted as a plain `vite --port <port>` (no `VITE_MOCK`) instead.
+
+**Rule of thumb:** for any `.mocked.spec.js` test that installs `page.route()` interceptors, run the dev server WITHOUT `VITE_MOCK` — `make dev`, or `cd tools/app-shell && npx vite --port <port>` directly. Despite its name and its "required for E2E tests" `Makefile` comment, `make dev-mock` is for manual/offline UI browsing against bundled sample data, not for the `page.route()`-based mocked-spec pattern described throughout this guide. If a mocked spec fails in ways that don't match the assertion you wrote (wrong data, mock never hit, unrelated fields), check which dev server mode is running before debugging the test itself.
 
 ## Tips
 

@@ -26,6 +26,18 @@ Data flow:
    - Prefer Schema Forge + NEO contracts/specs and handlers (`push-to-neo`, `ETGO_SF_*`, NEO endpoints).
    - Avoid classic AD/Jasper/classic-process patterns as the default implementation path.
 
+## Transactional Email Rules
+
+Transactional email must follow `docs/transactional-email-framework.md` and `docs/email-contracts.md`.
+
+1. Never call an external email provider directly from frontend code.
+2. Never commit provider endpoints, API keys, signing secrets, sender credentials, or other email provider secrets.
+3. Never expose a browser endpoint that accepts an arbitrary provider payload such as `to`, `template`, and `data`.
+4. Every email send must go through an explicit versioned email contract with authorization, recipient resolution, throttle, idempotency, audit, suppression, and kill switch behavior.
+5. Resolve recipients server-side from trusted records by default. Caller-provided recipients are allowed only for explicit admin/support contracts.
+6. `custom` email is allowed only as a controlled contract with role checks, sanitizer, strict throttle, reason capture, and audit.
+7. Each email contract must document at least 3 edge cases and include behavioral/security test coverage before it is considered complete.
+
 ## Pipeline Expectations
 
 Canonical phase order:

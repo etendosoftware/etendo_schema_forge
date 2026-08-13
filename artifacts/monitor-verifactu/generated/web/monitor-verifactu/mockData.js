@@ -5,7 +5,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-001",
     "active": "Sample active",
     "tAXType": "VAT 21%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 90
   },
@@ -13,7 +12,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-002",
     "active": "Sample active",
     "tAXType": "VAT 10%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 93
   },
@@ -21,7 +19,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-003",
     "active": "Sample active",
     "tAXType": "VAT 0%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 8
   },
@@ -29,7 +26,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-004",
     "active": "Sample active",
     "tAXType": "Sales Tax 8.5%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 91
   },
@@ -37,7 +33,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-005",
     "active": "Sample active",
     "tAXType": "Exempt",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 72
   },
@@ -45,7 +40,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-006",
     "active": "Sample active",
     "tAXType": "Reduced Rate 5%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 78
   },
@@ -53,7 +47,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-007",
     "active": "Sample active",
     "tAXType": "Standard Rate 20%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 31
   },
@@ -61,7 +54,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-008",
     "active": "Sample active",
     "tAXType": "VAT 21%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 97
   },
@@ -69,7 +61,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-009",
     "active": "Sample active",
     "tAXType": "VAT 10%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 70
   },
@@ -77,7 +68,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-010",
     "active": "Sample active",
     "tAXType": "VAT 0%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 77
   },
@@ -85,7 +75,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-011",
     "active": "Sample active",
     "tAXType": "Sales Tax 8.5%",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 32
   },
@@ -93,7 +82,6 @@ export const cabeceraDeEmisor = [
     "id": "mock-cabeceraDeEmisor-012",
     "active": "Sample active",
     "tAXType": "Exempt",
-    "refreshData": "Sample refreshData",
     "issuerNIF": "Sample issuerNIF",
     "nextSendWaitTime": 26
   }

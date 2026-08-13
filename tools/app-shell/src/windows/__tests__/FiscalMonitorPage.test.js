@@ -28,21 +28,22 @@ describe('FiscalMonitorPage — ContactDetailModal wiring', () => {
     assert.match(src, /contactsApiBase.*neoBase/);
   });
 
-  it('renders ContactDetailModal with open={!!bpPopup}', () => {
-    assert.match(src, /open=\{!!\s*bpPopup\}/);
+  it('renders ContactDetailModal with open={!!bpPopup.bpId}', () => {
+    assert.match(src, /open=\{!!bpPopup\.bpId\}/);
   });
 });
 
-// Guards: bpPopup must carry the raw bpId string, not a boolean — otherwise
+// Guards: bpPopup must carry an object with bpId, not a boolean — otherwise
 // ContactDetailModal.bpId would be true/false instead of the actual partner ID.
 describe('FiscalMonitorPage — bpPopup carries a string bpId (not a boolean)', () => {
-  it('onBpClick lambda passes bpId directly to setBpPopup (not true/false)', () => {
-    // Pattern: (bpId) => setBpPopup(bpId)  — NOT setBpPopup(true) or setBpPopup(!!bpId)
-    assert.match(src, /onBpClick.*bpId.*setBpPopup\(bpId\)/);
+  it('onBpClick lambda wraps bpId in an object (not a plain string or boolean)', () => {
+    // Pattern: (bpId) => setBpPopup({ bpId })  — object shape, not setBpPopup(bpId) or setBpPopup(true)
+    assert.match(src, /onBpClick.*bpId.*setBpPopup\(\{[^)]*bpId[^)]*\}\)/);
   });
 
-  it('ContactDetailModal receives bpId={bpPopup} (raw state value)', () => {
-    assert.match(src, /bpId=\{bpPopup\}/);
+  it('ContactDetailModal receives bpId from bpPopup object field', () => {
+    // bpId={bpPopup.bpId} — extracted from the object, not the raw state
+    assert.match(src, /bpId=\{bpPopup\.bpId\}/);
   });
 
   it('bpPopup is initialised to null (not false)', () => {
@@ -62,6 +63,47 @@ describe('FiscalMonitorPage — onBpClick wiring to sections', () => {
 
   it('passes onBpClick to VerifactuMonitorSection', () => {
     assert.match(src, /VerifactuMonitorSection[\s\S]*?onBpClick/);
+  });
+});
+
+// Guards: VfSolveErrorModal wiring — state, handlers, and prop forwarding
+describe('FiscalMonitorPage — VfSolveErrorModal wiring', () => {
+  it('imports VfSolveErrorModal', () => {
+    assert.match(src, /VfSolveErrorModal/);
+  });
+
+  it('declares vfErrorRows state', () => {
+    assert.match(src, /vfErrorRows/);
+  });
+
+  it('declares vfErrorModalOpen state', () => {
+    assert.match(src, /vfErrorModalOpen/);
+  });
+
+  it('handleVfErrorClick sets vfErrorRows and opens modal', () => {
+    assert.match(src, /handleVfErrorClick/);
+    assert.match(src, /setVfErrorRows/);
+    assert.match(src, /setVfErrorModalOpen/);
+  });
+
+  it('handleVfResolveClick sets vfErrorRows and opens modal', () => {
+    assert.match(src, /handleVfResolveClick/);
+  });
+
+  it('passes onVfErrorClick to VerifactuMonitorSection', () => {
+    assert.match(src, /VerifactuMonitorSection[\s\S]*?onVfErrorClick/);
+  });
+
+  it('passes onVfResolveClick to VerifactuMonitorSection', () => {
+    assert.match(src, /VerifactuMonitorSection[\s\S]*?onVfResolveClick/);
+  });
+
+  it('renders VfSolveErrorModal with open={vfErrorModalOpen}', () => {
+    assert.match(src, /open=\{vfErrorModalOpen\}/);
+  });
+
+  it('VfSolveErrorModal receives rows={vfErrorRows}', () => {
+    assert.match(src, /rows=\{vfErrorRows\}/);
   });
 });
 

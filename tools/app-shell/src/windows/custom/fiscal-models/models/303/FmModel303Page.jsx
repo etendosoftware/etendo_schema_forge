@@ -1,278 +1,253 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useUI } from '@/i18n';
 import {
-  ArrowLeft, Settings2, Download, FileText, Lock, Play,
-  OctagonAlert, TriangleAlert, CircleCheck, ChevronRight, GitCompare, FolderOpen,
-  Calculator, Loader2,
+  Settings, Download,
+  OctagonAlert, TriangleAlert, CircleCheck, ArrowLeftRight,
+  Calculator, Loader2, MoreVertical, TrendingUp, TrendingDown, Clock,
+  ClipboardCheck, ReceiptText, Folder, FileCheck,
 } from 'lucide-react';
-import {
-  StatusPillMenu, ResultPill, SummaryCard, Tabs, Banner, SectionCard, EmptyState,
-  NumberedStepper,
-} from '../../FmCommon.jsx';
+import { Tabs, KpiWidget } from '../../FmCommon.jsx';
+import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
-import { PresentModal, FileGenModal, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
+import { PresentModal, FileGenModal303, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
+import AeatSubmitFlow from './AeatSubmitFlow.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { formatAmount, formatPeriod, computeBoxes303 } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents } from '../../fiscalModelsUtils.js';
+import { AttachmentsTab, useAttachments } from '@/components/attachments';
+
+// AD table name backing the AEAT justificante attachments store — both the
+// server-side auto-attach on a successful telematic submission and the
+// manual "Presentación con Acuse de recibo" upload persist here.
+const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
 
 const STEPPER_INDEX = {
-  pendiente: 0, borrador: 1, listo: 2,
-  presentado: 3, presentadoOtra: 3, presentadoAcuse: 3,
-  omitido: -1,
+  draft: 0, ready: 1,
+  submitted: 2, submitted_ext: 2, submitted_ack: 2,
+  skipped: -1,
 };
+
+function toBoxArray(src) {
+  if (Array.isArray(src)) return src;
+  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
+  return [];
+}
+
+function applyOverrides(boxes, overrides) {
+  if (!Object.keys(overrides).length) return toBoxArray(boxes);
+  const arr = toBoxArray(boxes);
+  const result = arr.filter(b => !(b.num in overrides));
+  Object.entries(overrides).forEach(([num, val]) => {
+    if (val != null) result.push({ num: Number(num), value: val });
+  });
+  return result;
+}
+
+function removeBox108FromLive(prev) {
+  if (prev == null) return prev;
+  return recomputeDerivedBoxes(toBoxArray(prev).filter(b => b.num !== 108));
+}
+
+function applyBoxChange(prev, boxNum, value, fallbackBoxes) {
+  const base = prev != null ? toBoxArray(prev) : toBoxArray(fallbackBoxes);
+  const filtered = base.filter(b => b.num !== boxNum);
+  const updated = value != null ? [...filtered, { num: boxNum, value }] : filtered;
+  return recomputeDerivedBoxes(updated);
+}
+
+function parseBoxInput(rawValue) {
+  const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
+  return isNaN(numVal) ? null : numVal;
+}
+
+function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources) {
+  if (!res) return;
+  setLiveBoxes(recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides)));
+  setLiveSummary(res.summary);
+  if (res.sources) setLiveSources(res.sources);
+}
+
+function fetchOrgIdent(token, apiBaseUrl, setOrgIdent) {
+  if (!token || !apiBaseUrl) return;
+  fetch(`${neoBase(apiBaseUrl)}/session`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      const org = data?.organization;
+      if (!org) return;
+      setOrgIdent({ nif: org.taxId ?? '', nombre: org.name ?? '' });
+    })
+    .catch(() => {});
+}
+
+function applyGenerateError(result, t, setGenError) {
+  if (result.error === 'iban_required') {
+    setGenError(t('fm.gen303.error.iban_required') ?? 'Se necesita el IBAN para generar el fichero. Selecciona tipo C o N, o introduce el IBAN.');
+  } else {
+    const msg = result.serverMessage
+      || t('fm.gen303.error.generic')
+      || 'Error al generar el fichero. Por favor, inténtelo de nuevo.';
+    setGenError(msg);
+    console.error('generate303File failed:', result.error, result.serverMessage);
+  }
+}
+
+function recomputeDerivedBoxes(boxArr) {
+  const r2 = v => Math.round(v * 100) / 100;
+  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+  const box65entry = boxArr.find(b => b.num === 65);
+  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
+  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
+  const box46 = r2(get(27) - box45);
+  const box64 = r2(box46 + get(58) + get(76));
+  const box66 = r2(box64 * box65 / 100);
+  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
+  const box71 = r2(box69 - get(70) + get(109) - get(112));
+  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+  return [
+    ...boxArr.filter(b => !(b.num in derived)),
+    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+  ];
+}
 
 // ── Tab content components ────────────────────────────────────────
 
-function buildBoxIncidentMap(incidents) {
-  const map = {};
-  for (const inc of incidents) {
-    const m = inc.origin?.match(/Casilla\s+(\d+)/i);
-    if (!m) continue;
-    const key = String(parseInt(m[1], 10)).padStart(2, '0');
-    if (!map[key]) map[key] = [];
-    map[key].push(inc);
-  }
-  return map;
-}
+// Casillas tab — left sidebar nav + content area
+const CASILLAS_SECTIONS = [
+  { id: 'identificacion',  titleKey: 'fm.page.identificacion',  sections: ['identificacion', 'datos_bancarios'] },
+  { id: 'liquidacion',     titleKey: 'fm.page.liquidacion',     sections: ['iva_devengado', 'iva_deducible', 'resultado'] },
+  { id: 'info_adicional',  titleKey: 'fm.page.info_adicional',  sections: ['info_adicional'] },
+  { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final', 'sin_actividad', 'rectificativa'] },
+];
 
-function SourcesTab({ decl, t }) {
-  const [onlyIncidents, setOnlyIncidents] = useState(false);
-  const sources = decl.sources ?? [];
-  const boxIncidentMap = buildBoxIncidentMap(decl.incidents?.items ?? []);
-
-  function rowIncidents(source) {
-    return (source.boxes ?? '').split(',').flatMap(b => boxIncidentMap[b.trim()] ?? []);
-  }
-
-  const incidentRowCount = sources.filter(r => rowIncidents(r).length > 0).length;
-  const visible = onlyIncidents ? sources.filter(r => rowIncidents(r).length > 0) : sources;
-
-  const filterBtn = incidentRowCount > 0 && (
-    <button
-      className={`fm-toolbar__pill${onlyIncidents ? ' fm-toolbar__pill--active-dark' : ''}`}
-      style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-      onClick={() => setOnlyIncidents(v => !v)}
-    >
-      <TriangleAlert size={11} strokeWidth={2} />
-      {t('fm.sources.filter.incidents') ?? 'Con incidencias'}
-      <span className="fm-toolbar__count-badge">{incidentRowCount}</span>
-    </button>
-  );
+function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t }) {
+  const [activeSection, setActiveSection] = useState('identificacion');
+  const section = CASILLAS_SECTIONS.find(s => s.id === activeSection) ?? CASILLAS_SECTIONS[0];
 
   return (
-    <SectionCard
-      title={t('fm.sources.title')}
-      sub={t('fm.sources.sub')}
-      right={filterBtn}
-      flush
-    >
-      {sources.length === 0 ? (
-        <EmptyState
-          icon={<FileText size={28} strokeWidth={1.5} />}
-          title={t('fm.list.empty')}
-          sub={t('fm.sources.sub')}
-        />
-      ) : (
-        <div className="fm-table-wrap">
-          <table className="fm-dtable">
-            <thead>
-              <tr>
-                <th>{t('fm.sources.col.date')}</th>
-                <th>{t('fm.sources.col.ref')}</th>
-                <th>{t('fm.sources.col.type')}</th>
-                <th>{t('fm.sources.col.party')}</th>
-                <th>{t('fm.sources.col.regime')}</th>
-                <th className="num">{t('fm.sources.col.base')}</th>
-                <th className="num">{t('fm.sources.col.vat')}</th>
-                <th className="num">{t('fm.sources.col.total')}</th>
-                <th>{t('fm.sources.col.boxes')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign:'center', color:'#9ca3af', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
-              )}
-              {visible.map((r) => {
-                const incs = rowIncidents(r);
-                const hasBlock = incs.some(inc => inc.severity === 'block');
-                const hasWarn  = incs.length > 0 && !hasBlock;
-                const tooltip  = incs.map(inc => inc.message).join(' · ');
-                let rowClass = '';
-                if (hasBlock)     rowClass = 'fm-dtable__row--block';
-                else if (hasWarn) rowClass = 'fm-dtable__row--warn';
-                return (
-                  <tr key={r.ref} className={rowClass}>
-                    <td className="strong">{r.date}</td>
-                    <td className="mono">{r.ref}</td>
-                    <td>{r.type}</td>
-                    <td>{r.party}</td>
-                    <td style={{ color: '#6b7280' }}>{r.regime || '—'}</td>
-                    <td className="num strong">{formatAmount(r.base)}</td>
-                    <td className="num">{r.vat != null ? formatAmount(r.vat) : '—'}</td>
-                    <td className="num strong">{formatAmount(r.total)}</td>
-                    <td className="mono" style={{ color: '#9ca3af', fontSize: 11 }}>
-                      {r.boxes || '—'}
-                      {incs.length > 0 && (
-                        <span
-                          className={`fm-sources__inc-flag fm-sources__inc-flag--${hasBlock ? 'block' : 'warn'}`}
-                          title={tooltip}
-                        >
-                          {hasBlock
-                            ? <OctagonAlert size={12} strokeWidth={2} />
-                            : <TriangleAlert size={12} strokeWidth={2} />
-                          }
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </SectionCard>
-  );
-}
-
-function FilesTab({ decl, t, onGenerate, fileBlocked }) {
-  const file = decl.file ?? null;
-  return (
-    <SectionCard title={t('fm.files.title')} flush>
-      {file ? (
-        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid #d1fae5', borderRadius: 8, background: '#f0fdf4' }}>
-            <CircleCheck size={20} strokeWidth={1.75} style={{ color: '#16a34a', flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{file.name}</div>
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                {file.size} · {file.generatedAt}
-              </div>
-            </div>
-            <button className="fm-btn" onClick={() => {}}><Download size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />{t('fm.action.download')}</button>
-          </div>
-          <Banner
-            tone="info"
-            title={t('fm.files.next_step')}
-            sub={t('fm.files.next_step_sub')}
-          />
-        </div>
-      ) : (
-        <EmptyState
-          icon={<FolderOpen size={28} strokeWidth={1.5} />}
-          title={t('fm.files.empty')}
-          sub={t('fm.files.empty_sub')}
-          cta={
+    <div style={{ background: 'hsl(var(--card))', flex: 1, overflow: 'auto', padding: '0' }}>
+      <div style={{
+        display: 'flex',
+        background: 'hsl(var(--card))',
+        overflow: 'auto',
+        minWidth: 'fit-content',
+      }}>
+        {/* Left sidebar nav — no separator, same white card */}
+        <div style={{
+          width: 200, flexShrink: 0,
+          padding: '6px 8px',
+          display: 'flex', flexDirection: 'column', gap: 2,
+        }}>
+          {CASILLAS_SECTIONS.map(s => (
             <button
-              className={`fm-btn${fileBlocked ? ' fm-btn--danger' : ' fm-btn--primary'}`}
-              onClick={onGenerate}
+              key={s.id}
+              onClick={() => setActiveSection(s.id)}
+              style={{
+                padding: '8px 12px', fontSize: 14, textAlign: 'left', border: 'none', width: '100%',
+                background: activeSection === s.id ? 'hsl(var(--muted))' : 'transparent',
+                color: 'hsl(var(--foreground))',
+                fontWeight: activeSection === s.id ? 500 : 400,
+                cursor: 'pointer',
+                borderRadius: 8,
+                transition: 'background .1s',
+              }}
             >
-              {fileBlocked
-                ? <Lock size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />
-                : <FileText size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />
-              }
-              {t('fm.action.gen303')}
+              {t(s.titleKey)}
             </button>
-          }
-        />
-      )}
-    </SectionCard>
-  );
-}
-
-function HistoryTab({ decl, t }) {
-  const history = decl.history ?? [];
-  return (
-    <SectionCard title={t('fm.history.title')} flush>
-      {history.length === 0 ? (
-        <EmptyState icon="🕐" title={t('fm.list.empty')} />
-      ) : (
-        <div className="fm-timeline">
-          {history.map((e) => (
-            <div key={`${e.at}-${e.text}`} className="fm-timeline__event">
-              <div className="fm-timeline__dot">{e.icon ?? '○'}</div>
-              <div className="fm-timeline__body">
-                <div className="fm-timeline__text">{e.text}</div>
-                <div className="fm-timeline__meta">{e.at} · {e.who}</div>
-              </div>
-            </div>
           ))}
         </div>
-      )}
-    </SectionCard>
+        {/* Content area — no border, flows directly after sidebar */}
+        <div style={{ flex: 1, padding: '6px 24px', overflow: 'auto' }}>
+          <FmBoxes303
+            boxes={liveBoxes ?? decl.boxes ?? null}
+            year={decl.year}
+            period={decl.period}
+            sectionIds={section.sections}
+            identification={{ ...orgIdent, ...identChecks }}
+            onIdentChange={onIdentChange}
+            onBoxChange={onBoxChange}
+            data-testid="FmBoxes303__4f6c0d" />
+        </div>
+      </div>
+    </div>
   );
 }
 
-function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
-  const incidents = decl.incidents?.items ?? [];
-
-  if (blocking === 0 && warning === 0) {
-    return (
-      <SectionCard title={t('fm.incidents.tab_title')} flush>
-        <EmptyState
-          icon={<CircleCheck size={28} strokeWidth={1.5} />}
-          title={t('fm.incidents.empty')}
-          sub={t('fm.incidents.empty_sub')}
-        />
-      </SectionCard>
-    );
-  }
-
-  const total = blocking + warning;
-  const sorted = [...incidents].sort((a, b) =>
-    (a.severity === 'block' ? 0 : 1) - (b.severity === 'block' ? 0 : 1)
-  );
-
+// ── More options kebab menu ──────────────────────────────────────
+function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBlocked, t }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
   return (
-    <SectionCard
-      title={`${total} ${t('fm.incidents.tab_title').toLowerCase()}`}
-      sub={t('fm.incidents.block_sub')}
-      flush
-    >
-      {sorted.length > 0 ? (
-        <div className="fm-table-wrap">
-          <table className="fm-dtable">
-            <thead>
-              <tr>
-                <th>{t('fm.incidents.col.severity')}</th>
-                <th>{t('fm.incidents.col.origin')}</th>
-                <th>{t('fm.incidents.col.message')}</th>
-                <th>{t('fm.incidents.col.suggestion')}</th>
-                <th style={{ textAlign: 'right' }}>{t('fm.incidents.col.action')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((inc) => (
-                <tr key={`${inc.origin ?? ''}-${inc.message}`}>
-                  <td>
-                    {inc.severity === 'block'
-                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#dc2626', background: '#fee2e2', borderRadius: 4, padding: '2px 6px' }}><OctagonAlert size={11} strokeWidth={2} /> {t('fm.incidents.severity.block')}</span>
-                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#d97706', background: '#fef3c7', borderRadius: 4, padding: '2px 6px' }}><TriangleAlert size={11} strokeWidth={2} /> {t('fm.incidents.severity.warn')}</span>
-                    }
-                  </td>
-                  <td style={{ color: '#6b7280', fontSize: 11 }}>{inc.origin ?? '—'}</td>
-                  <td className="strong">{inc.message}</td>
-                  <td style={{ color: '#6b7280' }}>{inc.suggestion ?? '—'}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    {inc.origin?.match(/Casilla\s+\d+/i) && onGoToSources && (
-                      <button className="fm-btn" onClick={() => onGoToSources()}>
-                        {t('fm.sources.title')} <ChevronRight size={13} strokeWidth={2} style={{ display:'inline',verticalAlign:'middle' }} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        className="fm-section-header__icon-btn"
+        style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', background: 'hsl(var(--card))' }}
+        onClick={() => setOpen(o => !o)}
+        aria-label="Más opciones"
+      >
+        <MoreVertical size={15} strokeWidth={1.75} data-testid="MoreVertical__4f6c0d" />
+      </button>
+      {open && (
+        <div className="fm-status-select__menu" role="menu" style={{ right: 0, left: 'auto', minWidth: 220 }}>
+          <button className="fm-status-select__item fm-status-select__item--14" role="menuitem" onClick={() => { onCompare(); setOpen(false); }}>
+            <ArrowLeftRight
+              size={14}
+              strokeWidth={1.75}
+              style={{ color: 'hsl(var(--foreground))' }}
+              data-testid="ArrowLeftRight__4f6c0d" />
+            {t('fm.action.compare') ?? 'Comparar'}
+          </button>
+          <button className="fm-status-select__item fm-status-select__item--14" role="menuitem" onClick={() => { onConfig(); setOpen(false); }}>
+            <Settings
+              size={14}
+              strokeWidth={1.75}
+              style={{ color: 'hsl(var(--foreground))' }}
+              data-testid="Settings__4f6c0d" />
+            {t('fm.config.title') ?? 'Configuración'}
+          </button>
+          <button
+            className="fm-status-select__item fm-status-select__item--14"
+            role="menuitem"
+            onClick={() => { onGenerate(); setOpen(false); }}
+            disabled={generating}
+          >
+            <Download
+              size={14}
+              strokeWidth={1.75}
+              style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
+              data-testid="Download__4f6c0d" />
+            {t('fm.action.gen303') ?? 'Generar fichero 303'}
+          </button>
         </div>
-      ) : (
-        <EmptyState
-          icon={<CircleCheck size={28} strokeWidth={1.5} />}
-          title={t('fm.incidents.empty')}
-          sub={t('fm.incidents.empty_sub')}
-        />
       )}
-    </SectionCard>
+    </div>
   );
+}
+
+function getBoxValue(liveBoxes, num) {
+  const e = toBoxArray(liveBoxes).find(b => b.num === num);
+  return e ? (e.value ?? 0) : null;
+}
+
+function buildIncidentVariants(blocking, warning, t) {
+  let tone = null;
+  if (blocking > 0) tone = 'danger';
+  else if (warning > 0) tone = 'warn';
+
+  let iconColor = 'hsl(var(--text-disabled))';
+  if (blocking > 0) iconColor = 'hsl(var(--destructive))';
+  else if (warning > 0) iconColor = 'var(--status-warning-fg)';
+
+  let badge = null;
+  if (blocking > 0) badge = t('fm.incidents.severity.block') ?? 'Bloqueante';
+  else if (warning > 0) badge = t('fm.incidents.severity.warn') ?? 'Advertencia';
+
+  return { tone, iconColor, badge };
 }
 
 // ── Main page ─────────────────────────────────────────────────────
@@ -282,301 +257,432 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const t = ui;
   const [status, setStatus] = useState(decl.status);
   const [activeTab, setActiveTab] = useState('boxes');
-  const [boxPage, setBoxPage] = useState(0);
   const [showPresent, setShowPresent] = useState(false);
+  const [showAeatFlow, setShowAeatFlow] = useState(false);
   const [showFilegen, setShowFilegen] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [orgIdent, setOrgIdent] = useState({ nif: '', nombre: '' });
   const [identChecks, setIdentChecks] = useState(decl.identification ?? {});
-  const handleIdentChange = (id, value) => setIdentChecks(prev => ({ ...prev, [id]: value }));
-  const [liveBoxes,   setLiveBoxes]   = useState(null);
-  const [liveSummary, setLiveSummary] = useState(null);
-  const [liveSources, setLiveSources] = useState(null);
+  const handleIdentChange = (id, value) => {
+    setIdentChecks(prev => ({ ...prev, [id]: value }));
+    if (id === 'motivo_rectificacion' && value !== 'D') {
+      setManualOverrides(prev => { const n = { ...prev }; delete n[108]; return n; });
+      setLiveBoxes(removeBox108FromLive);
+    }
+  };
+  const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
+  const [manualOverrides, setManualOverrides] = useState({});
+
+  // Only used to grab `upload()` for the manual acuse-de-recibo path below —
+  // isActive: false keeps it from eagerly listing/fetching attachments on
+  // mount (that eager fetch is owned by the "receipt" tab's own AttachmentsTab).
+  const { upload: uploadReceipt } = useAttachments({
+    tableName: FISCAL_DECL_TABLE,
+    recordId: decl.id,
+    token,
+    apiBaseUrl,
+    isActive: false,
+  });
+
+  function handleBoxChange(boxNum, rawValue) {
+    const value = parseBoxInput(rawValue);
+    setManualOverrides(prev => ({ ...prev, [boxNum]: value }));
+    setLiveSummary(null);
+    const fallback = decl._precomputed?.boxes ?? decl.boxes;
+    setLiveBoxes(prev => applyBoxChange(prev, boxNum, value, fallback));
+  }
+
+  const [liveSummary, setLiveSummary] = useState(decl._precomputed?.summary ?? null);
+  const [liveSources, setLiveSources] = useState(decl._precomputed?.sources ?? null);
   const [computing,   setComputing]   = useState(false);
+  const [generating,  setGenerating]  = useState(false);
+  const [genError,    setGenError]    = useState(null);
+
+  // AEAT validation-error incidents (ETP-4456) — starts from whatever `decl.incidents` already
+  // carries (list-load snapshot, or the demo mock in `FmListPage.jsx`'s DEMO_DECLARATIONS when no
+  // token/apiBaseUrl is configured) and is refreshed from the real backend on mount and after
+  // every AEAT submission attempt (test or production — both replace the persisted rows server
+  // side, see `Fiscal303BoxesHandler#handleSubmit`).
+  const [incidents, setIncidents] = useState(decl.incidents ?? { blocking: 0, warning: 0, items: [] });
+
+  async function refreshIncidents() {
+    const fresh = await fetchDeclarationIncidents(decl.id, { token, apiBaseUrl });
+    setIncidents(fresh);
+  }
+
+  useEffect(() => {
+    // No token/apiBaseUrl means demo/mock mode — keep the mocked `decl.incidents` as-is instead
+    // of overwriting it with the all-zero empty shape `fetchDeclarationIncidents` would return.
+    if (!token || !apiBaseUrl) return;
+    refreshIncidents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decl.id, token, apiBaseUrl]);
 
   async function handleCompute() {
     setComputing(true);
     try {
       const res = await computeBoxes303(decl, { token, apiBaseUrl });
-      if (res) {
-        setLiveBoxes(res.boxes);
-        setLiveSummary(res.summary);
-        if (res.sources) setLiveSources(res.sources);
-      }
+      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
     } finally {
       setComputing(false);
     }
   }
 
-  useEffect(() => {
-    if (!token || !apiBaseUrl) return;
-    fetch(`${neoBase(apiBaseUrl)}/session`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        const org = data?.organization;
-        if (!org) return;
-        setOrgIdent({ nif: org.taxId ?? '', nombre: org.name ?? '' });
-      })
-      .catch(() => {});
-  }, [token, apiBaseUrl]);
+  async function handleGenerate({ filename } = {}) {
+    setGenError(null);
+    setGenerating(true);
+    const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename });
+    setGenerating(false);
+    if (!result.ok) applyGenerateError(result, t, setGenError);
+  }
 
-  const stepperSteps = [
-    t('fm.stepper.pending'),
-    t('fm.stepper.draft'),
-    t('fm.stepper.ready'),
-    t('fm.stepper.presented'),
-  ];
+  useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent); }, [token, apiBaseUrl]);
 
   function handleStatusChange(newStatus) {
     setStatus(newStatus);
     onStatusChange?.(decl.id, newStatus);
   }
 
-  function handlePresent({ status: newStatus }) {
+  // Bumped by AeatSubmitFlow's onAttached whenever the backend reports a
+  // PDF was returned for the submission — including TEST_SUCCESS, which
+  // deliberately does NOT go through handleStatusChange (test mode must
+  // never change the declaration's status). Combined into the "Justificante"
+  // tab's remount key below so a test-mode success also refreshes the tab,
+  // without misusing the status-change path for it.
+  const [receiptRefreshTick, setReceiptRefreshTick] = useState(0);
+  function handleAeatAttached() {
+    setReceiptRefreshTick(t => t + 1);
+  }
+
+  function handlePresent({ status: newStatus, acuseFile }) {
+    // 'aeat_telematic' is a sentinel from PresentModal's 4th path, never a
+    // real declaration status — it means "open the AEAT submission flow",
+    // not "change the status directly" like the other 3 manual paths.
+    if (newStatus === 'aeat_telematic') {
+      setShowPresent(false);
+      setShowAeatFlow(true);
+      return;
+    }
+    // Manual "Presentación con Acuse de recibo" path: persist the uploaded
+    // receipt to the same attachments store the "Justificante" tab reads
+    // from. Fire-and-forget — useAttachments.upload() already toasts its
+    // own errors and never rethrows, so a failed upload must not block the
+    // status change the user explicitly confirmed.
+    if (newStatus === 'submitted_ack' && acuseFile) {
+      uploadReceipt(acuseFile);
+    }
     handleStatusChange(newStatus);
   }
 
-  const blocking = decl.incidents?.blocking ?? 0;
-  const warning = decl.incidents?.warning ?? 0;
+  const blocking = incidents?.blocking ?? 0;
+  const warning = incidents?.warning ?? 0;
   const incidentCount = blocking + warning;
-  const isSubmitted = ['presentado', 'presentadoOtra', 'presentadoAcuse'].includes(status);
+  const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
   const fileBlocked = blocking > 0;
-  const summary = liveSummary ?? decl.summary ?? {};
+  // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
+  // are reflected in the accrued/deductible/result cards without a full recalculate.
+  const kpi27 = getBoxValue(liveBoxes, 27);
+  const kpi45 = getBoxValue(liveBoxes, 45);
+  const kpi46 = getBoxValue(liveBoxes, 46);
+  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi46 !== null)
+    ? { accrued: kpi27, deductible: kpi45, result: kpi46 }
+    : null;
+  const summary = liveSummary ?? liveBoxSummary ?? decl.summary ?? {};
   const resultKind = decl.result?.kind ?? null;
-  const prev = summary.prev ?? null;
 
-  function pctDelta(current, previous) {
-    if (previous == null || previous === 0 || current == null) return null;
-    const pct = ((current - previous) / Math.abs(previous)) * 100;
-    return { dir: pct >= 0 ? 'up' : 'down', text: `${Math.abs(pct).toFixed(1)}%` };
-  }
+  // Derive result sublabel from kind
+  const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
 
-  let incidentBadgeTone = null;
-  if (blocking > 0) incidentBadgeTone = 'danger';
-  else if (warning > 0) incidentBadgeTone = 'warn';
+
+  const { tone: incidentBadgeTone, iconColor: incidentIconColor, badge: incidentBadge } =
+    buildIncidentVariants(blocking, warning, t);
 
   const tabs = [
-    { id: 'boxes',     label: t('fm.tab.boxes') },
-    { id: 'sources',   label: t('fm.tab.sources') },
-    { id: 'incidents', label: t('fm.tab.incidents'),
+    { id: 'boxes',     label: t('fm.tab.boxes') ?? 'Casillas',
+      icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__4f6c0d" /> },
+    { id: 'sources',   label: t('fm.tab.sources') ?? 'Facturas',
+      badge: (liveSources ?? decl.sources)?.length ?? null,
+      icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__4f6c0d" /> },
+    { id: 'incidents', label: t('fm.tab.incidents') ?? 'Incidencias',
       badge: incidentCount > 0 ? incidentCount : null,
       badgeTone: incidentBadgeTone,
-    },
-    { id: 'files',     label: t('fm.tab.files'),
+      icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__4f6c0d" /> },
+    { id: 'files',     label: t('fm.tab.files') ?? 'Ficheros',
       badge: decl.file ? 1 : null,
-    },
-    { id: 'history',   label: t('fm.tab.history') },
+      icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__4f6c0d" /> },
+    { id: 'receipt',   label: t('fm.tab.receipt') ?? 'Justificante',
+      icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__4f6c0d" /> },
+    { id: 'history',   label: t('fm.tab.history') ?? 'Historial',
+      icon: <Clock size={16} strokeWidth={1.75} data-testid="Clock__4f6c0d" /> },
   ];
+
+  const periodLabel = `${decl.year}/${formatPeriod(decl.period)}`;
 
   return (
     <div className="fm-page fm-page--freeflow">
+      {/* ── Title bar ────────────────────────────────────────────── */}
+      <div style={{
+        padding: '10px 20px',
+        background: 'hsl(var(--card))', flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="fm-model-badge fm-model-badge--303">303</span>
+          <span style={{ fontWeight: 600, fontSize: 20, color: 'hsl(var(--foreground))' }}>
+            Modelo 303 - {periodLabel}
+          </span>
+          <MoreVertical
+            size={14}
+            strokeWidth={1.75}
+            style={{ color: 'hsl(var(--text-disabled))', cursor: 'pointer' }}
+            data-testid="MoreVertical__4f6c0d" />
+        </div>
+        <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 1 }}>
+          Tesorería / Modelo 303 - {periodLabel}
+        </div>
+      </div>
+      {/* ── Action bar ───────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '6px 20px 10px',
+        background: 'hsl(var(--card))', flexShrink: 0,
+      }}>
+        <button
+          className="fm-btn"
+          onClick={onBack}
+          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', fontSize: 14, color: 'hsl(var(--foreground))' }}
+        >
+          {t('fm.action.cancel') ?? 'Cancelar'}
+        </button>
+        <span style={{
+          padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
+          background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
+        }}>
+          {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${status}`) ?? status}
+        </span>
 
-      {/* ── Header (349-style) ──────────────────────────────────── */}
-      <div className="fm-349-header">
-        <div className="fm-349-header__back">
-          <button className="fm-349-header__back-btn" onClick={onBack}>
-            <ArrowLeft size={14} strokeWidth={1.75} /> {t('fm.action.back')}
+        <div style={{ flex: 1 }} />
+
+        <MoreOptionsMenu
+          onCompare={() => setShowCompare(true)}
+          onConfig={() => setShowConfig(true)}
+          onGenerate={() => { setGenError(null); setShowFilegen(true); }}
+          generating={generating}
+          fileBlocked={fileBlocked}
+          t={t}
+          data-testid="MoreOptionsMenu__4f6c0d" />
+
+        <button
+          className="fm-btn"
+          onClick={handleCompute}
+          disabled={computing}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))' }}
+        >
+          {computing
+            ? <Loader2
+            size={24}
+            strokeWidth={1.75}
+            style={{ animation: 'spin 1s linear infinite' }}
+            data-testid="Loader2__4f6c0d" />
+            : <Calculator size={24} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />
+          }
+          {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+        </button>
+
+        {!isSubmitted && (
+          <button
+            className="fm-toolbar__btn fm-toolbar__btn--primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+            onClick={() => setShowPresent(true)}
+          >
+            <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__4f6c0d" />
+            {t('fm.action.submit') ?? "Marcar como 'Presentado'"}
           </button>
-        </div>
-        <div className="fm-349-header__main">
-          <div>
-            <div className="fm-349-header__title-row">
-              <span className="fm-model-badge fm-model-badge--303">303</span>
-              <span className="fm-349-header__title">
-                Modelo 303 · {decl.year} / {formatPeriod(decl.period)}
-              </span>
-              <StatusPillMenu status={status} onStatusChange={handleStatusChange} />
-            </div>
-            <div className="fm-349-header__subtitle">
-              {t('fm.m303.subtitle')}
-              {' · '}
-              {decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}
-              {decl.nif ? ` · NIF: ${decl.nif}` : ''}
-            </div>
-          </div>
-          <div className="fm-349-header__actions">
-            <button
-              className="fm-349-header__btn"
-              onClick={handleCompute}
-              disabled={computing}
-              title={t('fm.action.compute') ?? 'Calcular desde contabilidad'}
-            >
-              {computing
-                ? <Loader2 size={14} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} />
-                : <Calculator size={14} strokeWidth={1.75} />
-              }
-              {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
-            </button>
-            <button className="fm-349-header__btn" onClick={() => setShowCompare(true)}>
-              <GitCompare size={14} strokeWidth={1.75} /> {t('fm.action.compare')}
-            </button>
-            <button className="fm-349-header__btn" onClick={() => setShowConfig(true)}>
-              <Settings2 size={14} strokeWidth={1.75} /> {t('fm.config.title')}
-            </button>
-            {!isSubmitted && (
-              <button
-                className={`fm-349-header__btn${fileBlocked ? ' fm-303-header__btn--locked' : ''}`}
-                onClick={() => setShowFilegen(true)}
-                title={fileBlocked ? t('fm.incidents.block_sub') : ''}
-                style={fileBlocked ? { color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2' } : {}}
-              >
-                {fileBlocked ? <Lock size={14} strokeWidth={1.75} /> : <Download size={14} strokeWidth={1.75} />} {t('fm.action.gen303')}
-              </button>
-            )}
-            <button
-              className="fm-349-header__btn fm-349-header__btn--primary"
-              onClick={() => setShowPresent(true)}
-            >
-              <Play size={13} strokeWidth={1.75} fill="currentColor" /> {isSubmitted ? t('fm.action.change_status') : t('fm.action.submit')}
-            </button>
-          </div>
-        </div>
+        )}
       </div>
-
-      {/* ── Numbered Stepper ────────────────────────────────────── */}
-      <NumberedStepper steps={stepperSteps} current={STEPPER_INDEX[status] ?? 0} />
-
-      {/* Incident banners */}
-      {blocking > 0 && (
-        <Banner
-          tone="danger"
-          icon={<OctagonAlert size={18} strokeWidth={1.75} />}
-          title={`${blocking} ${t('fm.incidents.banner')}`}
-          sub={t('fm.incidents.block_sub')}
-          actions={
-            <button className="fm-btn" onClick={() => setActiveTab('incidents')}>
-              {t('fm.action.go_to')} <ChevronRight size={13} strokeWidth={2} style={{ display:'inline',verticalAlign:'middle' }} />
-            </button>
+      {/* ── KPI bar ──────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', flexDirection: 'row', alignItems: 'center',
+        gap: 12, padding: '12px 16px',
+        flexShrink: 0,
+        background: 'hsl(var(--card))',
+      }}>
+        {/* Incidencias */}
+        <KpiWidget
+          icon={blocking > 0
+            ? <OctagonAlert size={20} strokeWidth={1.75} data-testid="OctagonAlert__4f6c0d" />
+            : <TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__4f6c0d" />
           }
-        />
-      )}
-      {warning > 0 && blocking === 0 && (
-        <Banner
-          tone="warn"
-          icon={<TriangleAlert size={18} strokeWidth={1.75} />}
-          title={`${warning} ${t('fm.incidents.banner_warn')}`}
-          actions={
-            <button className="fm-btn" onClick={() => setActiveTab('incidents')}>
-              {t('fm.tab.incidents')} <ChevronRight size={13} strokeWidth={2} style={{ display:'inline',verticalAlign:'middle' }} />
-            </button>
-          }
-        />
-      )}
+          iconColor={incidentIconColor}
+          label={t('fm.tab.incidents') ?? 'Incidencias'}
+          value={String(incidentCount)}
+          badge={incidentBadge}
+          badgeBg={blocking > 0 ? 'var(--status-destructive-bg)' : 'var(--status-warning-bg)'}
+          badgeColor={blocking > 0 ? 'hsl(var(--destructive))' : 'var(--status-warning-fg)'}
+          data-testid="KpiWidget__4f6c0d" />
 
-      {/* Summary cards row — always visible */}
-      <div className="fm-summary-row">
-        <SummaryCard
-          eyebrow={t('fm.m303.summary.accrued')}
+        {/* IVA Devengado */}
+        <KpiWidget
+          icon={<TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__4f6c0d" />}
+          iconColor="hsl(var(--foreground))"
+          label={t('fm.m303.summary.accrued') ?? 'IVA Devengado'}
           value={formatAmount(summary.accrued ?? 0)}
-          sub={t('fm.m303.summary.accrued_sub')}
-          delta={pctDelta(summary.accrued, prev?.accrued)}
-        />
-        <SummaryCard
-          eyebrow={t('fm.m303.summary.deductible')}
+          badge={t('fm.m303.summary.accrued_sub') ?? 'De ventas'}
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
+          data-testid="KpiWidget__4f6c0d" />
+
+        {/* IVA Deducible */}
+        <KpiWidget
+          icon={<TrendingDown size={20} strokeWidth={1.75} data-testid="TrendingDown__4f6c0d" />}
+          iconColor="hsl(var(--foreground))"
+          label={t('fm.m303.summary.deductible') ?? 'IVA Deducible'}
           value={formatAmount(summary.deductible ?? 0)}
-          sub={t('fm.m303.summary.deductible_sub')}
-          delta={pctDelta(summary.deductible, prev?.deductible)}
-        />
-        <SummaryCard
-          accent
-          eyebrow={t('fm.m303.summary.result')}
+          badge={t('fm.m303.summary.deductible_sub') ?? 'De compras'}
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
+          data-testid="KpiWidget__4f6c0d" />
+
+        {/* Resultado */}
+        <KpiWidget
+          icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
+          iconColor="hsl(var(--foreground))"
+          label={t('fm.m303.summary.result') ?? 'Resultado'}
           value={formatAmount(summary.result ?? 0)}
-          delta={pctDelta(summary.result, prev?.result)}
-          right={resultKind ? (
-            <ResultPill
-              kind={resultKind}
-              label={t(`fm.result.${resultKind}`)}
-            />
-          ) : null}
-          sub={t('fm.m303.summary.result_sub')}
-        />
-        {summary.previousCompensation != null && (
-          <SummaryCard
-            eyebrow={t('fm.m303.summary.previous')}
-            value={formatAmount(summary.previousCompensation)}
-            sub={t('fm.m303.summary.previous_sub')}
-            valueColor="#2563eb"
-          />
-        )}
+          badge={resultSubLabel}
+          badgeBg="hsl(var(--muted))"
+          badgeColor="hsl(var(--muted-foreground))"
+          data-testid="KpiWidget__4f6c0d" />
       </div>
-
+      {/* ── Inline generate error ────────────────────────────────── */}
+      {genError && (
+        <div style={{
+          margin: '4px 20px 0',
+          padding: '8px 14px',
+          background: 'var(--status-destructive-bg)',
+          border: '1px solid hsl(var(--destructive) / 0.3)',
+          borderRadius: 8,
+          fontSize: 13,
+          color: 'hsl(var(--destructive))',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <OctagonAlert size={14} data-testid="OctagonAlert__gen_error" />
+          {genError}
+        </div>
+      )}
+      {/* ── Tabs bar ─────────────────────────────────────────────── */}
       <div className="fm-tabs-sticky">
-        <Tabs tabs={tabs} active={activeTab} onSelect={setActiveTab} />
+        <Tabs
+          tabs={tabs}
+          active={activeTab}
+          onSelect={setActiveTab}
+          data-testid="Tabs__4f6c0d" />
       </div>
-
-      <div className="fm-page__body">
-        {activeTab === 'boxes' && (() => {
-          const BOX_PAGES = [
-            { titleKey: 'fm.page.identificacion',  sections: ['identificacion'] },
-            { titleKey: 'fm.page.liquidacion',    sections: ['iva_devengado', 'iva_deducible', 'resultado'] },
-            { titleKey: 'fm.page.info_adicional', sections: ['info_adicional'] },
-            { titleKey: 'fm.page.resultado_final',sections: ['resultado_final'] },
-          ];
-          const page = BOX_PAGES[boxPage];
-          return (
-            <SectionCard title={t(page.titleKey)}>
-              <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
-                {BOX_PAGES.map((p, idx) => (
-                  <button
-                    key={p.titleKey}
-                    onClick={() => setBoxPage(idx)}
-                    style={{
-                      fontSize: 12, padding: '4px 14px', borderRadius: 6, border: '1px solid',
-                      cursor: 'pointer', fontWeight: boxPage === idx ? 600 : 400,
-                      background: boxPage === idx ? '#1e40af' : '#f9fafb',
-                      color: boxPage === idx ? '#fff' : '#374151',
-                      borderColor: boxPage === idx ? '#1e40af' : '#d1d5db',
-                    }}
-                  >
-                    {t(p.titleKey)}
-                  </button>
-                ))}
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af', alignSelf: 'center' }}>
-                  {boxPage + 1} / {BOX_PAGES.length}
-                </span>
-              </div>
-              <FmBoxes303
-                boxes={liveBoxes ?? decl.boxes ?? null}
-                year={decl.year}
-                period={decl.period}
-                sectionIds={page.sections}
-                identification={{ ...orgIdent, ...identChecks }}
-                onIdentChange={handleIdentChange}
-              />
-            </SectionCard>
-          );
-        })()}
-        {activeTab === 'sources' && (
-          <SourcesTab decl={{ ...decl, sources: liveSources ?? decl.sources }} t={t} />
-        )}
-        {activeTab === 'incidents' && (
-          <IncidentsTab decl={decl} blocking={blocking} warning={warning} t={t}
-            onGoToSources={() => setActiveTab('sources')} />
-        )}
-        {activeTab === 'files' && (
-          <FilesTab
-            decl={decl}
-            t={t}
-            fileBlocked={fileBlocked}
-            onGenerate={() => setShowFilegen(true)}
-          />
-        )}
-        {activeTab === 'history' && (
-          <HistoryTab decl={decl} t={t} />
-        )}
-      </div>
-
+      {/* ── Tab content ──────────────────────────────────────────── */}
+      {activeTab === 'boxes' && (
+        <CasillasTab
+          decl={decl}
+          orgIdent={orgIdent}
+          identChecks={identChecks}
+          onIdentChange={handleIdentChange}
+          liveBoxes={liveBoxes}
+          onBoxChange={handleBoxChange}
+          t={t}
+          data-testid="CasillasTab__4f6c0d" />
+      )}
+      {activeTab !== 'boxes' && (
+        <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'sources' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
+          {activeTab === 'sources' && (
+            <SourcesTab
+              decl={{ ...decl, sources: liveSources ?? decl.sources, incidents }}
+              t={t}
+              data-testid="SourcesTab__4f6c0d" />
+          )}
+          {activeTab === 'incidents' && (
+            <IncidentsTab
+              decl={{ ...decl, incidents }}
+              blocking={blocking}
+              warning={warning}
+              t={t}
+              onGoToSources={() => setActiveTab('sources')}
+              data-testid="IncidentsTab__4f6c0d" />
+          )}
+          {activeTab === 'files' && (
+            <FilesTab
+              decl={decl}
+              t={t}
+              fileBlocked={fileBlocked}
+              onGenerate={() => { setGenError(null); setShowFilegen(true); }}
+              genLabel={t('fm.action.gen303') ?? 'Generar fichero 303'}
+              data-testid="FilesTab__4f6c0d" />
+          )}
+          {activeTab === 'receipt' && (
+            // key={`${status}-${receiptRefreshTick}`}: `status` changes when a
+            // production submission succeeds (handleStatusChange) — AEAT's own
+            // auto-attach on a successful telematic submission happens
+            // server-side and is invisible to this component, so remounting
+            // AttachmentsTab (and its useAttachments instance) on a status
+            // change is how this tab notices the new file. `receiptRefreshTick`
+            // covers the case `status` can't: a TEST_SUCCESS submission also
+            // gets a PDF attached server-side now, but test mode must never
+            // change the declaration's status, so it can't ride the status-key
+            // remount — AeatSubmitFlow's onAttached bumps the tick instead.
+            (<AttachmentsTab
+              tableName={FISCAL_DECL_TABLE}
+              recordId={decl.id}
+              token={token}
+              apiBaseUrl={apiBaseUrl}
+              isActive={activeTab === 'receipt'}
+              config={{ allowedMimeTypes: ['application/pdf'] }}
+              key={`${status}-${receiptRefreshTick}`}
+              data-testid="AttachmentsTab__303receipt" />)
+          )}
+          {activeTab === 'history' && (
+            <HistoryTab decl={decl} t={t} data-testid="HistoryTab__4f6c0d" />
+          )}
+        </div>
+      )}
       {showPresent && (
-        <PresentModal decl={decl} onConfirm={handlePresent} onClose={() => setShowPresent(false)} />
+        <PresentModal
+          decl={decl}
+          onConfirm={handlePresent}
+          onClose={() => setShowPresent(false)}
+          showAeatPath
+          data-testid="PresentModal__4f6c0d" />
+      )}
+      {showAeatFlow && (
+        <AeatSubmitFlow
+          decl={decl}
+          orgIdent={orgIdent}
+          identChecks={identChecks}
+          summary={summary}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          onSuccess={(newStatus) => handleStatusChange(newStatus)}
+          onAttached={handleAeatAttached}
+          onIncidentsChanged={refreshIncidents}
+          onClose={() => setShowAeatFlow(false)}
+          data-testid="AeatSubmitFlow__4f6c0d" />
       )}
       {showFilegen && (
-        <FileGenModal decl={decl} onConfirm={() => {}} onClose={() => setShowFilegen(false)} />
+        <FileGenModal303
+          decl={decl}
+          onConfirm={handleGenerate}
+          onClose={() => setShowFilegen(false)}
+          data-testid="FileGenModal303__4f6c0d" />
       )}
-      {showConfig && <ConfigDrawer onClose={() => setShowConfig(false)} token={token} apiBaseUrl={apiBaseUrl} />}
-      {showCompare && <CompareDrawer decl={decl} onClose={() => setShowCompare(false)} />}
+      {showConfig && <ConfigDrawer
+        onClose={() => setShowConfig(false)}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        model="303"
+        data-testid="ConfigDrawer__4f6c0d" />}
+      {showCompare && <CompareDrawer
+        decl={decl}
+        onClose={() => setShowCompare(false)}
+        data-testid="CompareDrawer__4f6c0d" />}
     </div>
   );
 }

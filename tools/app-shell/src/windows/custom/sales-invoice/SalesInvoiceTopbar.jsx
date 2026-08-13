@@ -1,27 +1,21 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import InvoiceTopbarExtra from '@generated/sales-invoice/custom/InvoiceTopbarExtra';
 import CloneButton from '../shared/CloneButton.jsx';
-import { useUI } from '@/i18n';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
+import { useUI } from '@etendosoftware/app-shell-core';
+import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 
 /* eslint-disable react/prop-types */
 
-export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, api, onProcess }) {
+export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, api, onProcess, onRefresh }) {
   const navigate = useNavigate();
   const ui = useUI();
   const [showClone, setShowClone] = useState(false);
 
-  useEffect(() => {
-    const handleInvoiceUpdated = (event) => {
-      if (String(event.detail?.invoiceId) !== String(recordId)) return;
-      window.location.reload();
-    };
-
-    window.addEventListener('sales-invoice:invoice-updated', handleInvoiceUpdated);
-    return () => window.removeEventListener('sales-invoice:invoice-updated', handleInvoiceUpdated);
-  }, [recordId]);
+  useInvoiceUpdatedListener('sales-invoice', recordId, onRefresh);
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${token}`,
@@ -32,7 +26,14 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
 
   return (
     <>
-      <CloneButton onClick={() => setShowClone(true)} title={ui('cloneOrderBtn')} />
+      <CloneButton
+        onClick={() => setShowClone(true)}
+        title={ui('cloneOrderBtn')}
+        data-testid="CloneButton__5c4da7" />
+      <CopyRecordLinkButton
+        recordId={recordId}
+        windowName="sales-invoice"
+        data-testid="CopyRecordLinkButton__5c4da7" />
       <InvoiceTopbarExtra
         data={data}
         recordId={recordId}
@@ -40,7 +41,7 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
         apiBaseUrl={apiBaseUrl}
         api={api}
         onProcess={onProcess}
-      />
+        data-testid="InvoiceTopbarExtra__5c4da7" />
       {showClone && createPortal(
         <CloneOrderModal
           recordId={recordId}
@@ -58,7 +59,7 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
             setShowClone(false);
             navigate(`/sales-invoice/${newId}`);
           }}
-        />,
+          data-testid="CloneOrderModal__5c4da7" />,
         document.body,
       )}
     </>

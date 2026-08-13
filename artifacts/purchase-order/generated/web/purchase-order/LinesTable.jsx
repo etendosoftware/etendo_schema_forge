@@ -5,9 +5,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true, lookup: true },
   { key: 'description', column: 'Description', type: 'string', label: 'Description' },
-  { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', label: 'Ordered Quantity', required: true, min: 0 },
-  { key: 'listPrice', column: 'PriceList', type: 'amount', label: 'Net List Price', required: true, min: 0 },
-  { key: 'discount', column: 'Discount', type: 'number', label: 'Discount %', min: 0 },
+  { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', label: 'Ordered Quantity', required: true },
+  { key: 'listPrice', column: 'PriceList', type: 'amount', label: 'Net List Price', required: true },
+  { key: 'discount', column: 'Discount', type: 'number', label: 'Discount %', min: 0, max: 100 },
   { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', required: true },
   { key: 'lineGrossAmount', column: 'Line_Gross_Amount', type: 'amount', label: 'Line Gross Amount' },
 ];

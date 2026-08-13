@@ -13,13 +13,13 @@ const WRAPPER_STYLE = {
 const ICON_STYLE = {
   width: '16px',
   height: '16px',
-  color: '#828FA3',
+  color: 'hsl(var(--text-disabled))',
 };
 
 export function DashboardRowChevron() {
   return (
     <div style={WRAPPER_STYLE}>
-      <ChevronRight style={ICON_STYLE} />
+      <ChevronRight style={ICON_STYLE} data-testid="ChevronRight__e40207" />
     </div>
   );
 }

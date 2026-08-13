@@ -63,18 +63,18 @@ export default function LinesSelectionBar({
       <div
         className={`pointer-events-auto h-full ${closing ? 'lines-bar-dismiss' : 'lines-bar-appear'}`}
         style={{
-          background: '#FFFFFF',
-          boxShadow: '0px 10px 15px -3px rgba(18,18,23,0.08), 0px 4px 6px -2px rgba(18,18,23,0.05)',
+          background: 'hsl(var(--card))',
+          boxShadow: '0px 10px 15px -3px hsl(var(--foreground) / 0.08), 0px 4px 6px -2px hsl(var(--foreground) / 0.05)',
           padding: 8,
         }}
       >
         <div className="flex items-center justify-between h-full">
           <div className="flex flex-col items-start pl-1">
-            <span style={{ fontFamily: 'Inter', fontSize: labelFontSize, fontWeight: 600, lineHeight: labelLineHeight, color: '#121217' }}>
+            <span style={{ fontFamily: 'Inter', fontSize: labelFontSize, fontWeight: 600, lineHeight: labelLineHeight, color: 'hsl(var(--foreground))' }}>
               {selectedLabel}
             </span>
             {totalLabel != null && (
-              <span style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 400, lineHeight: '16px', color: '#121217' }}>
+              <span style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 400, lineHeight: '16px', color: 'hsl(var(--foreground))' }}>
                 {totalLabel}
               </span>
             )}
@@ -85,25 +85,27 @@ export default function LinesSelectionBar({
               disabled={deleting}
               title={deleteTitle}
               onClick={onDelete}
-              className="bg-white hover:bg-[#FEF0F4] disabled:opacity-50 transition-colors"
+              className="bg-card hover:bg-[var(--status-destructive-bg)] disabled:opacity-50 transition-colors"
               style={{
                 width: btnSize,
                 height: btnSize,
-                border: '1px solid #FBB1C4',
-                boxShadow: '0px 1px 2px rgba(18,18,23,0.05)',
+                border: '1px solid hsl(var(--destructive) / 0.3)',
+                boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
                 borderRadius: 8,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Trash2 style={{ width: trashIcon, height: trashIcon, color: '#F3164E' }} />
+              <Trash2
+                style={{ width: trashIcon, height: trashIcon, color: 'hsl(var(--destructive))' }}
+                data-testid="Trash2__220f68" />
             </button>
             <button
               type="button"
               title={closeTitle}
               onClick={onClose}
-              className="transition-colors hover:bg-[#F5F7F9]"
+              className="transition-colors hover:bg-[hsl(var(--muted))]"
               style={{
                 width: btnSize,
                 height: btnSize,
@@ -114,7 +116,9 @@ export default function LinesSelectionBar({
                 border: 'none',
               }}
             >
-              <X style={{ width: closeIcon, height: closeIcon, color: '#828FA3' }} />
+              <X
+                style={{ width: closeIcon, height: closeIcon, color: 'hsl(var(--text-disabled))' }}
+                data-testid="X__220f68" />
             </button>
           </div>
         </div>

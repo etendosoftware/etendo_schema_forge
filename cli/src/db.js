@@ -138,6 +138,12 @@ function createCacheReadPool() {
       if (!entry) throw new CacheMissError(key, sql, params);
       return { rows: entry.rows, rowCount: entry.rows.length };
     },
+    async connect() {
+      return {
+        query: (sql, params) => pool.query(sql, params),
+        release: () => {},
+      };
+    },
     async end() { /* no-op */ },
     __cacheRead: true,
   };
@@ -207,6 +213,37 @@ function extractGradleHostPort(gradle) {
     port = parseInt(gradle['bbdd.port'], 10);
   }
   return { host, port };
+}
+
+/**
+ * Resolve the default DB connection values from gradle.properties (or env vars)
+ * without opening a pool. Used by the interactive TUI to pre-fill prompts.
+ * Returns { host, port, user, password, database, source } where source is
+ * 'gradle' | 'env' | 'defaults'.
+ */
+export function resolveDbDefaults(gradlePropertiesPath) {
+  const { gradle, explicit } = loadGradleConfig(gradlePropertiesPath);
+  const { host: gradleHost, port: gradlePort } = extractGradleHostPort(gradle);
+  const envHost = explicit ? null : process.env.ETENDO_DB_HOST;
+  const envPort = explicit ? null : parseInt(process.env.ETENDO_DB_PORT, 10);
+  const envUser = explicit ? null : process.env.ETENDO_DB_USER;
+  const envPassword = explicit ? null : process.env.ETENDO_DB_PASSWORD;
+  const envDatabase = explicit ? null : process.env.ETENDO_DB_NAME;
+
+  let source = 'defaults';
+  if (gradle) {
+    source = 'gradle';
+  } else if (envHost) {
+    source = 'env';
+  }
+  return {
+    host: (gradleHost === 'db' ? 'localhost' : gradleHost) || envHost || 'localhost',
+    port: gradlePort || envPort || 5432,
+    user: gradle?.['bbdd.user'] || envUser || 'etendo',
+    password: gradle?.['bbdd.password'] || envPassword || '',
+    database: gradle?.['bbdd.sid'] || envDatabase || 'etendo_dev',
+    source,
+  };
 }
 
 export function createDbPool(config, gradlePropertiesPath) {

@@ -8,17 +8,17 @@ import {
 
 describe('STATUSES — enum completeness', () => {
   it('has exactly 7 statuses', () => assert.equal(STATUSES.length, 7));
-  it('includes omitido', () => assert.ok(STATUSES.includes('omitido')));
-  it('includes pendiente', () => assert.ok(STATUSES.includes('pendiente')));
-  it('includes borrador', () => assert.ok(STATUSES.includes('borrador')));
-  it('includes listo', () => assert.ok(STATUSES.includes('listo')));
-  it('includes presentado', () => assert.ok(STATUSES.includes('presentado')));
-  it('includes presentadoOtra', () => assert.ok(STATUSES.includes('presentadoOtra')));
-  it('includes presentadoAcuse', () => assert.ok(STATUSES.includes('presentadoAcuse')));
+  it('includes skipped', () => assert.ok(STATUSES.includes('skipped')));
+  it('includes pending', () => assert.ok(STATUSES.includes('pending')));
+  it('includes draft', () => assert.ok(STATUSES.includes('draft')));
+  it('includes ready', () => assert.ok(STATUSES.includes('ready')));
+  it('includes submitted', () => assert.ok(STATUSES.includes('submitted')));
+  it('includes submitted_ext', () => assert.ok(STATUSES.includes('submitted_ext')));
+  it('includes submitted_ack', () => assert.ok(STATUSES.includes('submitted_ack')));
 });
 
 describe('STATUS_COLOR — all statuses have colors', () => {
-  for (const s of ['omitido','pendiente','borrador','listo','presentado','presentadoOtra','presentadoAcuse']) {
+  for (const s of ['skipped','pending','draft','ready','submitted','submitted_ext','submitted_ack']) {
     it(`${s} has a color`, () => assert.ok(typeof STATUS_COLOR[s] === 'string'));
   }
 });
@@ -42,14 +42,17 @@ describe('formatAmount', () => {
   it('returns em-dash for undefined', () => assert.equal(formatAmount(undefined), '—'));
   it('formats positive number with € symbol', () => assert.match(formatAmount(12179.75), /€|EUR/));
   it('formats negative number with minus sign', () => assert.match(formatAmount(-100), /-/));
+  it('groups thousands in the 1000-9999 range (Intl silently drops it without useGrouping)', () => {
+    assert.match(formatAmount(6162.60), /^6\.162,60\s€$/);
+  });
 });
 
 describe('formatPercent', () => {
   it('returns em-dash for null', () => assert.equal(formatPercent(null), '—'));
   it('returns em-dash for undefined', () => assert.equal(formatPercent(undefined), '—'));
-  it('formats integer rate without decimals', () => assert.equal(formatPercent(21), '21 %'));
-  it('formats decimal rate with comma separator', () => assert.equal(formatPercent(1.75), '1,75 %'));
-  it('formats zero', () => assert.equal(formatPercent(0), '0 %'));
+  it('formats integer rate without decimals', () => assert.equal(formatPercent(21), '21,00'));
+  it('formats decimal rate with comma separator', () => assert.equal(formatPercent(1.75), '1,75'));
+  it('formats zero', () => assert.equal(formatPercent(0), '0,00'));
 });
 
 describe('fmtDecl', () => {
@@ -71,73 +74,73 @@ describe('computeUpcomingDeadlines', () => {
     id: `${model}-${year}-${period}`, model, year, period, status,
   });
 
-  it('excludes presentado', () => {
-    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'presentado')]).length, 0);
+  it('excludes submitted', () => {
+    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'submitted')]).length, 0);
   });
-  it('excludes presentadoAcuse', () => {
-    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'presentadoAcuse')]).length, 0);
+  it('excludes submitted_ack', () => {
+    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'submitted_ack')]).length, 0);
   });
-  it('excludes presentadoOtra', () => {
-    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'presentadoOtra')]).length, 0);
+  it('excludes submitted_ext', () => {
+    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'submitted_ext')]).length, 0);
   });
-  it('excludes omitido', () => {
-    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'omitido')]).length, 0);
+  it('excludes skipped', () => {
+    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'skipped')]).length, 0);
   });
-  it('includes borrador', () => {
-    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'borrador')]).length, 1);
+  it('includes draft', () => {
+    assert.equal(computeUpcomingDeadlines([D('303', 2026, 'T1', 'draft')]).length, 1);
   });
-  it('includes pendiente', () => {
-    assert.equal(computeUpcomingDeadlines([D('349', 2026, '04', 'pendiente')]).length, 1);
+  it('includes pending', () => {
+    assert.equal(computeUpcomingDeadlines([D('349', 2026, '04', 'pending')]).length, 1);
   });
   it('T1 deadline is April 20 of the same year', () => {
-    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, 'T1', 'borrador')]);
+    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, 'T1', 'draft')]);
     assert.equal(deadline.getFullYear(), 2026);
     assert.equal(deadline.getMonth(), 3);
     assert.equal(deadline.getDate(), 20);
   });
   it('T2 deadline is July 20', () => {
-    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, 'T2', 'borrador')]);
+    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, 'T2', 'draft')]);
     assert.equal(deadline.getMonth(), 6);
     assert.equal(deadline.getDate(), 20);
   });
   it('T3 deadline is October 20', () => {
-    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, 'T3', 'borrador')]);
+    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2026, 'T3', 'draft')]);
     assert.equal(deadline.getMonth(), 9);
     assert.equal(deadline.getDate(), 20);
   });
   it('T4 deadline is January 20 of next year', () => {
-    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2025, 'T4', 'pendiente')]);
+    const [{ deadline }] = computeUpcomingDeadlines([D('303', 2025, 'T4', 'pending')]);
     assert.equal(deadline.getFullYear(), 2026);
     assert.equal(deadline.getMonth(), 0);
     assert.equal(deadline.getDate(), 20);
   });
   it('monthly period 04 deadline is May 20', () => {
-    const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '04', 'pendiente')]);
+    const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '04', 'pending')]);
     assert.equal(deadline.getFullYear(), 2026);
     assert.equal(deadline.getMonth(), 4);
     assert.equal(deadline.getDate(), 20);
   });
   it('monthly period 12 deadline is January 20 of next year', () => {
-    const [{ deadline }] = computeUpcomingDeadlines([D('349', 2025, '12', 'pendiente')]);
+    const [{ deadline }] = computeUpcomingDeadlines([D('349', 2025, '12', 'pending')]);
     assert.equal(deadline.getFullYear(), 2026);
     assert.equal(deadline.getMonth(), 0);
     assert.equal(deadline.getDate(), 20);
   });
   it('sorts chronologically (earlier deadline first)', () => {
-    const decls = [D('303', 2026, 'T2', 'borrador'), D('303', 2026, 'T1', 'borrador')];
+    const decls = [D('303', 2026, 'T2', 'draft'), D('303', 2026, 'T1', 'draft')];
     const result = computeUpcomingDeadlines(decls);
     assert.ok(result[0].deadline < result[1].deadline);
   });
   it('respects limit parameter', () => {
-    const decls = ['T1', 'T2', 'T3', 'T4'].map(p => D('303', 2026, p, 'pendiente'));
+    const decls = ['T1', 'T2', 'T3', 'T4'].map(p => D('303', 2026, p, 'pending'));
     assert.equal(computeUpcomingDeadlines(decls, 2).length, 2);
   });
   it('returns empty array when all completed', () => {
-    const decls = [D('303', 2026, 'T1', 'presentadoAcuse'), D('349', 2026, '04', 'omitido')];
+    const decls = [D('303', 2026, 'T1', 'submitted_ack'), D('349', 2026, '04', 'skipped')];
     assert.equal(computeUpcomingDeadlines(decls).length, 0);
   });
   it('each result item has decl and deadline properties', () => {
-    const [item] = computeUpcomingDeadlines([D('303', 2026, 'T1', 'borrador')]);
+    const [item] = computeUpcomingDeadlines([D('303', 2026, 'T1', 'draft')]);
     assert.ok(item.decl);
     assert.ok(item.deadline instanceof Date);
   });

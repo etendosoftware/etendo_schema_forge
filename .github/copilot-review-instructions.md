@@ -71,9 +71,15 @@ Flag violations clearly with the specific rule broken and the file/line involved
 
 ### Testing
 
-- Use `node:test` (`import { describe, it } from 'node:test'`).
-- Use `node:assert` for assertions.
-- Test command: `node --test 'cli/test/*.test.js'`.
+The project has two distinct test layers — do not conflate them:
+
+| Workspace | Framework | File pattern | Runner |
+|-----------|-----------|--------------|--------|
+| `cli/` | `node:test` + `node:assert` | `cli/test/*.test.js` | `node --test 'cli/test/*.test.js'` |
+| `tools/app-shell/` | Vitest | `**/__tests__/*.vitest.js` and `**/__tests__/*.vitest.jsx` | `npx vitest run` |
+
+A file named `*.vitest.js` or `*.vitest.jsx` inside `tools/app-shell/` **is** a test file. Do not flag it as missing tests.
+
 - Every new feature must include tests.
 - Every process must declare at least 3 edge cases.
 - Every kept business rule must have a behavioral test.

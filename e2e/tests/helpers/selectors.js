@@ -4,6 +4,7 @@
  * Prefer data-testid selectors over localized labels. Visible copy can change
  * with the active locale, while these ids describe the tested UI contract.
  */
+import { expect } from '@playwright/test';
 
 export const dashboard = {
   newSalesOrder: 'quick-action-sales-order-new',
@@ -44,12 +45,13 @@ export const purchaseInvoiceList = {
 };
 
 /**
- * Expected grid column labels per locale, in order, for both invoice grids.
- * Sales and purchase share the same final list because labelOverrides + the
- * customs are aligned. If a locale's session is active, the grid renders
- * using that set.
+ * Expected grid column labels per locale, in order. The first seven columns are
+ * shared by both invoice grids; the last column is the logistics-status column
+ * and differs per window: sales invoices ship to the customer ("Delivery Status"
+ * / "Estado de entrega"), while purchase invoices receive goods from the vendor
+ * ("Reception Status" / "Estado de recepción", ETP-4303).
  */
-export const INVOICE_GRID_COLUMNS = {
+const SHARED_INVOICE_COLUMNS = {
   es_ES: [
     'Fecha de la factura',
     'Nº documento',
@@ -58,7 +60,6 @@ export const INVOICE_GRID_COLUMNS = {
     'Estado doc.',
     'Imp.total',
     'Pendiente de pago',
-    'Estado de entrega',
   ],
   en_US: [
     'Invoice Date',
@@ -68,9 +69,23 @@ export const INVOICE_GRID_COLUMNS = {
     'Document Status',
     'Total Gross Amount',
     'Pending Payment',
-    'Delivery Status',
   ],
 };
+
+/** Last grid column (logistics status), per window and locale. */
+export const INVOICE_DELIVERY_STATUS_LABEL = {
+  'sales-invoice': { es_ES: 'Estado de entrega', en_US: 'Delivery Status' },
+  'purchase-invoice': { es_ES: 'Estado de recepción', en_US: 'Reception Status' },
+};
+
+/** Full expected column list (in order) for a given window + locale. */
+export function invoiceGridColumns(window, locale) {
+  return [...SHARED_INVOICE_COLUMNS[locale], INVOICE_DELIVERY_STATUS_LABEL[window][locale]];
+}
+
+// Shared subset, used only for locale detection (the seven common columns are
+// enough to tell es_ES from en_US regardless of the per-window last column).
+export const INVOICE_GRID_COLUMNS = SHARED_INVOICE_COLUMNS;
 
 // --- Purchase Order: List View ---
 export const purchaseOrderList = {
@@ -95,4 +110,56 @@ export const option = (fieldKey, optionId) => `option-${fieldKey}-${optionId}`;
 
 export function byTestId(page, testId) {
   return page.getByTestId(testId);
+}
+
+/**
+ * Click the last checkbox on the page via a genuine DOM `.click()` call.
+ *
+ * ImportLinesModal's Checkbox renders a sr-only native `<input>` (role=checkbox)
+ * behind a 1x1px clip-rect (Semantic Theme Contract DOM refactor) — too small
+ * for Playwright's mouse-based click to reliably hit (both a direct click and
+ * a force:true click on it silently no-op). A genuine DOM `.click()` call
+ * fires the same native change/click events a real click would, without
+ * depending on hit-testing a 1px target.
+ */
+export async function clickLastCheckbox(page) {
+  await page.getByRole('checkbox').last().evaluate((el) => el.click());
+}
+
+/**
+ * Enter edit mode for a `CreatableSearchSelect`-backed field (FK or fixed-list
+ * enum) and wait for its options to render, regardless of the field's current
+ * DOM shape (ETP-4600 unified both onto the same component):
+ *
+ * - Empty / no committed value → the field renders as the searchable combobox
+ *   input directly (`field-{key}`).
+ * - Already has a committed value (including a `defaultValue`) → it renders as
+ *   a Figma-style chip button (`field-{key}-chip`); the plain input is not in
+ *   the DOM. Clicking the chip unmounts it and mounts the input in the same
+ *   tick, so a bare click can hit a node mid-detach ("element was detached
+ *   from the DOM"). Retry the whole open-and-wait-for-options sequence
+ *   instead of a single click so that race settles deterministically.
+ */
+/**
+ * Locator for a `CreatableSearchSelect`-backed field's currently-displayed
+ * value, regardless of whether it is rendered as a committed chip
+ * (`field-{key}-chip`) or the plain combobox input (`field-{key}`). Use for
+ * read-style assertions (e.g. `.toContainText(...)`) after the field already
+ * holds a value (including a `defaultValue`), where a chip is expected.
+ */
+export function selectorFieldDisplay(page, key) {
+  return page.getByTestId(`field-${key}-chip`).or(page.getByTestId(`field-${key}`));
+}
+
+export async function openSelectorField(page, key) {
+  const chip = page.getByTestId(`field-${key}-chip`);
+  const input = page.getByTestId(`field-${key}`);
+  await expect(async () => {
+    if (await chip.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await chip.click({ timeout: 3_000 });
+    } else {
+      await input.click({ timeout: 3_000 });
+    }
+    await expect(page.locator('[role="option"]').first()).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 15_000 });
 }

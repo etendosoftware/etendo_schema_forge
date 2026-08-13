@@ -67,9 +67,7 @@ export default function DocumentTotalsPanel({
   const hasPerProductDiscount = discountAmt != null && discountAmt > 0;
   const canShowTotalDiscount = !readOnly && !!lineConfig?.discountField && (lines.length > 0 || pendingLine != null);
 
-  const divider = (
-    <div style={{ borderTopWidth: '0.5px', borderTopStyle: 'solid', borderTopColor: 'var(--border)' }} />
-  );
+  const divider = <div className="border-t border-border" />;
 
   return (
     <div className="mt-1 flex flex-col items-end" data-inline-add-portal="true">
@@ -121,7 +119,7 @@ export default function DocumentTotalsPanel({
               // Single compact row — checkbox + label + % input + amount — so the
               // expanded panel keeps the same height as the collapsed "+ Añadir
               // descuento total" link area, no layout shift on toggle.
-              <div className="flex items-center gap-2 py-2 px-2">
+              (<div className="flex items-center gap-2 py-2 px-2">
                 <div className="flex items-center gap-1.5 select-none">
                   <Checkbox
                     checked
@@ -130,7 +128,7 @@ export default function DocumentTotalsPanel({
                       setInputPct(0);
                       onTotalDiscountChange?.(0);
                     }}
-                  />
+                    data-testid="Checkbox__2bc3fb" />
                   <span className="whitespace-nowrap">{ui('totalDiscount')}</span>
                 </div>
                 <input
@@ -146,14 +144,13 @@ export default function DocumentTotalsPanel({
                     setInputPct(v);
                     onTotalDiscountChange?.(v);
                   }}
-                  className="w-12 text-xs border border-border/60 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  style={{ borderWidth: '0.5px' }}
+                  className="w-12 rounded border border-border-control px-1.5 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-focus-ring"
                 />
                 <span className="text-xs text-muted-foreground">%</span>
                 <span className="tabular-nums text-muted-foreground ml-auto whitespace-nowrap">
                   {totalDiscountAmt > 0 ? `-${fmt(totalDiscountAmt)}` : fmt(0)}
                 </span>
-              </div>
+              </div>)
             )
           )}
 

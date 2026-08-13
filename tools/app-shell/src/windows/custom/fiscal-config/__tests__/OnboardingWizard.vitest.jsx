@@ -167,7 +167,7 @@ describe('OnboardingWizard — territory selection', () => {
     renderWizard();
     fireEvent.click(screen.getByText('fiscal.territory.espania'));
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    expect(screen.getByText('fiscal.onboarding.subq.volume.title')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.onboarding.subq.obligation.title')).toBeInTheDocument();
   });
 });
 
@@ -252,34 +252,34 @@ describe('OnboardingWizard — SubquestionScreen (volume)', () => {
 
   it('shows volume question for siiver territories', () => {
     navigateToVolumeSubquestion();
-    expect(screen.getByText('fiscal.onboarding.subq.volume.title')).toBeInTheDocument();
-    expect(screen.getByText('fiscal.onboarding.subq.volume.low.label')).toBeInTheDocument();
-    expect(screen.getByText('fiscal.onboarding.subq.volume.high.label')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.onboarding.subq.obligation.title')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.onboarding.subq.obligation.no.label')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.onboarding.subq.obligation.yes.label')).toBeInTheDocument();
   });
 
   it('continue is enabled after selecting high volume', () => {
     navigateToVolumeSubquestion();
-    fireEvent.click(screen.getByText('fiscal.onboarding.subq.volume.high.label'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.subq.obligation.yes.label'));
     expect(screen.getByText('fiscal.onboarding.continue')).not.toBeDisabled();
   });
 
   it('continue stays disabled after selecting low volume without choosing system', () => {
     navigateToVolumeSubquestion();
-    fireEvent.click(screen.getByText('fiscal.onboarding.subq.volume.low.label'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.subq.obligation.no.label'));
     expect(screen.getByText('fiscal.onboarding.continue')).toBeDisabled();
   });
 
   it('shows system choice when volume is low', () => {
     navigateToVolumeSubquestion();
-    fireEvent.click(screen.getByText('fiscal.onboarding.subq.volume.low.label'));
-    expect(screen.getByText('fiscal.onboarding.subq.system.title')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('fiscal.onboarding.subq.obligation.no.label'));
+    expect(screen.getByText('fiscal.onboarding.subq.choice.title')).toBeInTheDocument();
     expect(screen.getByText('fiscal.onboarding.subq.verifactu.label')).toBeInTheDocument();
     expect(screen.getByText('fiscal.onboarding.subq.sii.vol.label')).toBeInTheDocument();
   });
 
   it('continue is enabled after choosing system for low volume', () => {
     navigateToVolumeSubquestion();
-    fireEvent.click(screen.getByText('fiscal.onboarding.subq.volume.low.label'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.subq.obligation.no.label'));
     fireEvent.click(screen.getByText('fiscal.onboarding.subq.verifactu.label'));
     expect(screen.getByText('fiscal.onboarding.continue')).not.toBeDisabled();
   });
@@ -299,7 +299,7 @@ describe('OnboardingWizard — ConfirmScreen', () => {
   it('shows confirmation title and subtitle', () => {
     navigateToConfirm();
     expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
-    expect(screen.getByText('fiscal.onboarding.confirm.subtitle')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.onboarding.confirm.subtitle.pre')).toBeInTheDocument();
   });
 
   it('shows confirm button', () => {
@@ -340,7 +340,7 @@ describe('OnboardingWizard — createRecords flow', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
     await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.detail.saveapply')).toBeInTheDocument();
+      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
   });
 
@@ -350,9 +350,9 @@ describe('OnboardingWizard — createRecords flow', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
     await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.detail.saveapply')).toBeInTheDocument();
+      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByText('fiscal.onboarding.back'));
+    fireEvent.click(screen.getByText('fiscal.cancel'));
     expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
   });
 });
@@ -387,7 +387,7 @@ describe('OnboardingWizard — ManualScreen', () => {
     navigateToManual();
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
     expect(screen.getByText('SII')).toBeInTheDocument();
-    expect(screen.getByText('TBAI')).toBeInTheDocument();
+    expect(screen.getByText('TicketBAI')).toBeInTheDocument();
   });
 
   it('continue is disabled after selecting territory but not system', () => {
@@ -449,11 +449,11 @@ describe('OnboardingWizard — AppliedScreen', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
     await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.detail.saveapply')).toBeInTheDocument();
+      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
     // handleSaveDetail: system='SII', siiRef.current is null (SiiSection not rendered),
     // optional-chaining returns undefined, onApplied() fires → step='applied'
-    fireEvent.click(screen.getByText('fiscal.onboarding.detail.saveapply'));
+    fireEvent.click(screen.getByText('fiscal.save'));
     await waitFor(() => {
       expect(screen.getByText('fiscal.onboarding.applied.title')).toBeInTheDocument();
     });
@@ -508,36 +508,6 @@ describe('OnboardingWizard — AppliedScreen', () => {
   });
 });
 
-describe('OnboardingWizard — Breadcrumb navigation', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('ConfirmScreen breadcrumb territory link navigates back to territory', () => {
-    renderWizard();
-    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('fiscal.onboarding.breadcrumb.territory'));
-    expect(screen.getByText('fiscal.onboarding.territory.title')).toBeInTheDocument();
-  });
-
-  it('ConfirmScreen shows breadcrumb confirm label', () => {
-    renderWizard();
-    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    expect(screen.getByText('fiscal.onboarding.breadcrumb.confirm')).toBeInTheDocument();
-  });
-
-  it('SubquestionScreen breadcrumb territory link navigates back to territory', () => {
-    renderWizard();
-    fireEvent.click(screen.getByText('fiscal.territory.alava'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    expect(screen.getByText('fiscal.onboarding.subq.also.title')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('fiscal.onboarding.breadcrumb.territory'));
-    expect(screen.getByText('fiscal.onboarding.territory.title')).toBeInTheDocument();
-  });
-});
 
 describe('OnboardingWizard — createRecords API calls', () => {
   afterEach(() => {
@@ -555,7 +525,7 @@ describe('OnboardingWizard — createRecords API calls', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
 
     await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.detail.saveapply')).toBeInTheDocument();
+      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('sii-config'),
@@ -576,7 +546,7 @@ describe('OnboardingWizard — createRecords API calls', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
 
     await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.detail.saveapply')).toBeInTheDocument();
+      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('tbai-config'),
@@ -595,7 +565,7 @@ describe('OnboardingWizard — createRecords API calls', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
 
     await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.detail.saveapply')).toBeInTheDocument();
+      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('verifactu-config'),
@@ -672,5 +642,40 @@ describe('OnboardingWizard — OrgDropdown multi-org', () => {
     renderWizard();
     fireEvent.click(screen.getByText('Test Organization').closest('button'));
     expect(screen.queryByText('Other Org')).not.toBeInTheDocument();
+  });
+});
+
+// ── renderPageHead helper ─────────────────────────────────────────────────────
+
+describe('OnboardingWizard — renderPageHead helper', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders the org name in the page head on the territory step', () => {
+    renderWizard();
+    // renderPageHead passes selectedOrg to PageHead which renders the org name
+    expect(screen.getByText('Test Organization')).toBeInTheDocument();
+  });
+
+  it('renders the manual config link on the territory step (onGoToManual variant)', () => {
+    renderWizard();
+    // Territory step calls renderPageHead with onGoToManual → shows the link
+    expect(screen.getByText('fiscal.onboarding.territory.prefer.manual.link')).toBeInTheDocument();
+  });
+
+  it('does NOT render the manual config link on the skipped step (no onGoToManual)', () => {
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.onboarding.skip'));
+    // SkippedScreen calls renderPageHead without onGoToManual → link absent
+    expect(screen.queryByText('fiscal.onboarding.territory.prefer.manual.link')).not.toBeInTheDocument();
+  });
+
+  it('re-renders the org name on subquestion step', () => {
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.territory.alava'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    // SubquestionScreen also calls renderPageHead
+    expect(screen.getByText('Test Organization')).toBeInTheDocument();
   });
 });

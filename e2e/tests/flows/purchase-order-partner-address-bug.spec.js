@@ -78,7 +78,8 @@ test.describe('Purchase Order - Partner Address Bug', () => {
       await expect(partnerAddressChip).toHaveText(/\S/);
     } else {
       // Manual mode → open the dropdown and assert at least one option.
-      await expect(partnerAddressInput).toBeEnabled();
+      // Allow a short grace period: a callout re-fire can transiently disable the field.
+      await expect(partnerAddressInput).toBeEnabled({ timeout: 5_000 });
       await partnerAddressInput.click();
       await expect(page.locator('[data-testid^="option-partnerAddress-"]').first()).toBeVisible({ timeout: 5_000 });
     }
@@ -89,9 +90,9 @@ async function waitForPartnerAddressMode(input, chip) {
   let lastMode = 'pending';
 
   // Use short intervals early (callout usually resolves in <1s) and back off
-  // gradually. 15s total covers slow environments. The 'pending' state is
-  // normal while the callout is in-flight — the field may be invisible/disabled
-  // during that window, which must not be counted as a failure.
+  // gradually. 30s total covers slow/cold-start environments. The 'pending'
+  // state is normal while the callout is in-flight — the field may be
+  // invisible/disabled during that window, which must not be counted as a failure.
   await expect.poll(async () => {
     if (await chip.isVisible().catch(() => false)) {
       lastMode = 'chip';
@@ -102,7 +103,7 @@ async function waitForPartnerAddressMode(input, chip) {
       return lastMode;
     }
     return 'pending';
-  }, { timeout: 15_000, intervals: [200, 200, 500, 1_000] }).not.toBe('pending');
+  }, { timeout: 30_000, intervals: [100, 200, 200, 500, 500, 1_000] }).not.toBe('pending');
 
   return lastMode;
 }

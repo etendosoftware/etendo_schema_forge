@@ -1,10 +1,14 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
-import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
+import AccountingTable from './AccountingTable';
+import AccountingForm from './AccountingForm';
 import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import { AttachmentsTab } from '@/components/attachments';
+import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
 import catalogs from './mockCatalogs';
 import ProductGallery from '@/windows/custom/product/ProductGallery';
 import ProductSidebar from '@/windows/custom/product/ProductSidebar';
@@ -21,7 +25,9 @@ const statusField = null;
 // @sf-generated-end summary:product
 
 // @sf-generated-start extraBadges:product
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:product
 
 // @sf-generated-start processes:product
@@ -35,7 +41,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:product
 
 // @sf-generated-start requiredHeaderFields:product
-const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'returnable'];
+const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'active', 'returnable'];
 // @sf-generated-end requiredHeaderFields:product
 
 
@@ -81,6 +87,17 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/product/priceRuleVersion",
       "detailUrl": "/sws/neo/product/priceRuleVersion/{id}",
+      "supportedFilters": []
+    },
+    "accounting": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": false,
+      "listUrl": "/sws/neo/product/accounting",
+      "detailUrl": "/sws/neo/product/accounting/{id}",
       "supportedFilters": []
     },
     "billOfMaterials": {
@@ -178,7 +195,7 @@ export const api = {
       "field": "uOM",
       "column": "C_UOM_ID",
       "reference": "UOM",
-      "inputMode": "selector",
+      "inputMode": "search",
       "url": "/sws/neo/product/product/selectors/uOM"
     },
     {
@@ -244,6 +261,38 @@ export const api = {
       "reference": "ServicePriceRule",
       "inputMode": "selector",
       "url": "/sws/neo/product/priceRuleVersion/selectors/servicePriceRule"
+    },
+    {
+      "entity": "accounting",
+      "field": "fixedAsset",
+      "column": "P_Asset_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/fixedAsset"
+    },
+    {
+      "entity": "accounting",
+      "field": "productExpense",
+      "column": "P_Expense_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/productExpense"
+    },
+    {
+      "entity": "accounting",
+      "field": "productRevenue",
+      "column": "P_Revenue_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/productRevenue"
+    },
+    {
+      "entity": "accounting",
+      "field": "productCOGS",
+      "column": "P_Cogs_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/productCOGS"
     },
     {
       "entity": "billOfMaterials",
@@ -447,13 +496,33 @@ export const api = {
   },
   "window": {
     "category": "inventory"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "M_Product_Category_ID": "Category",
+      "ProductType": "Type"
+    },
+    "es_ES": {
+      "M_Product_Category_ID": "Categoría",
+      "ProductType": "Tipo"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:ProductPage
 export default function ProductPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('140');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="140" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="product"
         Form={ProductForm}
@@ -467,18 +536,35 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        formFooter={ProductPriceBar}
+        secondaryTabs={[
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, addLineFields: { entry: [
+          { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 1000 },
+        ]}
         primaryTabs={[
           { key: 'general', label: 'General' },
           { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
         ]}
-        customTabsAfterBottom
         hidePrint
         hideMoreMenu
-        contentBg="bg-slate-50"
-        customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
+        noHeaderBorder
+        toolbarBorderBottom
+        compactSidebarPadding
+        whiteFormBackground
+        autoSaveOnBlur
+        sidebarClassName="w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle"
+        tabsBarPaddingX="px-2"
+        primaryTabsVariant="pill"
+        toolbarPaddingX="px-2"
+        contentBg="bg-card"
+        formCardPadding="px-2"
+        customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        labelOverrides={labelOverrides}
+        {...props} window={effectiveWindow}
         sidebarContent={(data) => (
           <ProductSidebar
             recordId={recordId}
@@ -488,6 +574,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           />
         )}
       />
+      </>
     );
   }
 
@@ -500,10 +587,15 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       galleryRenderer={(gProps) => <ProductGallery {...gProps} />}
+      listbarPaddingX="px-2"
+      tablePaddingX="px-2"
       hidePrint
       hideMoreMenu
+      hideLink
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      {...props}
+      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"type":"string"},{"target":"description","aliases":["descripcion","descripción"],"label":"Description","required":false,"type":"textarea"},{"required":false,"type":"string","target":"price","aliases":["precio"],"label":"Price"}]}}
+      {...props} window={effectiveWindow}
     />
   );
 }

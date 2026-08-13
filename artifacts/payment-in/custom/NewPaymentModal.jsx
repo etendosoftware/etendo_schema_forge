@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { useUI } from '@/i18n';
+import { trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 function fmtDate(raw) {
   if (!raw) return '-';
@@ -14,10 +16,7 @@ function fmtDate(raw) {
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? Number.parseFloat(val) : (val ?? 0);
-  if (curr) {
-    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: curr }).format(n); } catch { /* */ }
-  }
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatCurrency(curr, n);
 }
 
 export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose }) {
@@ -159,6 +158,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       if (!res.ok) throw new Error(resJson?.response?.message || resJson?.message || `Failed (${res.status})`);
       const paymentId = resJson?.response?.data?.id;
       if (paymentId) {
+        trackDocumentCreated('payment-in');
         navigate(`/${windowName}/${paymentId}`);
       } else {
         handleClose();
@@ -202,51 +202,51 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
   const isInvoiceMode = mode === 'invoice';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={handleClose}>
-      <div className="bg-white rounded-xl shadow-lg flex flex-col overflow-hidden"
-        style={{ width: 480, maxHeight: '85vh', border: '0.5px solid #E5E7EB' }}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onClick={handleClose}>
+      <div className="bg-card rounded-xl shadow-lg flex flex-col overflow-hidden"
+        style={{ width: 480, maxHeight: '85vh', border: '0.5px solid hsl(var(--border-subtle))' }}
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>{ui('financeCollections')}</div>
-              <div style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{ui('newPayment')}</div>
+              <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>{ui('financeCollections')}</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))' }}>{ui('newPayment')}</div>
             </div>
-            <button type="button" onClick={handleClose} style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, border: '0.5px solid #E5E7EB', background: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1 }}>&times;</button>
+            <button type="button" onClick={handleClose} style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, border: '0.5px solid hsl(var(--border-subtle))', background: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', fontSize: 14, lineHeight: 1 }}>&times;</button>
           </div>
         </div>
 
         {/* Mode selector */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '12px 14px', borderBottom: '1px solid #E5E7EB' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '12px 14px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
           <button type="button" onClick={() => setMode('credit')}
             style={{
               padding: '12px 14px', borderRadius: 8, textAlign: 'left', cursor: 'pointer',
-              border: !isInvoiceMode ? '2px solid #3b82f6' : '0.5px solid #d1d5db',
-              background: !isInvoiceMode ? '#eff6ff' : '#fff',
+              border: !isInvoiceMode ? '2px solid var(--status-info-border)' : '0.5px solid hsl(var(--border-subtle))',
+              background: !isInvoiceMode ? 'var(--status-info-bg)' : 'hsl(var(--card))',
             }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={!isInvoiceMode ? '#2563eb' : '#6B7280'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={!isInvoiceMode ? 'var(--status-info-fg)' : 'hsl(var(--muted))'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
               </svg>
-              <span style={{ fontSize: 12, fontWeight: 500, color: !isInvoiceMode ? '#2563eb' : '#374151' }}>{ui('creditAdvance')}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: !isInvoiceMode ? 'var(--status-info-fg)' : 'hsl(var(--foreground))' }}>{ui('creditAdvance')}</span>
             </div>
-            <div style={{ fontSize: 10, color: '#9ca3af' }}>{ui('creditAdvanceDescription')}</div>
+            <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))' }}>{ui('creditAdvanceDescription')}</div>
           </button>
           <button type="button" onClick={() => setMode('invoice')}
             style={{
               padding: '12px 14px', borderRadius: 8, textAlign: 'left', cursor: 'pointer',
-              border: isInvoiceMode ? '2px solid #3b82f6' : '0.5px solid #d1d5db',
-              background: isInvoiceMode ? '#eff6ff' : '#fff',
+              border: isInvoiceMode ? '2px solid var(--status-info-border)' : '0.5px solid hsl(var(--border-subtle))',
+              background: isInvoiceMode ? 'var(--status-info-bg)' : 'hsl(var(--card))',
             }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isInvoiceMode ? '#2563eb' : '#6B7280'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isInvoiceMode ? 'var(--status-info-fg)' : 'hsl(var(--muted))'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
               </svg>
-              <span style={{ fontSize: 12, fontWeight: 500, color: isInvoiceMode ? '#2563eb' : '#374151' }}>{ui('linkedToInvoiceMode')}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: isInvoiceMode ? 'var(--status-info-fg)' : 'hsl(var(--foreground))' }}>{ui('linkedToInvoiceMode')}</span>
             </div>
-            <div style={{ fontSize: 10, color: '#9ca3af' }}>{ui('linkedToInvoiceModeDescription')}</div>
+            <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))' }}>{ui('linkedToInvoiceModeDescription')}</div>
           </button>
         </div>
 
@@ -254,9 +254,9 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
         <div className="flex-1 overflow-y-auto" style={{ padding: '14px 16px' }}>
           {/* Credit mode banner */}
           {!isInvoiceMode && (
-            <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: '#eff6ff', borderRadius: 8, marginBottom: 12, border: '0.5px solid #bfdbfe' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-              <span style={{ fontSize: 11, color: '#1e40af', lineHeight: 1.4 }}>
+            <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: 'var(--status-info-bg)', borderRadius: 8, marginBottom: 12, border: '0.5px solid var(--status-info-border)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--status-info-fg)" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+              <span style={{ fontSize: 11, color: 'var(--status-info-fg)', lineHeight: 1.4 }}>
                 {ui('creditAdvanceDescription')}
               </span>
             </div>
@@ -265,9 +265,9 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Customer */}
             <div>
-              <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('customer')}</label>
+              <label style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 3 }}>{ui('customer')}</label>
               {loadingCustomers ? (
-                <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>{ui('loading')}</div>
+                <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '6px 10px' }}>{ui('loading')}</div>
               ) : (
                 <Select value={customerId} onValueChange={v => { setCustomerId(v); setInvoiceId(''); }} required>
                   <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder={ui('selectCustomer')} /></SelectTrigger>
@@ -281,13 +281,13 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
             {/* Invoice (only in invoice mode) */}
             {isInvoiceMode && (
               <div>
-                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('invoice')}</label>
+                <label style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 3 }}>{ui('invoice')}</label>
                 {!customerId ? (
-                  <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px', border: '0.5px solid #E5E7EB', borderRadius: 6 }}>{ui('selectCustomerFirst')}</div>
+                  <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '6px 10px', border: '0.5px solid hsl(var(--border-subtle))', borderRadius: 6 }}>{ui('selectCustomerFirst')}</div>
                 ) : loadingInvoices ? (
-                  <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>{ui('loadingInvoices')}</div>
+                  <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '6px 10px' }}>{ui('loadingInvoices')}</div>
                 ) : invoices.length === 0 ? (
-                  <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px', border: '0.5px solid #E5E7EB', borderRadius: 6 }}>{ui('noPendingInvoices')}</div>
+                  <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '6px 10px', border: '0.5px solid hsl(var(--border-subtle))', borderRadius: 6 }}>{ui('noPendingInvoices')}</div>
                 ) : (
                   <Select value={invoiceId} onValueChange={setInvoiceId} required>
                     <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder={ui('selectInvoice')} /></SelectTrigger>
@@ -306,21 +306,21 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
             {/* Date + Amount */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div>
-                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('date')}</label>
+                <label style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 3 }}>{ui('date')}</label>
                 <DateField value={date} onChange={setDate} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('amount')}</label>
+                <label style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 3 }}>{ui('amount')}</label>
                 <input type="number" min={0} step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className="text-sm tabular-nums"
-                  style={{ width: '100%', border: '0.5px solid #E5E7EB', borderRadius: 6, padding: '7px 10px', outline: 'none', boxSizing: 'border-box' }} />
+                  style={{ width: '100%', border: '0.5px solid hsl(var(--border-subtle))', borderRadius: 6, padding: '7px 10px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
 
             {/* Payment Method */}
             <div>
-              <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('method')}</label>
+              <label style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 3 }}>{ui('method')}</label>
               {loadingPaymentMethods ? (
-                <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>{ui('loading')}</div>
+                <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '6px 10px' }}>{ui('loading')}</div>
               ) : (
                 <Select value={paymentMethodId} onValueChange={v => { setPaymentMethodId(v); }}>
                   <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder={ui('selectPaymentMethod')} /></SelectTrigger>
@@ -333,9 +333,9 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
 
             {/* Account */}
             <div>
-              <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('account')}</label>
+              <label style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 3 }}>{ui('account')}</label>
               {loadingAccounts ? (
-                <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>{ui('loading')}</div>
+                <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '6px 10px' }}>{ui('loading')}</div>
               ) : (
                 <Select value={accountId} onValueChange={setAccountId} required>
                   <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder={ui('selectAccount')} /></SelectTrigger>
@@ -349,25 +349,25 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
             {/* Description (credit mode only) */}
             {!isInvoiceMode && (
               <div>
-                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('description')}</label>
+                <label style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 3 }}>{ui('description')}</label>
                 <input type="text" value={description} onChange={e => setDescription(e.target.value)}
                   placeholder={ui('creditDescriptionPlaceholder')}
-                  style={{ width: '100%', fontSize: 13, border: '0.5px solid #E5E7EB', borderRadius: 6, padding: '7px 10px', outline: 'none', color: '#374151', boxSizing: 'border-box' }} />
+                  style={{ width: '100%', fontSize: 13, border: '0.5px solid hsl(var(--border-subtle))', borderRadius: 6, padding: '7px 10px', outline: 'none', color: 'hsl(var(--foreground))', boxSizing: 'border-box' }} />
               </div>
             )}
           </div>
 
-          {error && <div style={{ fontSize: 11, color: '#dc2626', marginTop: 8 }}>{error}</div>}
+          {error && <div style={{ fontSize: 11, color: 'hsl(var(--destructive))', marginTop: 8 }}>{error}</div>}
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderTop: '0.5px solid #d1d5db', padding: '10px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--border-subtle))', padding: '10px 16px' }}>
           <button type="button" onClick={handleClose}
-            style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '0.5px solid #E5E7EB', background: 'transparent', color: '#6B7280', cursor: 'pointer' }}>
+            style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '0.5px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}>
             {ui('cancel')}
           </button>
           <button type="button" onClick={isInvoiceMode ? handleCreateLinked : handleCreateCredit} disabled={saving}
-            style={{ fontSize: 13, fontWeight: 500, padding: '6px 16px', borderRadius: 6, border: 'none', background: '#18181b', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1 }}>
+            style={{ fontSize: 13, fontWeight: 500, padding: '6px 16px', borderRadius: 6, border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1 }}>
             {saving ? ui('creating') : (isInvoiceMode ? ui('createPayment') : ui('createCredit'))}
           </button>
         </div>

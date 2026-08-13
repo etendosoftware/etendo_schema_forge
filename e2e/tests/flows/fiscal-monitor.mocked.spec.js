@@ -125,7 +125,7 @@ test.describe('Fiscal Monitor — SII profile', () => {
     await installFiscalMonitorMocks(page, { siiCfg: SII_CFG, siiCount: 12 });
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
   });
 
   test('shows the SII issued and received tabs', async ({ page }) => {
@@ -138,14 +138,15 @@ test.describe('Fiscal Monitor — SII profile', () => {
     await expect(tabs.getByText(t('fiscalMonitor.sii.tab.received')).first()).toBeVisible();
   });
 
-  test('shows KPI cards for SII profile', async ({ page }) => {
+  test('shows the SII issued and received tabs when SII count data is present', async ({ page }) => {
     await loginWithOrg(page);
     await installFiscalMonitorMocks(page, { siiCfg: SII_CFG, siiCount: 7 });
     await navigateTo(page, 'fiscal-monitor');
 
-    // KPI cards render counts from the mock (totalRows = 7 for each endpoint)
-    const cards = page.getByTestId('fm-kpi-card');
-    await expect(cards.first()).toBeVisible({ timeout: 8_000 });
+    // Both invoice-type tabs (fm-tabs) must render
+    const tabs = page.getByTestId('fm-tabs').first();
+    await expect(tabs.getByText(t('fiscalMonitor.sii.tab.issued')).first()).toBeVisible({ timeout: 8_000 });
+    await expect(tabs.getByText(t('fiscalMonitor.sii.tab.received')).first()).toBeVisible();
   });
 });
 
@@ -155,7 +156,7 @@ test.describe('Fiscal Monitor — TBAI profile', () => {
     await installFiscalMonitorMocks(page, { tbaiCfg: TBAI_CFG, tbaiCount: 8 });
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.tbai.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('tbai-tablecard')).toBeVisible({ timeout: 8_000 });
   });
 });
 
@@ -165,17 +166,18 @@ test.describe('Fiscal Monitor — Verifactu profile', () => {
     await installFiscalMonitorMocks(page, { vfCfg: VF_CFG, vfCount: 4 });
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.verifactu.title'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('verifactu-tablecard')).toBeVisible({ timeout: 8_000 });
   });
 
-  test('shows Verifactu status tabs', async ({ page }) => {
+  test('shows Verifactu filter pills (Correctas / Con problemas)', async ({ page }) => {
     await loginWithOrg(page);
     await installFiscalMonitorMocks(page, { vfCfg: VF_CFG });
     await navigateTo(page, 'fiscal-monitor');
 
+    // Verifactu uses filter pills (fm-tabs testid) not tabbed navigation
     const tabs = page.getByTestId('fm-tabs').first();
-    await expect(tabs.getByText(t('fiscalMonitor.verifactu.tab.accepted')).first()).toBeVisible({ timeout: 8_000 });
-    await expect(tabs.getByText(t('fiscalMonitor.verifactu.tab.rejected')).first()).toBeVisible();
+    await expect(tabs.getByText(t('fiscalMonitor.verifactu.pill.correct')).first()).toBeVisible({ timeout: 8_000 });
+    await expect(tabs.getByText(t('fiscalMonitor.verifactu.pill.problems')).first()).toBeVisible();
   });
 });
 
@@ -185,8 +187,14 @@ test.describe('Fiscal Monitor — SII+TBAI combined profile', () => {
     await installFiscalMonitorMocks(page, { siiCfg: SII_CFG, tbaiCfg: TBAI_CFG });
     await navigateTo(page, 'fiscal-monitor');
 
-    await expect(page.getByText(t('fiscalMonitor.sii.title'))).toBeVisible({ timeout: 8_000 });
-    await expect(page.getByText(t('fiscalMonitor.tbai.title'))).toBeVisible();
+    // Default system tab is SII — verify SII content is visible
+    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
+
+    // Switch to TBAI system tab (only one section visible at a time).
+    // In combined mode TbaiMonitorSection renders with noWrap, so tbai-tablecard
+    // wrapper is absent — check for the always-present "Enviadas" filter pill instead.
+    await page.getByRole('tab', { name: t('fiscalMonitor.systemTab.tbai') }).click();
+    await expect(page.getByText(t('fiscalMonitor.tbai.pill.sent')).first()).toBeVisible({ timeout: 8_000 });
   });
 });
 
@@ -200,20 +208,20 @@ test.describe('Fiscal Monitor — conflict state', () => {
   });
 });
 
-test.describe('Fiscal Monitor — KPI card → tab sync', () => {
-  test('clicking the Facturas recibidas KPI card activates the Recibidas tab', async ({ page }) => {
+test.describe('Fiscal Monitor — tab activation', () => {
+  test('clicking the Recibidas tab activates it', async ({ page }) => {
     await loginWithOrg(page);
     await installFiscalMonitorMocks(page, { siiCfg: SII_CFG, siiCount: 10 });
     await navigateTo(page, 'fiscal-monitor');
 
-    // Wait for the section to render
-    await expect(page.getByTestId('fm-kpi-card').first()).toBeVisible({ timeout: 8_000 });
+    // Wait for the SII tabs to render
+    await expect(page.getByTestId('fm-tabs').first()).toBeVisible({ timeout: 8_000 });
 
-    // Click the "Facturas recibidas" KPI card (periodo actual)
-    await page.getByTestId('fm-kpi-card').filter({ hasText: t('fiscalMonitor.kpi.sii.received') }).first().click();
+    // Click the Recibidas tab directly
+    await page.getByTestId('fm-tabs').first().locator('button').filter({ hasText: t('fiscalMonitor.sii.tab.received') }).first().click();
     await page.waitForTimeout(300);
 
-    // Recibidas tab button (not the period segment) should now be active
+    // Recibidas tab button should now be active
     const activeTab = page.getByTestId('fm-tabs').first().locator('.tab.active');
     await expect(activeTab).toContainText(t('fiscalMonitor.sii.tab.received'));
   });

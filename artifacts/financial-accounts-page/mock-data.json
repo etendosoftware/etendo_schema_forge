@@ -1,0 +1,42 @@
+{
+  "__note": "JSON-only NEO endpoint; this file is a placeholder to satisfy the F8 pipeline validator.",
+  "response": {
+    "data": {
+      "accounts": [
+        {
+          "id": "94EAA455D2644E04AB25D93BE5157B6D",
+          "name": "BBVA Principal",
+          "type": "B",
+          "currentBalance": 12345.67,
+          "currencyId": "102",
+          "currencyIso": "EUR",
+          "iban": "ES1212340000000000000001",
+          "isDefault": true,
+          "pendingCount": 4
+        },
+        {
+          "id": "94EAA455D2644E04AB25D93BE5157B6E",
+          "name": "Caja Tienda",
+          "type": "C",
+          "currentBalance": 250.5,
+          "currencyId": "102",
+          "currencyIso": "EUR",
+          "iban": "",
+          "isDefault": false,
+          "pendingCount": 0
+        }
+      ],
+      "summary": {
+        "totalBalance": 12596.17,
+        "byCurrency": [
+          { "currencyIso": "EUR", "total": 12596.17 }
+        ],
+        "pending": {
+          "accountsWithPending": 1,
+          "suggestionsReady": 0,
+          "byRule": 0
+        }
+      }
+    }
+  }
+}

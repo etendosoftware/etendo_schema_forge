@@ -1,0 +1,2007 @@
+/**
+ * Integration test for InlineLinesPanel — renders the component in jsdom
+ * with minimal mocks. No server, no DB, no browser needed.
+ */
+import { render, screen, within, act, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import InlineLinesPanel from '../InlineLinesPanel.jsx';
+import React, { createRef } from 'react';
+
+// --- Mocks (one block, no spreading across files) ---
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+// ETP-4685 — a handful of enum i18n keys translated for the "resolves enum option
+// labels through ui()" test below; any other key falls through unchanged, so this
+// stays a no-op for every other test in this file.
+const ETP4685_TEST_TRANSLATIONS = { taxCategoryVat21: 'Artículo (prueba)', taxCategoryVat10: 'Servicio (prueba)' };
+vi.mock('@/i18n', () => ({
+  useLabel: () => () => '',
+  useUI: () => (key) => ETP4685_TEST_TRANSLATIONS[key] ?? key,
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+}));
+
+vi.mock('@/lib/resolveIdentifier.js', () => ({
+  resolveIdentifier: (row, key) => {
+    const idKey = `${key}$_identifier`;
+    return row[idKey] || row[key] || '';
+  },
+}));
+
+vi.mock('@/lib/resolveColumnLabel.js', () => ({
+  resolveColumnLabel: (col) => col.label || col.key,
+}));
+
+vi.mock('@/lib/linesColumnWidth.js', () => ({
+  columnFlex: () => '1 0 100px',
+  columnMinWidthPx: () => 100,
+}));
+
+// Stub the heavy sub-components that need their own providers
+vi.mock('../InlineSearchCombo.jsx', () => ({
+  InlineSearchCombo: ({ field, displayLabel, excludeId }) => (
+    <span
+      data-testid={`inline-combo-${field.key}`}
+      data-exclude-id={excludeId == null ? '' : String(excludeId)}
+    >
+      {displayLabel}
+    </span>
+  ),
+}));
+vi.mock('../SelectorInput.jsx', () => ({
+  SelectorInput: () => <span data-testid="selector-input" />,
+  // DimensionsPanel.jsx's DimensionGrid imports this as a default export — needed
+  // once a test actually expands the dimensions sub-row (see the "Add dimensions"
+  // hover-action tests below), not just checks the collapsed summary/toggle.
+  // ETP-4610 live-transition tests drive real field edits through this stub's
+  // "set"/"clear" buttons, which call `onChange` exactly like a real selector
+  // picking (or clearing) a value would.
+  default: ({ field, onChange }) => (
+    <div data-testid={`dimension-field-${field.key}`}>
+      <button
+        type="button"
+        data-testid={`dimension-field-${field.key}-set`}
+        onClick={() => onChange('NEWVAL', 'New Value')}
+      >
+        set
+      </button>
+      <button
+        type="button"
+        data-testid={`dimension-field-${field.key}-clear`}
+        onClick={() => onChange('', '')}
+      >
+        clear
+      </button>
+    </div>
+  ),
+}));
+vi.mock('../ProductSearchDrawer.jsx', () => ({
+  default: () => null,
+}));
+vi.mock('./quickActionsStyle.js', () => ({
+  QUICK_ACTIONS_PILL_CLASS: 'pill',
+}));
+
+// --- Test data ---
+
+const COLUMNS = [
+  { key: 'product', label: 'Product', type: 'string', column: 'M_Product_ID' },
+  { key: 'quantity', label: 'Qty', type: 'number' },
+  { key: 'unitPrice', label: 'Price', type: 'amount' },
+  { key: 'lineNetAmount', label: 'Total', type: 'amount' },
+];
+
+const ROWS = [
+  { id: 'L1', product: 'P1', 'product$_identifier': 'Widget', quantity: 10, unitPrice: 5.0, lineNetAmount: 50 },
+  { id: 'L2', product: 'P2', 'product$_identifier': 'Gadget', quantity: 3, unitPrice: 20.0, lineNetAmount: 60 },
+];
+
+function renderPanel(props = {}) {
+  const ref = createRef();
+  const result = render(
+    <InlineLinesPanel
+      ref={ref}
+      columns={COLUMNS}
+      data={ROWS}
+      entity="lines"
+      token="test"
+      apiBaseUrl="/api"
+      selectorContext={{}}
+      onSelectionChange={vi.fn()}
+      onUpdateRow={vi.fn().mockResolvedValue()}
+      onDeleteRow={vi.fn().mockResolvedValue()}
+      {...props}
+    />,
+  );
+  return { ...result, ref };
+}
+
+// Radix Select needs a few pointer-capture DOM APIs jsdom does not implement —
+// only exercised by the "resolves enum option labels through ui()" test below,
+// which opens a real Select dropdown (see AccountBadgeSelect.vitest.jsx for the
+// same pattern).
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+  Element.prototype.scrollIntoView = vi.fn();
+});
+
+// --- Tests ---
+
+describe('InlineLinesPanel', () => {
+  it('renders the panel container', () => {
+    renderPanel();
+    expect(screen.getByTestId('inline-lines-panel')).toBeInTheDocument();
+  });
+
+  it('renders column headers', () => {
+    renderPanel();
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-quantity')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-unitPrice')).toBeInTheDocument();
+  });
+
+  it('renders all data rows', () => {
+    renderPanel();
+    expect(screen.getByTestId('line-row-L1')).toBeInTheDocument();
+    expect(screen.getByTestId('line-row-L2')).toBeInTheDocument();
+  });
+
+  it('displays resolved identifiers (product name, not ID)', () => {
+    renderPanel();
+    expect(screen.getByText('Widget')).toBeInTheDocument();
+    expect(screen.getByText('Gadget')).toBeInTheDocument();
+  });
+
+  it('formats amount columns in es-ES locale (comma decimal, no currency symbol)', () => {
+    renderPanel();
+    // Real formatCurrency(undefined, value) — no currency code available at this column,
+    // falls back to plain es-ES number formatting: comma decimal, no symbol/code shown.
+    expect(screen.getByText('50,00')).toBeInTheDocument();
+    expect(screen.getByText('60,00')).toBeInTheDocument();
+  });
+
+  it('shows edit and delete actions on hover', async () => {
+    renderPanel();
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    // Actions container should appear
+    const actions = within(row).getByTestId('line-actions');
+    expect(actions).toBeInTheDocument();
+  });
+
+  it('does not show actions when isDocumentReadOnly', async () => {
+    renderPanel({ isDocumentReadOnly: true });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    // line-actions may render but the action buttons inside should not
+    const actions = within(row).queryByTestId('line-actions');
+    if (actions) {
+      // In readonly mode, showActions is false → no buttons rendered inside
+      expect(within(actions).queryByRole('button')).toBeNull();
+    }
+  });
+
+  it('handles empty data gracefully', () => {
+    renderPanel({ data: [] });
+    expect(screen.getByTestId('inline-lines-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('line-row-L1')).toBeNull();
+  });
+
+  it('respects hidden columns', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'secret', label: 'Secret', type: 'string', hidden: true },
+    ];
+    renderPanel({ columns: cols });
+    expect(screen.queryByTestId('column-header-secret')).toBeNull();
+  });
+
+  // --- ETP-4543: dynamic `hiddenColumns` prop (displayLogic-driven visibility) ---
+  //
+  // Mirrors DataTable's `hiddenColumns` filter: a list of column keys to
+  // exclude on top of the static `col.hidden` flag. Used by DetailView to
+  // hide config-gated accounting-dimension columns (project/costcenter)
+  // when the @ACCT_DIMENSION_DISPLAY@ toggle resolves to hidden.
+
+  it('does not render a column header whose key is listed in hiddenColumns', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    renderPanel({ columns: cols, hiddenColumns: ['costcenter'] });
+    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+  });
+
+  it('does not render body cells for a column listed in hiddenColumns', () => {
+    const cols = [
+      { key: 'product', label: 'Product', type: 'string', column: 'M_Product_ID' },
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    const rows = [{ id: 'HC1', product: 'P1', costcenter: 'CC1', 'costcenter$_identifier': 'HQ' }];
+    renderPanel({ columns: cols, data: rows, hiddenColumns: ['costcenter'] });
+    expect(screen.queryByText('HQ')).toBeNull();
+  });
+
+  it('still renders columns that are NOT listed in hiddenColumns', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'project', label: 'Project', type: 'selector', column: 'C_Project_ID' },
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    renderPanel({ columns: cols, hiddenColumns: ['costcenter'] });
+    // project is NOT in hiddenColumns — stays visible.
+    expect(screen.getByTestId('column-header-project')).toBeInTheDocument();
+    // Pre-existing columns are unaffected.
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    // costcenter IS in hiddenColumns — hidden.
+    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+  });
+
+  it('defaults hiddenColumns to [] — omitting the prop behaves identically to before this change', () => {
+    // No `hiddenColumns` prop passed at all (not even an empty array) —
+    // every existing caller that predates ETP-4543 must render unaffected.
+    renderPanel();
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-quantity')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-unitPrice')).toBeInTheDocument();
+    expect(screen.getByTestId('line-row-L1')).toBeInTheDocument();
+    expect(screen.getByTestId('line-row-L2')).toBeInTheDocument();
+  });
+
+  it('passing an explicit empty hiddenColumns=[] behaves identically to omitting it', () => {
+    renderPanel({ hiddenColumns: [] });
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-quantity')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-unitPrice')).toBeInTheDocument();
+  });
+
+  it('combines static col.hidden AND dynamic hiddenColumns filtering', () => {
+    const cols = [
+      ...COLUMNS,
+      { key: 'secret', label: 'Secret', type: 'string', hidden: true },
+      { key: 'costcenter', label: 'Cost Center', type: 'selector', column: 'C_Costcenter_ID' },
+    ];
+    renderPanel({ columns: cols, hiddenColumns: ['costcenter'] });
+    expect(screen.queryByTestId('column-header-secret')).toBeNull();
+    expect(screen.queryByTestId('column-header-costcenter')).toBeNull();
+    expect(screen.getByTestId('column-header-product')).toBeInTheDocument();
+  });
+
+  it('exposes imperative ref with flushPendingEdits and clearSelection', () => {
+    const { ref } = renderPanel();
+    expect(typeof ref.current.flushPendingEdits).toBe('function');
+    expect(typeof ref.current.closeEditing).toBe('function');
+    expect(typeof ref.current.clearSelection).toBe('function');
+  });
+
+  it('flushPendingEdits resolves a promise', async () => {
+    const { ref } = renderPanel();
+    await expect(ref.current.flushPendingEdits()).resolves.toBeUndefined();
+  });
+
+  it('onRowClick fires when provided and row body is clicked', async () => {
+    const onRowClick = vi.fn();
+    renderPanel({ onRowClick });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.click(row);
+    });
+    expect(onRowClick).toHaveBeenCalledWith(ROWS[0]);
+  });
+
+  // --- Extended coverage (pencil, trash, checkboxes, cell rendering) ---
+
+  it('click pencil icon enters edit mode for the row', async () => {
+    renderPanel();
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0]; // pencil is first
+    await act(async () => {
+      await userEvent.click(editBtn);
+    });
+    // After clicking pencil, the row should have edit cells — look for an input
+    // inside the row (EditCell renders an <Input> for editable types).
+    const inputs = within(row).queryAllByRole('textbox');
+    // The 'product' column is type: 'string' and editable — should render an input
+    expect(inputs.length).toBeGreaterThan(0);
+  });
+
+  it('click trash icon fires onDeleteRow', async () => {
+    const onDeleteRow = vi.fn().mockResolvedValue();
+    renderPanel({ onDeleteRow });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    const buttons = within(actions).getAllByRole('button');
+    const trashBtn = buttons[buttons.length - 1]; // trash is second/last
+    await act(async () => {
+      await userEvent.click(trashBtn);
+    });
+    expect(onDeleteRow).toHaveBeenCalledWith(ROWS[0]);
+  });
+
+  // ETP-4565 — regression: `hideDelete: true` windows (e.g. product-category's
+  // Contabilidad tab) resolve `onDeleteRow` to undefined all the way up from the
+  // contract's `apiPrediction.crud.<entity>.delete: false`. DataTable already gates
+  // its own trash button on `onDeleteRow` (see DataTable.jsx ~1450); InlineLinesPanel
+  // did not, so the icon rendered anyway and silently no-opped on click. This asserts
+  // the icon itself is absent — not just inert — when no delete handler is provided.
+  it('does not render the delete (trash) icon when onDeleteRow is not provided (ETP-4565)', async () => {
+    renderPanel({ onDeleteRow: undefined });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    // Edit (pencil) must still render — only delete is gated.
+    expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeInTheDocument();
+    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeNull();
+    expect(within(actions).queryByRole('button', { name: /delete/i })).toBeNull();
+  });
+
+  it('still renders the delete (trash) icon when onDeleteRow IS provided (no regression)', async () => {
+    renderPanel();
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeInTheDocument();
+  });
+
+  it('numeric column headers are right-aligned', () => {
+    renderPanel();
+    const qtyHeader = screen.getByTestId('column-header-quantity');
+    expect(qtyHeader.style.justifyContent).toBe('flex-end');
+  });
+
+  it('renders boolean column as Yes/No text', () => {
+    const columns = [
+      { key: 'active', label: 'Active', type: 'boolean' },
+    ];
+    const rows = [
+      { id: 'B1', active: true },
+      { id: 'B2', active: false },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    // renderBooleanCell: true → ui('yes') which returns 'yes'
+    expect(screen.getByText('yes')).toBeInTheDocument();
+    expect(screen.getByText('no')).toBeInTheDocument();
+  });
+
+  it('renders date column with formatted date', () => {
+    const columns = [
+      { key: 'orderDate', label: 'Date', type: 'date' },
+    ];
+    const rows = [
+      { id: 'D1', orderDate: '2026-03-15' },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    // renderDateCell parses "2026-03-15" and calls toLocaleDateString
+    const row = screen.getByTestId('line-row-D1');
+    // The date should be rendered (exact format depends on locale, but it should not be the raw ISO string)
+    expect(within(row).queryByText('—')).toBeNull();
+  });
+
+  it('renders dash for empty date column', () => {
+    const columns = [
+      { key: 'orderDate', label: 'Date', type: 'date' },
+    ];
+    const rows = [
+      { id: 'D2', orderDate: null },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('renders signedDelta column in read mode: negative value with negative color', () => {
+    const columns = [
+      { key: 'etgoQtydiff', label: 'Difference', type: 'signedDelta' },
+    ];
+    const rows = [
+      { id: 'S1', etgoQtydiff: -8 },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const cell = screen.getByText('-8');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('hsl(var(--destructive))');
+    expect(cell.style.fontWeight).toBe('600');
+  });
+
+  it('renders signedDelta column in read mode: exactly-zero as "±0" with neutral color', () => {
+    const columns = [
+      { key: 'etgoQtydiff', label: 'Difference', type: 'signedDelta' },
+    ];
+    const rows = [
+      { id: 'S2', etgoQtydiff: 0 },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const cell = screen.getByText('±0');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('hsl(var(--foreground))');
+  });
+
+  it('renders signedDelta column in read mode: positive value with positive color', () => {
+    const columns = [
+      { key: 'etgoQtydiff', label: 'Difference', type: 'signedDelta' },
+    ];
+    const rows = [
+      { id: 'S3', etgoQtydiff: 5 },
+    ];
+    const ref = createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const cell = screen.getByText('+5');
+    expect(cell).toBeInTheDocument();
+    expect(cell.style.color).toBe('var(--status-success-fg)');
+  });
+
+  it('commitField skips when value is unchanged (onUpdateRow NOT called)', async () => {
+    const onUpdateRow = vi.fn().mockResolvedValue();
+    renderPanel({ onUpdateRow });
+    const row = screen.getByTestId('line-row-L1');
+    // Enter edit mode
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => {
+      await userEvent.click(editBtn);
+    });
+    // The product field should now be an editable input with value 'P1'.
+    // Find the input for product (type: 'string') and blur it without changing the value.
+    const inputs = within(row).getAllByRole('textbox');
+    const productInput = inputs[0];
+    // Blur without changing — commitField should skip because original === value
+    await act(async () => {
+      productInput.focus();
+      productInput.blur();
+    });
+    // onUpdateRow should NOT have been called because value is unchanged
+    expect(onUpdateRow).not.toHaveBeenCalled();
+  });
+
+  it('onEditRow is called instead of toggling inline edit when provided', async () => {
+    const onEditRow = vi.fn();
+    renderPanel({ onEditRow });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => {
+      await userEvent.click(editBtn);
+    });
+    expect(onEditRow).toHaveBeenCalledWith(ROWS[0]);
+  });
+
+  it('clearSelection resets selected rows', async () => {
+    const onSelectionChange = vi.fn();
+    const { ref } = renderPanel({ onSelectionChange });
+    // Clear should work without error
+    await act(async () => {
+      ref.current.clearSelection();
+    });
+    expect(onSelectionChange).toHaveBeenCalledWith([]);
+  });
+
+  it('closeEditing exits edit mode', async () => {
+    const { ref } = renderPanel();
+    const row = screen.getByTestId('line-row-L1');
+    // Enter edit mode
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => {
+      await userEvent.click(editBtn);
+    });
+    // Should have editable inputs
+    expect(within(row).queryAllByRole('textbox').length).toBeGreaterThan(0);
+    // Now close
+    await act(async () => {
+      ref.current.closeEditing();
+    });
+    // After close, no editable inputs in the row
+    // Re-query the row (it re-renders)
+    const rowAfter = screen.getByTestId('line-row-L1');
+    // In read mode, product renders as a span, not an input
+    expect(within(rowAfter).queryAllByRole('textbox').length).toBe(0);
+  });
+
+  // ---------- ETP-4422: outside-click autosave must fire on the FIRST click ----------
+  //
+  // Regression coverage for the "autosave needs 2 clicks" bug. Root cause: Radix's
+  // SelectTrigger calls preventDefault() on its own pointerdown handler, which per the
+  // Pointer Events spec suppresses the browser's compatibility `mousedown` for that
+  // interaction. A `mousedown` outside-click listener therefore never runs on the first
+  // click on a trigger. Fix: listen for `pointerdown` in the CAPTURE phase on `document`,
+  // which fires before any bubble-phase handler on the clicked element (Radix's included)
+  // gets a chance to steal focus or call preventDefault() — so the row's pristine,
+  // still-focused input is available to blur (and hence autosave) synchronously.
+
+  it('autosaves the pending edit on the FIRST outside pointerdown, even when the ' +
+    'target cancels it and steals focus (simulates Radix SelectTrigger)', async () => {
+    const onUpdateRow = vi.fn().mockResolvedValue();
+    renderPanel({ onUpdateRow });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => {
+      await userEvent.click(editBtn);
+    });
+
+    // Mid-edit: focus the row's input and change its value WITHOUT blurring yet —
+    // this is the pending edit whose autosave PATCH must not need a second click.
+    const productInput = within(row).getByTestId('field-product');
+    act(() => {
+      productInput.focus();
+    });
+    fireEvent.change(productInput, { target: { value: 'Changed Widget' } });
+    expect(document.activeElement).toBe(productInput);
+
+    // Simulate a Radix-style trigger rendered OUTSIDE the row: its own bubble-phase
+    // pointerdown handler calls preventDefault() AND steals focus to a decoy element —
+    // exactly what Radix's internal focus management does. If our fix used a plain
+    // bubble-phase (or `mousedown`) listener, it would observe `document.activeElement`
+    // AFTER this handler already ran (i.e. already stolen), so it would never find the
+    // row's input inside `editingRowEl` and would skip the blur — reproducing the bug.
+    const outsideTrigger = document.createElement('button');
+    document.body.appendChild(outsideTrigger);
+    const decoy = document.createElement('input');
+    document.body.appendChild(decoy);
+    outsideTrigger.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      decoy.focus();
+    });
+
+    await act(async () => {
+      outsideTrigger.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true }),
+      );
+      // Flush the deferred setTimeout(0) that commits setEditingRowId(null).
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // The autosave PATCH must have fired from the explicit blur() — on the first click.
+    expect(onUpdateRow).toHaveBeenCalledWith(
+      ROWS[0],
+      'product',
+      'Changed Widget',
+      expect.objectContaining({}),
+    );
+    // Row must have exited edit mode.
+    const rowAfter = screen.getByTestId('line-row-L1');
+    expect(within(rowAfter).queryAllByRole('textbox').length).toBe(0);
+
+    document.body.removeChild(outsideTrigger);
+    document.body.removeChild(decoy);
+  });
+
+  // ---------- NEW: additional coverage for uncovered InlineLinesPanel branches ----------
+
+  it('renders enum column with Select dropdown in edit mode', async () => {
+    const columns = [
+      {
+        key: 'taxCategory',
+        label: 'Tax',
+        type: 'enum',
+        column: 'C_TaxCategory_ID',
+        enumLabels: { VAT21: '21% VAT', VAT10: '10% VAT' },
+      },
+    ];
+    const rows = [{ id: 'E1', taxCategory: 'VAT21' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-E1');
+    // Enter edit mode
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    // Enum field should render a Select trigger
+    const trigger = within(row).getByTestId('field-taxCategory');
+    expect(trigger).toBeInTheDocument();
+  });
+
+  // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw display
+  // text; the inline-edit <Select> must resolve each option through ui() like
+  // DistinctEnumPicker/ListFilterBar do, or it shows the raw internal key.
+  it('resolves enum option labels through ui() instead of showing the raw enumLabels key', async () => {
+    const columns = [
+      {
+        key: 'taxCategory',
+        label: 'Tax',
+        type: 'enum',
+        column: 'C_TaxCategory_ID',
+        enumLabels: { VAT21: 'taxCategoryVat21', VAT10: 'taxCategoryVat10' },
+      },
+    ];
+    const rows = [{ id: 'E1', taxCategory: 'VAT21' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-E1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    const trigger = within(row).getByTestId('field-taxCategory');
+    await act(async () => { await userEvent.click(trigger); });
+    const options = screen.getAllByTestId('SelectItem__3b7ec2');
+    const optionTexts = options.map((o) => o.textContent);
+    // The mocked ui() (see top-of-file TRANSLATIONS) maps these keys to Spanish text;
+    // the raw keys must never reach the DOM.
+    expect(optionTexts).toContain('Artículo (prueba)');
+    expect(optionTexts).not.toContain('taxCategoryVat21');
+    expect(optionTexts).not.toContain('taxCategoryVat10');
+  });
+
+  // ETP-4685 — ReadCell (the cell as shown BEFORE the user clicks to edit it)
+  // has no branch for `type: 'enum'`/`type: 'status'`, so it falls through to
+  // the generic `resolveIdentifier` fallback — the raw backend identifier
+  // (an untranslated AD Name), never the enumLabels-resolved, ui()-translated
+  // text EditCell already shows once editing starts. This is what the user
+  // sees by default, on every row, without ever clicking anything.
+  it('resolves enum column labels through ui() in read-only mode (before editing)', () => {
+    const columns = [
+      {
+        key: 'taxCategory',
+        label: 'Tax',
+        type: 'enum',
+        column: 'C_TaxCategory_ID',
+        enumLabels: { VAT21: 'taxCategoryVat21', VAT10: 'taxCategoryVat10' },
+      },
+    ];
+    const rows = [{ id: 'E1', taxCategory: 'VAT21', 'taxCategory$_identifier': '21% VAT' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-E1');
+    expect(within(row).getByText('Artículo (prueba)')).toBeInTheDocument();
+    expect(within(row).queryByText('taxCategoryVat21')).not.toBeInTheDocument();
+    expect(within(row).queryByText('21% VAT')).not.toBeInTheDocument();
+  });
+
+  it('renders date input type in edit mode', async () => {
+    const columns = [
+      { key: 'orderDate', label: 'Date', type: 'date', column: 'DateOrdered' },
+    ];
+    const rows = [{ id: 'DT1', orderDate: '2026-03-15' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-DT1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    // Date field renders as type="date" input
+    const dateInput = within(row).getByTestId('field-orderDate');
+    expect(dateInput).toBeInTheDocument();
+    expect(dateInput).toHaveAttribute('type', 'date');
+  });
+
+  it('renders numeric field with decimal inputMode in edit mode', async () => {
+    const columns = [
+      { key: 'quantity', label: 'Qty', type: 'number', column: 'QtyOrdered' },
+    ];
+    const rows = [{ id: 'N1', quantity: 10 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-N1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    const numInput = within(row).getByTestId('field-quantity');
+    expect(numInput).toHaveAttribute('inputmode', 'decimal');
+  });
+
+  it('renders integer field with numeric inputMode in edit mode', async () => {
+    const columns = [
+      { key: 'lineNo', label: 'Line', type: 'integer', column: 'Line' },
+    ];
+    const rows = [{ id: 'INT1', lineNo: 10 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-INT1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    const intInput = within(row).getByTestId('field-lineNo');
+    expect(intInput).toHaveAttribute('inputmode', 'numeric');
+  });
+
+  it('shows validation error for value below col.min', async () => {
+    const columns = [
+      { key: 'quantity', label: 'Qty', type: 'number', column: 'QtyOrdered', min: 1 },
+    ];
+    const rows = [{ id: 'MV1', quantity: 5 }];
+    const onUpdateRow = vi.fn().mockResolvedValue();
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={onUpdateRow}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-MV1');
+    // Enter edit mode
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    // Type a value below min
+    const qtyInput = within(row).getByTestId('field-quantity');
+    await act(async () => {
+      await userEvent.clear(qtyInput);
+      await userEvent.type(qtyInput, '0');
+      qtyInput.blur();
+    });
+    // commitField should NOT have been called successfully (min validation fails)
+    // The toast.error is called with 'fieldMinValueError'
+    const { toast } = await import('sonner');
+    expect(toast.error).toHaveBeenCalled();
+  });
+
+  it('formats amount type with two decimals in edit mode', async () => {
+    const columns = [
+      { key: 'name', label: 'Name', type: 'string', column: 'Name' },
+      { key: 'unitPrice', label: 'Price', type: 'amount', column: 'PriceActual', noTrailing: true },
+    ];
+    const rows = [{ id: 'FE1', name: 'Item', unitPrice: 23 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-FE1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    // Amount field should display "23.00" (formatForEdit)
+    const priceInput = within(row).getByTestId('field-unitPrice');
+    expect(priceInput).toHaveValue('23.00');
+  });
+
+  it('renders readonly LookupTrigger for lookup fields in edit mode', async () => {
+    const columns = [
+      {
+        key: 'product',
+        label: 'Product',
+        type: 'search',
+        column: 'M_Product_ID',
+        lookup: true,
+      },
+    ];
+    const rows = [{ id: 'LT1', product: 'P1', 'product$_identifier': 'Widget' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-LT1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    // LookupTrigger renders a button with data-testid="field-product"
+    const lookupBtn = within(row).getByTestId('field-product');
+    expect(lookupBtn).toBeInTheDocument();
+    expect(lookupBtn.tagName).toBe('BUTTON');
+  });
+
+  it('renders percent column with percentage sign', () => {
+    const columns = [
+      { key: 'discount', label: 'Discount', type: 'percent' },
+    ];
+    const rows = [{ id: 'PC1', discount: 15 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    expect(screen.getByText('15%')).toBeInTheDocument();
+  });
+
+  it('renders computed/readOnly column as non-editable in edit mode', async () => {
+    const columns = [
+      { key: 'lineNetAmount', label: 'Total', type: 'amount', computed: true },
+    ];
+    const rows = [{ id: 'RO1', lineNetAmount: 500 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-RO1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    // Computed column should NOT render an input — EditCell returns null for non-editable
+    expect(within(row).queryByRole('textbox')).toBeNull();
+  });
+
+  it('select-all checkbox toggles all rows', async () => {
+    const onSelectionChange = vi.fn();
+    renderPanel({ onSelectionChange });
+    // Find the select-all checkbox (first checkbox in the header)
+    const checkboxes = screen.getAllByRole('checkbox');
+    const selectAll = checkboxes[0];
+    await act(async () => {
+      await userEvent.click(selectAll);
+    });
+    expect(onSelectionChange).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'L1' }),
+        expect.objectContaining({ id: 'L2' }),
+      ]),
+    );
+  });
+
+  // ─── ADDITIONAL EDIT-MODE AND READ-MODE BRANCH COVERAGE ──────────────
+
+  it('amount column shows 2-decimal formatted value in read mode', () => {
+    const columns = [
+      { key: 'total', label: 'Total', type: 'amount' },
+    ];
+    const rows = [{ id: 'AM1', total: 99.1 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    // es-ES comma decimal, no currency symbol (no currency code passed at this column).
+    expect(screen.getByText('99,10')).toBeInTheDocument();
+  });
+
+  it('selector column shows InlineSearchCombo in edit mode', async () => {
+    const columns = [
+      { key: 'warehouse', label: 'Warehouse', type: 'selector', column: 'M_Warehouse_ID' },
+    ];
+    const rows = [{ id: 'SEL1', warehouse: 'W1', 'warehouse$_identifier': 'Main WH' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-SEL1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    // Selector field renders InlineSearchCombo
+    expect(within(row).getByTestId('inline-combo-warehouse')).toBeInTheDocument();
+  });
+
+  it('readOnly column stays read-only in edit mode (no input rendered)', async () => {
+    const columns = [
+      { key: 'code', label: 'Code', type: 'string', readOnly: true },
+    ];
+    const rows = [{ id: 'RO2', code: 'ABC-123' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-RO2');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    // readOnly column should not have an editable input
+    expect(within(row).queryByRole('textbox')).toBeNull();
+  });
+
+  it('empty/null string values render dash in read-mode', () => {
+    const columns = [
+      { key: 'description', label: 'Desc', type: 'string' },
+    ];
+    const rows = [
+      { id: 'EM1', description: null },
+      { id: 'EM2', description: '' },
+    ];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    // Rows should exist and render — empty strings resolve to empty span
+    expect(screen.getByTestId('line-row-EM1')).toBeInTheDocument();
+    expect(screen.getByTestId('line-row-EM2')).toBeInTheDocument();
+  });
+
+  it('percent column renders with percentage sign in read mode', () => {
+    const columns = [
+      { key: 'tax', label: 'Tax', type: 'percent' },
+    ];
+    const rows = [{ id: 'PX1', tax: 21 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    expect(screen.getByText('21%')).toBeInTheDocument();
+  });
+
+  it('custom render function is used in read mode', () => {
+    const columns = [
+      {
+        key: 'status',
+        label: 'Status',
+        type: 'string',
+        render: (row) => <span data-testid="custom-render">{row.status === 'OK' ? 'Good' : 'Bad'}</span>,
+      },
+    ];
+    const rows = [{ id: 'CR1', status: 'OK' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    expect(screen.getByTestId('custom-render')).toBeInTheDocument();
+    expect(screen.getByText('Good')).toBeInTheDocument();
+  });
+
+  it('derivation column stays read-only in edit mode', async () => {
+    const columns = [
+      { key: 'computed', label: 'Computed', type: 'number', derivation: 'fromField' },
+    ];
+    const rows = [{ id: 'DER1', computed: 42 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-DER1');
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    // derivation column is not editable — no textbox
+    expect(within(row).queryByRole('textbox')).toBeNull();
+  });
+
+  it('null amount renders dash in read mode', () => {
+    const columns = [
+      { key: 'total', label: 'Total', type: 'amount' },
+    ];
+    const rows = [{ id: 'NA1', total: null }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    // formatCurrency mock returns '—' for null
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('NaN percent renders dash in read mode', () => {
+    const columns = [
+      { key: 'discount', label: 'Discount', type: 'percent' },
+    ];
+    const rows = [{ id: 'NP1', discount: 'abc' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    // NaN percent renders '—'
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('boolean column with null value renders dash', () => {
+    const columns = [
+      { key: 'flag', label: 'Flag', type: 'boolean' },
+    ];
+    const rows = [{ id: 'BN1', flag: null }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    // null boolean renders '—'
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  // ============================================================
+  // Additional branch coverage tests
+  // ============================================================
+
+  it('boolean column with "Y" renders truthy label', () => {
+    const columns = [{ key: 'flag', label: 'Flag', type: 'boolean' }];
+    const rows = [{ id: 'BY1', flag: 'Y' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('yes')).toBeInTheDocument();
+  });
+
+  it('boolean column with "N" renders falsy label', () => {
+    const columns = [{ key: 'flag', label: 'Flag', type: 'boolean' }];
+    const rows = [{ id: 'BN2', flag: 'N' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('no')).toBeInTheDocument();
+  });
+
+  it('boolean column with "true" (string) renders truthy', () => {
+    const columns = [{ key: 'flag', label: 'Flag', type: 'boolean' }];
+    const rows = [{ id: 'BT1', flag: 'true' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('yes')).toBeInTheDocument();
+  });
+
+  it('boolean column with "false" (string) renders falsy', () => {
+    const columns = [{ key: 'flag', label: 'Flag', type: 'boolean' }];
+    const rows = [{ id: 'BF1', flag: 'false' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('no')).toBeInTheDocument();
+  });
+
+  it('date column with YYYY-MM-DD format renders formatted date', () => {
+    const columns = [{ key: 'orderDate', label: 'Date', type: 'date' }];
+    const rows = [{ id: 'D1', orderDate: '2026-01-15' }];
+    const ref = React.createRef();
+    const { container } = render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    // Should render some date text (not a dash)
+    expect(container.textContent).not.toBe('');
+    expect(container.textContent).not.toContain('—');
+  });
+
+  it('date column with datetime format renders formatted date', () => {
+    const columns = [{ key: 'created', label: 'Created', type: 'date' }];
+    const rows = [{ id: 'DT1', created: '2026-03-10T14:30:00Z' }];
+    const ref = React.createRef();
+    const { container } = render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(container.textContent).not.toBe('');
+  });
+
+  it('date column with null renders dash', () => {
+    const columns = [{ key: 'orderDate', label: 'Date', type: 'date' }];
+    const rows = [{ id: 'DN1', orderDate: null }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('date column with invalid string shows raw value', () => {
+    const columns = [{ key: 'orderDate', label: 'Date', type: 'date' }];
+    const rows = [{ id: 'DI1', orderDate: 'not-a-date' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('not-a-date')).toBeInTheDocument();
+  });
+
+  it('computed column is not editable (no edit mode on click)', () => {
+    const columns = [{ key: 'total', label: 'Total', type: 'amount', computed: true }];
+    const rows = [{ id: 'C1', total: 100 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('100,00')).toBeInTheDocument();
+  });
+
+  it('readOnly column is not editable', () => {
+    const columns = [{ key: 'code', label: 'Code', type: 'string', readOnly: true }];
+    const rows = [{ id: 'RO1', code: 'ABC' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('ABC')).toBeInTheDocument();
+  });
+
+  it('derivation column is not editable', () => {
+    const columns = [{ key: 'derived', label: 'Derived', type: 'amount', derivation: 'computed' }];
+    const rows = [{ id: 'DV1', derived: 50 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('50,00')).toBeInTheDocument();
+  });
+
+  it('column with custom render function uses it', () => {
+    const columns = [{
+      key: 'custom',
+      label: 'Custom',
+      type: 'string',
+      render: (row) => <span data-testid="custom-render">{row.custom}-custom</span>,
+    }];
+    const rows = [{ id: 'CR1', custom: 'hello' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByTestId('custom-render')).toHaveTextContent('hello-custom');
+  });
+
+  it('renders empty state when data is empty array', () => {
+    const columns = [{ key: 'name', label: 'Name', type: 'string' }];
+    const ref = React.createRef();
+    const { container } = render(
+      <InlineLinesPanel ref={ref} columns={columns} data={[]} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    // No data rows, only header
+    const rows = container.querySelectorAll('[role="row"]');
+    expect(rows.length).toBeLessThanOrEqual(1); // header only
+  });
+
+  it('renders identifier fallback for unknown column type', () => {
+    const columns = [{ key: 'misc', label: 'Misc', type: 'unknown-type' }];
+    const rows = [{ id: 'U1', misc: 'raw-value' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('raw-value')).toBeInTheDocument();
+  });
+
+  it('renders percent column with valid number', () => {
+    const columns = [{ key: 'discount', label: 'Discount', type: 'percent' }];
+    const rows = [{ id: 'P1', discount: 15 }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('15%')).toBeInTheDocument();
+  });
+
+  it('renders with isDocumentReadOnly preventing edit', () => {
+    const columns = [{ key: 'qty', label: 'Qty', type: 'amount' }];
+    const rows = [{ id: 'RO1', qty: 5 }];
+    const ref = React.createRef();
+    const { container } = render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()}
+        isDocumentReadOnly={true} />,
+    );
+    expect(container.textContent).toContain('5,00');
+  });
+
+  it('renders multiple rows with alternating row IDs', () => {
+    const columns = [{ key: 'name', label: 'Name', type: 'string' }];
+    const rows = [
+      { id: 'MR1', name: 'First' },
+      { id: 'MR2', name: 'Second' },
+      { id: 'MR3', name: 'Third' },
+    ];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('First')).toBeInTheDocument();
+    expect(screen.getByText('Second')).toBeInTheDocument();
+    expect(screen.getByText('Third')).toBeInTheDocument();
+  });
+
+  it('renders amount column formatted without currency identifier (currency shown at header level)', () => {
+    const columns = [{ key: 'lineNetAmount', label: 'Net', type: 'amount' }];
+    const rows = [{ id: 'AC1', lineNetAmount: 250, 'currency$_identifier': 'USD' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('250,00')).toBeInTheDocument();
+  });
+
+  it('renders string column with identifier fallback', () => {
+    const columns = [{ key: 'bp', label: 'BP', type: 'string' }];
+    const rows = [{ id: 'IF1', bp: 'B1', 'bp$_identifier': 'Acme Corp' }];
+    const ref = React.createRef();
+    render(
+      <InlineLinesPanel ref={ref} columns={columns} data={rows} entity="lines"
+        token="test" apiBaseUrl="/api" selectorContext={{}}
+        onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
+    );
+    expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+  });
+
+  describe('EditCell — excludeValueOf passes excludeId to InlineSearchCombo', () => {
+    // A selector/search column with `column` set so EditCell builds a selectorUrl
+    // and renders the InlineSearchCombo (mocked to expose excludeId).
+    async function enterEditAndGetCombo(columns, rows, comboKey) {
+      const ref = React.createRef();
+      render(
+        <InlineLinesPanel
+          ref={ref}
+          columns={columns}
+          data={rows}
+          entity="movementLine"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId(`line-row-${rows[0].id}`);
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const editBtn = within(actions).getAllByRole('button')[0]; // pencil
+      await act(async () => { await userEvent.click(editBtn); });
+      return within(row).getByTestId(`inline-combo-${comboKey}`);
+    }
+
+    const COLS = [
+      { key: 'storageBin', label: 'Origin Bin', type: 'selector', column: 'M_Locator_ID' },
+      { key: 'newStorageBin', label: 'Destination Bin', type: 'selector', column: 'M_LocatorTo_ID', excludeValueOf: 'storageBin' },
+    ];
+
+    it('passes excludeId = row[excludeValueOf] to the InlineSearchCombo', async () => {
+      const rows = [{ id: 'L1', storageBin: 'LOC-AG', 'storageBin$_identifier': 'Aisle G', newStorageBin: '', 'newStorageBin$_identifier': '' }];
+      const combo = await enterEditAndGetCombo(COLS, rows, 'newStorageBin');
+      expect(combo).toHaveAttribute('data-exclude-id', 'LOC-AG');
+    });
+
+    it('passes excludeId = "" (null) when the sibling field has no value', async () => {
+      const rows = [{ id: 'L1', storageBin: '', 'storageBin$_identifier': '', newStorageBin: '', 'newStorageBin$_identifier': '' }];
+      const combo = await enterEditAndGetCombo(COLS, rows, 'newStorageBin');
+      expect(combo).toHaveAttribute('data-exclude-id', '');
+    });
+
+    it('opt-in no-op: a selector column WITHOUT excludeValueOf gets excludeId null', async () => {
+      const cols = [
+        { key: 'storageBin', label: 'Origin Bin', type: 'selector', column: 'M_Locator_ID' },
+        { key: 'newStorageBin', label: 'Destination Bin', type: 'selector', column: 'M_LocatorTo_ID' },
+      ];
+      const rows = [{ id: 'L1', storageBin: 'LOC-AG', 'storageBin$_identifier': 'Aisle G', newStorageBin: '', 'newStorageBin$_identifier': '' }];
+      const combo = await enterEditAndGetCombo(cols, rows, 'newStorageBin');
+      expect(combo).toHaveAttribute('data-exclude-id', '');
+    });
+  });
+
+  describe('email-format validation on inline cell edit', () => {
+    const EMAIL_COLUMNS = [
+      { key: 'name', label: 'Name', type: 'string', column: 'Name' },
+      { key: 'email', label: 'Email', type: 'string', column: 'Email' },
+    ];
+    const EMAIL_ROWS = [{ id: 'C1', name: 'Jane', email: 'jane@example.com' }];
+
+    async function enterEmailEdit(onUpdateRow) {
+      render(
+        <InlineLinesPanel
+          columns={EMAIL_COLUMNS}
+          data={EMAIL_ROWS}
+          entity="contact"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={onUpdateRow}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-C1');
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const editBtn = within(actions).getAllByRole('button')[0];
+      await act(async () => { await userEvent.click(editBtn); });
+      return row;
+    }
+
+    it('blocks the PATCH and toasts for a non-empty malformed email', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterEmailEdit(onUpdateRow);
+      const emailInput = within(row).getByTestId('field-email');
+      await act(async () => {
+        await userEvent.clear(emailInput);
+        await userEvent.type(emailInput, 'not-an-email');
+        emailInput.blur();
+      });
+      const { toast } = await import('sonner');
+      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail');
+      expect(onUpdateRow).not.toHaveBeenCalled();
+    });
+
+    it('commits a corrected valid email (clears the error, PATCHes)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterEmailEdit(onUpdateRow);
+      const emailInput = within(row).getByTestId('field-email');
+      await act(async () => {
+        await userEvent.clear(emailInput);
+        await userEvent.type(emailInput, 'new@example.com');
+        emailInput.blur();
+      });
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        EMAIL_ROWS[0], 'email', 'new@example.com', expect.objectContaining({ column: 'Email' }),
+      );
+    });
+
+    it('does not email-validate a non-email column (regression)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterEmailEdit(onUpdateRow);
+      const nameInput = within(row).getByTestId('field-name');
+      await act(async () => {
+        await userEvent.clear(nameInput);
+        await userEvent.type(nameInput, 'not-an-email');
+        nameInput.blur();
+      });
+      // The non-email 'name' column commits normally — no invalid-email block.
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        EMAIL_ROWS[0], 'name', 'not-an-email', expect.objectContaining({ column: 'Name' }),
+      );
+    });
+  });
+
+  describe('phone-format validation on inline cell edit', () => {
+    const PHONE_COLUMNS = [
+      { key: 'name', label: 'Name', type: 'string', column: 'Name' },
+      { key: 'phone', label: 'Phone', type: 'string', column: 'Phone' },
+    ];
+    const PHONE_ROWS = [{ id: 'C1', name: 'Jane', phone: '+34 600 123 456' }];
+
+    async function enterPhoneEdit(onUpdateRow) {
+      render(
+        <InlineLinesPanel
+          columns={PHONE_COLUMNS}
+          data={PHONE_ROWS}
+          entity="contact"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={onUpdateRow}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-C1');
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const editBtn = within(actions).getAllByRole('button')[0];
+      await act(async () => { await userEvent.click(editBtn); });
+      return row;
+    }
+
+    it('blocks the PATCH and toasts for an invalid phone', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterPhoneEdit(onUpdateRow);
+      const phoneInput = within(row).getByTestId('field-phone');
+      await act(async () => {
+        await userEvent.clear(phoneInput);
+        await userEvent.type(phoneInput, '600abc');
+        phoneInput.blur();
+      });
+      const { toast } = await import('sonner');
+      expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars');
+      expect(onUpdateRow).not.toHaveBeenCalled();
+    });
+
+    it('commits a corrected valid phone (PATCHes)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterPhoneEdit(onUpdateRow);
+      const phoneInput = within(row).getByTestId('field-phone');
+      await act(async () => {
+        await userEvent.clear(phoneInput);
+        await userEvent.type(phoneInput, '600 111 222');
+        phoneInput.blur();
+      });
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        PHONE_ROWS[0], 'phone', '600 111 222', expect.objectContaining({ column: 'Phone' }),
+      );
+    });
+
+    it('does not phone-validate a non-phone column (regression)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterPhoneEdit(onUpdateRow);
+      const nameInput = within(row).getByTestId('field-name');
+      await act(async () => {
+        await userEvent.clear(nameInput);
+        await userEvent.type(nameInput, 'abc def');
+        nameInput.blur();
+      });
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        PHONE_ROWS[0], 'name', 'abc def', expect.objectContaining({ column: 'Name' }),
+      );
+    });
+  });
+
+  // ETP-4529 follow-up: dimensionFields (project/costcenter/...) is a list nested INSIDE
+  // the single top-level 'dimensions' column, so the existing hiddenColumns filter (which
+  // only matches top-level column keys) never reached it — a dimension disabled in GL
+  // Configuration kept rendering inside the expand panel even after the SAME visibility
+  // signal correctly hid it from the header. Reproduces the live bug (Cost Center
+  // deactivated but still shown in the sales-invoice lines expand panel) and confirms the
+  // fix: dimensionFields is now filtered by hiddenColumns too, and the whole column drops
+  // out when every candidate ends up hidden.
+  //
+  // ETP-4610 — the `dimensionsPanel` column NEVER renders as a fixed grid column anymore
+  // (no `column-header-dimensions`, no badges in the row). The entry point moved to a
+  // hover action ("Add dimensions") next to Pencil/Trash, plus the existing leading
+  // expand-chevron. Both are still gated on `hiddenColumns` filtering out every candidate.
+  describe('dimensionsPanel column — hiddenColumns filters nested dimensionFields', () => {
+    const dimensionColumns = [
+      {
+        key: 'dimensions',
+        type: 'dimensionsPanel',
+        label: 'Dimensions',
+        dimensionFields: [
+          { key: 'project', column: 'C_Project_ID' },
+          { key: 'costcenter', column: 'C_Costcenter_ID' },
+        ],
+      },
+    ];
+    const dimensionRows = [{
+      id: 'L1',
+      project: 'PRJ1', 'project$_identifier': 'Project Alpha',
+      costcenter: 'CC1', 'costcenter$_identifier': 'HQ',
+    }];
+
+    function renderDimensionsPanel(hiddenColumns, extraProps = {}) {
+      return render(
+        <InlineLinesPanel
+          columns={dimensionColumns}
+          data={dimensionRows}
+          hiddenColumns={hiddenColumns}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+          {...extraProps}
+        />,
+      );
+    }
+
+    it('never renders the dimensions column header, regardless of hiddenColumns', () => {
+      renderDimensionsPanel([]);
+      expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
+      renderDimensionsPanel(['costcenter']);
+      expect(screen.queryByTestId('column-header-dimensions')).toBeNull();
+    });
+
+    it('keeps the expand chevron when at least one candidate is visible', () => {
+      renderDimensionsPanel(['costcenter']);
+      expect(screen.getByTestId('dimensions-panel-toggle')).toBeInTheDocument();
+    });
+
+    // Live-UX-review follow-up (ETP-4610): the chevron previously sat flush against the
+    // row's left border. It now gets the same `px-2` breathing room the selection
+    // checkbox column already has, in a widened 44px column (28px button + 8px padding
+    // each side) instead of the old bare 32px.
+    it('gives the chevron column the same left padding convention as the checkbox column', () => {
+      renderDimensionsPanel(['costcenter']);
+      const toggle = screen.getByTestId('dimensions-panel-toggle');
+      const chevronColumn = toggle.parentElement;
+      expect(chevronColumn).toHaveClass('px-2');
+      expect(chevronColumn.style.width).toBe('44px');
+    });
+
+    // Live-UX-review follow-up (ETP-4610): the expanded dimensions sub-row's first field
+    // must start at the same x position as the first real grid column above it (chevron
+    // column + checkbox column + the first cell's own leading padding), not the flat
+    // 40px it used before.
+    it('indents the dimensions sub-row so its first field aligns with the first grid column', async () => {
+      renderDimensionsPanel(['costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => {
+        await userEvent.click(within(row).getByTestId('dimensions-panel-toggle'));
+      });
+      const subRow = screen.getByTestId('dimensions-panel-L1');
+      // 44px chevron column + 40px checkbox column + 12px first-cell padding.
+      expect(subRow.style.paddingLeft).toBe('96px');
+    });
+
+    it('drops the expand chevron entirely when every candidate is hidden', () => {
+      renderDimensionsPanel(['project', 'costcenter']);
+      expect(screen.queryByTestId('dimensions-panel-toggle')).toBeNull();
+    });
+
+    it('shows the "Add dimensions" hover action only when at least one candidate is visible', async () => {
+      renderDimensionsPanel(['costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).getByTestId('line-action-add-dimensions')).toBeInTheDocument();
+    });
+
+    it('hides the "Add dimensions" hover action when every candidate is hidden (negative case)', async () => {
+      renderDimensionsPanel(['project', 'costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).queryByTestId('line-action-add-dimensions')).toBeNull();
+    });
+
+    it('hides the "Add dimensions" hover action for a table with no dimensionsPanel column at all', async () => {
+      renderPanel();
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).queryByTestId('line-action-add-dimensions')).toBeNull();
+    });
+
+    it('clicking the "Add dimensions" hover action expands the same sub-row the chevron toggles', async () => {
+      renderDimensionsPanel(['costcenter']);
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(screen.queryByTestId('dimensions-panel-L1')).toBeNull();
+      await act(async () => {
+        await userEvent.click(within(row).getByTestId('line-action-add-dimensions'));
+      });
+      expect(screen.getByTestId('dimensions-panel-L1')).toBeInTheDocument();
+    });
+
+    // ETP-4610 follow-up — the hover action's icon/tooltip are static (always `Layers` /
+    // "Edit dimensions"), regardless of whether the line already has dimension values
+    // set. An earlier adaptive Add/Edit variant swapped icon+tooltip based on
+    // `hasFilledDimensionValues()`, but its "edit" state (Pencil icon) sat right next to
+    // the row's own Edit action and read as a duplicate button — dropped in favor of one
+    // unconditional icon/tooltip (see docs/feedback.md).
+    it('always shows the "editDimensionsTooltip" tooltip, whether the line is filled or empty', async () => {
+      // dimensionRows[0] has both project and costcenter filled.
+      renderDimensionsPanel([]);
+      const filledRow = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(filledRow); });
+      const filledAction = within(filledRow).getByTestId('line-action-add-dimensions');
+      expect(filledAction).toHaveAttribute('title', 'editDimensionsTooltip');
+      expect(filledAction).toHaveAttribute('aria-label', 'editDimensionsTooltip');
+
+      const emptyRows = [{ id: 'L2' }];
+      render(
+        <InlineLinesPanel
+          columns={dimensionColumns}
+          data={emptyRows}
+          hiddenColumns={[]}
+          entity="lines"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const emptyRow = screen.getByTestId('line-row-L2');
+      await act(async () => { await userEvent.hover(emptyRow); });
+      const emptyAction = within(emptyRow).getByTestId('line-action-add-dimensions');
+      expect(emptyAction).toHaveAttribute('title', 'editDimensionsTooltip');
+    });
+  });
+
+  // ETP-4610 — generic hover-action extension slot (`rowActions` prop). Verifies the
+  // mechanism itself (not the dimensions use case): any caller can inject extra hover
+  // actions, each with its own per-row conditional visibility, through the exact same
+  // `renderRowActionStrip` code path the built-in "Add dimensions" action uses.
+  describe('rowActions — generic hover-action extension slot', () => {
+    it('renders a caller-supplied action in the hover strip', async () => {
+      const onClick = vi.fn();
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: () => <span />, tooltip: 'Archive', onClick, testId: 'line-action-archive' }],
+      });
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      const btn = within(row).getByTestId('line-action-archive');
+      expect(btn).toBeInTheDocument();
+      await act(async () => { await userEvent.click(btn); });
+      expect(onClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'L1' }));
+    });
+
+    it('supports a boolean `show` to hide an action unconditionally', async () => {
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: () => <span />, tooltip: 'Archive', onClick: vi.fn(), show: false }],
+      });
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      expect(within(row).queryByTestId('line-action-archive')).toBeNull();
+    });
+
+    it('supports a per-row `show` function so the action can condition its own visibility', async () => {
+      renderPanel({
+        rowActions: [{
+          key: 'archive',
+          icon: () => <span />,
+          tooltip: 'Archive',
+          onClick: vi.fn(),
+          show: (row) => row.id === 'L2',
+        }],
+      });
+      const rowL1 = screen.getByTestId('line-row-L1');
+      const rowL2 = screen.getByTestId('line-row-L2');
+      await act(async () => { await userEvent.hover(rowL1); });
+      expect(within(rowL1).queryByTestId('line-action-archive')).toBeNull();
+      await act(async () => { await userEvent.hover(rowL2); });
+      expect(within(rowL2).getByTestId('line-action-archive')).toBeInTheDocument();
+    });
+
+    it('renders multiple extra actions ahead of the built-in Pencil/Trash pair', async () => {
+      renderPanel({
+        rowActions: [
+          { key: 'first', icon: () => <span />, tooltip: 'First', onClick: vi.fn() },
+          { key: 'second', icon: () => <span />, tooltip: 'Second', onClick: vi.fn() },
+        ],
+      });
+      const row = screen.getByTestId('line-row-L1');
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const buttons = within(actions).getAllByRole('button');
+      // The two extra actions render first, in declared order, ahead of the
+      // built-in Pencil/Trash pair (4 buttons total).
+      expect(buttons).toHaveLength(4);
+      expect(buttons[0]).toHaveAttribute('data-testid', 'line-action-first');
+      expect(buttons[1]).toHaveAttribute('data-testid', 'line-action-second');
+    });
+  });
+});

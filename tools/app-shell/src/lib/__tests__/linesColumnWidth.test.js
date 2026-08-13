@@ -41,12 +41,12 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'text' }, 2), '1 1 224px');
     });
 
-    it('selector/foreignKey at idx=0 returns 0 0 192px (no special case override)', () => {
-      assert.equal(columnFlex({ type: 'selector' }, 0), '0 0 192px');
-      assert.equal(columnFlex({ type: 'foreignKey' }, 0), '0 0 192px');
+    it('selector/foreignKey at idx=0 returns 1 1 192px (elastic so product column takes remaining space)', () => {
+      assert.equal(columnFlex({ type: 'selector' }, 0), '1 1 192px');
+      assert.equal(columnFlex({ type: 'foreignKey' }, 0), '1 1 192px');
     });
 
-    it('selector/search/foreignKey columns → 0 0 192px (fixed)', () => {
+    it('selector/search/foreignKey columns at idx>0 → 0 0 192px (fixed)', () => {
       assert.equal(columnFlex({ type: 'selector' }, 1), '0 0 192px');
       assert.equal(columnFlex({ type: 'search' }, 1), '0 0 192px');
       assert.equal(columnFlex({ type: 'foreignKey' }, 1), '0 0 192px');
@@ -64,6 +64,46 @@ describe('linesColumnWidth', () => {
     it('unknown types → 0 0 120px (safe fallback)', () => {
       assert.equal(columnFlex({ type: 'custom' }, 1), '0 0 120px');
       assert.equal(columnFlex({}, 1), '0 0 120px');
+    });
+
+    it('grow:true on amount → 1 0 172px', () => {
+      assert.equal(columnFlex({ type: 'amount', grow: true }, 0), '1 0 172px');
+    });
+
+    it('grow:true on price → 1 0 152px', () => {
+      assert.equal(columnFlex({ type: 'price', grow: true }, 1), '1 0 152px');
+    });
+
+    it('grow:true on quantity → 1 0 152px', () => {
+      assert.equal(columnFlex({ type: 'quantity', grow: true }, 1), '1 0 152px');
+    });
+
+    it('grow:true on integer → 1 0 152px', () => {
+      assert.equal(columnFlex({ type: 'integer', grow: true }, 1), '1 0 152px');
+    });
+
+    it('grow:true on decimal → 1 0 152px', () => {
+      assert.equal(columnFlex({ type: 'decimal', grow: true }, 1), '1 0 152px');
+    });
+
+    it('grow:true on percent → 1 0 152px', () => {
+      assert.equal(columnFlex({ type: 'percent', grow: true }, 1), '1 0 152px');
+    });
+
+    it('grow:true on unknown type → 1 0 120px fallback', () => {
+      assert.equal(columnFlex({ type: 'custom', grow: true }, 1), '1 0 120px');
+    });
+
+    it('selector at idx=0 grows by default; grow:false overrides it', () => {
+      assert.equal(columnFlex({ type: 'selector' }, 0), '1 1 192px');
+      assert.equal(columnFlex({ type: 'selector', grow: true }, 0), '1 1 192px');
+      assert.equal(columnFlex({ type: 'selector', grow: false }, 0), '0 0 192px');
+    });
+
+    it('search at idx=1 is fixed by default; grow:true overrides it', () => {
+      assert.equal(columnFlex({ type: 'search' }, 1), '0 0 192px');
+      assert.equal(columnFlex({ type: 'search', grow: false }, 1), '0 0 192px');
+      assert.equal(columnFlex({ type: 'search', grow: true }, 1), '1 1 192px');
     });
   });
 

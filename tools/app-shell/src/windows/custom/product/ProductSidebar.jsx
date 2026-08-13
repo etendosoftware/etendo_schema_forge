@@ -1,39 +1,86 @@
-import { useState, useEffect } from 'react';
-import { Boxes, Lock, PackageCheck } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ExternalLink, Box, Calendar, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
-import { formatDashboardAxisTick } from '@/lib/dashboardNumberFormat';
+import { niceScale, formatDashboardAxisTick } from '@/lib/dashboardNumberFormat';
 
 const DOT_COLORS = ['#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
 
-const COLORS = {
-  blue:  { bg: 'bg-blue-50',  icon: 'text-blue-500'  },
-  green: { bg: 'bg-green-50', icon: 'text-green-500' },
-  amber: { bg: 'bg-amber-50', icon: 'text-amber-500' },
-  red:   { bg: 'bg-red-50',   icon: 'text-red-400'   },
-};
+// Time-range dropdown shown above the summary. Mirrors the Contacts PeriodSelector.
+// Drives the inline stock-movement chart window (see `inlineMonths`).
+const SIDEBAR_PERIOD_OPTIONS = [
+  { value: '3M', key: 'last3Months', months: 3 },
+  { value: '6M', key: 'last6Months', months: 6 },
+  { value: '12M', key: 'last12Months', months: 12 },
+];
 
-function StatCard({ icon: Icon, label, value, subtitle, color = 'blue' }) {
-  const c = COLORS[color] ?? COLORS.blue;
+function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const current = SIDEBAR_PERIOD_OPTIONS.find(o => o.value === period) ?? SIDEBAR_PERIOD_OPTIONS[0];
+
   return (
-    <div className={`rounded-2xl p-4 ${c.bg}`}>
-      <Icon size={18} className={`${c.icon} mb-2`} />
-      <div className="text-sm font-medium text-gray-600 mb-0.5">{label}</div>
-      <div className="text-3xl font-bold leading-none tracking-tight text-gray-900">
-        {value === null ? <span className="text-gray-300">—</span> : value}
-      </div>
-      {subtitle && <div className="text-sm mt-1.5 text-gray-500">{subtitle}</div>}
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen(o => !o)}
+        className={`h-10 flex items-center gap-1 px-3 border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-sm font-medium transition-colors
+          ${disabled ? 'bg-muted text-disabled cursor-not-allowed' : 'bg-card text-foreground'}`}
+      >
+        <Calendar
+          className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
+          data-testid="Calendar__59b33d" />
+        <span className="flex-1 text-left mx-1">{ui(current.key)}</span>
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
+          data-testid="ChevronDown__59b33d" />
+      </button>
+      {open && (
+        <div className="absolute top-11 left-0 z-50 min-w-full bg-card border border-border-control rounded-lg shadow-md overflow-hidden">
+          {SIDEBAR_PERIOD_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChangePeriod(opt.value); setOpen(false); }}
+              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-muted text-foreground whitespace-nowrap ${period === opt.value ? 'font-medium' : 'font-normal'}`}
+            >
+              {ui(opt.key)}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-// Mini stat cell for the Warehouses tab
-function MiniStat({ label, value, color }) {
-  const c = COLORS[color] ?? COLORS.blue;
+// Horizontal availability widget: icon box + label + locations badge + big number.
+function AvailabilityWidget({ label, value, badge }) {
   return (
-    <div className={`rounded-lg px-2.5 py-2 ${c.bg} text-center`}>
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">{label}</div>
-      <div className="text-lg font-bold leading-none text-gray-900">{value}</div>
+    <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-card border border-border-subtle rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
+      <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-card border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
+        <Box className="w-6 h-6 text-disabled" data-testid="Box__59b33d" />
+      </div>
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">{label}</span>
+          {badge && (
+            <span className="px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground whitespace-nowrap">{badge}</span>
+          )}
+        </div>
+        <span className="text-2xl font-medium tracking-[-0.01em] text-foreground leading-9">
+          {value === null ? <span className="text-muted-foreground">—</span> : value}
+        </span>
+      </div>
     </div>
   );
 }
@@ -82,29 +129,89 @@ function buildChartData(transactions, currentStock, maxMonths = 12) {
   return { months, values };
 }
 
+// Build the month axis used by the per-warehouse series (same fixed-window logic as buildChartData).
+function buildMonthAxis(maxMonths) {
+  const now = new Date();
+  const months = [];
+  for (let i = maxMonths - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return months;
+}
+
+// One cumulative series per warehouse, anchored to each warehouse's current stock.
+// `warehouses` is sortedRows ([{ binName, quantityOnHand }]); series order + color match the legend.
+function buildWarehouseSeries(transactions, warehouses, locatorToWarehouse, maxMonths = 12) {
+  if (!transactions || transactions.length === 0 || !warehouses || warehouses.length === 0) return null;
+
+  const months = buildMonthAxis(maxMonths);
+
+  const series = warehouses.map((w, i) => {
+    // Bucket this warehouse's movements by month
+    const byMonth = {};
+    for (const t of transactions) {
+      if (locatorToWarehouse[t.storageBin] !== w.binName) continue;
+      const d = new Date(t.movementDate);
+      if (isNaN(d)) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      byMonth[key] = (byMonth[key] || 0) + Number(t.movementQuantity || 0);
+    }
+
+    let cum = 0;
+    const rawValues = months.map(m => { cum += byMonth[m] || 0; return cum; });
+
+    // Anchor: shift so the last point equals this warehouse's current stock
+    const offset = w.quantityOnHand != null ? w.quantityOnHand - rawValues[rawValues.length - 1] : 0;
+    const values = rawValues.map(v => v + offset);
+
+    return { name: w.binName, color: DOT_COLORS[i % DOT_COLORS.length], values };
+  });
+
+  return { months, series };
+}
+
 const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function ChartSVG({ months, values, W, H, PAD_X, PAD_Y, gradId, fontSize = 10 }) {
+function smoothPath(xs, ys) {
+  if (xs.length < 2) return xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x},${ys[i]}`).join(' ');
+  const d = [`M${xs[0]},${ys[0]}`];
+  for (let i = 1; i < xs.length; i++) {
+    const cpX = (xs[i - 1] + xs[i]) / 2;
+    d.push(`C${cpX},${ys[i - 1]} ${cpX},${ys[i]} ${xs[i]},${ys[i]}`);
+  }
+  return d.join(' ');
+}
+
+function ChartSVG({ months, values, series, W, H, PAD_X, PAD_Y, gradId, fontSize = 10, PAD_R = PAD_X, preserveAspectRatio = 'xMidYMid meet' }) {
   const [hoveredIdx, setHoveredIdx] = useState(null);
 
-  const maxVal = Math.max(...values, 1);
-  const minVal = Math.min(...values, 0);
-  const range = maxVal - minVal || 1;
+  // Single-series (modal) vs multi-series (per-warehouse). Single keeps the original blue look.
+  const multi = Array.isArray(series) && series.length > 0;
+  const seriesList = multi ? series : [{ name: null, color: 'var(--status-info-fg)', values }];
+  const pointCount = seriesList[0].values.length;
 
-  const xStep = (W - PAD_X * 2) / Math.max(values.length - 1, 1);
-  const toY = v => PAD_Y + (H - PAD_Y * 2) * (1 - (v - minVal) / range);
+  // Global Y scale spanning every series. Baseline is always 0 (stock can't be negative);
+  // niceScale gives a rounded max + ticks, same as the dashboard / sibling charts.
+  const allVals = seriesList.flatMap(s => s.values);
+  const maxVal = Math.max(...allVals, 0);
+  const { niceMax, ticks: yTicks } = niceScale(maxVal);
+
+  const xStep = (W - PAD_X - PAD_R) / Math.max(pointCount - 1, 1);
+  const toY = v => PAD_Y + (H - PAD_Y * 2) * (1 - Math.max(v, 0) / niceMax);
   const toX = i => PAD_X + i * xStep;
 
-  const pts = values.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
-  const areaPts = `${toX(0)},${H} ${pts} ${toX(values.length - 1)},${H}`;
+  const paths = seriesList.map((s, idx) => {
+    const xs = s.values.map((_, i) => toX(i));
+    const ys = s.values.map(v => toY(v));
+    const linePath = smoothPath(xs, ys);
+    const areaPath = `${linePath} L${xs[xs.length - 1]},${H} L${xs[0]},${H} Z`;
+    return { color: s.color, idx, linePath, areaPath };
+  });
 
-  const yLabels = [
-    { v: maxVal, label: formatDashboardAxisTick(maxVal) },
-    { v: Math.round((maxVal + Math.max(minVal, 0)) / 2), label: formatDashboardAxisTick(Math.round((maxVal + Math.max(minVal, 0)) / 2)) },
-    ...(minVal < 0 ? [{ v: minVal, label: formatDashboardAxisTick(minVal) }] : []),
-  ];
+  const yLabels = yTicks.map(t => ({ v: t, label: formatDashboardAxisTick(t) }));
 
-  const n = values.length;
+  const n = pointCount;
   const showQuarters = n <= 48;
 
   const MIN_YEAR_GAP_PX = 40;
@@ -141,75 +248,127 @@ function ChartSVG({ months, values, W, H, PAD_X, PAD_Y, gradId, fontSize = 10 })
     const mouseX = e.clientX - rect.left;
     const viewX = (mouseX / rect.width) * W;
     const rawIdx = (viewX - PAD_X) / xStep;
-    const idx = Math.max(0, Math.min(values.length - 1, Math.round(rawIdx)));
+    const idx = Math.max(0, Math.min(pointCount - 1, Math.round(rawIdx)));
     setHoveredIdx(idx);
   };
 
-  const TW = fontSize * 5, TH = fontSize * 3.2, TR = 4;
   const hx = hoveredIdx !== null ? toX(hoveredIdx) : null;
-  const hy = hoveredIdx !== null ? toY(values[hoveredIdx]) : null;
-  const tooltipX = hx !== null ? Math.max(PAD_X, Math.min(W - PAD_X - TW, hx - TW / 2)) : null;
-  const tooltipY = hy !== null ? Math.max(PAD_Y, hy - TH - 8) : null;
-
   const hMonth = hoveredIdx !== null ? (() => {
     const [yr, mo] = months[hoveredIdx].split('-');
     return `${MONTH_NAMES[parseInt(mo, 10)]} '${yr.slice(2)}`;
   })() : null;
-  const hVal = hoveredIdx !== null ? values[hoveredIdx].toLocaleString() : null;
+
+  // Single-series tooltip box (modal — unchanged)
+  const TW = fontSize * 5, TH = fontSize * 3.2, TR = 4;
+  const hy = hoveredIdx !== null ? toY(seriesList[0].values[hoveredIdx]) : null;
+  const tooltipX = hx !== null ? Math.max(PAD_X, Math.min(W - PAD_X - TW, hx - TW / 2)) : null;
+  const tooltipY = hy !== null ? Math.max(PAD_Y, hy - TH - 8) : null;
+  const hVal = hoveredIdx !== null ? seriesList[0].values[hoveredIdx].toLocaleString() : null;
+
+  // Multi-series tooltip box (one row per warehouse)
+  const rowH = fontSize * 1.6;
+  const MTW = fontSize * 7, MTH = rowH * (seriesList.length + 1) + 6;
+  const mTipX = hx !== null ? Math.max(PAD_X, Math.min(W - PAD_R - MTW, hx + 8)) : null;
+  const mTipY = Math.max(PAD_Y, PAD_Y + 2);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H + 20}`} className="w-full h-full cursor-crosshair"
+    <svg viewBox={`0 0 ${W} ${H + 20}`} preserveAspectRatio={preserveAspectRatio} className="w-full h-full cursor-crosshair"
       onMouseMove={handleMouseMove} onMouseLeave={() => setHoveredIdx(null)}>
       <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.02" />
-        </linearGradient>
+        {paths.map((p) => (
+          <linearGradient key={p.idx} id={`${gradId}-${p.idx}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={p.color} stopOpacity="0.2" />
+            <stop offset="100%" stopColor={p.color} stopOpacity="0.02" />
+          </linearGradient>
+        ))}
       </defs>
-      <line x1={PAD_X} y1={PAD_Y} x2={W - PAD_X} y2={PAD_Y} stroke="#f3f4f6" strokeWidth="1" />
-      <line x1={PAD_X} y1={H - PAD_Y} x2={W - PAD_X} y2={H - PAD_Y} stroke="#f3f4f6" strokeWidth="1" />
-      {yLabels.map((yl, i) => (
-        <text key={i} x={PAD_X - 5} y={toY(yl.v) + 4} textAnchor="end" fontSize={fontSize} fill="#6b7280">{yl.label}</text>
+      {yLabels.map((yl) => (
+        <line key={yl.v} x1={PAD_X} y1={toY(yl.v)} x2={W - PAD_R} y2={toY(yl.v)} stroke="hsl(var(--border-subtle))" strokeWidth="1" strokeDasharray="4,3" />
       ))}
-      <line x1={PAD_X} y1={toY(0)} x2={W - PAD_X} y2={toY(0)} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4,3" />
-      <polygon points={areaPts} fill={`url(#${gradId})`} />
-      <polyline points={pts} fill="none" stroke="#3b82f6" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
-      {hoveredIdx !== null && (
+      {yLabels.map((yl) => (
+        <text key={yl.label} x={PAD_X - 5} y={toY(yl.v) + 4} textAnchor="end" fontSize={fontSize} fill="hsl(var(--text-disabled))">{yl.label}</text>
+      ))}
+      {paths.map((p) => (
+        <path key={`area-${p.idx}`} d={p.areaPath} fill={`url(#${gradId}-${p.idx})`} />
+      ))}
+      {paths.map((p) => (
+        <path key={`line-${p.idx}`} d={p.linePath} fill="none" stroke={p.color} strokeWidth="2"
+          strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      ))}
+      {hoveredIdx !== null && !multi && (
         <>
-          <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="#94a3b8" strokeWidth="1" strokeDasharray="3,2" />
-          <circle cx={hx} cy={hy} r="5" fill="white" stroke="#3b82f6" strokeWidth="2" />
-          <rect x={tooltipX} y={tooltipY} width={TW} height={TH} rx={TR} fill="#1e293b" />
-          <text x={tooltipX + TW / 2} y={tooltipY + fontSize + 2} textAnchor="middle" fontSize={fontSize} fill="#94a3b8">{hMonth}</text>
+          <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="hsl(var(--text-disabled))" strokeWidth="1" strokeDasharray="3,2" />
+          <circle cx={hx} cy={hy} r="5" fill="white" stroke="var(--status-info-fg)" strokeWidth="2" />
+          <rect x={tooltipX} y={tooltipY} width={TW} height={TH} rx={TR} fill="hsl(var(--foreground))" />
+          <text x={tooltipX + TW / 2} y={tooltipY + fontSize + 2} textAnchor="middle" fontSize={fontSize} fill="hsl(var(--text-disabled))">{hMonth}</text>
           <text x={tooltipX + TW / 2} y={tooltipY + TH - 4} textAnchor="middle" fontSize={fontSize + 1} fontWeight="700" fill="white">{hVal}</text>
         </>
       )}
-      {hoveredIdx === null && (
-        <circle cx={toX(values.length - 1)} cy={toY(values[values.length - 1])} r="4" fill="#3b82f6" />
+      {hoveredIdx !== null && multi && (
+        <>
+          <line x1={hx} y1={PAD_Y} x2={hx} y2={H} stroke="hsl(var(--text-disabled))" strokeWidth="1" strokeDasharray="3,2" />
+          {seriesList.map((s) => (
+            <circle key={s.name} cx={hx} cy={toY(s.values[hoveredIdx])} r="4" fill="white" stroke={s.color} strokeWidth="2" />
+          ))}
+          <rect x={mTipX} y={mTipY} width={MTW} height={MTH} rx={4} fill="hsl(var(--foreground))" />
+          <text x={mTipX + 6} y={mTipY + fontSize + 2} fontSize={fontSize} fill="hsl(var(--text-disabled))">{hMonth}</text>
+          {seriesList.map((s, idx) => (
+            <g key={s.name}>
+              <rect x={mTipX + 6} y={mTipY + rowH * (idx + 1) + 1} width={8} height={3} rx={1} fill={s.color} />
+              <text x={mTipX + 18} y={mTipY + rowH * (idx + 1) + fontSize} fontSize={fontSize} fontWeight="600" fill="white">
+                {s.values[hoveredIdx].toLocaleString()}
+              </text>
+            </g>
+          ))}
+        </>
       )}
       {xLabels.map((l, i) => l.text && (
         <text key={i} x={l.x} y={H + 14} textAnchor="middle"
           fontSize={l.bold ? fontSize + 1 : fontSize} fontWeight={l.bold ? '700' : '400'}
-          fill={l.bold ? '#4b5563' : '#9ca3af'}>{l.text}</text>
+          fill={l.bold ? 'hsl(var(--muted-foreground))' : 'hsl(var(--text-disabled))'}>{l.text}</text>
       ))}
     </svg>
   );
 }
 
-const PERIOD_OPTIONS = [
-  { label: '1M', months: 1 },
-  { label: '3M', months: 3 },
-  { label: '6M', months: 6 },
-  { label: '1Y', months: 12 },
-  { label: '2Y', months: 24 },
-];
+
+function StockEmptyState({ onAdjustStock, onReplenish }) {
+  const ui = useUI();
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 px-4 py-6">
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-xl font-semibold text-foreground text-center">{ui('noStockMovements')}</span>
+        <span className="text-xs font-normal text-foreground text-center">{ui('noStockMovementsDesc')}</span>
+      </div>
+      <div className="flex flex-row items-center gap-3">
+        <button
+          type="button"
+          onClick={onAdjustStock}
+          className="flex items-center justify-center px-2 py-1 h-8 bg-card border border-border-control shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] rounded-lg text-sm font-medium text-foreground"
+        >
+          {ui('adjustStock')}
+        </button>
+        <button
+          type="button"
+          onClick={onReplenish}
+          className="flex items-center justify-center px-2 py-1 h-8 bg-foreground rounded-lg text-sm font-medium text-primary-foreground"
+        >
+          {ui('replenishStock')}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function StockChart({
   transactions, currentStock, locationRows = [], locatorToWarehouse = {},
+  // Inline chart time window (driven by the sidebar period selector). Modal keeps its own period.
+  inlineMonths = 12,
   // External control: open modal pre-filtered to a warehouse
   externalOpen, externalWarehouse, onExternalClose,
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
-  const [period, setPeriod] = useState('1A');
+  const [period, setPeriod] = useState('6M');
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
   const ui = useUI();
 
@@ -234,53 +393,80 @@ function StockChart({
     setSelectedWarehouse(prev => prev === name ? null : name);
   };
 
-  const filteredTransactions = selectedWarehouse
-    ? transactions.filter(t => locatorToWarehouse[t.storageBin] === selectedWarehouse)
-    : transactions;
-
-  const filteredStock = selectedWarehouse
-    ? (locationRows.find(r => r.binName === selectedWarehouse)?.quantityOnHand ?? 0)
-    : currentStock;
-
-  const chart = buildChartData(transactions, currentStock, 12);
-  const selectedPeriod = PERIOD_OPTIONS.find(p => p.label === period);
-  const chartLarge = buildChartData(filteredTransactions, filteredStock, selectedPeriod?.months ?? 999);
+  const chart = buildChartData(transactions, currentStock, inlineMonths);
 
   if (!chart) return null;
 
   const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
 
+  // Per-warehouse series for the inline chart (one line per warehouse, colors match the legend)
+  const seriesChart = buildWarehouseSeries(transactions, sortedRows, locatorToWarehouse, inlineMonths);
+
+  // Per-warehouse series for the modal, driven by its own period selector
+  const modalMonths = SIDEBAR_PERIOD_OPTIONS.find(o => o.value === period)?.months ?? 6;
+  const seriesLarge = buildWarehouseSeries(transactions, sortedRows, locatorToWarehouse, modalMonths);
+  // When a warehouse is selected, isolate its series; fall back to aggregated single line if needed
+  const displaySeries = selectedWarehouse && seriesLarge
+    ? { ...seriesLarge, series: seriesLarge.series.filter(s => s.name === selectedWarehouse) }
+    : seriesLarge;
+  const chartLargeFallback = !seriesLarge ? buildChartData(transactions, currentStock, modalMonths) : null;
+
   return (
     <>
       {/* Mini chart shown in Summary tab */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-4">
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-sm font-semibold text-gray-800">{ui('stockMovement')}</div>
+      <div className="px-4 pt-2 pb-3 flex flex-col gap-2">
+        {/* Title + Expandir */}
+        <div className="flex items-center justify-between gap-1.5">
+          <span className="text-sm font-normal text-muted-foreground flex-1">{ui('stockMovement')}</span>
           <button
             onClick={() => setInternalOpen(true)}
-            className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors border border-gray-200 rounded-lg px-3 py-1"
+            className="inline-flex items-center gap-1 text-sm font-medium text-foreground underline underline-offset-2 shrink-0"
           >
-            {ui('expand')}
+            {ui('expand')} <ExternalLink size={16} className="text-disabled" data-testid="ExternalLink__59b33d" />
           </button>
         </div>
-        <div className="text-xs text-gray-400 mb-2">{ui('productLast12Months')}</div>
-        <div style={{ height: 120 }}>
-          <ChartSVG {...chart} W={340} H={100} PAD_X={36} PAD_Y={8} gradId="sbGrad" fontSize={10} />
+        {/* Warehouse legend */}
+        {sortedRows.length > 0 && (
+          <div className="flex items-center gap-5 flex-wrap">
+            {sortedRows.map((b, i) => (
+              <div key={b.binName} className="flex items-center gap-2">
+                <span className="flex-shrink-0 rounded-sm" style={{ width: 14, height: 4, backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
+                <span className="text-xs font-normal text-foreground">{b.binName}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ height: 170 }}>
+          <ChartSVG
+            months={seriesChart?.months ?? chart.months}
+            series={seriesChart?.series}
+            values={chart.values}
+            W={340}
+            H={100}
+            PAD_X={36}
+            PAD_R={8}
+            PAD_Y={12}
+            gradId="sbGrad"
+            fontSize={10}
+            preserveAspectRatio="none"
+            data-testid="ChartSVG__59b33d" />
         </div>
       </div>
-
       {/* Expanded modal */}
-      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-4xl w-full">
-          <DialogHeader>
-            <DialogTitle>
+      <Dialog
+        open={isOpen}
+        onOpenChange={handleOpenChange}
+        data-testid="Dialog__59b33d">
+        <DialogContent className="max-w-4xl w-full" data-testid="DialogContent__59b33d">
+          <DialogHeader data-testid="DialogHeader__59b33d">
+            <DialogTitle data-testid="DialogTitle__59b33d">
               <div className="flex items-center justify-between gap-4 pr-8">
                 <span>{ui('stockMovement')}</span>
-                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-                  {PERIOD_OPTIONS.map(opt => (
-                    <button key={opt.label} onClick={() => setPeriod(opt.label)}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${period === opt.label ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                      {opt.label}
+                <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                  {SIDEBAR_PERIOD_OPTIONS.map(opt => (
+                    <button key={opt.value} onClick={() => setPeriod(opt.value)}
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${period === opt.value ? 'bg-card text-status-info-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                      {ui(opt.key)}
                     </button>
                   ))}
                 </div>
@@ -289,28 +475,38 @@ function StockChart({
           </DialogHeader>
           <div className="flex gap-6 pt-2">
             <div className="flex-1 min-w-0" style={{ height: 300 }}>
-              <ChartSVG {...(chartLarge ?? chart)} W={600} H={250} PAD_X={52} PAD_Y={16} gradId="sbGradLarge" fontSize={13} />
+              <ChartSVG
+                months={displaySeries?.months ?? chartLargeFallback?.months ?? chart.months}
+                series={displaySeries?.series}
+                values={chartLargeFallback?.values ?? chart.values}
+                W={600}
+                H={250}
+                PAD_X={52}
+                PAD_Y={16}
+                gradId="sbGradLarge"
+                fontSize={13}
+                data-testid="ChartSVG__59b33d" />
             </div>
             {sortedRows.length > 0 && (
               <div className="w-56 flex-shrink-0 flex flex-col gap-2">
-                <div className="text-sm font-semibold text-gray-700">{ui('stockByWarehouse')}</div>
+                <div className="text-sm font-semibold text-foreground">{ui('stockByWarehouse')}</div>
                 {sortedRows.map((b, i) => {
                   const isSelected = selectedWarehouse === b.binName;
                   const isDimmed = selectedWarehouse !== null && !isSelected;
                   return (
                     <button key={b.binName} onClick={() => handleWarehouseClick(b.binName)}
                       className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg transition-colors text-left
-                        ${isSelected ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-gray-50 hover:bg-gray-100'}
+                        ${isSelected ? 'bg-status-info ring-1 focus:ring-focus-ring' : 'bg-muted hover:bg-muted'}
                         ${isDimmed ? 'opacity-40' : ''}`}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
-                        <span className="text-sm text-gray-700 truncate">{b.binName}</span>
+                        <span className="text-sm text-muted-foreground truncate">{b.binName}</span>
                       </div>
-                      <span className="text-sm font-semibold text-gray-800 flex-shrink-0">{b.quantityOnHand.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-foreground flex-shrink-0">{b.quantityOnHand.toLocaleString()}</span>
                     </button>
                   );
                 })}
-                <div className="text-xs text-gray-400 mt-auto pt-2">
+                <div className="text-xs text-disabled mt-auto pt-2">
                   {selectedWarehouse
                     ? `${locationRows.find(r => r.binName === selectedWarehouse)?.quantityOnHand?.toLocaleString() ?? 0} ${ui('units')}`
                     : `${ui('total')}: ${currentStock?.toLocaleString()} ${ui('units')}`}
@@ -330,6 +526,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const [stockRows, setStockRows] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
+  const [period, setPeriod] = useState('3M');
   const [chartTrigger, setChartTrigger] = useState({ open: false, warehouse: null });
 
   useEffect(() => {
@@ -348,7 +545,6 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   }, [recordId, token, apiBaseUrl]);
 
   const onHand = stockRows?.reduce((s, r) => s + (Number(r.quantityOnHand) || 0), 0) ?? null;
-  const reserved = stockRows?.reduce((s, r) => s + (Number(r.reservedQty) || 0), 0) ?? null;
 
   const locatorToWarehouse = (stockRows ?? []).reduce((map, r) => {
     if (r.storageBin) map[r.storageBin] = r['warehouse$_identifier'] ?? r.warehouse ?? 'Unknown';
@@ -365,47 +561,52 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const locationRows = Object.values(binMap).filter(b => b.quantityOnHand > 0);
   const binCount = locationRows.length;
 
-  const available = (onHand !== null && reserved !== null) ? onHand - reserved : null;
   const fmt = v => (v === null ? null : v.toLocaleString());
-
-  const onHandColor = onHand === 0 ? 'red' : 'blue';
-  const availableColor = available === null ? 'blue'
-    : available <= 0 ? 'red'
-    : onHand > 0 && available <= onHand * 0.1 ? 'amber'
-    : 'green';
 
   let onHandSubtitle = null;
   if (binCount === 1) onHandSubtitle = locationRows[0]?.binName ?? null;
   else if (binCount > 1) onHandSubtitle = `${binCount} ${ui('locations')}`;
 
-  const availablePct = onHand > 0 && available !== null ? Math.round((available / onHand) * 100) : null;
   const hasChart = transactions !== null && transactions.length > 0;
   const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
+  const navigate = useNavigate();
+
+  const inlineMonths = (SIDEBAR_PERIOD_OPTIONS.find(o => o.value === period) ?? SIDEBAR_PERIOD_OPTIONS[0]).months;
 
   const stockChartProps = {
     transactions,
     currentStock: onHand,
     locationRows,
     locatorToWarehouse,
+    inlineMonths,
     externalOpen: chartTrigger.open,
     externalWarehouse: chartTrigger.warehouse,
     onExternalClose: () => setChartTrigger({ open: false, warehouse: null }),
   };
 
+  // Service-type products are not stockable — no stock section to show (ETP-4606).
+  if (data?.productType === 'S') return null;
+
   return (
     <div className="flex flex-col gap-3">
+      {/* ── Inventory overview ── */}
+      <div>
 
-      {/* ── Inventory overview pill ── */}
-      <div className="rounded-2xl border border-gray-200/70 bg-white shadow-sm">
-
-        {/* Header inside the pill */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-3">
-          <span className="text-sm font-semibold text-gray-800">{ui('inventoryOverview')}</span>
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
+        {/* Segmented tabs (pill) — full width, no title */}
+        <div className="px-4 pt-2">
+          <div className="flex items-center gap-1 p-1 h-10 rounded-xl" style={{ background: 'hsl(var(--muted))' }}>
             {['summary', 'warehouses'].map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors
-                  ${activeTab === tab ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className="flex-1 h-8 px-3 text-sm rounded-lg transition-all"
+                style={
+                  activeTab === tab
+                    ? { background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', fontWeight: 500,
+                        boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)' }
+                    : { color: 'hsl(var(--foreground))', fontWeight: 400 }
+                }
+              >
                 {tab === 'summary' ? ui('summary') : ui('warehouses')}
               </button>
             ))}
@@ -414,59 +615,77 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
 
         {/* Summary tab content */}
         {activeTab === 'summary' && (
-          <div className="px-4 pb-4 flex flex-col gap-3">
-            <StatCard icon={Boxes} label={ui('onHand')} value={fmt(onHand)} subtitle={onHandSubtitle} color={onHandColor} />
-            <StatCard icon={PackageCheck} label={ui('available')} value={fmt(available)} subtitle={availablePct !== null ? ui('productPctFree', { pct: availablePct }) : null} color={availableColor} />
-            <StatCard icon={Lock} label={ui('reserved')} value={fmt(reserved)} subtitle={reserved !== null && reserved > 0 ? ui('unitsHeld') : null} color="amber" />
+          <div className="px-4 pt-3 pb-4 flex flex-col gap-3">
+            <SidebarPeriodSelector
+              period={period}
+              onChangePeriod={setPeriod}
+              ui={ui}
+              disabled={!hasChart}
+              data-testid="SidebarPeriodSelector__59b33d" />
+            {hasChart && <AvailabilityWidget
+              label={ui('onHand')}
+              value={fmt(onHand)}
+              badge={onHandSubtitle}
+              data-testid="AvailabilityWidget__59b33d" />}
           </div>
         )}
 
         {/* Warehouses tab content */}
         {activeTab === 'warehouses' && (
-          <div className="px-4 pb-4 flex flex-col gap-3">
-            {/* Total on hand */}
-            <div className="rounded-xl bg-blue-50/60 border-l-4 border-l-blue-400 px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-widest text-blue-500 mb-1">{ui('productTotalOnHand')}</div>
-              <div className="text-3xl font-bold text-gray-900 leading-none tracking-tight">{fmt(onHand)}</div>
-              {binCount > 0 && (
-                <div className="text-sm text-gray-500 mt-1.5">
-                  {binCount === 1 ? ui('productInWarehouse', { name: locationRows[0]?.binName }) : ui('productDistributedIn', { count: binCount })}
-                </div>
-              )}
-            </div>
-
-            {/* Per-warehouse cards */}
-            {sortedRows.map((b, i) => {
-              const wAvailable = b.quantityOnHand - b.reservedQty;
-              const wAvailableColor = wAvailable <= 0 ? 'red'
-                : b.quantityOnHand > 0 && wAvailable <= b.quantityOnHand * 0.1 ? 'amber'
-                : 'green';
-              return (
-                <div key={b.binName} className="rounded-xl border border-gray-100 p-3">
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
-                    <span className="text-sm font-semibold text-gray-700">{b.binName}</span>
+          <div className="px-4 pt-3 pb-4 flex flex-col gap-3">
+            <SidebarPeriodSelector
+              period={period}
+              onChangePeriod={setPeriod}
+              ui={ui}
+              disabled={!hasChart}
+              data-testid="SidebarPeriodSelector__59b33d" />
+            {sortedRows.length > 0 && <div className="flex flex-col gap-[10px]">
+              {sortedRows.map((b, i) => {
+                const wAvailable = b.quantityOnHand - b.reservedQty;
+                return (
+                  <div key={b.binName} className="flex flex-col gap-3 bg-muted rounded-lg p-3">
+                    <div className="flex items-center gap-1 h-6">
+                      <span className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
+                      </span>
+                      <span className="text-xs font-semibold text-muted-foreground truncate">{b.binName}</span>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-normal text-muted-foreground">{ui('available')}</span>
+                        <span className="text-sm font-medium text-foreground">{fmt(wAvailable)}</span>
+                      </div>
+                      <div className="border-t border-[hsl(var(--foreground) / 0.05)]" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-normal text-muted-foreground">{ui('reserved')}</span>
+                        <span className="text-sm font-medium text-foreground">{fmt(b.reservedQty)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <MiniStat label={ui('onHand')}    value={fmt(b.quantityOnHand)} color={b.quantityOnHand === 0 ? 'red' : 'blue'} />
-                    <MiniStat label={ui('available')} value={fmt(wAvailable)}       color={wAvailableColor} />
-                    <MiniStat label={ui('reserved')}  value={fmt(b.reservedQty)}    color="amber" />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>}
           </div>
         )}
       </div>
-
-      {/* ── Stock movement pill (separate) ── */}
-      {hasChart && <StockChart {...stockChartProps} />}
-
+      {/* ── Divider ── */}
+      {(hasChart || transactions !== null) && (
+        <div className="px-4">
+          <div className="border-t border-border-subtle" />
+        </div>
+      )}
+      {/* ── Stock movement or empty state ── */}
+      {hasChart
+        ? <StockChart {...stockChartProps} data-testid="StockChart__59b33d" />
+        : transactions !== null && <StockEmptyState
+        onAdjustStock={() => navigate('/physical-inventory/new')}
+        onReplenish={() => navigate('/purchase-order/new')}
+        data-testid="StockEmptyState__59b33d" />
+      }
       {/* Hidden StockChart for warehouse tab modal trigger */}
       {activeTab === 'warehouses' && hasChart && (
         <div className="hidden">
-          <StockChart {...stockChartProps} />
+          <StockChart {...stockChartProps} data-testid="StockChart__59b33d" />
         </div>
       )}
     </div>

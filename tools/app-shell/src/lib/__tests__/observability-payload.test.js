@@ -45,7 +45,18 @@ describe('observability payload normalization', () => {
     assert.deepEqual(
       sanitizeEventProperties({
         action: 'open',
+        durationMs: 125,
+        specName: 'sales-order',
+        entity: 'sales_order',
         component: 'menu',
+        kpiId: 'kpi_adoption_dashboard_quick_actions_7d',
+        module: 'dashboard',
+        flow: 'quick_actions',
+        durationMs: 1250,
+        count: 2,
+        total: 5,
+        correctCount: 4,
+        critical: true,
         documentId: 'secret-doc-id',
         label: 'Customer Name',
         rawUrl: '/sales-order/ABC123?token=secret',
@@ -54,7 +65,113 @@ describe('observability payload normalization', () => {
       }),
       {
         action: 'open',
+        durationMs: 125,
+        specName: 'sales-order',
+        entity: 'sales_order',
         component: 'menu',
+        kpiId: 'kpi_adoption_dashboard_quick_actions_7d',
+        module: 'dashboard',
+        flow: 'quick_actions',
+        durationMs: 1250,
+        count: 2,
+        total: 5,
+        correctCount: 4,
+        critical: true,
+      }
+    );
+  });
+
+  it('drops invalid KPI metric values', () => {
+    assert.deepEqual(
+      sanitizeEventProperties({
+        durationMs: Infinity,
+        score: Number.NaN,
+        count: -1,
+        total: '5',
+        critical: 'true',
+        status: 'success',
+      }),
+      {
+        status: 'success',
+      }
+    );
+  });
+
+  it('keeps bounded numeric metrics and low-cardinality metadata', () => {
+    assert.deepEqual(
+      sanitizeEventProperties({
+        accuracy: 98.4,
+        attempt: 2,
+        category: 'sales',
+        count: 3,
+        durationMs: 2500,
+        operation: 'create',
+        position: 1,
+        score: 9,
+        source: 'copilot',
+        specName: 'sales-order',
+        step: 4,
+        supportRequested: false,
+        value: 1,
+      }),
+      {
+        accuracy: 98.4,
+        attempt: 2,
+        category: 'sales',
+        count: 3,
+        durationMs: 2500,
+        operation: 'create',
+        position: 1,
+        score: 9,
+        source: 'copilot',
+        specName: 'sales-order',
+        step: 4,
+        supportRequested: false,
+        value: 1,
+      }
+    );
+  });
+
+  it('drops out-of-bounds numeric metrics even when the key is allowlisted', () => {
+    assert.deepEqual(
+      sanitizeEventProperties({
+        accuracy: 120,
+        durationMs: Number.POSITIVE_INFINITY,
+        position: -1,
+        score: 101,
+        step: 1001,
+        value: 1000000001,
+      }),
+      {}
+    );
+  });
+
+  it('drops non-numeric values for numeric metric keys', () => {
+    assert.deepEqual(
+      sanitizeEventProperties({
+        accuracy: '98',
+        attempt: true,
+        count: '3',
+        durationMs: '2500',
+        position: false,
+        score: '9',
+        step: '4',
+        value: '1',
+      }),
+      {}
+    );
+  });
+
+  it('gives the denylist priority over the allowlist', () => {
+    assert.deepEqual(
+      sanitizeEventProperties({
+        id: 42,
+        name: 'private',
+        rawUrl: '/sales-order/ABC123',
+        specName: 'sales-order',
+      }),
+      {
+        specName: 'sales-order',
       }
     );
   });

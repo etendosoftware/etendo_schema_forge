@@ -4,23 +4,283 @@ import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
-import { useMenuLabel, useLabel, useUI } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, LayoutList, RefreshCw, Eye, Copy } from 'lucide-react';
+import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
+import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import ReportDrawer from './ReportDrawer.jsx';
-import DocumentPrintDrawer, { printDocuments } from './DocumentPrintDrawer.jsx';
+import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
+import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
+import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
+import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
 import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
+import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
+
+function resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices) {
+  if (quickFilters?.length) {
+    const labels = Array.isArray(preset.quickFilterLabels) ? preset.quickFilterLabels : [];
+    const next = new Set();
+    for (const label of labels) {
+      const idx = quickFilters.findIndex((f) => f?.label === label);
+      if (idx >= 0) next.add(idx);
+    }
+    setActiveFilterIndices(next);
+  } else {
+    setActiveFilterIndices(new Set());
+  }
+}
+
+export function splitFilterParts(parts) {
+  const allCriteria = [];
+  const passthrough = new URLSearchParams();
+  for (const filterStr of parts) {
+    const params = new URLSearchParams(filterStr);
+    for (const [k, v] of params.entries()) {
+      if (k === 'criteria') {
+        try {
+          const parsed = JSON.parse(v);
+          allCriteria.push(...(Array.isArray(parsed) ? parsed : [parsed]));
+        } catch {
+        }
+      } else {
+        passthrough.append(k, v);
+      }
+    }
+  }
+  return { allCriteria, passthrough };
+}
+
+/**
+ * Pre-expand `multiField` columns into ordinary pseudo-columns for the
+ * advanced-filter path, so each constituent part shows up as its own filterable
+ * field with zero core changes. The `multiField` parent itself has no queryable
+ * key and is dropped. `column` is intentionally omitted on each pseudo-column:
+ * AdvancedFilterBuilder resolves its field label as
+ * `labelOf(col.column) ?? col.label ?? col.key`, so dropping `column` makes it
+ * fall through to our locale-resolved header wording (e.g. "Identificador"/
+ * "Nombre") instead of the AD column label ("Search Key").
+ */
+function expandMultiFieldColumns(columns, locale) {
+  const out = [];
+  for (const col of columns) {
+    if (col?.type === 'multiField' && Array.isArray(col.parts)) {
+      for (const part of col.parts) {
+        if (part.filterable === false) continue;
+        out.push({
+          key: part.key,
+          type: part.type,
+          label: part.labels?.[locale] ?? part.labels?.en_US ?? part.label ?? part.key,
+          required: part.required,
+        });
+      }
+      continue;
+    }
+    // Plain columns that carry a per-locale `labels` map but no singular `label`
+    // (e.g. custom cells) would otherwise fall through to `col.key` in the
+    // advanced-filter field picker — a lowercase, unlocalized identifier. Resolve
+    // the localized label here so the builder shows "Venta"/"Compra"/"Stock".
+    if (col?.labels && !col.label && !col.column) {
+      out.push({ ...col, label: col.labels[locale] ?? col.labels.en_US ?? col.key });
+      continue;
+    }
+    out.push(col);
+  }
+  return out;
+}
+
+function ListFilterBarSection(props) {
+  return (
+    <>
+      {!(props.hideFilters ?? props.hideListFilters) && (
+        <ListFilterBar
+          entity={props.entity}
+          apiBaseUrl={props.apiBaseUrl}
+          columns={props.columns}
+          columnFilters={props.columnFilters}
+          onFilterChange={props.onFilterChange}
+          advancedFilter={props.advancedFilter}
+          onAdvancedFilterChange={props.onAdvancedFilterChange}
+          rows={props.hook.items}
+          dateFilterKey={props.dateFilterKey}
+          presets={props.windowName ? props.filterPresets : null}
+          onApplyPreset={props.windowName ? props.applyPreset : null}
+          onSavePreset={props.windowName ? props.saveCurrentAsPreset : null}
+          onDeletePreset={props.windowName ? props.deletePreset : null}
+          labelOverrides={props.labelOverrides}
+          hideStatusFilter={props.hideStatusFilter}
+          data-testid="ListFilterBar__620cbc" />
+      )}
+    </>
+  );
+}
+
+/**
+ * The list's table region, in either of its two wrappers.
+ *
+ * Default: a ScrollPane that owns the scroll and drives infinite loading, showing
+ * skeletons on the initial fetch and the gallery renderer when that view mode is on.
+ *
+ * `ownScroll`: skip the ScrollPane entirely and hand the table a bounded flex box, for
+ * a custom headerTable that scrolls one of its own regions (e.g. financial-account pins
+ * its toolbar and KPI panel and scrolls only the rows). Wrapping such a table in the
+ * ScrollPane gives it a SECOND, outer scroll that drags the pinned parts away, plus
+ * ScrollPane's always-visible shadow scrollbar. Infinite scroll (`onReachBottom`)
+ * belongs to the ScrollPane, so it is inert in this mode — the table owns paging if it
+ * needs it. This branch also forwards `loading`, since there is no skeleton wrapper
+ * around it to stand in for the initial fetch.
+ *
+ * Extracted from ListView for two reasons: the ~28 `Table` props were written out once
+ * per branch (Sonar flagged the duplicated block), and the branches counted towards
+ * ListView's cognitive complexity. `tableProps` is built by the caller, where the
+ * handlers are in scope, and lands here as a single object.
+ */
+function ListTableRegion({
+  ownScroll, Table, tableProps, hook, ui, tablePaddingX, tablePaddingBottom,
+  onReachBottom, viewMode, galleryRenderer, navigate, windowName, token, apiBaseUrl,
+}) {
+  if (ownScroll) {
+    return (
+      <div className={`flex min-h-0 flex-1 flex-col ${tablePaddingX}`} data-testid="list-table-region">
+        <div
+          className={tableOpacityClass(hook)}
+          style={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column' }}>
+          <Table {...tableProps} loading={hook.loading} data-testid="Table__620cbc" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ScrollPane
+      onReachBottom={onReachBottom}
+      className={`${tablePaddingX} ${tablePaddingBottom}`}
+      data-testid="ScrollPane__620cbc">
+      {hook.loading && hook.items.length === 0 ? (
+        <div className="space-y-3">
+          <Skeleton className="h-10 w-full" data-testid="Skeleton__620cbc" />
+          <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
+          <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
+          <Skeleton className="h-8 w-full" data-testid="Skeleton__620cbc" />
+        </div>
+      ) : (
+        <div className={tableOpacityClass(hook)}>
+          {viewMode === 'gallery' && galleryRenderer
+            ? galleryRenderer({ data: hook.items, onNavigate: (id) => navigate(`/${windowName}/${id}`), token, apiBaseUrl })
+            : <Table {...tableProps} data-testid="Table__620cbc" />
+          }
+          {hook.loadingMore && (
+            <div className="flex items-center justify-center py-4">
+              <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              <span className="ml-2 text-sm text-muted-foreground">{ui('loadingMore')}</span>
+            </div>
+          )}
+          {!hook.hasMore && hook.items.length > 0 && !hook.loadingMore && (
+            <p className="text-center text-xs text-muted-foreground/60 py-3">{ui('allRecordsLoaded')}</p>
+          )}
+        </div>
+      )}
+    </ScrollPane>
+  );
+}
+
+function SortToggleButton({ SortIconComponent, isDefaultSort, iconButtonHover, onToggle }) {
+  const SortEl = SortIconComponent || ArrowUpDown;
+  return (
+    <button
+      onClick={onToggle}
+      className={[
+        'h-9 w-9 flex items-center justify-center rounded-lg border transition-colors',
+        isDefaultSort
+          ? `border-border text-muted-foreground ${iconButtonHover}`
+          : 'border-primary/40 bg-primary/10 text-primary',
+      ].join(' ')}
+    >
+      <SortEl className="h-4 w-4" data-testid="SortEl__620cbc" />
+    </button>
+  );
+}
+
+function RefreshButton({ RefreshIconComponent, iconButtonHover, onRefresh, label }) {
+  const RefreshEl = RefreshIconComponent || RefreshCw;
+  return (
+    <button
+      onClick={onRefresh}
+      className={`h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground ${iconButtonHover} transition-colors`}
+      title={label || 'Refresh'}
+    >
+      <RefreshEl className="h-4 w-4" data-testid="RefreshEl__620cbc" />
+    </button>
+  );
+}
+
+function TableRowsIcon({ size = 24, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="18" height="18" rx="2" stroke={color} strokeWidth="1.5" />
+      <line x1="3" y1="9" x2="21" y2="9" stroke={color} strokeWidth="1.5" />
+      <line x1="3" y1="15" x2="21" y2="15" stroke={color} strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode }) {
+  if (!galleryRenderer) return null;
+  return (
+    <div data-testid="view-toggle" className="flex flex-row items-center p-1 gap-1 h-10 w-[108px] bg-[hsl(var(--muted))] rounded-xl">
+      <button
+        onClick={onSelectList}
+        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "list" ? "bg-card shadow-sm" : ""}`}
+      >
+        <TableRowsIcon size={24} color="hsl(var(--text-disabled))" data-testid="TableRowsIcon__620cbc" />
+      </button>
+      <button
+        onClick={onSelectGallery}
+        className={`flex items-center justify-center w-12 h-8 rounded-lg transition-all ${viewMode === "gallery" ? "bg-card shadow-sm" : ""}`}
+      >
+        <LayoutGrid
+          className="h-6 w-6"
+          style={{ color: 'hsl(var(--text-disabled))' }}
+          data-testid="LayoutGrid__620cbc" />
+      </button>
+    </div>
+  );
+}
+
+function iconSizeClass(selectionBarSize) {
+  return selectionBarSize === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+}
+
+function buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName) {
+  return renderPreview ? (row) => setPreviewRow(row) : (row) => navigate(`/${windowName}/${row.id}`);
+}
+
+function tableOpacityClass(hook) {
+  return hook.loading ? 'opacity-70 transition-opacity duration-200' : 'transition-opacity duration-200';
+}
+
+function parseListSortBy(listSortBy) {
+  const parts = listSortBy ? listSortBy.trim().split(/\s+/) : [];
+  return {
+    initialSortColumn: parts[0] || 'creationDate',
+    initialSortDirection: parts[0] ? (parts[1] ?? 'asc') : 'desc',
+  };
+}
+
+function isDefaultSortActive(hook, defaultColumn, defaultDirection) {
+  return hook.sortColumn === defaultColumn && hook.sortDirection === defaultDirection;
+}
 
 /**
  * Full-width list view for an entity.
@@ -38,10 +298,25 @@ export function ListView({
   hidePrint = false,
   hideMoreMenu = false,
   hideListFilters = false,
+  // Drops the whole list bar (filters + sort/refresh/link/print/New) instead of
+  // just its individual controls. For windows whose headerTable renders its own
+  // complete toolbar — without this, `hideCreate`/`hidePrint`/`hideListFilters`
+  // still leave an empty padded strip with the sort/refresh icons, which have no
+  // flag of their own. Also settable through `listViewOptions.hideListBar`.
+  hideListBar = false,
+  // The Table scrolls one of its own regions: render it in a bounded flex box
+  // instead of ListView's ScrollPane (see the Table block below for the rationale).
+  // Also settable through `listViewOptions.tableOwnsScroll`.
+  tableOwnsScroll = false,
   hideLink = false,
-  hideEyeCount = false,
   headerContent = null,
   api = null,
+  // ETP-4520 — the runtime per-tier window override (`useWindowAccess`'s 'read-only'
+  // tier forces `{ readOnly: true }` here — see buildWindowAccessWiring/effectiveWindow
+  // in generate-frontend.js and the equivalent hand-wired custom windows). Distinct from
+  // `api.window.readOnly` below, which is the static decisions.json-authored flag for a
+  // window that's ALWAYS view-only regardless of role. Either one forces read-only.
+  window: windowProp = null,
   bulkActions = null,
   isRowSelectable = null,
   listViewOptions = {},
@@ -53,11 +328,13 @@ export function ListView({
   onNew = null,
   newLabel = null,
   newActions = [],
-  listbarPaddingX = 'px-6',
+  listbarPaddingX = 'px-2',
+  listbarPaddingY = 'py-3',
   SortIconComponent = null,
   RefreshIconComponent = null,
   iconButtonHover = 'hover:text-foreground',
-  tablePaddingX = 'px-6',
+  tablePaddingX = 'px-2',
+  tablePaddingBottom = 'pb-6',
   labelOverrides,
   onCloneRow = null,
   initialColumnFilters,
@@ -81,6 +358,9 @@ export function ListView({
   renderPreview = null,
   externalPreviewRow = null,
   onExternalPreviewClose = null,
+  hiddenColumns = [],
+  listSortBy = null,
+  import: importConfig = null,
 }) {
   // Subset filters — radio-style, always one active, applied first.
   const [activeSubsetIndex, setActiveSubsetIndex] = useState(() => {
@@ -114,11 +394,23 @@ export function ListView({
 
   const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
 
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const { runBatch } = useBatch({ apiBaseUrl, token });
+  const { locale } = useLocaleSwitch();
+
+  // `multiField` columns are opaque to the advanced filter: expand each into
+  // per-part pseudo-columns so the builder and criteria composer treat every
+  // constituent field as an independent filterable field (no core edits).
+  const filterColumns = useMemo(
+    () => expandMultiFieldColumns(tableColumns, locale),
+    [tableColumns, locale],
+  );
+
   const advancedFilterPart = useMemo(() => {
-    const criteria = buildAdvancedFilterCriteria(advancedFilter, tableColumns);
+    const criteria = buildAdvancedFilterCriteria(advancedFilter, filterColumns);
     if (!criteria || criteria.length === 0) return null;
     return `criteria=${encodeURIComponent(JSON.stringify(criteria))}`;
-  }, [advancedFilter, tableColumns]);
+  }, [advancedFilter, filterColumns]);
 
   const effectiveFilter = useMemo(() => {
     // Composition here covers window-scope filters only:
@@ -141,21 +433,7 @@ export function ListView({
     if (parts.length === 0) return null;
 
     // Split each part into criteria payload + passthrough query params.
-    const allCriteria = [];
-    const passthrough = new URLSearchParams();
-    for (const filterStr of parts) {
-      const params = new URLSearchParams(filterStr);
-      for (const [k, v] of params.entries()) {
-        if (k === 'criteria') {
-          try {
-            const parsed = JSON.parse(v);
-            allCriteria.push(...(Array.isArray(parsed) ? parsed : [parsed]));
-          } catch {}
-        } else {
-          passthrough.append(k, v);
-        }
-      }
-    }
+    const { allCriteria, passthrough } = splitFilterParts(parts);
 
     const segments = [];
     if (allCriteria.length > 0) {
@@ -204,7 +482,14 @@ export function ListView({
       else delete next[key];
       return next;
     });
-  }, []);
+    trackSearchPerformed({
+      entity,
+      specName: windowName,
+      source: 'list_filter',
+      type: parsed ? 'filter_apply' : 'filter_clear',
+      count: parsed ? 1 : 0,
+    });
+  }, [entity, windowName]);
 
   const handleClearAllFilters = useCallback(() => {
     setColumnFilters({});
@@ -229,17 +514,7 @@ export function ListView({
       setActiveSubsetIndex(target >= 0 ? target : (subsetFilters[0] ? 0 : null));
     }
 
-    if (quickFilters?.length) {
-      const labels = Array.isArray(preset.quickFilterLabels) ? preset.quickFilterLabels : [];
-      const next = new Set();
-      for (const label of labels) {
-        const idx = quickFilters.findIndex((f) => f?.label === label);
-        if (idx >= 0) next.add(idx);
-      }
-      setActiveFilterIndices(next);
-    } else {
-      setActiveFilterIndices(new Set());
-    }
+    resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices);
   }, [filterPresets, subsetFilters, quickFilters]);
 
   const saveCurrentAsPreset = useCallback((name) => {
@@ -248,8 +523,8 @@ export function ListView({
       : null;
     const quickFilterLabels = quickFilters
       ? [...activeFilterIndices]
-          .map((i) => quickFilters[i]?.label)
-          .filter(Boolean)
+        .map((i) => quickFilters[i]?.label)
+        .filter(Boolean)
       : [];
     savePreset(name, {
       columnFilters,
@@ -261,6 +536,8 @@ export function ListView({
 
   const didInitialFetchRef = useRef(false);
 
+  const { initialSortColumn, initialSortDirection } = parseListSortBy(listSortBy);
+
   const hook = useEntity(entity, null, {
     token,
     apiBaseUrl,
@@ -268,7 +545,19 @@ export function ListView({
     columnDefs,
     columnFilters,
     trailingFilter: advancedFilterPart,
+    specName: windowName,
+    initialSortColumn,
+    initialSortDirection,
   });
+
+  useEffect(() => {
+    if (!entity && !windowName) return;
+    trackWindowOpened({
+      entity,
+      specName: windowName,
+      source: 'list_view',
+    });
+  }, [entity, windowName]);
 
   const refreshRef = useRef(hook.refresh);
   refreshRef.current = hook.refresh;
@@ -322,13 +611,20 @@ export function ListView({
   const sendDocumentEnabled = !!effectiveSendDocument && effectiveSendDocument.enabled !== false;
   const allowEmail = effectiveSendDocument?.allowEmail !== false;
 
+  // View-only window (decisions.json → window.readOnly, OR the ETP-4520 runtime
+  // 'read-only' access tier via the `window` prop): suppress the write quick
+  // actions and don't wire their default handlers. Row click still opens the
+  // (read-only) detail, so viewing is preserved. Complements DetailView's own gate.
+  const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
+
   const effectiveRowQuickActions = useMemo(() => {
     if (!quickActionsEnabled) return rowQuickActions;
     const merged = {
       ...rowQuickActions,
+      readOnly: windowReadOnly || rowQuickActions.readOnly === true,
       onEdit: rowQuickActions.onEdit
-        || ((row) => row?.id && navigate(`/${windowName || entity}/${row.id}`)),
-      onDelete: rowQuickActions.onDelete || defaultRequestDelete,
+        || (windowReadOnly ? undefined : (row) => row?.id && navigate(`/${windowName || entity}/${row.id}`)),
+      onDelete: rowQuickActions.onDelete || (windowReadOnly ? undefined : defaultRequestDelete),
     };
     // Thread sendDocument through to DataTable → RowQuickActions for the gate,
     // and inject a default onEmail when the window is eligible but the host
@@ -338,10 +634,83 @@ export function ListView({
       merged.onEmail = (row) => setEmailRow(row);
     }
     return merged;
-  }, [quickActionsEnabled, rowQuickActions, navigate, windowName, entity, defaultRequestDelete, effectiveSendDocument, sendDocumentEnabled]);
+  }, [quickActionsEnabled, rowQuickActions, navigate, windowName, entity, defaultRequestDelete, effectiveSendDocument, sendDocumentEnabled, windowReadOnly]);
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
+  // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
+  // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
+  // the nested `labels` object ImportDialog forwards to each child (shape documented in
+  // app-shell-core's ImportDialog.jsx) and pass `translate={ui}` so the send pipeline
+  // localizes backend errors too. Templated strings (mappedSummary/{mapped}/{total},
+  // tooltips, bulkApply/{count}/{raw}/{value}) keep their {placeholders} — the child fills
+  // them at render time; the (n) => string labels interpolate here. `save`/`cancel`/`retry`/
+  // `close` reuse existing generic keys per the i18n guide's "reuse before adding" rule.
+  const importLabels = useMemo(() => ({
+    title: ui('importDialogTitle'),
+    revalidating: ui('importRevalidating'),
+    downloadTemplate: ui('importDownloadTemplate'),
+    importButton: (n) => ui('importButtonCount', { n }),
+    dropzone: {
+      dropHere: ui('importDropHere'),
+      dropHint: ui('importDropHint'),
+    },
+    progress: {
+      title: ui('importProgressTitle'),
+      subtitle: ui('importProgressSubtitle'),
+    },
+    mapping: {
+      notImported: ui('importNotImported'),
+      mappedSummary: ui('importMappedSummary'),
+      editMatch: ui('importEditMatch'),
+      editTitle: ui('importEditColumnTitle'),
+      save: ui('save'),
+      cancel: ui('cancel'),
+    },
+    confirm: {
+      title: ui('importConfirmTitle'),
+      willImport: (n) => ui('importWillImport', { n }),
+      willSkip: (n) => ui('importWillSkip', { n }),
+      cancel: ui('cancel'),
+      confirm: ui('importConfirmButton'),
+    },
+    fileError: {
+      title: ui('importFileErrorTitle'),
+      cancel: ui('cancel'),
+      retry: ui('retry'),
+    },
+    reviewQueue: {
+      filterAll: ui('importFilterAll'),
+      filterOk: ui('importFilterOk'),
+      filterError: ui('importFilterError'),
+      skip: ui('importSkip'),
+      skipped: ui('importSkipped'),
+      unskip: ui('importUnskip'),
+      downloadErrors: ui('importDownloadErrors'),
+      status: ui('importStatus'),
+      statusOk: ui('importStatusOk'),
+      statusError: ui('importStatusError'),
+      fieldErrorsTooltip: ui('importFieldErrorsTooltip'),
+      bulkApplyTitle: ui('importBulkApplyTitle'),
+      bulkApplyDescription: ui('importBulkApplyDescription'),
+      bulkApplyOnlyThis: ui('importBulkApplyOnlyThis'),
+      bulkApplyAll: ui('importBulkApplyAll'),
+      retry: ui('retry'),
+    },
+    systemError: {
+      title: ui('importSystemErrorTitle'),
+      subtitle: ui('importSystemErrorSubtitle'),
+      copy: ui('importSystemErrorCopy'),
+      copied: ui('importSystemErrorCopied'),
+      copyFailed: ui('importSystemErrorCopyFailed'),
+      close: ui('close'),
+      showReport: ui('importSystemErrorShowReport'),
+      hideReport: ui('importSystemErrorHideReport'),
+      rowData: ui('importSystemErrorRowData'),
+      requestSent: ui('importSystemErrorRequestSent'),
+      serverResponse: ui('importSystemErrorServerResponse'),
+    },
+  }), [ui]);
   const label = tMenu(entityLabel) || entityLabel || entity;
   const { toggleFavorite, isFavorite } = useFavorites();
   const favKey = windowName || entity || '';
@@ -358,6 +727,12 @@ export function ListView({
   }, [favActive, hook.items.length]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
+  // ETP-4656 — partial bulk-delete outcome: bump deselectTrigger with the ids of
+  // the rows that were successfully deleted so DataTable drops only those from
+  // its internal selection Set, leaving the failed rows checked (see
+  // useBulkRowDelete below and DataTable's matching deselectTrigger effect).
+  const [deselectTrigger, setDeselectTrigger] = useState(0);
+  const [deselectRowIds, setDeselectRowIds] = useState([]);
   const [previewRow, setPreviewRow] = useState(null);
   const activePreviewRow = previewRow ?? externalPreviewRow ?? null;
 
@@ -379,6 +754,31 @@ export function ListView({
     setClearSelectionCounter((c) => c + 1);
   }, []);
 
+  // ETP-4656 — grid multi-select "Delete selected". Outcome handling per the
+  // standardized delete UX:
+  //   - all succeeded  → refetch (deleted rows disappear) + clear selection.
+  //   - partial failure → refetch (succeeded rows disappear) + keep only the
+  //     failed rows selected, both in our own state and in DataTable's
+  //     internal checkbox Set (via deselectTrigger/deselectRowIds).
+  //   - all failed      → no refetch, selection untouched.
+  const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
+    apiBaseUrl,
+    entity: entity || 'header',
+    token,
+    onSuccess: (succeeded, failed) => {
+      if (succeeded.length > 0) hook.refresh();
+      if (failed.length === 0) {
+        clearSelection();
+      } else {
+        setSelectedRows(failed);
+        if (succeeded.length > 0) {
+          setDeselectRowIds(succeeded.map((r) => r.id));
+          setDeselectTrigger((c) => c + 1);
+        }
+      }
+    },
+  });
+
   // Register this list view with the current-window context so the Copilot
   // widget can auto-attach it when opened. Memoized so the hook's signature
   // computation stays stable across unrelated renders.
@@ -392,7 +792,6 @@ export function ListView({
   useRegisterWindowContext(windowContextInfo);
   const [showSortPopover, setShowSortPopover] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  const [showDocPrint, setShowDocPrint] = useState(false);
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem(`viewMode:${entity}`) || 'list'
   );
@@ -403,9 +802,8 @@ export function ListView({
   };
 
   const sortBtnRef = useRef(null);
-  const scrollRef = useRef(null);
 
-  const isDefaultSort = hook.sortColumn === 'creationDate' && hook.sortDirection === 'desc';
+  const isDefaultSort = isDefaultSortActive(hook, initialSortColumn, initialSortDirection);
 
   // Close sort popover on outside click
   useEffect(() => {
@@ -449,378 +847,436 @@ export function ListView({
     setShowSortPopover(false);
   }, [hook.setSortColumn, hook.setSortDirection]);
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200 && hook.hasMore && !hook.loadingMore) {
-      hook.loadMore();
-    }
+  const handleReachBottom = useCallback(() => {
+    if (hook.hasMore && !hook.loadingMore) hook.loadMore();
   }, [hook.hasMore, hook.loadingMore, hook.loadMore]);
+
+  // A custom headerTable that renders the window's whole toolbar itself needs the native
+  // list bar dropped entirely — the individual hide* flags leave an empty padded strip
+  // behind, since sort/refresh have no flag of their own.
+  const listBarHidden = listViewOptions?.hideListBar ?? hideListBar;
+
+  // Everything the Table needs, in one object, because ListTableRegion renders it from
+  // either of two wrappers and these used to be written out once per branch. `meta` is
+  // the same list-response envelope `headerContent` gets: a custom headerTable that
+  // renders its own aggregate panel (e.g. financial-account's balance sidebar) needs it
+  // here, since that panel lives inside the table slot rather than above it.
+  const tableProps = {
+    entity,
+    specName: windowName,
+    data: hook.items,
+    meta: hook.meta,
+    onNavigate: buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName),
+    onSelectionChange: setSelectedRows,
+    // ETP-4656 — the AUTHORITATIVE selection, read-only for the slot. A custom
+    // headerTable that has to react to selection (e.g. financial-account swaps its own
+    // toolbar for the selection bar) must not mirror this by wrapping
+    // `onSelectionChange`: DataTable clears/prunes its internal Set silently from the
+    // `clearSelectionTrigger` and `deselectTrigger` effects WITHOUT calling
+    // `onSelectionChange`, so any locally-mirrored count goes stale the moment a bulk
+    // delete succeeds or the selection is cancelled — and the slot's toolbar would
+    // never come back. DataTable itself has no `selectedRows` prop (it is local state
+    // there), so forwarding this through a spread is inert.
+    selectedRows,
+    onDataMutated: hook.refresh,
+    isRowSelectable,
+    compact: false,
+    sortColumn: hook.sortColumn,
+    sortDirection: hook.sortDirection,
+    onSort: handleColumnSort,
+    onColumnsReady: setTableColumns,
+    api,
+    token,
+    apiBaseUrl,
+    labelOverrides,
+    onFilterChange: handleFilterChange,
+    onClearAllFilters: handleClearAllFilters,
+    columnFilters,
+    onCloneRow,
+    rowFilter: effectiveRowFilter,
+    hoverRowActions,
+    clearSelectionTrigger: clearSelectionCounter,
+    deselectTrigger,
+    deselectRowIds,
+    rowQuickActions: effectiveRowQuickActions,
+    hiddenColumns,
+  };
 
   return (
     <>
-    <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
-      {/* White content card with rounded top-left corner */}
-      <div className="flex-1 flex flex-col bg-white rounded-tl-2xl overflow-hidden min-h-0">
-        {/* Selection bar or filter bar */}
-        {selectedRows.length > 0 ? (
-          <div className={`flex items-center justify-between ${listbarPaddingX} py-3 border-b border-border/30`}>
-            <div className="flex items-center gap-3 h-10">
-              <span className="text-sm font-semibold">{ui('selected').replace('{count}', selectedRows.length)}</span>
+      <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
+        {/* White content card with rounded top-left corner */}
+        <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
+          {/* Selection bar or filter bar */}
+          {/* Selection bar when rows are picked, otherwise the filter bar. Kept as a
+              ternary whose alternate is a plain `&&`: nesting one ternary inside
+              another here is what Sonar S3358 flags.
+
+              ETP-4658/ETP-4656 — `hideListBar` gates ONLY the idle filter bar, not the
+              selection bar. The flag exists because a custom headerTable draws the
+              window's own toolbar, so the native idle strip is a duplicate that leaves
+              an empty padded band behind (sort/refresh have no hide* flag of their own).
+              The selection bar is a different thing: transient, never empty, and the
+              standardized home of "Delete selected" — no headerTable replaces it, so
+              suppressing it here silently dropped grid multi-select delete from every
+              custom-headerTable window (that is how Cuentas financieras lost it).
+              This is safe by construction rather than by convention: the bar is
+              unreachable unless the grid is selectable, so a custom headerTable that
+              wants no selection at all simply keeps `selectable={false}` on its own
+              DataTable and never renders rows that can be picked. */}
+          {selectedRows.length > 0 ? (
+            <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
+              <div className="flex items-center gap-3 h-10">
+                <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
+              </div>
+              <div className="flex items-center gap-2 h-10">
+                {!(listViewOptions?.hidePrint ?? hidePrint) && (
+                  <Button
+                    size={selectionBarSize}
+                    className="gap-1.5"
+                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui)}
+                    data-testid="Button__620cbc">
+                    <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
+                    {ui('print')} ({selectedRows.length})
+                  </Button>
+                )}
+                {onCloneRow && (
+                  <Button
+                    variant="outline"
+                    size={selectionBarSize}
+                    className="gap-1.5"
+                    onClick={() => onCloneRow(selectedRows)}
+                    data-testid="Button__620cbc">
+                    <Copy className={iconSizeClass(selectionBarSize)} data-testid="Copy__620cbc" />
+                    {ui('cloneOrderBtn')} ({selectedRows.length})
+                  </Button>
+                )}
+                {/* ETP-4656 — generic "Delete selected". Suppressed when the window is
+                    read-only or via the explicit `listViewOptions.hideBulkDelete` opt-out
+                    (e.g. a host that already renders its own delete affordance through
+                    selectionBarRightActions for an unrelated reason must opt out
+                    explicitly — inferring it from that prop's mere presence was fragile,
+                    since selectionBarRightActions can be used for things other than
+                    delete). */}
+                {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
+                  <Button
+                    variant="outline"
+                    size={selectionBarSize}
+                    className="gap-1.5"
+                    disabled={bulkDeleting}
+                    onClick={() => requestBulkDelete(selectedRows)}
+                    data-testid="bulk-delete-selected">
+                    <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
+                    {ui('bulkDeleteSelected')} ({selectedRows.length})
+                  </Button>
+                )}
+                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
+                {selectionBarRightActions && selectionBarRightActions({
+                  selectedRows,
+                  clearSelection,
+                  token,
+                  apiBaseUrl,
+                  onDataMutated: hook.refresh,
+                })}
+              </div>
             </div>
-            <div className="flex items-center gap-2 h-10">
-              <Button
-                variant="outline"
-                size={selectionBarSize}
-                className="gap-1.5"
-                onClick={() => setShowDocPrint(true)}
-              >
-                <Eye className={selectionBarSize === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-                {ui('preview')}
-              </Button>
-              <Button
-                size={selectionBarSize}
-                className="gap-1.5"
-                onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token)}
-              >
-                <Printer className={selectionBarSize === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-                {ui('print')} ({selectedRows.length})
-              </Button>
-              {onCloneRow && (
-                <Button
-                  variant="outline"
-                  size={selectionBarSize}
-                  className="gap-1.5"
-                  onClick={() => onCloneRow(selectedRows)}
-                >
-                  <Copy className={selectionBarSize === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-                  {ui('cloneOrderBtn')} ({selectedRows.length})
-                </Button>
-              )}
-              {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
-              {selectionBarRightActions && selectionBarRightActions({
-                selectedRows,
-                clearSelection,
-                token,
-                apiBaseUrl,
-                onDataMutated: hook.refresh,
-              })}
-            </div>
-          </div>
-        ) : (
-          <div className={`flex items-center justify-between ${listbarPaddingX} py-3`}>
-            <div className="flex items-center gap-2">
-              {subsetFilters && (
-                <div className="inline-flex items-center gap-1 rounded-xl bg-[#F5F7F9] p-1 h-10">
-                  {subsetFilters.map((sf, i) => (
-                    <button
-                      key={i}
-                      onClick={() => selectSubset(i)}
-                      className={[
-                        'flex-1 h-8 px-2 text-sm font-medium text-[#121217] rounded-lg transition-all',
-                        activeSubsetIndex === i
-                          ? 'bg-white shadow-sm'
-                          : 'bg-[#F5F7F9] hover:brightness-95',
-                      ].join(' ')}
-                    >
-                      {ui(sf.label)}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {quickFilters && (
-                <div className="flex items-center gap-1">
-                  {quickFilters.map((qf, i) => (
-                    <button
-                      key={i}
-                      onClick={() => toggleQuickFilter(i)}
-                      className={[
-                        'h-9 px-3 text-xs rounded-lg border bg-white transition-colors',
-                        activeFilterIndices.has(i)
-                          ? 'border-primary text-primary bg-primary/5 font-medium'
-                          : 'border-border text-muted-foreground hover:text-foreground',
-                      ].join(' ')}
-                    >
-                      {ui(qf.label)}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {!(listViewOptions?.hideFilters ?? hideListFilters) && (
-                <ListFilterBar
+          ) : !listBarHidden && (
+            <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
+              <div className="flex items-center gap-2">
+                {subsetFilters && (
+                  <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
+                    {subsetFilters.map((sf, i) => (
+                      <button
+                        key={i}
+                        onClick={() => selectSubset(i)}
+                        data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
+                        className={[
+                          'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
+                          activeSubsetIndex === i
+                            ? 'bg-card shadow-sm'
+                            : 'bg-[hsl(var(--muted))] hover:brightness-95',
+                        ].join(' ')}
+                      >
+                        {ui(sf.label)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {quickFilters && (
+                  <div role="group" aria-label="Filters" className="flex items-center gap-1">
+                    {quickFilters.map((qf, i) => (
+                      <button
+                        key={i}
+                        onClick={() => toggleQuickFilter(i)}
+                        data-testid={`quick-filter-${qf.key || qf.label?.toLowerCase()}`}
+                        className={[
+                          'h-9 px-3 text-xs rounded-lg border bg-card transition-colors',
+                          activeFilterIndices.has(i)
+                            ? 'border-primary text-primary bg-primary/5 font-medium'
+                            : 'border-border text-muted-foreground hover:text-foreground',
+                        ].join(' ')}
+                      >
+                        {ui(qf.label)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <ListFilterBarSection
+                  hideFilters={listViewOptions?.hideFilters}
+                  hideListFilters={hideListFilters}
+                  hideStatusFilter={listViewOptions?.hideStatusFilter}
                   entity={entity}
                   apiBaseUrl={apiBaseUrl}
-                  columns={tableColumns}
+                  columns={filterColumns}
                   columnFilters={columnFilters}
                   onFilterChange={handleFilterChange}
                   advancedFilter={advancedFilter}
                   onAdvancedFilterChange={setAdvancedFilter}
-                  rows={hook.items}
+                  hook={hook}
                   dateFilterKey={dateFilterKey}
-                  presets={windowName ? filterPresets : null}
-                  onApplyPreset={windowName ? applyPreset : null}
-                  onSavePreset={windowName ? saveCurrentAsPreset : null}
-                  onDeletePreset={windowName ? deletePreset : null}
+                  windowName={windowName}
+                  filterPresets={filterPresets}
+                  applyPreset={applyPreset}
+                  saveCurrentAsPreset={saveCurrentAsPreset}
+                  deletePreset={deletePreset}
                   labelOverrides={labelOverrides}
-                />
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {!(listViewOptions?.hideLink ?? hideLink) && (
-                <button className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
-                  <Link2 className="h-4 w-4" />
-                </button>
-              )}
-              <div className="relative" ref={sortBtnRef}>
-                {(() => { const SortEl = SortIconComponent || ArrowUpDown; return (
-                <button
-                  onClick={() => setShowSortPopover(v => !v)}
-                  className={[
-                    'h-9 w-9 flex items-center justify-center rounded-lg border transition-colors',
-                    isDefaultSort
-                      ? `border-border text-muted-foreground ${iconButtonHover}`
-                      : 'border-primary/40 bg-primary/10 text-primary',
-                  ].join(' ')}
-                >
-                  <SortEl className="h-4 w-4" />
-                </button>
-                ); })()}
-                {showSortPopover && tableColumns.length > 0 && (
-                  <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-card shadow-lg py-1">
-                    <div className="px-3 py-2 text-xs font-medium text-muted-foreground tracking-wide">
-                      {ui('sortBy')}
+                  data-testid="ListFilterBarSection__620cbc" />
+                <ViewToggle
+                  galleryRenderer={galleryRenderer}
+                  onSelectList={() => handleViewMode('list')}
+                  viewMode={viewMode}
+                  onSelectGallery={() => handleViewMode('gallery')}
+                  data-testid="ViewToggle__620cbc" />
+              </div>
+              <div className="flex items-center gap-2">
+                {!(listViewOptions?.hideLink ?? hideLink) && (
+                  <button
+                    className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
+                    <Link2 className="h-4 w-4" data-testid="Link2__620cbc" />
+                  </button>
+                )}
+                <div className="relative" ref={sortBtnRef}>
+                  <SortToggleButton
+                    SortIconComponent={SortIconComponent}
+                    isDefaultSort={isDefaultSort}
+                    iconButtonHover={iconButtonHover}
+                    onToggle={() => setShowSortPopover(v => !v)}
+                    data-testid="SortToggleButton__620cbc" />
+                  {showSortPopover && tableColumns.length > 0 && (
+                    <div
+                      className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-card shadow-lg py-1">
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground tracking-wide">
+                        {ui('sortBy')}
+                      </div>
+                      {tableColumns.filter(col => col.sortable !== false).map(col => {
+                        const colLabel = t(col.column) ?? col.label ?? col.key;
+                        const isActive = hook.sortColumn === col.key;
+                        return (
+                          <button
+                            key={col.key}
+                            onClick={() => handleSortSelect(col.key)}
+                            className={[
+                              'w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors',
+                              isActive ? 'bg-primary/5 text-foreground font-medium' : 'text-foreground hover:bg-muted/50',
+                            ].join(' ')}
+                          >
+                            <span className="w-4 text-center text-xs">
+                              {isActive ? (hook.sortDirection === 'asc' ? '\u25B2' : '\u25BC') : ''}
+                            </span>
+                            <span className="flex-1 text-left">{colLabel}</span>
+                          </button>
+                        );
+                      })}
+                      {!isDefaultSort && (
+                        <>
+                          <div className="border-t border-border/50 my-1" />
+                          <button
+                            onClick={handleClearSort}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
+                          >
+                            <span className="w-4" />
+                            <span className="flex-1 text-left">{ui('clearSort')}</span>
+                          </button>
+                        </>
+                      )}
                     </div>
-                    {tableColumns.filter(col => col.sortable !== false).map(col => {
-                      const colLabel = t(col.column) ?? col.label ?? col.key;
-                      const isActive = hook.sortColumn === col.key;
-                      return (
-                        <button
-                          key={col.key}
-                          onClick={() => handleSortSelect(col.key)}
-                          className={[
-                            'w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors',
-                            isActive ? 'bg-primary/5 text-foreground font-medium' : 'text-foreground hover:bg-muted/50',
-                          ].join(' ')}
-                        >
-                          <span className="w-4 text-center text-xs">
-                            {isActive ? (hook.sortDirection === 'asc' ? '\u25B2' : '\u25BC') : ''}
-                          </span>
-                          <span className="flex-1 text-left">{colLabel}</span>
-                        </button>
-                      );
-                    })}
-                    {!isDefaultSort && (
+                  )}
+                </div>
+                <RefreshButton
+                  RefreshIconComponent={RefreshIconComponent}
+                  iconButtonHover={iconButtonHover}
+                  onRefresh={() => hook.refresh()}
+                  label={ui('refresh')}
+                  data-testid="RefreshButton__620cbc" />
+                {importConfig?.enabled && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+                    onClick={() => setShowImportDialog(true)}
+                    aria-label={ui('import')}
+                    title={ui('import')}
+                    data-testid="ListView__importButton"
+                  >
+                    <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewImport" />
+                  </Button>
+                )}
+                {!(listViewOptions?.hidePrint ?? hidePrint) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+                    onClick={() => setShowReport(true)}
+                    data-testid="Button__620cbc">
+                    <Printer className="h-3.5 w-3.5" data-testid="Printer__620cbc" />
+                    {ui('print')}
+                  </Button>
+                )}
+                {/* Split "New" button */}
+                {!hideCreate && !windowReadOnly && (
+                  <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
+                    <Button
+                      className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+                      data-testid="action-new"
+                      onClick={() => onNew ? onNew() : navigate(`/${windowName}/new`)}
+                    >
+                      <Plus className="h-4 w-4" data-testid="Plus__620cbc" />
+                      {newLabel ?? tMenu(entityLabel, { field: 'newLabel' }) ?? ui('newRecord')}
+                    </Button>
+                    {newActions.length > 0 && (
                       <>
-                        <div className="border-t border-border/50 my-1" />
-                        <button
-                          onClick={handleClearSort}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
-                        >
-                          <span className="w-4" />
-                          <span className="flex-1 text-left">{ui('clearSort')}</span>
-                        </button>
+                        <div className="w-px bg-primary-foreground/20" />
+                        <DropdownMenu data-testid="DropdownMenu__620cbc">
+                          <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
+                            <Button
+                              className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+                              data-testid="action-new-more">
+                              <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" data-testid="DropdownMenuContent__620cbc">
+                            {newActions.map((action) => (
+                              <DropdownMenuItem
+                                key={action.key}
+                                onClick={action.onClick}
+                                data-testid={`action-new-${action.key}`}
+                              >
+                                {action.label}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </>
                     )}
                   </div>
                 )}
               </div>
-              {(() => { const RefreshEl = RefreshIconComponent || RefreshCw; return (
-              <button
-                onClick={() => hook.refresh()}
-                className={`h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground ${iconButtonHover} transition-colors`}
-                title={ui('refresh') || 'Refresh'}
-              >
-                <RefreshEl className="h-4 w-4" />
-              </button>
-              ); })()}
-              {!(listViewOptions?.hidePrint ?? hidePrint) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
-                  onClick={() => setShowReport(true)}
-                >
-                  <Printer className="h-3.5 w-3.5" />
-                  {ui('print')}
-                </Button>
-              )}
-              {/* View toggle */}
-              {galleryRenderer && (
-                <div className="inline-flex items-center border border-border rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => handleViewMode('list')}
-                    className={`h-9 w-9 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                  >
-                    <LayoutList className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleViewMode('gallery')}
-                    className={`h-9 w-9 flex items-center justify-center transition-colors ${viewMode === 'gallery' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                  >
-                    <LayoutGrid className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-              {/* Split "New" button */}
-              {!hideCreate && (
-              <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
-                <Button
-                  className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[#FFD500] hover:text-[#121217] transition-colors"
-                  data-testid="action-new"
-                  onClick={() => onNew ? onNew() : navigate(`/${windowName}/new`)}
-                >
-                  <Plus className="h-4 w-4" />
-                  {newLabel ?? tMenu(entityLabel, { field: 'newLabel' }) ?? ui('newRecord')}
-                </Button>
-                {newActions.length > 0 && (
-                  <>
-                    <div className="w-px bg-primary-foreground/20" />
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button className="rounded-none rounded-r-lg px-2 hover:bg-[#FFD500] hover:text-[#121217] transition-colors" data-testid="action-new-more">
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {newActions.map((action) => (
-                          <DropdownMenuItem
-                            key={action.key}
-                            onClick={action.onClick}
-                            data-testid={`action-new-${action.key}`}
-                          >
-                            {action.label}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </>
-                )}
-              </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* KPI / header content */}
-        {headerContent && (
-          <div className="px-6 pt-4">
-            {typeof headerContent === 'function'
-              ? headerContent({ api, token, apiBaseUrl, items: hook.items, loading: hook.loading })
-              : headerContent}
-          </div>
-        )}
-
-        {/* Indeterminate top progress bar — visible while refreshing existing data */}
-        {hook.loading && hook.items.length > 0 && (
-          <>
-            <div className="h-0.5 w-full overflow-hidden bg-primary/10">
-              <div
-                className="h-full w-1/3 bg-primary"
-                style={{ animation: 'sf-list-progress 1.1s ease-in-out infinite' }}
-              />
-            </div>
-            <style>{`@keyframes sf-list-progress { 0% { transform: translateX(-100%) } 100% { transform: translateX(400%) } }`}</style>
-          </>
-        )}
-
-        {/* Table */}
-        <div ref={scrollRef} onScroll={handleScroll} className={`flex-1 overflow-auto ${tablePaddingX} pb-6`}>
-          {hook.loading && hook.items.length === 0 ? (
-            <div className="space-y-3">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-            </div>
-          ) : (
-            <div className={hook.loading ? 'opacity-70 transition-opacity duration-200' : 'transition-opacity duration-200'}>
-              {viewMode === 'gallery' && galleryRenderer
-                ? galleryRenderer({ data: hook.items, onNavigate: (id) => navigate(`/${windowName}/${id}`), token, apiBaseUrl })
-                : (
-                  <Table
-                    entity={entity}
-                    data={hook.items}
-                    onNavigate={renderPreview ? (row) => setPreviewRow(row) : (row) => navigate(`/${windowName}/${row.id}`)}
-                    onSelectionChange={setSelectedRows}
-                    onDataMutated={hook.refresh}
-                    isRowSelectable={isRowSelectable}
-                    compact={false}
-                    sortColumn={hook.sortColumn}
-                    sortDirection={hook.sortDirection}
-                    onSort={handleColumnSort}
-                    onColumnsReady={setTableColumns}
-                    api={api}
-                    token={token}
-                    apiBaseUrl={apiBaseUrl}
-                    labelOverrides={labelOverrides}
-                    onFilterChange={handleFilterChange}
-                    onClearAllFilters={handleClearAllFilters}
-                    columnFilters={columnFilters}
-                    onCloneRow={onCloneRow}
-                    rowFilter={effectiveRowFilter}
-                    hoverRowActions={hoverRowActions}
-                    clearSelectionTrigger={clearSelectionCounter}
-                    rowQuickActions={effectiveRowQuickActions}
-                  />
-                )
-              }
-              {hook.loadingMore && (
-                <div className="flex items-center justify-center py-4">
-                  <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                  <span className="ml-2 text-sm text-muted-foreground">{ui('loadingMore')}</span>
-                </div>
-              )}
-              {!hook.hasMore && hook.items.length > 0 && !hook.loadingMore && (
-                <p className="text-center text-xs text-muted-foreground/60 py-3">{ui('allRecordsLoaded')}</p>
-              )}
             </div>
           )}
+
+          {/* KPI / header content */}
+          {headerContent && (
+            <div className="px-6 pt-4">
+              {typeof headerContent === 'function'
+                ? headerContent({ api, token, apiBaseUrl, items: hook.items, loading: hook.loading, meta: hook.meta })
+                : headerContent}
+            </div>
+          )}
+
+          {/* Indeterminate top progress bar — visible while refreshing existing data */}
+          {hook.loading && hook.items.length > 0 && (
+            <>
+              <div role="progressbar" className="h-0.5 w-full overflow-hidden bg-primary/10" data-testid="list-progress-bar">
+                <div
+                  className="h-full w-1/3 bg-primary"
+                  style={{ animation: 'sf-list-progress 1.1s ease-in-out infinite' }}
+                />
+              </div>
+              <style>{`@keyframes sf-list-progress { 0% { transform: translateX(-100%) } 100% { transform: translateX(400%) } }`}</style>
+            </>
+          )}
+
+          {/* Table region (ScrollPane, or a bounded flex box when the table owns its
+              own scroll) — see ListTableRegion for the full rationale. */}
+          <ListTableRegion
+            ownScroll={listViewOptions?.tableOwnsScroll ?? tableOwnsScroll}
+            Table={Table}
+            tableProps={tableProps}
+            hook={hook}
+            ui={ui}
+            tablePaddingX={tablePaddingX}
+            tablePaddingBottom={tablePaddingBottom}
+            onReachBottom={handleReachBottom}
+            viewMode={viewMode}
+            galleryRenderer={galleryRenderer}
+            navigate={navigate}
+            windowName={windowName}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="ListTableRegion__620cbc" />
         </div>
-      </div>
-      <ReportDrawer
-        open={showReport}
-        onClose={() => setShowReport(false)}
-        windowName={windowName}
-        columns={tableColumns.map(col => ({ ...col, label: t(col.column) ?? col.label ?? col.key }))}
-        title={label}
-        apiBaseUrl={apiBaseUrl}
-        entity={entity}
-        token={token}
-        sortColumn={hook.sortColumn}
-        sortDirection={hook.sortDirection}
-      />
-      <DocumentPrintDrawer
-        open={showDocPrint}
-        onClose={() => setShowDocPrint(false)}
-        windowName={windowName}
-        documentIds={selectedRows.map(r => r.id || r)}
-        token={token}
-      />
-      {quickActionsEnabled && !rowQuickActions?.onDelete && defaultDeleteDialog}
-      {/* ETP-3914 — Generic Send/Download modal mount for any documental window
+        <ReportDrawer
+          open={showReport}
+          onClose={() => setShowReport(false)}
+          windowName={windowName}
+          columns={tableColumns.map(col => ({ ...col, label: t(col.column) ?? col.label ?? col.key }))}
+          title={label}
+          apiBaseUrl={apiBaseUrl}
+          entity={entity}
+          token={token}
+          sortColumn={hook.sortColumn}
+          sortDirection={hook.sortDirection}
+          data-testid="ReportDrawer__620cbc" />
+        {quickActionsEnabled && !rowQuickActions?.onDelete && defaultDeleteDialog}
+        {bulkDeleteDialog}
+        {/* ETP-3914 — Generic Send/Download modal mount for any documental window
           that did not bring its own `onEmail`. Custom windows that mount the
           modal manually (sales-invoice, purchase-invoice) keep doing so because
           their `rowQuickActions.onEmail` wins over the default injected above. */}
-      {emailRow && sendDocumentEnabled && !rowQuickActions?.onEmail && (
-        <SendDocumentModal
-          documentType={tMenu(entityLabel) || entityLabel || entity}
-          documentNo={emailRow.documentNo}
-          bpName={emailRow['businessPartner$_identifier']}
-          bPartnerId={emailRow.businessPartner}
-          apiBaseUrl={apiBaseUrl}
-          documentId={emailRow.id}
-          windowName={windowName}
-          token={token}
-          allowEmail={allowEmail}
-          onClose={() => setEmailRow(null)}
-        />
-      )}
-    </div>
-    {activePreviewRow && renderPreview?.({
-      row: activePreviewRow,
-      onClose: handlePreviewClose,
-      onEdit: handlePreviewEdit,
-    })}
+        {emailRow && sendDocumentEnabled && !rowQuickActions?.onEmail && (
+          <SendDocumentModal
+            documentType={tMenu(entityLabel) || entityLabel || entity}
+            documentNo={emailRow.documentNo}
+            bpName={emailRow['businessPartner$_identifier']}
+            bPartnerId={emailRow.businessPartner}
+            apiBaseUrl={apiBaseUrl}
+            documentId={emailRow.id}
+            windowName={windowName}
+            token={token}
+            allowEmail={allowEmail}
+            sendPolicy={effectiveSendDocument}
+            onClose={() => setEmailRow(null)}
+            data-testid="SendDocumentModal__620cbc" />
+        )}
+        {importConfig?.enabled && showImportDialog && (
+          <ImportDialog
+            open={showImportDialog}
+            onOpenChange={setShowImportDialog}
+            config={importConfig}
+            token={token}
+            postBatch={runBatch}
+            simSearchFn={simSearch}
+            labels={importLabels}
+            translate={ui}
+            onImported={({ failedCount }) => {
+              // Refresh unconditionally — some rows may have committed even when others
+              // failed. Only auto-close when there is nothing left to review: closing
+              // unconditionally (the original wiring) unmounted the dialog the instant it
+              // rendered the Result step's review queue, hiding every failed row's error
+              // message the moment it became visible — confirmed via a real browser run
+              // where a batch that failed outright showed nothing on screen at all, even
+              // after ImportDialog/sendRow were fixed to surface the real message.
+              hook.refresh();
+              if (failedCount === 0) setShowImportDialog(false);
+            }}
+            data-testid="ImportDialog__620cbc" />
+        )}
+      </div>
+      {activePreviewRow && renderPreview?.({
+        row: activePreviewRow,
+        onClose: handlePreviewClose,
+        onEdit: handlePreviewEdit,
+      })}
     </>
   );
 }

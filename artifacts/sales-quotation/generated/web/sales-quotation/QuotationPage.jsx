@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
 import QuotationTable from './QuotationTable';
 import QuotationForm from './QuotationForm';
@@ -14,19 +16,6 @@ import catalogs from './mockCatalogs';
 
 const breadcrumb = 'Sales / Sales Quotation';
 
-const labelOverrides = {
-  "es_ES": {
-    "C_BPartner_ID": "Contacto",
-    "C_Reject_Reason_ID": "Razón de rechazo",
-    "DateOrdered": "Fecha de presupuesto"
-  },
-  "en_US": {
-    "C_BPartner_ID": "Contact",
-    "C_Reject_Reason_ID": "Reject Reason",
-    "DateOrdered": "Quotation Date"
-  }
-};
-
 
 // @sf-generated-start summary:quotation
 const summary = [
@@ -40,7 +29,9 @@ const statusField = 'documentStatus';
 // @sf-generated-end summary:quotation
 
 // @sf-generated-start extraBadges:quotation
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:quotation
 
 // @sf-generated-start processes:quotation
@@ -66,7 +57,7 @@ const draftMode = {
 // @sf-generated-end draftMode:quotation
 
 // @sf-generated-start requiredHeaderFields:quotation
-const requiredHeaderFields = ['documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'grandTotalAmount', 'summedLineAmount'];
+const requiredHeaderFields = ['currency', 'priceList', 'documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'grandTotalAmount', 'summedLineAmount'];
 // @sf-generated-end requiredHeaderFields:quotation
 
 // @sf-generated-start addLineFields:quotationLine
@@ -74,9 +65,9 @@ const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', forceCalloutFields: ["listPrice","unitPrice","tax","uOM","grossUnitPrice","discount"] },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
-    { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', required: true, label: 'Ordered Quantity', defaultValue: 1, min: 0 },
-    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'Net List Price', min: 0 },
-    { key: 'discount', column: 'Discount', type: 'number', label: 'Discount', defaultValue: 0, min: 0 },
+    { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', required: true, label: 'Ordered Quantity', defaultValue: 1 },
+    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'Net List Price' },
+    { key: 'discount', column: 'Discount', type: 'number', label: 'Discount', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', required: true, label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineGrossAmount","grossUnitPrice","lineNetAmount"] },
   ],
   derived: [
@@ -126,6 +117,30 @@ export const api = {
   "selectors": [
     {
       "entity": "quotation",
+      "field": "currency",
+      "column": "C_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-quotation/quotation/selectors/currency"
+    },
+    {
+      "entity": "quotation",
+      "field": "priceList",
+      "column": "M_PriceList_ID",
+      "reference": "PriceList",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-quotation/quotation/selectors/priceList",
+      "context": {
+        "required": [
+          {
+            "param": "isSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
+    },
+    {
+      "entity": "quotation",
       "field": "businessPartner",
       "column": "C_BPartner_ID",
       "reference": "BusinessPartner",
@@ -138,15 +153,16 @@ export const api = {
       "column": "C_BPartner_Location_ID",
       "reference": "BusinessPartnerLocation",
       "inputMode": "dependent",
-      "url": "/sws/neo/sales-quotation/quotation/selectors/partnerAddress"
-    },
-    {
-      "entity": "quotation",
-      "field": "priceList",
-      "column": "M_PriceList_ID",
-      "reference": "PriceList",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-quotation/quotation/selectors/priceList"
+      "url": "/sws/neo/sales-quotation/quotation/selectors/partnerAddress",
+      "context": {
+        "required": [
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
     },
     {
       "entity": "quotation",
@@ -154,7 +170,15 @@ export const api = {
       "column": "FIN_Paymentmethod_ID",
       "reference": "Paymentmethod",
       "inputMode": "selector",
-      "url": "/sws/neo/sales-quotation/quotation/selectors/paymentMethod"
+      "url": "/sws/neo/sales-quotation/quotation/selectors/paymentMethod",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
     },
     {
       "entity": "quotation",
@@ -173,14 +197,6 @@ export const api = {
       "url": "/sws/neo/sales-quotation/quotation/selectors/rejectReason"
     },
     {
-      "entity": "quotation",
-      "field": "currency",
-      "column": "C_Currency_ID",
-      "reference": "Currency",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-quotation/quotation/selectors/currency"
-    },
-    {
       "entity": "quotationLine",
       "field": "product",
       "column": "M_Product_ID",
@@ -194,7 +210,21 @@ export const api = {
       "column": "C_Tax_ID",
       "reference": "Tax",
       "inputMode": "selector",
-      "url": "/sws/neo/sales-quotation/quotationLine/selectors/tax"
+      "url": "/sws/neo/sales-quotation/quotationLine/selectors/tax",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "DateInvoiced",
+            "source": "parentField",
+            "field": "orderDate",
+            "format": "DD-MM-YYYY"
+          }
+        ]
+      }
     }
   ],
   "actions": [
@@ -262,14 +292,6 @@ export const api = {
     },
     {
       "entity": "quotation",
-      "field": "generateTemplate",
-      "column": "Generatetemplate",
-      "url": "/sws/neo/sales-quotation/quotation/{id}/action/generateTemplate",
-      "processId": "800022",
-      "processType": "classic"
-    },
-    {
-      "entity": "quotation",
       "field": "processNow",
       "column": "Processing",
       "url": "/sws/neo/sales-quotation/quotation/{id}/action/processNow",
@@ -283,6 +305,14 @@ export const api = {
       "url": "/sws/neo/sales-quotation/quotation/{id}/action/posted",
       "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
+    },
+    {
+      "entity": "quotation",
+      "field": "generateTemplate",
+      "column": "Generatetemplate",
+      "url": "/sws/neo/sales-quotation/quotation/{id}/action/generateTemplate",
+      "processId": "800022",
+      "processType": "classic"
     },
     {
       "entity": "quotation",
@@ -314,6 +344,22 @@ export const api = {
       "column": "EM_APRM_AddPayment",
       "url": "/sws/neo/sales-quotation/quotation/{id}/action/aPRMAddPayment",
       "processId": "9BED7889E1034FE68BD85D5D16857320",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "quotation",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sales-quotation/quotation/{id}/action/eTPRRemovePayment",
+      "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "quotation",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/sales-quotation/quotation/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
       "processType": "obuiapp"
     },
     {
@@ -385,7 +431,8 @@ export const api = {
     "es_ES": {
       "C_BPartner_ID": "Contacto",
       "C_Reject_Reason_ID": "Razón de rechazo",
-      "DateOrdered": "Fecha de presupuesto"
+      "DateOrdered": "Fecha de presupuesto",
+      "PriceList": "Precio"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
@@ -395,10 +442,20 @@ export const api = {
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:QuotationPage
 export default function QuotationPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('6CB5B67ED33F47DFA334079D3EA2340E');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="6CB5B67ED33F47DFA334079D3EA2340E" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="quotation"
         detailEntity="quotationLine"
@@ -418,7 +475,6 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrint
         hideSaveStatuses={["CA","ETGO_CI","CL","VO","CJ"]}
         noHeaderBorder
         notesField="description"
@@ -430,12 +486,14 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        documentDateField="orderDate"
         salesTheme
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument
-        {...props}
+        selectorPriceCurrency="org"
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -448,11 +506,10 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="orderDate"
-      hidePrint
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@!='DR'"}}}}
       sendDocument
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

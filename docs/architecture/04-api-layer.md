@@ -49,6 +49,29 @@ The response is a simplified list:
 
 The selector query uses the `AD_Reference_Value` configuration to determine which table and identifier column to search.
 
+### 1.4 Transactional Email Contract Endpoint
+
+Transactional email uses a contract command endpoint, not a provider passthrough endpoint:
+
+```
+POST /sws/neo/email-contracts/{contractName}/send
+```
+
+The request body must contain only the versioned command data required by the contract, such as `recordId`, `intent`, and `idempotencyKey`. The browser must not send provider API keys, sender identity, template names selected outside the contract, or arbitrary `to/template/data` payloads.
+
+Server-side flow:
+
+1. Validate JWT and initialize Etendo context.
+2. Resolve the named contract and version.
+3. Enforce role, tenant, organization, and record authorization.
+4. Resolve recipient and variables from trusted server records.
+5. Apply throttle, idempotency, suppression, and kill switches.
+6. Write audit state.
+7. Call the provider adapter with server-side configuration only.
+8. Return a structured status such as `SENT`, `DUPLICATE`, `THROTTLED`, `UNAUTHORIZED`, `NO_RECIPIENT`, `SUPPRESSED`, `KILL_SWITCHED`, or `PROVIDER_FAILED`.
+
+See [../transactional-email-framework.md](../transactional-email-framework.md) and [../email-contracts.md](../email-contracts.md).
+
 ---
 
 ## 2. Request/Response Flow

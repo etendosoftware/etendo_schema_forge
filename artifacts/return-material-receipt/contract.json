@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
-  "generatedAt": "2026-04-29T18:11:05.114Z",
-  "updatedAt": "2026-05-11T16:22:45.010Z",
-  "checksum": "963d5b3618f4484b",
+  "version": "0.21.0",
+  "generatedAt": "2026-07-06T16:17:20.249Z",
+  "updatedAt": "2026-08-05T03:15:28.243Z",
+  "checksum": "b4a039d37f7e2442",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -11,12 +11,58 @@
       "category": "sales",
       "notesField": "description",
       "relatedDocuments": true,
+      "hideDeleteWhenComplete": true,
       "customComponents": {
-        "bottomSection": "ReturnMaterialReceiptBottomPanel"
+        "bottomSection": "ReturnMaterialReceiptBottomPanel",
+        "topbarRight": "ConfirmWithCreditButton"
+      },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
+      "processOverrides": {
+        "Process Receipt": {
+          "exclude": true
+        },
+        "etblkpBulkposting": {
+          "exclude": true
+        }
+      },
+      "labelOverrides": {
+        "es_ES": {
+          "sourceShipmentDocNo": "Albarán origen",
+          "movementQuantity": "Cant. a devolver",
+          "orderQuantity": "Cant. entregada original"
+        },
+        "en_US": {
+          "sourceShipmentDocNo": "Source Shipment",
+          "movementQuantity": "Return Qty",
+          "orderQuantity": "Original Delivered Qty"
+        }
       },
       "dateFilterKey": "movementDate",
+      "noHeaderBorder": true,
+      "sendDocument": {
+        "enabled": false
+      },
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "maxDetailLines": 0,
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill"
+        }
+      ]
     },
     "entities": {
       "returnMaterialReceipt": {
@@ -42,6 +88,12 @@
               "source": "documentType.sequence"
             },
             "section": "principal",
+            "seq": 2,
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 30
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -66,6 +118,13 @@
             },
             "defaultValue": "@#Date@",
             "section": "principal",
+            "seq": 3,
+            "gridOrder": 1,
+            "dot": false,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate"
             },
@@ -90,14 +149,19 @@
             "reference": "BusinessPartner",
             "inputMode": "search",
             "section": "principal",
+            "seq": 1,
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
             },
             "readOnlyLogic": {
-              "raw": "@Processed@='Y' | @HAS_M_INOUTLINES@='Y'",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
             }
           },
           {
@@ -110,8 +174,11 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
-            "section": "other"
+            "form": false,
+            "section": "other",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "warehouse",
@@ -122,12 +189,18 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "Warehouse",
             "inputMode": "search",
             "section": "principal",
+            "seq": 4,
+            "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_InOut_Warehouse"
             },
@@ -155,7 +228,12 @@
               "field": "businessPartner",
               "filterKey": "C_BPartner_ID"
             },
-            "section": "other",
+            "section": "principal",
+            "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -188,61 +266,127 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
-            "defaultValue": "DR"
+            "defaultValue": "DR",
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
           },
           {
-            "name": "salesOrder",
-            "apiKey": "salesOrder",
-            "column": "C_Order_ID",
-            "label": "RM order",
-            "type": "foreignKey",
-            "tsType": "string",
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
             "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Order",
-            "inputMode": "search",
-            "section": "principal"
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "gridOrder": 8,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
           },
           {
             "name": "trackingNo",
@@ -254,12 +398,74 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "section": "other",
+            "validation": {
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@DeliveryViaRule@='S'",
               "evaluable": true
             }
+          },
+          {
+            "name": "invoiceStatus",
+            "apiKey": "invoiceStatus",
+            "column": "InvoiceStatus",
+            "label": "Invoice Status",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "columnType": "percent",
+            "gridOrder": 7,
+            "validation": {
+              "maxLength": 4
+            }
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "label": "Bulk Posting",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'\n",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          },
+          {
+            "name": "sourceShipmentDocNo",
+            "apiKey": "sourceShipmentDocNo",
+            "column": "sourceShipmentDocNo",
+            "label": "Source Shipment",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "gridOrder": 6
           }
         ],
         "searchableFields": [
@@ -289,8 +495,23 @@
               "type": "computed",
               "source": "DR"
             }
+          },
+          {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            }
+          },
+          {
+            "name": "etblkpBulkposting",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
           }
-        ]
+        ],
+        "javaQualifier": "returnMaterialReceiptHeaderHandler"
       },
       "returnMaterialReceiptLine": {
         "tableName": "M_InOutLine",
@@ -307,7 +528,7 @@
             "tsType": "number",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true,
             "sourceRequired": true,
             "derivation": {
@@ -316,6 +537,10 @@
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@",
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -336,6 +561,10 @@
             "reference": "Product",
             "inputMode": "search",
             "section": "principal",
+            "gridOrder": 1,
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
             },
@@ -363,6 +592,11 @@
             },
             "defaultValue": "0",
             "section": "principal",
+            "gridOrder": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
@@ -378,12 +612,16 @@
             "tsType": "string",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true,
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "search",
-            "section": "principal",
+            "section": "other",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "readOnlyLogic": {
               "raw": "@UomManagement@='Y'",
               "evaluable": true,
@@ -403,7 +641,10 @@
             "form": true,
             "reference": "OrderLine",
             "inputMode": "search",
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "description",
@@ -416,7 +657,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "other"
+            "section": "other",
+            "validation": {
+              "maxLength": 2000
+            }
           },
           {
             "name": "orderQuantity",
@@ -429,7 +673,11 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "other",
+            "section": "principal",
+            "gridOrder": 3,
+            "validation": {
+              "maxLength": 10
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_Conversion"
             },
@@ -462,7 +710,8 @@
               "source": "0"
             }
           }
-        ]
+        ],
+        "javaQualifier": "returnMaterialReceiptLineHandler"
       }
     }
   },
@@ -474,11 +723,57 @@
       "category": "sales",
       "notesField": "description",
       "relatedDocuments": true,
+      "hideDeleteWhenComplete": true,
       "customComponents": {
-        "bottomSection": "ReturnMaterialReceiptBottomPanel"
+        "bottomSection": "ReturnMaterialReceiptBottomPanel",
+        "topbarRight": "ConfirmWithCreditButton"
+      },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
+      "processOverrides": {
+        "Process Receipt": {
+          "exclude": true
+        },
+        "etblkpBulkposting": {
+          "exclude": true
+        }
+      },
+      "labelOverrides": {
+        "es_ES": {
+          "sourceShipmentDocNo": "Albarán origen",
+          "movementQuantity": "Cant. a devolver",
+          "orderQuantity": "Cant. entregada original"
+        },
+        "en_US": {
+          "sourceShipmentDocNo": "Source Shipment",
+          "movementQuantity": "Return Qty",
+          "orderQuantity": "Original Delivered Qty"
+        }
       },
       "dateFilterKey": "movementDate",
-      "linesLayout": "inlineEditable"
+      "noHeaderBorder": true,
+      "sendDocument": {
+        "enabled": false
+      },
+      "linesLayout": "inlineEditable",
+      "maxDetailLines": 0,
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill"
+        }
+      ]
     },
     "entities": {
       "returnMaterialReceipt": {
@@ -595,7 +890,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
@@ -603,7 +898,7 @@
             "apiKey": "salesOrder",
             "column": "C_Order_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": false
           },
           {
@@ -643,15 +938,15 @@
             "apiKey": "documentAction",
             "column": "DocAction",
             "type": "button",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
-            "visibility": "discarded",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -787,7 +1082,7 @@
             "apiKey": "invoiceStatus",
             "column": "InvoiceStatus",
             "type": "integer",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -847,68 +1142,20 @@
             "required": false
           },
           {
-            "name": "invoice",
-            "apiKey": "invoice",
-            "column": "C_Invoice_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "processed",
-            "apiKey": "processed",
-            "column": "Processed",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "salesTransaction",
-            "apiKey": "salesTransaction",
-            "column": "IsSOTrx",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "datePrinted",
-            "apiKey": "datePrinted",
-            "column": "DatePrinted",
-            "type": "date",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "sendMaterials",
-            "apiKey": "sendMaterials",
-            "column": "RM_Shipment_Pickedit",
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
             "type": "button",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
-            "name": "print",
-            "apiKey": "print",
-            "column": "IsPrinted",
-            "type": "boolean",
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
             "visibility": "discarded",
             "required": true
-          },
-          {
-            "name": "processNow",
-            "apiKey": "processNow",
-            "column": "Processing",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": false
           },
           {
             "name": "id",
@@ -947,6 +1194,70 @@
             "apiKey": "client",
             "column": "AD_Client_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "print",
+            "apiKey": "print",
+            "column": "IsPrinted",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "sendMaterials",
+            "apiKey": "sendMaterials",
+            "column": "RM_Shipment_Pickedit",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "datePrinted",
+            "apiKey": "datePrinted",
+            "column": "DatePrinted",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesTransaction",
+            "apiKey": "salesTransaction",
+            "column": "IsSOTrx",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
@@ -1029,8 +1340,25 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "sourceShipmentDocNo",
+            "apiKey": "sourceShipmentDocNo",
+            "column": "sourceShipmentDocNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "etgoCurrency",
+            "apiKey": "etgoCurrency",
+            "column": "EM_ETGO_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
           }
-        ]
+        ],
+        "javaQualifier": "returnMaterialReceiptHeaderHandler"
       },
       "returnMaterialReceiptLine": {
         "tableName": "M_InOutLine",
@@ -1182,38 +1510,6 @@
             "required": false
           },
           {
-            "name": "reinvoice",
-            "apiKey": "reinvoice",
-            "column": "IsInvoiced",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_InOutLine_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "organization",
             "apiKey": "organization",
             "column": "AD_Org_ID",
@@ -1226,6 +1522,38 @@
             "apiKey": "shipmentReceipt",
             "column": "M_InOut_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "reinvoice",
+            "apiKey": "reinvoice",
+            "column": "IsInvoiced",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_InOutLine_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
@@ -1317,7 +1645,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "returnMaterialReceiptLineHandler"
       }
     },
     "endpoints": [
@@ -1459,15 +1788,16 @@
         "column": "C_BPartner_Location_ID",
         "reference": "BusinessPartnerLocation",
         "inputMode": "dependent",
-        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/partnerAddress"
-      },
-      {
-        "entity": "returnMaterialReceipt",
-        "field": "salesOrder",
-        "column": "C_Order_ID",
-        "reference": "Order",
-        "inputMode": "search",
-        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/salesOrder"
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/partnerAddress",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
       },
       {
         "entity": "returnMaterialReceiptLine",
@@ -1519,12 +1849,6 @@
       },
       {
         "entity": "returnMaterialReceipt",
-        "field": "posted",
-        "column": "Posted",
-        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/posted"
-      },
-      {
-        "entity": "returnMaterialReceipt",
         "field": "calculateFreight",
         "column": "Calculate_Freight",
         "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/calculateFreight",
@@ -1533,10 +1857,10 @@
       },
       {
         "entity": "returnMaterialReceipt",
-        "field": "sendMaterials",
-        "column": "RM_Shipment_Pickedit",
-        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
-        "processId": "4AD70293357245AB96E59C2CDB43A35D",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -1554,6 +1878,14 @@
         "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/updateLines",
         "processId": "800010",
         "processType": "classic"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "sendMaterials",
+        "column": "RM_Shipment_Pickedit",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
+        "processId": "4AD70293357245AB96E59C2CDB43A35D",
+        "processType": "obuiapp"
       },
       {
         "entity": "returnMaterialReceipt",
@@ -1603,6 +1935,18 @@
     },
     "window": {
       "category": "sales"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "sourceShipmentDocNo": "Albarán origen",
+        "movementQuantity": "Cant. a devolver",
+        "orderQuantity": "Cant. entregada original"
+      },
+      "en_US": {
+        "sourceShipmentDocNo": "Source Shipment",
+        "movementQuantity": "Return Qty",
+        "orderQuantity": "Original Delivered Qty"
+      }
     }
   },
   "testManifest": {
@@ -1632,6 +1976,14 @@
         "description": "Action endpoint for 'documentAction' in returnMaterialReceipt should exist"
       },
       {
+        "id": "t-action-endpoint-returnMaterialReceipt-etblkpBulkposting",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Action endpoint for 'etblkpBulkposting' in returnMaterialReceipt should exist"
+      },
+      {
         "id": "t-action-endpoint-returnMaterialReceipt-generateTo",
         "category": "action-endpoint",
         "entity": "returnMaterialReceipt",
@@ -1646,14 +1998,6 @@
         "field": "invoicefromshipment",
         "runner": "node",
         "description": "Action endpoint for 'invoicefromshipment' in returnMaterialReceipt should exist"
-      },
-      {
-        "id": "t-action-endpoint-returnMaterialReceipt-posted",
-        "category": "action-endpoint",
-        "entity": "returnMaterialReceipt",
-        "field": "posted",
-        "runner": "node",
-        "description": "Action endpoint for 'posted' in returnMaterialReceipt should exist"
       },
       {
         "id": "t-action-endpoint-returnMaterialReceipt-processGoodsJava",
@@ -1726,12 +2070,28 @@
         "description": "Default value for 'documentStatus' in returnMaterialReceipt should be a string"
       },
       {
+        "id": "t-default-value-type-returnMaterialReceipt-etblkpBulkposting",
+        "category": "default-value-type",
+        "entity": "returnMaterialReceipt",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Default value for 'etblkpBulkposting' in returnMaterialReceipt should be a string"
+      },
+      {
         "id": "t-default-value-type-returnMaterialReceipt-movementDate",
         "category": "default-value-type",
         "entity": "returnMaterialReceipt",
         "field": "movementDate",
         "runner": "node",
         "description": "Default value for 'movementDate' in returnMaterialReceipt should be a string"
+      },
+      {
+        "id": "t-default-value-type-returnMaterialReceipt-posted",
+        "category": "default-value-type",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in returnMaterialReceipt should be a string"
       },
       {
         "id": "t-default-value-type-returnMaterialReceiptLine-lineNo",
@@ -1750,6 +2110,22 @@
         "description": "Default value for 'movementQuantity' in returnMaterialReceiptLine should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-returnMaterialReceipt-etblkpBulkposting",
+        "category": "displaylogic-evaluable",
+        "entity": "returnMaterialReceipt",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Display logic for 'etblkpBulkposting' in returnMaterialReceipt should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-returnMaterialReceipt-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in returnMaterialReceipt should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-returnMaterialReceipt-trackingNo",
         "category": "displaylogic-evaluable",
         "entity": "returnMaterialReceipt",
@@ -1764,6 +2140,22 @@
         "field": "orderQuantity",
         "runner": "node",
         "description": "Display logic for 'orderQuantity' in returnMaterialReceiptLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-returnMaterialReceipt-etblkpBulkposting",
+        "category": "displaylogic-valid",
+        "entity": "returnMaterialReceipt",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Display logic for 'etblkpBulkposting' in returnMaterialReceipt should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-returnMaterialReceipt-posted",
+        "category": "displaylogic-valid",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in returnMaterialReceipt should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-returnMaterialReceipt-trackingNo",
@@ -1814,6 +2206,22 @@
         "description": "Field 'documentStatus' should be present in returnMaterialReceipt"
       },
       {
+        "id": "t-field-presence-returnMaterialReceipt-etblkpBulkposting",
+        "category": "field-presence",
+        "entity": "returnMaterialReceipt",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Field 'etblkpBulkposting' should be present in returnMaterialReceipt"
+      },
+      {
+        "id": "t-field-presence-returnMaterialReceipt-invoiceStatus",
+        "category": "field-presence",
+        "entity": "returnMaterialReceipt",
+        "field": "invoiceStatus",
+        "runner": "node",
+        "description": "Field 'invoiceStatus' should be present in returnMaterialReceipt"
+      },
+      {
         "id": "t-field-presence-returnMaterialReceipt-movementDate",
         "category": "field-presence",
         "entity": "returnMaterialReceipt",
@@ -1830,12 +2238,20 @@
         "description": "Field 'partnerAddress' should be present in returnMaterialReceipt"
       },
       {
-        "id": "t-field-presence-returnMaterialReceipt-salesOrder",
+        "id": "t-field-presence-returnMaterialReceipt-posted",
         "category": "field-presence",
         "entity": "returnMaterialReceipt",
-        "field": "salesOrder",
+        "field": "posted",
         "runner": "node",
-        "description": "Field 'salesOrder' should be present in returnMaterialReceipt"
+        "description": "Field 'posted' should be present in returnMaterialReceipt"
+      },
+      {
+        "id": "t-field-presence-returnMaterialReceipt-sourceShipmentDocNo",
+        "category": "field-presence",
+        "entity": "returnMaterialReceipt",
+        "field": "sourceShipmentDocNo",
+        "runner": "node",
+        "description": "Field 'sourceShipmentDocNo' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-field-presence-returnMaterialReceipt-trackingNo",
@@ -1942,6 +2358,22 @@
         "description": "Field 'documentStatus' should have type 'string' in returnMaterialReceipt"
       },
       {
+        "id": "t-field-type-returnMaterialReceipt-etblkpBulkposting",
+        "category": "field-type",
+        "entity": "returnMaterialReceipt",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Field 'etblkpBulkposting' should have type 'string' in returnMaterialReceipt"
+      },
+      {
+        "id": "t-field-type-returnMaterialReceipt-invoiceStatus",
+        "category": "field-type",
+        "entity": "returnMaterialReceipt",
+        "field": "invoiceStatus",
+        "runner": "node",
+        "description": "Field 'invoiceStatus' should have type 'number' in returnMaterialReceipt"
+      },
+      {
         "id": "t-field-type-returnMaterialReceipt-movementDate",
         "category": "field-type",
         "entity": "returnMaterialReceipt",
@@ -1958,12 +2390,20 @@
         "description": "Field 'partnerAddress' should have type 'string' in returnMaterialReceipt"
       },
       {
-        "id": "t-field-type-returnMaterialReceipt-salesOrder",
+        "id": "t-field-type-returnMaterialReceipt-posted",
         "category": "field-type",
         "entity": "returnMaterialReceipt",
-        "field": "salesOrder",
+        "field": "posted",
         "runner": "node",
-        "description": "Field 'salesOrder' should have type 'string' in returnMaterialReceipt"
+        "description": "Field 'posted' should have type 'boolean' in returnMaterialReceipt"
+      },
+      {
+        "id": "t-field-type-returnMaterialReceipt-sourceShipmentDocNo",
+        "category": "field-type",
+        "entity": "returnMaterialReceipt",
+        "field": "sourceShipmentDocNo",
+        "runner": "node",
+        "description": "Field 'sourceShipmentDocNo' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-field-type-returnMaterialReceipt-trackingNo",
@@ -2298,14 +2738,6 @@
         "description": "Selector endpoint for 'partnerAddress' in returnMaterialReceipt should exist"
       },
       {
-        "id": "t-selector-endpoint-returnMaterialReceipt-salesOrder",
-        "category": "selector-endpoint",
-        "entity": "returnMaterialReceipt",
-        "field": "salesOrder",
-        "runner": "node",
-        "description": "Selector endpoint for 'salesOrder' in returnMaterialReceipt should exist"
-      },
-      {
         "id": "t-selector-endpoint-returnMaterialReceipt-warehouse",
         "category": "selector-endpoint",
         "entity": "returnMaterialReceipt",
@@ -2490,6 +2922,22 @@
         "description": "System field 'documentType' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
+        "id": "t-system-field-returnMaterialReceipt-etblkpAccountingstatus",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-system-field-returnMaterialReceipt-etgoCurrency",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "etgoCurrency",
+        "runner": "node",
+        "description": "System field 'etgoCurrency' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
         "id": "t-system-field-returnMaterialReceipt-externalBusinessPartnerReference",
         "category": "system-field",
         "entity": "returnMaterialReceipt",
@@ -2560,14 +3008,6 @@
         "field": "invoicefromshipment",
         "runner": "node",
         "description": "System field 'invoicefromshipment' should exist in backend but not frontend for returnMaterialReceipt"
-      },
-      {
-        "id": "t-system-field-returnMaterialReceipt-invoiceStatus",
-        "category": "system-field",
-        "entity": "returnMaterialReceipt",
-        "field": "invoiceStatus",
-        "runner": "node",
-        "description": "System field 'invoiceStatus' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-system-field-returnMaterialReceipt-isnettingshipment",
@@ -2650,14 +3090,6 @@
         "description": "System field 'pickDate' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
-        "id": "t-system-field-returnMaterialReceipt-posted",
-        "category": "system-field",
-        "entity": "returnMaterialReceipt",
-        "field": "posted",
-        "runner": "node",
-        "description": "System field 'posted' should exist in backend but not frontend for returnMaterialReceipt"
-      },
-      {
         "id": "t-system-field-returnMaterialReceipt-print",
         "category": "system-field",
         "entity": "returnMaterialReceipt",
@@ -2720,6 +3152,14 @@
         "field": "salesCampaign",
         "runner": "node",
         "description": "System field 'salesCampaign' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-system-field-returnMaterialReceipt-salesOrder",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "salesOrder",
+        "runner": "node",
+        "description": "System field 'salesOrder' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-system-field-returnMaterialReceipt-salesRepresentative",
@@ -3049,27 +3489,27 @@
       }
     ],
     "summary": {
-      "total": 181,
+      "total": 193,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
-        "default-value-type": 4,
-        "displaylogic-evaluable": 2,
-        "displaylogic-valid": 2,
-        "field-presence": 16,
-        "field-type": 16,
+        "default-value-type": 6,
+        "displaylogic-evaluable": 4,
+        "displaylogic-valid": 4,
+        "field-presence": 19,
+        "field-type": 19,
         "process-failure": 1,
         "process-happy": 1,
         "readonlylogic-evaluable": 10,
         "readonlylogic-valid": 10,
         "rule-declared": 4,
         "searchable-filters": 5,
-        "selector-endpoint": 7,
-        "system-field": 87,
+        "selector-endpoint": 6,
+        "system-field": 88,
         "visibility": 2
       },
       "byRunner": {
-        "node": 179,
+        "node": 191,
         "junit": 2
       }
     }

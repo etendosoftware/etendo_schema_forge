@@ -1,0 +1,23 @@
+name: Domain Boundary Check
+
+# DISABLED: the schema_forge monorepo was split into separate repos
+# (schema_forge_core + etendo_schema_forge), so the cross-domain boundary check
+# no longer applies here. The job is kept as a no-op that always succeeds so any
+# branch-protection rule requiring the "domain-boundary-check" status still
+# resolves. To re-enable, restore the previous steps from git history.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  domain-boundary-check:
+    name: domain-boundary-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op (check disabled after repo split)
+        run: echo "Domain boundary check is disabled — repos are split at the repo level."

@@ -31,19 +31,24 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
       <button
         type="button"
         onClick={() => { setOpen(!open); setQuery(''); }}
-        className="flex w-full items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm text-left hover:bg-muted/30 transition-colors"
+        className="flex w-full items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-left hover:bg-muted/30 transition-colors"
       >
-        <Truck className="h-4 w-4 text-muted-foreground shrink-0" />
+        <Truck
+          className="h-4 w-4 text-muted-foreground shrink-0"
+          data-testid="Truck__fbef91" />
         <span className="flex-1 truncate text-muted-foreground">
           {selected ? <span className="text-foreground">{selected.name}</span> : ui('qpoAllSuppliers')}
         </span>
-        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <ChevronDown
+          className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+          data-testid="ChevronDown__fbef91" />
       </button>
-
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-white shadow-lg">
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-card shadow-lg">
           <div className="relative p-2">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Search
+              className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
+              data-testid="Search__fbef91" />
             <input
               ref={inputRef}
               type="text"
@@ -58,7 +63,7 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
                 onClick={() => setQuery('')}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5" data-testid="X__fbef91" />
               </button>
             )}
           </div>
@@ -69,7 +74,7 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
               onClick={() => { onSelect(null); setOpen(false); }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
             >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-400 text-xs font-medium text-white">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-primary-foreground">
                 *
               </div>
               <span className="font-medium">{ui('qpoAllSuppliers')}</span>
@@ -81,7 +86,7 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
                 onClick={() => { onSelect(s); setOpen(false); }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
               >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-medium text-white">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-status-info text-xs font-medium text-primary-foreground">
                   {s.name.charAt(0)}
                 </div>
                 <div className="flex-1 text-left min-w-0">

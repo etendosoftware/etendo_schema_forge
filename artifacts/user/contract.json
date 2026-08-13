@@ -1,14 +1,17 @@
 {
-  "version": "0.3.0",
+  "version": "0.19.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-05-12T19:44:45.365Z",
-  "checksum": "43eb66f58e0f74a8",
+  "updatedAt": "2026-08-07T16:09:22.004Z",
+  "checksum": "7e6dbf8f1a309fc6",
   "frontendContract": {
     "window": {
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
       "category": "settings",
+      "headerExtra": {
+        "customForm": "AssignRoleControl"
+      },
       "layoutType": "default"
     },
     "entities": {
@@ -31,23 +34,13 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
-          },
-          {
-            "name": "username",
-            "apiKey": "username",
-            "column": "UserName",
-            "label": "Username",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "section": "principal"
           },
           {
             "name": "firstName",
@@ -61,6 +54,9 @@
             "grid": true,
             "form": true,
             "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -77,6 +73,9 @@
             "grid": true,
             "form": true,
             "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
             }
@@ -92,7 +91,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "security"
+            "section": "security",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "isPasswordExpired",
@@ -110,7 +112,10 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "security"
+            "section": "security",
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "description",
@@ -123,7 +128,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "details"
+            "section": "details",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "name": "businessPartner",
@@ -138,7 +146,10 @@
             "form": true,
             "reference": "BusinessPartner",
             "inputMode": "search",
-            "section": "details"
+            "section": "details",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "email",
@@ -148,10 +159,14 @@
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
-            "required": false,
+            "required": true,
             "grid": true,
             "form": true,
-            "section": "principal"
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 255
+            }
           },
           {
             "name": "locked",
@@ -170,7 +185,11 @@
               "source": "N"
             },
             "defaultValue": "N",
-            "section": "security"
+            "section": "security",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "position",
@@ -183,7 +202,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "details"
+            "section": "details",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "phone",
@@ -196,7 +218,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "details"
+            "section": "details",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "name": "supervisor",
@@ -211,7 +236,10 @@
             "form": true,
             "reference": "User",
             "inputMode": "search",
-            "section": "details"
+            "section": "details",
+            "validation": {
+              "maxLength": 22
+            }
           },
           {
             "name": "defaultRole",
@@ -220,13 +248,16 @@
             "label": "Default Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "reference": "Role",
-            "inputMode": "selector",
+            "inputMode": "search",
             "section": "defaults",
+            "validation": {
+              "maxLength": 12
+            },
             "validationRule": {
               "code": "EXISTS ( SELECT 1\n        FROM  AD_USER_ROLES A_U_R\n        WHERE A_U_R.AD_ROLE_ID = AD_Role.AD_Role_ID\n        AND A_U_R.ISACTIVE = 'Y'\n        AND A_U_R.AD_USER_ID = @AD_User_ID@)",
               "contextParams": [],
@@ -248,7 +279,10 @@
             "form": true,
             "reference": "Language",
             "inputMode": "selector",
-            "section": "defaults"
+            "section": "defaults",
+            "validation": {
+              "maxLength": 6
+            }
           },
           {
             "name": "defaultClient",
@@ -268,6 +302,9 @@
               "filterKey": "Default_AD_Role_ID"
             },
             "section": "defaults",
+            "validation": {
+              "maxLength": 12
+            },
             "validationRule": {
               "code": "AD_CLIENT.ISACTIVE = 'Y' AND EXISTS (SELECT 1 FROM AD_ROLE_ORGACCESS WHERE AD_ROLE_ORGACCESS.AD_CLIENT_ID = AD_CLIENT.AD_CLIENT_ID AND AD_ROLE_ORGACCESS.AD_ROLE_ID = @Default_AD_Role_ID@ AND AD_ROLE_ORGACCESS.ISACTIVE = 'Y')",
               "contextParams": [],
@@ -294,6 +331,9 @@
               "filterKey": "Default_AD_Role_ID"
             },
             "section": "defaults",
+            "validation": {
+              "maxLength": 12
+            },
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM AD_ROLE_ORGACCESS A_R_O, ad_role r\n        WHERE A_R_O.AD_ORG_ID = AD_ORG.AD_Org_ID\n        AND A_R_O.ISACTIVE = 'Y'\n        AND A_R_O.AD_ROLE_ID = R.AD_ROLE_ID\n        and r.ad_role_id = @Default_AD_Role_ID@\n        AND R.ISACTIVE = 'Y'\n        AND (LPAD(TO_CHAR(R.USERLEVEL), 1, '1')='S' OR AD_ORG.AD_ORG_ID <> '0')\n        AND A_R_O.AD_ROLE_ID = @Default_AD_Role_ID@)",
               "contextParams": [],
@@ -320,6 +360,9 @@
               "filterKey": "Default_AD_Client_ID"
             },
             "section": "defaults",
+            "validation": {
+              "maxLength": 12
+            },
             "validationRule": {
               "code": "M_Warehouse.AD_Client_ID = @Default_AD_Client_ID@",
               "contextParams": [],
@@ -345,12 +388,15 @@
               "source": "@#Date@"
             },
             "defaultValue": "@#Date@",
-            "section": "security"
+            "section": "security",
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
           }
         ],
         "searchableFields": [
           "name",
-          "username",
           "email"
         ],
         "computedFields": [
@@ -375,7 +421,8 @@
               "source": "@#Date@"
             }
           }
-        ]
+        ],
+        "javaQualifier": "user"
       },
       "userRoles": {
         "tableName": "AD_User_Roles",
@@ -390,13 +437,17 @@
             "label": "Role",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "Role",
             "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "AD_Role.AD_Client_ID=@#AD_Client_ID@",
               "contextParams": [
@@ -412,7 +463,7 @@
             "label": "Role Administrator",
             "type": "boolean",
             "tsType": "boolean",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -421,7 +472,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -435,7 +490,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "hideDelete": true
       },
       "emailConfiguration": {
         "tableName": "C_POC_CONFIGURATION",
@@ -454,7 +510,11 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "smtpServer",
@@ -468,7 +528,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "section": "server"
+            "section": "server",
+            "validation": {
+              "required": true,
+              "maxLength": 200
+            }
           },
           {
             "name": "sMTPAuthentification",
@@ -482,7 +546,11 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "section": "server"
+            "section": "server",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "smtpServerAccount",
@@ -495,7 +563,10 @@
             "required": false,
             "grid": true,
             "form": true,
-            "section": "auth"
+            "section": "auth",
+            "validation": {
+              "maxLength": 50
+            }
           },
           {
             "name": "smtpServerPassword",
@@ -508,7 +579,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "auth"
+            "section": "auth",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "smtpServerSenderAddress",
@@ -521,7 +595,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "sender"
+            "section": "sender",
+            "validation": {
+              "maxLength": 50
+            }
           },
           {
             "name": "smtpConnectionSecurity",
@@ -538,18 +615,31 @@
             "enumValues": [
               {
                 "value": "N",
-                "name": "None"
+                "name": "None",
+                "labels": {
+                  "es_ES": "Ninguna"
+                }
               },
               {
                 "value": "STARTTLS",
-                "name": "STARTTLS"
+                "name": "STARTTLS",
+                "labels": {
+                  "es_ES": "STARTTLS"
+                }
               },
               {
                 "value": "SSL",
-                "name": "SSL"
+                "name": "SSL",
+                "labels": {
+                  "es_ES": "SSL"
+                }
               }
             ],
             "section": "server",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.EmailConfiguration_Port"
             }
@@ -571,7 +661,11 @@
               "source": "25"
             },
             "defaultValue": "25",
-            "section": "server"
+            "section": "server",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "smtpConnectionTimeout",
@@ -589,7 +683,10 @@
               "source": "600"
             },
             "defaultValue": "600",
-            "section": "server"
+            "section": "server",
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "fromName",
@@ -602,7 +699,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "sender"
+            "section": "sender",
+            "validation": {
+              "maxLength": 200
+            }
           },
           {
             "name": "replyToAddress",
@@ -615,7 +715,10 @@
             "required": false,
             "grid": false,
             "form": true,
-            "section": "sender"
+            "section": "sender",
+            "validation": {
+              "maxLength": 200
+            }
           },
           {
             "name": "testSuccessful",
@@ -633,7 +736,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "lastTestDate",
@@ -645,7 +752,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 19
+            }
           },
           {
             "name": "smtpconnectiontest",
@@ -663,7 +773,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "defaultConfiguration",
@@ -681,7 +795,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -732,7 +850,10 @@
       "id": "108",
       "name": "User",
       "primaryEntity": "user",
-      "category": "settings"
+      "category": "settings",
+      "headerExtra": {
+        "customForm": "AssignRoleControl"
+      }
     },
     "entities": {
       "user": {
@@ -769,7 +890,7 @@
             "apiKey": "username",
             "column": "UserName",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -850,7 +971,7 @@
             "column": "Email",
             "type": "string",
             "visibility": "editable",
-            "required": false
+            "required": true
           },
           {
             "name": "locked",
@@ -929,7 +1050,7 @@
             "apiKey": "defaultRole",
             "column": "Default_Ad_Role_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1108,7 +1229,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "user"
       },
       "userRoles": {
         "tableName": "AD_User_Roles",
@@ -1120,7 +1242,7 @@
             "apiKey": "role",
             "column": "AD_Role_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1136,7 +1258,7 @@
             "apiKey": "roleAdmin",
             "column": "Is_Role_Admin",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1363,14 +1485,6 @@
             "required": false
           },
           {
-            "name": "cPocConfigurationID",
-            "apiKey": "cPocConfigurationID",
-            "column": "C_Poc_Configuration_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -1409,6 +1523,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Poc_Configuration_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ]
       }
@@ -1420,7 +1542,6 @@
         "entity": "user",
         "supportedFilters": [
           "name",
-          "username",
           "email"
         ]
       },
@@ -1530,7 +1651,6 @@
         "detailUrl": "/sws/neo/user/user/{id}",
         "supportedFilters": [
           "name",
-          "username",
           "email"
         ]
       },
@@ -1540,7 +1660,7 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/user/userRoles",
         "detailUrl": "/sws/neo/user/userRoles/{id}",
         "supportedFilters": [
@@ -1583,7 +1703,7 @@
         "field": "defaultRole",
         "column": "Default_Ad_Role_ID",
         "reference": "Role",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/user/user/selectors/defaultRole"
       },
       {
@@ -1600,7 +1720,16 @@
         "column": "Default_Ad_Client_ID",
         "reference": "Client",
         "inputMode": "dependent",
-        "url": "/sws/neo/user/user/selectors/defaultClient"
+        "url": "/sws/neo/user/user/selectors/defaultClient",
+        "context": {
+          "required": [
+            {
+              "param": "Default_AD_Role_ID",
+              "source": "field",
+              "field": "defaultRole"
+            }
+          ]
+        }
       },
       {
         "entity": "user",
@@ -1608,7 +1737,16 @@
         "column": "Default_Ad_Org_ID",
         "reference": "Organization",
         "inputMode": "dependent",
-        "url": "/sws/neo/user/user/selectors/defaultOrganization"
+        "url": "/sws/neo/user/user/selectors/defaultOrganization",
+        "context": {
+          "required": [
+            {
+              "param": "Default_AD_Role_ID",
+              "source": "field",
+              "field": "defaultRole"
+            }
+          ]
+        }
       },
       {
         "entity": "user",
@@ -1616,7 +1754,16 @@
         "column": "Default_M_Warehouse_ID",
         "reference": "Warehouse",
         "inputMode": "dependent",
-        "url": "/sws/neo/user/user/selectors/defaultWarehouse"
+        "url": "/sws/neo/user/user/selectors/defaultWarehouse",
+        "context": {
+          "required": [
+            {
+              "param": "Default_AD_Client_ID",
+              "source": "field",
+              "field": "defaultClient"
+            }
+          ]
+        }
       },
       {
         "entity": "userRoles",
@@ -2052,14 +2199,6 @@
         "description": "Field 'supervisor' should be present in user"
       },
       {
-        "id": "t-field-presence-user-username",
-        "category": "field-presence",
-        "entity": "user",
-        "field": "username",
-        "runner": "node",
-        "description": "Field 'username' should be present in user"
-      },
-      {
         "id": "t-field-presence-userRoles-role",
         "category": "field-presence",
         "entity": "userRoles",
@@ -2340,14 +2479,6 @@
         "description": "Field 'supervisor' should have type 'string' in user"
       },
       {
-        "id": "t-field-type-user-username",
-        "category": "field-type",
-        "entity": "user",
-        "field": "username",
-        "runner": "node",
-        "description": "Field 'username' should have type 'string' in user"
-      },
-      {
         "id": "t-field-type-userRoles-role",
         "category": "field-type",
         "entity": "userRoles",
@@ -2500,14 +2631,6 @@
         "description": "Field 'name' should be a supported filter for user"
       },
       {
-        "id": "t-searchable-filters-user-username",
-        "category": "searchable-filters",
-        "entity": "user",
-        "field": "username",
-        "runner": "node",
-        "description": "Field 'username' should be a supported filter for user"
-      },
-      {
         "id": "t-searchable-filters-userRoles-role",
         "category": "searchable-filters",
         "entity": "userRoles",
@@ -2588,14 +2711,6 @@
         "description": "System field 'client' should exist in backend but not frontend for emailConfiguration"
       },
       {
-        "id": "t-system-field-emailConfiguration-cPocConfigurationID",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "cPocConfigurationID",
-        "runner": "node",
-        "description": "System field 'cPocConfigurationID' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
         "id": "t-system-field-emailConfiguration-createdBy",
         "category": "system-field",
         "entity": "emailConfiguration",
@@ -2626,6 +2741,14 @@
         "field": "emailConfigOrganization",
         "runner": "node",
         "description": "System field 'emailConfigOrganization' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-system-field-emailConfiguration-id",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for emailConfiguration"
       },
       {
         "id": "t-system-field-emailConfiguration-organization",
@@ -2860,6 +2983,14 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for user"
       },
       {
+        "id": "t-system-field-user-username",
+        "category": "system-field",
+        "entity": "user",
+        "field": "username",
+        "runner": "node",
+        "description": "System field 'username' should exist in backend but not frontend for user"
+      },
+      {
         "id": "t-system-field-user-viaemail",
         "category": "system-field",
         "entity": "user",
@@ -2970,21 +3101,21 @@
       }
     ],
     "summary": {
-      "total": 165,
+      "total": 163,
       "byCategory": {
         "action-endpoint": 3,
         "crud-flags": 3,
         "default-value-type": 9,
-        "field-presence": 36,
-        "field-type": 36,
+        "field-presence": 35,
+        "field-type": 35,
         "rule-declared": 16,
-        "searchable-filters": 5,
+        "searchable-filters": 4,
         "selector-endpoint": 8,
-        "system-field": 46,
+        "system-field": 47,
         "visibility": 3
       },
       "byRunner": {
-        "node": 165,
+        "node": 163,
         "junit": 0
       }
     }

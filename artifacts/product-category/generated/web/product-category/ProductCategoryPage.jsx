@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ProductCategoryTable from './ProductCategoryTable';
 import ProductCategoryForm from './ProductCategoryForm';
-import AssignedProductsTable from './AssignedProductsTable';
-import AssignedProductsForm from './AssignedProductsForm';
+import AccountingTable from './AccountingTable';
+import AccountingForm from './AccountingForm';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -20,7 +22,9 @@ const statusField = null;
 // @sf-generated-end summary:productCategory
 
 // @sf-generated-start extraBadges:productCategory
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:productCategory
 
 // @sf-generated-start processes:productCategory
@@ -34,22 +38,25 @@ const draftMode = null;
 // @sf-generated-end draftMode:productCategory
 
 // @sf-generated-start requiredHeaderFields:productCategory
-const requiredHeaderFields = ['searchKey', 'name', 'default', 'summaryLevel'];
+const requiredHeaderFields = ['searchKey', 'name', 'default', 'active'];
 // @sf-generated-end requiredHeaderFields:productCategory
 
-// @sf-generated-start addLineFields:assignedProducts
+// @sf-generated-start addLineFields:accounting
 const addLineFields = {
   entry: [
-
+    { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', required: true, label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', required: true, label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
   ],
   derived: [
 
   ],
   hidden: [
-
+    { key: 'accountingSchema', fromSibling: 'accountingSchema' },
   ],
 };
-// @sf-generated-end addLineFields:assignedProducts
+// @sf-generated-end addLineFields:accounting
 
 export const api = {
   "specName": "product-category",
@@ -69,87 +76,60 @@ export const api = {
         "name"
       ]
     },
-    "assignedProducts": {
+    "accounting": {
       "get": true,
       "getById": true,
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/product-category/assignedProducts",
-      "detailUrl": "/sws/neo/product-category/assignedProducts/{id}",
-      "supportedFilters": [
-        "searchKey",
-        "name",
-        "productType"
-      ]
+      "delete": false,
+      "listUrl": "/sws/neo/product-category/accounting",
+      "detailUrl": "/sws/neo/product-category/accounting/{id}",
+      "supportedFilters": []
     }
   },
-  "selectors": [],
+  "selectors": [
+    {
+      "entity": "accounting",
+      "field": "fixedAsset",
+      "column": "P_Asset_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product-category/accounting/selectors/fixedAsset"
+    },
+    {
+      "entity": "accounting",
+      "field": "productExpense",
+      "column": "P_Expense_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product-category/accounting/selectors/productExpense"
+    },
+    {
+      "entity": "accounting",
+      "field": "productRevenue",
+      "column": "P_Revenue_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product-category/accounting/selectors/productRevenue"
+    },
+    {
+      "entity": "accounting",
+      "field": "productCOGS",
+      "column": "P_Cogs_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product-category/accounting/selectors/productCOGS"
+    }
+  ],
   "actions": [
     {
-      "entity": "assignedProducts",
+      "entity": "accounting",
       "field": "processNow",
       "column": "Processing",
-      "url": "/sws/neo/product-category/assignedProducts/{id}/action/processNow",
-      "processId": "136",
+      "url": "/sws/neo/product-category/accounting/{id}/action/processNow",
+      "processId": "140",
       "processType": "classic"
-    },
-    {
-      "entity": "assignedProducts",
-      "field": "copyservicemodifytaxconfig",
-      "column": "Copyservicemodifytaxconfig",
-      "url": "/sws/neo/product-category/assignedProducts/{id}/action/copyservicemodifytaxconfig",
-      "processId": "CBBD7BB6BDFE4705B68DD3D9FF788D4E",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "assignedProducts",
-      "field": "createVariants",
-      "column": "CreateVariants",
-      "url": "/sws/neo/product-category/assignedProducts/{id}/action/createVariants",
-      "processId": "3C386BC12832466790E50F2F8C5EBD85",
-      "processType": "classic"
-    },
-    {
-      "entity": "assignedProducts",
-      "field": "manageVariants",
-      "column": "ManageVariants",
-      "url": "/sws/neo/product-category/assignedProducts/{id}/action/manageVariants",
-      "processId": "FE3A8C134D41488DB3A69837BD54B56A",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "assignedProducts",
-      "field": "relateprodcattaxtoservice",
-      "column": "Relateprodcattaxtoservice",
-      "url": "/sws/neo/product-category/assignedProducts/{id}/action/relateprodcattaxtoservice",
-      "processId": "E0870062F05F4DC88E589ABC6A45DF4C",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "assignedProducts",
-      "field": "relateprodcattoservice",
-      "column": "Relateprodcattoservice",
-      "url": "/sws/neo/product-category/assignedProducts/{id}/action/relateprodcattoservice",
-      "processId": "8E5996F1F3154B498468938B5341A0CB",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "assignedProducts",
-      "field": "relateprodtoservice",
-      "column": "Relateprodtoservice",
-      "url": "/sws/neo/product-category/assignedProducts/{id}/action/relateprodtoservice",
-      "processId": "E66C669B0B01498C8EB3F99CD371CF9A",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "assignedProducts",
-      "field": "updateInvariants",
-      "column": "Updateinvariants",
-      "url": "/sws/neo/product-category/assignedProducts/{id}/action/updateInvariants",
-      "processId": "7DC2C8DC186B4C1DB18E147911950861",
-      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -172,14 +152,22 @@ export const api = {
 
 // @sf-generated-start component:ProductCategoryPage
 export default function ProductCategoryPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('144');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="144" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="productCategory"
-        detailEntity="assignedProducts"
+        detailEntity="accounting"
         Form={ProductCategoryForm}
-        DetailTable={AssignedProductsTable}
-        DetailForm={AssignedProductsForm}
+        DetailTable={AccountingTable}
+        DetailForm={AccountingForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
@@ -187,15 +175,26 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
         addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Product Category"
-        detailLabel="Assigned Products"
+        detailLabel="Accounting"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hidePrint
+        noHeaderBorder
+        toolbarBorderBottom
+        whiteFormBackground
+        autoSaveOnBlur
+        tabsBarPaddingX="px-2"
+        toolbarPaddingX="px-2"
+        formCardPadding="p-2"
+        formScrollPaddingX="px-2"
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product_Category", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        addLineGuard={(_, children) => children.length < 1}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -207,8 +206,12 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listbarPaddingX="px-2"
+      tablePaddingX="px-2"
+      hidePrint
+      hideLink
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

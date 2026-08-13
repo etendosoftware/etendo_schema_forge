@@ -3,6 +3,9 @@ import userEvent from '@testing-library/user-event';
 
 const navigateMock = vi.fn();
 const openCopilotMock = vi.fn();
+const telemetryMocks = vi.hoisted(() => ({
+  trackDashboardKpi: vi.fn(),
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -22,6 +25,13 @@ vi.mock('@/lib/dashboardNavigation.js', () => ({
   resolveDashboardNavigation: () => null,
 }));
 
+vi.mock('@/lib/dashboardKpiTelemetry.js', () => ({
+  DASHBOARD_KPI_IDS: {
+    dashboardToDocument: 'kpi_ux_dashboard_to_document',
+  },
+  trackDashboardKpi: telemetryMocks.trackDashboardKpi,
+}));
+
 vi.mock('react-router-dom', () => ({
   Link: ({ to, children, ...rest }) => (
     <a href={typeof to === 'string' ? to : '#'} {...rest}>{children}</a>
@@ -35,6 +45,7 @@ describe('RecentSalesList', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     openCopilotMock.mockReset();
+    telemetryMocks.trackDashboardKpi.mockReset();
   });
 
   it('renders the header title from useUI', () => {
@@ -114,6 +125,20 @@ describe('RecentSalesList', () => {
     const { container } = render(<RecentSalesList invoices={invoices} currencyLabel="EUR" />);
     const anchor = container.querySelector('a');
     expect(anchor?.getAttribute('href')).toBe('/sales-invoice/abc123');
+  });
+
+  it('tracks dashboard document navigation without record identifiers', async () => {
+    const user = userEvent.setup();
+    const invoices = [{ id: 'abc123', client: 'X', documentNo: 'D-1', amount: 0 }];
+
+    render(<RecentSalesList invoices={invoices} currencyLabel="EUR" />);
+    await user.click(screen.getByTestId('recent-sales-item-abc123'));
+
+    expect(telemetryMocks.trackDashboardKpi).toHaveBeenCalledWith('dashboard_document_opened', {
+      kpiId: 'kpi_ux_dashboard_to_document',
+      entityType: 'sales_invoice',
+      source: 'dashboard_recent_sales',
+    });
   });
 
   it('falls back to /sales-invoice when invoice has no id and no navigation', () => {

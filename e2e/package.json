@@ -7,10 +7,11 @@
     "test:headed": "npx playwright test --headed",
     "test:ui": "npx playwright test --ui",
     "test:debug": "npx playwright test --debug",
+    "test:etendogo-contextual-selectors": "E2E_ETENDOGO_CONTEXT_SELECTORS=1 npx playwright test tests/flows/etendogo-contextual-selectors.integration.spec.js",
     "test:mcp-oauth-smoke": "npx playwright test tests/flows/mcp-oauth-pkce.smoke.spec.js",
     "report": "npx playwright show-report"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0"
+    "@playwright/test": "1.58.2"
   }
 }

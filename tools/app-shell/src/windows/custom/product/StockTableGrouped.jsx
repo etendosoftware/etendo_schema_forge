@@ -8,10 +8,10 @@ import { DataTable } from '@/components/contract-ui';
  */
 const columns = [
     { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string', label: 'Warehouse' },
-    { key: 'uOM', column: 'C_UOM_ID', type: 'string', label: 'UOM' },
-    { key: 'quantityOnHand', column: 'QtyOnHand', type: 'number', label: 'Quantity on Hand' },
-    { key: 'reservedQty', column: 'ReservedQty', type: 'number', label: 'Reserved Qty' },
-    { key: 'allocatedQuantity', column: 'AllocatedQty', type: 'number', label: 'Allocated Quantity' },
+    { key: 'uOM', column: 'C_UOM_ID', type: 'string', label: 'UOM', required: true },
+    { key: 'quantityOnHand', column: 'QtyOnHand', type: 'number', label: 'Quantity on Hand', required: true },
+    { key: 'reservedQty', column: 'ReservedQty', type: 'number', label: 'Reserved Qty', required: true },
+    { key: 'allocatedQuantity', column: 'AllocatedQty', type: 'number', label: 'Allocated Quantity', required: true },
 ];
 
 const filters = ['warehouse'];
@@ -46,6 +46,6 @@ export default function StockTableGrouped({ data = [], ...props }) {
             data={groupedData}
             selectable={false}
             {...props}
-        />
+            data-testid="DataTable__7f7232" />
     );
 }

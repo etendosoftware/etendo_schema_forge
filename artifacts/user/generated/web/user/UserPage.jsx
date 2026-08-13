@@ -1,9 +1,12 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import UserTable from './UserTable';
 import UserForm from './UserForm';
 import UserRolesTable from './UserRolesTable';
 import UserRolesForm from './UserRolesForm';
+import AssignRoleControl from '@/windows/custom/user/AssignRoleControl';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -22,7 +25,9 @@ const statusField = null;
 // @sf-generated-end summary:user
 
 // @sf-generated-start extraBadges:user
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:user
 
 // @sf-generated-start processes:user
@@ -36,14 +41,13 @@ const draftMode = null;
 // @sf-generated-end draftMode:user
 
 // @sf-generated-start requiredHeaderFields:user
-const requiredHeaderFields = ['name', 'username', 'locked', 'lastPasswordUpdate'];
+const requiredHeaderFields = ['name', 'email', 'locked', 'lastPasswordUpdate'];
 // @sf-generated-end requiredHeaderFields:user
 
 // @sf-generated-start addLineFields:userRoles
 const addLineFields = {
   entry: [
-    { key: 'role', column: 'AD_Role_ID', type: 'selector', required: true, label: 'Role', reference: 'Role', inputMode: 'selector' },
-    { key: 'roleAdmin', column: 'Is_Role_Admin', type: 'checkbox', required: true, label: 'Role Administrator' },
+
   ],
   derived: [
 
@@ -69,7 +73,6 @@ export const api = {
       "detailUrl": "/sws/neo/user/user/{id}",
       "supportedFilters": [
         "name",
-        "username",
         "email"
       ]
     },
@@ -79,7 +82,7 @@ export const api = {
       "post": true,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/user/userRoles",
       "detailUrl": "/sws/neo/user/userRoles/{id}",
       "supportedFilters": [
@@ -122,7 +125,7 @@ export const api = {
       "field": "defaultRole",
       "column": "Default_Ad_Role_ID",
       "reference": "Role",
-      "inputMode": "selector",
+      "inputMode": "search",
       "url": "/sws/neo/user/user/selectors/defaultRole"
     },
     {
@@ -139,7 +142,16 @@ export const api = {
       "column": "Default_Ad_Client_ID",
       "reference": "Client",
       "inputMode": "dependent",
-      "url": "/sws/neo/user/user/selectors/defaultClient"
+      "url": "/sws/neo/user/user/selectors/defaultClient",
+      "context": {
+        "required": [
+          {
+            "param": "Default_AD_Role_ID",
+            "source": "field",
+            "field": "defaultRole"
+          }
+        ]
+      }
     },
     {
       "entity": "user",
@@ -147,7 +159,16 @@ export const api = {
       "column": "Default_Ad_Org_ID",
       "reference": "Organization",
       "inputMode": "dependent",
-      "url": "/sws/neo/user/user/selectors/defaultOrganization"
+      "url": "/sws/neo/user/user/selectors/defaultOrganization",
+      "context": {
+        "required": [
+          {
+            "param": "Default_AD_Role_ID",
+            "source": "field",
+            "field": "defaultRole"
+          }
+        ]
+      }
     },
     {
       "entity": "user",
@@ -155,7 +176,16 @@ export const api = {
       "column": "Default_M_Warehouse_ID",
       "reference": "Warehouse",
       "inputMode": "dependent",
-      "url": "/sws/neo/user/user/selectors/defaultWarehouse"
+      "url": "/sws/neo/user/user/selectors/defaultWarehouse",
+      "context": {
+        "required": [
+          {
+            "param": "Default_AD_Client_ID",
+            "source": "field",
+            "field": "defaultClient"
+          }
+        ]
+      }
     },
     {
       "entity": "userRoles",
@@ -210,8 +240,16 @@ export const api = {
 
 // @sf-generated-start component:UserPage
 export default function UserPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('108');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="108" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="user"
         detailEntity="userRoles"
@@ -230,10 +268,12 @@ export default function UserPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        formFooter={AssignRoleControl}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_User", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
-        {...props}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -246,7 +286,7 @@ export default function UserPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

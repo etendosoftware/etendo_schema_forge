@@ -66,18 +66,30 @@ function buildCalendarGrid(year, month) {
  * Index events by date key for O(1) lookup.
  * Multi-day events (date..endDate) are duplicated across every day they span.
  */
+const MS_PER_DAY = 86400000;
+
+function indexEventSpan(evt, map) {
+  const start = new Date(evt.date);
+  const end = evt.endDate ? new Date(evt.endDate) : start;
+  if (end < start) return;
+  // Upper bound on calendar-day iterations; the real terminator is `cursor > end`
+  // in the body. Computed up-front so the loop counter (i), not `end`, drives
+  // the loop condition.
+  const maxIters = Math.ceil((end - start) / MS_PER_DAY) + 2;
+  const cursor = new Date(start);
+  for (let i = 0; i < maxIters; i++) {
+    if (cursor > end) break;
+    const key = toDateKey(cursor);
+    if (!map[key]) map[key] = [];
+    map[key].push(evt);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+}
+
 export function indexEvents(events) {
   const map = {};
   for (const evt of events) {
-    const start = new Date(evt.date);
-    const end = evt.endDate ? new Date(evt.endDate) : start;
-    const cursor = new Date(start);
-    while (cursor <= end) {
-      const key = toDateKey(cursor);
-      if (!map[key]) map[key] = [];
-      map[key].push(evt);
-      cursor.setDate(cursor.getDate() + 1);
-    }
+    indexEventSpan(evt, map);
   }
   return map;
 }
@@ -135,8 +147,8 @@ export function CalendarView({
           size="icon"
           onClick={() => changeMonth(-1)}
           aria-label="Previous month"
-        >
-          <ChevronLeft className="h-5 w-5" />
+          data-testid="Button__936aad">
+          <ChevronLeft className="h-5 w-5" data-testid="ChevronLeft__936aad" />
         </Button>
 
         <h2 className="text-lg font-semibold">
@@ -148,11 +160,10 @@ export function CalendarView({
           size="icon"
           onClick={() => changeMonth(1)}
           aria-label="Next month"
-        >
-          <ChevronRight className="h-5 w-5" />
+          data-testid="Button__936aad">
+          <ChevronRight className="h-5 w-5" data-testid="ChevronRight__936aad" />
         </Button>
       </div>
-
       {/* Day-of-week header */}
       <div className="grid grid-cols-7 mb-1">
         {DAY_LABELS.map((d) => (
@@ -164,7 +175,6 @@ export function CalendarView({
           </div>
         ))}
       </div>
-
       {/* Calendar grid */}
       <div className="grid grid-cols-7 border-t border-l">
         {grid.flat().map((date) => {
@@ -196,7 +206,6 @@ export function CalendarView({
               >
                 {date.getDate()}
               </span>
-
               {/* Event pills */}
               <div className="mt-0.5 flex flex-col gap-0.5 w-full overflow-hidden">
                 {visible.map((evt) => (
@@ -229,7 +238,7 @@ export function CalendarView({
                   <Badge
                     variant="secondary"
                     className="text-[10px] px-1 py-0 h-4 w-fit"
-                  >
+                    data-testid="Badge__936aad">
                     + {overflow} more
                   </Badge>
                 )}

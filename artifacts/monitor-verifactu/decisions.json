@@ -3,9 +3,17 @@
   "window": {
     "category": "monitor",
     "name": "Monitor Verifactu",
-    "attachments": false
+    "attachments": false,
+    "readOnly": true
   },
   "entities": {
+    "facturasParcialmenteAceptadas": {
+      "javaQualifier": "mark-subsanation-handler",
+      "methods": ["GET", "GETBYID", "PUT", "PATCH"]
+    },
+    "facturasInválidas": {
+      "javaQualifier": "correct-invoice-handler"
+    },
     "cabeceraDeEmisor": {
       "fields": {
         "organization": {
@@ -15,6 +23,9 @@
         "client": {
           "visibility": "system",
           "derivation": "fromParent"
+        },
+        "refreshData": {
+          "visibility": "discarded"
         }
       }
     }

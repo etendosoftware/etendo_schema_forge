@@ -1,13 +1,16 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from './modal-styles.js';
+import { LABEL_GAP, FIELD_HEIGHT_IMPORTANT } from '@/components/ui/formDensity';
 
 const INPUT_BASE =
-  'w-full rounded-md border border-input bg-white px-3 focus:ring-2 focus:ring-primary focus:outline-none';
-const INPUT_CLS = `${INPUT_BASE} !h-[40px] !text-[14px]`;
+  'w-full rounded-md border border-input bg-card px-3 focus:ring-2 focus:ring-primary focus:outline-none';
+const INPUT_CLS = `${INPUT_BASE} ${FIELD_HEIGHT_IMPORTANT} !text-[14px]`;
 const SELECT_CLS =
-  'w-full !h-[40px] rounded-md border border-input bg-white px-3 !text-[14px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer';
-const SELECT_STYLE = { height: '40px', minHeight: '40px', fontSize: '14px' };
+  `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-input bg-card px-3 !text-[14px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer`;
+// ETP-4321: height now comes from the FIELD_HEIGHT class (36px). Keep fontSize
+// only — the inline height/minHeight would otherwise override the token.
+const SELECT_STYLE = { fontSize: '14px' };
 
 export function DynamicSelect({
   value,
@@ -37,7 +40,7 @@ export function DynamicSelect({
         <button
           type="button"
           onClick={onRetry}
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap transition-colors"
+          className="text-xs font-medium text-status-info-foreground hover:text-status-info-foreground whitespace-nowrap transition-colors"
         >
           {retryLabel}
         </button>
@@ -85,7 +88,7 @@ function FieldRenderer({ field, value, onChange, opts, ui, form, autoFocus }) {
         value={value}
         onChange={e => onChange(field.id, e.target.value)}
         options={selector.options ?? []}
-      />
+        data-testid={"DynamicSelect__" + field.id} />
     );
   }
 
@@ -111,17 +114,14 @@ function FieldRenderer({ field, value, onChange, opts, ui, form, autoFocus }) {
         onChange={e => onChange(field.id, e.target.value)}
         options={selector.options ?? []}
         placeholder={field.dependsOn && !form[field.dependsOn] ? ui('selectCountryFirst') : '—'}
-      />
+        data-testid={"DynamicSelect__" + field.id} />
     );
   }
 
   return (
     <input
       type={
-        field.type === 'number' ? 'number'
-        : field.type === 'email' ? 'email'
-        : field.type === 'tel' ? 'tel'
-        : 'text'
+        getInputType(field)
       }
       className={INPUT_CLS}
       value={value}
@@ -131,6 +131,19 @@ function FieldRenderer({ field, value, onChange, opts, ui, form, autoFocus }) {
       autoFocus={autoFocus}
     />
   );
+}
+
+function getInputType(field) {
+  if (field.type === 'number') {
+    return 'number';
+  } else {
+    if (field.type === 'email') {
+      return 'email';
+    } else {
+      return field.type === 'tel' ? 'tel'
+          : 'text';
+    }
+  }
 }
 
 function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
@@ -172,7 +185,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
                   <input
                     key={f.id}
                     type={f.type === 'email' ? 'email' : f.type === 'tel' ? 'tel' : 'text'}
-                    style={{ height: '40px', fontSize: '14px' }}
+                    style={{ fontSize: '14px' }}
                     className={`${INPUT_CLS} w-full`}
                     value={row[f.id] ?? ''}
                     placeholder={ui(f.labelKey)}
@@ -187,7 +200,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
             <button
               type="button"
               onClick={() => onRemove(i)}
-              className="text-muted-foreground hover:text-red-500 transition-colors text-lg leading-none flex-shrink-0 mb-1"
+              className="text-muted-foreground hover:text-destructive transition-colors text-lg leading-none flex-shrink-0 mb-1"
               style={{ width: '20px' }}
             >
               ×
@@ -197,7 +210,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
         <button
           type="button"
           onClick={() => onAdd({ ...emptyRow })}
-          className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+          className="text-sm font-medium text-status-info-foreground hover:text-status-info-foreground transition-colors"
         >
           + {ui(section.addLabelKey)}
         </button>
@@ -238,7 +251,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
                       <button
                         type="button"
                         onClick={() => onRemove(i)}
-                        className="text-muted-foreground hover:text-red-500 transition-colors text-base leading-none"
+                        className="text-muted-foreground hover:text-destructive transition-colors text-base leading-none"
                       >
                         ×
                       </button>
@@ -253,11 +266,24 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
       <button
         type="button"
         onClick={() => onAdd({ ...emptyRow })}
-        className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+        className="text-sm font-medium text-status-info-foreground hover:text-status-info-foreground transition-colors"
       >
         + {ui(section.addLabelKey)}
       </button>
     </div>
+  );
+}
+
+function renderFieldInput(f, { form, onChange, opts, ui }) {
+  return (
+    <FieldRenderer
+      field={f}
+      value={form[f.id] ?? ''}
+      onChange={onChange}
+      opts={opts}
+      ui={ui}
+      form={form}
+      data-testid="FieldRenderer__195103" />
   );
 }
 
@@ -280,7 +306,7 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            className="text-xs font-medium text-status-info-foreground hover:text-status-info-foreground transition-colors"
           >
             + {ui('add')}
           </button>
@@ -289,17 +315,15 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
           <button
             type="button"
             onClick={() => setExpanded(false)}
-            className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            className="text-xs font-medium text-status-info-foreground hover:text-status-info-foreground transition-colors"
           >
             &minus;
           </button>
         )}
       </div>
-
       {!expanded && !hasData && (
         <p className="text-xs text-muted-foreground">{ui(section.emptyTextKey)}</p>
       )}
-
       {!expanded && hasData && (
         <div className="rounded-md border border-border overflow-hidden">
           <div className="flex items-center">
@@ -316,20 +340,19 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
                 allFields.forEach(f => onChange(f.id, ''));
                 setExpanded(false);
               }}
-              className="px-3 py-1.5 text-muted-foreground hover:text-red-500 transition-colors text-base leading-none shrink-0"
+              className="px-3 py-1.5 text-muted-foreground hover:text-destructive transition-colors text-base leading-none shrink-0"
             >
               ×
             </button>
           </div>
         </div>
       )}
-
       {expanded && (
         <div className="grid grid-cols-4 gap-3">
           {allFields.map(f => (
-            <div key={f.id} className={`space-y-1.5${f.fullWidth ? ' col-span-4' : ''}`}>
+            <div key={f.id} className={`${LABEL_GAP}${f.fullWidth ? ' col-span-4' : ''}`}>
               <label style={MODAL_STYLES.fieldLabel}>{ui(f.labelKey)}</label>
-              <FieldRenderer field={f} value={form[f.id] ?? ''} onChange={onChange} opts={opts} ui={ui} form={form} />
+              {renderFieldInput(f, { form, onChange, opts, ui })}
             </div>
           ))}
         </div>
@@ -437,7 +460,14 @@ export default function EntityCreationModal({
     if (section.component) {
       const Component = componentMap[section.component];
       if (!Component) return null;
-      return <Component form={form} onChange={onChange} opts={opts} requiredFields={requiredFields} />;
+      return (
+        <Component
+          form={form}
+          onChange={onChange}
+          opts={opts}
+          requiredFields={requiredFields}
+          data-testid="Component__195103" />
+      );
     }
     if (section.plain && section.fields) {
       return (
@@ -445,7 +475,7 @@ export default function EntityCreationModal({
           {section.fields.map(f => (
             <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={MODAL_STYLES.fieldLabel}>{ui(f.labelKey)}</label>
-              <FieldRenderer field={f} value={form[f.id] ?? ''} onChange={onChange} opts={opts} ui={ui} form={form} />
+              {renderFieldInput(f, { form, onChange, opts, ui })}
             </div>
           ))}
         </div>
@@ -471,7 +501,7 @@ export default function EntityCreationModal({
             }))
           }
           ui={ui}
-        />
+          data-testid="RepeatableSection__195103" />
       );
     }
     if (section.fields) {
@@ -482,7 +512,7 @@ export default function EntityCreationModal({
           onChange={onChange}
           opts={opts}
           ui={ui}
-        />
+          data-testid="CollapsibleFieldSection__195103" />
       );
     }
     return null;
@@ -491,12 +521,12 @@ export default function EntityCreationModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      style={{ backgroundColor: 'hsl(var(--foreground) / 0.4)' }}
       onClick={onCancel}
     >
       <div className="entity-creation-modal" onClick={e => e.stopPropagation()} style={MODAL_STYLES.dialog}>
         {/* Title */}
-        <div style={{ boxSizing: 'border-box', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '8px 20px 16px 20px', gap: '20px', width: '100%', height: '64px', borderBottom: '1px solid #E8EAEF', flexShrink: 0 }}>
+        <div style={{ boxSizing: 'border-box', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '8px 20px 16px 20px', gap: '20px', width: '100%', height: '64px', borderBottom: '1px solid hsl(var(--border-subtle))', flexShrink: 0 }}>
           <h2 style={MODAL_STYLES.title}>{title}</h2>
           {titleRightContent}
         </div>
@@ -516,9 +546,17 @@ export default function EntityCreationModal({
             {headerFields.map((f, idx) => (
               <div key={f.id} style={{ ...MODAL_STYLES.field, gridColumn: f.fullWidth ? 'span 4' : undefined }}>
                 <label style={MODAL_STYLES.fieldLabel}>
-                  {ui(f.labelKey)}{f.required && <span style={{ color: '#ef4444', marginLeft: '2px' }}>*</span>}
+                  {ui(f.labelKey)}{f.required && <span style={{ color: 'hsl(var(--destructive))', marginLeft: '2px' }}>*</span>}
                 </label>
-                <FieldRenderer field={f} value={form[f.id] ?? ''} onChange={onChange} opts={opts} ui={ui} form={form} autoFocus={idx === 0} />
+                <FieldRenderer
+                  field={f}
+                  value={form[f.id] ?? ''}
+                  onChange={onChange}
+                  opts={opts}
+                  ui={ui}
+                  form={form}
+                  autoFocus={idx === 0}
+                  data-testid="FieldRenderer__195103" />
               </div>
             ))}
           </div>
@@ -542,13 +580,13 @@ export default function EntityCreationModal({
                     gap: '4px',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: active ? '2px solid #121217' : '2px solid transparent',
+                    borderBottom: active ? '2px solid hsl(var(--foreground))' : '2px solid transparent',
                     borderRadius: 0,
                     cursor: 'pointer',
                     fontFamily: 'Inter, sans-serif',
                     fontSize: '14px',
                     fontWeight: active ? 600 : 400,
-                    color: active ? '#121217' : '#9ca3af',
+                    color: active ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))',
                     whiteSpace: 'nowrap',
                     transition: 'color 0.15s',
                   }}
@@ -568,7 +606,7 @@ export default function EntityCreationModal({
             </div>
           ))}
           {error && (
-            <div className="mt-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="mt-4 rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}

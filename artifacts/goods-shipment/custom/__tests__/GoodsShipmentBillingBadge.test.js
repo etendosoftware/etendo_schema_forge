@@ -16,89 +16,85 @@ describe('GoodsShipmentBillingBadge', () => {
     assert.match(src, /import\s*\{[^}]*useUI[^}]*\}\s*from\s*['"]@\/i18n['"]/);
   });
 
-  it('imports DocumentStatusPill from @/components/contract-ui/DocumentStatusPill', () => {
-    assert.match(src, /import\s+DocumentStatusPill\s+from\s*['"]@\/components\/contract-ui\/DocumentStatusPill['"]/);
+  it('imports getProgressTone from @/lib/progressTone', () => {
+    assert.match(src, /import\s*\{[^}]*getProgressTone[^}]*\}\s*from\s*['"]@\/lib\/progressTone['"]/);
   });
 
-  describe('null guard — only renders for completed shipments', () => {
-    it('checks documentStatus equals CO before rendering', () => {
-      assert.match(src, /data\?\.documentStatus\s*===\s*['"]CO['"]/);
+  it('imports TONE_STYLES from @/components/ui/status-tag-tokens', () => {
+    assert.match(src, /import\s*\{[^}]*TONE_STYLES[^}]*\}\s*from\s*['"]@\/components\/ui\/status-tag-tokens/);
+  });
+
+  it('does not import DocumentStatusPill (replaced by inline span + TONE_STYLES)', () => {
+    assert.doesNotMatch(src, /import\s+DocumentStatusPill/);
+  });
+
+  describe('null guard — only renders when invoiced > 0', () => {
+    it('reads invoiceStatus and coerces it to a number defaulting to 0', () => {
+      assert.match(src, /data\?\.invoiceStatus\s*!=\s*null\s*\?\s*Number\(\s*data\.invoiceStatus\s*\)\s*:\s*0/);
     });
 
-    it('returns null when the shipment is not completed', () => {
-      assert.match(src, /if\s*\(\s*!isCompleted\s*\)\s*return null/);
+    it('returns null when the invoiced percentage is <= 0', () => {
+      assert.match(src, /if\s*\(\s*rawPct\s*<=\s*0\s*\)\s*return null/);
     });
   });
 
   describe('invoice percentage calculation', () => {
-    it('reads completelyInvoiced from data as the fallback source', () => {
-      assert.match(src, /data\?\.completelyInvoiced/);
-    });
-
-    it('treats boolean true as 100% invoiced', () => {
-      assert.match(src, /ci\s*===\s*true/);
-    });
-
-    it('treats string "true" as 100% invoiced', () => {
-      assert.match(src, /ci\s*===\s*'true'/);
-    });
-
-    it('treats string "Y" as 100% invoiced', () => {
-      assert.match(src, /ci\s*===\s*'Y'/);
-    });
-
-    it('uses data.invoiceStatus as the primary numeric source', () => {
+    it('reads invoiceStatus from data', () => {
       assert.match(src, /data\?\.invoiceStatus/);
     });
 
-    it('falls back to completelyInvoiced-derived percentage when invoiceStatus is null/undefined', () => {
-      assert.match(src, /invoiceStatus\s*!=\s*null\s*\?[^:]*:\s*fallbackPct/);
+    it('normalises invoiceStatus to a 0-1 fraction (divides by 100)', () => {
+      assert.match(src, /\/\s*100/);
+    });
+
+    it('computes final display percentage via Math.round', () => {
+      assert.match(src, /Math\.round\s*\(/);
+    });
+
+    it('does not read completelyInvoiced (simplified — invoiceStatus only)', () => {
+      assert.doesNotMatch(src, /data\?\.completelyInvoiced/);
     });
   });
 
-  describe('tone mapping', () => {
-    it('maps pct >= 100 to success tone', () => {
-      assert.match(src, /pct\s*>=\s*100\s*\?\s*['"]success['"]/);
+  describe('tone via getProgressTone', () => {
+    it('calls getProgressTone with the normalised fraction', () => {
+      assert.match(src, /getProgressTone\s*\(\s*pct\s*\)/);
     });
 
-    it('maps pct > 0 (but < 100) to warning tone', () => {
-      assert.match(src, /pct\s*>\s*0\s*\?\s*['"]warning['"]/);
+    it('looks up palette from TONE_STYLES using the tone', () => {
+      assert.match(src, /TONE_STYLES\s*\[\s*tone\s*\]/);
     });
 
-    it('maps pct === 0 to neutral tone', () => {
-      assert.match(src, /['"]neutral['"]/);
+    it('applies palette.background as the span background', () => {
+      assert.match(src, /palette\.background/);
+    });
+
+    it('applies palette.color as the span color', () => {
+      assert.match(src, /palette\.color/);
     });
   });
 
-  describe('i18n label mapping — no hardcoded English strings', () => {
-    it('maps pct >= 100 to the invoiced i18n key via ui()', () => {
+  describe('i18n — no hardcoded English strings', () => {
+    it('uses ui("invoiced") as the badge label', () => {
       assert.match(src, /ui\(['"]invoiced['"]\)/);
     });
 
-    it('maps pct > 0 to the partiallyInvoiced i18n key via ui()', () => {
-      assert.match(src, /ui\(['"]partiallyInvoiced['"]\)/);
-    });
-
-    it('maps pct === 0 to the pending i18n key via ui()', () => {
-      assert.match(src, /ui\(['"]pending['"]\)/);
-    });
-
-    it('does not hardcode "Invoiced" as a literal string', () => {
+    it('does not hardcode "Invoiced", "Partially Invoiced", or "Pending"', () => {
       assert.doesNotMatch(src, /['"](Invoiced|Partially Invoiced|Pending)['"]/);
     });
   });
 
-  describe('DocumentStatusPill rendering', () => {
-    it('passes tone prop to DocumentStatusPill', () => {
-      assert.match(src, /<DocumentStatusPill[^/]*tone=\{tone\}/s);
+  describe('rendering — inline span, no DocumentStatusPill', () => {
+    it('renders a <span> element as the badge root', () => {
+      assert.match(src, /<span/);
     });
 
-    it('passes label prop to DocumentStatusPill', () => {
-      assert.match(src, /<DocumentStatusPill[^/]*label=\{label\}/s);
+    it('shows the numeric percentage in a tabular-nums span', () => {
+      assert.match(src, /fontVariantNumeric.*tabular-nums/s);
     });
 
-    it('passes a status prop to DocumentStatusPill', () => {
-      assert.match(src, /<DocumentStatusPill[^/]*status=/s);
+    it('does not render <DocumentStatusPill', () => {
+      assert.doesNotMatch(src, /<DocumentStatusPill/);
     });
   });
 });

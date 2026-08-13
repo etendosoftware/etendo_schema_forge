@@ -3,6 +3,57 @@ import { useUI } from '@/i18n';
 import { STATUS_COLOR, STATUS_ICON, STATUS_ORDER } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
 
+// ── KPI Widget — horizontal card (303 & 349) ──────────────────────
+export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, value, valueColor }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex', flexDirection: 'row', alignItems: 'center',
+        padding: '8px 8px 8px 12px', gap: 12, height: 68,
+        background: hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))', border: '1px solid hsl(var(--border-subtle))',
+        boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
+        borderRadius: 8, flex: 1, minWidth: 0, cursor: 'default',
+        transition: 'background .15s',
+      }}>
+      <div style={{
+        width: 40, height: 40, background: 'hsl(var(--card))',
+        border: '1px solid hsl(var(--border-control))',
+        boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
+        borderRadius: 8,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <span style={{ color: iconColor ?? 'hsl(var(--text-disabled))', display: 'inline-flex' }}>{icon}</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 400, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>{label}</span>
+          {badge != null && (
+            <span style={{
+              padding: '4px 8px', borderRadius: 360,
+              fontSize: 12, fontWeight: 400, lineHeight: '16px',
+              background: badgeBg ?? 'hsl(var(--muted))',
+              color: badgeColor ?? 'hsl(var(--text-disabled))',
+            }}>
+              {badge}
+            </span>
+          )}
+        </div>
+        <span style={{
+          fontSize: 24, fontWeight: 500,
+          letterSpacing: '-0.01em', color: valueColor ?? 'hsl(var(--foreground))', lineHeight: '36px',
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          {value}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function StatusPill({ status }) {
   const t = useUI();
   const color = STATUS_COLOR[status] ?? 'grey';
@@ -44,11 +95,15 @@ export function StatusPillMenu({ status, onStatusChange }) {
   return (
     <div className="fm-status-pill-menu">
       <button className="fm-status-pill-menu__trigger" onClick={() => setOpen(o => !o)} aria-haspopup="listbox">
-        <StatusPill status={status} />
+        <StatusPill status={status} data-testid="StatusPill__1775af" />
         <span className="fm-status-pill-menu__caret" aria-hidden="true">▾</span>
       </button>
       {open && (
-        <StatusMenu current={status} onSelect={onStatusChange} onClose={() => setOpen(false)} />
+        <StatusMenu
+          current={status}
+          onSelect={onStatusChange}
+          onClose={() => setOpen(false)}
+          data-testid="StatusMenu__1775af" />
       )}
     </div>
   );
@@ -101,6 +156,7 @@ export function Tabs({ tabs, active, onSelect }) {
           className={`fm-tabs__tab${t.id === active ? ' fm-tabs__tab--active' : ''}`}
           onClick={() => onSelect(t.id)}
         >
+          {t.icon && <span style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>{t.icon}</span>}
           {t.label}
           {t.badge != null && (
             <span className={['fm-tabs__badge', t.badgeTone && `fm-tabs__badge--${t.badgeTone}`].filter(Boolean).join(' ')}>

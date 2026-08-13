@@ -74,32 +74,38 @@ export default function EntityField({
 
   return (
     <div className="relative" ref={wrapRef}>
-      <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 focus-within:border-gray-900">
-        <Search size={14} className="shrink-0 text-gray-400" />
+      <div className="flex items-center gap-2 rounded-lg border border-border-control bg-card px-3 py-2 focus-within:border-foreground">
+        <Search
+          size={14}
+          className="shrink-0 text-muted-foreground"
+          data-testid={"Search__" + field.id} />
         <input
           type="text"
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           placeholder={value?.label || ui(field.searchPlaceholder || 'ocrReviewVendorSearch')}
-          className="flex-1 text-sm text-gray-900 placeholder-gray-500 outline-none"
+          className="flex-1 text-sm text-foreground placeholder-gray-500 outline-none"
         />
-        {loading && <Loader2 size={14} className="animate-spin text-gray-400" />}
+        {loading && <Loader2
+          size={14}
+          className="animate-spin text-muted-foreground"
+          data-testid={"Loader2__" + field.id} />}
       </div>
       {open && (CreateComponent || query.trim() || items.length > 0) && (
-        <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+        <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border-subtle bg-card shadow-lg">
           {CreateComponent && (
             <button
               type="button"
               onMouseDown={(e) => { e.preventDefault(); setOpen(false); setShowCreate(true); }}
-              className="flex w-full items-center gap-1.5 border-b border-gray-200 px-3 py-2 text-left text-sm font-medium text-gray-800 hover:bg-blue-50"
+              className="flex w-full items-center gap-1.5 border-b border-border-subtle px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-status-info"
             >
-              <Plus size={14} />
+              <Plus size={14} data-testid={"Plus__" + field.id} />
               {ui(field.createLabel || 'ocrReviewVendorCreate')}
             </button>
           )}
           {!loading && items.length === 0 && (
-            <div className="px-3 py-2 text-xs text-gray-500">{ui(field.noMatchesLabel || 'ocrReviewVendorNoMatches')}</div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">{ui(field.noMatchesLabel || 'ocrReviewVendorNoMatches')}</div>
           )}
           {items.map((item) => {
             const label = item.name || item._identifier || item.id;
@@ -112,7 +118,7 @@ export default function EntityField({
                   setQuery('');
                   setOpen(false);
                 }}
-                className="block w-full truncate px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-50"
+                className="block w-full truncate px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
               >
                 {label}
               </button>
@@ -127,7 +133,7 @@ export default function EntityField({
           token={token}
           onCancel={() => setShowCreate(false)}
           onSubmit={handleCreateSubmit}
-        />
+          data-testid={"CreateComponent__" + field.id} />
       ) : null}
     </div>
   );

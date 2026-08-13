@@ -87,36 +87,51 @@ export default function BulkDocumentAction({
 
   return (
     <>
-      <Button variant="outline" size="sm" className="gap-1.5" onClick={handleOpen} disabled={running}>
-        <ListChecks className="h-3.5 w-3.5" />
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5"
+        onClick={handleOpen}
+        disabled={running}
+        data-testid="Button__90fe6a">
+        <ListChecks className="h-3.5 w-3.5" data-testid="ListChecks__90fe6a" />
         {ui(labelKey)} ({selectedRows.length})
       </Button>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{ui(labelKey)}</DialogTitle>
+      <Dialog open={open} onOpenChange={setOpen} data-testid="Dialog__90fe6a">
+        <DialogContent data-testid="DialogContent__90fe6a">
+          <DialogHeader data-testid="DialogHeader__90fe6a">
+            <DialogTitle data-testid="DialogTitle__90fe6a">{ui(labelKey)}</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-2">
-            <Label>{ui('documentAction')}</Label>
-            <Select value={selectedAction ?? ''} onValueChange={setSelectedAction}>
-              <SelectTrigger>
-                <SelectValue />
+            <Label data-testid="Label__90fe6a">{ui('documentAction')}</Label>
+            <Select
+              value={selectedAction ?? ''}
+              onValueChange={setSelectedAction}
+              data-testid="Select__90fe6a">
+              <SelectTrigger data-testid="SelectTrigger__90fe6a">
+                <SelectValue data-testid="SelectValue__90fe6a" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent data-testid="SelectContent__90fe6a">
                 {actions.map((a) => (
-                  <SelectItem key={a.value} value={a.value}>
+                  <SelectItem key={a.value} value={a.value} data-testid="SelectItem__90fe6a">
                     {ui(a.labelKey)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={running}>
+          <DialogFooter data-testid="DialogFooter__90fe6a">
+            <Button
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={running}
+              data-testid="Button__90fe6a">
               {ui('cancel')}
             </Button>
-            <Button onClick={handleDone} disabled={running || !selectedAction}>
+            <Button
+              onClick={handleDone}
+              disabled={running || !selectedAction}
+              data-testid="Button__90fe6a">
               {ui('done')}
             </Button>
           </DialogFooter>

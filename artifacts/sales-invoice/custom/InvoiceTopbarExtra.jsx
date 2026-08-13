@@ -1,17 +1,15 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
-import InvoicePaymentModal from '@/windows/custom/shared/InvoicePaymentModal.jsx';
+import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import SendToSifButton from './SendToSifButton';
+import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
+import { getArSubtype } from './invoiceSubtype';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  if (curr) {
-    try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency: curr }).format(n);
-    } catch { /* fallback if currency code is invalid */ }
-  }
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatCurrency(curr, n);
 }
 
 /** Classify an installment into a status category */
@@ -27,10 +25,10 @@ function classifyInstallment(inst) {
 }
 
 const BADGE_STYLES = {
-  paid:    { bg: '#d1fae5', color: '#065f46', dot: '#10b981', accent: '#10b981' },
-  partial: { bg: '#dbeafe', color: '#1e3a5f', dot: '#3b82f6', accent: '#3b82f6' },
-  overdue: { bg: '#fee2e2', color: '#991b1b', dot: '#ef4444', accent: '#ef4444' },
-  pending: { bg: '#fef3c7', color: '#78350f', dot: '#f59e0b', accent: '#f59e0b' },
+  paid:    { bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)', dot: 'var(--status-success-fg)', accent: 'var(--status-success-fg)' },
+  partial: { bg: 'var(--status-info-bg)', color: 'var(--status-info-fg)', dot: 'var(--status-info-border)', accent: 'var(--status-info-border)' },
+  overdue: { bg: 'var(--status-destructive-bg)', color: 'var(--status-destructive-fg)', dot: 'var(--status-destructive-fg)', accent: 'var(--status-destructive-fg)' },
+  pending: { bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', dot: 'var(--status-warning-border)', accent: 'var(--status-warning-border)' },
 };
 
 /**
@@ -50,14 +48,28 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [showShipmentDialog, setShowShipmentDialog] = useState(false);
+  const [shipmentCreating, setShipmentCreating] = useState(false);
   const [installments, setInstallments] = useState([]);
   const [installmentsLoading, setInstallmentsLoading] = useState(true);
+
+  // Keep a ref to the latest data so the event listener (with [] deps) can
+  // check arInvoiceSubtype without a stale closure.
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const headers = useMemo(() => ({
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
+
+  // ETP-4372 — source the same client-rendered PDF the InvoicePreview panel uses
+  // so the form-view topbar Send modal shows the document instead of the
+  // "PDF not configured" fallback. Hook is called unconditionally at top level
+  // (before the early returns below) to respect the rules of hooks. Keyed on the
+  // same id the modal passes as documentId (data?.id).
+  const { pdfUrl, loading: pdfLoading } = useInvoicePdf(data?.id ?? null, apiBaseUrl, token);
 
   const currency = data?.['currency$_identifier'] || '';
   const grandTotal = data?.grandTotalAmount ?? 0;
@@ -82,27 +94,65 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
 
   useEffect(() => { fetchInstallments(); }, [fetchInstallments]);
 
-  // Listen for DocAction process completion and auto-open Send modal
+  // Listen for DocAction process completion — set flags for send modal and
+  // (for standard FAC invoices only) shipment creation prompt.
   useEffect(() => {
     const handler = (e) => {
       if (e.detail?.entity === 'header' && e.detail?.process?.columnName === 'DocAction' && e.detail?.recordId) {
         sessionStorage.setItem(`invoice:sendAfterConfirm:${e.detail.recordId}`, '1');
+        const subtype = getArSubtype(dataRef.current);
+        if (subtype === 'FAC') {
+          sessionStorage.setItem(`invoice:createShipment:${e.detail.recordId}`, '1');
+        }
       }
     };
     window.addEventListener('neo:processSuccess', handler);
     return () => window.removeEventListener('neo:processSuccess', handler);
   }, []);
 
-  // Auto-open Send modal after Confirm & Send
+  // After the record re-fetches as CO, open queued modals in order.
   useEffect(() => {
     if (isCompleted && recordId) {
-      const key = `invoice:sendAfterConfirm:${recordId}`;
-      if (sessionStorage.getItem(key)) {
-        sessionStorage.removeItem(key);
+      const sendKey = `invoice:sendAfterConfirm:${recordId}`;
+      if (sessionStorage.getItem(sendKey)) {
+        sessionStorage.removeItem(sendKey);
         setShowSendModal(true);
+      }
+      const shipKey = `invoice:createShipment:${recordId}`;
+      if (sessionStorage.getItem(shipKey)) {
+        sessionStorage.removeItem(shipKey);
+        setShowShipmentDialog(true);
       }
     }
   }, [isCompleted, recordId]);
+
+  const handleCreateShipment = async () => {
+    setShipmentCreating(true);
+    try {
+      const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
+      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const res = await fetch(`${base}/sales-invoice/header/${recordId}/action/createShipment`, {
+        method: 'POST', headers, body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      const shipmentData = json?.response?.data;
+      if (res.ok && shipmentData?.documentNo) {
+        setShowShipmentDialog(false);
+        // Soft feedback — no hard toast dependency in topbar
+        window.dispatchEvent(new CustomEvent('neo:toast', {
+          detail: { type: 'success', message: `${ui('shipmentCreated')}: ${shipmentData.documentNo}` },
+        }));
+      } else {
+        const msg = json?.response?.error || ui('failedToImportLines');
+        window.dispatchEvent(new CustomEvent('neo:toast', { detail: { type: 'error', message: msg } }));
+        setShowShipmentDialog(false);
+      }
+    } catch {
+      setShowShipmentDialog(false);
+    } finally {
+      setShipmentCreating(false);
+    }
+  };
 
   // Derive badge status from installments (must be before any early return)
   const badgeInfo = useMemo(() => {
@@ -153,22 +203,66 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
 
   if (!data?.documentStatus) return null;
 
-  // Draft — only show Send button
+  // ETP-4717 — Draft: nothing to show. Send is only available once the
+  // invoice is Completed (CO), matching the grid row quick-action's status
+  // gate; it used to render unconditionally here, which was the bug.
   if (isDraft) {
     return (
+      <></>
+    );
+  }
+
+  // Credit instruments (ETP-4737: unified RECTIFICATIVA subtype, formerly separate
+  // NC / DEV) — mirror the grid's "Pendiente de pago" cell: green "Aplicada" once
+  // the note is fully consumed, else a purple "Saldo a favor · remaining" badge
+  // that opens the same payment history modal the grid opens (listing the
+  // payments that consumed the note).
+  const arSubtype = getArSubtype(data);
+  const isCreditInstrument = arSubtype === 'RECTIFICATIVA';
+  if (isCompleted && isCreditInstrument) {
+    // Credit notes carry negative amounts end to end — installments (when loaded) are the
+    // fresh source, data.outstandingAmount the fallback snapshot; either way the remaining
+    // unused balance is the absolute value.
+    const outstandingAbs = Math.abs(installments.length > 0
+      ? installments.reduce((s, i) => s + (parseFloat(i.outstandingAmount) || 0), 0)
+      : parseFloat(data?.outstandingAmount ?? 0));
+    if (installmentsLoading) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground" style={{ padding: '4px 12px' }}>
+          {ui('loading')}
+        </span>
+      );
+    }
+    if (outstandingAbs < 0.001) {
+      return (
+        <span
+          className="inline-flex items-center gap-1.5 text-[13px] font-medium h-9"
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
+        >
+          {ui('cpCreditFullyApplied')}
+        </span>
+      );
+    }
+    return (
       <>
-        <SendDocumentButton onClick={() => setShowSendModal(true)} />
-        {showSendModal && (
-          <SendDocumentModal
-            documentType={tMenu('Sales Invoice')}
-            documentNo={data?.documentNo}
-            bpName={data?.['businessPartner$_identifier']}
-            bPartnerId={data?.businessPartner}
+        <button
+          type="button"
+          data-testid="payment-status-badge"
+          onClick={() => setShowPaymentsModal(true)}
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold hover:opacity-80 cursor-pointer h-9"
+          style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
+        >
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
+          {ui('cpFavorBadge')} · {fmt(outstandingAbs, currency)}
+        </button>
+        {showPaymentsModal && (
+          <InvoicePaymentHistoryModal
+            invoiceId={recordId}
+            invoiceData={data}
+            specName="sales-invoice"
             apiBaseUrl={apiBaseUrl}
-            documentId={data?.id}
-            windowName="sales-invoice"
-            token={token}
-            onClose={() => setShowSendModal(false)}
+            onClose={() => setShowPaymentsModal(false)}
+            onPaymentAdded={fetchInstallments}
           />
         )}
       </>
@@ -210,6 +304,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     return (
       <button
         type="button"
+        data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
         style={{
@@ -231,6 +326,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       {/* Badge pill — sole entry point to payments modal */}
       <button
         type="button"
+        data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
         style={{
@@ -253,15 +349,17 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         status={data?.documentStatus}
       />
 
-      <SendDocumentButton onClick={() => setShowSendModal(true)} />
+      {/* ETP-4717 — explicit Completed gate, matching the grid row
+          quick-action's status rule (this branch is only reached once
+          installments exist, which in practice already implies CO). */}
+      {isCompleted && <SendDocumentButton onClick={() => setShowSendModal(true)} />}
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (
-        <InvoicePaymentModal
+        <InvoicePaymentHistoryModal
           invoiceId={recordId}
           invoiceData={data}
           specName="sales-invoice"
-          token={token}
           apiBaseUrl={apiBaseUrl}
           onClose={() => setShowPaymentsModal(false)}
           onPaymentAdded={fetchInstallments}
@@ -279,8 +377,44 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           documentId={data?.id}
           windowName="sales-invoice"
           token={token}
+          pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           onClose={() => setShowSendModal(false)}
         />
+      )}
+
+      {/* "¿Gestionar envío?" dialog — offered after confirming a standard invoice */}
+      {showShipmentDialog && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}
+          onClick={() => !shipmentCreating && setShowShipmentDialog(false)}
+        >
+          <div
+            style={{ background: 'hsl(var(--card))', borderRadius: 12, padding: '28px 32px', maxWidth: 360, width: '90%', boxShadow: '0 8px 32px hsl(var(--foreground) / 0.18)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <p style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))', marginBottom: 8 }}>{ui('manageShipment')}</p>
+            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', marginBottom: 24 }}>{ui('createShipmentDraftHint')}</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                disabled={shipmentCreating}
+                onClick={() => setShowShipmentDialog(false)}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '0.5px solid hsl(var(--border-subtle))', background: 'transparent', fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', cursor: 'pointer' }}
+              >
+                {ui('skipShipment')}
+              </button>
+              <button
+                type="button"
+                disabled={shipmentCreating}
+                onClick={handleCreateShipment}
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: 'hsl(var(--foreground))', fontSize: 13, fontWeight: 500, color: 'hsl(var(--card))', cursor: shipmentCreating ? 'not-allowed' : 'pointer', opacity: shipmentCreating ? 0.7 : 1 }}
+              >
+                {shipmentCreating ? ui('creating') : ui('createShipmentDraft')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

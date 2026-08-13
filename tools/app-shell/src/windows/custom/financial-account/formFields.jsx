@@ -1,0 +1,33 @@
+/**
+ * Shared form-field primitives for the financial-account modals (Create
+ * movement, Create statement). Keeping a single `inputClass` + `FieldRow` here
+ * guarantees both modals render identical fields.
+ */
+
+export const inputClass =
+  'h-10 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1';
+
+export const selectClass = inputClass;
+
+/** Multi-line variant of {@link inputClass} (auto height instead of h-10). */
+export const textareaClass =
+  'min-h-[60px] rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1';
+
+/**
+ * Label + control stacked vertically. The control fills the cell width via the
+ * flex-column's default `align-items: stretch`.
+ *
+ * @param {{ label: string, required?: boolean, optional?: string, children: React.ReactNode }} props
+ */
+export function FieldRow({ label, required, optional, children }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+        {label}
+        {required ? <span className="text-[hsl(var(--destructive))]"> *</span> : null}
+        {optional ? <span className="font-normal text-[hsl(var(--muted-foreground))]"> {optional}</span> : null}
+      </span>
+      {children}
+    </label>
+  );
+}

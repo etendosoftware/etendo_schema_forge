@@ -1,0 +1,3564 @@
+{
+  "version": "0.8.0",
+  "generatedAt": "2026-05-04T17:00:26.053Z",
+  "updatedAt": "2026-08-04T14:03:25.379Z",
+  "contractChecksum": "d43ccec2d3f8430f",
+  "apiPrediction": {
+    "specName": "sii-monitor",
+    "baseUrl": "/sws/neo/sii-monitor",
+    "crud": {
+      "organizations": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/organizations",
+        "detailUrl": "/sws/neo/sii-monitor/organizations/{id}",
+        "supportedFilters": []
+      },
+      "issuedInvoices": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/issuedInvoices",
+        "detailUrl": "/sws/neo/sii-monitor/issuedInvoices/{id}",
+        "supportedFilters": []
+      },
+      "issuedInvoicesSiiData": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/issuedInvoicesSiiData",
+        "detailUrl": "/sws/neo/sii-monitor/issuedInvoicesSiiData/{id}",
+        "supportedFilters": []
+      },
+      "receivedInvoices": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/receivedInvoices",
+        "detailUrl": "/sws/neo/sii-monitor/receivedInvoices/{id}",
+        "supportedFilters": []
+      },
+      "receivedInvoicesSiiData": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/receivedInvoicesSiiData",
+        "detailUrl": "/sws/neo/sii-monitor/receivedInvoicesSiiData/{id}",
+        "supportedFilters": []
+      },
+      "cashCriterionPayments": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/cashCriterionPayments",
+        "detailUrl": "/sws/neo/sii-monitor/cashCriterionPayments/{id}",
+        "supportedFilters": []
+      },
+      "paymentsSiiData": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/paymentsSiiData",
+        "detailUrl": "/sws/neo/sii-monitor/paymentsSiiData/{id}",
+        "supportedFilters": []
+      },
+      "issuedInvoices(previousPeriod)": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)",
+        "detailUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}",
+        "supportedFilters": []
+      },
+      "issuedInvoices(previousPeriod)SiiData": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData",
+        "detailUrl": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData/{id}",
+        "supportedFilters": []
+      },
+      "receivedInvoices(previousPeriod)": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)",
+        "detailUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}",
+        "supportedFilters": []
+      },
+      "receivedInvoices(previousPeriod)SiiData": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData",
+        "detailUrl": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "issuedInvoices",
+        "field": "aeatsiiInvoice",
+        "column": "EM_Aeatsii_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/selectors/aeatsiiInvoice"
+      },
+      {
+        "entity": "issuedInvoices",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/selectors/businessPartner"
+      },
+      {
+        "entity": "issuedInvoices",
+        "field": "paymentMethod",
+        "column": "FIN_Paymentmethod_ID",
+        "reference": "Paymentmethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/selectors/paymentMethod",
+        "context": {
+          "optional": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "issuedInvoicesSiiData",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/issuedInvoicesSiiData/selectors/invoice"
+      },
+      {
+        "entity": "issuedInvoicesSiiData",
+        "field": "conexinSII",
+        "column": "Aeatsii_Conexion_ID",
+        "reference": "Aeatsii_Conexion",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/issuedInvoicesSiiData/selectors/conexinSII"
+      },
+      {
+        "entity": "receivedInvoices",
+        "field": "aeatsiiInvoice",
+        "column": "EM_Aeatsii_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/selectors/aeatsiiInvoice"
+      },
+      {
+        "entity": "receivedInvoices",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/selectors/businessPartner"
+      },
+      {
+        "entity": "receivedInvoices",
+        "field": "paymentMethod",
+        "column": "FIN_Paymentmethod_ID",
+        "reference": "Paymentmethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/selectors/paymentMethod",
+        "context": {
+          "optional": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "receivedInvoicesSiiData",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/receivedInvoicesSiiData/selectors/invoice"
+      },
+      {
+        "entity": "receivedInvoicesSiiData",
+        "field": "conexinSII",
+        "column": "Aeatsii_Conexion_ID",
+        "reference": "Aeatsii_Conexion",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/receivedInvoicesSiiData/selectors/conexinSII"
+      },
+      {
+        "entity": "cashCriterionPayments",
+        "field": "bpartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/sii-monitor/cashCriterionPayments/selectors/bpartner"
+      },
+      {
+        "entity": "cashCriterionPayments",
+        "field": "fINPaymentmethod",
+        "column": "FIN_Paymentmethod_ID",
+        "reference": "Paymentmethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/cashCriterionPayments/selectors/fINPaymentmethod"
+      },
+      {
+        "entity": "cashCriterionPayments",
+        "field": "fINPayment",
+        "column": "FIN_Payment_ID",
+        "reference": "Payment",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/cashCriterionPayments/selectors/fINPayment"
+      },
+      {
+        "entity": "cashCriterionPayments",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/cashCriterionPayments/selectors/currency"
+      },
+      {
+        "entity": "cashCriterionPayments",
+        "field": "fINPaymentDetail",
+        "column": "FIN_Payment_Detail_ID",
+        "reference": "Payment_Detail",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/cashCriterionPayments/selectors/fINPaymentDetail"
+      },
+      {
+        "entity": "cashCriterionPayments",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/cashCriterionPayments/selectors/invoice"
+      },
+      {
+        "entity": "paymentsSiiData",
+        "field": "fINPayment",
+        "column": "FIN_Payment_ID",
+        "reference": "Payment",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/paymentsSiiData/selectors/fINPayment"
+      },
+      {
+        "entity": "paymentsSiiData",
+        "field": "aeatsiiConexion",
+        "column": "Aeatsii_Conexion_ID",
+        "reference": "Aeatsii_Conexion",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/paymentsSiiData/selectors/aeatsiiConexion"
+      },
+      {
+        "entity": "issuedInvoices(previousPeriod)",
+        "field": "aeatsiiInvoice",
+        "column": "EM_Aeatsii_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/selectors/aeatsiiInvoice"
+      },
+      {
+        "entity": "issuedInvoices(previousPeriod)",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/selectors/businessPartner"
+      },
+      {
+        "entity": "issuedInvoices(previousPeriod)",
+        "field": "paymentMethod",
+        "column": "FIN_Paymentmethod_ID",
+        "reference": "Paymentmethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/selectors/paymentMethod",
+        "context": {
+          "optional": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "issuedInvoices(previousPeriod)SiiData",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData/selectors/invoice"
+      },
+      {
+        "entity": "issuedInvoices(previousPeriod)SiiData",
+        "field": "conexinSII",
+        "column": "Aeatsii_Conexion_ID",
+        "reference": "Aeatsii_Conexion",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)SiiData/selectors/conexinSII"
+      },
+      {
+        "entity": "receivedInvoices(previousPeriod)",
+        "field": "aeatsiiInvoice",
+        "column": "EM_Aeatsii_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/selectors/aeatsiiInvoice"
+      },
+      {
+        "entity": "receivedInvoices(previousPeriod)",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/selectors/businessPartner"
+      },
+      {
+        "entity": "receivedInvoices(previousPeriod)",
+        "field": "paymentMethod",
+        "column": "FIN_Paymentmethod_ID",
+        "reference": "Paymentmethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/selectors/paymentMethod",
+        "context": {
+          "optional": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "receivedInvoices(previousPeriod)SiiData",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData/selectors/invoice"
+      },
+      {
+        "entity": "receivedInvoices(previousPeriod)SiiData",
+        "field": "conexinSII",
+        "column": "Aeatsii_Conexion_ID",
+        "reference": "Aeatsii_Conexion",
+        "inputMode": "selector",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)SiiData/selectors/conexinSII"
+      }
+    ],
+    "actions": [
+      {
+        "name": "informeltimaConexinSII",
+        "actionType": "utilityAction",
+        "entity": "organizations",
+        "column": "BTN_Imprimir",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/organizations/{id}/action/informeltimaConexinSII",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "3D2FDB6FC2BE4F549BA72A98ABD95F8A",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "updateInvoices",
+        "actionType": "utilityAction",
+        "entity": "organizations",
+        "column": "Update_Invoices",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/organizations/{id}/action/updateInvoices",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "47EA4A31145142CCA33C786DFD984041",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "nuevaConsultaFacturasASII",
+        "actionType": "utilityAction",
+        "entity": "organizations",
+        "column": "BTN_Consultar_Fact",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/organizations/{id}/action/nuevaConsultaFacturasASII",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "0662F6BC8D604AAEA5A2DD49E87F4B65",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "validHash",
+        "actionType": "utilityAction",
+        "entity": "organizations",
+        "column": "Valid_Hash",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/organizations/{id}/action/validHash",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "3C55FFE46CA940B6819DE3BBA19437E6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiSend",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices",
+        "column": "EM_Aeatsii_Send",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/aeatsiiSend",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "2ECF46DAAEEB486EAF79D3594D50DE5F",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiModif",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices",
+        "column": "EM_Aeatsii_Modif",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/aeatsiiModif",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "posted",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices",
+        "column": "Posted",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/posted",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "aeatsiiDup",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices",
+        "column": "EM_Aeatsii_Dup",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/aeatsiiDup",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "92C02F9A367140C085D1EE3BD27C4E96",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiUnsubscribe",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices",
+        "column": "EM_Aeatsii_Unsubscribe",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/aeatsiiUnsubscribe",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BE564945CB2D4892AC0EE51204C5DB7D",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "calculatePromotions",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices",
+        "column": "Calculate_Promotions",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/calculatePromotions",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "9EB2228A60684C0DBEC12D5CD8D85218",
+        "processType": "classic"
+      },
+      {
+        "name": "copyFrom",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices",
+        "column": "CopyFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/copyFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "210",
+        "processType": "classic"
+      },
+      {
+        "name": "createLinesFrom",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices",
+        "column": "CreateFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/createLinesFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ]
+      },
+      {
+        "name": "createLinesFromShipment",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices",
+        "column": "Createfrominouts",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/createLinesFromShipment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "7737CA7330FD49FBA7EBC225E85F2BC9",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "createLinesFromOrder",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices",
+        "column": "Createfromorders",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/createLinesFromOrder",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "AB2EFCAABB7B4EC0A9B30CFB82963FB6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "documentAction",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices",
+        "column": "DocAction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/documentAction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "111",
+        "processType": "classic"
+      },
+      {
+        "name": "aPRMAddpayment",
+        "actionType": "paymentAction",
+        "entity": "issuedInvoices",
+        "column": "EM_APRM_Addpayment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/aPRMAddpayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "9BED7889E1034FE68BD85D5D16857320",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aPRMProcessinvoice",
+        "actionType": "paymentAction",
+        "entity": "issuedInvoices",
+        "column": "EM_APRM_Processinvoice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/aPRMProcessinvoice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "B54318B49E984B9CB855AEFB1F474CD6",
+        "processType": "classic"
+      },
+      {
+        "name": "etvfacRectCreate",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices",
+        "column": "EM_Etvfac_Rect_Create",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/etvfacRectCreate",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "E36A8BA259164E78AFDDC760172C18F5",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tBAIQRcode",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices",
+        "column": "em_tbai_qrcode",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/tBAIQRcode",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tbaiVoidxmlgenerator",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices",
+        "column": "EM_Tbai_Voidxmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/tbaiVoidxmlgenerator",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "535A8BAE44A34759A7C8FF40D62A5070",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tbaiXmlgenerator",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices",
+        "column": "EM_Tbai_Xmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/tbaiXmlgenerator",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BE2486102F2C41779B760609FD69A225",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "generateTo",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices",
+        "column": "GenerateTo",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/generateTo",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "142",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "111",
+        "processType": "classic"
+      },
+      {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
+        "entity": "issuedInvoices",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "issuedInvoices",
+        "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiSend",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices",
+        "column": "EM_Aeatsii_Send",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/aeatsiiSend",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "2ECF46DAAEEB486EAF79D3594D50DE5F",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiModif",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices",
+        "column": "EM_Aeatsii_Modif",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/aeatsiiModif",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "posted",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices",
+        "column": "Posted",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/posted",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "aeatsiiDup",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices",
+        "column": "EM_Aeatsii_Dup",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/aeatsiiDup",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "92C02F9A367140C085D1EE3BD27C4E96",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiUnsubscribe",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices",
+        "column": "EM_Aeatsii_Unsubscribe",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/aeatsiiUnsubscribe",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BE564945CB2D4892AC0EE51204C5DB7D",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "calculatePromotions",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices",
+        "column": "Calculate_Promotions",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/calculatePromotions",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "9EB2228A60684C0DBEC12D5CD8D85218",
+        "processType": "classic"
+      },
+      {
+        "name": "copyFrom",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices",
+        "column": "CopyFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/copyFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "210",
+        "processType": "classic"
+      },
+      {
+        "name": "createLinesFrom",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices",
+        "column": "CreateFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/createLinesFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ]
+      },
+      {
+        "name": "createLinesFromShipment",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices",
+        "column": "Createfrominouts",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/createLinesFromShipment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "7737CA7330FD49FBA7EBC225E85F2BC9",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "createLinesFromOrder",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices",
+        "column": "Createfromorders",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/createLinesFromOrder",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "AB2EFCAABB7B4EC0A9B30CFB82963FB6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "documentAction",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices",
+        "column": "DocAction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/documentAction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "111",
+        "processType": "classic"
+      },
+      {
+        "name": "aPRMAddpayment",
+        "actionType": "paymentAction",
+        "entity": "receivedInvoices",
+        "column": "EM_APRM_Addpayment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/aPRMAddpayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "9BED7889E1034FE68BD85D5D16857320",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aPRMProcessinvoice",
+        "actionType": "paymentAction",
+        "entity": "receivedInvoices",
+        "column": "EM_APRM_Processinvoice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/aPRMProcessinvoice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "B54318B49E984B9CB855AEFB1F474CD6",
+        "processType": "classic"
+      },
+      {
+        "name": "etvfacRectCreate",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices",
+        "column": "EM_Etvfac_Rect_Create",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/etvfacRectCreate",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "E36A8BA259164E78AFDDC760172C18F5",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tBAIQRcode",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices",
+        "column": "em_tbai_qrcode",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/tBAIQRcode",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tbaiVoidxmlgenerator",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices",
+        "column": "EM_Tbai_Voidxmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/tbaiVoidxmlgenerator",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "535A8BAE44A34759A7C8FF40D62A5070",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tbaiXmlgenerator",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices",
+        "column": "EM_Tbai_Xmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/tbaiXmlgenerator",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BE2486102F2C41779B760609FD69A225",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "generateTo",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices",
+        "column": "GenerateTo",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/generateTo",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "142",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "111",
+        "processType": "classic"
+      },
+      {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
+        "entity": "receivedInvoices",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "receivedInvoices",
+        "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "send",
+        "actionType": "createFrom",
+        "entity": "cashCriterionPayments",
+        "column": "Send",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/cashCriterionPayments/{id}/action/send",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "EA02D79CA1DE4B46909EA6EF64A66B53",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiSend",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Aeatsii_Send",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/aeatsiiSend",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "2ECF46DAAEEB486EAF79D3594D50DE5F",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiModif",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Aeatsii_Modif",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/aeatsiiModif",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "posted",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "Posted",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/posted",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "aeatsiiDup",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Aeatsii_Dup",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/aeatsiiDup",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "92C02F9A367140C085D1EE3BD27C4E96",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiUnsubscribe",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Aeatsii_Unsubscribe",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/aeatsiiUnsubscribe",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BE564945CB2D4892AC0EE51204C5DB7D",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "calculatePromotions",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "Calculate_Promotions",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/calculatePromotions",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "9EB2228A60684C0DBEC12D5CD8D85218",
+        "processType": "classic"
+      },
+      {
+        "name": "copyFrom",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "CopyFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/copyFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "210",
+        "processType": "classic"
+      },
+      {
+        "name": "createLinesFrom",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "CreateFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/createLinesFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ]
+      },
+      {
+        "name": "createLinesFromShipment",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "Createfrominouts",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/createLinesFromShipment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "7737CA7330FD49FBA7EBC225E85F2BC9",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "createLinesFromOrder",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "Createfromorders",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/createLinesFromOrder",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "AB2EFCAABB7B4EC0A9B30CFB82963FB6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "documentAction",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "DocAction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/documentAction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "111",
+        "processType": "classic"
+      },
+      {
+        "name": "aPRMAddpayment",
+        "actionType": "paymentAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_APRM_Addpayment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/aPRMAddpayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "9BED7889E1034FE68BD85D5D16857320",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aPRMProcessinvoice",
+        "actionType": "paymentAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_APRM_Processinvoice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/aPRMProcessinvoice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "B54318B49E984B9CB855AEFB1F474CD6",
+        "processType": "classic"
+      },
+      {
+        "name": "etvfacRectCreate",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Etvfac_Rect_Create",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/etvfacRectCreate",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "E36A8BA259164E78AFDDC760172C18F5",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tBAIQRcode",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "em_tbai_qrcode",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/tBAIQRcode",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tbaiVoidxmlgenerator",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Tbai_Voidxmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/tbaiVoidxmlgenerator",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "535A8BAE44A34759A7C8FF40D62A5070",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tbaiXmlgenerator",
+        "actionType": "utilityAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Tbai_Xmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/tbaiXmlgenerator",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BE2486102F2C41779B760609FD69A225",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "generateTo",
+        "actionType": "createFrom",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "GenerateTo",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/generateTo",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "142",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "111",
+        "processType": "classic"
+      },
+      {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "issuedInvoices(previousPeriod)",
+        "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/issuedInvoices(previousPeriod)/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiSend",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Aeatsii_Send",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/aeatsiiSend",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "2ECF46DAAEEB486EAF79D3594D50DE5F",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiModif",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Aeatsii_Modif",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/aeatsiiModif",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "posted",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "Posted",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/posted",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "aeatsiiDup",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Aeatsii_Dup",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/aeatsiiDup",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "92C02F9A367140C085D1EE3BD27C4E96",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aeatsiiUnsubscribe",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Aeatsii_Unsubscribe",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/aeatsiiUnsubscribe",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BE564945CB2D4892AC0EE51204C5DB7D",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "calculatePromotions",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "Calculate_Promotions",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/calculatePromotions",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "9EB2228A60684C0DBEC12D5CD8D85218",
+        "processType": "classic"
+      },
+      {
+        "name": "copyFrom",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "CopyFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/copyFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "210",
+        "processType": "classic"
+      },
+      {
+        "name": "createLinesFrom",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "CreateFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/createLinesFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ]
+      },
+      {
+        "name": "createLinesFromShipment",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "Createfrominouts",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/createLinesFromShipment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "7737CA7330FD49FBA7EBC225E85F2BC9",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "createLinesFromOrder",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "Createfromorders",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/createLinesFromOrder",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "AB2EFCAABB7B4EC0A9B30CFB82963FB6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "documentAction",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "DocAction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/documentAction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "111",
+        "processType": "classic"
+      },
+      {
+        "name": "aPRMAddpayment",
+        "actionType": "paymentAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_APRM_Addpayment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/aPRMAddpayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "9BED7889E1034FE68BD85D5D16857320",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aPRMProcessinvoice",
+        "actionType": "paymentAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_APRM_Processinvoice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/aPRMProcessinvoice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "B54318B49E984B9CB855AEFB1F474CD6",
+        "processType": "classic"
+      },
+      {
+        "name": "etvfacRectCreate",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Etvfac_Rect_Create",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/etvfacRectCreate",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "E36A8BA259164E78AFDDC760172C18F5",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tBAIQRcode",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "em_tbai_qrcode",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/tBAIQRcode",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tbaiVoidxmlgenerator",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Tbai_Voidxmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/tbaiVoidxmlgenerator",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "535A8BAE44A34759A7C8FF40D62A5070",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "tbaiXmlgenerator",
+        "actionType": "utilityAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Tbai_Xmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/tbaiXmlgenerator",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "BE2486102F2C41779B760609FD69A225",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "generateTo",
+        "actionType": "createFrom",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "GenerateTo",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/generateTo",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "142",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "111",
+        "processType": "classic"
+      },
+      {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "receivedInvoices(previousPeriod)",
+        "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-monitor/receivedInvoices(previousPeriod)/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "monitor",
+      "readOnly": true
+    }
+  },
+  "formState": {
+    "entities": {
+      "organizations": {
+        "fields": {
+          "acogidaAlSII": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "name": {
+            "required": true
+          },
+          "cIF": {},
+          "conexiones": {},
+          "cashVAT": {},
+          "recc": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "monitordate": {
+            "defaultValue": "01-01-2017"
+          },
+          "updateInvoices": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "issuedInvoices": {
+        "fields": {
+          "aeatsiiInvoice": {},
+          "aeatsiiIssent": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "N"
+          },
+          "aeatsiiModified": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "N"
+          },
+          "aeatsiiEstado": {
+            "readOnly": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+          },
+          "invoiceDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+            "defaultValue": "@#Date@"
+          },
+          "etsgDateOperation": {
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "@DateInvoiced@"
+          },
+          "accountingDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "documentStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "DR"
+          },
+          "businessPartner": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'"
+          },
+          "grandTotalAmount": {
+            "readOnly": true,
+            "required": true
+          },
+          "aeatsiiClaveTipo": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+          },
+          "aeatsiiMotivoRectif": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'"
+          },
+          "totalPaid": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "paymentMethod": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "salesTransaction": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "@IsSOTrx@"
+          },
+          "aeatsiiSend": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
+            "defaultValue": "N"
+          },
+          "aeatsiiModif": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiErrorRegistral": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+            "defaultValue": "N"
+          },
+          "aeatsiiDup": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiErrorCode": {
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiErrorMsg": {
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiInsiidate": {
+            "readOnlyLogic": "true"
+          }
+        }
+      },
+      "issuedInvoicesSiiData": {
+        "fields": {
+          "invoice": {
+            "readOnly": true,
+            "required": true
+          },
+          "conexinSII": {},
+          "cdigoCSV": {},
+          "estadoRegistro": {
+            "required": true
+          },
+          "comunicacion": {},
+          "motivo": {},
+          "estadoCuadre": {},
+          "fechaCuadre": {},
+          "fechaltimaModificacinSII": {}
+        }
+      },
+      "receivedInvoices": {
+        "fields": {
+          "aeatsiiInvoice": {},
+          "aeatsiiIssent": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "N"
+          },
+          "aeatsiiModified": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "N"
+          },
+          "aeatsiiEstado": {
+            "readOnly": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+          },
+          "invoiceDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+            "defaultValue": "@#Date@"
+          },
+          "aeatsiiFechaRegCont": {
+            "readOnlyLogic": "@AEATSII_InSIIAndPostedInvoices@='Y'",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN null ELSE now() END FROM dual"
+          },
+          "etsgDateOperation": {
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "@DateInvoiced@"
+          },
+          "accountingDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "documentStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "DR"
+          },
+          "orderReference": {},
+          "businessPartner": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'"
+          },
+          "grandTotalAmount": {
+            "readOnly": true,
+            "required": true
+          },
+          "aeatsiiClaveTipoFc": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+          },
+          "totalPaid": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "paymentMethod": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "salesTransaction": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "@IsSOTrx@"
+          },
+          "aeatsiiSend": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
+            "defaultValue": "N"
+          },
+          "aeatsiiModif": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiErrorRegistral": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+            "defaultValue": "N"
+          },
+          "aeatsiiDup": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiErrorCode": {
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiErrorMsg": {
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiInsiidate": {
+            "readOnlyLogic": "true"
+          }
+        }
+      },
+      "receivedInvoicesSiiData": {
+        "fields": {
+          "invoice": {
+            "readOnly": true,
+            "required": true
+          },
+          "conexinSII": {},
+          "cdigoCSV": {},
+          "estadoRegistro": {
+            "required": true
+          },
+          "comunicacion": {},
+          "motivo": {},
+          "estadoCuadre": {},
+          "fechaCuadre": {},
+          "fechaltimaModificacinSII": {}
+        }
+      },
+      "cashCriterionPayments": {
+        "fields": {
+          "issent": {},
+          "estado": {},
+          "invoicenumber": {},
+          "dateinvoiced": {},
+          "isreceipt": {},
+          "bpartner": {},
+          "paymentnumber": {},
+          "paymentdate": {},
+          "amount": {},
+          "status": {},
+          "fINPaymentmethod": {},
+          "fINPayment": {},
+          "currency": {},
+          "fINPaymentDetail": {},
+          "issotrx": {},
+          "send": {
+            "readOnlyLogic": "@Estado@='CO'"
+          },
+          "invoice": {},
+          "active": {}
+        }
+      },
+      "paymentsSiiData": {
+        "fields": {
+          "fINPayment": {
+            "readOnly": true,
+            "required": true
+          },
+          "motivo": {},
+          "estado": {},
+          "aeatsiiConexion": {},
+          "codigoCsv": {},
+          "active": {
+            "required": true
+          }
+        }
+      },
+      "issuedInvoices(previousPeriod)": {
+        "fields": {
+          "aeatsiiInvoice": {},
+          "aeatsiiIssent": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "N"
+          },
+          "aeatsiiModified": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "N"
+          },
+          "aeatsiiEstado": {
+            "readOnly": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+          },
+          "invoiceDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+            "defaultValue": "@#Date@"
+          },
+          "etsgDateOperation": {
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "@DateInvoiced@"
+          },
+          "accountingDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "documentStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "DR"
+          },
+          "businessPartner": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'"
+          },
+          "grandTotalAmount": {
+            "readOnly": true,
+            "required": true
+          },
+          "aeatsiiClaveTipo": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+          },
+          "totalPaid": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "paymentMethod": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "salesTransaction": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "@IsSOTrx@"
+          },
+          "aeatsiiSend": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
+            "defaultValue": "N"
+          },
+          "aeatsiiModif": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiErrorRegistral": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+            "defaultValue": "N"
+          },
+          "aeatsiiDup": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiErrorCode": {
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiErrorMsg": {
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiInsiidate": {
+            "readOnlyLogic": "true"
+          }
+        }
+      },
+      "issuedInvoices(previousPeriod)SiiData": {
+        "fields": {
+          "invoice": {
+            "readOnly": true,
+            "required": true
+          },
+          "conexinSII": {},
+          "cdigoCSV": {},
+          "estadoRegistro": {
+            "required": true
+          },
+          "comunicacion": {},
+          "motivo": {},
+          "estadoCuadre": {},
+          "fechaCuadre": {},
+          "fechaltimaModificacinSII": {}
+        }
+      },
+      "receivedInvoices(previousPeriod)": {
+        "fields": {
+          "aeatsiiInvoice": {},
+          "aeatsiiIssent": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "N"
+          },
+          "aeatsiiModified": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "N"
+          },
+          "aeatsiiEstado": {
+            "readOnly": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+          },
+          "invoiceDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
+            "defaultValue": "@#Date@"
+          },
+          "etsgDateOperation": {
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "@DateInvoiced@"
+          },
+          "accountingDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "documentStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "DR"
+          },
+          "orderReference": {},
+          "businessPartner": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @HAS_C_INVOICELINES@='Y'"
+          },
+          "grandTotalAmount": {
+            "readOnly": true,
+            "required": true
+          },
+          "aeatsiiClaveTipo": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+          },
+          "totalPaid": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "paymentMethod": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "salesTransaction": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "@IsSOTrx@"
+          },
+          "aeatsiiSend": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @em_aeatsii_estado@='BA' | (@DocStatus@!'CO' & @DocStatus@!'VO')) | (@IsSOTrx@='N' & @AEATSII_PreSII_Invoice@='N' &(@EM_Aeatsii_Fecha_Reg_Cont@=null | @EM_Aeatsii_Fecha_Reg_Cont@='' | @EM_Aeatsii_Fecha_Reg_Cont@='null'))",
+            "defaultValue": "N"
+          },
+          "aeatsiiModif": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiErrorRegistral": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+            "defaultValue": "N"
+          },
+          "aeatsiiDup": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiErrorCode": {
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiErrorMsg": {
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiInsiidate": {
+            "readOnlyLogic": "true"
+          }
+        }
+      },
+      "receivedInvoices(previousPeriod)SiiData": {
+        "fields": {
+          "invoice": {
+            "readOnly": true,
+            "required": true
+          },
+          "motivo": {},
+          "estadoRegistro": {
+            "required": true
+          },
+          "conexinSII": {},
+          "cdigoCSV": {},
+          "estadoCuadre": {},
+          "fechaCuadre": {},
+          "fechaltimaModificacinSII": {},
+          "comunicacion": {}
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage sii monitor records.",
+    "whenToUse": [
+      "Use for sii monitor management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "acogidaAlSII",
+        "name",
+        "recc",
+        "updateInvoices"
+      ],
+      "lineFields": [
+        "invoiceDate",
+        "accountingDate",
+        "businessPartner",
+        "paymentMethod",
+        "aeatsiiSend",
+        "aeatsiiModif",
+        "aeatsiiErrorRegistral",
+        "aeatsiiDup",
+        "estadoRegistro",
+        "invoiceDate",
+        "accountingDate",
+        "businessPartner",
+        "paymentMethod",
+        "aeatsiiSend",
+        "aeatsiiModif",
+        "aeatsiiErrorRegistral",
+        "aeatsiiDup",
+        "estadoRegistro",
+        "active",
+        "invoiceDate",
+        "accountingDate",
+        "businessPartner",
+        "paymentMethod",
+        "aeatsiiSend",
+        "aeatsiiModif",
+        "aeatsiiErrorRegistral",
+        "aeatsiiDup",
+        "estadoRegistro",
+        "invoiceDate",
+        "accountingDate",
+        "businessPartner",
+        "paymentMethod",
+        "aeatsiiSend",
+        "aeatsiiModif",
+        "aeatsiiErrorRegistral",
+        "aeatsiiDup",
+        "estadoRegistro"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "issuedInvoices",
+        "field": "paymentMethod",
+        "context": {
+          "optional": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "receivedInvoices",
+        "field": "paymentMethod",
+        "context": {
+          "optional": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "issuedInvoices(previousPeriod)",
+        "field": "paymentMethod",
+        "context": {
+          "optional": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "receivedInvoices(previousPeriod)",
+        "field": "paymentMethod",
+        "context": {
+          "optional": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [
+      "aeatsiiSend",
+      "posted",
+      "copyFrom",
+      "createLinesFrom",
+      "createLinesFromShipment",
+      "createLinesFromOrder",
+      "documentAction",
+      "etvfacRectCreate",
+      "tbaiVoidxmlgenerator",
+      "generateTo",
+      "processNow",
+      "etblkpBulkposting",
+      "aeatsiiSend",
+      "posted",
+      "copyFrom",
+      "createLinesFrom",
+      "createLinesFromShipment",
+      "createLinesFromOrder",
+      "documentAction",
+      "etvfacRectCreate",
+      "tbaiVoidxmlgenerator",
+      "generateTo",
+      "processNow",
+      "etblkpBulkposting",
+      "send",
+      "aeatsiiSend",
+      "posted",
+      "copyFrom",
+      "createLinesFrom",
+      "createLinesFromShipment",
+      "createLinesFromOrder",
+      "documentAction",
+      "etvfacRectCreate",
+      "tbaiVoidxmlgenerator",
+      "generateTo",
+      "processNow",
+      "etblkpBulkposting",
+      "aeatsiiSend",
+      "posted",
+      "copyFrom",
+      "createLinesFrom",
+      "createLinesFromShipment",
+      "createLinesFromOrder",
+      "documentAction",
+      "etvfacRectCreate",
+      "tbaiVoidxmlgenerator",
+      "generateTo",
+      "processNow",
+      "etblkpBulkposting"
+    ],
+    "workflow": [],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Payment amount exceeds remaining balance"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "acogidaAlSII",
+          "name",
+          "recc",
+          "updateInvoices"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": [
+      "tbaiVoidxmlgenerator",
+      "tbaiVoidxmlgenerator",
+      "tbaiVoidxmlgenerator",
+      "tbaiVoidxmlgenerator"
+    ]
+  },
+  "checksum": "78b08344a0c337b1"
+}

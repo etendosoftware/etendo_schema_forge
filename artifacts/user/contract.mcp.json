@@ -1,0 +1,439 @@
+{
+  "version": "0.19.0",
+  "generatedAt": "2026-04-29T18:12:34.035Z",
+  "updatedAt": "2026-08-07T16:09:22.004Z",
+  "contractChecksum": "7e6dbf8f1a309fc6",
+  "apiPrediction": {
+    "specName": "user",
+    "baseUrl": "/sws/neo/user",
+    "crud": {
+      "user": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/user/user",
+        "detailUrl": "/sws/neo/user/user/{id}",
+        "supportedFilters": [
+          "name",
+          "email"
+        ]
+      },
+      "userRoles": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/user/userRoles",
+        "detailUrl": "/sws/neo/user/userRoles/{id}",
+        "supportedFilters": [
+          "role"
+        ]
+      },
+      "emailConfiguration": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/user/emailConfiguration",
+        "detailUrl": "/sws/neo/user/emailConfiguration/{id}",
+        "supportedFilters": [
+          "smtpServer"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "user",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BusinessPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/user/user/selectors/businessPartner"
+      },
+      {
+        "entity": "user",
+        "field": "supervisor",
+        "column": "Supervisor_ID",
+        "reference": "User",
+        "inputMode": "search",
+        "url": "/sws/neo/user/user/selectors/supervisor"
+      },
+      {
+        "entity": "user",
+        "field": "defaultRole",
+        "column": "Default_Ad_Role_ID",
+        "reference": "Role",
+        "inputMode": "search",
+        "url": "/sws/neo/user/user/selectors/defaultRole"
+      },
+      {
+        "entity": "user",
+        "field": "defaultLanguage",
+        "column": "Default_Ad_Language",
+        "reference": "Language",
+        "inputMode": "selector",
+        "url": "/sws/neo/user/user/selectors/defaultLanguage"
+      },
+      {
+        "entity": "user",
+        "field": "defaultClient",
+        "column": "Default_Ad_Client_ID",
+        "reference": "Client",
+        "inputMode": "dependent",
+        "url": "/sws/neo/user/user/selectors/defaultClient",
+        "context": {
+          "required": [
+            {
+              "param": "Default_AD_Role_ID",
+              "source": "field",
+              "field": "defaultRole"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "user",
+        "field": "defaultOrganization",
+        "column": "Default_Ad_Org_ID",
+        "reference": "Organization",
+        "inputMode": "dependent",
+        "url": "/sws/neo/user/user/selectors/defaultOrganization",
+        "context": {
+          "required": [
+            {
+              "param": "Default_AD_Role_ID",
+              "source": "field",
+              "field": "defaultRole"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "user",
+        "field": "defaultWarehouse",
+        "column": "Default_M_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "dependent",
+        "url": "/sws/neo/user/user/selectors/defaultWarehouse",
+        "context": {
+          "required": [
+            {
+              "param": "Default_AD_Client_ID",
+              "source": "field",
+              "field": "defaultClient"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "userRoles",
+        "field": "role",
+        "column": "AD_Role_ID",
+        "reference": "Role",
+        "inputMode": "selector",
+        "url": "/sws/neo/user/userRoles/selectors/role"
+      }
+    ],
+    "actions": [
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "user",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/user/user/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "grantPortalAccess",
+        "actionType": "utilityAction",
+        "entity": "user",
+        "column": "Grant_Portal_Access",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/user/user/{id}/action/grantPortalAccess",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "97FFD59B991D49BFB5153C309B009272",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "smtpconnectiontest",
+        "actionType": "utilityAction",
+        "entity": "emailConfiguration",
+        "column": "Smtpconnectiontest",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/user/emailConfiguration/{id}/action/smtpconnectiontest",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "9AB8A39485BD4FB1B6BB38B27E707668",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "settings"
+    }
+  },
+  "formState": {
+    "entities": {
+      "user": {
+        "fields": {
+          "name": {
+            "required": true
+          },
+          "firstName": {},
+          "lastName": {},
+          "password": {},
+          "isPasswordExpired": {
+            "readOnly": true,
+            "defaultValue": "N"
+          },
+          "description": {},
+          "businessPartner": {},
+          "email": {
+            "required": true
+          },
+          "locked": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "position": {},
+          "phone": {},
+          "supervisor": {},
+          "defaultRole": {
+            "readOnly": true
+          },
+          "defaultLanguage": {},
+          "defaultClient": {},
+          "defaultOrganization": {},
+          "defaultWarehouse": {},
+          "lastPasswordUpdate": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "@#Date@"
+          }
+        }
+      },
+      "userRoles": {
+        "fields": {
+          "role": {
+            "readOnly": true,
+            "required": true
+          },
+          "roleAdmin": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "emailConfiguration": {
+        "fields": {
+          "active": {
+            "required": true
+          },
+          "smtpServer": {
+            "required": true
+          },
+          "sMTPAuthentification": {
+            "required": true
+          },
+          "smtpServerAccount": {},
+          "smtpServerPassword": {},
+          "smtpServerSenderAddress": {},
+          "smtpConnectionSecurity": {
+            "required": true
+          },
+          "smtpPort": {
+            "required": true,
+            "defaultValue": "25"
+          },
+          "smtpConnectionTimeout": {
+            "defaultValue": "600"
+          },
+          "fromName": {},
+          "replyToAddress": {},
+          "testSuccessful": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "lastTestDate": {
+            "readOnly": true
+          },
+          "smtpconnectiontest": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "defaultConfiguration": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage user records.",
+    "whenToUse": [
+      "Use for user management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name",
+        "email"
+      ],
+      "lineFields": [
+        "active",
+        "smtpServer",
+        "sMTPAuthentification",
+        "smtpConnectionSecurity",
+        "smtpPort",
+        "smtpconnectiontest",
+        "defaultConfiguration"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "user",
+        "field": "defaultClient",
+        "context": {
+          "required": [
+            {
+              "param": "Default_AD_Role_ID",
+              "source": "field",
+              "field": "defaultRole"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "user",
+        "field": "defaultOrganization",
+        "context": {
+          "required": [
+            {
+              "param": "Default_AD_Role_ID",
+              "source": "field",
+              "field": "defaultRole"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "user",
+        "field": "defaultWarehouse",
+        "context": {
+          "required": [
+            {
+              "param": "Default_AD_Client_ID",
+              "source": "field",
+              "field": "defaultClient"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [
+      "processNow"
+    ],
+    "workflow": [],
+    "edgeCases": [
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name",
+          "email"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "da23c08bd5a11cce"
+}

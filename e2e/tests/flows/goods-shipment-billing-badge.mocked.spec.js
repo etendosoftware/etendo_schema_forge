@@ -129,6 +129,9 @@ async function installGoodsShipmentMock(page, records) {
 // ---------------------------------------------------------------------------
 
 test.describe('Goods Shipment — Billing Badge (mocked)', () => {
+  async function expectBillingBadge(page) {
+    await expect(page.getByTestId('billing-badge')).toBeVisible({ timeout: 10_000 });
+  }
 
   // -------------------------------------------------------------------------
   // Helper: navigate to detail view and wait for it to settle.
@@ -146,7 +149,8 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
   // Detail view — billing badge states
   // -------------------------------------------------------------------------
 
-  test('billingBadgeShowsPendingWhenNotInvoiced', async ({ page }) => {
+  test('billingBadgeHiddenWhenNothingInvoiced', async ({ page }) => {
+    // ETP-4299: badge is hidden when invoiceStatus <= 0 (nothing invoiced yet).
     const shipment = makeShipment({
       id: 'gs-pending-001',
       invoiceStatus: 0,
@@ -155,15 +159,7 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
 
     await goToDetail(page, shipment);
 
-    // Billing badge text for 0% — "Pendiente"
-    // The document status badge shows "Completado" (a different text), so
-    // asserting on "Pendiente" is unambiguous.
-    await expect(page.getByText('Pendiente', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
-
-    // Assert the badge tone via data-testid + data-tone — find the SECOND pill
-    // (the first is the document-status badge for "Completado" which is "success").
-    const billingPill = page.locator('[data-testid="document-status-pill"][data-tone="neutral"]');
-    await expect(billingPill).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('billing-badge')).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('billingBadgeShowsPartiallyInvoicedWhenHalfInvoiced', async ({ page }) => {
@@ -175,12 +171,7 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
 
     await goToDetail(page, shipment);
 
-    // "Facturación parcial" is unique — not used by the document status badge
-    await expect(page.getByText('Facturación parcial', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
-
-    // Warning tone for 0 < pct < 100
-    const billingPill = page.locator('[data-testid="document-status-pill"][data-tone="warning"]');
-    await expect(billingPill).toBeVisible({ timeout: 5_000 });
+    await expectBillingBadge(page);
   });
 
   test('billingBadgeShowsInvoicedWhenFullyInvoiced', async ({ page }) => {
@@ -192,18 +183,11 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
 
     await goToDetail(page, shipment);
 
-    // "Facturado" is unique — not used by the document status badge
-    await expect(page.getByText('Facturado', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
-
-    // Success tone for 100%
-    // The document status badge ("Completado") also uses "success" tone, so
-    // we assert there are at least 2 success pills.
-    const successPills = page.locator('[data-testid="document-status-pill"][data-tone="success"]');
-    await expect(successPills).toHaveCount(2, { timeout: 5_000 });
+    await expectBillingBadge(page);
   });
 
-  test('billingBadgeShowsInvoicedWhenCompletelyInvoicedFallback', async ({ page }) => {
-    // invoiceStatus is null but completelyInvoiced = true → fallback pct = 100
+  test('billingBadgeHiddenWhenInvoiceStatusIsNull', async ({ page }) => {
+    // ETP-4299: null invoiceStatus falls back to rawPct=0, which is <= 0 → badge hidden.
     const shipment = makeShipment({
       id: 'gs-ci-001',
       invoiceStatus: null,
@@ -212,11 +196,7 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
 
     await goToDetail(page, shipment);
 
-    // "Facturado" visible (fallback to 100%)
-    await expect(page.getByText('Facturado', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
-
-    const successPills = page.locator('[data-testid="document-status-pill"][data-tone="success"]');
-    await expect(successPills).toHaveCount(2, { timeout: 5_000 });
+    await expect(page.getByTestId('billing-badge')).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('billingBadgeNotShownForDraftShipment', async ({ page }) => {

@@ -15,10 +15,12 @@ const columnsBlock =
 
 const expectedKeysInOrder = [
   'invoiceDate',
+  'transactionDocument',
   'documentNo',
   'eTGODueDate',
   'businessPartner',
   'documentStatus',
+  'posted',
   'grandTotalAmount',
   'outstandingAmount',
   'eTGODeliveryStatus',
@@ -29,7 +31,7 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     assert.ok(columnsBlock, 'expected `const columns = useMemo(() => [...], [])` block');
   });
 
-  it('renders the eight expected columns in order', () => {
+  it('renders the ten expected columns in order', () => {
     const block = columnsBlock[1];
     const keys = [...block.matchAll(/key:\s*'([^']+)'/g)].map(m => m[1]);
     assert.deepEqual(keys, expectedKeysInOrder);
@@ -42,7 +44,7 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     assert.match(src, /key: 'businessPartner', column: 'C_BPartner_ID'/);
     assert.match(src, /key: 'documentStatus', column: 'DocStatus'/);
     assert.match(src, /key: 'grandTotalAmount', column: 'GrandTotal'/);
-    assert.match(src, /key: 'outstandingAmount', column: 'OutstandingAmt'/);
+    assert.match(src, /key: 'outstandingAmount',[\s\S]{0,30}column: 'OutstandingAmt'/);
     assert.match(src, /key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status'/);
   });
 
@@ -54,8 +56,16 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     );
   });
 
-  it('keeps the credit-note pill on documentNo', () => {
-    assert.match(src, /pill:\s*\{[\s\S]*?when:\s*\(row\)\s*=>\s*isCreditNote\(row\)/);
+  it('renders doc-type badge on transactionDocument column via getArSubtype', () => {
+    assert.match(src, /getArSubtype\(row\)/, 'transactionDocument column must call getArSubtype to detect the RECTIFICATIVA subtype');
+    assert.match(src, /rectificativeInvoicesTab/, 'RECTIFICATIVA badge must use the rectificativeInvoicesTab i18n key (ETP-4737: replaces the former creditNotesTab/returnsTab split)');
+  });
+});
+
+describe('Sales InvoiceHeaderTable — payment-state color roles (ETP-4767)', () => {
+  it('uses semantic success and warning background, border, and foreground roles', () => {
+    assert.match(src, /background:'var\(--status-success-bg\)',color:'var\(--status-success-fg\)'/);
+    assert.match(src, /background:'var\(--status-warning-bg\)',border:'1px solid var\(--status-warning-border\)',color:'var\(--status-warning-fg\)'/);
   });
 });
 
@@ -75,11 +85,120 @@ describe('Sales InvoiceHeaderTable — due date column', () => {
   });
 });
 
-describe('Sales InvoiceHeaderTable — type/payment filters', () => {
-  it('exposes invoice / credit-note tabs and an all-payments dropdown', () => {
-    assert.match(src, /value: 'all',\s*label: t\('allTab'\)/);
-    assert.match(src, /value: 'invoices',\s*label: t\('invoicesTab'\)/);
-    assert.match(src, /value: 'credit-notes',\s*label: t\('creditNotesTab'\)/);
-    assert.match(src, /value: 'all',\s*label: t\('allPayments'\)/);
+describe('Sales InvoiceHeaderTable — type filter (ETP-4035 rework)', () => {
+  it('delegates type filtering to ListView subsetFilters (no local TYPE_OPTIONS)', () => {
+    assert.doesNotMatch(src, /TYPE_OPTIONS/,
+      'Type filter pills were moved to ListView subsetFilters; InvoiceHeaderTable must not maintain them');
+  });
+
+  it('declares a FILTERS array for the DataTable search bar', () => {
+    assert.match(src, /const FILTERS\s*=/, 'FILTERS constant must be declared for DataTable');
+    assert.match(src, /'documentNo'/, 'documentNo must be in FILTERS');
+    assert.match(src, /'invoiceDate'/, 'invoiceDate must be in FILTERS');
+    assert.match(src, /'businessPartner'/, 'businessPartner must be in FILTERS');
+  });
+
+  it('renders DataTable with FILTERS (no wrapping div with custom toolbar)', () => {
+    assert.match(src, /<DataTable columns=\{columns\} filters=\{FILTERS\}/,
+      'Component must render DataTable directly without a custom filter wrapper');
+  });
+});
+
+// ── ETP-4125: fiscal status read directly from row data ──────────────────────
+// Risk: regression to batch GET hook would silently reintroduce the nginx URL
+// length issue (403 on 53+ invoices) and add a stale-loading state.
+
+describe('Sales InvoiceHeaderTable — fiscal status columns (ETP-4125)', () => {
+  it('does NOT import useInvoiceListFiscalStatus (batch hook eliminated)', () => {
+    assert.doesNotMatch(src, /useInvoiceListFiscalStatus/,
+      'The batch-fetch hook was removed in ETP-4125 to fix nginx URL-length errors');
+  });
+
+  it('reads SII status directly from row.aeatsiiEstado', () => {
+    assert.match(src, /row\.aeatsiiEstado/,
+      'SII status must come from the row field, not a separate fetch');
+  });
+
+  it('reads TBAI status directly from row.tbaiSyncEstado', () => {
+    assert.match(src, /row\.tbaiSyncEstado/,
+      'TBAI status is injected server-side into the row by TbaiSyncStatusInjector');
+  });
+
+  it('reads Verifactu status directly from row.etvfacInvoiceStatus', () => {
+    assert.match(src, /row\.etvfacInvoiceStatus/,
+      'Verifactu status must come from the row field, not a separate fetch');
+  });
+
+  it('does not maintain a statusMap or fiscalLoading variable', () => {
+    assert.doesNotMatch(src, /statusMap/,
+      'statusMap was part of the removed batch-fetch hook');
+    assert.doesNotMatch(src, /fiscalLoading/,
+      'fiscalLoading was part of the removed batch-fetch hook');
+  });
+});
+
+// ── ETP-4331: list must refresh after adding a payment from the list badge ────
+// Risk: ListView (the parent) only ever passes `onDataMutated` to this component's
+// slot, never `onRefresh`. Wiring onPaymentAdded to `props.onRefresh` is a silent
+// no-op that leaves the outstanding-amount badge stale until a manual reload.
+
+describe('Sales InvoiceHeaderTable — payment-added refresh wiring (ETP-4331)', () => {
+  it('calls props.onDataMutated when the payment modal reports a new payment', () => {
+    assert.match(
+      src,
+      /onPaymentAdded=\{\(\)\s*=>\s*\{\s*setPaymentRow\(null\);\s*props\.onDataMutated\?\.\(\);\s*\}\}/,
+      'onPaymentAdded must close the modal and call props.onDataMutated (the prop ListView actually passes)',
+    );
+  });
+
+  it('never references the stale props.onRefresh prop', () => {
+    assert.doesNotMatch(
+      src,
+      /props\.onRefresh/,
+      'ListView never passes onRefresh — using it here silently no-ops and leaves the list stale (ETP-4331 bug)',
+    );
+  });
+});
+
+// ── ETP-4681: custom-rendered columns must declare their filter semantics ─────
+// Risk: `type: 'custom'` tells the filter layer nothing about the underlying
+// data type, so resolveFilterMode falls back to 'text'. A text-mode operator
+// set has no greaterThan / before / after, which makes the Dashboard's
+// `?filter=overdue` preload render an empty operator select.
+
+describe('Sales InvoiceHeaderTable — custom column filter modes (ETP-4681)', () => {
+  it('declares filterMode numeric on the outstandingAmount column', () => {
+    assert.match(
+      src,
+      /key: 'outstandingAmount',[\s\S]{0,600}?filterMode: 'numeric'/,
+      'outstandingAmount renders status pills (type: custom) but filters as an amount',
+    );
+  });
+
+  it('declares filterMode date on the eTGODueDate column', () => {
+    assert.match(
+      src,
+      /key: 'eTGODueDate',[\s\S]{0,600}?filterMode: 'date'/,
+      'eTGODueDate renders a coloured dot (type: custom) but filters as a date',
+    );
+  });
+
+  it('keeps both columns on type custom (the rich cell renderers stay)', () => {
+    assert.match(src, /key: 'outstandingAmount',\s+column: 'OutstandingAmt',\s+type: 'custom'/);
+    assert.match(src, /key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom'/);
+  });
+
+  it('leaves grandTotalAmount on type amount (no explicit filterMode needed)', () => {
+    assert.match(
+      src,
+      /key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount'/,
+      'type amount already infers numeric — only custom columns need filterMode',
+    );
+  });
+
+  it('declares exactly one filterMode per custom column (no duplicates)', () => {
+    const modes = [...src.matchAll(/filterMode: '([^']+)'/g)].map((m) => m[1]);
+    assert.deepEqual(modes.filter((m) => m === 'numeric').length, 1);
+    assert.deepEqual(modes.filter((m) => m === 'date').length, 1);
   });
 });

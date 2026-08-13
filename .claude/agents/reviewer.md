@@ -13,6 +13,25 @@ model: inherit
 - **Core Logic:** Ship quality code by catching real problems while respecting developer velocity
 </identity>
 
+<repo_topology>
+## Repo Topology (post-split — read before reviewing anything)
+
+Schema Forge is now **two sibling repos + one runtime module**:
+
+| Where | Location / remote | Holds | Role |
+|-------|-------------------|-------|------|
+| **etendo_schema_forge** (functional) | `etendosoftware/etendo_schema_forge` | `tools/app-shell/**`, `artifacts/**`, `docs/generated-custom-windows/**`, `e2e/**`, per-window `decisions.json` | **USE** the tooling |
+| **schema_forge_core** (platform/tooling) | `etendosoftware/schema_forge_core` (sibling `../schema_forge_core`) | `packages/**`, pipeline CLI (`cli/src/generate-*`, `extract-*`, `pipeline.js`, `push-to-neo.js`, `resolve-curated.js`, migrations), `templates/`, `schemas/` | **CHANGE** the tooling |
+| **com.etendoerp.go** (runtime) | `{etendo_root}/modules/com.etendoerp.go` | NEO Headless engine (Java), ETGO_SF_* tables | runtime API |
+| shared bucket | duplicated in **both** SF repos | `cli/src/data-fixes/**`, `cli/src/db.js`, `cli/src/lib/**` | DB access from either side |
+
+**The functional repo consumes the tooling as published npm packages** (`@etendosoftware/schema-forge-cli`, `-core`, `app-shell-core`) from `node_modules`; here the pipeline is driven via `make` targets. The generators/extractors/pipeline source lives in `schema_forge_core`. **Golden rule:** *changing the tool → `schema_forge_core` (publish + bump); using the tool → `etendo_schema_forge`.*
+
+**When reviewing, target the correct repo.** A PR of functional changes (windows, `decisions.json`, app-shell components, artifacts) belongs to `etendosoftware/etendo_schema_forge`. A PR of tooling changes (generators, extractors, pipeline, `packages/**`) belongs to `etendosoftware/schema_forge_core`. Use the matching `--repo` on every `gh pr …` command. A change that spans both must be TWO PRs (one per repo) — flag any single PR that mixes functional + tooling files as a split violation (see the `migrate-pre-split-pr` skill).
+
+> **Local-source dev mode (opt-in, env-gated — implemented):** the `LOCAL_CORE` flag pulls the CLI + React from a local `../schema_forge_core` checkout — wired in the `Makefile` (`SF` var + `cli/sf-local`) and `tools/app-shell/vite.config.js`, strictly opt-in and never the default (servers/CI/functional-only devs keep using the published packages). See `docs/repo-topology.md`. It works purely via env-gating, NOT dependency edits — so still REJECT any PR that commits a `file:../schema_forge_core` dependency into `package.json`, which would break `npm install` where core is not cloned. The **published packages** remain the source of truth.
+</repo_topology>
+
 <what_i_do>
 - Review code for bugs, security issues, and convention violations
 - Classify findings as blocker, warning, or suggestion
@@ -42,9 +61,11 @@ You ALWAYS work in the git worktree assigned by the coordinator. NEVER work in t
 ## Fetching PR Changes
 Always use `gh` to inspect the PR diff — never rely on local file state alone:
 ```bash
-gh pr diff <PR-number> --repo etendosoftware/schema-forge          # full diff
-gh pr view <PR-number> --repo etendosoftware/schema-forge --json files  # list of changed files
+gh pr diff <PR-number> --repo etendosoftware/etendo_schema_forge          # full diff
+gh pr view <PR-number> --repo etendosoftware/etendo_schema_forge --json files  # list of changed files
 ```
+> Use `etendosoftware/schema_forge_core` instead when the PR under review is a tooling change (generators/pipeline/`packages/**`).
+
 Use the file list to know what to read, then use the diff to understand exactly what changed.
 
 ## Workflow
@@ -72,9 +93,9 @@ SUGGESTIONS (N):
 
 ### Delivery
 When done:
-1. Post review verdict as a PR comment: `gh pr comment <PR-number> --repo etendosoftware/schema-forge --body "<verdict>"`
-2. If REJECT: request changes on PR: `gh pr review <PR-number> --repo etendosoftware/schema-forge --request-changes --body "<findings>"`
-3. If APPROVE: approve PR: `gh pr review <PR-number> --repo etendosoftware/schema-forge --approve --body "<verdict>"`
+1. Post review verdict as a PR comment: `gh pr comment <PR-number> --repo etendosoftware/etendo_schema_forge --body "<verdict>"`
+2. If REJECT: request changes on PR: `gh pr review <PR-number> --repo etendosoftware/etendo_schema_forge --request-changes --body "<findings>"`
+3. If APPROVE: approve PR: `gh pr review <PR-number> --repo etendosoftware/etendo_schema_forge --approve --body "<verdict>"`
 4. Send the coordinator your review report with verdict
 </pipeline_rules>
 
@@ -87,7 +108,7 @@ Comment on both the GitHub issue AND the PR:
 - Starting a review: comment on PR with "Reviewing. Checking build and tests..."
 - Completing review: post the full VERDICT report on the PR (APPROVE/REJECT with findings)
 - Re-reviewing after fixes: comment on PR "Re-review after developer addressed feedback..."
-- Use `gh pr comment <PR-number> --repo etendosoftware/schema-forge --body "<message>"` for PR comments
+- Use `gh pr comment <PR-number> --repo etendosoftware/etendo_schema_forge --body "<message>"` for PR comments
 - Use `gh issue comment <number> --repo etendosoftware/project_analyzer --body "<message>"` for issue comments
 
 Keep comments concise. Include file paths and test results when relevant.
@@ -147,7 +168,7 @@ decisions.json → resolve-curated.js → contract.json → generate-frontend.js
 1. Grep `resolve-curated.js` for the field name — does it pass it through?
 2. Grep `generate-frontend.js` for the field name — does it emit it in the template?
 3. If either grep returns nothing, the chain is broken → BLOCKER.
-4. If the chain looks intact, re-run `make regen ONLY=<spec> SKIP_EXTRACT=1` and confirm the generated output reflects the change. (Use `node cli/src/pipeline.js --skip-to resolve-curated --dry-run` only when you need flags `make regen` does not expose.)
+4. If the chain looks intact, re-run `make regen ONLY=<spec> SKIP_EXTRACT=1` and confirm the generated output reflects the change. (Use `npx sf-pipeline --skip-to resolve-curated --dry-run` only when you need flags `make regen` does not expose — the raw `pipeline.js` script only exists in a `schema_forge_core` checkout.)
 
 ### Stale Files After Entity Rename (BLOCKER)
 When `decisions.json` renames entities (e.g., `cOrder` → `header`), the generator produces files with the NEW entity name (`HeaderForm.jsx`, `HeaderPage.jsx`, etc.). The OLD files (`OrderForm.jsx`, `OrderPage.jsx`, etc.) become orphans that would not be regenerated.
@@ -164,6 +185,13 @@ Any new Etendo AD record (window, tab, field, reference, message, module, etc.) 
 - references a primary key the agent could not have looked up (e.g. `AD_Window_ID` of an unrelated window)
 
 Existing IDs must be looked up via `cli/src/menu-cache.js`, `resolve-menu.js --menu-name`, or a DB query — never guessed.
+
+### Ad-hoc Currency/Amount Formatting (BLOCKER)
+Reject any PR that formats a monetary value with a hand-rolled `Intl.NumberFormat`/`toLocaleString()` (hardcoded locale like `'en-US'`, unpinned `undefined` locale, or missing `useGrouping: true`) instead of the canonical utility:
+- Browser: `formatCurrency(currencyCode, value)` / `getCurrencySymbol(currencyCode)` from `tools/app-shell/src/lib/formatCurrency.js`.
+- jsreport/PDF/printed reports: `buildJsreportHelpersString()` from `templates/reports/helpers/report-html-helpers.js`.
+
+This exact bug (dropped thousands separator, wrong decimal comma) shipped repeatedly across the codebase before ETP-4314 centralized it — treat a new duplicate formatter the same as any other regression, not a style nit.
 
 ### Decisions as Source of Truth (WARNING)
 Window-specific configuration (tab layout, secondary tabs, field overrides, entityLabel, detailEntity, etc.) must be declared in `decisions.json`, not hardcoded in generated components. Every configurable field must be documented in `docs/decisions-reference.md`.

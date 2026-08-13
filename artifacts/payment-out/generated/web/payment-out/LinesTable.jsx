@@ -3,6 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:lines
 const columns = [
+  { key: 'invoiceDocumentNo', column: 'invoiceDocumentNo', type: 'string', label: 'Invoice' },
   { key: 'dueDate', column: 'DueDate', type: 'date', label: 'Due Date' },
   { key: 'expected', column: 'ExpectedAmount', type: 'amount', label: 'Expected Amount' },
   { key: 'amount', column: 'Amount', type: 'amount', label: 'Paid Amount', required: true },

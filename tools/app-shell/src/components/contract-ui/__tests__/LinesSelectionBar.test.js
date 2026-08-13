@@ -60,13 +60,13 @@ describe('LinesSelectionBar', () => {
     assert.match(src, /\{totalLabel\}/);
   });
 
-  it('uses Inter font and brand color #121217 for labels', () => {
+  it('uses Inter font and semantic foreground color for labels', () => {
     assert.match(src, /fontFamily:\s*'Inter'/);
-    assert.match(src, /'#121217'/);
+    assert.match(src, /hsl\(var\(--foreground\)\)/);
   });
 
-  it('uses pink border and red icon for the delete button (matches ListView bar)', () => {
-    assert.match(src, /#FBB1C4/);
-    assert.match(src, /#F3164E/);
+  it('uses destructive border and icon roles for the delete button', () => {
+    assert.match(src, /hsl\(var\(--destructive\) \/ 0\.3\)/);
+    assert.match(src, /hsl\(var\(--destructive\)\)/);
   });
 });

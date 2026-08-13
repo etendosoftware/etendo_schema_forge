@@ -55,8 +55,7 @@ export default function ProjectsPage() {
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <KPIHeader kpis={KPIS} />
-
+      <KPIHeader kpis={KPIS} data-testid="KPIHeader__84c7bf" />
       {/* Project Board Kanban */}
       <KanbanBoard
         columns={KANBAN_COLUMNS}
@@ -64,41 +63,40 @@ export default function ProjectsPage() {
         onDragEnd={handleDragEnd}
         onCardClick={handleCardClick}
         emptyMessage="No projects"
-      />
-
+        data-testid="KanbanBoard__84c7bf" />
       {/* Two-column layout: Time Entries (1/2) + Documents (1/2) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Time Entries */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-muted-foreground" />
+        <Card data-testid="Card__84c7bf">
+          <CardHeader data-testid="CardHeader__84c7bf">
+            <CardTitle className="flex items-center gap-2" data-testid="CardTitle__84c7bf">
+              <Clock className="h-5 w-5 text-muted-foreground" data-testid="Clock__84c7bf" />
               {ui('recentTimeEntries')}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent data-testid="CardContent__84c7bf">
             <DataTable
               columns={TIME_COLUMNS}
               filters={TIME_FILTERS}
               data={TIME_DATA}
-            />
+              data-testid="DataTable__84c7bf" />
           </CardContent>
         </Card>
 
         {/* Recent Documents */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-muted-foreground" />
+        <Card data-testid="Card__84c7bf">
+          <CardHeader data-testid="CardHeader__84c7bf">
+            <CardTitle className="flex items-center gap-2" data-testid="CardTitle__84c7bf">
+              <FileText className="h-5 w-5 text-muted-foreground" data-testid="FileText__84c7bf" />
               {ui('recentDocuments')}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent data-testid="CardContent__84c7bf">
             <DataTable
               columns={DOC_COLUMNS}
               filters={DOC_FILTERS}
               data={DOC_DATA}
-            />
+              data-testid="DataTable__84c7bf" />
           </CardContent>
         </Card>
       </div>

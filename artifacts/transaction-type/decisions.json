@@ -1,0 +1,31 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "window": {
+    "category": "finance",
+    "name": "Transaction Type",
+    "detailEntity": null,
+    "layoutType": "list-modal",
+    "breadcrumb": "Finance / Transaction Type"
+  },
+  "entities": {
+    "transactionType": {
+      "javaQualifier": "transaction-type",
+      "fields": {
+        "name": {
+          "visibility": "editable",
+          "form": true,
+          "grid": true,
+          "gridOrder": 1,
+          "required": true,
+          "searchable": true
+        },
+        "searchKey": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": false
+        }
+      }
+    }
+  }
+}

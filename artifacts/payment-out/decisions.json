@@ -3,21 +3,76 @@
   "window": {
     "category": "finance",
     "name": "Payment Out",
-    "relatedDocuments": true,
+    "relatedDocuments": false,
     "notesField": "description",
     "dateFilterKey": "paymentDate",
-    "linesLayout": "inlineEditable",
+    "detailEntity": null,
+    "customTabsAfterBottom": true,
+    "summaryFields": [],
+    "hideDeleteWhenComplete": true,
     "customComponents": {
-      "bottomSection": "PaymentOutBottomPanel"
-    }
+      "headerTable": "PaymentHeaderTable",
+      "sidePanel": "PaymentDetailSidebar",
+      "bottomSection": "PaymentOutBottomPanel",
+      "processConfirmModal": "ReactivarConfirmModal",
+      "topbarExtra": "PaymentConciliadoBadge",
+      "sidePanelStyle": {
+        "order": -1,
+        "borderLeft": "none",
+        "borderRight": "1px solid hsl(var(--border-subtle))",
+        "padding": 0
+      }
+    },
+    "contentAreaClassName": "!bg-card !p-0",
+    "hideCreate": true,
+    "attachments": false,
+    "hideFormCard": true,
+    "hidePrint": true,
+    "hideSaveStatuses": [
+      "RDNC",
+      "RPPC",
+      "RPR",
+      "RPVOID",
+      "PWNC"
+    ],
+    "processOverrides": {
+      "aPRMProcessPayment": {
+        "label": "processConfirm",
+        "displayLogicRaw": "@status@ = 'RPAP'",
+        "confirmModal": true
+      },
+      "aPRMAddScheduledpayments": { "exclude": true },
+      "aprmExecutepayment": { "exclude": true },
+      "aPRMReversePayment": { "exclude": true },
+      "aPRMReconcilePayment": { "exclude": true },
+      "etprReactivatePayment": {
+        "add": true,
+        "columnName": "etprReactivatePayment",
+        "label": "processReactivate",
+        "style": "ghost-danger",
+        "displayLogicRaw": "@status@ != 'RPAP'"
+      }
+    },
+    "statusEnumLabels": {
+      "RPAP": "statusDraft",
+      "RPR": "pagoDepositado",
+      "RDNC": "pagoDepositado",
+      "RPPC": "pagoDepositado",
+      "PPM": "pagoDepositado",
+      "PWNC": "pagoDepositado"
+    },
+    "statusFieldLabel": "statusColumnLabel",
+    "toolbarBorderBottom": true
   },
   "entities": {
     "header": {
+      "javaQualifier": "payment-reactivate",
       "fields": {
         "documentNo": {
           "visibility": "readOnly",
           "grid": true,
           "searchable": true,
+          "form": false,
           "section": "principal",
           "seq": 10,
           "readOnlyLogic": null
@@ -25,12 +80,14 @@
         "businessPartner": {
           "grid": true,
           "searchable": true,
+          "form": false,
           "reference": "BusinessPartner",
           "section": "principal",
           "seq": 20,
           "readOnlyLogic": null
         },
         "account": {
+          "form": false,
           "reference": "FinancialAccount",
           "section": "principal",
           "seq": 30,
@@ -39,11 +96,13 @@
         "paymentDate": {
           "grid": true,
           "searchable": true,
+          "form": false,
           "section": "principal",
           "seq": 40,
           "readOnlyLogic": null
         },
         "paymentMethod": {
+          "form": false,
           "reference": "PaymentMethod",
           "section": "principal",
           "seq": 50,
@@ -51,17 +110,20 @@
         },
         "currency": {
           "visibility": "editable",
+          "form": false,
           "section": "principal",
           "seq": 60,
           "readOnlyLogic": null
         },
         "referenceNo": {
           "searchable": true,
+          "form": false,
           "section": "collapsed",
           "seq": 70,
           "readOnlyLogic": null
         },
         "description": {
+          "form": false,
           "section": "collapsed",
           "seq": 80,
           "readOnlyLogic": null
@@ -158,11 +220,47 @@
           "visibility": "editable",
           "form": false,
           "section": "other"
+        },
+        "creationDate": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "updated": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etblkpAccountingstatus": {
+          "form": false
+        },
+        "etblkpBulkposting": {
+          "form": false
+        },
+        "etprReactivatePayment": {
+          "form": false
+        },
+        "eTPRRemovePayment": {
+          "form": false
+        },
+        "psd2GenerateBankPayment": {
+          "form": false
         }
       }
     },
     "lines": {
       "name": "lines",
+      "javaQualifier": "paymentScheduleDetailHandler",
+      "virtualFields": [
+        {
+          "name": "invoiceDocumentNo",
+          "column": "invoiceDocumentNo",
+          "label": "Invoice",
+          "type": "string",
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 1
+        }
+      ],
       "fields": {
         "dueDate": {
           "visibility": "readOnly",
@@ -259,6 +357,7 @@
       }
     },
     "executionHistory": {
+      "exclude": true,
       "name": "executionHistory",
       "fields": {
         "executionDate": {
@@ -289,6 +388,7 @@
       }
     },
     "exchangeRates": {
+      "exclude": true,
       "name": "exchangeRates",
       "fields": {
         "currency": {
@@ -313,6 +413,7 @@
       }
     },
     "usedCreditSource": {
+      "exclude": true,
       "name": "usedCreditSource",
       "fields": {
         "creditPaymentUsed": {
@@ -330,6 +431,7 @@
       }
     },
     "accounting": {
+      "exclude": true,
       "name": "accounting",
       "fields": {
         "accountingDate": {

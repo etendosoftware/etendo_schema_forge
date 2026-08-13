@@ -3,12 +3,13 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:goodsReceiptLine
 const columns = [
-  { key: 'lineNo', column: 'Line', type: 'number', label: 'Line No.', required: true },
-  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product' },
+  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true },
   { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true },
-  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true },
-  { key: 'storageBin', column: 'M_Locator_ID', type: 'selector', label: 'Storage Bin' },
-  { key: 'invoiceQuantity', column: 'Qtyinvoiced', type: 'number', label: 'Invoiced Quantity', required: true },
+  { key: 'orderQuantity', column: 'QuantityOrder', type: 'number', label: 'Order Quantity', readOnly: true },
+  { key: 'dimensions', type: 'dimensionsPanel', label: 'Accounting dimensions', labels: { en_US: 'Accounting dimensions', es_ES: 'Dimensiones contables' }, dimensionFields: [
+    { key: 'project', column: 'C_Project_ID', type: 'selector', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'CostCenter', inputMode: 'selector' },
+  ] },
 ];
 // @sf-generated-end columns:goodsReceiptLine
 

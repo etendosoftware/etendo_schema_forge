@@ -1,0 +1,137 @@
+{
+  "version": "0.11.0",
+  "generatedAt": "2026-04-28T16:08:39.756Z",
+  "updatedAt": "2026-07-06T18:12:04.725Z",
+  "contractChecksum": "da73f53efb58144a",
+  "apiPrediction": {
+    "specName": "verifactu-config",
+    "baseUrl": "/sws/neo/verifactu-config",
+    "crud": {
+      "cabeceraDeConfiguraciónVerifactu": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/verifactu-config/cabeceraDeConfiguraciónVerifactu",
+        "detailUrl": "/sws/neo/verifactu-config/cabeceraDeConfiguraciónVerifactu/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [
+      {
+        "name": "isReady",
+        "actionType": "utilityAction",
+        "entity": "cabeceraDeConfiguraciónVerifactu",
+        "column": "IS_Ready",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/verifactu-config/cabeceraDeConfiguraciónVerifactu/{id}/action/isReady",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "D995FA46EEDB4DAF9F414E661FB13E43",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "configuration"
+    }
+  },
+  "formState": {
+    "entities": {
+      "cabeceraDeConfiguraciónVerifactu": {
+        "fields": {
+          "tAXType": {
+            "required": true,
+            "readOnlyLogic": "@IS_Ready@='Y'"
+          },
+          "defaultQR": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "issuerNIF": {
+            "readOnly": true
+          },
+          "systemStartat": {
+            "readOnly": true
+          },
+          "systemStopat": {
+            "readOnly": true
+          },
+          "incidentReport": {
+            "readOnly": true
+          },
+          "isReady": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage verifactu config records.",
+    "whenToUse": [
+      "Use for verifactu config management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "tAXType",
+        "defaultQR",
+        "isReady"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "tAXType",
+          "defaultQR",
+          "isReady"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "c73c582faf38f18f"
+}

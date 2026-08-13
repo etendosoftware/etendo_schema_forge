@@ -1,0 +1,678 @@
+{
+  "version": "0.4.0",
+  "generatedAt": "2026-05-26T14:01:54.525Z",
+  "updatedAt": "2026-07-21T12:35:17.395Z",
+  "checksum": "855ec7fd6298ff5e",
+  "frontendContract": {
+    "window": {
+      "id": "6FEBA130CDE24CC09041FFA6117ADFA9",
+      "name": "Conversion Rate Downloader Log",
+      "primaryEntity": "conversionRateDownloaderLog",
+      "category": "settings",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
+      "detailEntity": null,
+      "layoutType": "default"
+    },
+    "entities": {
+      "conversionRateDownloaderLog": {
+        "tableName": "SMFCR_Sync_Log",
+        "tabId": "005CE51FBD2D4ABCA2D01B63FDDE469C",
+        "tabName": "Conversion Rate Downloader Log",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            },
+            "defaultValue": "Y",
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "syncDate",
+            "apiKey": "syncDate",
+            "column": "sync_date",
+            "label": "Sync Date",
+            "type": "dateTime",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "validation": {
+              "maxLength": 19
+            }
+          },
+          {
+            "name": "pairsUpdated",
+            "apiKey": "pairsUpdated",
+            "column": "pairs_updated",
+            "label": "Pairs Updated",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "defaultValue": "0",
+            "section": "principal",
+            "validation": {
+              "maxLength": 2
+            }
+          },
+          {
+            "name": "pairsFailed",
+            "apiKey": "pairsFailed",
+            "column": "pairs_failed",
+            "label": "Pairs Failed",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "defaultValue": "0",
+            "section": "principal",
+            "validation": {
+              "maxLength": 2
+            }
+          },
+          {
+            "name": "errorDetail",
+            "apiKey": "errorDetail",
+            "column": "error_detail",
+            "label": "Error Detail",
+            "type": "text",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "validation": {
+              "maxLength": 2000
+            }
+          },
+          {
+            "name": "durationms",
+            "apiKey": "durationms",
+            "column": "duration_ms",
+            "label": "Duration (ms)",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "status",
+            "apiKey": "status",
+            "column": "status",
+            "label": "Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "SUCCESS"
+            },
+            "enumValues": [
+              {
+                "value": "FAILED",
+                "name": "FAILED",
+                "labels": {
+                  "es_ES": "FAILED"
+                }
+              },
+              {
+                "value": "PARTIAL",
+                "name": "PARTIAL",
+                "labels": {
+                  "es_ES": "PARTIAL"
+                }
+              },
+              {
+                "value": "SUCCESS",
+                "name": "SUCCESS",
+                "labels": {
+                  "es_ES": "SUCCESS"
+                }
+              }
+            ],
+            "defaultValue": "SUCCESS",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            }
+          }
+        ],
+        "searchableFields": [
+          "syncDate",
+          "status"
+        ],
+        "computedFields": [
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          },
+          {
+            "name": "pairsUpdated",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          },
+          {
+            "name": "pairsFailed",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          },
+          {
+            "name": "status",
+            "derivation": {
+              "type": "computed",
+              "source": "SUCCESS"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "6FEBA130CDE24CC09041FFA6117ADFA9",
+      "name": "Conversion Rate Downloader Log",
+      "primaryEntity": "conversionRateDownloaderLog",
+      "category": "settings",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
+      "detailEntity": null
+    },
+    "entities": {
+      "conversionRateDownloaderLog": {
+        "tableName": "SMFCR_Sync_Log",
+        "tabId": "005CE51FBD2D4ABCA2D01B63FDDE469C",
+        "tabName": "Conversion Rate Downloader Log",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "syncDate",
+            "apiKey": "syncDate",
+            "column": "sync_date",
+            "type": "dateTime",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "pairsUpdated",
+            "apiKey": "pairsUpdated",
+            "column": "pairs_updated",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "pairsFailed",
+            "apiKey": "pairsFailed",
+            "column": "pairs_failed",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "errorDetail",
+            "apiKey": "errorDetail",
+            "column": "error_detail",
+            "type": "text",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "durationms",
+            "apiKey": "durationms",
+            "column": "duration_ms",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "status",
+            "apiKey": "status",
+            "column": "status",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Smfcr_Sync_Log_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/conversionRateDownloaderLog",
+        "entity": "conversionRateDownloaderLog",
+        "supportedFilters": [
+          "syncDate",
+          "status"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/conversionRateDownloaderLog/:id",
+        "entity": "conversionRateDownloaderLog",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/conversionRateDownloaderLog",
+        "entity": "conversionRateDownloaderLog",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/conversionRateDownloaderLog/:id",
+        "entity": "conversionRateDownloaderLog",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/conversionRateDownloaderLog/:id",
+        "entity": "conversionRateDownloaderLog",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "conversion-rate-downloader-log",
+    "baseUrl": "/sws/neo/conversion-rate-downloader-log",
+    "crud": {
+      "conversionRateDownloaderLog": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/conversion-rate-downloader-log/conversionRateDownloaderLog",
+        "detailUrl": "/sws/neo/conversion-rate-downloader-log/conversionRateDownloaderLog/{id}",
+        "supportedFilters": [
+          "syncDate",
+          "status"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "settings",
+      "readOnly": true
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-crud-flags-conversionRateDownloaderLog",
+        "category": "crud-flags",
+        "entity": "conversionRateDownloaderLog",
+        "runner": "node",
+        "description": "CRUD flags for 'conversionRateDownloaderLog' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-conversionRateDownloaderLog-active",
+        "category": "default-value-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "active",
+        "runner": "node",
+        "description": "Default value for 'active' in conversionRateDownloaderLog should be a string"
+      },
+      {
+        "id": "t-default-value-type-conversionRateDownloaderLog-pairsFailed",
+        "category": "default-value-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "pairsFailed",
+        "runner": "node",
+        "description": "Default value for 'pairsFailed' in conversionRateDownloaderLog should be a string"
+      },
+      {
+        "id": "t-default-value-type-conversionRateDownloaderLog-pairsUpdated",
+        "category": "default-value-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "pairsUpdated",
+        "runner": "node",
+        "description": "Default value for 'pairsUpdated' in conversionRateDownloaderLog should be a string"
+      },
+      {
+        "id": "t-default-value-type-conversionRateDownloaderLog-status",
+        "category": "default-value-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "status",
+        "runner": "node",
+        "description": "Default value for 'status' in conversionRateDownloaderLog should be a string"
+      },
+      {
+        "id": "t-field-presence-conversionRateDownloaderLog-active",
+        "category": "field-presence",
+        "entity": "conversionRateDownloaderLog",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-presence-conversionRateDownloaderLog-durationms",
+        "category": "field-presence",
+        "entity": "conversionRateDownloaderLog",
+        "field": "durationms",
+        "runner": "node",
+        "description": "Field 'durationms' should be present in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-presence-conversionRateDownloaderLog-errorDetail",
+        "category": "field-presence",
+        "entity": "conversionRateDownloaderLog",
+        "field": "errorDetail",
+        "runner": "node",
+        "description": "Field 'errorDetail' should be present in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-presence-conversionRateDownloaderLog-pairsFailed",
+        "category": "field-presence",
+        "entity": "conversionRateDownloaderLog",
+        "field": "pairsFailed",
+        "runner": "node",
+        "description": "Field 'pairsFailed' should be present in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-presence-conversionRateDownloaderLog-pairsUpdated",
+        "category": "field-presence",
+        "entity": "conversionRateDownloaderLog",
+        "field": "pairsUpdated",
+        "runner": "node",
+        "description": "Field 'pairsUpdated' should be present in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-presence-conversionRateDownloaderLog-status",
+        "category": "field-presence",
+        "entity": "conversionRateDownloaderLog",
+        "field": "status",
+        "runner": "node",
+        "description": "Field 'status' should be present in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-presence-conversionRateDownloaderLog-syncDate",
+        "category": "field-presence",
+        "entity": "conversionRateDownloaderLog",
+        "field": "syncDate",
+        "runner": "node",
+        "description": "Field 'syncDate' should be present in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-type-conversionRateDownloaderLog-active",
+        "category": "field-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-type-conversionRateDownloaderLog-durationms",
+        "category": "field-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "durationms",
+        "runner": "node",
+        "description": "Field 'durationms' should have type 'number' in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-type-conversionRateDownloaderLog-errorDetail",
+        "category": "field-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "errorDetail",
+        "runner": "node",
+        "description": "Field 'errorDetail' should have type 'string' in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-type-conversionRateDownloaderLog-pairsFailed",
+        "category": "field-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "pairsFailed",
+        "runner": "node",
+        "description": "Field 'pairsFailed' should have type 'number' in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-type-conversionRateDownloaderLog-pairsUpdated",
+        "category": "field-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "pairsUpdated",
+        "runner": "node",
+        "description": "Field 'pairsUpdated' should have type 'number' in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-type-conversionRateDownloaderLog-status",
+        "category": "field-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "status",
+        "runner": "node",
+        "description": "Field 'status' should have type 'string' in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-field-type-conversionRateDownloaderLog-syncDate",
+        "category": "field-type",
+        "entity": "conversionRateDownloaderLog",
+        "field": "syncDate",
+        "runner": "node",
+        "description": "Field 'syncDate' should have type 'string' in conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-searchable-filters-conversionRateDownloaderLog-status",
+        "category": "searchable-filters",
+        "entity": "conversionRateDownloaderLog",
+        "field": "status",
+        "runner": "node",
+        "description": "Field 'status' should be a supported filter for conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-searchable-filters-conversionRateDownloaderLog-syncDate",
+        "category": "searchable-filters",
+        "entity": "conversionRateDownloaderLog",
+        "field": "syncDate",
+        "runner": "node",
+        "description": "Field 'syncDate' should be a supported filter for conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-system-field-conversionRateDownloaderLog-client",
+        "category": "system-field",
+        "entity": "conversionRateDownloaderLog",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-system-field-conversionRateDownloaderLog-createdBy",
+        "category": "system-field",
+        "entity": "conversionRateDownloaderLog",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-system-field-conversionRateDownloaderLog-creationDate",
+        "category": "system-field",
+        "entity": "conversionRateDownloaderLog",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-system-field-conversionRateDownloaderLog-id",
+        "category": "system-field",
+        "entity": "conversionRateDownloaderLog",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-system-field-conversionRateDownloaderLog-organization",
+        "category": "system-field",
+        "entity": "conversionRateDownloaderLog",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-system-field-conversionRateDownloaderLog-updated",
+        "category": "system-field",
+        "entity": "conversionRateDownloaderLog",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-system-field-conversionRateDownloaderLog-updatedBy",
+        "category": "system-field",
+        "entity": "conversionRateDownloaderLog",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for conversionRateDownloaderLog"
+      },
+      {
+        "id": "t-visibility-conversionRateDownloaderLog",
+        "category": "visibility",
+        "entity": "conversionRateDownloaderLog",
+        "runner": "node",
+        "description": "Entity 'conversionRateDownloaderLog' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 29,
+      "byCategory": {
+        "crud-flags": 1,
+        "default-value-type": 4,
+        "field-presence": 7,
+        "field-type": 7,
+        "searchable-filters": 2,
+        "system-field": 7,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 29,
+        "junit": 0
+      }
+    }
+  }
+}

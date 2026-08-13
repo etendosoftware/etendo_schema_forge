@@ -4,9 +4,9 @@ function PercentPill({ label, value }) {
   const n = typeof value === 'string' ? parseFloat(value) : (value ?? 0);
   const pct = Math.round(n);
   const full = pct >= 100;
-  const bg = full ? '#d1fae5' : '#f3f4f6';
-  const color = full ? '#065f46' : '#374151';
-  const dot = full ? '#10b981' : '#9ca3af';
+  const bg = full ? 'var(--status-success-bg)' : 'hsl(var(--muted))';
+  const color = full ? 'var(--status-success-fg)' : 'hsl(var(--muted-foreground))';
+  const dot = full ? 'var(--status-success-fg)' : 'hsl(var(--text-disabled))';
 
   return (
     <span
@@ -27,8 +27,14 @@ export default function PurchaseOrderTopbar({ data }) {
 
   return (
     <>
-      <PercentPill label={ui('purchaseOrder.topbar.deliveryStatus')} value={data.deliveryStatusPurchase} />
-      <PercentPill label={ui('purchaseOrder.topbar.invoiceStatus')} value={data.invoiceStatus} />
+      <PercentPill
+        label={ui('purchaseOrder.topbar.deliveryStatus')}
+        value={data.deliveryStatusPurchase}
+        data-testid="PercentPill__f94e17" />
+      <PercentPill
+        label={ui('purchaseOrder.topbar.invoiceStatus')}
+        value={data.invoiceStatus}
+        data-testid="PercentPill__f94e17" />
     </>
   );
 }

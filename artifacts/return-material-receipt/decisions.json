@@ -3,57 +3,129 @@
   "window": {
     "category": "sales",
     "name": "Return Material Receipt",
+    "sendDocument": {
+      "enabled": false
+    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
     "linesLayout": "inlineEditable",
+    "noHeaderBorder": true,
+    "hideDeleteWhenComplete": true,
+    "maxDetailLines": 0,
     "customComponents": {
-      "bottomSection": "ReturnMaterialReceiptBottomPanel"
-    }
+      "bottomSection": "ReturnMaterialReceiptBottomPanel",
+      "topbarRight": "ConfirmWithCreditButton"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "sourceShipmentDocNo": "Albarán origen",
+        "movementQuantity": "Cant. a devolver",
+        "orderQuantity": "Cant. entregada original"
+      },
+      "en_US": {
+        "sourceShipmentDocNo": "Source Shipment",
+        "movementQuantity": "Return Qty",
+        "orderQuantity": "Original Delivered Qty"
+      }
+    },
+    "processOverrides": {
+      "Process Receipt": {
+        "exclude": true
+      },
+      "etblkpBulkposting": {
+        "exclude": true
+      }
+    },
+    "menuActions": [
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      }
+    ],
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill"
+      }
+    ]
   },
   "entities": {
     "header": {
       "name": "returnMaterialReceipt",
-      "fields": {
-        "documentNo": {
+      "javaQualifier": "returnMaterialReceiptHeaderHandler",
+      "virtualFields": [
+        {
+          "name": "sourceShipmentDocNo",
+          "column": "sourceShipmentDocNo",
+          "label": "Source Shipment",
+          "type": "string",
           "visibility": "readOnly",
+          "form": true,
           "grid": true,
-          "searchable": true,
-          "inputMode": "text",
-          "section": "principal"
-        },
-        "businessPartner": {
-          "grid": true,
-          "searchable": true,
-          "reference": "BusinessPartner",
-          "inputMode": "search",
-          "readOnlyLogic": null,
-          "section": "principal"
+          "gridOrder": 6,
+          "section": "principal",
+          "seq": 6
+        }
+      ],
+      "fields": {
+        "etblkpAccountingstatus": {
+          "visibility": "discarded"
         },
         "movementDate": {
           "grid": true,
+          "gridOrder": 1,
           "searchable": true,
           "inputMode": "date",
           "readOnlyLogic": null,
-          "section": "principal"
+          "dot": false,
+          "section": "principal",
+          "seq": 3
         },
-        "warehouse": {
-          "grid": false,
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 2,
+          "searchable": true,
+          "inputMode": "text",
+          "section": "principal",
+          "seq": 2
+        },
+        "businessPartner": {
+          "grid": true,
+          "gridOrder": 3,
+          "searchable": true,
+          "reference": "BusinessPartner",
           "inputMode": "search",
-          "readOnlyLogic": null,
-          "section": "principal"
+          "readOnlyLogic": "@Processed@='Y'",
+          "section": "principal",
+          "seq": 1
         },
         "documentStatus": {
           "visibility": "readOnly",
           "grid": true,
+          "gridOrder": 4,
           "searchable": true,
           "form": false
         },
-        "salesOrder": {
-          "visibility": "readOnly",
-          "grid": false,
+        "warehouse": {
+          "grid": true,
+          "gridOrder": 5,
           "inputMode": "search",
-          "section": "principal"
+          "readOnlyLogic": null,
+          "section": "principal",
+          "seq": 4,
+          "defaultExpr": "@#M_Warehouse_ID@"
+        },
+        "salesOrder": {
+          "visibility": "system"
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -63,19 +135,23 @@
             "filterKey": "C_BPartner_ID"
           },
           "readOnlyLogic": null,
-          "section": "other"
+          "section": "principal",
+          "seq": 5
         },
         "description": {
           "inputMode": "textarea",
+          "form": false,
           "section": "other"
         },
         "trackingNo": {
           "visibility": "editable",
           "inputMode": "text",
+          "form": false,
           "section": "other"
         },
         "accountingDate": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "_note": "ETP-4737: matches the goods-shipment/goods-receipt pattern (ETP-4531) — accounting date is hidden from the user but included/writable so ReturnMaterialReceiptHeaderHandler#mirrorAccountingDate (movementDate -> accountingDate, ETP-4531 pattern) actually persists on create. Previously 'discarded' (excluded from the field filter entirely), which silently dropped the mirrored value on POST and left accountingDate defaulting to a bogus value."
         },
         "orderReference": {
           "visibility": "discarded"
@@ -159,7 +235,11 @@
           "visibility": "discarded"
         },
         "invoiceStatus": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 7,
+          "form": false,
+          "columnType": "percent"
         },
         "isnettingshipment": {
           "visibility": "discarded"
@@ -204,7 +284,21 @@
           "visibility": "discarded"
         },
         "posted": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 8,
+          "badge": true,
+          "visibleWhenCapability": "showAccountingFields",
+          "badgeLabels": {
+            "true": { "en_US": "Posted", "es_ES": "Contabilizado" },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         },
         "receiveMaterials": {
           "visibility": "discarded"
@@ -213,7 +307,8 @@
           "visibility": "discarded"
         },
         "documentAction": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "javaQualifier": "documentAction"
         },
         "processNow": {
           "visibility": "discarded"
@@ -255,14 +350,16 @@
     },
     "lines": {
       "name": "returnMaterialReceiptLine",
+      "javaQualifier": "returnMaterialReceiptLineHandler",
       "fields": {
         "lineNo": {
-          "grid": true,
+          "grid": false,
           "inputMode": "number",
           "section": "principal"
         },
         "product": {
           "grid": true,
+          "gridOrder": 1,
           "searchable": true,
           "inputMode": "search",
           "readOnlyLogic": null,
@@ -270,20 +367,22 @@
         },
         "movementQuantity": {
           "grid": true,
+          "gridOrder": 2,
           "inputMode": "number",
           "readOnlyLogic": null,
           "section": "principal"
         },
         "uOM": {
           "visibility": "readOnly",
-          "grid": true,
+          "grid": false,
           "inputMode": "search",
-          "section": "principal"
+          "section": "other"
         },
         "orderQuantity": {
           "visibility": "readOnly",
           "grid": true,
-          "section": "other"
+          "gridOrder": 3,
+          "section": "principal"
         },
         "salesOrderLine": {
           "visibility": "readOnly",

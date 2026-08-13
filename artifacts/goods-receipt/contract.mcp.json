@@ -1,0 +1,856 @@
+{
+  "version": "0.30.0",
+  "generatedAt": "2026-07-30T22:14:36.474Z",
+  "updatedAt": "2026-08-02T18:39:15.065Z",
+  "contractChecksum": "e15091d290bd10a5",
+  "apiPrediction": {
+    "specName": "goods-receipt",
+    "baseUrl": "/sws/neo/goods-receipt",
+    "crud": {
+      "goodsReceipt": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/goods-receipt/goodsReceipt",
+        "detailUrl": "/sws/neo/goods-receipt/goodsReceipt/{id}",
+        "supportedFilters": [
+          "documentNo",
+          "businessPartner",
+          "movementDate",
+          "orderReference",
+          "documentStatus"
+        ]
+      },
+      "goodsReceiptLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/goods-receipt/goodsReceiptLine",
+        "detailUrl": "/sws/neo/goods-receipt/goodsReceiptLine/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "goodsReceipt",
+        "field": "warehouse",
+        "column": "M_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/warehouse"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BusinessPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/businessPartner"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "partnerAddress",
+        "column": "C_BPartner_Location_ID",
+        "reference": "BusinessPartnerLocation",
+        "inputMode": "dependent",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/partnerAddress",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "salesOrder",
+        "column": "C_Order_ID",
+        "reference": "Order",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/salesOrder"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "CostCenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/costcenter"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "asset",
+        "column": "A_Asset_ID",
+        "reference": "Asset",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/asset"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "stDimension",
+        "column": "User1_ID",
+        "reference": "UserDimension1",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/stDimension"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "ndDimension",
+        "column": "User2_ID",
+        "reference": "UserDimension2",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/ndDimension"
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "etgoCurrency",
+        "column": "EM_ETGO_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/selectors/etgoCurrency"
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/product"
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "operativeUOM",
+        "column": "C_Aum",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/operativeUOM",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "M_Product_ID",
+              "source": "field",
+              "field": "product"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/uOM"
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "storageBin",
+        "column": "M_Locator_ID",
+        "reference": "Locator",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/storageBin",
+        "context": {
+          "required": [
+            {
+              "param": "M_Warehouse_ID",
+              "source": "parentField",
+              "field": "warehouse"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "salesOrderLine",
+        "column": "C_OrderLine_ID",
+        "reference": "OrderLine",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/salesOrderLine"
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/project"
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "CostCenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/costcenter"
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "asset",
+        "column": "A_Asset_ID",
+        "reference": "Asset",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/asset"
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "stDimension",
+        "column": "User1_ID",
+        "reference": "UserDimension1",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/stDimension"
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "ndDimension",
+        "column": "User2_ID",
+        "reference": "UserDimension2",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/ndDimension"
+      }
+    ],
+    "actions": [
+      {
+        "name": "createLinesFrom",
+        "actionType": "createFrom",
+        "entity": "goodsReceipt",
+        "column": "CreateFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/createLinesFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ]
+      },
+      {
+        "name": "generateTo",
+        "actionType": "createFrom",
+        "entity": "goodsReceipt",
+        "column": "GenerateTo",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/generateTo",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "154",
+        "processType": "classic"
+      },
+      {
+        "name": "documentAction",
+        "actionType": "documentAction",
+        "entity": "goodsReceipt",
+        "column": "DocAction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/documentAction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "109",
+        "processType": "classic"
+      },
+      {
+        "name": "processGoodsJava",
+        "actionType": "utilityAction",
+        "entity": "goodsReceipt",
+        "column": "Process_Goods_Java",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/processGoodsJava",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "49DEE812BF0545269781FCEBF2235924",
+        "processType": "classic"
+      },
+      {
+        "name": "calculateFreight",
+        "actionType": "utilityAction",
+        "entity": "goodsReceipt",
+        "column": "Calculate_Freight",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/calculateFreight",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "800141",
+        "processType": "classic"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "goodsReceipt",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "updateLines",
+        "actionType": "utilityAction",
+        "entity": "goodsReceipt",
+        "column": "UpdateLines",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/updateLines",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "800010",
+        "processType": "classic"
+      },
+      {
+        "name": "receiveMaterials",
+        "actionType": "createFrom",
+        "entity": "goodsReceipt",
+        "column": "RM_Receipt_PickEdit",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "sendMaterials",
+        "actionType": "createFrom",
+        "entity": "goodsReceipt",
+        "column": "RM_Shipment_Pickedit",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/sendMaterials",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "4AD70293357245AB96E59C2CDB43A35D",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "invoicefromshipment",
+        "actionType": "utilityAction",
+        "entity": "goodsReceipt",
+        "column": "Invoicefromshipment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/invoicefromshipment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "62250E8866EA4D96A66C309878DC039E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "managePrereservation",
+        "actionType": "utilityAction",
+        "entity": "goodsReceiptLine",
+        "column": "Manage_Prereservation",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/{id}/action/managePrereservation",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "70E42AD47E5F4698A9ACCCAF3EB72B9E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "explode",
+        "actionType": "utilityAction",
+        "entity": "goodsReceiptLine",
+        "column": "Explode",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceiptLine/{id}/action/explode",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "DAE719940FE9463F8A3E3C401BBAFC53",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "purchases"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "goodsReceipt": {
+        "fields": {
+          "documentNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "warehouse": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "businessPartner": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "partnerAddress": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "movementDate": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "salesOrder": {},
+          "orderReference": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "description": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "documentStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "DR"
+          },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "asset": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "stDimension": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "ndDimension": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "invoiceStatus": {
+            "readOnly": true
+          },
+          "processed": {
+            "readOnly": true,
+            "required": true
+          },
+          "etgoCurrency": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          }
+        }
+      },
+      "goodsReceiptLine": {
+        "fields": {
+          "lineNo": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
+          },
+          "product": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "attributeSetValue": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "operativeQuantity": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "operativeUOM": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "movementQuantity": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
+            "defaultValue": "1"
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@UomManagement@='Y'"
+          },
+          "storageBin": {
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@OnHandLocatorDefault@"
+          },
+          "description": {},
+          "salesOrderLine": {},
+          "orderQuantity": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "asset": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "stDimension": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "ndDimension": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "invoiceQuantity": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Create and manage goods receipt documents.",
+    "whenToUse": [
+      "Use for supplier goods receipt before receipt or invoice."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "warehouse",
+        "businessPartner",
+        "partnerAddress",
+        "movementDate",
+        "etgoCurrency"
+      ],
+      "lineFields": [
+        "lineNo",
+        "product",
+        "movementQuantity"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "goodsReceipt",
+        "field": "partnerAddress",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsReceipt",
+        "field": "project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "operativeUOM",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "M_Product_ID",
+              "source": "field",
+              "field": "product"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "goodsReceiptLine",
+        "field": "storageBin",
+        "context": {
+          "required": [
+            {
+              "param": "M_Warehouse_ID",
+              "source": "parentField",
+              "field": "warehouse"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [
+      "createLinesFrom",
+      "generateTo",
+      "documentAction",
+      "etblkpBulkposting",
+      "receiveMaterials",
+      "sendMaterials"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "warehouse",
+          "businessPartner",
+          "partnerAddress",
+          "movementDate",
+          "etgoCurrency"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "lineNo",
+          "product",
+          "movementQuantity"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "createLinesFrom"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "07eac4fb4a7a5309"
+}

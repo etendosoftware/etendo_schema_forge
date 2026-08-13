@@ -1,0 +1,396 @@
+{
+  "version": "0.43.0",
+  "generatedAt": "2026-04-29T19:06:30.936Z",
+  "updatedAt": "2026-07-28T13:29:08.917Z",
+  "contractChecksum": "323eb4ee09a6f034",
+  "apiPrediction": {
+    "specName": "assets",
+    "baseUrl": "/sws/neo/assets",
+    "crud": {
+      "assets": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/assets/assets",
+        "detailUrl": "/sws/neo/assets/assets/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name",
+          "assetCategory",
+          "depreciate"
+        ]
+      },
+      "amortizationLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/assets/amortizationLine",
+        "detailUrl": "/sws/neo/assets/amortizationLine/{id}",
+        "supportedFilters": []
+      },
+      "assetAcct": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/assets/assetAcct",
+        "detailUrl": "/sws/neo/assets/assetAcct/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "assets",
+        "field": "assetCategory",
+        "column": "A_Asset_Group_ID",
+        "reference": "AssetGroup",
+        "inputMode": "selector",
+        "url": "/sws/neo/assets/assets/selectors/assetCategory"
+      },
+      {
+        "entity": "assets",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/assets/assets/selectors/currency"
+      },
+      {
+        "entity": "assets",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/product"
+      },
+      {
+        "entity": "assets",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/project"
+      },
+      {
+        "entity": "amortizationLine",
+        "field": "amortization",
+        "column": "A_Amortization_ID",
+        "reference": "Amortization",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/amortizationLine/selectors/amortization"
+      },
+      {
+        "entity": "amortizationLine",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/assets/amortizationLine/selectors/currency"
+      },
+      {
+        "entity": "assetAcct",
+        "field": "accountingSchema",
+        "column": "C_AcctSchema_ID",
+        "reference": "AcctSchema",
+        "inputMode": "selector",
+        "url": "/sws/neo/assets/assetAcct/selectors/accountingSchema"
+      },
+      {
+        "entity": "assetAcct",
+        "field": "accumulatedDepreciation",
+        "column": "A_Accumdepreciation_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/assets/assetAcct/selectors/accumulatedDepreciation"
+      },
+      {
+        "entity": "assetAcct",
+        "field": "depreciation",
+        "column": "A_Depreciation_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/assets/assetAcct/selectors/depreciation"
+      }
+    ],
+    "actions": [
+      {
+        "name": "processed",
+        "actionType": "utilityAction",
+        "entity": "assets",
+        "column": "Processed",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/assets/assets/{id}/action/processed",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "800125",
+        "processType": "classic"
+      },
+      {
+        "name": "processAsset",
+        "actionType": "utilityAction",
+        "entity": "assets",
+        "column": "Process_Asset",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/assets/assets/{id}/action/processAsset",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "D1E4EC58B04D4D3FA0060FF28094B39B",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "C_Project_ID": "Proyecto",
+        "EM_Etadas_Costcenter_ID": "Centro de coste",
+        "C_BPartner_ID": "Contacto",
+        "EM_Etadas_User1_ID": "1ª Dimensión",
+        "EM_Etadas_User2_ID": "2ª Dimensión",
+        "EM_Etadas_Salesregion_ID": "Región de ventas",
+        "EM_Etadas_C_Activity_ID": "Actividad",
+        "EM_Etadas_Campaign_ID": "Campaña",
+        "EM_Etgo_Amortization_Status": "Estado de amortización",
+        "M_Product_ID": "Producto"
+      },
+      "en_US": {
+        "C_Project_ID": "Project",
+        "EM_Etadas_Costcenter_ID": "Cost Center",
+        "C_BPartner_ID": "Business Partner",
+        "EM_Etadas_User1_ID": "1st Dimension",
+        "EM_Etadas_User2_ID": "2nd Dimension",
+        "EM_Etadas_Salesregion_ID": "Sales Region",
+        "EM_Etadas_C_Activity_ID": "Activity",
+        "EM_Etadas_Campaign_ID": "Sales Campaign",
+        "EM_Etgo_Amortization_Status": "Amortization Status",
+        "M_Product_ID": "Product"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "assets": {
+        "fields": {
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "assetCategory": {
+            "required": true
+          },
+          "description": {},
+          "currency": {
+            "readOnly": true,
+            "readOnlyLogic": "@existAmortizationLines@ = 'Y'",
+            "defaultValue": "@C_Currency_ID@"
+          },
+          "product": {},
+          "depreciate": {
+            "required": true
+          },
+          "depreciationType": {
+            "required": true
+          },
+          "calculateType": {
+            "required": true
+          },
+          "annualDepreciation": {},
+          "amortize": {
+            "required": true
+          },
+          "usableLifeYears": {},
+          "usableLifeMonths": {},
+          "everyMonthIs30Days": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "purchaseDate": {},
+          "cancellationDate": {},
+          "depreciationStartDate": {},
+          "depreciationEndDate": {},
+          "assetValue": {},
+          "residualAssetValue": {},
+          "depreciationAmt": {},
+          "previouslyDepreciatedAmt": {
+            "defaultValue": "0"
+          },
+          "processed": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "depreciatedValue": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "depreciatedPlan": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "project": {},
+          "processAsset": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etgoAmortizationStatus": {
+            "readOnly": true,
+            "defaultValue": "0"
+          }
+        }
+      },
+      "amortizationLine": {
+        "fields": {
+          "sEQNoAsset": {
+            "readOnly": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQ_No_Asset),0)+10 AS DefaultValue FROM A_AMORTIZATIONLINE WHERE A_ASSET_ID=@A_ASSET_ID@"
+          },
+          "amortization": {
+            "readOnly": true
+          },
+          "amortizationPercentage": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "amortizationAmount": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "currency": {
+            "readOnlyLogic": "@Processed@='Y'"
+          }
+        }
+      },
+      "assetAcct": {
+        "fields": {
+          "accountingSchema": {
+            "readOnly": true,
+            "required": true
+          },
+          "accumulatedDepreciation": {
+            "required": true
+          },
+          "depreciation": {
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage assets financial records.",
+    "whenToUse": [
+      "Use for assets management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "assetCategory",
+        "depreciate",
+        "depreciationType",
+        "calculateType",
+        "amortize",
+        "everyMonthIs30Days",
+        "processed",
+        "processAsset"
+      ],
+      "lineFields": [
+        "accumulatedDepreciation",
+        "depreciation"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line"
+    ],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Required field without default value must be provided",
+      "Validate the current form state before running lifecycle actions",
+      "Do not run destructive lifecycle actions without explicit user confirmation"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "assetCategory",
+          "depreciate",
+          "depreciationType",
+          "calculateType",
+          "amortize",
+          "everyMonthIs30Days",
+          "processed",
+          "processAsset"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "accumulatedDepreciation",
+          "depreciation"
+        ]
+      }
+    ],
+    "warnings": [
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "17ac6dae0ad76be5"
+}

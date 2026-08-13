@@ -3,7 +3,8 @@
   "window": {
     "category": "monitor",
     "name": "SII Monitor",
-    "attachments": false
+    "attachments": false,
+    "readOnly": true
   },
   "entities": {
     "organizations": {
@@ -16,6 +17,26 @@
           "visibility": "system",
           "derivation": "fromParent"
         }
+      }
+    },
+    "issuedInvoices": {
+      "fields": {
+        "eTGOCurrencyRate": { "visibility": "discarded" }
+      }
+    },
+    "receivedInvoices": {
+      "fields": {
+        "eTGOCurrencyRate": { "visibility": "discarded" }
+      }
+    },
+    "issuedInvoices(previousPeriod)": {
+      "fields": {
+        "eTGOCurrencyRate": { "visibility": "discarded" }
+      }
+    },
+    "receivedInvoices(previousPeriod)": {
+      "fields": {
+        "eTGOCurrencyRate": { "visibility": "discarded" }
       }
     }
   }

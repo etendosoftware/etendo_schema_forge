@@ -6,6 +6,13 @@ Use this window to observe the real-time submission status of electronic invoice
 
 The window is read-only. It does not create or modify invoice records; it only displays the status reported by AEAT or Hacienda Foral after submission.
 
+## Theme roles
+
+The monitor cards, tabs, filters and contact/error dialogs consume the shared
+semantic theme. Structural roles control surfaces and input chrome, while
+submission outcomes use success, warning, information, neutral and destructive
+roles. The developer debug panel remains outside this UI-theme scope.
+
 ## What this window should allow
 
 - Detect the active fiscal profile for the current organization and render only the relevant section(s).
@@ -63,9 +70,9 @@ The tab × period combination maps to one of 4 NEO entities:
 
 All entities live under spec `sii-monitor`. Pagination: 20 rows per page.
 
-**Status filter row** (second row, below the tabs): Todas | Correcto (CO) | Aceptado con errores (AE) | Con errores | Pendiente (PE)
+**Status filter row** (second row, below the tabs): Todas | Aceptado (CO) | Aceptado con errores (AE) | Con errores | Pendiente (PE)
 
-The "Con errores" tab is a composite filter covering both `IN` (Incorrecto) and `EE` (Error de envío). For the real API it sends `operator: "inSet", value: ["IN","EE"]`; for mock data it filters both codes client-side. All other tabs send `operator: "equals"` with the single code.
+The "Con errores" tab is a composite filter covering both `IN` (Rechazado) and `EE` (Error). For the real API it sends `operator: "inSet", value: ["IN","EE"]`; for mock data it filters both codes client-side. All other tabs send `operator: "equals"` with the single code.
 
 **Columns:** Date · Invoice number · Cliente/Proveedor · Type (`aeatsiiClaveTipo` / `aeatsiiClaveTipoFc`) · Total · Status pill · CSV AEAT
 
@@ -103,6 +110,33 @@ Each tab maps to a dedicated NEO entity under spec `monitor-verifactu`:
 | Inválidas | `facturasInválidas` |
 
 **Columns:** Invoice number · Issuer NIF · Type · CSV AEAT · Status pill · Error reason (`[codeError] errorReason`)
+
+### Error resolution (`VfSolveErrorModal`)
+
+Clicking the resolve button on a selected `IN` (Inválida) or `AE` (Parcialmente aceptada) row opens
+`VfSolveErrorModal.jsx`, which resolves the two Verifactu error states through **two different backend
+paths** — each depends on the underlying AD_Column type:
+
+| Row status | Frontend call | Underlying column | Backend handler | Sets |
+|---|---|---|---|---|
+| `IN` (Inválida) | `POST .../facturasInválidas/{id}/action/Correct_Invoice` | Button (AD_Reference `28`), linked to OBUIAPP process `com.etendoerp.verifactu.process.CorrectedInvoice` | `CorrectInvoiceHandler` (`correct-invoice-handler`) | `em_etvfac_corrected_inv = 'Y'` |
+| `AE` (Parcialmente aceptada) | `PUT .../facturasParcialmenteAceptadas/{id}` body `{isSubsanation:true}` | Plain YesNo checkbox | `MarkSubsanationHandler` (`mark-subsanation-handler`) | `em_etvfac_issubsanation = 'Y'` |
+
+Both entities are backed by the **view** `etvfac_inv_sent_status_v` (`ISVIEW=Y`), so a default-CRUD PUT
+against them returns `200` but silently writes nothing — this is why both actions need a dedicated
+`NeoHandler` wired via `ETGO_SF_ENTITY.JAVA_QUALIFIER`, instead of relying on NEO's generic CRUD/action
+bridge. `Correct_Invoice` additionally requires a **dedicated** handler (not the generic
+`NeoButtonActionHelper` OBUIAPP bridge) because the generic path enforces an `OBUIAPP_Process_Access`
+grant that was never configured for this process — `CorrectInvoiceHandler` bypasses that check the same
+way `SiiSendHandler`/`TbaiXmlgeneratorHandler` do for their own legacy buttons.
+
+**Gotcha (do not repeat):** the `JAVA_QUALIFIER` on `ETGO_SF_ENTITY` is a database value, not just an
+XML sourcedata value. Hand-editing `ETGO_SF_ENTITY.xml` and running `./gradlew export.database` does
+**nothing** for this — `export.database` reads DB → XML, not the other way around. To wire a new entity
+handler you MUST: (1) declare `entities.<name>.javaQualifier` in `artifacts/monitor-verifactu/decisions.json`,
+(2) run `node cli/src/resolve-curated.js --window monitor-verifactu --write` to refresh `contract.json`,
+(3) run `node cli/src/push-to-neo.js monitor-verifactu` to write it to the live DB, then (4) run
+`./gradlew export.database` in Etendo root to sync the XML sourcedata back to match.
 
 ## Status-pill click routing
 
@@ -180,7 +214,7 @@ Status is fetched by `useFiscalStatus(invoiceId, specName, profile, apiBaseUrl)`
 |--------|------|--------|----------|--------------|
 | SII | `sii-monitor` | `issuedInvoices` (then `receivedInvoices` fallback) | `aeatsiiInvoice` | `aeatsiiEstado` |
 | TBAI | `tbai-facturas-enviadas` | `sincronización` | `invoice` | `estado` |
-| Verifactu | `monitor-verifactu` | `facturasAceptadas` → `partiallyAcceptedInvoices` → `facturasRechazadas` → `facturasInválidas` (first match) | `invoice` | `verifactuSendingStatus` |
+| Verifactu | `monitor-verifactu` | `facturasAceptadas` → `facturasParcialmenteAceptadas` → `facturasRechazadas` → `facturasInválidas` (first match) | `invoice` | `verifactuSendingStatus` |
 
 No match → pill shows `PE` (SII/Verifactu) or `Pendiente` (TBAI). While fetching, rows show a skeleton shimmer.
 

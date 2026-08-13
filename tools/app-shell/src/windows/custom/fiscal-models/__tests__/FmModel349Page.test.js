@@ -12,7 +12,7 @@ describe('FmModel349Page — exports', () => {
 });
 
 describe('FmModel349Page — composition', () => {
-  it('renders StatusPillMenu', () => assert.match(src, /StatusPillMenu/));
+  it('renders KpiWidget', () => assert.match(src, /KpiWidget/));
   it('has back navigation (onBack)', () => assert.match(src, /onBack/));
   it('renders operator table', () => assert.match(src, /operator|operador/i));
 });
@@ -46,4 +46,43 @@ describe('FmModel349Page — keys (no Triangulares, pairs grouped)', () => {
     const iIdx = keyIds.indexOf("'I'");
     assert.ok(aIdx !== -1 && iIdx !== -1 && aIdx < iIdx, 'A must come before I');
   });
+});
+
+describe('FmModel349Page — compute & generate wiring', () => {
+  it('imports compute349Operators from fiscalModelsUtils', () =>
+    assert.match(src, /compute349Operators/));
+  it('imports generate349File from fiscalModelsUtils', () =>
+    assert.match(src, /generate349File/));
+  it('accepts token and apiBaseUrl props', () =>
+    assert.match(src, /token.*apiBaseUrl|apiBaseUrl.*token/));
+  it('has handleCompute function', () =>
+    assert.match(src, /function handleCompute|handleCompute\s*=/));
+  it('has handleGenerate function', () =>
+    assert.match(src, /function handleGenerate|handleGenerate\s*=/));
+  it('has handlePreviewPdf function', () =>
+    assert.match(src, /function handlePreviewPdf|handlePreviewPdf\s*=/));
+  it('liveOperators state is defined', () =>
+    assert.match(src, /liveOperators/));
+});
+
+describe('FmModel349Page — PDF preview', () => {
+  it('imports use349Pdf', () =>
+    assert.match(src, /use349Pdf/));
+  it('imports DocumentPreview', () =>
+    assert.match(src, /DocumentPreview/));
+  it('renders DocumentPreview (in JSX)', () =>
+    assert.match(src, /<DocumentPreview/));
+  it('has showPdf state', () =>
+    assert.match(src, /showPdf/));
+  it('calls clearPdf on close (onClose clears state)', () =>
+    assert.match(src, /clearPdf/));
+});
+
+describe('FmModel349Page — button states', () => {
+  it('Recalculate button has disabled={computing} attribute', () =>
+    assert.match(src, /disabled=\{computing\}/));
+  it('Generate button has disabled={generating} attribute', () =>
+    assert.match(src, /disabled=\{generating\}/));
+  it('Preview PDF button has disabled={pdfLoading} attribute', () =>
+    assert.match(src, /disabled=\{pdfLoading\}/));
 });

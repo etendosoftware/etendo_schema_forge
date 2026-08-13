@@ -1,0 +1,676 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// Importing DetailView.jsx pulls in the whole component tree (router, i18n,
+// hooks, sub-components, lib helpers). Mirror the mocks used by
+// DetailView.vitest.jsx so the module loads in isolation and we can import the
+// three exported pure helpers directly.
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+  useSearchParams: () => [new URLSearchParams()],
+  useLocation: () => ({ pathname: '/test/123', search: '', hash: '' }),
+}));
+
+vi.mock('@/i18n', () => ({
+  useLabel: () => (key) => key,
+  useMenuLabel: () => (key) => key,
+  useUI: () => (key) => key,
+  useLocale: () => ({}),
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+}));
+
+vi.mock('@/hooks/useEntity', () => ({
+  useEntity: () => ({ handleChange: vi.fn() }),
+}));
+
+vi.mock('@/hooks/useCatalogs', () => ({
+  useCatalogs: () => ({ catalogs: {}, catalogsLoaded: true }),
+}));
+
+vi.mock('@/hooks/useDisplayLogic', () => ({
+  useDisplayLogic: () => ({}),
+}));
+
+vi.mock('@/hooks/useCallout', () => ({
+  useCallout: () => ({
+    calloutResult: null,
+    calloutLoading: false,
+    executeCallout: vi.fn(),
+  }),
+}));
+
+vi.mock('@/hooks/useLineGrossAmount', () => ({
+  useLineGrossAmount: () => ({ grossAmount: 0, computeGrossAmount: vi.fn() }),
+  ORDER_LINE_CONFIG: { quantityField: 'orderedQuantity', priceField: 'unitPrice' },
+}));
+
+vi.mock('@/hooks/useDocumentAction', () => ({
+  useDocumentAction: () => ({ execute: vi.fn(), loading: false }),
+}));
+
+vi.mock('@/components/layout/PageMetaContext', () => ({
+  useSetPageMeta: () => vi.fn(),
+}));
+
+vi.mock('@/components/layout/FavoritesContext', () => ({
+  useFavorites: () => ({ isFavorite: () => false, toggleFavorite: vi.fn() }),
+}));
+
+vi.mock('../SummaryBar.jsx', () => ({
+  SummaryBar: () => null,
+}));
+
+vi.mock('../DocumentTotalsPanel.jsx', () => ({ default: () => null }));
+vi.mock('../DocumentStatusPill.jsx', () => ({ default: () => null }));
+vi.mock('../DocumentPrintDrawer.jsx', () => ({ default: () => null }));
+
+vi.mock('@/lib/resolveIdentifier.js', () => ({
+  resolveIdentifier: (data, key) => data?.[key + '$_identifier'] ?? data?.[key] ?? '',
+}));
+
+vi.mock('@/lib/lineFieldChange.js', () => ({
+  buildCalloutFormState: vi.fn(() => ({})),
+  extractAuxValues: vi.fn(() => ({})),
+  normalizeCalloutQty: vi.fn(),
+  normalizeCalloutResponse: vi.fn(() => ({})),
+  applyQtyZeroGuard: vi.fn(),
+  roundAmounts: vi.fn((v) => v),
+  resolveSnapshotIdentifiers: vi.fn(() => ({})),
+}));
+
+vi.mock('@/lib/selectorCatalog.js', () => ({
+  getCatalogOptions: vi.fn(() => []),
+}));
+
+vi.mock('@/lib/formatAmount.js', () => ({
+  formatAmount: (val) => (val != null ? String(val) : ''),
+}));
+
+vi.mock('@/lib/utils.js', () => ({
+  cn: (...args) => args.filter(Boolean).join(' '),
+}));
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
+}));
+
+import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import {
+  normalizePatchFieldValues,
+  applyCalloutFieldUpdates,
+  applyCalloutComboUpdates,
+  runAddLineAction,
+} from '../DetailView.jsx';
+// applyOneComboEntry (the per-combo worker behind applyCalloutComboUpdates) is
+// not re-exported from DetailView.jsx — it's only importable from its
+// definition site. This is the function ETP-4772's stale-response guard
+// actually runs for combos; applyCalloutComboUpdates unconditionally skips
+// the trigger field before ever reaching it, so the trigger-field staleness
+// path can only be exercised by calling applyOneComboEntry directly.
+import { applyOneComboEntry } from '../detailViewHelpers.jsx';
+
+describe('normalizePatchFieldValues', () => {
+  it('skips keys ending in $_identifier', () => {
+    const fieldValues = {};
+    normalizePatchFieldValues({ 'businessPartner$_identifier': 'ACME' }, fieldValues);
+    expect(fieldValues).toEqual({});
+  });
+
+  it('converts integer numeric strings to numbers', () => {
+    const fieldValues = {};
+    normalizePatchFieldValues({ qty: '10' }, fieldValues);
+    expect(fieldValues.qty).toBe(10);
+    expect(typeof fieldValues.qty).toBe('number');
+  });
+
+  it('converts negative decimal numeric strings to numbers', () => {
+    const fieldValues = {};
+    normalizePatchFieldValues({ adjustment: '-3.5' }, fieldValues);
+    expect(fieldValues.adjustment).toBe(-3.5);
+  });
+
+  it('leaves non-numeric strings as-is', () => {
+    const fieldValues = {};
+    normalizePatchFieldValues({ name: 'hello' }, fieldValues);
+    expect(fieldValues.name).toBe('hello');
+  });
+
+  it('does not convert Spanish-locale comma strings', () => {
+    const fieldValues = {};
+    normalizePatchFieldValues({ price: '10,50' }, fieldValues);
+    expect(fieldValues.price).toBe('10,50');
+    expect(typeof fieldValues.price).toBe('string');
+  });
+
+  it('leaves number values untouched', () => {
+    const fieldValues = {};
+    normalizePatchFieldValues({ qty: 42 }, fieldValues);
+    expect(fieldValues.qty).toBe(42);
+  });
+
+  it('leaves boolean values untouched', () => {
+    const fieldValues = {};
+    normalizePatchFieldValues({ active: true, closed: false }, fieldValues);
+    expect(fieldValues.active).toBe(true);
+    expect(fieldValues.closed).toBe(false);
+  });
+
+  it('leaves null values untouched', () => {
+    const fieldValues = {};
+    normalizePatchFieldValues({ ref: null }, fieldValues);
+    expect(fieldValues.ref).toBeNull();
+  });
+
+  it('mutates the passed fieldValues object in place and returns undefined', () => {
+    const fieldValues = { existing: 'keep' };
+    const result = normalizePatchFieldValues({ qty: '5' }, fieldValues);
+    expect(result).toBeUndefined();
+    expect(fieldValues).toEqual({ existing: 'keep', qty: 5 });
+  });
+});
+
+describe('applyCalloutFieldUpdates', () => {
+  function makeArgs(overrides = {}) {
+    return {
+      data: {},
+      triggerField: 'trigger',
+      userTouchedRef: { current: new Set() },
+      appliedFields: new Map(),
+      hook: { handleChange: vi.fn() },
+      api: {},
+      catalogs: {},
+      ...overrides,
+    };
+  }
+
+  it('applies entry.value via hook.handleChange and appliedFields.set', () => {
+    const a = makeArgs();
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'WH1' } },
+      a,
+    );
+    expect(a.appliedFields.get('warehouse')).toBe('WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+  });
+
+  it('skips an empty callout value when the field already has a user value', () => {
+    const a = makeArgs({ data: { warehouse: 'EXISTING' } });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: '' } },
+      a,
+    );
+    expect(a.appliedFields.has('warehouse')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+  });
+
+  it('applies an empty callout value when the field has no user value', () => {
+    const a = makeArgs({ data: { warehouse: '' } });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'WH1' } },
+      a,
+    );
+    expect(a.appliedFields.get('warehouse')).toBe('WH1');
+  });
+
+  it('skips a user-touched non-trigger field that already has a value', () => {
+    const a = makeArgs({
+      data: { warehouse: 'USER' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+    });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'WH1' } },
+      a,
+    );
+    expect(a.appliedFields.has('warehouse')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+  });
+
+  it('lets the trigger field win even when it is user-touched', () => {
+    const a = makeArgs({
+      triggerField: 'warehouse',
+      data: { warehouse: 'USER' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+    });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'WH1' } },
+      a,
+    );
+    expect(a.appliedFields.get('warehouse')).toBe('WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+  });
+
+  it('emits key$_identifier when entry._identifier is present', () => {
+    const a = makeArgs();
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'WH1', _identifier: 'Main Warehouse' } },
+      a,
+    );
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
+  });
+
+  it('does not emit key$_identifier when entry has no _identifier and api is empty', () => {
+    const a = makeArgs();
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'WH1' } },
+      a,
+    );
+    expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+  });
+
+  // handleEntryIdentifierChange's `entry.value && api?.selectors` branch (ETP-4706):
+  // callout returned an id without _identifier — resolve the display label from an
+  // already-loaded catalog instead of leaving the field's identifier blank.
+  describe('resolving a missing identifier from loaded catalogs', () => {
+    afterEach(() => {
+      vi.mocked(getCatalogOptions).mockReset().mockReturnValue([]);
+    });
+
+    it('emits key$_identifier from a matching catalog option (label field)', () => {
+      vi.mocked(getCatalogOptions).mockReturnValue([{ id: 'WH1', label: 'Main Warehouse' }]);
+      const a = makeArgs({ api: { selectors: [{ field: 'warehouse', entity: 'lines' }] } });
+      applyCalloutFieldUpdates(
+        { warehouse: { value: 'WH1' } },
+        a,
+      );
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
+    });
+
+    it('falls back to name, then _identifier, when the option has no label', () => {
+      vi.mocked(getCatalogOptions).mockReturnValue([{ id: 'WH1', name: 'Main Warehouse (name)' }]);
+      const a = makeArgs({ api: { selectors: [{ field: 'warehouse', entity: 'lines' }] } });
+      applyCalloutFieldUpdates(
+        { warehouse: { value: 'WH1' } },
+        a,
+      );
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse (name)');
+    });
+
+    it('does not emit an identifier when no selector matches the field', () => {
+      vi.mocked(getCatalogOptions).mockReturnValue([{ id: 'WH1', label: 'Main Warehouse' }]);
+      const a = makeArgs({ api: { selectors: [{ field: 'otherField', entity: 'lines' }] } });
+      applyCalloutFieldUpdates(
+        { warehouse: { value: 'WH1' } },
+        a,
+      );
+      expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    });
+
+    it('does not emit an identifier when the selector matches but no catalog option has that id', () => {
+      vi.mocked(getCatalogOptions).mockReturnValue([{ id: 'OTHER_ID', label: 'Not This One' }]);
+      const a = makeArgs({ api: { selectors: [{ field: 'warehouse', entity: 'lines' }] } });
+      applyCalloutFieldUpdates(
+        { warehouse: { value: 'WH1' } },
+        a,
+      );
+      expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    });
+  });
+});
+
+// ETP-4772: opening a new Purchase/Sales Order auto-fires a callout for the
+// default warehouse. If the user changes warehouse before that default
+// callout's response arrives, the OLD (stale) response used to win
+// unconditionally via the "trigger field always wins" rule — reverting the
+// user's choice back to the default. These tests exercise the generation
+// guard (dispatchSnapshot vs fieldGenerationRef) that fixes it.
+describe('applyCalloutFieldUpdates — ETP-4772 stale response guard', () => {
+  function makeArgs(overrides = {}) {
+    return {
+      data: {},
+      triggerField: 'trigger',
+      userTouchedRef: { current: new Set() },
+      appliedFields: new Map(),
+      hook: { handleChange: vi.fn() },
+      api: {},
+      catalogs: {},
+      ...overrides,
+    };
+  }
+
+  it('discards a stale response for the trigger field itself when a newer edit happened since dispatch', () => {
+    const fieldGenerationRef = { current: {} };
+    // Simulate the race: the default auto-callout dispatched at generation 1,
+    // then the user edits warehouse again before its response comes back,
+    // bumping the field to generation 2.
+    fieldGenerationRef.current.warehouse = 2;
+    const staleDispatchSnapshot = { warehouse: 1 };
+
+    const a = makeArgs({
+      triggerField: 'warehouse',
+      data: { warehouse: 'USER_CHOSEN' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+      dispatchSnapshot: staleDispatchSnapshot,
+      fieldGenerationRef,
+    });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'DEFAULT_WH' } },
+      a,
+    );
+
+    expect(a.appliedFields.has('warehouse')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+    // The stale response must not have bumped generation further.
+    expect(fieldGenerationRef.current.warehouse).toBe(2);
+  });
+
+  it('applies a fresh (non-stale) response for the trigger field and bumps its generation', () => {
+    const fieldGenerationRef = { current: { warehouse: 1 } };
+    const freshDispatchSnapshot = { warehouse: 1 };
+
+    const a = makeArgs({
+      triggerField: 'warehouse',
+      data: { warehouse: 'USER_CHOSEN' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+      dispatchSnapshot: freshDispatchSnapshot,
+      fieldGenerationRef,
+    });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'DEFAULT_WH' } },
+      a,
+    );
+
+    expect(a.appliedFields.get('warehouse')).toBe('DEFAULT_WH');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'DEFAULT_WH');
+    expect(fieldGenerationRef.current.warehouse).toBe(2);
+  });
+
+  it('discards a stale collateral update the same way as a stale trigger-field update', () => {
+    const fieldGenerationRef = { current: { priceList: 3 } };
+    const staleDispatchSnapshot = { priceList: 1 };
+
+    const a = makeArgs({
+      triggerField: 'businessPartner',
+      data: { priceList: 'USER_CHOSEN' },
+      userTouchedRef: { current: new Set() },
+      dispatchSnapshot: staleDispatchSnapshot,
+      fieldGenerationRef,
+    });
+    applyCalloutFieldUpdates(
+      { priceList: { value: 'DEFAULT_PL' } },
+      a,
+    );
+
+    expect(a.appliedFields.has('priceList')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+  });
+
+  it('still applies when no generation tracking is wired (backwards compatible with hand-built ctx)', () => {
+    const a = makeArgs({ triggerField: 'warehouse' });
+    applyCalloutFieldUpdates(
+      { warehouse: { value: 'WH1' } },
+      a,
+    );
+    expect(a.appliedFields.get('warehouse')).toBe('WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+  });
+});
+
+describe('applyCalloutComboUpdates', () => {
+  function makeArgs(overrides = {}) {
+    return {
+      data: {},
+      triggerField: 'trigger',
+      userTouchedRef: { current: new Set() },
+      appliedFields: new Map(),
+      hook: { handleChange: vi.fn() },
+      ...overrides,
+    };
+  }
+
+  it('uses combo.selected and emits label via key$_identifier', () => {
+    const a = makeArgs();
+    applyCalloutComboUpdates(
+      { address: { selected: 'A1', _identifier: 'Street 1' } },
+      a,
+    );
+    expect(a.appliedFields.get('address')).toBe('A1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Street 1');
+  });
+
+  it('auto-selects the first entry when selected is null', () => {
+    const a = makeArgs();
+    applyCalloutComboUpdates(
+      {
+        address: {
+          selected: null,
+          entries: [{ id: 'A1', identifier: 'First Addr' }, { id: 'A2', identifier: 'Second' }],
+        },
+      },
+      a,
+    );
+    expect(a.appliedFields.get('address')).toBe('A1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'First Addr');
+  });
+
+  it('falls back to entry._identifier when auto-selecting without identifier', () => {
+    const a = makeArgs();
+    applyCalloutComboUpdates(
+      { address: { selected: null, entries: [{ id: 'A1', _identifier: 'Fallback Addr' }] } },
+      a,
+    );
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Fallback Addr');
+  });
+
+  it('does nothing when selected is null and there are no entries', () => {
+    const a = makeArgs();
+    applyCalloutComboUpdates(
+      { address: { selected: null, entries: [] } },
+      a,
+    );
+    expect(a.appliedFields.size).toBe(0);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+  });
+
+  it('does not emit identifier when no label is available', () => {
+    const a = makeArgs();
+    applyCalloutComboUpdates(
+      { address: { selected: 'A1' } },
+      a,
+    );
+    expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1');
+  });
+
+  it('skips a user-touched non-trigger combo that already has a value', () => {
+    const a = makeArgs({
+      data: { address: 'USER' },
+      userTouchedRef: { current: new Set(['address']) },
+    });
+    applyCalloutComboUpdates(
+      { address: { selected: 'A1', _identifier: 'Street 1' } },
+      a,
+    );
+    expect(a.appliedFields.has('address')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+  });
+
+  it('skips combo for the trigger field to prevent callout reverting user selection', () => {
+    const a = makeArgs({
+      triggerField: 'address',
+      data: { address: 'USER' },
+      userTouchedRef: { current: new Set(['address']) },
+    });
+    applyCalloutComboUpdates(
+      { address: { selected: 'A1', _identifier: 'Street 1' } },
+      a,
+    );
+    expect(a.appliedFields.has('address')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-4772 (combo path): the actual bug that motivated the guard was the
+// warehouse selector arriving through `combos.warehouse: { selected, entries }`
+// on a fresh-record callout, not through the plain `updates` map exercised by
+// the `applyCalloutFieldUpdates` suite above. Every combo update funnels
+// through `applyOneComboEntry`, which carries the same isStaleCalloutResponse
+// check — these tests exercise that path directly.
+describe('applyOneComboEntry — ETP-4772 stale response guard (combos)', () => {
+  function makeArgs(overrides = {}) {
+    return {
+      data: {},
+      userTouchedRef: { current: new Set() },
+      appliedFields: new Map(),
+      hook: { handleChange: vi.fn() },
+      ...overrides,
+    };
+  }
+
+  it('discards a stale combo response when a newer edit happened since dispatch', () => {
+    const fieldGenerationRef = { current: { warehouse: 2 } };
+    const staleDispatchSnapshot = { warehouse: 1 };
+
+    const a = makeArgs({
+      data: { warehouse: 'USER_CHOSEN' },
+      userTouchedRef: { current: new Set(['warehouse']) },
+      dispatchSnapshot: staleDispatchSnapshot,
+      fieldGenerationRef,
+    });
+
+    applyOneComboEntry(
+      'warehouse',
+      { selected: 'DEFAULT_WH', _identifier: 'Default Warehouse' },
+      a,
+    );
+
+    expect(a.appliedFields.has('warehouse')).toBe(false);
+    expect(a.hook.handleChange).not.toHaveBeenCalled();
+    // The stale response must not have bumped generation further.
+    expect(fieldGenerationRef.current.warehouse).toBe(2);
+  });
+
+  it('applies a fresh (non-stale) combo response and bumps its generation', () => {
+    const fieldGenerationRef = { current: { warehouse: 1 } };
+    const freshDispatchSnapshot = { warehouse: 1 };
+
+    const a = makeArgs({
+      data: { warehouse: '' },
+      dispatchSnapshot: freshDispatchSnapshot,
+      fieldGenerationRef,
+    });
+
+    applyOneComboEntry(
+      'warehouse',
+      { selected: 'DEFAULT_WH', _identifier: 'Default Warehouse' },
+      a,
+    );
+
+    expect(a.appliedFields.get('warehouse')).toBe('DEFAULT_WH');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'DEFAULT_WH');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Default Warehouse');
+    expect(fieldGenerationRef.current.warehouse).toBe(2);
+  });
+
+  it('applies an up-to-date collateral combo normally (legitimate case not broken by the guard)', () => {
+    // Collateral field (e.g. address) whose combo response is not stale —
+    // dispatch generation matches current generation, so it must still apply
+    // like it always did before ETP-4772.
+    const fieldGenerationRef = { current: { address: 1 } };
+    const currentDispatchSnapshot = { address: 1 };
+
+    const a = makeArgs({
+      data: { address: '' },
+      dispatchSnapshot: currentDispatchSnapshot,
+      fieldGenerationRef,
+    });
+
+    applyOneComboEntry(
+      'address',
+      { selected: 'A1', _identifier: 'Street 1' },
+      a,
+    );
+
+    expect(a.appliedFields.get('address')).toBe('A1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Street 1');
+    expect(fieldGenerationRef.current.address).toBe(2);
+  });
+
+  it('still applies when no generation tracking is wired (backwards compatible with hand-built ctx)', () => {
+    const a = makeArgs();
+
+    applyOneComboEntry(
+      'warehouse',
+      { selected: 'WH1', _identifier: 'Main Warehouse' },
+      a,
+    );
+
+    expect(a.appliedFields.get('warehouse')).toBe('WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
+  });
+});
+
+describe('runAddLineAction', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('logs an error when the secondary add-line handler rejects', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const boom = new Error('toggle failed');
+    const handlers = {
+      handleCustomModalAddClick: vi.fn(),
+      handleSecondaryAddLineToggle: vi.fn().mockRejectedValue(boom),
+    };
+
+    await runAddLineAction({ key: 'lines' }, handlers);
+
+    expect(handlers.handleSecondaryAddLineToggle).toHaveBeenCalledWith('lines');
+    expect(handlers.handleCustomModalAddClick).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledWith(
+      "Add line action failed for tab 'lines':",
+      boom,
+    );
+  });
+
+  it('logs an error when the customAddModal handler rejects', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const boom = new Error('modal failed');
+    const handlers = {
+      handleCustomModalAddClick: vi.fn().mockRejectedValue(boom),
+      handleSecondaryAddLineToggle: vi.fn(),
+    };
+
+    await runAddLineAction({ key: 'address', customAddModal: () => null }, handlers);
+
+    expect(handlers.handleCustomModalAddClick).toHaveBeenCalledWith('address');
+    expect(handlers.handleSecondaryAddLineToggle).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalledWith(
+      "Add line action failed for tab 'address':",
+      boom,
+    );
+  });
+
+  it('does not log when the secondary add-line handler resolves', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const handlers = {
+      handleCustomModalAddClick: vi.fn(),
+      handleSecondaryAddLineToggle: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await runAddLineAction({ key: 'lines' }, handlers);
+
+    expect(handlers.handleSecondaryAddLineToggle).toHaveBeenCalledWith('lines');
+    expect(errSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not log when the customAddModal handler resolves', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const handlers = {
+      handleCustomModalAddClick: vi.fn().mockResolvedValue(undefined),
+      handleSecondaryAddLineToggle: vi.fn(),
+    };
+
+    await runAddLineAction({ key: 'address', customAddModal: () => null }, handlers);
+
+    expect(handlers.handleCustomModalAddClick).toHaveBeenCalledWith('address');
+    expect(errSpy).not.toHaveBeenCalled();
+  });
+});

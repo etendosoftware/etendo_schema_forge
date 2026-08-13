@@ -1,0 +1,355 @@
+{
+  "version": "0.11.0",
+  "generatedAt": "2026-05-04T17:02:25.021Z",
+  "updatedAt": "2026-08-04T14:03:24.110Z",
+  "contractChecksum": "bdeef52685f3538b",
+  "apiPrediction": {
+    "specName": "monitor-verifactu",
+    "baseUrl": "/sws/neo/monitor-verifactu",
+    "crud": {
+      "cabeceraDeEmisor": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/monitor-verifactu/cabeceraDeEmisor",
+        "detailUrl": "/sws/neo/monitor-verifactu/cabeceraDeEmisor/{id}",
+        "supportedFilters": []
+      },
+      "facturasRechazadas": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/monitor-verifactu/facturasRechazadas",
+        "detailUrl": "/sws/neo/monitor-verifactu/facturasRechazadas/{id}",
+        "supportedFilters": []
+      },
+      "facturasParcialmenteAceptadas": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas",
+        "detailUrl": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas/{id}",
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID",
+          "PUT",
+          "PATCH"
+        ]
+      },
+      "facturasAceptadas": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/monitor-verifactu/facturasAceptadas",
+        "detailUrl": "/sws/neo/monitor-verifactu/facturasAceptadas/{id}",
+        "supportedFilters": []
+      },
+      "facturasInválidas": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/monitor-verifactu/facturasInválidas",
+        "detailUrl": "/sws/neo/monitor-verifactu/facturasInválidas/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "facturasRechazadas",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/monitor-verifactu/facturasRechazadas/selectors/invoice"
+      },
+      {
+        "entity": "facturasParcialmenteAceptadas",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas/selectors/invoice"
+      },
+      {
+        "entity": "facturasAceptadas",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/monitor-verifactu/facturasAceptadas/selectors/invoice"
+      },
+      {
+        "entity": "facturasInválidas",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/monitor-verifactu/facturasInválidas/selectors/invoice"
+      }
+    ],
+    "actions": [
+      {
+        "name": "isReady",
+        "actionType": "utilityAction",
+        "entity": "cabeceraDeEmisor",
+        "column": "IS_Ready",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/monitor-verifactu/cabeceraDeEmisor/{id}/action/isReady",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "D995FA46EEDB4DAF9F414E661FB13E43",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "correctInvoice",
+        "actionType": "utilityAction",
+        "entity": "facturasRechazadas",
+        "column": "Correct_Invoice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/monitor-verifactu/facturasRechazadas/{id}/action/correctInvoice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "F353F2A7307B464CA2C6515CBEFB0D93",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "correctInvoice",
+        "actionType": "utilityAction",
+        "entity": "facturasParcialmenteAceptadas",
+        "column": "Correct_Invoice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas/{id}/action/correctInvoice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "F353F2A7307B464CA2C6515CBEFB0D93",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "correctInvoice",
+        "actionType": "utilityAction",
+        "entity": "facturasAceptadas",
+        "column": "Correct_Invoice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/monitor-verifactu/facturasAceptadas/{id}/action/correctInvoice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "F353F2A7307B464CA2C6515CBEFB0D93",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "correctInvoice",
+        "actionType": "utilityAction",
+        "entity": "facturasInválidas",
+        "column": "Correct_Invoice",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/monitor-verifactu/facturasInválidas/{id}/action/correctInvoice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "F353F2A7307B464CA2C6515CBEFB0D93",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "monitor",
+      "readOnly": true
+    }
+  },
+  "formState": {
+    "entities": {
+      "cabeceraDeEmisor": {
+        "fields": {
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "tAXType": {
+            "required": true,
+            "readOnlyLogic": "@IS_Ready@='Y'"
+          },
+          "issuerNIF": {
+            "readOnly": true
+          },
+          "nextSendWaitTime": {
+            "required": true,
+            "defaultValue": "60"
+          }
+        }
+      },
+      "facturasRechazadas": {
+        "fields": {
+          "issuerTaxID": {},
+          "active": {},
+          "sentToVerifactu": {},
+          "errorReason": {},
+          "cSV": {},
+          "typeOperation": {},
+          "codeError": {},
+          "isSubsanation": {},
+          "invoice": {},
+          "verifactuSendingStatus": {}
+        }
+      },
+      "facturasParcialmenteAceptadas": {
+        "fields": {
+          "issuerTaxID": {},
+          "active": {},
+          "sentToVerifactu": {},
+          "errorReason": {},
+          "typeOperation": {},
+          "codeError": {},
+          "isSubsanation": {},
+          "invoice": {},
+          "verifactuSendingStatus": {}
+        }
+      },
+      "facturasAceptadas": {
+        "fields": {
+          "issuerTaxID": {},
+          "active": {},
+          "sentToVerifactu": {},
+          "errorReason": {},
+          "cSV": {},
+          "typeOperation": {},
+          "codeError": {},
+          "isSubsanation": {},
+          "invoice": {},
+          "verifactuSendingStatus": {}
+        }
+      },
+      "facturasInválidas": {
+        "fields": {
+          "issuerTaxID": {},
+          "active": {},
+          "errorReason": {},
+          "typeOperation": {},
+          "isSubsanation": {},
+          "invoice": {},
+          "verifactuSendingStatus": {},
+          "correctInvoice": {}
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage monitor verifactu records.",
+    "whenToUse": [
+      "Use for monitor verifactu management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "active",
+        "tAXType",
+        "nextSendWaitTime"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "active",
+          "tAXType",
+          "nextSendWaitTime"
+        ]
+      }
+    ],
+    "warnings": [
+      "System lifecycle actions are present but are not exposed as editable agent actions"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "b6e078d5d696c1d2"
+}

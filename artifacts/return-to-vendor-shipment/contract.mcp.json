@@ -1,0 +1,600 @@
+{
+  "version": "0.24.0",
+  "generatedAt": "2026-07-06T16:17:20.534Z",
+  "updatedAt": "2026-08-04T17:47:50.435Z",
+  "contractChecksum": "eed628b2edf5cbce",
+  "apiPrediction": {
+    "specName": "return-to-vendor-shipment",
+    "baseUrl": "/sws/neo/return-to-vendor-shipment",
+    "crud": {
+      "returnToVendorShipment": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment",
+        "detailUrl": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}",
+        "supportedFilters": [
+          "documentNo",
+          "businessPartner",
+          "movementDate",
+          "documentStatus"
+        ]
+      },
+      "returnToVendorShipmentLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine",
+        "detailUrl": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/{id}",
+        "supportedFilters": [
+          "product"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "returnToVendorShipment",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BusinessPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/selectors/businessPartner"
+      },
+      {
+        "entity": "returnToVendorShipment",
+        "field": "partnerAddress",
+        "column": "C_BPartner_Location_ID",
+        "reference": "BusinessPartnerLocation",
+        "inputMode": "dependent",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/selectors/partnerAddress",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "returnToVendorShipment",
+        "field": "warehouse",
+        "column": "M_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "search",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/selectors/warehouse"
+      },
+      {
+        "entity": "returnToVendorShipmentLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/selectors/product"
+      },
+      {
+        "entity": "returnToVendorShipmentLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "search",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/selectors/uOM"
+      }
+    ],
+    "actions": [
+      {
+        "name": "sendMaterials",
+        "actionType": "createFrom",
+        "entity": "returnToVendorShipment",
+        "column": "RM_Shipment_Pickedit",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/sendMaterials",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "4AD70293357245AB96E59C2CDB43A35D",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "createLinesFrom",
+        "actionType": "createFrom",
+        "entity": "returnToVendorShipment",
+        "column": "CreateFrom",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/createLinesFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ]
+      },
+      {
+        "name": "generateTo",
+        "actionType": "createFrom",
+        "entity": "returnToVendorShipment",
+        "column": "GenerateTo",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/generateTo",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "154",
+        "processType": "classic"
+      },
+      {
+        "name": "documentAction",
+        "actionType": "documentAction",
+        "entity": "returnToVendorShipment",
+        "column": "DocAction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/documentAction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "109",
+        "processType": "classic"
+      },
+      {
+        "name": "calculateFreight",
+        "actionType": "utilityAction",
+        "entity": "returnToVendorShipment",
+        "column": "Calculate_Freight",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/calculateFreight",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "800141",
+        "processType": "classic"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "returnToVendorShipment",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "receiveMaterials",
+        "actionType": "createFrom",
+        "entity": "returnToVendorShipment",
+        "column": "RM_Receipt_PickEdit",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/receiveMaterials",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "updateLines",
+        "actionType": "utilityAction",
+        "entity": "returnToVendorShipment",
+        "column": "UpdateLines",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/updateLines",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "800010",
+        "processType": "classic"
+      },
+      {
+        "name": "invoicefromshipment",
+        "actionType": "utilityAction",
+        "entity": "returnToVendorShipment",
+        "column": "Invoicefromshipment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/invoicefromshipment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "62250E8866EA4D96A66C309878DC039E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "processGoodsJava",
+        "actionType": "utilityAction",
+        "entity": "returnToVendorShipment",
+        "column": "Process_Goods_Java",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/processGoodsJava",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "49DEE812BF0545269781FCEBF2235924",
+        "processType": "classic"
+      },
+      {
+        "name": "explode",
+        "actionType": "utilityAction",
+        "entity": "returnToVendorShipmentLine",
+        "column": "Explode",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/{id}/action/explode",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "DAE719940FE9463F8A3E3C401BBAFC53",
+        "processType": "classic"
+      },
+      {
+        "name": "managePrereservation",
+        "actionType": "utilityAction",
+        "entity": "returnToVendorShipmentLine",
+        "column": "Manage_Prereservation",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/{id}/action/managePrereservation",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "70E42AD47E5F4698A9ACCCAF3EB72B9E",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "purchases"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "sourceReceiptDocNo": "Albarán origen",
+        "MovementQty": "Cant. a devolver",
+        "QuantityOrder": "Cant. pedida"
+      },
+      "en_US": {
+        "sourceReceiptDocNo": "Source Receipt",
+        "MovementQty": "Return Qty",
+        "QuantityOrder": "Ordered Qty"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "returnToVendorShipment": {
+        "fields": {
+          "documentNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "businessPartner": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "partnerAddress": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "movementDate": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "warehouse": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "description": {},
+          "documentStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "DR"
+          },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etblkpBulkposting": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "trackingNo": {},
+          "invoiceStatus": {
+            "readOnly": true
+          },
+          "sourceReceiptDocNo": {
+            "readOnly": true
+          }
+        }
+      },
+      "returnToVendorShipmentLine": {
+        "fields": {
+          "lineNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
+          },
+          "product": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "movementQuantity": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
+            "defaultValue": "0"
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@UomManagement@='Y'"
+          },
+          "description": {},
+          "orderQuantity": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Create and manage return to vendor shipment documents.",
+    "whenToUse": [
+      "Use for supplier return to vendor shipment before receipt or invoice."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "businessPartner",
+        "partnerAddress",
+        "movementDate",
+        "warehouse"
+      ],
+      "lineFields": [
+        "movementQuantity"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "returnToVendorShipment",
+        "field": "partnerAddress",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [
+      "sendMaterials",
+      "createLinesFrom",
+      "generateTo",
+      "documentAction",
+      "etblkpBulkposting",
+      "receiveMaterials"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "businessPartner",
+          "partnerAddress",
+          "movementDate",
+          "warehouse"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "movementQuantity"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "sendMaterials"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "a9bf582fb7f6f902"
+}

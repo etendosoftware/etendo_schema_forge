@@ -1,14 +1,17 @@
 {
-  "version": "0.2.0",
+  "version": "0.11.0",
   "generatedAt": "2026-05-04T17:02:25.021Z",
-  "updatedAt": "2026-05-15T16:00:20.749Z",
-  "checksum": "261b0dfd2a329c54",
+  "updatedAt": "2026-08-04T14:03:24.110Z",
+  "checksum": "bdeef52685f3538b",
   "frontendContract": {
     "window": {
       "id": "F4675DAB02134762B66881DAE4672AD0",
       "name": "Monitor Verifactu",
       "primaryEntity": "cabeceraDeEmisor",
       "category": "monitor",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "attachments": false,
       "layoutType": "default"
     },
@@ -35,7 +38,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "tAXType",
@@ -63,28 +70,15 @@
                 "name": "IVA"
               }
             ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "readOnlyLogic": {
               "raw": "@IS_Ready@='Y'",
               "evaluable": true,
               "js": "record['isReady'] === 'Y'"
             }
-          },
-          {
-            "name": "refreshData",
-            "apiKey": "refreshData",
-            "column": "Refresh_Data",
-            "label": "Refrescar Datos",
-            "type": "button",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N"
           },
           {
             "name": "issuerNIF",
@@ -96,7 +90,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "nextSendWaitTime",
@@ -114,7 +111,11 @@
               "type": "computed",
               "source": "60"
             },
-            "defaultValue": "60"
+            "defaultValue": "60",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            }
           }
         ],
         "searchableFields": [],
@@ -127,13 +128,6 @@
             }
           },
           {
-            "name": "refreshData",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
             "name": "nextSendWaitTime",
             "derivation": {
               "type": "computed",
@@ -143,7 +137,7 @@
         ]
       },
       "facturasRechazadas": {
-        "tableName": "etvfac_inv_sent_status_mv",
+        "tableName": "etvfac_inv_sent_status_v",
         "tabId": "F26C18F5EF6C4DB5B94A97F36B45CF7B",
         "tabName": "Facturas rechazadas",
         "uiPattern": "STD",
@@ -158,7 +152,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "active",
@@ -170,7 +167,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "sentToVerifactu",
@@ -182,7 +182,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "errorReason",
@@ -194,7 +197,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "cSV",
@@ -206,7 +212,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 16
+            }
           },
           {
             "name": "typeOperation",
@@ -228,7 +237,10 @@
                 "value": "BA",
                 "name": "BAJA"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "codeError",
@@ -240,7 +252,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "isSubsanation",
@@ -252,7 +267,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "invoice",
@@ -266,7 +284,10 @@
             "grid": false,
             "form": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "verifactuSendingStatus",
@@ -300,14 +321,17 @@
                 "value": "ER",
                 "name": "Rechazada"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [],
         "computedFields": []
       },
       "facturasParcialmenteAceptadas": {
-        "tableName": "etvfac_inv_sent_status_mv",
+        "tableName": "etvfac_inv_sent_status_v",
         "tabId": "126EBD2F625344E1A22C11219217F551",
         "tabName": "Facturas Parcialmente Aceptadas",
         "uiPattern": "STD",
@@ -322,7 +346,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "active",
@@ -334,7 +361,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "sentToVerifactu",
@@ -346,7 +376,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "errorReason",
@@ -358,7 +391,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "typeOperation",
@@ -380,7 +416,10 @@
                 "value": "BA",
                 "name": "BAJA"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "codeError",
@@ -392,7 +431,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "isSubsanation",
@@ -404,7 +446,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "invoice",
@@ -418,7 +463,10 @@
             "grid": false,
             "form": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "verifactuSendingStatus",
@@ -452,14 +500,18 @@
                 "value": "ER",
                 "name": "Rechazada"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "mark-subsanation-handler"
       },
       "facturasAceptadas": {
-        "tableName": "etvfac_inv_sent_status_mv",
+        "tableName": "etvfac_inv_sent_status_v",
         "tabId": "9DE45A800ACB4FDB944B05B80D565543",
         "tabName": "Facturas Aceptadas",
         "uiPattern": "STD",
@@ -474,7 +526,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "active",
@@ -486,7 +541,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "sentToVerifactu",
@@ -498,7 +556,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "errorReason",
@@ -510,7 +571,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "cSV",
@@ -522,7 +586,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 16
+            }
           },
           {
             "name": "typeOperation",
@@ -544,7 +611,10 @@
                 "value": "BA",
                 "name": "BAJA"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "codeError",
@@ -556,7 +626,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "isSubsanation",
@@ -568,7 +641,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "invoice",
@@ -582,7 +658,10 @@
             "grid": false,
             "form": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "verifactuSendingStatus",
@@ -616,14 +695,17 @@
                 "value": "ER",
                 "name": "Rechazada"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           }
         ],
         "searchableFields": [],
         "computedFields": []
       },
       "facturasInválidas": {
-        "tableName": "etvfac_inv_sent_status_mv",
+        "tableName": "etvfac_inv_sent_status_v",
         "tabId": "6055C2356AEE43D4B1CEC16994DC3E5F",
         "tabName": "Facturas Inválidas",
         "uiPattern": "STD",
@@ -638,7 +720,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "active",
@@ -650,7 +735,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "errorReason",
@@ -662,7 +750,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 500
+            }
           },
           {
             "name": "typeOperation",
@@ -684,7 +775,10 @@
                 "value": "BA",
                 "name": "BAJA"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "isSubsanation",
@@ -696,7 +790,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1
+            }
           },
           {
             "name": "invoice",
@@ -710,7 +807,10 @@
             "grid": false,
             "form": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
           },
           {
             "name": "verifactuSendingStatus",
@@ -744,7 +844,10 @@
                 "value": "ER",
                 "name": "Rechazada"
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "correctInvoice",
@@ -757,6 +860,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@etvfac_corrected_invoice@='Y'",
               "evaluable": true
@@ -764,7 +870,8 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "correct-invoice-handler"
       }
     }
   },
@@ -774,6 +881,9 @@
       "name": "Monitor Verifactu",
       "primaryEntity": "cabeceraDeEmisor",
       "category": "monitor",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "attachments": false
     },
     "entities": {
@@ -807,14 +917,6 @@
             "required": true
           },
           {
-            "name": "refreshData",
-            "apiKey": "refreshData",
-            "column": "Refresh_Data",
-            "type": "button",
-            "visibility": "editable",
-            "required": false
-          },
-          {
             "name": "issuerNIF",
             "apiKey": "issuerNIF",
             "column": "Issuer_Nif",
@@ -828,14 +930,6 @@
             "column": "Next_Send_Wait_Time",
             "type": "integer",
             "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "verifactuConfig",
-            "apiKey": "verifactuConfig",
-            "column": "Etvfac_Verifactu_Config_ID",
-            "type": "id",
-            "visibility": "system",
             "required": true
           },
           {
@@ -933,11 +1027,19 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Etvfac_Verifactu_Config_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ]
       },
       "facturasRechazadas": {
-        "tableName": "etvfac_inv_sent_status_mv",
+        "tableName": "etvfac_inv_sent_status_v",
         "tabId": "F26C18F5EF6C4DB5B94A97F36B45CF7B",
         "tabName": "Facturas rechazadas",
         "fields": [
@@ -1030,14 +1132,6 @@
             "required": false
           },
           {
-            "name": "invoiceSentStatusID",
-            "apiKey": "invoiceSentStatusID",
-            "column": "Etvfac_Inv_Sent_Status_Mv_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -1092,11 +1186,27 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "verifactuConfig",
+            "apiKey": "verifactuConfig",
+            "column": "Etvfac_Verifactu_Config_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Etvfac_Inv_Sent_Status_V_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": false
           }
         ]
       },
       "facturasParcialmenteAceptadas": {
-        "tableName": "etvfac_inv_sent_status_mv",
+        "tableName": "etvfac_inv_sent_status_v",
         "tabId": "126EBD2F625344E1A22C11219217F551",
         "tabName": "Facturas Parcialmente Aceptadas",
         "fields": [
@@ -1189,14 +1299,6 @@
             "required": false
           },
           {
-            "name": "invoiceSentStatusID",
-            "apiKey": "invoiceSentStatusID",
-            "column": "Etvfac_Inv_Sent_Status_Mv_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "correctInvoice",
             "apiKey": "correctInvoice",
             "column": "Correct_Invoice",
@@ -1251,11 +1353,28 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "verifactuConfig",
+            "apiKey": "verifactuConfig",
+            "column": "Etvfac_Verifactu_Config_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Etvfac_Inv_Sent_Status_V_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": false
           }
-        ]
+        ],
+        "javaQualifier": "mark-subsanation-handler"
       },
       "facturasAceptadas": {
-        "tableName": "etvfac_inv_sent_status_mv",
+        "tableName": "etvfac_inv_sent_status_v",
         "tabId": "9DE45A800ACB4FDB944B05B80D565543",
         "tabName": "Facturas Aceptadas",
         "fields": [
@@ -1348,14 +1467,6 @@
             "required": false
           },
           {
-            "name": "invoiceSentStatusID",
-            "apiKey": "invoiceSentStatusID",
-            "column": "Etvfac_Inv_Sent_Status_Mv_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -1410,11 +1521,27 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "verifactuConfig",
+            "apiKey": "verifactuConfig",
+            "column": "Etvfac_Verifactu_Config_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Etvfac_Inv_Sent_Status_V_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": false
           }
         ]
       },
       "facturasInválidas": {
-        "tableName": "etvfac_inv_sent_status_mv",
+        "tableName": "etvfac_inv_sent_status_v",
         "tabId": "6055C2356AEE43D4B1CEC16994DC3E5F",
         "tabName": "Facturas Inválidas",
         "fields": [
@@ -1491,14 +1618,6 @@
             "required": false
           },
           {
-            "name": "invoiceSentStatusID",
-            "apiKey": "invoiceSentStatusID",
-            "column": "Etvfac_Inv_Sent_Status_Mv_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -1569,8 +1688,25 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "verifactuConfig",
+            "apiKey": "verifactuConfig",
+            "column": "Etvfac_Verifactu_Config_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Etvfac_Inv_Sent_Status_V_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": false
           }
-        ]
+        ],
+        "javaQualifier": "correct-invoice-handler"
       }
     },
     "endpoints": [
@@ -1734,10 +1870,10 @@
       "cabeceraDeEmisor": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/cabeceraDeEmisor",
         "detailUrl": "/sws/neo/monitor-verifactu/cabeceraDeEmisor/{id}",
         "supportedFilters": []
@@ -1745,10 +1881,10 @@
       "facturasRechazadas": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/facturasRechazadas",
         "detailUrl": "/sws/neo/monitor-verifactu/facturasRechazadas/{id}",
         "supportedFilters": []
@@ -1756,21 +1892,27 @@
       "facturasParcialmenteAceptadas": {
         "get": true,
         "getById": true,
-        "post": true,
+        "post": false,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas",
         "detailUrl": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID",
+          "PUT",
+          "PATCH"
+        ]
       },
       "facturasAceptadas": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/facturasAceptadas",
         "detailUrl": "/sws/neo/monitor-verifactu/facturasAceptadas/{id}",
         "supportedFilters": []
@@ -1778,10 +1920,10 @@
       "facturasInválidas": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/monitor-verifactu/facturasInválidas",
         "detailUrl": "/sws/neo/monitor-verifactu/facturasInválidas/{id}",
         "supportedFilters": []
@@ -1822,14 +1964,6 @@
       }
     ],
     "actions": [
-      {
-        "entity": "cabeceraDeEmisor",
-        "field": "refreshData",
-        "column": "Refresh_Data",
-        "url": "/sws/neo/monitor-verifactu/cabeceraDeEmisor/{id}/action/refreshData",
-        "processId": "E0D681117A1843C5B9D525701087D7DC",
-        "processType": "obuiapp"
-      },
       {
         "entity": "cabeceraDeEmisor",
         "field": "isReady",
@@ -1885,7 +2019,8 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "monitor"
+      "category": "monitor",
+      "readOnly": true
     }
   },
   "testManifest": {
@@ -1897,14 +2032,6 @@
         "field": "isReady",
         "runner": "node",
         "description": "Action endpoint for 'isReady' in cabeceraDeEmisor should exist"
-      },
-      {
-        "id": "t-action-endpoint-cabeceraDeEmisor-refreshData",
-        "category": "action-endpoint",
-        "entity": "cabeceraDeEmisor",
-        "field": "refreshData",
-        "runner": "node",
-        "description": "Action endpoint for 'refreshData' in cabeceraDeEmisor should exist"
       },
       {
         "id": "t-action-endpoint-facturasAceptadas-correctInvoice",
@@ -1990,14 +2117,6 @@
         "description": "Default value for 'nextSendWaitTime' in cabeceraDeEmisor should be a string"
       },
       {
-        "id": "t-default-value-type-cabeceraDeEmisor-refreshData",
-        "category": "default-value-type",
-        "entity": "cabeceraDeEmisor",
-        "field": "refreshData",
-        "runner": "node",
-        "description": "Default value for 'refreshData' in cabeceraDeEmisor should be a string"
-      },
-      {
         "id": "t-displaylogic-evaluable-facturasInv-lidas-correctInvoice",
         "category": "displaylogic-evaluable",
         "entity": "facturasInválidas",
@@ -2036,14 +2155,6 @@
         "field": "nextSendWaitTime",
         "runner": "node",
         "description": "Field 'nextSendWaitTime' should be present in cabeceraDeEmisor"
-      },
-      {
-        "id": "t-field-presence-cabeceraDeEmisor-refreshData",
-        "category": "field-presence",
-        "entity": "cabeceraDeEmisor",
-        "field": "refreshData",
-        "runner": "node",
-        "description": "Field 'refreshData' should be present in cabeceraDeEmisor"
       },
       {
         "id": "t-field-presence-cabeceraDeEmisor-tAXType",
@@ -2372,14 +2483,6 @@
         "field": "nextSendWaitTime",
         "runner": "node",
         "description": "Field 'nextSendWaitTime' should have type 'number' in cabeceraDeEmisor"
-      },
-      {
-        "id": "t-field-type-cabeceraDeEmisor-refreshData",
-        "category": "field-type",
-        "entity": "cabeceraDeEmisor",
-        "field": "refreshData",
-        "runner": "node",
-        "description": "Field 'refreshData' should have type 'string' in cabeceraDeEmisor"
       },
       {
         "id": "t-field-type-cabeceraDeEmisor-tAXType",
@@ -2737,13 +2840,6 @@
         "description": "Rule 'monitor-verifactu-Facturas Inválidas-Correct_Invoice-displayLogic' (displayLogic) should be declared"
       },
       {
-        "id": "t-rule-declared-Refrescar-monitor-Verifactu",
-        "category": "rule-declared",
-        "rule": "Refrescar monitor Verifactu",
-        "runner": "node",
-        "description": "Rule 'Refrescar monitor Verifactu' (process) should be declared"
-      },
-      {
         "id": "t-selector-endpoint-facturasAceptadas-invoice",
         "category": "selector-endpoint",
         "entity": "facturasAceptadas",
@@ -2806,6 +2902,14 @@
         "field": "defaultQR",
         "runner": "node",
         "description": "System field 'defaultQR' should exist in backend but not frontend for cabeceraDeEmisor"
+      },
+      {
+        "id": "t-system-field-cabeceraDeEmisor-id",
+        "category": "system-field",
+        "entity": "cabeceraDeEmisor",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for cabeceraDeEmisor"
       },
       {
         "id": "t-system-field-cabeceraDeEmisor-incidentReport",
@@ -2880,14 +2984,6 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for cabeceraDeEmisor"
       },
       {
-        "id": "t-system-field-cabeceraDeEmisor-verifactuConfig",
-        "category": "system-field",
-        "entity": "cabeceraDeEmisor",
-        "field": "verifactuConfig",
-        "runner": "node",
-        "description": "System field 'verifactuConfig' should exist in backend but not frontend for cabeceraDeEmisor"
-      },
-      {
         "id": "t-system-field-facturasAceptadas-client",
         "category": "system-field",
         "entity": "facturasAceptadas",
@@ -2928,12 +3024,12 @@
         "description": "System field 'hash' should exist in backend but not frontend for facturasAceptadas"
       },
       {
-        "id": "t-system-field-facturasAceptadas-invoiceSentStatusID",
+        "id": "t-system-field-facturasAceptadas-id",
         "category": "system-field",
         "entity": "facturasAceptadas",
-        "field": "invoiceSentStatusID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'invoiceSentStatusID' should exist in backend but not frontend for facturasAceptadas"
+        "description": "System field 'id' should exist in backend but not frontend for facturasAceptadas"
       },
       {
         "id": "t-system-field-facturasAceptadas-organization",
@@ -2958,6 +3054,14 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for facturasAceptadas"
+      },
+      {
+        "id": "t-system-field-facturasAceptadas-verifactuConfig",
+        "category": "system-field",
+        "entity": "facturasAceptadas",
+        "field": "verifactuConfig",
+        "runner": "node",
+        "description": "System field 'verifactuConfig' should exist in backend but not frontend for facturasAceptadas"
       },
       {
         "id": "t-system-field-facturasInv-lidas-client",
@@ -3008,12 +3112,12 @@
         "description": "System field 'hash' should exist in backend but not frontend for facturasInválidas"
       },
       {
-        "id": "t-system-field-facturasInv-lidas-invoiceSentStatusID",
+        "id": "t-system-field-facturasInv-lidas-id",
         "category": "system-field",
         "entity": "facturasInválidas",
-        "field": "invoiceSentStatusID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'invoiceSentStatusID' should exist in backend but not frontend for facturasInválidas"
+        "description": "System field 'id' should exist in backend but not frontend for facturasInválidas"
       },
       {
         "id": "t-system-field-facturasInv-lidas-organization",
@@ -3046,6 +3150,14 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for facturasInválidas"
+      },
+      {
+        "id": "t-system-field-facturasInv-lidas-verifactuConfig",
+        "category": "system-field",
+        "entity": "facturasInválidas",
+        "field": "verifactuConfig",
+        "runner": "node",
+        "description": "System field 'verifactuConfig' should exist in backend but not frontend for facturasInválidas"
       },
       {
         "id": "t-system-field-facturasParcialmenteAceptadas-client",
@@ -3096,12 +3208,12 @@
         "description": "System field 'hash' should exist in backend but not frontend for facturasParcialmenteAceptadas"
       },
       {
-        "id": "t-system-field-facturasParcialmenteAceptadas-invoiceSentStatusID",
+        "id": "t-system-field-facturasParcialmenteAceptadas-id",
         "category": "system-field",
         "entity": "facturasParcialmenteAceptadas",
-        "field": "invoiceSentStatusID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'invoiceSentStatusID' should exist in backend but not frontend for facturasParcialmenteAceptadas"
+        "description": "System field 'id' should exist in backend but not frontend for facturasParcialmenteAceptadas"
       },
       {
         "id": "t-system-field-facturasParcialmenteAceptadas-organization",
@@ -3126,6 +3238,14 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for facturasParcialmenteAceptadas"
+      },
+      {
+        "id": "t-system-field-facturasParcialmenteAceptadas-verifactuConfig",
+        "category": "system-field",
+        "entity": "facturasParcialmenteAceptadas",
+        "field": "verifactuConfig",
+        "runner": "node",
+        "description": "System field 'verifactuConfig' should exist in backend but not frontend for facturasParcialmenteAceptadas"
       },
       {
         "id": "t-system-field-facturasRechazadas-client",
@@ -3168,12 +3288,12 @@
         "description": "System field 'hash' should exist in backend but not frontend for facturasRechazadas"
       },
       {
-        "id": "t-system-field-facturasRechazadas-invoiceSentStatusID",
+        "id": "t-system-field-facturasRechazadas-id",
         "category": "system-field",
         "entity": "facturasRechazadas",
-        "field": "invoiceSentStatusID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'invoiceSentStatusID' should exist in backend but not frontend for facturasRechazadas"
+        "description": "System field 'id' should exist in backend but not frontend for facturasRechazadas"
       },
       {
         "id": "t-system-field-facturasRechazadas-organization",
@@ -3198,6 +3318,14 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for facturasRechazadas"
+      },
+      {
+        "id": "t-system-field-facturasRechazadas-verifactuConfig",
+        "category": "system-field",
+        "entity": "facturasRechazadas",
+        "field": "verifactuConfig",
+        "runner": "node",
+        "description": "System field 'verifactuConfig' should exist in backend but not frontend for facturasRechazadas"
       },
       {
         "id": "t-visibility-cabeceraDeEmisor",
@@ -3236,24 +3364,24 @@
       }
     ],
     "summary": {
-      "total": 170,
+      "total": 169,
       "byCategory": {
-        "action-endpoint": 6,
+        "action-endpoint": 5,
         "crud-flags": 5,
-        "default-value-type": 3,
+        "default-value-type": 2,
         "displaylogic-evaluable": 1,
         "displaylogic-valid": 1,
-        "field-presence": 42,
-        "field-type": 42,
+        "field-presence": 41,
+        "field-type": 41,
         "readonlylogic-evaluable": 1,
         "readonlylogic-valid": 1,
-        "rule-declared": 6,
+        "rule-declared": 5,
         "selector-endpoint": 4,
-        "system-field": 53,
+        "system-field": 57,
         "visibility": 5
       },
       "byRunner": {
-        "node": 170,
+        "node": 169,
         "junit": 0
       }
     }

@@ -67,26 +67,24 @@ export default function PurchasesPage() {
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <KPIHeader kpis={KPIS} />
-
+      <KPIHeader kpis={KPIS} data-testid="KPIHeader__cd0900" />
       {/* Tab switcher */}
       <div className="flex items-center gap-2">
         <Button
           variant={activeTab === 'kanban' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setActiveTab('kanban')}
-        >
+          data-testid="Button__cd0900">
           {ui("viewKanban")}
         </Button>
         <Button
           variant={activeTab === 'list' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setActiveTab('list')}
-        >
+          data-testid="Button__cd0900">
           {ui("viewList")}
         </Button>
       </div>
-
       {/* Tab content */}
       {activeTab === 'kanban' && (
         <KanbanBoard
@@ -95,15 +93,14 @@ export default function PurchasesPage() {
           onDragEnd={handleDragEnd}
           onCardClick={handleCardClick}
           emptyMessage={ui("noResults")}
-        />
+          data-testid="KanbanBoard__cd0900" />
       )}
-
       {activeTab === 'list' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{ui("purchaseOrders")}</CardTitle>
+        <Card data-testid="Card__cd0900">
+          <CardHeader data-testid="CardHeader__cd0900">
+            <CardTitle data-testid="CardTitle__cd0900">{ui("purchaseOrders")}</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0" data-testid="CardContent__cd0900">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -126,7 +123,9 @@ export default function PurchasesPage() {
                       <td className="px-4 py-3 text-muted-foreground">{card.subtitle}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(card.value)}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={STATUS_VARIANT[card.columnId] || 'secondary'}>
+                        <Badge
+                          variant={STATUS_VARIANT[card.columnId] || 'secondary'}
+                          data-testid="Badge__cd0900">
                           {STATUS_LABEL[card.columnId] || card.columnId}
                         </Badge>
                       </td>

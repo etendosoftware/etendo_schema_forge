@@ -231,6 +231,19 @@ Etendo uses log4j2 (configured via `log4j2-web.xml` or `log4j2.properties`). The
 </RollingFile>
 ```
 
+### 4.6 Transactional Email Logging
+
+Email contract logs must be structured and redacted. Include `requestId`, `auditId`, `contract`, `version`, `tenantId`, `userId`, `recordId` when applicable, `status`, `throttleBucket`, `providerStatus`, and `durationMs`.
+
+Do not log provider API keys, reset tokens, raw custom HTML, full message bodies, or secrets derived from provider configuration. See [../ops/transactional-email-security.md](../ops/transactional-email-security.md).
+
+The Etendo Go email executor emits one terminal observability event for each
+contract attempt. The default implementation writes redacted structured logs;
+future sinks can forward the same event to Prometheus, OpenTelemetry, or another
+metrics backend. Events include `recipientDomain` and `recipientHash` instead of
+the raw destination address, plus optional `providerDurationMs`,
+`throttleScope`, `killSwitchScope`, and `errorClass`.
+
 ---
 
 ## 5. Layer 3: Metrics
@@ -246,7 +259,35 @@ Etendo uses log4j2 (configured via `log4j2-web.xml` or `log4j2.properties`). The
 | `sf_process_duration_seconds` | Histogram | process_name, status | DalProcess execution time |
 | `sf_active_sessions` | Gauge | -- | Number of active AD_Session records |
 
-### 5.2 Infrastructure Metrics
+### 5.2 Transactional Email Metrics
+
+| Metric | Type | Labels | Purpose |
+|--------|------|--------|---------|
+| `sf_email_send_total` | Counter | contract, version, tenant, status | Send outcomes and error rate |
+| `sf_email_provider_duration_seconds` | Histogram | provider, contract, status | Provider latency and timeout behavior |
+| `sf_email_throttle_total` | Counter | contract, tenant, throttle_bucket | Abuse control visibility |
+| `sf_email_duplicate_total` | Counter | contract, tenant | Idempotency effectiveness |
+| `sf_email_suppression_total` | Counter | contract, tenant, reason | Bounce, complaint, and manual suppression impact |
+| `sf_email_kill_switch_total` | Counter | scope, contract, tenant | Kill switch activations |
+| `sf_email_provider_error_total` | Counter | provider, contract, error_class | Provider failure analysis |
+
+Implementation notes:
+
+- `sf_email_send_total` is emitted for every terminal executor outcome,
+  including validation failures before provider submission.
+- `sf_email_provider_duration_seconds` is emitted only when a provider call is
+  attempted.
+- `sf_email_provider_error_total` distinguishes provider rejection,
+  unconfigured provider, and transport/serialization failures through
+  `error_class`.
+- `sf_email_throttle_total`, `sf_email_duplicate_total`,
+  `sf_email_suppression_total`, and `sf_email_kill_switch_total` are derived
+  from the same terminal event, so dashboards can correlate controls without
+  joining separate logs.
+- Keep recipient-level analysis in logs with `recipientHash`; do not create
+  high-cardinality metrics labels for raw recipients.
+
+### 5.3 Infrastructure Metrics
 
 | Metric | Source | Purpose |
 |--------|--------|---------|
@@ -256,7 +297,7 @@ Etendo uses log4j2 (configured via `log4j2-web.xml` or `log4j2.properties`). The
 | PostgreSQL connections, query time, lock waits | `pg_stat_activity`, `pg_stat_statements` | Database health |
 | Disk usage, CPU, memory | Node exporter (Prometheus) | System resource monitoring |
 
-### 5.3 Business Metrics
+### 5.4 Business Metrics
 
 | Metric | Purpose |
 |--------|---------|
@@ -266,7 +307,7 @@ Etendo uses log4j2 (configured via `log4j2-web.xml` or `log4j2.properties`). The
 | User session duration | Engagement, session timeout tuning |
 | Error rate per window | Identify problematic windows |
 
-### 5.4 Metric Exposition
+### 5.5 Metric Exposition
 
 **Recommended approach:** Prometheus JMX exporter (sidecar or javaagent) for JVM/Tomcat/HikariCP metrics. Custom Prometheus servlet endpoint (`/metrics`) for application metrics using the Prometheus Java client library.
 
@@ -297,6 +338,9 @@ scrape_configs:
 | **WARNING** | JVM heap usage > 85% for 10 minutes | Notify ops channel |
 | **WARNING** | Disk usage > 80% | Notify ops channel |
 | **WARNING** | GC pause > 500ms | Notify ops channel |
+| **WARNING** | Email provider failure rate above threshold for 5 minutes | Notify ops channel and check email runbook |
+| **WARNING** | Email throttle or suppression spike for one tenant/contract | Notify ops channel and investigate abuse or misconfiguration |
+| **INFO** | Email kill switch activated | Notify ops channel with scope and actor |
 | **INFO** | Deployment completed (health check transitions DOWN -> UP) | Notify ops channel |
 | **INFO** | Unusual session spike (>2x normal for time of day) | Log for review |
 

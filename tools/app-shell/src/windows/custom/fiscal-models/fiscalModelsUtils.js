@@ -1,3 +1,5 @@
+import { formatCurrency } from '../../../lib/formatCurrency.js';
+
 // ── Box computation ──────────────────────────────────────────────────
 // Returns { boxes, summary } from GET /neo/fiscal303/boxes?year=&period=.
 // Falls back to hardcoded GOOrg mock data when token/apiBaseUrl are absent or the request fails.
@@ -5,7 +7,8 @@ export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
   if (token && apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-      const url = `${base}/fiscal303/boxes?year=${decl.year}&period=${decl.period}`;
+      const params = new URLSearchParams({ year: decl.year, period: decl.period });
+      const url = `${base}/fiscal303/boxes?${params}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) return await res.json();
     } catch (_) {
@@ -36,29 +39,258 @@ export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
   return null;
 }
 
+// Maps identChecks field ids (from casillas form) to their AEAT HTTP param names.
+// Simple 1:1 string forwarding — value is set only when truthy.
+const IDENT_PARAM_MAP = [
+  ['bank_iban',          'IBAN'],
+  ['bank_swift_bic',     'BIC'],
+  ['bank_nombre',        'Bank'],
+  ['bank_direccion',     'BankAddress'],
+  ['bank_ciudad',        'BankCity'],
+  ['bank_pais',          'CountryIso'],
+  ['bank_sepa',          'SEPA'],
+  ['baja_domiciliacion', 'Cancel_Modify_Debit'],
+];
+
+// Declaration types (tipo_declaracion) for which AEAT actually allows/requires an
+// IBAN: Domiciliación (U), Devolución (D), and Devolución transferencia extranjero
+// (X). For any other tipo, AEAT rejects the submission with error EDID065 if IBAN
+// is present. Shared by generate303File and AeatSubmitFlow — both must guard the
+// same set before hitting the network.
+export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
+
+// Declaration type (tipo_declaracion) for which AEAT's NRC (Número de Referencia Completo)
+// field actually applies: Ingreso (I) only, per AEAT's own bundled Modelo 303 spec. The backend
+// already discards any NRC value for every other tipo before it reaches AEAT
+// (`Fiscal303BoxesHandler#resolveNrcForSubmission`, mirroring Classic's
+// `AEAT303PresentationServlet`) — this constant mirrors the Java side's
+// `DECLARATION_TYPE_INGRESO` 1:1 so both layers agree on the same literal. UI-only visibility
+// gate: NRC is NOT mandatory even for tipo I (no AEAT "required" rule found — a real AEAT flow,
+// "reconocimiento de deuda", lets you submit an Ingreso declaration without one), so this must
+// never be paired with a required/blocking validation.
+export const DECLARATION_TYPE_INGRESO = 'I';
+
+// Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
+// Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
+const BOX_PARAM_MAP = {
+  42:  'Special_Compensations',      // compensaciones régimen especial / agrario
+  43:  'Investment_Adjustment',      // regularización bienes de inversión
+  44:  'Adjustment_Final_Percentage',// prorrata definitiva
+  68:  'AnnualRegularAmt',           // regularización anual prorrata (T4/12 only)
+  78:  'PreviousPeriodAmtApplied',   // cuotas a compensar aplicadas en este período
+  108: 'AdministrativeCriteriaDiscrepancy', // discrepancia criterio administrativo (2024+)
+  109: 'ReturnsPendingSettlement',   // devoluciones en tramitación (2023+)
+  110: 'PreviousPeriodAmt',          // cuotas a compensar pendientes de períodos anteriores
+  111: 'RectifyingAmount',           // rectificación. importe (2024+ rectificativa)
+  124: 'OSS_SujetaYAcogida',         // operaciones OSS sujetas y acogidas (2021+)
+};
+
+/**
+ * Calls GET /neo/fiscal303/generate and triggers a browser file download.
+ * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+ *
+ * All parameters are read from the casillas form state:
+ *   identChecks   — identificación fields (tipo_declaracion, bank_iban, bank_swift_bic, etc.)
+ *   manualOverrides — editable box values keyed by box number
+ *   filename      — optional download filename (defaults to 303_<period>_<year>.txt)
+ */
+function applyRectificativaParams(params, identChecks) {
+  params.set('IsComplementary', 'Y');
+  if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
+  if (identChecks.motivo_rectificacion === 'R') params.set('RectifyingReason', 'Y');
+  else if (identChecks.motivo_rectificacion === 'D')
+    params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
+}
+
+export function applyIdentParams(params, identChecks) {
+  for (const [field, paramName] of IDENT_PARAM_MAP) {
+    const v = identChecks[field];
+    if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
+  }
+  if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
+  if (identChecks.complementaria === true) {
+    params.set('IsComplementary', 'Y');
+    if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
+  }
+  // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
+  if (identChecks.rectificativa) applyRectificativaParams(params, identChecks);
+}
+
+function applyBoxParams(params, manualOverrides) {
+  for (const [boxNum, paramName] of Object.entries(BOX_PARAM_MAP)) {
+    const v = manualOverrides[Number(boxNum)];
+    if (v != null) params.set(paramName, String(v));
+  }
+}
+
+function parseServerMessage(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    const full = parsed?.error?.message || parsed?.message || '';
+    // Strip Java exception class prefix (e.g. "com.foo.SomeException: Actual message")
+    const exIdx = full.indexOf('Exception: ');
+    let cleaned = (exIdx >= 0 ? full.slice(exIdx + 11) : full).trim();
+    // Openbravo message keys arrive as "@AEAT303_SomeKey@" — strip the @ delimiters
+    if (cleaned.startsWith('@') && cleaned.endsWith('@')) cleaned = cleaned.slice(1, -1);
+    return cleaned || undefined;
+  } catch (_) { return undefined; }
+}
+
+export function triggerDownload(blob, downloadName) {
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = downloadName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
+/**
+ * Decodes a base64 string (no `data:` URI prefix) into a Blob. Mirrors the
+ * atob → Uint8Array pattern already used by usePreviewAttachment.js for
+ * base64-encoded attachment payloads, so both call sites agree on the same
+ * decoding convention.
+ */
+export function base64ToBlob(base64, mimeType = 'application/pdf') {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: mimeType });
+}
+
+/**
+ * Decodes a base64 payload (e.g. `pdfBase64` from POST /fiscal303/submit)
+ * and triggers a browser download — for endpoints that return the file
+ * inline in a JSON response rather than as a fetch Response blob.
+ */
+export function triggerBase64Download(base64, downloadName, mimeType = 'application/pdf') {
+  if (!base64) return;
+  triggerDownload(base64ToBlob(base64, mimeType), downloadName);
+}
+
+export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+
+  const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
+
+  if (
+    (IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true) &&
+    !identChecks?.bank_iban?.trim()
+  ) {
+    return { ok: false, error: 'iban_required' };
+  }
+
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const params = new URLSearchParams({ year: decl.year, period: decl.period, tipo });
+
+    if (identChecks) applyIdentParams(params, identChecks);
+    if (manualOverrides) applyBoxParams(params, manualOverrides);
+
+    const url = `${base}/fiscal303/generate?${params}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      const raw = await res.text().catch(() => '');
+      return { ok: false, error: `http_${res.status}`, serverMessage: parseServerMessage(raw) };
+    }
+    const blob = await res.blob();
+    triggerDownload(blob, filename ?? `303_${decl.period}_${decl.year}.txt`);
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+/**
+ * Calls PUT /neo/fiscal303/declarations?id=... to persist a manual status
+ * change. Despite the URL, this endpoint is generic across fiscal models —
+ * both 303 and 349 declarations live in the same backend table.
+ * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+ */
+export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
+
+/**
+ * Calls GET /neo/fiscal303/incidents?id=... to fetch the AEAT validation rows persisted for a
+ * declaration — replaced (not appended) on every telematic submission attempt, test mode and
+ * production alike (see ETP-4456, `Fiscal303BoxesHandler#handleSubmit` +
+ * `FiscalDeclCrudHandler#replaceIncidents`). Maps the backend's generic `{code, message, severity}`
+ * rows into the shape `IncidentsTab`/`SourcesTab` (`FmTabContent.jsx`) already expect from the demo
+ * mock data (`DEMO_DECLARATIONS` in `FmListPage.jsx`): `origin` = code, `message` = message,
+ * `severity` = the backend's own `severity` value (`'block'` for AEAT errors, `'warn'` for AEAT
+ * warnings/avisos — added in ETP-4456's `severity` column on `ETGO_Fiscal_Decl_Incident`, so no
+ * mapping/translation is needed here beyond a defensive fallback). Any row missing/blank `severity`
+ * (e.g. data persisted before this column existed) defaults to `'block'`, matching the backend's
+ * own default for legacy rows (`FiscalDeclCrudHandler#resolveSeverity`). `blocking`/`warning` are
+ * now the actual counts of each severity in the response, rather than an assumed all-blocking
+ * shape. These rows never carry a casilla number, so the existing "ir a Casilla X" button in
+ * `IncidentsTab` (matched via `inc.origin?.match(/Casilla\s+\d+/i)`) naturally never renders for
+ * them — left untouched, it's for a separate, not-yet-built casilla-validation feature.
+ * Returns `{ blocking, warning, items }` on success, or the all-zero empty shape when
+ * token/apiBaseUrl/id are missing or the request fails — safe to always destructure.
+ */
+export async function fetchDeclarationIncidents(id, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl || !id) return EMPTY_INCIDENTS;
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const res = await fetch(`${base}/fiscal303/incidents?id=${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return EMPTY_INCIDENTS;
+    const body = await res.json().catch(() => null);
+    const rows = Array.isArray(body?.data) ? body.data : [];
+    const items = rows.map(r => ({
+      origin: r.code ?? '',
+      message: r.message ?? '',
+      severity: r.severity === 'warn' ? 'warn' : 'block',
+    }));
+    const blocking = items.filter(i => i.severity === 'block').length;
+    const warning = items.filter(i => i.severity === 'warn').length;
+    return { blocking, warning, items };
+  } catch (_) {
+    return EMPTY_INCIDENTS;
+  }
+}
+
+// 'pending' is kept intentionally: Modelo 349 uses it as its initial draft state.
 export const STATUSES = [
-  'omitido', 'pendiente', 'borrador', 'listo',
-  'presentado', 'presentadoOtra', 'presentadoAcuse',
+  'skipped', 'pending', 'draft', 'ready',
+  'submitted', 'submitted_ext', 'submitted_ack',
 ];
 
 export const STATUS_COLOR = {
-  omitido:         'grey',
-  pendiente:       'orange',
-  borrador:        'blue',
-  listo:           'green',
-  presentado:      'teal',
-  presentadoOtra:  'violet',
-  presentadoAcuse: 'emerald',
+  skipped:       'grey',
+  pending:       'orange',
+  draft:         'blue',
+  ready:         'green',
+  submitted:     'teal',
+  submitted_ext: 'violet',
+  submitted_ack: 'emerald',
 };
 
 export const STATUS_ICON = {
-  omitido:         '×',
-  pendiente:       '○',
-  borrador:        '✎',
-  listo:           '✓',
-  presentado:      '✓',
-  presentadoOtra:  '↗',
-  presentadoAcuse: '☑',
+  skipped:       '×',
+  pending:       '○',
+  draft:         '✎',
+  ready:         '✓',
+  submitted:     '✓',
+  submitted_ext: '↗',
+  submitted_ack: '☑',
 };
 
 export const STATUS_ORDER = [...STATUSES];
@@ -71,13 +303,15 @@ export function formatPeriod(period) {
 }
 
 export function formatAmount(amount) {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+  return formatCurrency('EUR', amount);
 }
 
 export function formatPercent(value) {
   if (value == null) return '—';
-  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(value) + ' %';
+  return new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 export function fmtDecl(decl) {
@@ -214,7 +448,7 @@ export function deriveBoxes303(data) {
 }
 
 const COMPLETED_STATUSES = new Set([
-  'presentado', 'presentadoOtra', 'presentadoAcuse', 'omitido',
+  'submitted', 'submitted_ext', 'submitted_ack', 'skipped',
 ]);
 
 function getDeadlineDate(model, year, period) {
@@ -231,6 +465,107 @@ function getDeadlineDate(model, year, period) {
     return new Date(y, nextM - 1, 20);
   }
   return null;
+}
+
+/**
+ * Returns true if any invoice affecting the given declaration's period was
+ * updated after sinceMs (Unix ms timestamp). Returns false on any error.
+ */
+export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return false;
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
+    const url = `${base}/fiscal303/modified?${params}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.modified === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// ── Model 349 utilities ───────────────────────────────────────────
+
+export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
+  if (token && apiBaseUrl) {
+    try {
+      const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+      const params = new URLSearchParams({ year: decl.year, period: decl.period });
+      const res = await fetch(`${base}/fiscal349/operators?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Mock fallback — demo mode only (no token)
+  await new Promise(r => setTimeout(r, 700));
+  if (decl.year === 2026 && (decl.period === 'T1' || decl.period === 'T2')) {
+    return {
+      operators: [
+        { bpId: '1', nif: 'IT12345678901', name: 'Bramini Vino S.r.l.',      key: 'A', base: '12450.00' },
+        { bpId: '2', nif: 'FR40123456789', name: 'Olives de Provence SARL',   key: 'A', base: '6800.00'  },
+        { bpId: '3', nif: 'DE123456789',   name: 'Bayern Technik GmbH',        key: 'E', base: '17600.00' },
+        { bpId: '4', nif: 'PT501234567',   name: 'Lusitana Serviços Lda',      key: 'S', base: '650.00'   },
+        { bpId: '5', nif: 'NL123456789B01',name: 'Amsterdam Trading BV',       key: 'I', base: '1450.00'  },
+      ],
+      summary: { totalE: '17600.00', totalS: '650.00', totalA: '19250.00', totalI: '1450.00' },
+    };
+  }
+  return null;
+}
+
+export async function generate349File(decl, { token, apiBaseUrl, phone, contact } = {}) {
+  if (!token || !apiBaseUrl) return false;
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const body = new URLSearchParams({ year: decl.year, period: decl.period });
+    if (phone)   body.set('phone',   phone);
+    if (contact) body.set('contact', contact);
+    const res = await fetch(`${base}/fiscal349/generate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body.toString(),
+    });
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    // .txt to match the Etendo classic Tax Report Launcher output extension
+    a.download = `349_${decl.period}_${decl.year}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+export async function checkModified349(decl, sinceMs, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return false;
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
+    const res = await fetch(`${base}/fiscal349/modified?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.modified === true;
+  } catch (_) {
+    return false;
+  }
 }
 
 export function computeUpcomingDeadlines(decls, limit = 5) {

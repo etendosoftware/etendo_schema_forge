@@ -1,0 +1,282 @@
+{
+  "version": "0.4.0",
+  "generatedAt": "2026-04-28T16:08:39.756Z",
+  "updatedAt": "2026-05-26T18:48:57.280Z",
+  "contractChecksum": "3499dd205a5c6052",
+  "apiPrediction": {
+    "specName": "sii-config",
+    "baseUrl": "/sws/neo/sii-config",
+    "crud": {
+      "siiConfiguration": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/sii-config/siiConfiguration",
+        "detailUrl": "/sws/neo/sii-config/siiConfiguration/{id}",
+        "supportedFilters": []
+      },
+      "logHash": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/sii-config/logHash",
+        "detailUrl": "/sws/neo/sii-config/logHash/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [
+      {
+        "name": "validHash",
+        "actionType": "utilityAction",
+        "entity": "siiConfiguration",
+        "column": "Valid_Hash",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-config/siiConfiguration/{id}/action/validHash",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "3C55FFE46CA940B6819DE3BBA19437E6",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "nuevaConsultaFacturasASII",
+        "actionType": "utilityAction",
+        "entity": "siiConfiguration",
+        "column": "BTN_Consultar_Fact",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-config/siiConfiguration/{id}/action/nuevaConsultaFacturasASII",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "0662F6BC8D604AAEA5A2DD49E87F4B65",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "informeltimaConexinSII",
+        "actionType": "utilityAction",
+        "entity": "siiConfiguration",
+        "column": "BTN_Imprimir",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-config/siiConfiguration/{id}/action/informeltimaConexinSII",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "3D2FDB6FC2BE4F549BA72A98ABD95F8A",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "updateInvoices",
+        "actionType": "utilityAction",
+        "entity": "siiConfiguration",
+        "column": "Update_Invoices",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sii-config/siiConfiguration/{id}/action/updateInvoices",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "47EA4A31145142CCA33C786DFD984041",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "configuration"
+    }
+  },
+  "formState": {
+    "entities": {
+      "siiConfiguration": {
+        "fields": {
+          "acogidaAlSII": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "fechaAcogidaSII": {},
+          "plazoLmiteDeEnvoASII": {
+            "required": true,
+            "defaultValue": "8"
+          },
+          "cadenciaEnvoFacturasVentaASII": {
+            "required": true,
+            "defaultValue": "0"
+          },
+          "cadenciaEnvoFacturasCompraASII": {
+            "required": true,
+            "defaultValue": "0"
+          },
+          "entornoDeProduccin": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "adjuntarArchivosXML": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "recc": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "redeme": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "monitordate": {
+            "defaultValue": "01-01-2017"
+          },
+          "postedInvoices": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "authorizationno": {},
+          "validHash": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "cIF": {
+            "readOnly": true
+          },
+          "conexiones": {
+            "readOnly": true
+          },
+          "cashVAT": {},
+          "lastQueryBook": {
+            "readOnly": true
+          },
+          "lastQueryExercise": {
+            "readOnly": true
+          },
+          "lastQueryPeriod": {
+            "readOnly": true
+          },
+          "sinceJanuary2017": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "logHash": {
+        "fields": {
+          "active": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "logs": {
+            "readOnly": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage sii config records.",
+    "whenToUse": [
+      "Use for sii config management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "acogidaAlSII",
+        "plazoLmiteDeEnvoASII",
+        "cadenciaEnvoFacturasVentaASII",
+        "cadenciaEnvoFacturasCompraASII",
+        "entornoDeProduccin",
+        "adjuntarArchivosXML",
+        "recc",
+        "redeme",
+        "postedInvoices",
+        "validHash"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "acogidaAlSII",
+          "plazoLmiteDeEnvoASII",
+          "cadenciaEnvoFacturasVentaASII",
+          "cadenciaEnvoFacturasCompraASII",
+          "entornoDeProduccin",
+          "adjuntarArchivosXML",
+          "recc",
+          "redeme",
+          "postedInvoices",
+          "validHash"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "e733de1510b181bf"
+}

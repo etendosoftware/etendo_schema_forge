@@ -105,12 +105,6 @@
           "windowId": "167"
         },
         {
-          "name": "return-from-customer",
-          "label": "Return",
-          "favname": "Return from Customer",
-          "windowId": "FF808081330213E60133021822E40007"
-        },
-        {
           "name": "return-material-receipt",
           "label": "Return Receipt",
           "favname": "Return Material Receipt",
@@ -140,12 +134,6 @@
           "label": "Invoice",
           "favname": "Purchase Invoice",
           "windowId": "183"
-        },
-        {
-          "name": "return-to-vendor",
-          "label": "Return",
-          "favname": "Return to Vendor",
-          "windowId": "C50A8AEE6F044825B5EF54FAAE76826F"
         },
         {
           "name": "return-to-vendor-shipment",
@@ -257,9 +245,17 @@
           "windowId": "6F8F913FA60F4CBD93DC1D3AA696E76E"
         },
         {
-          "name": "bank-reconciliation",
-          "label": "Bank Reconciliation",
-          "favname": "Bank Reconciliation"
+          "name": "financial-account",
+          "label": "Accounts",
+          "favname": "Accounts",
+          "windowId": "94EAA455D2644E04AB25D93BE5157B6D"
+        },
+        {
+          "name": "match-rule",
+          "label": "Match Rule",
+          "favname": "Match Rule",
+          "hidden": true,
+          "windowId": "24963D64E83B4543A7F6BD248CF944EE"
         },
         {
           "name": "chart-of-accounts",
@@ -268,10 +264,59 @@
           "windowId": "118"
         },
         {
+          "name": "general-ledger-configuration",
+          "label": "General Ledger Configuration",
+          "favname": "General Ledger Configuration",
+          "windowId": "125"
+        },
+        {
+          "name": "calendar",
+          "label": "Calendar",
+          "favname": "Calendar",
+          "windowId": "117"
+        },
+        {
+          "name": "fiscal-calendar",
+          "label": "Fiscal Calendar",
+          "favname": "Fiscal Calendar",
+          "hidden": true,
+          "windowId": "117"
+        },
+        {
+          "name": "open-close-period-control",
+          "label": "Periods",
+          "favname": "Open/Close Period Control",
+          "hidden": true,
+          "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A"
+        },
+        {
           "name": "assets",
           "label": "Assets",
           "favname": "Assets",
           "windowId": "800027"
+        },
+        {
+          "name": "asset-group",
+          "label": "Asset Category",
+          "favname": "Asset Category",
+          "windowId": "252"
+        },
+        {
+          "name": "amortization",
+          "label": "Amortization",
+          "favname": "Amortization",
+          "windowId": "800026"
+        },
+        {
+          "name": "not-posted-documents",
+          "label": "Not Posted Documents",
+          "favname": "Not Posted Documents"
+        },
+        {
+          "name": "simple-g-l-journal",
+          "label": "Manual Journals",
+          "favname": "Manual Journals",
+          "windowId": "B917E8A7B0864ACEA9D941E3B7494E53"
         },
         {
           "name": "recurring-invoice",
@@ -283,6 +328,12 @@
           "name": "fiscal-monitor",
           "label": "Fiscal Monitor",
           "favname": "Fiscal Monitor"
+        },
+        {
+          "name": "conversion-rates",
+          "label": "Conversion Rates",
+          "favname": "Conversion Rates",
+          "windowId": "116"
         },
         {
           "name": "fiscal-models",
@@ -304,8 +355,8 @@
       "items": [
         {
           "name": "authorize",
-          "label": "Connect with Claude",
-          "favname": "Connect with Claude"
+          "label": "Connect AI assistant",
+          "favname": "Connect AI assistant"
         }
       ]
     },
@@ -314,6 +365,12 @@
       "icon": "Settings",
       "section": "System",
       "items": [
+        {
+          "name": "organization",
+          "label": "Organization",
+          "favname": "Organization",
+          "windowId": "110"
+        },
         {
           "name": "price-list",
           "label": "Price List",
@@ -327,28 +384,34 @@
           "windowId": "141"
         },
         {
-          "name": "payment-method",
-          "label": "Payment Method",
-          "favname": "Payment Method",
-          "windowId": "3CAAC7D54593489384452416ACF356DD"
-        },
-        {
           "name": "tax",
           "label": "Tax",
           "favname": "Tax",
           "windowId": "137"
         },
         {
-          "name": "unit-of-measure",
-          "label": "Unit of Measure",
-          "favname": "Unit of Measure",
-          "windowId": "120"
+          "name": "tax-category",
+          "label": "Tax Category",
+          "favname": "Tax Category",
+          "windowId": "138"
+        },
+        {
+          "name": "business-partner-category",
+          "label": "Business Partner Category",
+          "favname": "Business Partner Category",
+          "windowId": "192"
         },
         {
           "name": "user",
           "label": "User",
           "favname": "User",
           "windowId": "108"
+        },
+        {
+          "name": "roles",
+          "label": "Roles",
+          "favname": "Roles",
+          "capability": "isAdminOrClientAdmin"
         },
         {
           "name": "smart-scan",
@@ -365,6 +428,12 @@
           "name": "fiscal-config",
           "label": "Fiscal Configuration",
           "favname": "Fiscal Configuration"
+        },
+        {
+          "name": "conversion-rate-downloader-log",
+          "label": "Conversion Rate Downloader Log",
+          "favname": "Conversion Rate Downloader Log",
+          "windowId": "6FEBA130CDE24CC09041FFA6117ADFA9"
         }
       ]
     },

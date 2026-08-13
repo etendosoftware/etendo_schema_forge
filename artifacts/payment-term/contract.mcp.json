@@ -1,0 +1,115 @@
+{
+  "version": "0.4.0",
+  "generatedAt": "2026-04-29T19:06:55.269Z",
+  "updatedAt": "2026-05-19T17:03:46.080Z",
+  "contractChecksum": "7747449adb3281d4",
+  "apiPrediction": {
+    "specName": "payment-term",
+    "baseUrl": "/sws/neo/payment-term",
+    "crud": {
+      "header": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/payment-term/header",
+        "detailUrl": "/sws/neo/payment-term/header/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "settings"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Value": "Clave",
+        "Name": "Nombre",
+        "Description": "Descripción",
+        "FixMonthOffset": "Meses de desplazamiento",
+        "NetDays": "Días",
+        "IsDefault": "Por defecto",
+        "IsActive": "Activo"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "header": {
+        "fields": {
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "offsetMonthDue": {
+            "required": true
+          },
+          "overduePaymentDaysRule": {
+            "required": true
+          },
+          "default": {}
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage payment term records.",
+    "whenToUse": [
+      "Use for payment term management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "offsetMonthDue",
+        "overduePaymentDaysRule"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "offsetMonthDue",
+          "overduePaymentDaysRule"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "ad5c1cf43c5ee22b"
+}

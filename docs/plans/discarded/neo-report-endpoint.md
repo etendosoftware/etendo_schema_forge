@@ -1,6 +1,12 @@
 # Plan: NEO Headless Report Endpoint
 
-**Status:** Pending
+> **OBSOLETE — superseded/cancelled by ETP-4255.** The Jasper NEO report endpoint described
+> here (binary report generation via `ReportingUtils.exportJR`) will NOT be implemented.
+> ETP-4255 removes runtime Jasper from NEO/MCP entirely: report generation is
+> NEO-native-handlers-only (`NeoHandler` beans returning JSON), and jsreport handles the
+> rest. Kept below as historical record only.
+
+**Status:** Discarded (OBSOLETE — see ETP-4255)
 **Date:** 2026-03-12
 **Related:** [Process & Report Pipeline](process-and-report-pipeline.md) — Phase 2
 

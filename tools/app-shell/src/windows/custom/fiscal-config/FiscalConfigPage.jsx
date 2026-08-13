@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Save } from 'lucide-react';
+import OrgDropdown from './FiscalOrgDropdown.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,21 +16,27 @@ import OnboardingWizard from './OnboardingWizard.jsx';
 import SiiSection from './SiiSection.jsx';
 import TbaiSection from './TbaiSection.jsx';
 import VerifactuSection from './VerifactuSection.jsx';
-import CertSection from './CertSection.jsx';
 import FiscalConfigDebugPanel from './FiscalConfigDebugPanel.jsx';
+import TabBar from './TabBar.jsx';
+
+// ── FiscalConfigPage ───────────────────────────────────────────────────────────
 
 export default function FiscalConfigPage({ token, apiBaseUrl }) {
   const ui = useUI();
   const navigate = useNavigate();
-  const { selectedOrg } = useAuth();
+  const { selectedOrg, selectedRole, selectOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
+  const orgList = selectedRole?.orgList ?? [];
   const debugMode = useDebugMode();
-
-  useSetPageMeta({ title: ui('fiscal.title'), breadcrumb: `${ui('settings')} / ${ui('fiscal.monitor.nav')} / ${ui('fiscal.title')}` });
 
   // mockOverride = null | { key, sii, tbai, verifactu }  (set by debug panel)
   const [mockOverride, setMockOverride] = useState(null);
   const [mockCertDays, setMockCertDays] = useState(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [savedOk, setSavedOk] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
 
   const {
     loading, error, profile,
@@ -38,33 +45,57 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   } = useFiscalConfig(orgId, apiBaseUrl);
 
   // When mock is active, bypass API result entirely
-  const effectiveProfile = mockOverride
+  const effectiveProfile  = mockOverride
     ? detectProfile(mockOverride.sii, mockOverride.tbai, mockOverride.verifactu)
     : profile;
-  const effectiveSii      = mockOverride ? mockOverride.sii      : siiRecord;
-  const effectiveTbai     = mockOverride ? mockOverride.tbai     : tbaiRecord;
-  const effectiveVerifactu= mockOverride ? mockOverride.verifactu: verifactuRecord;
 
-  const { daysLeft: certDaysLeft } = useCertExpiry(apiBaseUrl, { mockDaysLeft: mockCertDays });
+  const PROFILE_LABEL = { sii: 'SII', 'sii-navarra': 'SII', 'sii+tbai': 'SII + TBAI', tbai: 'TBAI', verifactu: 'VERI*FACTU' };
+  const profileLabel = PROFILE_LABEL[effectiveProfile] ?? null;
+  const pageTitle = profileLabel ? `${ui('fiscal.title')} ${profileLabel}` : ui('fiscal.title');
+  useSetPageMeta({ title: pageTitle, breadcrumb: `${ui('settings')} / ${ui('fiscal.monitor.nav')} / ${pageTitle}` });
+  const effectiveSii       = mockOverride ? mockOverride.sii       : siiRecord;
+  const effectiveTbai      = mockOverride ? mockOverride.tbai      : tbaiRecord;
+  const effectiveVerifactu = mockOverride ? mockOverride.verifactu : verifactuRecord;
 
-  const siiRef  = useRef(null);
-  const tbaiRef = useRef(null);
-  const [combinedSaving, setCombinedSaving] = useState(false);
-  const [siiError, setSiiError]   = useState(null);
-  const [tbaiError, setTbaiError] = useState(null);
+  const { daysLeft: certDaysLeft } = useCertExpiry(apiBaseUrl, { mockDaysLeft: mockCertDays, orgId });
 
-  async function handleCombinedSave() {
-    setCombinedSaving(true);
-    setSiiError(null);
-    setTbaiError(null);
-    const results = await Promise.allSettled([
-      siiRef.current?.save(),
-      tbaiRef.current?.save(),
-    ]);
-    if (results[0].status === 'rejected') setSiiError(results[0].reason?.message ?? ui('fiscal.sii.error', { error: '' }));
-    if (results[1].status === 'rejected') setTbaiError(results[1].reason?.message ?? ui('fiscal.tbai.error', { error: '' }));
-    if (results.every(r => r.status === 'fulfilled')) refetch();
-    setCombinedSaving(false);
+  const siiRef       = useRef(null);
+  const tbaiRef      = useRef(null);
+  const verifactuRef = useRef(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    setSavedOk(false);
+    try {
+      if (['sii', 'sii-navarra'].includes(effectiveProfile)) {
+        await siiRef.current?.save();
+      } else if (effectiveProfile === 'tbai') {
+        await tbaiRef.current?.save();
+      } else if (effectiveProfile === 'verifactu') {
+        await verifactuRef.current?.save();
+      } else if (effectiveProfile === 'sii+tbai') {
+        const [r0, r1] = await Promise.allSettled([
+          siiRef.current?.save(),
+          tbaiRef.current?.save(),
+        ]);
+        if (r0.status === 'rejected' || r1.status === 'rejected') {
+          throw new Error(r0.reason?.message ?? r1.reason?.message ?? 'Error saving');
+        }
+      }
+      refetch();
+      setResetKey(k => k + 1);
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 2500);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCancel() {
+    navigate(-1);
   }
 
   const DebugPanel = debugMode ? (
@@ -77,7 +108,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
       activeMockKey={mockOverride?.key ?? null}
       mockCertDays={mockCertDays}
       onSetCertDays={setMockCertDays}
-    />
+      data-testid="FiscalConfigDebugPanel__310303" />
   ) : null;
 
   // When mock is active, skip loading/error entirely and go straight to the effective profile
@@ -95,145 +126,212 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
             apiBaseUrl={apiBaseUrl}
             onComplete={refetch}
             onGoHome={() => navigate('/dashboard')}
-          />
+            data-testid="OnboardingWizard__310303" />
         </div>
       </>
     );
   }
 
-  // All other states: scrollable content with a standard header.
+  // ── Org bar ──────────────────────────────────────────────────────────────────
+  let saveLabel;
+  if (saving) saveLabel = ui('fiscal.saving');
+  else if (savedOk) saveLabel = `✓ ${ui('fiscal.save')}`;
+  else saveLabel = ui('fiscal.save');
+
+  const orgBar = (
+    <div className="flex-shrink-0 border-b border-[hsl(var(--border-subtle))]">
+      <div className="flex items-center justify-between px-6 h-[56px]">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{ui('fiscal.onboarding.org.label')}</span>
+          <OrgDropdown
+            selectedOrg={selectedOrg}
+            orgList={orgList}
+            onSelect={org => selectOrg(org)}
+            data-testid="OrgDropdown__310303" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleCancel}
+            disabled={saving}
+            data-testid="Button__310303">
+            {ui('fiscal.cancel')}
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || !orgId}
+            className={savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}
+            data-testid="Button__310303">
+            <Save size={14} className="mr-1.5" data-testid="Save__310303" />
+            {saveLabel}
+          </Button>
+        </div>
+      </div>
+      {saveError && (
+        <div className="flex items-center justify-between px-6 py-2 bg-destructive/10 border-t border-destructive/20 text-sm text-destructive">
+          <span>{saveError}</span>
+          <button type="button" onClick={() => setSaveError(null)} className="ml-4 hover:opacity-70">✕</button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       {DebugPanel}
-    <div className="relative h-full overflow-y-auto">
-      <div className="px-6 py-8">
-        {orgId && (
-          <div className="mb-6 flex items-start justify-between">
-            <div>
-              <h1 className="text-xl font-bold">{ui('fiscal.title')}</h1>
-              {selectedOrg?.name && (
-                <p className="text-sm text-muted-foreground mt-1">{ui('fiscal.org.label', { name: selectedOrg.name })}</p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={refetch}
-              disabled={loading}
-              aria-label={ui('fiscalMonitor.refresh')}
-              title={ui('fiscalMonitor.refresh')}
-              className="mt-1 p-2 rounded-lg border border-[#D1D4DB] bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <RefreshCw size={16} className={loading ? 'animate-spin text-gray-400' : 'text-gray-500'} />
-            </button>
+      <div className="relative h-full flex flex-col overflow-hidden">
+        {orgBar}
+
+        {!orgId && !mockOverride && (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-sm text-muted-foreground text-center py-12">
+              {ui('fiscal.noOrg')}
+            </p>
           </div>
         )}
 
-        <CertExpiryBanner daysLeft={certDaysLeft} variant="prominent" />
-
-        {!orgId && !mockOverride && (
-          <p className="text-sm text-muted-foreground text-center py-12">
-            {ui('fiscal.noOrg')}
-          </p>
-        )}
-
         {showLoading && (
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-8 w-1/2" />
+          <div className="flex-1 px-6 py-8 space-y-4">
+            <Skeleton className="h-8 w-full" data-testid="Skeleton__310303" />
+            <Skeleton className="h-32 w-full" data-testid="Skeleton__310303" />
+            <Skeleton className="h-8 w-1/2" data-testid="Skeleton__310303" />
           </div>
         )}
 
         {showError && (
-          <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
-            <p className="text-sm text-destructive">{ui('fiscal.loadError', { error })}</p>
-            <Button variant="link" onClick={refetch} className="mt-2 h-auto p-0">
-              {ui('fiscal.retry')}
-            </Button>
+          <div className="flex-1 px-6 py-8">
+            <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
+              <p className="text-sm text-destructive">{ui('fiscal.loadError', { error })}</p>
+              <Button
+                variant="link"
+                onClick={refetch}
+                className="mt-2 h-auto p-0"
+                data-testid="Button__310303">
+                {ui('fiscal.retry')}
+              </Button>
+            </div>
           </div>
         )}
 
         {showContent && effectiveProfile === 'conflict' && (
-          <div className="rounded-lg border border-destructive bg-destructive/10 p-6">
-            <h2 className="font-semibold text-destructive">{ui('fiscal.conflict.title')}</h2>
-            <p className="text-sm text-muted-foreground mt-2">{ui('fiscal.conflict.body')}</p>
+          <div className="flex-1 px-6 py-8">
+            <div className="rounded-lg border border-destructive bg-destructive/10 p-6">
+              <h2 className="font-semibold text-destructive">{ui('fiscal.conflict.title')}</h2>
+              <p className="text-sm text-muted-foreground mt-2">{ui('fiscal.conflict.body')}</p>
+            </div>
           </div>
         )}
 
-        {showContent && effectiveProfile === 'sii' && (
-          <SiiSection
-            record={effectiveSii}
-            apiBaseUrl={apiBaseUrl}
-            orgId={orgId}
-            onSave={refetch}
-            variant="sii"
-          />
+        {/* SII / SII-Navarra — no tabs */}
+        {showContent && ['sii', 'sii-navarra'].includes(effectiveProfile) && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-6 py-6">
+              <SiiSection
+                key={resetKey}
+                ref={siiRef}
+                record={effectiveSii}
+                apiBaseUrl={apiBaseUrl}
+                orgId={orgId}
+                onSave={() => {}}
+                variant={effectiveProfile}
+                hideSave
+                data-testid="SiiSection__310303" />
+              <CertExpiryBanner
+                daysLeft={certDaysLeft}
+                variant="prominent"
+                data-testid="CertExpiryBanner__310303" />
+            </div>
+          </div>
         )}
 
-        {showContent && effectiveProfile === 'sii-navarra' && (
-          <SiiSection
-            record={effectiveSii}
-            apiBaseUrl={apiBaseUrl}
-            orgId={orgId}
-            onSave={refetch}
-            variant="sii-navarra"
-          />
-        )}
-
+        {/* SII + TBAI — with tabs */}
         {showContent && effectiveProfile === 'sii+tbai' && (
-          <div className="space-y-10">
-            <SiiSection
-              ref={siiRef}
-              record={effectiveSii}
-              apiBaseUrl={apiBaseUrl}
-              orgId={orgId}
-              onSave={() => {}}
-              variant="sii"
-              hideSave
-              hideCert
-            />
-            {siiError && <p className="text-sm text-destructive">{ui('fiscal.sii.error', { error: siiError })}</p>}
+          <>
+            <TabBar
+              tabs={[ui('fiscal.tab.sii'), ui('fiscal.tab.tbai')]}
+              active={activeTab}
+              onChange={setActiveTab}
+              data-testid="TabBar__310303" />
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-6 py-6">
+                {activeTab === 0 && (
+                  <SiiSection
+                    key={`sii-${resetKey}`}
+                    ref={siiRef}
+                    record={effectiveSii}
+                    apiBaseUrl={apiBaseUrl}
+                    orgId={orgId}
+                    onSave={() => {}}
+                    variant="sii"
+                    hideSave
+                    data-testid="SiiSection__310303" />
+                )}
+                {activeTab === 1 && (
+                  <TbaiSection
+                    key={`tbai-${resetKey}`}
+                    ref={tbaiRef}
+                    record={effectiveTbai}
+                    apiBaseUrl={apiBaseUrl}
+                    orgId={orgId}
+                    onSave={() => {}}
+                    hideSave
+                    hideCert
+                    data-testid="TbaiSection__310303" />
+                )}
+                <CertExpiryBanner
+                  daysLeft={certDaysLeft}
+                  variant="prominent"
+                  data-testid="CertExpiryBanner__310303" />
+                {/* errors are shown in the org bar */}
+              </div>
+            </div>
+          </>
+        )}
 
-            <div className="border-t pt-8">
+        {/* TBAI — no tabs */}
+        {showContent && effectiveProfile === 'tbai' && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-6 py-6">
               <TbaiSection
+                key={resetKey}
                 ref={tbaiRef}
                 record={effectiveTbai}
                 apiBaseUrl={apiBaseUrl}
                 orgId={orgId}
                 onSave={() => {}}
                 hideSave
-                hideCert
-              />
-              {tbaiError && <p className="text-sm text-destructive">{ui('fiscal.tbai.error', { error: tbaiError })}</p>}
+                data-testid="TbaiSection__310303" />
+              <CertExpiryBanner
+                daysLeft={certDaysLeft}
+                variant="prominent"
+                data-testid="CertExpiryBanner__310303" />
+              {/* errors are shown in the org bar */}
             </div>
-
-            <CertSection context="sii" orgId={orgId} apiBaseUrl={apiBaseUrl} />
-
-            <Button onClick={handleCombinedSave} disabled={combinedSaving}>
-              {combinedSaving ? ui('fiscal.saving') : ui('fiscal.save')}
-            </Button>
           </div>
         )}
 
-        {showContent && effectiveProfile === 'tbai' && (
-          <TbaiSection
-            record={effectiveTbai}
-            apiBaseUrl={apiBaseUrl}
-            orgId={orgId}
-            onSave={refetch}
-          />
-        )}
-
+        {/* Verifactu — no tabs */}
         {showContent && effectiveProfile === 'verifactu' && (
-          <VerifactuSection
-            record={effectiveVerifactu}
-            apiBaseUrl={apiBaseUrl}
-            orgId={orgId}
-            onSave={refetch}
-          />
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-6 py-6">
+              <VerifactuSection
+                key={resetKey}
+                ref={verifactuRef}
+                record={effectiveVerifactu}
+                apiBaseUrl={apiBaseUrl}
+                orgId={orgId}
+                onSave={() => {}}
+                hideSave
+                data-testid="VerifactuSection__310303" />
+              <CertExpiryBanner
+                daysLeft={certDaysLeft}
+                variant="prominent"
+                data-testid="CertExpiryBanner__310303" />
+              {/* errors are shown in the org bar */}
+            </div>
+          </div>
         )}
       </div>
-    </div>
     </>
   );
 }

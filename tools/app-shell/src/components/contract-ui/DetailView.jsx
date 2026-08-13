@@ -1,14 +1,18 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { ProcessParamDialog } from './ProcessParamDialog';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield } from 'lucide-react';
+import { X, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
+import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
 
 const TAB_ICONS = {
   'custom:attachments': AttachmentIcon,
   'custom:sif': Shield,
+  'custom:pricing': PricingIcon,
+  'products': WarehouseProductsIcon,
 };
 
 function TabStripButton({
@@ -53,88 +57,54 @@ import { useCallout } from '@/hooks/useCallout';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
+import { useNeoAction } from '@/hooks/useNeoAction';
 import { useMenuLabel, useUI } from '@/i18n';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { SummaryBar } from './SummaryBar.jsx';
-import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
 import LinesSelectionBar from './LinesSelectionBar.jsx';
-import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
+import { DetailMoreActionsMenu } from './DetailMoreActionsMenu.jsx';
+import DetailSidePanel from './DetailSidePanel.jsx';
+import LinesBulkActionBar from './LinesBulkActionBar.jsx';
+import { evalTabReadOnly } from './evalTabReadOnly.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
-  normalizeCalloutResponse, applyQtyZeroGuard, roundAmounts,
+  normalizeCalloutResponse, applyQtyZeroGuard, resetDescriptionOnProductChange, roundAmounts,
   resolveSnapshotIdentifiers,
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+
+// DocumentTotalsPanel/BalanceFooterPanel call their `formatAmount` prop as
+// (value, currency) — keep that signature here, delegating to the shared
+// formatCurrency(currencyCode, value) util, whose argument order is reversed.
+function formatAmount(val, curr) {
+  return formatCurrency(curr, val);
+}
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
+import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
 
-/**
- * Evaluate a simple Etendo display-logic expression (@Field@='Value') against record data.
- * Returns true (visible) if the expression cannot be parsed or if the field is missing from data.
- */
-function sidePanelWrapperCls(hasSidePanel, linesLayout) {
-  if (hasSidePanel) return 'flex items-start gap-0';
-  if (linesLayout === 'inlineEditable') return 'flex flex-col';
-  return '';
-}
-
-function evalDisplayLogicRaw(expr, data) {
-  if (!expr) return true;
-  const clauses = [...expr.matchAll(/@(\w+)@\s*(!?=)\s*'([^']*)'/g)];
-  if (clauses.length === 0) return true;
-  return clauses.every(([, fieldRef, op, expected]) => {
-    const key = fieldRef[0].toLowerCase() + fieldRef.slice(1);
-    if (!(key in (data || {}))) return true; // field absent → default visible
-    const rawVal = data[key];
-    // Normalize boolean API values to Etendo string equivalents (true→'Y', false→'N')
-    const actual = typeof rawVal === 'boolean' ? (rawVal ? 'Y' : 'N') : String(rawVal ?? '');
-    return op === '=' ? actual === expected : actual !== expected;
-  });
-}
-import { cn } from '@/lib/utils.js';
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
+import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import {
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
+} from './detailViewHelpers.jsx';
 
-/**
- * Collapsible section that hides itself entirely when children render as null.
- */
-function CollapsibleSection({ title, children }) {
-  const ref = useRef(null);
-  const [empty, setEmpty] = useState(true);
-
-  useEffect(() => {
-    // Check for actual form fields — wrapper divs always render even when
-    // EntityForm returns null, so we must look for real input elements.
-    if (ref.current) {
-      const hasFields = ref.current.querySelector(
-        'input, select, textarea, [role="combobox"], [role="spinbutton"]'
-      ) !== null;
-      setEmpty(!hasFields);
-    }
-  });
-
-  if (empty) return <div ref={ref} className="hidden">{children}</div>;
-
-  return (
-    <details className="group">
-      <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground py-1 select-none list-none flex items-center gap-1">
-        <svg className="h-4 w-4 transition-transform group-open:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-        {title}
-      </summary>
-      <div className="pt-2" ref={ref}>
-        {children}
-      </div>
-    </details>
-  );
-}
+// Re-exported for the suites that import these from 'DetailView.jsx'.
+// Only the definition site moved (R1: no test was edited).
+export {
+  SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
+} from './detailViewHelpers.jsx';
 
 /**
  * Compute the padding classes for the main detail content column.
@@ -150,11 +120,50 @@ function CollapsibleSection({ title, children }) {
  * Extracted from inline JSX to avoid the nested-ternary anti-pattern Sonar
  * S3358 was flagging inside the className templates.
  */
-function detailContentPadding(linesLayout, hasSidebar, variant) {
+function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
   const isInline = linesLayout === 'inlineEditable';
-  if (hasSidebar) return isInline ? 'pr-2' : 'pl-6 pr-2';
-  if (variant === 'panel') return isInline ? 'pr-6' : 'px-6';
-  return isInline ? '' : 'px-6';
+  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
+  if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
+  return isInline ? '' : (paddingXOverride ?? 'px-6');
+}
+
+const BLEED_AXIS = { px: 'mx', pr: 'mr', pl: 'ml' };
+
+/**
+ * Horizontal bleed for the secondary tab strip, so its bottom border reaches both
+ * edges of the panel instead of starting a few pixels in.
+ *
+ * The strip is a sibling of the form card inside the padded content column (the only
+ * thing between them is `getLinesTabsSectionClassName`'s `mt-2`), so it inherits that
+ * column's horizontal padding. Each padding token is cancelled with a matching negative
+ * margin and then re-applied inside, which moves the border out to the edges while
+ * leaving the tab buttons exactly where they were. Derived from the SAME
+ * `detailContentPadding()` inputs as the column itself so the two cannot drift.
+ */
+export function getTabStripBleedClassName({
+  linesLayout,
+  sidePanel,
+  sidebarContent,
+  sidebarAboveTabsOnly,
+  compactSidebarPadding,
+  formScrollPaddingX = null,
+} = {}) {
+  const padding = detailContentPadding(
+    linesLayout,
+    !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)),
+    'content',
+    compactSidebarPadding,
+    formScrollPaddingX,
+  );
+  return padding
+      .split(/\s+/)
+      .filter(Boolean)
+      .flatMap((token) => {
+        const match = /^(px|pr|pl)-(.+)$/.exec(token);
+        if (!match) return [];
+        return [`-${BLEED_AXIS[match[1]]}-${match[2]}`, token];
+      })
+      .join(' ');
 }
 
 /**
@@ -173,22 +182,1027 @@ function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLin
   return undefined;
 }
 
+export function applyCalloutComboUpdates(combos, ctx) {
+  const { triggerField } = ctx;
+  for (const [key, combo] of Object.entries(combos)) {
+    // Never override the field the user just changed via its own combo response.
+    // The callout may refresh the list of options for that field, but the user's
+    // explicit selection must always win — auto-selecting the first entry would
+    // silently revert their choice (e.g., NC → FAC on invoice doc type).
+    if (key === triggerField) continue;
+    applyOneComboEntry(key, combo, ctx);
+  }
+}
+
 /**
- * Full-page detail view for a single entity record.
- * Two-zone layout: gray top bar + white content card with rounded corner.
- *
- * `customTabs` accepts items of shape:
- *   { key, label, Component, placement = 'footer', props = {} }
- *
- * - placement: 'footer' (default) -> renders as a chip row in the bottom Docs section
- *   (legacy behavior; component receives layout="chips").
- * - placement: 'tab' -> renders as a first-class tab next to lines/secondaryTabs.
- *   The component always mounts but receives `isActive` so it can lazy-load data
- *   the first time it becomes visible.
- *
- * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api }`
- * plus any keys declared in the optional `props` object.
+ * Returns the `onSelectionChange` handler for a secondary tab when the lines
+ * layout is `inlineEditable` (tracks selected rows per tab), otherwise
+ * undefined — UNLESS `enableSecondaryRowDelete` opts the tab in explicitly.
+ * ETP-4656 (Gap 4): non-inlineEditable tabs (e.g. Contacto → Direcciones /
+ * Personas de contacto, which use `customAddModal` popups instead of inline
+ * cell editing) still need multi-select bulk delete — `enableSecondaryRowDelete`
+ * already exists as the single-row delete opt-in for exactly these tabs (see
+ * `onDeleteRow` a few lines below), so it doubles as the bulk-select opt-in
+ * too instead of inventing a second flag. The underlying `Table` already
+ * renders checkboxes regardless of layout (DataTable's `selectable` defaults
+ * to true) — they were just never wired up to DetailView's selection state
+ * for non-inlineEditable tabs before this.
  */
+export function getSecondarySelectionChangeHandler(linesLayout, setSecondarySelectedRows, st, enableSecondaryRowDelete = false) {
+  return (linesLayout === 'inlineEditable' || enableSecondaryRowDelete)
+      ? (rows) => setSecondarySelectedRows(prev => ({...prev, [st.key]: rows}))
+      : undefined;
+}
+
+export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
+  const { api, apiBaseUrl, secondaryHooks, stIdx, token, ui, extractErrorMessage, isDocumentReadOnly, hook } = ctx;
+  return !st.customAddModal && linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
+    const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
+        || `${apiBaseUrl}/${st.key}/${row.id}`;
+    const includesIdentifier = opts?.identifier !== undefined;
+    const optimistic = includesIdentifier
+        ? {[fieldKey]: value, [`${fieldKey}$_identifier`]: opts.identifier}
+        : {[fieldKey]: value};
+    // Snapshot the previous values so we can revert on failure.
+    const previous = includesIdentifier
+        ? {[fieldKey]: row[fieldKey], [`${fieldKey}$_identifier`]: row[`${fieldKey}$_identifier`]}
+        : {[fieldKey]: row[fieldKey]};
+    secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, optimistic);
+    let res;
+    try {
+      res = await fetch(childUrl, {
+        method: 'PATCH',
+        headers: {...(token ? {Authorization: `Bearer ${token}`} : {}), 'Content-Type': 'application/json'},
+        body: JSON.stringify({[fieldKey]: value}),
+      });
+    } catch (err) {
+      secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
+      toast.error(err?.message || ui('networkError'));
+      throw err;
+    }
+    if (res.ok) {
+      const updated = await res.json().catch(() => null);
+      // Server response wins over the optimistic cache when present
+      // — keeps any callout-driven fields the backend computed.
+      // NEO wraps the saved record in {response:{data:[...]}}.
+      const serverRow = updated?.response?.data?.[0] ?? null;
+      if (serverRow) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, serverRow);
+      // ETP-4029: editing rate/foreignAmount here also updates the invoice
+      // header's hidden eTGOCurrencyRate on the backend (reverse sync — see
+      // InvoiceExchangeRateHandler). Without this, the header's currency-rate
+      // picker keeps showing the stale value until a manual reload.
+      // refreshHeaderTotals is the same lightweight, non-disruptive header
+      // refresh already used after primary-line edits — it re-GETs the header
+      // and merges in only the fields the user hasn't touched, so any of the
+      // user's own in-progress unsaved header edits survive untouched.
+      //
+      // clearUserChangedKey('eTGOCurrencyRate') runs first, and ONLY for this
+      // one field: if the user had earlier edited the rate via the header's
+      // own CurrencyRatePicker in this same visit (already saved), that edit
+      // permanently marks eTGOCurrencyRate as "user changed" for the rest of
+      // the session (see useEntity.handleChange) — refreshHeaderTotals would
+      // then refuse to overwrite it, leaving the header stuck on the old
+      // value even though the tab's edit just persisted a newer one. This is
+      // a narrow, deliberate exception for this specific cross-surface sync;
+      // see the full rationale on clearUserChangedKey's definition.
+      if (st.key === 'exchangeRates' && hook?.selected?.id) {
+        hook.clearUserChangedKey('eTGOCurrencyRate');
+        hook.refreshHeaderTotals(hook.selected.id);
+      }
+    } else {
+      secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
+      const msg = await extractErrorMessage(res);
+      toast.error(msg || ui('networkError'));
+      throw new Error(msg || 'PATCH failed');
+    }
+  } : undefined;
+}
+
+/**
+ * Build the add / save-line / delete handlers for a secondary table tab.
+ * Extracted verbatim from the SecondaryTableTab call site so the logic is
+ * unit-testable without a replica. Called once per tab per render with the
+ * current render's values, preserving the original closure-over-render-scope
+ * behavior of the former inline closures.
+ *
+ * @param {object} deps
+ * @param {object} deps.st - current secondary tab descriptor
+ * @param {number} deps.stIdx - current secondary tab index
+ * @param {object} deps.api - resolved API config (for crud detail URLs)
+ * @param {string} deps.apiBaseUrl - base URL for NEO Headless requests
+ * @param {string} [deps.token] - bearer token
+ * @param {object} deps.secondaryHooks - per-tab child entity hooks
+ * @param {Function} deps.ui - i18n label resolver
+ * @param {Function} deps.extractErrorMessage - response error extractor
+ * @param {Function} deps.confirmDelete - delete confirmation prompt
+ * @param {object} deps.secondaryInlineLinesRefs - refs to inline line tables
+ * @param {object} deps.selectedSecondaryLine - currently open secondary line
+ * @param {object} deps.secondaryLineEdits - pending edits for the open line
+ * @param {object} deps.secondarySelectedRows - selected rows per tab key
+ * @param {Function} deps.setAddingSecondaryLine
+ * @param {Function} deps.setSavingSecondaryLine
+ * @param {Function} deps.setSelectedSecondaryLine
+ * @param {Function} deps.setSecondaryLineEdits
+ * @param {Function} deps.setSecondaryLineEditColumns
+ * @param {Function} deps.setSecondaryDeleting
+ * @param {Function} deps.setSecondarySelectedRows
+ * @returns {{onAdd: Function, onSaveLine: Function, onDelete: Function}}
+ */
+export function buildSecondaryLineHandlers(deps) {
+  const {
+    st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
+    extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
+    selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
+    setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
+    setSecondaryLineEdits, setSecondaryLineEditColumns, setSecondaryDeleting,
+    setSecondarySelectedRows,
+  } = deps;
+
+  const onAdd = async (lineData) => {
+    const entryKeys = new Set(st.addLineFields.entry.map(f => f.key));
+    const filtered = {};
+    for (const [k, v] of Object.entries(lineData)) {
+      if (entryKeys.has(k)) filtered[k] = v;
+    }
+    const result = await secondaryHooks[stIdx]?.handleAddChild?.(filtered);
+    if (result) setAddingSecondaryLine(prev => ({...prev, [st.key]: false}));
+    return result;
+  };
+
+  const onSaveLine = async () => {
+    setSavingSecondaryLine(true);
+    try {
+      const secUrl = `${apiBaseUrl}/${st.key}/${selectedSecondaryLine.id}`;
+      const fieldValues = {};
+      for (const [k, v] of Object.entries(secondaryLineEdits)) {
+        if (k.endsWith('$_identifier')) continue;
+        // NEO Headless PATCH expects camelCase API keys, not DB column names.
+        // Always use k (the API key) as the field name.
+        // Convert numeric strings to numbers for BigDecimal compatibility.
+        // Only strip when the value is already in standard format (no commas).
+        // Comma removal is skipped to avoid locale corruption (e.g. Spanish "10,50" = 10.5).
+        if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
+          fieldValues[k] = parseFloat(v);
+        } else {
+          fieldValues[k] = v;
+        }
+      }
+      const res = await fetch(secUrl, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+        body: JSON.stringify(fieldValues),
+      });
+      if (res.ok) {
+        // Server response wins over the local edits: it carries
+        // callout-computed fields (e.g. the recalculated foreignAmount
+        // on an exchange-rate row) that the edited values don't have.
+        // NEO wraps the saved record in {response:{data:[...]}}.
+        const updated = await res.json().catch(() => null);
+        const serverValues = updated?.response?.data?.[0] ?? null;
+        setSelectedSecondaryLine(prev => ({...prev, ...secondaryLineEdits, ...(serverValues ?? {})}));
+        // Refresh the grid row cache so the list reflects the saved and
+        // derived values without having to reopen the record.
+        secondaryHooks[stIdx]?.handleUpdateChild?.(selectedSecondaryLine.id, serverValues ?? secondaryLineEdits);
+        setSecondaryLineEdits(null);
+        setSecondaryLineEditColumns({});
+        toast.success('Record saved');
+      } else {
+        toast.error(await extractErrorMessage(res));
+      }
+    } catch (err) {
+      toast.error(err.message || 'Network error');
+    } finally {
+      setSavingSecondaryLine(false);
+    }
+  };
+
+  const onDelete = async () => {
+    if (!(await confirmDelete())) return;
+    setSecondaryDeleting(prev => ({...prev, [st.key]: true}));
+    const rows = secondarySelectedRows[st.key] ?? [];
+    try {
+      // ETP-4656 — shared triage (Promise.allSettled + succeeded/failed partition)
+      // and single-toast-per-outcome selection, same helpers ListView/Financial
+      // Accounts/Movements/Statements bulk delete already use (see batchDelete.js).
+      // Replaces the old two-independent-if (`recordsDeleted` + `recordsCouldNotBeDeleted`)
+      // stacked-toast pattern this function predates.
+      const { succeeded, failed } = await runBatchDelete(rows, (row) => {
+        const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
+            || `${apiBaseUrl}/${st.key}/${row.id}`;
+        return fetch(childUrl, {
+          method: 'DELETE',
+          headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+        }).then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return row;
+        });
+      });
+
+      for (const row of succeeded) {
+        secondaryHooks[stIdx]?.handleDeleteChild?.(row.id);
+        if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === row.id) {
+          setSelectedSecondaryLine(null);
+        }
+      }
+
+      secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
+      setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
+
+      toastBatchDeleteOutcome(ui, { succeeded, failed, total: rows.length });
+    } catch (err) {
+      toast.error(err.message || ui('networkError'));
+    } finally {
+      setSecondaryDeleting(prev => ({...prev, [st.key]: false}));
+    }
+  };
+
+  return { onAdd, onSaveLine, onDelete };
+}
+
+export function SecondaryFormTab(props) {
+  return <div className="flex-1 min-w-0">
+    <props.st.Form
+        data={props.data ?? {}}
+        readOnly={!props.hook.editing}
+        onChange={props.onChange}
+        entity={props.st.key}
+        catalogs={props.catalogs}
+        token={props.token}
+        apiBaseUrl={props.apiBaseUrl}
+        selectorContext={props.selectorContextByEntity[props.st.key]}
+        labelOverrides={props.labelOverrides}
+    />
+  </div>;
+}
+
+function secondaryDetailSidebar(props) {
+  if (!(props.st.Form && !props.st.Panel && (props.selectedSecondaryLine?._tabKey === props.st.key || props.closingSecondaryLine))) {
+    return null;
+  }
+  return (
+    <div
+        className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${props.closingSecondaryLine ? "sidebar-slide-out" : "sidebar-slide-in"}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-foreground">{props.detailPanelTitle}</span>
+        <button
+            onClick={props.onCloseDetailPanel}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="h-3.5 w-3.5" data-testid="X__fa3275" />
+        </button>
+      </div>
+      <props.st.Form
+          data={props.secondaryLineEdits ?? props.selectedSecondaryLine}
+          readOnly={!props.hook.editing}
+          onChange={props.onChange}
+          entity={props.st.key}
+          catalogs={props.catalogs}
+          token={props.token}
+          apiBaseUrl={props.apiBaseUrl}
+          selectorContext={props.selectorContextByEntity[props.st.key]}
+          excludeFields={props.st.key === "contact" ? ["active"] : []}
+          labelOverrides={props.labelOverrides}
+      />
+      {props.hook.editing && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
+          <div className="flex gap-2 mt-4">
+            {props.secondaryLineEdits && (
+                <>
+                  <button
+                      disabled={props.savingLine}
+                      onClick={props.onSaveLine}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {props.savingLine ? props.loadingLabel : props.saveLabel}
+                  </button>
+                  <button
+                      onClick={props.onDiscardLine}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
+                  >
+                    {props.discardLabel}
+                  </button>
+                </>
+            )}
+            {(props.crud?.[props.st.key]?.delete ?? true) && props.selectedSecondaryLine?.id && (
+                <button
+                    disabled={props.savingLine}
+                    onClick={props.onDeleteLine}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
+                >
+                  <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
+                  {props.deleteLabel}
+                </button>
+            )}
+          </div>
+      )}
+    </div>
+  );
+}
+
+function secondaryAddLineBar(props) {
+  const secondaryChildCount = (props.secondaryHooks?.[props.stIdx]?.children ?? []).length;
+  if (!((props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing
+      && resolveCanAddSecondaryLines(props.st, secondaryChildCount))) {
+    return null;
+  }
+  return (
+    // Wrapper measured by the secondary selection bar — its
+    // `position: fixed` portal overlays exactly this region.
+    // Mirrors the primary header-lines add-button wrapper (shared
+    // getAddLineWrapperClassName/Style helpers) so both paths get the
+    // same top border, vertical spacing and padding — keeps alignment
+    // consistent across primary and secondary tabs.
+    // Always `relative` (never sticky): the child-tab add-line button
+    // must stay in flow below the table. getAddLineWrapperClassName's
+    // sticky bottom-0 variant is only correct for the tall PRIMARY
+    // header-lines area — applying it here makes the button overlap the
+    // last table row when the scroll container is resized.
+    <div
+      ref={props.secondaryAddLineWrapperRef}
+      className="relative"
+      // No borderTop: the child table already renders its own bottom
+      // border, so the primary path's top divider would double up here.
+      // noTopPadding: keep the button snug under the table (no vertical
+      // gap above it) while preserving horizontal alignment.
+      style={getAddLineWrapperStyle(props.linesLayout, { withBorder: false, noTopPadding: true })}
+    >
+      {/* alignSelf:flex-start keeps this span from being stretched by
+          the flex-column parent — otherwise data-inline-add-portal would
+          cover the whole bar and the outside-click save would never fire. */}
+      <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
+        <AddLineButton
+          onClick={props.onAddLineClick}
+          label={props.addLineLabel}
+          hideChevron={props.hideChevron}
+          data-testid="AddLineButton__fa3275" />
+      </span>
+      {/* ETP-4656 (Gap 4) — `enableSecondaryRowDelete` also unlocks the bulk-select bar
+          for non-inlineEditable tabs (e.g. Direcciones/Personas de contacto), matching
+          the onSelectionChange wiring above and the row-level onDeleteRow gate below. */}
+      {(props.linesLayout === "inlineEditable" || props.enableSecondaryRowDelete) && (props.crud?.[props.st.key]?.delete ?? true) && (
+          <LinesSelectionBar
+            visible={props.secondaryBarVisible[props.st.key] ?? false}
+            closing={props.secondaryBarClosing[props.st.key] ?? false}
+            barRect={props.secondaryBarRects[props.st.key]}
+            count={(props.secondarySelectedRows[props.st.key] ?? []).length}
+            selectedLabel={props.selectedLabel}
+            totalLabel={null}
+            deleting={props.secondaryDeleting[props.st.key] ?? false}
+            deleteTitle={props.deleteLabel}
+            closeTitle={props.closeTitle}
+            compact
+            onDelete={props.onDelete}
+            onClose={props.onClose}
+            data-testid="LinesSelectionBar__fa3275" />
+      )}
+    </div>
+  );
+}
+
+export function SecondaryTableTab(props) {
+  // Evaluates the tab's own readOnlyLogic (if declared) against the current
+  // header record — independent of the document-wide isDocumentReadOnly, which
+  // only governs the primary lines table. Most tabs declare no readOnlyLogic
+  // and this stays false, preserving today's behavior everywhere else.
+  const tabReadOnly = evalTabReadOnly(props.st, props.hook.selected);
+  const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
+  const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
+  const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
+  // ETP-4565 — st.maxDetailLines caps this tab's own child count (declared per
+  // secondary tab in decisions.json). At this point secondaryChildren.length is
+  // always 0 when showEmptyState is being evaluated below, so this only ever
+  // blocks the empty-state add trigger for the maxDetailLines:0 (import-only)
+  // case — a tab capped at >=1 still shows it while empty, same as today.
+  const canAddMore = resolveCanAddSecondaryLines(props.st, secondaryChildren.length);
+  const showEmptyState = secondaryChildren.length === 0 && !isAddingThis
+    && props.hook.editing && hasAddFields && canAddMore && !props.st.customAddModal && !tabReadOnly;
+  if (showEmptyState) {
+    return secondaryTabEmptyState({ ui: props.ui, onAddLineClick: props.onAddLineClick, addLineLabel: props.addLineLabel });
+  }
+  return (
+    <>
+      <div className="flex items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <props.st.Table
+              ref={getSecondaryLinesTableRef(props.linesLayout, props.secondaryInlineLinesRef, props.st)}
+              data={props.secondaryHooks[props.stIdx]?.children ?? []}
+              entity={props.st.key}
+              token={props.token}
+              apiBaseUrl={props.apiBaseUrl}
+              labelOverrides={props.labelOverrides}
+              selectorContext={props.selectorContextByEntity[props.st.key]}
+              linesLayout={props.linesLayout}
+              isDocumentReadOnly={tabReadOnly}
+              onRowClick={resolveSecondaryRowClickHandler(props.st, {
+                openCustomModal: props.openCustomModal,
+                openSecondaryLine: props.openSecondaryLine,
+                linesLayout: props.linesLayout,
+              })}
+              // Pencil action for customAddModal tabs (Dirección) opens
+              // the popup editor — rows are not editable in place.
+              onEditRow={getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
+              selectedRowId={props.selectedSecondaryLine?._tabKey === props.st.key ? props.selectedSecondaryLine?.id : undefined}
+              onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st, props.enableSecondaryRowDelete)}
+              onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && !tabReadOnly && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
+              // Inline edit save for secondary-tab rows. Fires when a
+              // cell loses focus while in edit mode. Optimistic flow:
+              // we update the local cache FIRST so the Radix Select
+              // (and read-mode label) reflect the new pick instantly,
+              // then PATCH the server and roll back if it rejects.
+              onUpdateRow={getSecondaryRowUpdateHandler(props.st, props.linesLayout, {
+                api: props.api,
+                apiBaseUrl: props.apiBaseUrl,
+                secondaryHooks: props.secondaryHooks,
+                stIdx: props.stIdx,
+                token: props.token,
+                ui: props.ui,
+                extractErrorMessage: props.extractErrorMessage,
+                isDocumentReadOnly: tabReadOnly,
+                hook: props.hook,
+              })}
+              addRow={props.st.addLineFields?.entry?.length > 0 && !tabReadOnly && canAddMore ? {
+                ref: props.secondaryAddRowRef,
+                active: props.addingSecondaryLine[props.st.key] ?? false,
+                fields: props.st.addLineFields.entry,
+                onAdd: props.onAdd,
+                onCancel: props.onCancel,
+                catalogs: props.catalogs,
+                seedValues: props.secondaryAddRowSeed,
+                resolvedDefaults: props.secondaryChildDefaults,
+              } : undefined}
+          />
+        </div>
+        {secondaryDetailSidebar(props)}
+      </div>
+      {!tabReadOnly && secondaryAddLineBar(props)}
+    </>
+  );
+}
+
+export function getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lineConfig, data) {
+  return bottomSection?.showLineTotals !== false ? (() => {
+    const total = selectedChildRows.reduce((acc, row) => {
+      const v = parseFloat(String(row?.[lineConfig.grossField] ?? row?.lineGrossAmount ?? 0));
+      return acc + (Number.isFinite(v) ? v : 0);
+    }, 0);
+    const curr = data?.['currency$_identifier'] || '';
+    return curr ? formatCurrency(curr, total) : total.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+  })() : null;
+}
+
+export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPadding = false } = {}) {
+  const inline = linesLayout === 'inlineEditable';
+  const padY = inline ? 8 : 10;
+  const padX = inline ? 8 : 16;
+  // Default keeps the original symmetric padding (numeric 8 for inlineEditable,
+  // '10px 16px' otherwise) so the primary path is byte-for-byte unchanged.
+  // noTopPadding drops ONLY the top so the add-button sits snug under the child
+  // table, while horizontal padding still aligns it with table content.
+  let padding;
+  if (noTopPadding) {
+    padding = `0 ${padX}px ${padY}px`;
+  } else if (inline) {
+    padding = padY;
+  } else {
+    padding = `${padY}px ${padX}px`;
+  }
+  return {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    // The top border separates the lines from the add-button in the primary
+    // header-lines path. Secondary/child tabs already have the table's own
+    // bottom border, so they pass withBorder:false to avoid a double divider.
+    ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, hsl(var(--border-subtle)))' } : {}),
+    padding
+  };
+}
+
+// ETP-4565 — st.maxDetailLines mirrors window.maxDetailLines' semantics
+// (generator: `addLineGuard={(_, children) => children.length < N}`) but is
+// declared per secondary tab (`window.secondaryTabs.<key>.maxDetailLines` in
+// decisions.json), since a window can have several secondaryTabs that each
+// need an independent cap (e.g. contacts' customerAccounting/vendorAccounting).
+// `N > 0` hides the add affordances once the tab's own child count reaches N;
+// `0` disables manual add entirely (import-only-style, matching maxDetailLines:0
+// on the detailEntity pattern). Undeclared (null/undefined) stays uncapped —
+// today's behavior for every secondaryTabs entry that predates this flag.
+export function resolveCanAddSecondaryLines(st, childrenCount) {
+  return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
+}
+
+export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui }) {
+  return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
+    // Inline autosave with callout chain. NEO Headless expects API keys
+    // (camelCase), an unwrapped body, and numeric strings coerced for
+    // BigDecimal — mirrors the side-panel save at line ~1750. When a
+    // trigger field changes (e.g., product), `handleLineFieldChange`
+    // populates `derivedUpdates` with all callout-driven fields (price,
+    // tax, description, etc.) so they can be PATCHed in one shot.
+    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+        || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+    const coerce = (v) => (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v);
+    const payloadValue = coerce(value);
+
+    // Build the row snapshot the callout sees: existing row + the change.
+    // Strip null/empty inherited keys that the parent has set (e.g.
+    // businessPartner, priceList on OrderLine). buildCalloutFormState
+    // by contract does NOT overwrite a row value with the header's,
+    // so without this prune the callout would receive
+    // businessPartner=null and NEO returns listPrice=0. The addRow
+    // flow doesn't hit this because it starts from an empty values
+    // object, but existing rows include denormalized parent keys.
+    const headerSnapshot = hook.editing || hook.selected || {};
+    const cleanRow = {...row};
+    for (const k of Object.keys(headerSnapshot)) {
+      const v = cleanRow[k];
+      if (v === null || v === undefined || v === '') {
+        delete cleanRow[k];
+      }
+    }
+    const snapshot = {...cleanRow, [fieldKey]: payloadValue};
+    if (opts?.identifier !== undefined) {
+      snapshot[fieldKey + '$_identifier'] = opts.identifier;
+    }
+    // Mirror DataTable's selector-aux merge (lines 468–512). The
+    // selector item carries `_aux` (product_PSTD, _PLIM, _UOM, _CURR)
+    // and top-level fields (standardPrice, isTaxIncluded, currency)
+    // that the callout needs to compute the price. Without this, the
+    // callout has no access to the price-list metadata and returns 0.
+    const selectedItem = opts?.selectedItem;
+    if (selectedItem && typeof selectedItem === 'object') {
+      mergeSelectorAuxFields(selectedItem, snapshot, fieldKey);
+      mergeSelectorContextFields(selectedItem, snapshot, fieldKey);
+    }
+
+    // Run callout (no-op for fields without one). Captures derived fields
+    // through the applyUpdates callback so we can fold them into the PATCH.
+    let derivedUpdates = {};
+    try {
+      await handleLineFieldChange(fieldKey, payloadValue, snapshot, (updates) => {
+        derivedUpdates = {...updates};
+      });
+    } catch {
+      // Callout is best-effort; PATCH continues with the user-typed value only.
+    }
+
+    // PATCH body: send the full row + derived + change. NEO Headless
+    // doesn't reliably recompute derived fields (lineGrossAmount,
+    // standardPrice) when only a partial body arrives — observed
+    // when changing product to one with a different price. The
+    // side-panel save (line ~1750) sends the whole row for the same
+    // reason, so we mirror that here for parity.
+    const fieldValues = {};
+    // 1. Start from the cleaned row (skips already-null inherited keys).
+    collectRowFieldValues(cleanRow, fieldValues, coerce);
+    // 2. Overlay derived fields from the callout (incl. lineGrossAmount,
+    //    standardPrice, unitPrice, listPrice).
+    for (const [k, v] of Object.entries(derivedUpdates)) {
+      if (k.endsWith('$_identifier')) continue;
+      fieldValues[k] = coerce(v);
+    }
+    // 3. The user-changed field always wins (last-write).
+    fieldValues[fieldKey] = payloadValue;
+
+    // Derive unitPrice (PriceActual) = listPrice × (1 - discount/100).
+    // Without this the backend keeps the pre-discount PriceActual and
+    // confirmed totals don't match the discounted lineNetAmount we just
+    // computed — matches the side-panel save flow.
+    prepareLineForPost(fieldValues);
+
+    const res = await fetch(childUrl, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+      body: JSON.stringify(fieldValues),
+    });
+    if (res.ok) {
+      applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue, fieldValues, opts, hook, row);
+      // Server response wins over the optimistic cache when present —
+      // picks up trigger-computed fields (e.g. etgoQtydiff) that only
+      // exist after the DB flush, mirroring the secondary-tab handler
+      // above (line ~425). NEO wraps the saved record in
+      // {response:{data:[...]}}.
+      const updated = await res.json().catch(() => null);
+      const serverRow = updated?.response?.data?.[0] ?? null;
+      // ETP-4751 — pass the raw response ROOT (`updated`) as the exemption-cause signal source:
+      // InvoiceLineHandler stamps exemptionCauseWarning/exemptionCauseAutoFilled at the response
+      // root, not on the nested line row (`serverRow`), so a line EDIT that turns a line exempt
+      // still surfaces the SIF warning toast.
+      if (serverRow) hook.handleUpdateChild?.(row.id, serverRow, undefined, updated);
+    } else {
+      const msg = await extractErrorMessage(res);
+      toast.error(msg || ui('networkError'));
+      throw new Error(msg || 'PATCH failed');
+    }
+  } : undefined;
+}
+
+export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage }) {
+  return (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly ? async (row) => {
+    if (!(await confirmDelete())) return;
+    try {
+      const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+          || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+      const res = await fetch(childUrl, {
+        method: 'DELETE',
+        headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+      });
+      if (res.ok) {
+        hook.handleDeleteChild(row.id);
+        if (selectedLine?.id === row.id) setSelectedLine(null);
+        toast.success(ui('recordDeleted'));
+      } else {
+        toast.error(await extractErrorMessage(res));
+      }
+    } catch (err) {
+      toast.error(err.message || ui('networkError'));
+    }
+  } : undefined;
+}
+
+// Normalizes boolean-ish status values (true/'Y' -> 'true', false/'N' -> 'false') so
+// windows whose statusField is a boolean flag (e.g. goods-movements' `processed`) can
+// declare completedStatuses as string literals, matching the precedent in statusBadge.js.
+function normalizeStatusValue(value) {
+  if (value === true || value === 'Y') return 'true';
+  if (value === false || value === 'N') return 'false';
+  return value;
+}
+
+function getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField) {
+  const statusValue = _headerData?.[statusField || 'documentStatus'];
+  return Boolean(
+      draftMode?.enabled && (
+          Array.isArray(draftMode.completedStatuses)
+              ? draftMode.completedStatuses.includes(normalizeStatusValue(statusValue))
+              : (isProcessed || _headerData?.documentStatus === 'CO')
+      )
+  );
+}
+
+export function getDetailContentContainerClassName({
+  linesLayout,
+  sidePanel,
+  sidebarContent,
+  sidebarAboveTabsOnly,
+  compactSidebarPadding,
+  primaryTabs,
+  activePrimaryTab,
+  formScrollPaddingX = null,
+  contentOverflow = 'auto',
+} = {}) {
+  const defaultOverflowCls = contentOverflow === 'hidden' ? 'overflow-hidden' : 'overflow-auto pb-2';
+  const overflowCls = linesLayout === 'inlineEditable' ? 'flex flex-col overflow-y-auto' : defaultOverflowCls;
+  return `flex-1 min-h-0 min-w-0 ${overflowCls} ${detailContentPadding(linesLayout, !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)), 'content', compactSidebarPadding, formScrollPaddingX)}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`;
+}
+
+export function getLinesTabsSectionClassName(linesLayout) {
+  return linesLayout === 'inlineEditable' ? 'mt-1 flex flex-col relative' : 'mt-2';
+}
+
+export function computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState) {
+  return hook.isDirtyHeader
+      || addingLine
+      || Object.values(addingSecondaryLine).some(Boolean)
+      || (lineEdits != null && Object.keys(lineEdits).length > 0)
+      || (additionalDirtyState === true);
+}
+
+export function hasRecordForRoute(isNew, hook, recordId) {
+  return isNew
+      || (hook.selected?.id && String(hook.selected.id) === String(recordId));
+}
+
+export function isLoadingRecordForRoute(hook, isNew, recordId) {
+  if (isNew && hook.defaultsLoading) return true;
+  return hook.loading && !hasRecordForRoute(isNew, hook, recordId);
+}
+
+export function resolveHideMoreMenu(hideMoreMenu, data) {
+  return typeof hideMoreMenu === 'function' ? hideMoreMenu({ data }) : hideMoreMenu;
+}
+
+export function shouldShowLinesEmptyState(hook, addingLine, LinesEmptyState, isDocumentReadOnly) {
+  return hook.children.length === 0 && !addingLine && LinesEmptyState && hook.editing && !isDocumentReadOnly;
+}
+
+// ETP-4530 — field keys for which `lineHiddenColumns` (below) is allowed to trust the
+// lines-entity `evaluate-display` visibility map, computed against a REPRESENTATIVE
+// (header) record rather than the actual line row. Valid only for
+// `@ACCT_DIMENSION_DISPLAY@`-gated accounting dimensions, whose expansion
+// (`DimensionDisplayUtility.computeAccountingDimensionDisplayLogic()`) depends solely on
+// the client's dimension config, never on record field values — see the `lineHiddenColumns`
+// comment for the full incident writeup (product/listPrice/grossAmount regression).
+// Some windows' extractors emit 'costcenter', others the camelCase 'costCenter' — both
+// casings are included so the macro is recognized (cacheable, filterable) regardless of
+// which one a given generated entity actually uses.
+//
+// 'product' is deliberately NOT included here, despite simple-g-l-journal's dimensionsPanel
+// listing it alongside project/costCenter/businessPartner as an @ACCT_DIMENSION_DISPLAY@
+// candidate there: in sales-invoice/purchase-invoice, `product` is a real per-line field
+// with its OWN record-dependent raw AD displayLogic (`@Financial_Invoice_Line@='N'`, see
+// the ETP-4530 regression note below on `lineHiddenColumns`) — the exact "false noise"
+// this allowlist exists to filter out. Trusting 'product' unconditionally here would fix
+// the gap for simple-g-l-journal but silently reintroduce that already-fixed regression
+// for every OTHER window that shares this component and has a real, per-record 'product'
+// field. This constant stays GLOBAL and unconditional on purpose.
+//
+// ETP-4610 (originally flagged by a GitHub Copilot review on PR 975, then fixed as part
+// of the same ticket) — the real per-window signal this comment used to call "out of
+// scope" now exists: `dimensionsPanelFieldKeys`, a prop generated from this window's own
+// decisions.json `dimensionsPanel: true` fields (see `buildDimensionsPanelColumn` /
+// `dimensionsPanelFieldKeys` in schema_forge_core's generate-frontend.js, and the
+// `dimensionsPanelFieldKeys` prop + `trustedDimensionKeys` memo below). `lineHiddenColumns`
+// and the expanded-row DetailForm's `displayLogic` both trust `DIMENSION_MACRO_KEYS UNION
+// dimensionsPanelFieldKeys`, scoped to the current DetailView instance — so
+// simple-g-l-journal can trust 'product' as a dimension macro without this global constant
+// ever needing to include it, and sales-invoice/purchase-invoice (which never pass
+// 'product' in that prop) are unaffected. See DetailView.lineHiddenColumns.vitest.jsx for
+// both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped
+// instances).
+const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
+export function isDeleteButtonVisible({
+  isNew,
+  recordId,
+  data,
+  statusField,
+  hideDeleteWhenComplete,
+  isProcessed,
+  deleteAction,
+  hideDeleteButton = false,
+}) {
+  // hideDeleteButton is an explicit, unconditional "never show delete here"
+  // signal (e.g. Amortization) — it wins over everything else, including the
+  // deleteAction lifecycle bypass below.
+  if (hideDeleteButton) return false;
+  // ETP-4479 — a deleteAction-backed delete is safe at any lifecycle stage
+  // (the action reactivates server-side before removing), so it ignores
+  // hideDeleteWhenComplete/isProcessed and only hides for the voided status.
+  if (deleteAction) {
+    return !isNew && recordId && data?.[statusField] !== 'RPVOID';
+  }
+  return !isNew && recordId && isDeleteVisibleForRecord({
+    record: data,
+    statusField,
+    hideDeleteWhenComplete
+  }) && !(hideDeleteWhenComplete && isProcessed);
+}
+
+export function shouldShowLineActionButtons(hook, lineEdits, selectedLine) {
+  return hook.editing && (lineEdits || selectedLine?.id);
+}
+
+export function canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, DetailExtraActions, canAddLines) {
+  return hook.editing && !isDocumentReadOnly && (allEntryFields.length > 0 || DetailExtraActions) && canAddLines;
+}
+
+/**
+ * Save / Confirm toolbar buttons for draftMode windows (Save Draft + Confirm).
+ * Extracted from the DetailView footer IIFE to keep cognitive complexity low.
+ * All identifiers are destructured with the SAME names used inside the component
+ * so closure-equivalent logic and the dirty-state regression substrings stay intact.
+ */
+function renderDraftModeSaveActions({
+  hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
+  ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
+  draftMode, blockSaveForBalance, blockCompleteForBalance, setShowProcessingModal,
+}) {
+  return (
+    <>
+      <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+        if (!(await flushPendingLines())) return;
+        const saved = await hook.handleSave(data);
+        if (saved?.id && isNew) {
+          hook.primeSaved?.(saved);
+          navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+        } else {
+          reportUnnavigableSave({ saved, isNew, windowName, ui });
+        }
+      }}>
+        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
+        {ui('save')}
+      </Button>
+      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
+        if (!(await flushPendingLines())) return;
+        if (typeof draftMode.onConfirm === 'function') { draftMode.onConfirm(); return; }
+        const showProcessing = Boolean(draftMode.processingModal);
+        if (showProcessing) setShowProcessingModal(true);
+        try {
+          const saved = await hook.handleSaveAndProcess(draftMode);
+          if (saved) {
+            if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+            if (onAfterSave) {
+              navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
+            } else if (saved.id && isNew) {
+              hook.primeSaved?.(saved);
+              navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+            } else if (saved.id) {
+              hook.fetchById?.(saved.id);
+            } else {
+              reportUnnavigableSave({ saved, isNew, windowName, ui });
+            }
+          }
+        } finally {
+          if (showProcessing) setShowProcessingModal(false);
+        }
+      }}>
+        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
+        {ui(draftMode.label) || draftMode.label || ui('process')}
+      </Button>
+    </>
+  );
+}
+
+const UNNAVIGABLE_SAVE_MESSAGE_KEY = 'savedButCannotOpenRecord';
+
+/**
+ * A NEW record that saves OK but whose response yields no derivable id (see
+ * deriveRecordId in useEntity) used to skip the redirect with no signal at all,
+ * leaving the user on /window/new. Surface it instead of failing silently.
+ * Returns true when the failure was reported.
+ */
+export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
+  if (!isNew || !saved || saved.id) return false;
+  console.error(
+    `[DetailView] Save succeeded for '${windowName}' but the response has no derivable record id — redirect skipped`,
+    saved,
+  );
+  toast.error(ui?.(UNNAVIGABLE_SAVE_MESSAGE_KEY) || UNNAVIGABLE_SAVE_MESSAGE_KEY);
+  return true;
+}
+
+export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
+  if (!saved) return;
+  if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+  if (onAfterSave) {
+    navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
+  } else if (saved.id && isNew) {
+    hook.primeSaved?.(saved);
+    navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+  } else {
+    reportUnnavigableSave({ saved, isNew, windowName, ui });
+  }
+}
+
+/**
+ * Save (+ optional Confirm) toolbar buttons for a brand-new (unsaved) record.
+ * Extracted from the DetailView footer IIFE. New-record Save is never gated by
+ * !isDirty — only by isDocumentReadOnly, isSaving and blockSaveForBalance.
+ */
+function renderNewRecordSaveActions({
+  hook, flushPendingLines, data, isNew, navigate, windowName,
+  ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
+  isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
+}) {
+  return (
+    <>
+      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+        if (!(await flushPendingLines())) return;
+        const saved = await hook.handleSave(data);
+        if (saved?.id && isNew) {
+          if (onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+          hook.primeSaved?.(saved);
+          navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+        } else {
+          reportUnnavigableSave({ saved, isNew, windowName, ui });
+        }
+      }}>
+        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" data-testid="Save__fa3275" />}
+        {ui('save')}
+      </Button>
+      {!isProcessed && hook.children.length > 0 && (
+        <Button size="default" className={saveBtnCls} data-testid="action-complete" disabled={hook.isSaving || blockCompleteForBalance} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
+          if (!(await flushPendingLines())) return;
+          const saved = await hook.handleSaveAndProcess(draftMode);
+          await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
+        }}>
+          {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
+          {ui(draftMode.label) || tMenu(draftMode.label) || ui('process')}
+        </Button>
+      )}
+    </>
+  );
+}
+
+/**
+ * Single Save toolbar button for an existing (already-persisted) record.
+ * Extracted from the DetailView footer IIFE. Gated by isDocumentReadOnly,
+ * isSaving, !isDirty and blockSaveForBalance.
+ */
+function renderExistingRecordSaveAction({
+  hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
+  ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
+  isDocumentReadOnly, blockSaveForBalance,
+}) {
+  return (
+    <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+      if (!(await flushPendingLines())) return;
+      const saved = await hook.handleSave(data);
+      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
+    }}>
+      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
+      {ui('save')}
+    </Button>
+  );
+}
+
+/**
+ * Dispatches the footer Save/Confirm action block by record state. Extracted to
+ * module level so the branch logic does not count toward DetailView's cognitive
+ * complexity. All values arrive via the `params` object built in DetailView.
+ */
+function renderSaveActions(params) {
+  if (params.draftMode?.enabled) return renderDraftModeSaveActions(params);
+  if (params.isNew) return renderNewRecordSaveActions(params);
+  return renderExistingRecordSaveAction(params);
+}
+
+async function executeDetailProcessImpl(process, paramValues, explicitRows, {
+  selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui,
+  setSelectedChildRows, setExecutingDetailProcess,
+}) {
+  const rows = explicitRows || selectedChildRows;
+  const fieldValues = {};
+  for (const p of (process.params ?? [])) {
+    if (p.hidden) fieldValues[p.key] = p.value;
+  }
+  Object.assign(fieldValues, paramValues);
+  setExecutingDetailProcess(true);
+  try {
+    const results = await Promise.allSettled(
+      rows.map(row => {
+        const url = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+          || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+        return fetch(`${url}/action/${process.columnName ?? process.name}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ fieldValues }),
+        }).then(res => ({ res, row }));
+      })
+    );
+    let ok = 0;
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.res.ok) ok++;
+    }
+    setSelectedChildRows([]);
+    if (ok > 0) {
+      toast.success(ui('processCompletedCount', { count: ok }) !== 'processCompletedCount'
+        ? ui('processCompletedCount', { count: ok })
+        : `${process.label || process.name}: ${ok} record(s) processed`);
+      hook.fetchById?.(hook.selected?.id);
+      hook.refresh?.();
+    }
+    const failed = results.length - ok;
+    if (failed > 0) toast.error(`${failed} record(s) failed`);
+  } catch (err) {
+    toast.error(err?.message || 'Network error');
+  } finally {
+    setExecutingDetailProcess(false);
+  }
+}
+
+/**
+ * ETP-4542: opt-in "save before running a process" gate. Only windows that pass
+ * `saveBeforeProcesses` participate; every other window keeps the previous behavior
+ * (returns true immediately, no save). When the form has pending changes (`isDirty`,
+ * the same signal that drives the Save button), the changes are persisted silently
+ * (`{ silent: true }` suppresses the success toast) BEFORE the process flow opens, so
+ * the process runs on fresh data. On save failure — required missing, ETP-4542 numeric
+ * violation, or a backend error — `handleSave` has already surfaced the error and returns
+ * a record without an id; this returns false so the caller aborts without opening the
+ * confirm modal, param dialog, or firing the process POST.
+ *
+ * @returns {Promise<boolean>} true → proceed with the process; false → abort silently.
+ */
+export async function maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, handleSave }) {
+  if (!saveBeforeProcesses || !isDirty) return true;
+  const saved = await handleSave?.({ silent: true });
+  return !!saved?.id;
+}
+
+// Builds the form-footer render pieces. A formFooter may opt into rendering INSIDE
+// the header card (single-field footers like TaxSifField set the static marker
+// `inlineInHeaderCard`), aligned in the same horizontal grid as the native header
+// fields, instead of the default detached block below the card (multi-section
+// panels like AssetsDetailPanel). Inline footers are spliced into the principal
+// Form's grid via its `trailing` slot (a bare grid cell, WITHOUT the pointer-events
+// wrapper, so it is a direct grid sibling of the native fields). Non-marked footers
+// keep the detached `footerElement` block and are completely unaffected.
+export function buildHeaderFooter({ formFooter, embedded, data, entity, handleChangeWithCallout, hook, catalogs, api, token, apiBaseUrl }) {
+  if (!formFooter) return { footerInline: false, footerElement: null, inlineTrailing: undefined };
+  const footerInline = !!formFooter.inlineInHeaderCard;
+  const footerNode = React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing, registerFields: hook.registerFields, fieldErrors: hook.fieldErrors });
+  const footerElement = (
+    <div className={embedded ? 'pointer-events-none' : ''}>
+      {footerNode}
+    </div>
+  );
+  const inlineTrailing = footerInline ? footerNode : undefined;
+  return { footerInline, footerElement, inlineTrailing };
+}
+
 export function DetailView({
   entity,
   detailEntity,
@@ -199,13 +1213,23 @@ export function DetailView({
   statusField,
   extraBadges = [],
   processes = [],
+  detailProcesses = [],
   addLineFields = { entry: [], derived: [] },
   catalogs: staticCatalogs,
   api,
+  // ETP-4520 — runtime per-tier window override; see ListView.jsx's identical
+  // `window` prop for the full rationale (buildWindowAccessWiring/effectiveWindow).
+  window: windowProp = null,
   entityLabel,
   detailLabel,
   detailTabIndex,
+  detailTabOrder,
   titleField = 'documentNo',
+  // Name of the header field holding this document's primary date (e.g. "orderDate"
+  // for orders/quotations, "invoiceDate" for invoices). Used for exchange-rate lookups
+  // and other document-date-dependent logic. Defaults to "orderDate" for backward
+  // compatibility with windows that don't declare window.documentDateField.
+  documentDateField = 'orderDate',
   windowName,
   recordId,
   token,
@@ -223,6 +1247,19 @@ export function DetailView({
   menuActions = [],
   customMenuContent = null,
   hideDeleteWhenComplete = false,
+  // Unconditional "never show header delete" signal (e.g. Amortization) —
+  // wins over deleteAction and the normal lifecycle rules. See
+  // isDeleteButtonVisible above.
+  hideDeleteButton = false,
+  // ETP-4479 — when set, the delete (Trash2) button invokes this NEO action
+  // name via `neoAction.execute(recordId, deleteAction)` instead of a raw
+  // DELETE, and is visible for any status except 'RPVOID'. Used by windows
+  // (e.g. payment-in/out) where a plain header DELETE fails once the record
+  // has ever been referenced (FK constraints) — the action safely reactivates
+  // and removes it server-side. Overrides hideDeleteWhenComplete entirely
+  // when set; when null (default), behavior is unchanged for every window.
+  // hideDeleteButton (above) still wins over this when both are set.
+  deleteAction = null,
   customTabsAfterBottom = false,
   hidePrint = false,
   hideSaveStatuses = [],
@@ -230,15 +1267,21 @@ export function DetailView({
   hideMoreDetails = false,
   noHeaderBorder = false,
   toolbarBorderBottom = false,
+  compactSidebarPadding = false,
+  whiteFormBackground = false,
+  hideFormCard = false,
   tabsBarRightDivider = null,
   tabsBarRight = null,
+  tabsBarAfter = null,
   hideTopBar = false,
   CustomLines = null,
   customLinesLabel = 'Invoices',
   sidePanel = null,
   sidePanelStyle = null,
+  sidebarAboveTabsOnly = false,
   afterTotals = null,
   bottomSection = null,
+  balanceFooter = null,
   linesEmptyState = null,
   topbarExtra = null,
   topbarRight = null,
@@ -248,7 +1291,7 @@ export function DetailView({
   sidebarContent = null,
   othersLabel = null,
   primaryTabs = null,
-  contentBg = 'bg-white',
+  contentBg = 'bg-card',
   lineConfig = ORDER_LINE_CONFIG,
   lockWhenProcessed = true,
   addLineGuard = null,
@@ -259,29 +1302,50 @@ export function DetailView({
   additionalDirtyState = false,
   labelOverrides,
   enableSecondaryRowDelete = false,
-  sidebarClassName = 'w-96 shrink-0 overflow-y-auto pt-0 pl-0 pr-4 pb-5',
-  linesLayout = 'classic',
+  sidebarClassName = 'w-96 shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5',
+  linesLayout = 'inlineEditable',
   autoSaveOnBlur = false,
   toolbarPaddingX = 'px-6',
   tabsBarPaddingX = 'px-6',
   formScrollPaddingX = null,
+  contentOverflow = 'auto',
   formCardPadding = 'p-6',
   toolbarButtonSize = 'sm',
   primaryTabsVariant = 'default',
   refetchAfterSave = false,
   secondaryTabsPaddingY = 'py-2.5',
   secondaryTabsShowHoverLine = false,
+  tabsSeparator = false,
+  saveBeforeProcesses = false,
+  // ETP-4542: opt-in per window. When true, a header process button whose action is
+  // currently running shows a spinner + "Generating..." label and is disabled to
+  // prevent duplicate executions. Windows that don't pass it keep the current behavior
+  // (no spinner, no extra disabled state). Distinct from saveBeforeProcesses on purpose.
+  showProcessLoadingState = false,
   hideAddLineChevron = false,
   addLineButtonPaddingX = '',
   formScrollPaddingB = 'pb-6',
   secondaryTabContentPaddingT = 'pt-3',
+  transformRecord = null,
+  lockedAlert = null,
+  selectorPriceCurrency = null,
+  processConfirmModal = null,
+  // ETP-4610 — this window's own `dimensionsPanel: true` field keys on the lines
+  // entity (generated from decisions.json by `generate-frontend.js`'s
+  // `buildDimensionsPanelColumn`/`dimensionsPanelFieldKeys` — see
+  // docs/decisions-reference.md's "Accounting dimensions panel" section). Widens
+  // which keys `lineHiddenColumns` (and the expanded-row DetailForm's
+  // `displayLogic`) are willing to trust as config-driven dimension-macro
+  // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
+  // above for why the global allowlist itself must never include 'product'.
+  dimensionsPanelFieldKeys = [],
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
   // in memory from the other hook instance). On a direct URL hit `items` is empty anyway and
   // the effect falls through to fetchById. Skipping the list fetch unconditionally drops one
   // wasted GET per direct-URL navigation.
-  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave });
+  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName });
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
   // back-fill it generically here. Windows that already get it from the
@@ -306,24 +1370,69 @@ export function DetailView({
   // — the actions ref-controls the same modal so no functionality is lost.
   const getLineMenuActions = bottomSection?.lineMenuActions ?? null;
   const extraActionsRef = useRef(null);
-  // Static hooks for up to 4 secondary tabs (React rules forbid dynamic hook calls).
+  // Static hooks for up to 5 secondary tabs (React rules forbid dynamic hook calls).
   // Secondary hooks only consume child-level state (children, handleAddChild, handleDeleteChild,
   // handleSelect) — never the parent list. skipListFetch avoids refetching the parent entity
   // list once per hook (which would otherwise cause N+1 identical GETs on mount).
-  const secondaryHook0 = useEntity(entity, (secondaryTabs[0]?.isFormTab || secondaryTabs[0]?.Panel) ? null : (secondaryTabs[0]?.key ?? null), { token, apiBaseUrl, skipListFetch: true });
-  const secondaryHook1 = useEntity(entity, (secondaryTabs[1]?.isFormTab || secondaryTabs[1]?.Panel) ? null : (secondaryTabs[1]?.key ?? null), { token, apiBaseUrl, skipListFetch: true });
-  const secondaryHook2 = useEntity(entity, (secondaryTabs[2]?.isFormTab || secondaryTabs[2]?.Panel) ? null : (secondaryTabs[2]?.key ?? null), { token, apiBaseUrl, skipListFetch: true });
-  const secondaryHook3 = useEntity(entity, (secondaryTabs[3]?.isFormTab || secondaryTabs[3]?.Panel) ? null : (secondaryTabs[3]?.key ?? null), { token, apiBaseUrl, skipListFetch: true });
-  const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3];
+  // Windows with fewer tabs pass a null entity key to the unused hooks (no-op fetch).
+  // NOTE: the contacts window has 5 secondary tabs (person, bank account, location,
+  // customer accounting, vendor accounting) — the 5th (index 4) needs its own hook or its
+  // rows never fetch. Bump this count in lockstep if a window ever exceeds 5.
+  const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4];
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
+  // "From" currency for secondary-tab inline add-rows. The parent document's
+  // currency is a read-only column on those tabs (e.g. exchange rates), so the
+  // inline add-row has no input to populate it and it renders "—" until the POST
+  // sets it. Seed it from the header so it shows immediately. Depend on the scalar
+  // values (not the header object) so the seed keeps a stable identity and does
+  // not reset the open add-row on every parent re-render.
+  const headerCurrencyId = (hook.selected ?? hook.editing)?.currency ?? null;
+  const headerCurrencyLabel = (hook.selected ?? hook.editing)?.['currency$_identifier'] ?? sessionCurrencyCode ?? null;
+  const secondaryAddRowSeed = useMemo(() => {
+    if (headerCurrencyId == null && headerCurrencyLabel == null) return undefined;
+    const seed = {};
+    if (headerCurrencyId != null) seed.currency = headerCurrencyId;
+    if (headerCurrencyLabel != null) seed['currency$_identifier'] = headerCurrencyLabel;
+    return seed;
+  }, [headerCurrencyId, headerCurrencyLabel]);
 
+  // HandleDefaults: once the parent record is known, fetch backend-resolved
+  // defaults for NEW lines so the add-row can pre-fill editable fields (e.g. a
+  // line description defaulting to the parent's via @DESCRIPTION1@). An entity can
+  // opt out via decisions.json `handlesDefaults: false` (surfaced on api.crud).
+  const primaryHandlesDefaults = api?.crud?.[detailEntity]?.handlesDefaults !== false;
+  const primaryFetchChildDefaults = hook.fetchChildDefaults;
+  useEffect(() => {
+    if (!primaryHandlesDefaults || !parentRecordId) return;
+    primaryFetchChildDefaults?.(parentRecordId);
+  }, [primaryHandlesDefaults, parentRecordId, primaryFetchChildDefaults]);
+
+  // Ref updated on every render so the callback always reads the latest hook state,
+  // even when called from a setTimeout scheduled before the React re-render committed.
+  const handleFieldBlurRef = useRef(null);
+  handleFieldBlurRef.current = async () => {
+    if (!hasUnsavedEdits(hook.editing, hook.selected)) return;
+    // handleSave() resolves to the saved record on success, or null on any
+    // failure (validation block, non-2xx PATCH, network error) — see
+    // useEntity.js. A checkbox/toggle field autosaves immediately (ETP-4670:
+    // EntityForm fires onFieldBlur right after onChange for those types), so
+    // on failure the optimistic local flip must be rolled back — otherwise the
+    // control stays visually checked even though the backend rejected it and
+    // showed a toast (handleSave already surfaces the translated error via
+    // handleSaveErrorResponse). handleSelect(hook.selected) resets `editing`
+    // back to the last successfully-persisted record, discarding the rejected
+    // in-flight edit.
+    const saved = await hook.handleSave();
+    if (!saved) hook.handleSelect(hook.selected);
+  };
   const handleFieldBlur = useCallback(() => {
-    if (!hook.editing || !hook.selected) return;
-    const hasChanges = Object.entries(hook.editing).some(
-      ([key, value]) => key !== 'id' && value !== hook.selected[key]
-    );
-    if (hasChanges) hook.handleSave();
-  }, [hook]);
+    handleFieldBlurRef.current?.();
+  }, []);
   // Depend on the single scalar the memo reads from editing/selected, not the whole objects.
   // Keeps original semantics: prefer editing when present (even if priceList is null), else selected.
   const priceListId = (hook.editing || hook.selected)?.priceList ?? null;
@@ -331,62 +1440,122 @@ export function DetailView({
   // recreating a new array reference on every render.
   const secondaryTabKeysStr = secondaryTabs.map(t => t?.key ?? '').join('|');
 
+  // HandleDefaults for secondary detail tabs: same as the primary, per-tab entity.
+  useEffect(() => {
+    if (!parentRecordId) return;
+    secondaryTabKeysStr.split('|').forEach((key, i) => {
+      if (!key || api?.crud?.[key]?.handlesDefaults === false) return;
+      secondaryHooks[i]?.fetchChildDefaults?.(parentRecordId);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parentRecordId, secondaryTabKeysStr]);
+
   const selectorContextByEntity = useMemo(() => {
-    // Derive isSOTrx from window category so NEO's validation filter resolves
-    // @isSOTrx@ in M_PriceList.issopricelist = @isSOTrx@, showing only sales or
-    // purchase price lists depending on the document type.
     const category = api?.window?.category;
-    const isSOTrx = category === 'sales' ? 'Y' : category === 'purchases' ? 'N' : null;
-
-    // Derive isCustomer/isVendor from window category so the BusinessPartner selector
-    // shows only customers (sales) or vendors (purchases).
-    const isCustomer = category === 'sales' ? 'Y' : null;
-    const isVendor = category === 'purchases' ? 'Y' : null;
-
     const next = {};
-    // Primary entity (header): inject isSOTrx, isCustomer, isVendor
+
     if (entity) {
-      next[entity] = {
-        ...(isSOTrx ? { isSOTrx } : {}),
-        ...(isCustomer ? { isCustomer } : {}),
-        ...(isVendor ? { isVendor } : {}),
-      };
+      next[entity] = buildHeaderSelectorContext(category);
     }
+
     if (!parentRecordId) return next;
+
     if (detailEntity) {
-      // DateInvoiced is required by the C_Tax validationRule:
-      // VALIDFROM <= COALESCE(@DateInvoiced@, @DateOrdered@)
-      // Without it, COALESCE(null,null)=null → VALIDFROM<=null is always FALSE → no taxes returned.
-      // Etendo Classic's PL/pgSQL to_date() expects DD-MM-YYYY, so the ISO date from the
-      // header (YYYY-MM-DD) must be reformatted before being sent as a context param.
       const headerSnapshot = hook.selected ?? hook.editing;
-      const invoiceDate = headerSnapshot?.invoiceDate ?? headerSnapshot?.orderDate ?? null;
-      const isoMatch = typeof invoiceDate === 'string' ? invoiceDate.match(/^(\d{4})-(\d{2})-(\d{2})/) : null;
-      const dateInvoicedParam = isoMatch ? `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}` : invoiceDate;
       const currency = headerSnapshot?.['currency$_identifier'] ?? sessionCurrencyCode ?? null;
+      const priceCurrency = selectorPriceCurrency === 'org' ? sessionCurrencyCode : null;
       next[detailEntity] = {
-        parentId: parentRecordId,
-        ...(isSOTrx ? { isSOTrx, IsSOTrx: isSOTrx } : {}),
-        ...(priceListId ? { priceList: priceListId } : {}),
-        ...(dateInvoicedParam ? { DateInvoiced: dateInvoicedParam } : {}),
+        ...buildLineSelectorContext({
+          windowCategory: category,
+          parentId: parentRecordId,
+          headerRecord: {
+            ...headerSnapshot,
+            priceList: priceListId,
+          },
+        }),
         ...(currency ? { currency } : {}),
+        ...(priceCurrency ? { priceCurrency } : {}),
       };
     }
+
     for (const key of secondaryTabKeysStr.split('|').filter(Boolean)) {
       next[key] = { parentId: parentRecordId };
     }
     return next;
-  }, [entity, detailEntity, parentRecordId, secondaryTabKeysStr, priceListId, api, hook.selected, hook.editing]);
+  }, [entity, detailEntity, parentRecordId, secondaryTabKeysStr, priceListId, api, hook.selected, hook.editing, sessionCurrencyCode, selectorPriceCurrency]);
   const { catalogs, catalogsLoaded } = useCatalogs(api, token, apiBaseUrl, staticCatalogs);
-  const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
+  // cacheableKeys: only the dimension-macro fields are safe to pre-seed from a previous
+  // record's resolution — everything else in this window's header (e.g. Posted-based
+  // readOnly) is genuinely per-record and must never carry over between mounts.
+  const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl, cacheableKeys: DIMENSION_MACRO_KEYS });
+  // ETP-4529 — mirror the header evaluate-display call for the lines/detail entity.
+  // There is no single "current line record" to evaluate against (many rows share one
+  // entity), and dimension-macro visibility (@ACCT_DIMENSION_DISPLAY@ and friends) is
+  // config-driven, not record-driven, so reusing the header record as the fieldValues
+  // payload is a safe, representative context (it also satisfies useDisplayLogic's
+  // "skip when !values.id" guard once the header record is saved). Only `visibility` is
+  // consumed downstream — `readOnly` stays per-line via each field's own readOnlyLogic.
+  const lineDisplayLogic = useDisplayLogic(detailEntity, hook.editing, { token, apiBaseUrl, cacheableKeys: DIMENSION_MACRO_KEYS });
+  // ETP-4543 — dynamic column visibility for the primary lines grid (InlineLinesPanel /
+  // DataTable), derived from lineDisplayLogic.visibility. Fail-open: a key that is absent
+  // from the map, or explicitly `true`, is NOT hidden — only an explicit `false` (e.g. the
+  // config-gated @ACCT_DIMENSION_DISPLAY@ toggle for project/costcenter) hides the column.
+  //
+  // ETP-4530 regression fix — this evaluate-display call is scoped to `detailEntity` but
+  // evaluated against `hook.editing` (the HEADER record snapshot), not any specific line
+  // row (see the comment on `lineDisplayLogic` above: "one evaluate-display call... using
+  // the header record as a representative context"). That trick is only valid for
+  // `@ACCT_DIMENSION_DISPLAY@` — a config-only macro expanded server-side independent of
+  // any record's field values. NeoDisplayLogicHandler (com.etendoerp.go), however,
+  // evaluates EVERY active AD_Field's raw displayLogic for the lines tab, not just the
+  // dimension ones. Real AD fields with genuine per-row/aux-input-dependent displayLogic —
+  // e.g. sales-invoice's Product (`@Financial_Invoice_Line@='N'`, a sibling per-line field)
+  // and List Price / Line Gross Amount (`@GROSSPRICE@='Y'|'N'`, an SQL auxiliary input) —
+  // reference tokens the header snapshot never carries, which silently resolve to
+  // `undefined` and make the comparison evaluate `false`. That `false` looked identical
+  // to a legitimate "hide this column" signal, so it blast-radiused into hiding
+  // product/listPrice/grossAmount for every line, even though decisions.json explicitly
+  // marks product/grossAmount `displayLogic: null` ("Siempre") in this window's contract.
+  // Restrict this map to the field keys the representative-context trick was actually
+  // built for (see docs/generated-custom-windows/sales-invoice.md, ETP-4529 matrix) — any
+  // other key's `false` is untrustworthy noise from this evaluator's known limitation,
+  // not a real hide decision.
+  // ETP-4610 — window-scoped extension of DIMENSION_MACRO_KEYS: a key is trusted as a
+  // config-driven dimension macro if it's in the GLOBAL allowlist above OR THIS WINDOW
+  // INSTANCE itself declared it via `dimensionsPanelFieldKeys` (the lines entity's
+  // decisions.json `dimensionsPanel: true` fields, forwarded by generate-frontend.js —
+  // see the prop comment on `dimensionsPanelFieldKeys` above). This is what lets
+  // simple-g-l-journal trust 'product' as a dimension macro without reintroducing the
+  // ETP-4530 regression for sales-invoice/purchase-invoice, whose generated pages never
+  // pass 'product' in this prop. Stringified for the memo dep since `dimensionsPanelFieldKeys`
+  // defaults to a fresh `[]` reference on every render when the caller omits it.
+  const dimensionsPanelFieldKeysStr = (dimensionsPanelFieldKeys ?? []).join('|');
+  const trustedDimensionKeys = useMemo(
+    () => new Set([...DIMENSION_MACRO_KEYS, ...dimensionsPanelFieldKeysStr.split('|').filter(Boolean)]),
+    [dimensionsPanelFieldKeysStr]
+  );
+  const lineHiddenColumns = useMemo(
+    () => Object.entries(lineDisplayLogic?.visibility ?? {})
+      .filter(([key, visible]) => visible === false && trustedDimensionKeys.has(key))
+      .map(([key]) => key),
+    [lineDisplayLogic?.visibility, trustedDimensionKeys]
+  );
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
+  const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
+  // ETP-4479 — fall back to the per-window default when the caller didn't
+  // explicitly pass `deleteAction` (see WINDOW_DELETE_ACTIONS above).
+  const effectiveDeleteAction = deleteAction ?? WINDOW_DELETE_ACTIONS[windowName] ?? null;
+  // ETP-4500 — per-window rich delete cartel (see WINDOW_DELETE_CONFIRM_MODALS above).
+  const deleteConfirmModal = WINDOW_DELETE_CONFIRM_MODALS[windowName] ?? null;
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embedded') === '1';
   const tMenu = useMenuLabel();
   const ui = useUI();
+  // ETP-4520 — capability map for visibleWhenCapability-gated status pills (below).
+  const capabilities = useCapabilitiesSafe();
   const [addingLine, setAddingLine] = useState(false);
   // Live snapshot of the in-progress add-row values — updated on every keystroke
   // so DocumentTotalsPanel can compute real-time totals before the line is saved.
@@ -447,6 +1616,17 @@ export function DetailView({
     }
     return true;
   }, [addingLine, addingSecondaryLine, linesLayout]);
+
+  // ── Ordered save helper ────────────────────────────────────────────────────
+  //
+  // Always flush any open add-row before saving the header so the parent record
+  // sees the committed line state. If flushPendingLines reports a failure
+  // (e.g. validation), the save is aborted and returns null.
+  const flushAndSave = useCallback(async (data) => {
+    if (!(await flushPendingLines())) return null;
+    return hook.handleSave(data);
+  }, [hook, flushPendingLines]);
+
   const [customModalState, setCustomModalState] = useState({ key: null, rowId: null });
   const [activeTab, setActiveTab] = useState(0);
 
@@ -468,24 +1648,64 @@ export function DetailView({
     } : null
   ), [_headerData, windowName, _detailTabTitle, hook.editing, _isFormEditing]);
   useRegisterWindowContext(_windowContextInfo);
-  const isDocumentReadOnly = lockWhenProcessed && (_headerData?.processed === true || _headerData?.processed === 'Y');
+  // Window-level read-only (GO view-only windows, e.g. Conversion Rates, OR the
+  // ETP-4520 runtime 'read-only' access tier via the `window` prop): forces the
+  // whole detail read-only, reusing every isDocumentReadOnly gate (save, delete,
+  // add-line, inline edits). Also passed to the header <Form> so its fields render RO.
+  const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
+  const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus
   // values hide the Save/Confirm pair. This lets windows like sales-quotation keep the
   // pair visible during intermediate processed states (UE) while still hiding it in
   // terminal states (CA, ETGO_CI, CL, VO).
-  const isDraftModeCompleted = Boolean(
-    draftMode?.enabled && (
-      Array.isArray(draftMode.completedStatuses)
-        ? draftMode.completedStatuses.includes(_headerData?.documentStatus)
-        : (isProcessed || _headerData?.documentStatus === 'CO')
-    )
-  );
-  const sqBtnSize = toolbarButtonSize === 'default' ? 'h-10 w-10' : 'h-9 w-9';
-  const saveBtnCls = toolbarButtonSize === 'default' ? 'h-10 gap-2' : 'gap-1.5';
+  const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField);
+  const sqBtnSize = getSqBtnSize(toolbarButtonSize);
+  const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
   const [showPrint, setShowPrint] = useState(false);
+  const [confirmProcess, setConfirmProcess] = useState(null);
+  // ETP-4779: bumped whenever a menu action generates a derived document
+  // (runDocumentAction / runNeoMenuAction below) so the sibling "Documentos"
+  // related-docs section refetches — hook.fetchById only refreshes the
+  // header `data` prop, it does not know about the related-docs list.
+  const [docsRefreshSignal, setDocsRefreshSignal] = useState(0);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Shared by both the generic delete Dialog and the rich per-window cartel
+  // (WINDOW_DELETE_CONFIRM_MODALS) below — same eTPRRemovePayment / handleDelete
+  // routing either way; only the confirmation UI differs. Named distinctly from
+  // the line-level `confirmDelete` (a Promise-based prompt declared further down)
+  // since this one deletes the HEADER record.
+  const confirmHeaderDelete = async () => {
+    setShowDeleteConfirm(false);
+    // ETP-4479 — deleteAction-backed windows go through the same
+    // `neoAction.execute(recordId, actionName)` mechanism the
+    // detail-view "more" menu already uses for NEO actions
+    // (see runNeoMenuAction above), mirroring the URL convention
+    // PaymentHeaderTableBase's row-level delete relies on
+    // (POST {apiBaseUrl}/{entity}/{id}/action/{actionName}).
+    if (effectiveDeleteAction) {
+      const currentId = data?.id || recordId;
+      const result = await neoAction.execute(currentId, effectiveDeleteAction);
+      if (result.success) {
+        // Reuse the per-action i18n key convention (`${action}Completed`,
+        // e.g. eTPRRemovePaymentCompleted) when translated; otherwise
+        // fall back to the generic delete-success message.
+        const key = `${effectiveDeleteAction}Completed`;
+        const msg = ui(key);
+        toast.success(msg !== key ? msg : ui('recordDeleted'));
+        navigate(`/${windowName}`);
+      } else {
+        toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
+      }
+      return;
+    }
+    const deleted = await hook.handleDelete();
+    if (deleted) navigate(`/${windowName}`);
+  };
+  // Non-dismissible loading modal shown while a draftMode confirm action with
+  // draftMode.processingModal is in flight (e.g. Verifactu's ~8s GenerateRF).
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
   // Promise-based confirm for line/child deletions; replaces native window.confirm
   // so the dialog matches the styled "Eliminar registro" modal used elsewhere.
   const [pendingDeleteConfirm, setPendingDeleteConfirm] = useState(null);
@@ -493,21 +1713,9 @@ export function DetailView({
     () => new Promise((resolve) => setPendingDeleteConfirm({ resolve })),
     [],
   );
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const moreMenuRef = useRef(null);
   const handledOpenAddLineRef = useRef(false);
   const handledOpenSecondaryLineRef = useRef(false);
 
-  useEffect(() => {
-    if (!showMoreMenu) return;
-    const handleClick = (e) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) {
-        setShowMoreMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showMoreMenu]);
   const [directFetched, setDirectFetched] = useState(false);
   const [selectedLine, setSelectedLine] = useState(null);
   const [selectedChildRows, setSelectedChildRows] = useState([]);
@@ -661,6 +1869,18 @@ export function DetailView({
       }
     }
   }, [secondarySelectedRows, secondaryTabs]);
+  // Flush any pending secondary-bar close timeouts on unmount so they can't
+  // fire a setState after teardown (which throws "window is not defined" once
+  // the test/jsdom environment is gone).
+  useEffect(() => {
+    const timeouts = secondaryBarTimeoutRef.current;
+    return () => {
+      for (const key of Object.keys(timeouts)) {
+        clearTimeout(timeouts[key]);
+        delete timeouts[key];
+      }
+    };
+  }, []);
   // Measure each visible secondary tab's add-line wrapper so its bar can be
   // portaled with `position: fixed`. Only the active tab actually mounts its
   // wrapper (inactive tabs unmount their content), so refs from other tabs
@@ -702,6 +1922,7 @@ export function DetailView({
     setSecondaryBarClosing({});
   }, [activeTab]);
   const [deletingChildren, setDeletingChildren] = useState(false);
+
   const [lineEdits, setLineEdits] = useState(null);
   const [lineEditColumns, setLineEditColumns] = useState({});
 
@@ -712,11 +1933,7 @@ export function DetailView({
   // 4. A line sidebar edit has unsaved field changes
   // additionalDirtyState lets custom windows inject extra dirty sources via prop.
   const isDirty =
-    hook.isDirtyHeader
-    || addingLine
-    || Object.values(addingSecondaryLine).some(Boolean)
-    || (lineEdits != null && Object.keys(lineEdits).length > 0)
-    || (additionalDirtyState === true);
+    computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -740,21 +1957,7 @@ export function DetailView({
   const [secondaryDeleteConfirm, setSecondaryDeleteConfirm] = useState(null);
 
   const extractErrorMessage = useCallback(async (res) => {
-    let raw;
-    try {
-      const data = await res.json();
-      // NEO Headless top-level format: { error: { message, status } }
-      if (data?.error?.message) raw = data.error.message;
-      else {
-        // Etendo JsonDataService format: { response: { error: { message } | string } }
-        const err = data?.response?.error;
-        if (err?.message) raw = err.message;
-        else if (typeof err === 'string') raw = err;
-        else if (data?.message) raw = data.message;
-      }
-    } catch {
-      // Ignore non-JSON error bodies.
-    }
+    let raw = await parseBackendErrorMessage(res);
     return translateBackendError(raw ?? `Error ${res.status}`, ui);
   }, [ui]);
 
@@ -768,21 +1971,147 @@ export function DetailView({
     }, 250);
   }, []);
 
-  // Track fields whose values were set by a callout response to avoid re-triggering
-  const calloutAppliedRef = useRef(new Set());
+  // Track fields whose values were set by a callout response, keyed by field with
+  // the applied value, so we only skip the echo (same value) and not genuine edits.
+  const calloutAppliedRef = useRef(new Map());
+  // Active conversion rate (org base currency → header currency) for the SAVED state of
+  // the order. Set by the sync effect below whenever the saved currency differs from
+  // the org base currency. Used by handleLineFieldChange to convert pricelist prices on
+  // newly added lines. Conversion only applies to lines added AFTER the order's currency
+  // has been saved — there is no longer real-time conversion of unsaved lines on currency
+  // change (ETP-4027 simplification).
+  const activeCurrencyConversionRef = useRef(null);
   // Track fields the user has manually changed in this record session — protected
   // from being overwritten by callouts triggered from other fields.
   const userTouchedRef = useRef(new Set());
-  // Reset both refs when the record context changes (new record / different existing record)
+  // ETP-4772: per-field generation counter, bumped on every genuine write to a
+  // field (user edit or applied callout value). Each callout dispatch captures
+  // a snapshot of this map; when its response arrives, applyCalloutFieldUpdates/
+  // applyOneComboEntry compare that snapshot against the field's CURRENT
+  // generation to detect a response that is now stale (a newer edit/dispatch for
+  // that same field happened in between) and discard it instead of clobbering
+  // the newer value. Fixes: opening a new Purchase/Sales Order auto-fires a
+  // callout for the default warehouse; if the user changes warehouse before
+  // that default callout's response comes back, the stale response used to win
+  // unconditionally (the "trigger field always wins" rule didn't check recency).
+  const fieldGenerationRef = useRef({});
+  // Reset session-scoped refs when the record context changes (new record / different existing record).
   useEffect(() => {
     userTouchedRef.current = new Set();
-    calloutAppliedRef.current = new Set();
+    calloutAppliedRef.current = new Map();
+    activeCurrencyConversionRef.current = null;
+    fieldGenerationRef.current = {};
   }, [recordId]);
+
+  // Mirrors hook.editing but updated SYNCHRONOUSLY on every handleChangeWithCallout call,
+  // instead of waiting for the async setState React batches inside hook.handleChange.
+  // Without this, fireCallout's `formState` snapshot (read from hook.editing) is always
+  // one render behind for the very field that triggered it — e.g. selecting an FK posts
+  // formState with that FK still at its previous (often empty) value, which can make the
+  // backend callout respond based on stale data and clobber other fields the user just set
+  // (regression: toggling "Depreciar" on a new asset, saving, and the persisted record
+  // coming back with depreciate=false — traced to the assetCategory callout's stale
+  // formState.assetCategory === "" causing the backend to reset depreciate to false).
+  // Kept in sync with hook.editing on every render (covers external updates: saves,
+  // callout responses, record switches) and updated inline for changes fired within the
+  // same synchronous batch (e.g. a selector setting field + field$_identifier + aux fields
+  // back-to-back before React re-renders).
+  //
+  // ORDERING ASSUMPTION: the render-time overwrite below and the inline merge in
+  // handleChangeWithCallout agree only because React does not re-render synchronously in
+  // the middle of an event handler — the inline merge always runs before the next render's
+  // overwrite. That holds with current batching; if this ever moves to a mode where a
+  // setState can flush mid-handler, the overwrite could clobber the merge and the callout
+  // would go back to seeing stale state.
+  const pendingEditingRef = useRef(hook.editing || {});
+  pendingEditingRef.current = hook.editing || {};
+
+  // Sync activeCurrencyConversionRef with the SAVED state of the order: whenever
+  // hook.selected.currency changes (typically after a save), re-evaluate whether
+  // conversion is needed. Lines added afterwards inherit this rate via
+  // handleLineFieldChange. There is no real-time conversion on unsaved currency changes.
+  useEffect(() => {
+    if (recordId === 'new') return;
+    const docCurrencyId = hook.selected?.currency;
+    const orderDate = hook.selected?.[documentDateField];
+    if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
+        const sessionRes = await fetch(`${neoBase}/session`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!sessionRes.ok || cancelled) return;
+        const session = await sessionRes.json();
+        const orgCurrencyId = session?.currencyId;
+        if (!orgCurrencyId) return;
+        if (orgCurrencyId === docCurrencyId) {
+          // Saved currency matches org currency — no conversion needed.
+          activeCurrencyConversionRef.current = null;
+          return;
+        }
+
+        // If the order has a per-order rate override, use it directly without
+        // fetching validate-exchange-rate. This reflects the user's confirmed rate
+        // (set via CurrencyRatePicker) and avoids a redundant network call.
+        const overrideRate = hook.selected?.eTGOCurrencyRate != null
+          ? parseFloat(hook.selected.eTGOCurrencyRate)
+          : null;
+        if (overrideRate && overrideRate > 0) {
+          activeCurrencyConversionRef.current = {
+            baseCurrency: orgCurrencyId,
+            toCurrency: docCurrencyId,
+            rate: overrideRate,
+          };
+          return;
+        }
+
+        const rateRes = await fetch(
+          `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(docCurrencyId)}&date=${encodeURIComponent(orderDate)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!rateRes.ok || cancelled) {
+          activeCurrencyConversionRef.current = null;
+          return;
+        }
+        const rateData = await rateRes.json();
+        if (cancelled) return;
+        if (rateData?.hasRate && rateData.rate) {
+          activeCurrencyConversionRef.current = {
+            baseCurrency: orgCurrencyId,
+            toCurrency: docCurrencyId,
+            rate: rateData.rate,
+          };
+        } else {
+          // No rate available — clear stale ref. The dropdown-change validator
+          // normally blocks selecting a currency without a rate, but the saved
+          // state may still get here through other paths.
+          activeCurrencyConversionRef.current = null;
+        }
+      } catch {
+        activeCurrencyConversionRef.current = null;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.[documentDateField], apiBaseUrl, token, documentDateField]);
   // Guard: fire default callouts only once per new-record session
   const defaultCalloutsTriggeredRef = useRef(false);
   // Cache for tax rates fetched from the selector (keyed by tax ID).
   // Avoids repeated API calls when the same tax appears on multiple lines.
   const taxRateCacheRef = useRef({});
+  // Balance state for double-entry windows (decisions.json window.balanceFooter).
+  // blockSaveForBalance disables the save action until Σ debit === Σ credit.
+  const { blockSaveForBalance, blockCompleteForBalance } = computeBalanceGate({
+    balanceFooter,
+    children: hook.children,
+    pendingLineValues,
+    lineEdits,
+    selectedLine,
+  });
   const { computeLineGrossAmount, resolveTaxFactor, prepareLineForPost } = useLineGrossAmount(taxRateCacheRef, hook.children, lineConfig);
   // Batching refs for the sidebar onChange: product selector fires multiple synchronous
   // onChange calls (product, product$_identifier, unitPrice/grossUnitPrice). Without
@@ -798,23 +2127,8 @@ export function DetailView({
     if (!selectedLine) return;
     const taxId = selectedLine.tax;
     if (!taxId || taxRateCacheRef.current[taxId] != null) return;
-    let rate = null;
     const gross = parseFloat(String(selectedLine[lineConfig.grossField] ?? selectedLine.grossAmount ?? selectedLine.lineGrossAmount ?? '')) || 0;
-    if (gross > 0) {
-      const disc  = lineConfig.discountField ? (parseFloat(String(selectedLine[lineConfig.discountField] ?? '')) || 0) : 0;
-      const net   = parseFloat(String(selectedLine.lineNetAmount ?? '')) || 0;
-      if (net > 0) {
-        // Etendo stores LINENETAMT = qty × listPrice (before discount).
-        // Adjust by discount to get the actual taxable base before deriving the tax rate.
-        const taxableNet = disc > 0 ? net * (1 - disc / 100) : net;
-        rate = (gross / taxableNet - 1) * 100;
-      } else {
-        const qty   = parseFloat(String(selectedLine[lineConfig.qtyField]   ?? '')) || 0;
-        const price = parseFloat(String(selectedLine[lineConfig.priceField] ?? selectedLine.unitPrice ?? '')) || 0;
-        const lineNet = qty * price * (1 - disc / 100);
-        if (lineNet > 0) rate = (gross / lineNet - 1) * 100;
-      }
-    }
+    const rate = deriveTaxRateFromGross(gross, lineConfig, selectedLine);
     if (rate != null && rate >= 0) {
       taxRateCacheRef.current[taxId] = rate;
     }
@@ -854,7 +2168,7 @@ export function DetailView({
     }
     if (handledOpenImportRef.current) return;
     handledOpenImportRef.current = true;
-    setForceOpenImport(true);
+    setForceOpenImport(location.state.openImportModal);
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.state?.openImportModal, isNew, hook.editing, navigate, location.pathname]);
 
@@ -888,14 +2202,16 @@ export function DetailView({
   }, [isNew, hook, navigate, windowName, addingLine]);
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
-  const handleImportClick = useCallback(async () => {
+  // modalType ('order' | 'invoice') is forwarded in navigation state so the destination component
+  // knows which modal to auto-open via the forceOpen mechanism.
+  const handleImportClick = useCallback(async (modalType = 'order') => {
     if (isNew) {
       const saved = await hook.handleSave();
       if (!saved?.id) return false;
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
-        state: { openImportModal: true, justSaved: saved },
+        state: { openImportModal: modalType, justSaved: saved },
       });
       return false;
     }
@@ -982,10 +2298,16 @@ export function DetailView({
     triggers.forEach(({ field }, i) => {
       setTimeout(() => {
         const value = editingSnapshot[field];
-        if (value) executeCallout(field, value, editingSnapshot);
+        if (value) {
+          // ETP-4772: bump + snapshot BEFORE dispatch, so a manual edit that
+          // happens while this default callout is in flight (see fireCallout
+          // below) is detected as "newer" once this response comes back.
+          fieldGenerationRef.current[field] = (fieldGenerationRef.current[field] || 0) + 1;
+          executeCallout(field, value, editingSnapshot, { ...fieldGenerationRef.current });
+        }
       }, i * STAGGER_MS);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNew, hook.editing, api, entity]);
 
   useEffect(() => {
@@ -1005,6 +2327,9 @@ export function DetailView({
       && String(hook.selected?.id) === String(justSaved.id)
     ) {
       setDirectFetched(true);
+      // Fetch children even on the justSaved fast-path — the header is already
+      // primed but children (e.g. auto-created accounting lines) must be loaded.
+      hook.fetchChildren?.(recordId);
       // One-shot: clear the marker so a manual reload of /:id still fetches.
       navigate(location.pathname, {
         replace: true,
@@ -1025,7 +2350,7 @@ export function DetailView({
     // intentionally omitted from the dep list to avoid re-running on every
     // navigation tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentItem, directFetched, hook.fetchById, hook.handleSelect, hook.loading, hook.selected, isNew, recordId]);
+  }, [currentItem, directFetched, hook.fetchById, hook.fetchChildren, hook.handleSelect, hook.loading, hook.selected, isNew, recordId]);
 
   // Reset selected line when the parent record changes
   useEffect(() => {
@@ -1040,77 +2365,62 @@ export function DetailView({
     });
   }, [hook.selected?.id]);
 
+  // ETP-4029: the Exchange Rates tab caches its own row (rate/foreignAmount)
+  // independently of the header. Saving a new header currency rate updates
+  // that row on the backend (AbstractInvoiceHeaderHandler), but the effect
+  // above only re-syncs on a record ID change, not on same-record field
+  // changes — so this tab would keep showing the previously-fetched values
+  // until a manual reload. Scoped to exchangeRates only: no other secondary
+  // tab is known to depend on the header's currency/rate.
+  //
+  // grandTotalAmount is also a trigger: adding/editing/deleting a primary
+  // invoice line never touches currency/eTGOCurrencyRate, but it does change
+  // grandTotalAmount (refreshed into hook.selected by handleAddChild/
+  // handleUpdateChild/handleDeleteChild's refreshHeaderTotals call), and the
+  // backend recomputes this row's foreignAmount from grandTotalAmount on
+  // every line save (InvoiceLineHandler#syncConversionRateDocumentAfterLineSave)
+  // — so this tab needs the same refetch whenever that total changes.
+  useEffect(() => {
+    if (!hook.selected?.id) return;
+    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
+    if (exchangeRatesIdx < 0) return;
+    secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.grandTotalAmount]);
+
   // Apply callout results to the form when they arrive
   useEffect(() => {
     if (!calloutResult) return;
-    const { updates, combos, triggerField } = calloutResult;
-    const appliedFields = new Set();
+    const { updates, combos, triggerField, meta } = calloutResult;
+    const appliedFields = new Map();
+    // ETP-4772: `meta` carries the per-field generation snapshot captured at
+    // dispatch time (see fireCallout / the default-callouts effect above) —
+    // forwarded as `dispatchSnapshot` so applyCalloutFieldUpdates/
+    // applyOneComboEntry can discard stale responses.
+    const ctx = { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot: meta, fieldGenerationRef };
 
     if (updates) {
-      for (const [key, entry] of Object.entries(updates)) {
-        // Skip empty callout values if the field already has a non-empty value
-        // (e.g., callout clears warehouse but defaults already set it)
-        const currentVal = data[key];
-        const userHasValue = currentVal !== '' && currentVal != null;
-        if ((entry.value === '' || entry.value == null) && userHasValue) {
-          continue;
-        }
-        // Protect user-touched fields from being overwritten by collateral updates
-        // coming from a callout triggered by a different field. The trigger field
-        // itself always wins (it was just changed by the user).
-        if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue) {
-          continue;
-        }
-        appliedFields.add(key);
-        hook.handleChange(key, entry.value);
-        if (entry._identifier) {
-          hook.handleChange(key + '$_identifier', entry._identifier);
-        } else if (entry.value && api?.selectors) {
-          // Callout returned an ID without _identifier — resolve from loaded catalogs
-          const sel = api.selectors.find(s => s.field === key);
-          if (sel) {
-            const options = getCatalogOptions(catalogs, sel.entity, sel);
-            const match = Array.isArray(options) && options.find(o => o.id === entry.value);
-            if (match) {
-              hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
-            }
-          }
-        }
-      }
+      applyCalloutFieldUpdates(updates, ctx);
     }
     if (combos) {
-      for (const [key, combo] of Object.entries(combos)) {
-        let selectedVal = combo.selected;
-        let selectedLabel = combo._identifier;
-        // Auto-select first entry if no explicit selection (e.g., BP address combo)
-        if (selectedVal == null && Array.isArray(combo.entries) && combo.entries.length > 0) {
-          selectedVal = combo.entries[0].id;
-          selectedLabel = combo.entries[0].identifier || combo.entries[0]._identifier;
-        }
-        if (selectedVal != null) {
-          // Protect user-touched fields from collateral combo updates
-          const currentVal = data[key];
-          const userHasValue = currentVal !== '' && currentVal != null;
-          if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue) {
-            continue;
-          }
-          appliedFields.add(key);
-          hook.handleChange(key, selectedVal);
-          if (selectedLabel) {
-            hook.handleChange(key + '$_identifier', selectedLabel);
-          }
-        }
-      }
+      applyCalloutComboUpdates(combos, ctx);
     }
 
     // Mark these fields so the next onChange doesn't re-trigger callout
     calloutAppliedRef.current = appliedFields;
+
+    // Currency change validation is handled inside handleChangeWithCallout (synchronous
+    // dropdown-change path). The callout response handler intentionally no longer applies
+    // any conversion to pending lines — under the simplified ETP-4027 model, conversion
+    // only applies to lines added AFTER the saved currency change.
   }, [calloutResult]);
 
-  // Wrapped onChange that triggers callout for user-initiated FK changes
-  const handleChangeWithCallout = useCallback((field, value) => {
-    hook.handleChange(field, value);
-
+  // Fire the callout (and related validation) for a user-initiated field change.
+  // Extracted from handleChangeWithCallout so the same logic can be triggered either
+  // synchronously on change (default) or deferred to blur (opt-in: field.calloutOn === 'blur').
+  // `previousCurrency` is the currency value captured BEFORE hook.handleChange ran, used
+  // only by the currency rate-validation path; pass null when not a currency change.
+  const fireCallout = useCallback((field, value, previousCurrency = null) => {
     // Skip companion/auxiliary fields — they don't have callouts
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
@@ -1118,24 +2428,112 @@ export function DetailView({
     // from other triggers cannot overwrite the user's choice.
     userTouchedRef.current.add(field);
 
-    // If this field was just set by a callout response, don't re-trigger
+    // If this field was just set by a callout response to THIS exact value, it's
+    // the echo of the callout write — skip to avoid a re-trigger loop. A different
+    // value means the user genuinely edited it → let the callout run.
     if (calloutAppliedRef.current.has(field)) {
+      const appliedVal = calloutAppliedRef.current.get(field);
       calloutAppliedRef.current.delete(field);
-      return;
+      if (String(appliedVal) === String(value)) return;
     }
 
     // Only trigger callout for meaningful value changes (not empty/typing artifacts).
     // Skip partial search text — only trigger when value looks like an Etendo ID
-    // (32-char hex UUID or legacy numeric ID), not user-typed search strings.
+    // (32-char hex UUID or legacy numeric ID) or a numeric/amount value (integer or decimal).
     if (!value || value === '') return;
-    if (!/^[0-9A-Fa-f]{32}$/.test(value) && !/^\d+$/.test(value)) return;
+    if (!/^[0-9A-Fa-f]{32}$/.test(value) && !/^-?\d+(\.\d+)?$/.test(value) && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
 
-    // Trigger callout — the backend returns empty if no callout is registered
-    executeCallout(field, value, hook.editing);
-  }, [hook.handleChange, hook.editing, executeCallout]);
+    // Currency change validation (ETP-4027 simplified model): if no conversion rate
+    // exists between the org base currency and the newly selected currency for the
+    // order date, revert the dropdown to the previous value and surface an error.
+    // Skipped when the new currency equals the org currency (no rate needed) and when
+    // there is no previous currency yet (initial set, e.g. defaults).
+    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
+      const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
+      if (orderDate) {
+        const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
+        (async () => {
+          const revert = () => {
+            toast.error(ui('noConversionRateError', { date: orderDate }));
+            hook.handleChange('currency', previousCurrency);
+          };
+          try {
+            const sessionRes = await fetch(`${neoBase}/session`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!sessionRes.ok) { revert(); return; }
+            const session = await sessionRes.json();
+            const orgCurrencyId = session?.currencyId;
+            // No rate needed when changing TO the org currency — that's just removing
+            // the conversion. Allow without validation.
+            if (!orgCurrencyId || orgCurrencyId === value) return;
+            const rateRes = await fetch(
+              `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(value)}&date=${encodeURIComponent(orderDate)}`,
+              { headers: { Authorization: `Bearer ${token}` } },
+            );
+            if (!rateRes.ok) { revert(); return; }
+            const rateData = await rateRes.json();
+            if (!rateData?.hasRate || !rateData.rate) { revert(); return; }
+            // Rate exists — change stays. The sync effect on hook.selected.currency
+            // will pick it up after the user saves the header.
+          } catch {
+            revert();
+          }
+        })();
+      }
+    }
+
+    // ETP-4772: bump this field's generation right before dispatching — this is
+    // a genuine new value for it. The snapshot taken now travels with the
+    // request so the response effect can tell, on arrival, whether an even
+    // newer edit/dispatch for this field happened meanwhile (stale → discard)
+    // instead of unconditionally letting the trigger field win.
+    fieldGenerationRef.current[field] = (fieldGenerationRef.current[field] || 0) + 1;
+    const dispatchSnapshot = { ...fieldGenerationRef.current };
+
+    // Trigger callout — the backend returns empty if no callout is registered.
+    // Use the synchronously-updated snapshot (pendingEditingRef), not hook.editing: the
+    // latter is a stale closure captured before this render's hook.handleChange commits,
+    // so it always lags one change behind for the field that just triggered the callout.
+    executeCallout(field, value, pendingEditingRef.current, dispatchSnapshot);
+  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
+
+  // Wrapped onChange that updates local form state and triggers the callout synchronously.
+  // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
+  // EntityForm's DeferredInput, which calls this same onChange once on blur — so the
+  // deferral lives entirely in the input component and this handler stays uniform.
+  const handleChangeWithCallout = useCallback((field, value) => {
+    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
+    // revert the dropdown if the rate check fails. The closure preserves the old
+    // hook.editing reference, but capturing explicitly keeps intent clear.
+    //
+    // This one deliberately reads hook.editing, NOT pendingEditingRef: here we WANT the
+    // last-committed value (the currency to revert TO if the rate lookup fails). Switching
+    // it to the fresh ref would capture the value the user just picked, making the revert a
+    // no-op. Do not "fix" this for consistency with the ref used below.
+    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
+
+    hook.handleChange(field, value);
+    // Keep the synchronous snapshot current immediately — hook.handleChange's setEditing
+    // is async/batched, so without this, a same-tick chain of onChange calls (e.g. a
+    // selector setting field, field$_identifier, and aux fields back-to-back) would each
+    // see the pre-change value. This mirrors the write into the ref so fireCallout (called
+    // right below, and by any sibling onChange in the same batch) sees the fresh value.
+    pendingEditingRef.current = { ...pendingEditingRef.current, [field]: value };
+
+    fireCallout(field, value, previousCurrency);
+  }, [hook.handleChange, hook.editing, fireCallout]);
 
   // Execute callout for child entity (line-level) fields and apply results via callback.
   // Merges parent header data into formState so callouts have full context (e.g., priceList).
+  //
+  // KNOWN GAP (deliberately not fixed here): the header context below still reads
+  // hook.editing directly, so it carries the same one-render-stale hazard that
+  // pendingEditingRef fixes for HEADER field changes in handleChangeWithCallout above. It
+  // only bites if a line callout fires in the same synchronous batch as a header change
+  // (header edits and line edits are normally separate user gestures, which is why it was
+  // not in the failure path of the bug that motivated the ref). If a line callout is ever
+  // seen acting on stale header values, thread pendingEditingRef.current through here too.
   const handleLineFieldChange = useCallback(async (field, value, rowValues, applyUpdates) => {
     if (!field || (value == null || value === '') || !token || !apiBaseUrl || !detailEntity) return;
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
@@ -1152,9 +2550,9 @@ export function DetailView({
     }
 
     try {
-      const headerData         = hook.editing || hook.selected || {};
-      const formState          = buildCalloutFormState(rowValues, headerData);
-      const auxiliaryValues    = extractAuxValues(formState);
+      const headerData = hook.editing || hook.selected || {};
+      const formState = buildCalloutFormState(rowValues, headerData);
+      const auxiliaryValues = extractAuxValues(formState);
       const formStateForCallout = normalizeCalloutQty(formState);
       const payload = {
         field,
@@ -1174,86 +2572,41 @@ export function DetailView({
       const calloutData = await res.json();
       const result = normalizeCalloutResponse(calloutData, rowValues);
 
-      // Classic callouts (SL_Order_Product, SL_Invoice_Product) return the catalog price
-      // as standardPrice (PriceStd) and zero out listPrice (PriceList column).
-      // Use standardPrice as the list price when the callout zeroed listPrice.
-      // The selector enrichment in NeoSelectorService ensures standardPrice always comes
-      // from the document's price list for both order and invoice configs.
-      if (field === 'product' && result.standardPrice != null && (result.listPrice == null || Number(result.listPrice) === 0)) {
-        result.listPrice = result.standardPrice;
-      }
-
-      // Reset discount to 0 on product change so each product starts with no discount applied.
-      if (field === 'product' && lineConfig.discountField) {
-        result[lineConfig.discountField] = 0;
-      }
+      applyProductCalloutPriceAdjustments(field, result, lineConfig);
 
       // Resolve missing $_identifier from loaded catalogs for FK fields returned by callout
       // (e.g., callout sets uOM='100' but server omits the display name)
-      if (api?.selectors) {
-        for (const key of Object.keys(result)) {
-          if (key.includes('$_identifier')) continue;
-          if (result[key + '$_identifier']) continue;
-          const selConfig = api.selectors.find(s => s.field === key && s.entity === detailEntity);
-          if (!selConfig) continue;
-          const opts = getCatalogOptions(catalogs, detailEntity, selConfig);
-          const match = opts.find(o => o.id === result[key]);
-          if (match) result[key + '$_identifier'] = match.label || match.name || match._identifier || '';
-        }
-      }
+      populateIdentifierFields(api, result, detailEntity, catalogs);
       resolveSnapshotIdentifiers(result, field, rowValues);
 
       // Tax-included price lists: SL_Order_Product sets grossUnitPrice (price with tax) but
       // omits netUnitPrice (net price). Derive it from the tax factor so the backend receives
       // a valid netUnitPrice instead of null/0 at save time.
-      if (result.grossUnitPrice != null && result.netUnitPrice == null) {
-        const taxId = result.tax;
-        let taxFactor = null;
-        const calloutRate = parseFloat(String(result.taxRate ?? ''));
-        if (!isNaN(calloutRate) && calloutRate > 0) taxFactor = 1 + calloutRate / 100;
-        if (taxFactor === null && taxId && taxRateCacheRef.current[taxId] != null) {
-          taxFactor = 1 + taxRateCacheRef.current[taxId] / 100;
-        }
-        if (taxFactor === null && taxId) {
-          const ref = (hook.children || []).find(l =>
-            l.tax === taxId &&
-            parseFloat(String(l.grossAmount ?? '')) > 0 &&
-            parseFloat(String(l.lineNetAmount ?? '')) > 0
-          );
-          if (ref) taxFactor = parseFloat(String(ref.grossAmount)) / parseFloat(String(ref.lineNetAmount));
-        }
-        const gross = Number(result.grossUnitPrice);
-        result.netUnitPrice = taxFactor != null && taxFactor > 1
-          ? parseFloat((gross / taxFactor).toFixed(6))
-          : gross;
-      }
+      calculateNetUnitPrice(result, taxRateCacheRef, hook);
       applyQtyZeroGuard(result, rowValues);
+      resetDescriptionOnProductChange(result, field);
       // Fallback: when callout returns no lineNetAmount (e.g. SL_Invoice_Amt throws
       // PriceAdjustment exception for products without standard cost), compute qty × price.
       // Uses lineConfig fields so orders, invoices, and future window types all benefit.
-      if (result.lineNetAmount == null && (field === lineConfig.qtyField || field === lineConfig.priceField || field === 'product')) {
-        const qty   = field === lineConfig.qtyField   ? (parseFloat(value) || 0)
-                    : (parseFloat(String(rowValues[lineConfig.qtyField] ?? '')) || 0);
-        const price = field === lineConfig.priceField ? (parseFloat(value) || 0)
-                    : (parseFloat(String(result[lineConfig.priceField] ?? rowValues[lineConfig.priceField] ?? '')) || 0);
-        if (qty > 0 && price > 0) result.lineNetAmount = String(qty * price);
-      }
+      calculateLineNetAmount(result, field, lineConfig, value, rowValues);
       computeLineGrossAmount(field, value, result, rowValues);
 
       // Resolve tax$_identifier from existing lines if callout didn't include it.
-      if (!result['tax$_identifier']) {
-        const effectiveTaxId = result.tax ?? rowValues.tax;
-        if (effectiveTaxId) {
-          const ref = (hook.children || []).find(l => l.tax === effectiveTaxId && l['tax$_identifier']);
-          if (ref) result['tax$_identifier'] = ref['tax$_identifier'];
-        }
-      }
+      resolveTaxIdentifier(result, rowValues, hook);
       // forceCalloutFields: explicit opt-in list declared per field in decisions.json.
       // Only those fields bypass the touched-guard when this field triggers a callout.
       // No other window or field is affected unless it declares forceCalloutFields.
       const triggerFieldDef = (addLineFields?.entry ?? []).find(f => f.key === field);
       const forceFields = new Set(triggerFieldDef?.forceCalloutFields ?? []);
       if (field === 'product' && lineConfig.discountField) forceFields.add(lineConfig.discountField);
+      // Apply active currency conversion: converts prices added after a header currency
+      // change so each new line reflects the order header's currency, not the pricelist's.
+      applyProductCurrencyConversion(
+        field, result, rowValues, lineConfig,
+        activeCurrencyConversionRef.current,
+        hook.selected?.['currency$_identifier'] ?? hook.editing?.['currency$_identifier'],
+        computeLineGrossAmount,
+      );
       roundAmounts(result);
       applyUpdates?.(result, forceFields);
 
@@ -1263,7 +2616,9 @@ export function DetailView({
     }
   }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor]);
 
-  const data = hook.editing || currentItem || {};
+  const data = transformRecord
+    ? transformRecord(hook.editing || currentItem || {})
+    : (hook.editing || currentItem || {});
 
   // Send total-discount percentage to the backend on blur. Also mirror the
   // saved value into the editing state so subsequent form saves don't overwrite
@@ -1294,6 +2649,10 @@ export function DetailView({
   const handleNotesSave = useCallback(async (value) => {
     const currentId = data?.id || recordId;
     if (!currentId || isNew || !notesField) return;
+    if (value !== undefined && value.length > 255) {
+      toast.error(ui('notesMaxLengthExceeded'));
+      return;
+    }
     try {
       const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
@@ -1321,35 +2680,19 @@ export function DetailView({
   //    pipeline). This matches the UX where the add-lines button only
   //    appears once the header form is complete.
   // 3. Otherwise (no metadata at all), allow.
-  let canAddLines;
-  if (addLineGuard) {
-    canAddLines = addLineGuard(data);
-  } else if (Array.isArray(requiredHeaderFields) && requiredHeaderFields.length > 0) {
-    canAddLines = requiredHeaderFields.every((k) => {
-      const v = data?.[k];
-      return v != null && v !== '' && !(typeof v === 'string' && v.trim() === '');
-    });
-  } else {
-    canAddLines = true;
-  }
-  const windowTitle = breadcrumb
-    ? tMenu(breadcrumb.split(' / ').at(-1).trim()) || breadcrumb.split(' / ').at(-1).trim()
-    : tMenu(windowName) || windowName || '';
+  let canAddLines = resolveCanAddLines(addLineGuard, data, requiredHeaderFields, hook.children ?? []);
+  const windowTitle = getWindowTitle(breadcrumb, tMenu, windowName);
   const { toggleFavorite, isFavorite } = useFavorites();
   const favKey = windowName || windowTitle;
   const favActive = isFavorite(favKey);
 
-  const title = isNew
-    ? ui('newRecord')
-    : `${resolveIdentifier(data, titleField) || data._identifier || data.id || ''}`;
-  const fullBreadcrumb = breadcrumb
-    ? `${breadcrumb.split(' / ').map(s => tMenu(s.trim())).join(' / ')}${title ? ` / ${title}` : ''}`
-    : windowTitle;
+  const title = getRecordTitle(isNew, ui, data, titleField);
+  const fullBreadcrumb = getFullBreadcrumb(breadcrumb, tMenu, title, windowTitle);
 
   useSetPageMeta({
     title: title || windowTitle,
     breadcrumb: fullBreadcrumb,
-    onAddToFavorites: favKey ? () => toggleFavorite(favKey, entityLabel || breadcrumb?.split(' / ').at(-1).trim() || windowName) : undefined,
+    onAddToFavorites: getOnAddToFavorites(favKey, toggleFavorite, entityLabel, breadcrumb, windowName),
     isFavorite: favActive,
   }, [favActive, title]);
 
@@ -1367,41 +2710,33 @@ export function DetailView({
   const footerCustomTabs = customTabs.filter(ct => (ct?.placement ?? 'footer') === 'footer');
   const tabCustomTabs = customTabs.filter(ct => ct?.placement === 'tab');
   const [customTabCounts, setCustomTabCounts] = useState({});
+  // Custom-tab add form to auto-open after a save-header-first navigation,
+  // optionally restoring an in-progress draft (+ error) across the remount
+  const [pendingCustomTabAdd, setPendingCustomTabAdd] = useState(null);
+  const [pendingCustomTabRestore, setPendingCustomTabRestore] = useState(null);
+  // Defaults every tab-placement custom component to visible (true/undefined) until it
+  // explicitly reports otherwise via `onVisibilityChange(false)` — see buildInitialTabs.
+  const [customTabVisibility, setCustomTabVisibility] = useState({});
+  const [customLinesCount, setCustomLinesCount] = useState(null);
   const [activeCustomBelowTab, setActiveCustomBelowTab] = useState(0);
   // Reuse the secondaryTabs/lines/others activeTab state for custom tabs by prefixing
   // their keys with `custom:` so they cannot collide with secondaryTabs/lines/others/customLines.
-  const customTabKey = (ct) => `custom:${ct.key}`;
 
   // Build tabs: child entity lines + secondary tabs + custom 'tab' placement + "Others"
-  const tabs = [];
-  secondaryTabs.forEach((st, i) => {
-    const childCount = st.Panel ? (panelCounts[st.key] ?? null) : (!st.isFormTab ? (secondaryHooks[i]?.children?.length ?? null) : null);
-    tabs.push({ key: st.key, label: st.label, count: childCount });
+  const tabs = buildInitialTabs({
+    secondaryTabs, secondaryHooks, panelCounts, DetailTable, detailLabel, detailEntity,
+    hook, detailTabIndex, detailTabOrder, CustomLines, customLinesLabel, customLinesCount,
+    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility,
   });
-  if (DetailTable) {
-    const linesTab = { key: 'lines', label: detailLabel || detailEntity || 'Lines', count: hook.children?.length || 0 };
-    if (typeof detailTabIndex === 'number' && detailTabIndex >= 0 && detailTabIndex <= tabs.length) {
-      tabs.splice(detailTabIndex, 0, linesTab);
-    } else {
-      tabs.unshift(linesTab);
-    }
-  } else if (CustomLines) {
-    tabs.unshift({ key: 'customLines', label: customLinesLabel });
-  }
-  // Append 'tab' placement custom items after lines/secondary tabs but before Others.
-  // Items may pass `labelKey` to resolve a generic i18n label via useUI() instead of a
-  // hardcoded string in `label`.
-  if (!customTabsAfterBottom) {
-    tabCustomTabs.forEach(ct => {
-      const resolvedLabel = ct.labelKey ? ui(ct.labelKey) : ct.label;
-      tabs.push({ key: customTabKey(ct), label: resolvedLabel, count: customTabCounts[ct.key] ?? null });
-    });
-  }
 
   // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
   const [showOthers, setShowOthers] = useState(primaryTabs ? false : null);
   const [activePrimaryTab, setActivePrimaryTab] = useState(primaryTabs?.[0]?.key ?? 'general');
   const [notesFocused, setNotesFocused] = useState(false);
+  const [paramDialogProcess, setParamDialogProcess] = useState(null);
+  const [detailParamDialogProcess, setDetailParamDialogProcess] = useState(null);
+  const [executingDetailProcess, setExecutingDetailProcess] = useState(false);
+  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
 
   const othersRef = useRef(null);
 
@@ -1412,15 +2747,110 @@ export function DetailView({
     }
   });
 
-  if (showOthers === true) {
-    tabs.push({ key: 'others', label: othersLabel || ui('others') });
-  }
+  pushOthers(showOthers, tabs, othersLabel, ui);
+
+  // `activeTab` is a numeric index into `tabs`, but `tabs` is rebuilt fresh on every render
+  // (buildInitialTabs) and can shrink — e.g. a 'tab'-placement custom component calling
+  // onVisibilityChange(false) on itself (see customTabVisibility above). If the entry that
+  // WAS active disappears, the numeric index either goes out of range or now points at a
+  // different tab, leaving the tab strip with no active tab and no panel shown. Track the
+  // active tab by its stable `key` (not the index, which shifts when entries are removed)
+  // and redirect to the first tab whenever the previously active key is no longer present.
+  const activeTabKeyRef = useRef(null);
+  useEffect(() => {
+    const prevKey = activeTabKeyRef.current;
+    const prevKeyStillExists = prevKey == null || tabs.some(t => t.key === prevKey);
+    if (!prevKeyStillExists) {
+      setActiveTab(0);
+      activeTabKeyRef.current = tabs[0]?.key ?? null;
+    } else {
+      activeTabKeyRef.current = tabs[activeTab]?.key ?? prevKey;
+    }
+  }, [tabs, activeTab]);
 
   const isCustomTabActive = tabCustomTabs.some(ct => tabs[activeTab]?.key === customTabKey(ct));
+
+  // extraBadges rendering — split by type to keep each path simple.
+  // statusPill: a DocumentStatusPill from i18n keys. One-sided badges (only a
+  // trueKey declared) hide on the false value — the generator emits the missing
+  // side as the literal string 'undefined', which must never reach the screen.
+  const renderStatusPillBadge = (b) => {
+    // ETP-4520 — omit the pill entirely when gated by a capability the current
+    // role doesn't hold (e.g. `posted` on sales-invoice/purchase-invoice).
+    if (!isCapabilityVisible(capabilities, b.visibleWhenCapability)) return null;
+    const val = data[b.key];
+    if (val == null) return null;
+    const isTrue = val === true || val === 'Y' || val === 'true';
+    const labelKey = isTrue ? b.trueKey : b.falseKey;
+    if (!labelKey || labelKey === 'undefined') return null;
+    return (
+      <DocumentStatusPill
+        key={b.key}
+        status={isTrue ? 'Y' : 'N'}
+        label={ui(labelKey)}
+        tone={isTrue ? 'success' : 'warning'}
+        data-testid={`DocumentStatusPill__${b.key}`} />
+    );
+  };
+  const renderLegacyBadge = (b) => {
+    const when = b.when !== undefined ? b.when : true;
+    const show = when ? !!data[b.key] : !data[b.key];
+    if (!show) return null;
+    if (b.hideWhenStatus?.includes(data[statusField])) return null;
+    const cls = b.style === 'warning'
+      ? 'ml-1 border-status-warning-border bg-status-warning text-status-warning-foreground'
+      : 'ml-1 bg-status-info hover:bg-status-info border-transparent text-primary-foreground';
+    return (
+      <Badge
+        key={`${b.key}-${when}`}
+        variant={b.style === 'warning' ? 'outline' : 'default'}
+        className={cls}
+        data-testid="Badge__fa3275">
+        {b.label}
+      </Badge>
+    );
+  };
 
   const renderCustomTabPanels = (resolveIsActive) => tabCustomTabs.map((ct, idx) => {
     const TabComponent = ct.Component;
     const isActive = resolveIsActive(ct, idx);
+    const updateCustomTabCount = (count) => setCustomTabCounts(prev => {
+      if (prev[ct.key] === count) return prev;
+      return { ...prev, [ct.key]: count };
+    });
+    // Save-header-first support for custom tabs (child rows need a persisted
+    // parent FK). The tab decides WHEN: onSaveHeader({ navigateAfter: false })
+    // just persists and returns the saved record (the tab keeps its in-progress
+    // form and posts the child row itself), then calls onGoToSavedRecord to land
+    // on the saved record with this tab re-opened. The default (navigateAfter
+    // true) mirrors handleAddLineClick: save, navigate, re-open the add form.
+    const saveHeaderForCustomTab = async ({ navigateAfter = true } = {}) => {
+      const saved = await hook.handleSave();
+      if (!saved?.id) return null;
+      hook.primeSaved?.(saved);
+      if (navigateAfter) {
+        navigate(`/${windowName}/${saved.id}`, {
+          replace: true,
+          state: { openSecondaryTab: customTabKey(ct), openCustomTabAdd: ct.key, justSaved: saved },
+        });
+      }
+      return saved;
+    };
+    const goToSavedRecord = (saved, { reopenAdd = false, draft = null, error = null } = {}) => {
+      if (!saved?.id) return;
+      navigate(`/${windowName}/${saved.id}`, {
+        replace: true,
+        state: {
+          openSecondaryTab: customTabKey(ct),
+          ...(reopenAdd ? { openCustomTabAdd: ct.key, customTabRestore: { draft, error } } : {}),
+          justSaved: saved,
+        },
+      });
+    };
+    const updateCustomTabVisibility = (visible) => setCustomTabVisibility(prev => {
+      if (prev[ct.key] === visible) return prev;
+      return { ...prev, [ct.key]: visible };
+    });
     return (
       <div
         key={customTabKey(ct)}
@@ -1434,12 +2864,16 @@ export function DetailView({
           apiBaseUrl={apiBaseUrl}
           api={api}
           isActive={isActive}
-          onCountChange={(count) => setCustomTabCounts(prev => {
-            if (prev[ct.key] === count) return prev;
-            return { ...prev, [ct.key]: count };
-          })}
+          isNew={isNew}
+          onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
+          onGoToSavedRecord={isNew ? goToSavedRecord : undefined}
+          autoOpenAdd={pendingCustomTabAdd === ct.key}
+          restoreDraft={pendingCustomTabAdd === ct.key ? pendingCustomTabRestore : null}
+          onCountChange={updateCustomTabCount}
+          onChange={hook.handleChange}
+          onVisibilityChange={updateCustomTabVisibility}
           {...(ct.props || {})}
-        />
+          data-testid="TabComponent__fa3275" />
       </div>
     );
   });
@@ -1465,15 +2899,18 @@ export function DetailView({
         setSelectedSecondaryLine(null);
       }
     }
+    if (location.state?.openCustomTabAdd) {
+      setPendingCustomTabAdd(location.state.openCustomTabAdd);
+      setPendingCustomTabRestore(location.state.customTabRestore ?? null);
+    }
     navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state?.openSecondaryTab, location.state?.openAddSecondaryLine, isNew, hook.editing, navigate, location.pathname, tabs, secondaryTabs]);
+  }, [location.state?.openSecondaryTab, location.state?.openAddSecondaryLine, location.state?.openCustomTabAdd, isNew, hook.editing, navigate, location.pathname, tabs, secondaryTabs]);
 
   // Only black out the whole window when we actually don't have the record yet.
   // A list refresh (hook.loading for the side list) or any unrelated background
   // fetch must not wipe out a form the user was interacting with.
-  const hasRecordForRoute = isNew
-    || (hook.selected?.id && String(hook.selected.id) === String(recordId));
-  if (hook.loading && !hasRecordForRoute) {
+
+  if (isLoadingRecordForRoute(hook, isNew, recordId)) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
         {ui('loading')}
@@ -1481,25 +2918,24 @@ export function DetailView({
     );
   }
 
+  const saveActionParams = {
+    hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
+    ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
+    isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
+    setShowProcessingModal,
+  };
+  const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
+
   return (
-    <div className="flex-1 min-h-0 flex flex-col" data-testid="detail-view">
+    <div className="flex-1 min-h-0 flex flex-col" data-testid="detail-view" data-doc-status={_headerData?.documentStatus}>
       {/* Content card with rounded top-left corner */}
       <div className={`flex-1 flex flex-col ${contentBg} rounded-tl-2xl overflow-hidden min-h-0`}>
         {/* Action bar: Cancel + status | actions + save */}
-        {embedded ? (
-          statusField && data[statusField] ? (
-            <div className="flex items-center gap-3 px-6 py-3 border-b border-border/30">
-              <DocumentStatusPill
-                status={data[statusField]}
-                enumLabels={statusEnumLabels}
-              />
-            </div>
-          ) : null
-        ) : (
-        <div className={`flex items-center justify-between ${linesLayout === 'inlineEditable' ? 'p-2' : toolbarPaddingX + ' py-3'}${toolbarBorderBottom || linesLayout === 'inlineEditable' ? ' border-b border-[#E8EAEF]' : ''}`}>
+        {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
+        <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
           <div className="flex items-center gap-3">
             <Button
-              className="h-10 px-3 rounded-lg bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] text-[#121217] text-sm font-medium hover:bg-[#F5F7F9] transition-colors"
+              className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
               data-testid="action-cancel"
               onClick={() => navigate(`/${windowName}`)}
             >
@@ -1509,26 +2945,26 @@ export function DetailView({
               <DocumentStatusPill
                 status={data[statusField]}
                 enumLabels={statusEnumLabels}
-              />
+                prefix={resolveStatusPrefix(statusFieldLabel, ui)}
+                data-testid="DocumentStatusPill__fa3275" />
             )}
-            {extraBadges.map(b => {
-              const when = b.when !== undefined ? b.when : true;
-              const show = when ? !!data[b.key] : !data[b.key];
-              if (!show) return null;
-              if (b.hideWhenStatus?.includes(data[statusField])) return null;
-              const cls = b.style === 'warning'
-                ? 'ml-1 border-amber-300 bg-amber-50 text-amber-700'
-                : 'ml-1 bg-blue-600 hover:bg-blue-700 border-transparent text-white';
-              const variant = b.style === 'warning' ? 'outline' : 'default';
-              return (
-                <Badge key={`${b.key}-${when}`} variant={variant} className={cls}>
-                  {b.label}
-                </Badge>
-              );
-            })}
+            {extraBadges.map(b => b.type === 'statusPill'
+              ? renderStatusPillBadge(b)
+              : renderLegacyBadge(b))}
             {topbarExtra && (() => {
               const TopbarExtraComponent = topbarExtra;
-              return <TopbarExtraComponent data={data} recordId={data?.id || recordId} token={token} apiBaseUrl={apiBaseUrl} api={api} onProcess={hook.handleProcess} />;
+              return (
+                <TopbarExtraComponent
+                  data={data}
+                  recordId={data?.id || recordId}
+                  token={token}
+                  apiBaseUrl={apiBaseUrl}
+                  api={api}
+                  onChange={hook.handleChange}
+                  onProcess={hook.handleProcess}
+                  onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+                  data-testid="TopbarExtraComponent__fa3275" />
+              );
             })()}
           </div>
 
@@ -1536,7 +2972,18 @@ export function DetailView({
               {/* Topbar right slot (e.g. payment status badge) */}
               {topbarRight && (() => {
                 const TopbarRightComponent = topbarRight;
-                return <TopbarRightComponent data={data} recordId={data?.id || recordId} token={token} apiBaseUrl={apiBaseUrl} api={api} onProcess={hook.handleProcess} />;
+                return (
+                  <TopbarRightComponent
+                    data={data}
+                    recordId={data?.id || recordId}
+                    token={token}
+                    apiBaseUrl={apiBaseUrl}
+                    api={api}
+                    onProcess={hook.handleProcess}
+                    onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+                    onSave={() => hook.handleSave({ silent: true })}
+                    data-testid="TopbarRightComponent__fa3275" />
+                );
               })()}
               {/* Send / Print document — uses DocumentPrintDrawer.
                   Icon unified with RowQuickActions (envelope/Mail) so the same
@@ -1544,11 +2991,11 @@ export function DetailView({
               {documentPreview && !isNew && recordId && (
                 <button
                   onClick={() => setShowPrint(true)}
-                  className="flex items-center justify-center p-[7px] rounded-md bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors"
+                  className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors"
                   title={ui('sendPreview')}
                   data-testid="action-document-preview"
                 >
-                  <Mail className="h-[15px] w-[15px]" />
+                  <Mail className="h-[15px] w-[15px]" data-testid="Mail__fa3275" />
                 </button>
               )}
               {/* Print document — shown when documentPreview is not provided */}
@@ -1558,117 +3005,54 @@ export function DetailView({
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors`}
                   title={ui('print')}
                 >
-                  <Printer className="h-4 w-4" />
+                  <Printer className="h-4 w-4" data-testid="Printer__fa3275" />
                 </button>
               )}
-              {/* Delete record — hidden when hideDeleteWhenComplete and status matches */}
-              {!isNew && recordId && isDeleteVisibleForRecord({ record: data, statusField, hideDeleteWhenComplete }) && (
+              {/* Delete record — hidden unconditionally when hideDeleteButton is set; otherwise shown for a deleteAction-backed delete at any lifecycle stage (except RPVOID), or when hideDeleteWhenComplete/isProcessed rules allow it */}
+              {isDeleteButtonVisible({
+                isNew,
+                recordId,
+                data,
+                statusField,
+                hideDeleteWhenComplete,
+                isProcessed,
+                deleteAction: effectiveDeleteAction,
+                // View-only window (window.readOnly): never show the toolbar Delete.
+                // Reuses the existing unconditional opt-out so no other window's
+                // processed-document delete behavior changes.
+                hideDeleteButton: hideDeleteButton || windowReadOnly,
+              }) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors`}
                   title={ui('delete')}
                   data-testid="action-delete"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
                 </button>
               )}
-              {/* More actions */}
-              {!(typeof hideMoreMenu === 'function' ? hideMoreMenu({ data }) : hideMoreMenu) && <div className="relative" ref={moreMenuRef}>
-                <button
-                  onClick={() => setShowMoreMenu(v => !v)}
-                  className="flex items-center justify-center p-[7px] rounded-md bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors"
-                >
-                  <MoreVertical className="h-[15px] w-[15px]" />
-                </button>
-                {showMoreMenu && (() => {
-                  const resolvedActions = typeof menuActions === 'function'
-                    ? menuActions({ data, status: data?.[statusField] })
-                    : menuActions;
-                  const visibleActions = resolvedActions.filter(a => a.visible !== false);
-                  if (visibleActions.length === 0 && !customMenuContent) return null;
-                  return (
-                    <div
-                      className="absolute right-0 top-full mt-1 z-50 bg-white py-2 min-w-[148px]"
-                      style={{
-                        borderRadius: '8px',
-                        boxShadow:
-                          '0px 0px 0px 1px rgba(18,18,23,0.1), 0px 24px 48px rgba(18,18,23,0.03), 0px 10px 18px rgba(18,18,23,0.03), 0px 5px 8px rgba(18,18,23,0.04), 0px 2px 4px rgba(18,18,23,0.04)',
-                      }}
-                    >
-                      {visibleActions.map((action, i) => {
-                        const ActionIcon = action.icon;
-                        return (
-                        <button
-                          key={action.key || i}
-                          type="button"
-                          disabled={docAction.loading}
-                          onClick={async () => {
-                            setShowMoreMenu(false);
-                            if (action.documentAction) {
-                              const currentId = data?.id || recordId;
-                              try {
-                                await docAction.execute(currentId, action.documentAction);
-                                const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
-                                toast.success(msg);
-                                hook.fetchById?.(currentId);
-                              } catch (err) {
-                                toast.error(err.message);
-                              }
-                              return;
-                            }
-                            if (action.columnName) {
-                              hook.handleProcess?.({ columnName: action.columnName, name: action.key });
-                            } else if (action.onClick) {
-                              action.onClick();
-                            }
-                          }}
-                          className={`w-full text-left px-2 py-1 text-sm leading-6 transition-colors flex items-center gap-2 ${action.destructive
-                              ? 'text-red-600 hover:bg-red-50'
-                              : 'text-foreground hover:bg-secondary'
-                            } ${docAction.loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400 }}
-                        >
-                          {ActionIcon && (
-                            <ActionIcon
-                              className="h-4 w-4 flex-shrink-0 ml-1"
-                              style={{ color: action.destructive ? undefined : '#828FA3' }}
-                            />
-                          )}
-                          <span className={ActionIcon ? 'pl-1' : ''}>
-                            {action.labelKey ? ui(action.labelKey) : action.label}
-                          </span>
-                        </button>
-                        );
-                      })}
-                      {customMenuContent && (() => {
-                        const CustomMenuContent = customMenuContent;
-                        return <CustomMenuContent
-                          data={data}
-                          recordId={data?.id || recordId}
-                          token={token}
-                          apiBaseUrl={apiBaseUrl}
-                          onClose={() => setShowMoreMenu(false)}
-                          onRefresh={() => hook.fetchById?.(data?.id || recordId)}
-                        />;
-                      })()}
-                    </div>
-                  );
-                })()}
-              </div>}
+              {/* More actions — only render the button when there is something to show */}
+              <DetailMoreActionsMenu
+                apiBaseUrl={apiBaseUrl}
+                customMenuContent={customMenuContent}
+                data={data}
+                docAction={docAction}
+                hideMoreMenu={hideMoreMenu}
+                hook={hook}
+                menuActions={menuActions}
+                neoAction={neoAction}
+                recordId={recordId}
+                setDocsRefreshSignal={setDocsRefreshSignal}
+                sqBtnSize={sqBtnSize}
+                statusField={statusField}
+                token={token}
+                ui={ui}
+                data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
-              {(typeof extraActions === 'function' ? extraActions({ data, children: hook.children }) : extraActions).map((action, i) => (
-                action.visible !== false && (
-                  <Button
-                    key={action.key || i}
-                    variant="outline"
-                    size="default"
-                    className={`${action.className || ''} ${saveBtnCls}`.trim()}
-                    onClick={action.onClick}
-                  >
-                    {action.label}
-                  </Button>
-                )
-              ))}
+              {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
+              {/* Save action — rendered before process buttons when saveBeforeProcesses is set (per-window opt-in) */}
+              {saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+                && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
               {!isNew && processes
                 .filter(p => p.displayLogicRaw
@@ -1677,322 +3061,374 @@ export function DetailView({
                 .filter(p => !p.requiresLines || hook.children.length > 0)
                 .map(p => {
                   const isPrimary = p.style === 'positive';
-                  const btnClass = salesTheme
-                    ? (p.style === 'destructive'
-                      ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                      : isPrimary
-                        ? 'bg-amber-400 text-black hover:bg-amber-500 border-transparent font-medium'
-                        : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100')
-                    : (p.style === 'destructive'
-                      ? 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20'
-                      : isPrimary
-                        ? ''
-                        : '');
+                  const btnClass = getButtonClass(salesTheme, p, isPrimary);
+                  const processCtx = { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess: hook.handleProcess };
+                  // ETP-4542: match the running-process id (columnName ?? name) set by the
+                  // hook. Only reflect the loading state when the window opted in.
+                  const isRunning = showProcessLoadingState
+                    && hook.runningProcess != null
+                    && hook.runningProcess === (p.columnName ?? p.name);
                   return (
                     <Button
                       key={p.name}
                       variant={isPrimary ? 'default' : 'outline'}
                       size="default"
                       className={`${btnClass} ${saveBtnCls}`.trim()}
-                      onClick={() => hook.handleProcess?.(p)}
-                    >
-                      {tMenu(p.label)}
+                      disabled={isRunning}
+                      onClick={async () => {
+                        for (const g of (p.requiresFieldMax ?? [])) {
+                          const condOk = !g.conditionalOnField || data?.[g.conditionalOnField] === g.conditionalValue;
+                          if (condOk && Number(data?.[g.field] ?? 0) > Number(g.max)) {
+                            toast.error(ui(g.errorKey));
+                            return;
+                          }
+                        }
+                        // ETP-4542: opt-in per window (saveBeforeProcesses). Persist pending
+                        // changes silently before running the process; abort if that save fails
+                        // (handleSave already surfaced the error). See maybeSaveBeforeProcess.
+                        const canProceed = await maybeSaveBeforeProcess({
+                          saveBeforeProcesses, isDirty, handleSave: hook.handleSave,
+                        });
+                        if (!canProceed) return;
+                        dispatchProcessAction(p, processCtx);
+                      }}
+                      data-testid="Button__fa3275">
+                      {isRunning
+                        ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__process-running" />
+                            {ui('generating')}
+                          </>
+                        )
+                        : (
+                          <>
+                            {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[hsl(var(--destructive))]" data-testid="Undo2__fa3275" />}
+                            {tMenu(resolveProcessLabel(p, data))}
+                          </>
+                        )}
                     </Button>
                   );
                 })}
 
-              {!hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted && (() => {
-                if (draftMode?.enabled) {
+              {/* Detail entity process buttons — visible only for the single-line-click case.
+                  The multi-row (selectedChildRows) case is rendered exclusively by the bulk
+                  action bar above the lines table (see isDetailBulkBarVisible) to avoid
+                  rendering these buttons twice. */}
+              {!isNew && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
+                .map(p => {
+                  const isPrimary = p.style === 'positive';
+                  const btnClass = getButtonClass(salesTheme, p, isPrimary);
                   return (
-                    <>
-                      <Button variant="outline" size="default" className={`${saveBtnCls} bg-white border-[#D1D4DB] text-[#121217]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty} onClick={async () => {
-                        if (!(await flushPendingLines())) return;
-                        const saved = await hook.handleSave(data);
-                        if (saved?.id && isNew) {
-                          hook.primeSaved?.(saved);
-                          navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-                        }
-                      }}>
-                        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" color="#64748B" />}
-                        {ui('save')}
-                      </Button>
-                      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} onClick={async () => {
-                        if (!(await flushPendingLines())) return;
-                        if (typeof draftMode.onConfirm === 'function') { draftMode.onConfirm(); return; }
-                        const saved = await hook.handleSaveAndProcess(draftMode);
-                        if (saved) {
-                          if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-                          if (onAfterSave) {
-                            navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-                          } else if (saved.id && isNew) {
-                            hook.primeSaved?.(saved);
-                            navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-                          }
-                        }
-                      }}>
-                        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                        {ui(draftMode.label) || draftMode.label || ui('process')}
-                      </Button>
-                    </>
+                    <Button
+                      key={`detail-${p.name}`}
+                      variant="outline"
+                      size="default"
+                      className={`${btnClass} ${saveBtnCls}`.trim()}
+                      disabled={executingDetailProcess}
+                      onClick={() => {
+                        const rows = resolveDetailRows(selectedChildRows, selectedLine);
+                        p.params?.some(param => !param.hidden)
+                          ? setDetailParamDialogProcess({ ...p, _rows: rows })
+                          : executeDetailProcessImpl(p, {}, rows, detailProcessDeps);
+                      }}
+                      data-testid="Button__detail-process">
+                      {tMenu(p.label) || p.label}
+                    </Button>
                   );
-                }
-                if (isNew) {
-                  return (
-                    <>
-                      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving} onClick={async () => {
-                        if (!(await flushPendingLines())) return;
-                        const saved = await hook.handleSave(data);
-                        if (saved?.id && isNew) {
-                          hook.primeSaved?.(saved);
-                          navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-                        }
-                      }}>
-                        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                        {ui('save')}
-                      </Button>
-                      {!isProcessed && hook.children.length > 0 && (
-                        <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving} onClick={async () => {
-                          if (!(await flushPendingLines())) return;
-                          const saved = await hook.handleSaveAndProcess(draftMode);
-                          if (saved) {
-                            if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-                            if (onAfterSave) {
-                              navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-                            } else if (saved.id && isNew) {
-                              hook.primeSaved?.(saved);
-                              navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-                            }
-                          }
-                        }}>
-                          {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                          {ui(draftMode.label) || tMenu(draftMode.label) || ui('process')}
-                        </Button>
-                      )}
-                    </>
-                  );
-                }
-                return (
-                  <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty} onClick={async () => {
-                    if (!(await flushPendingLines())) return;
-                    const saved = await hook.handleSave(data);
-                    if (saved) {
-                      if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-                      if (onAfterSave) {
-                        navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-                      } else if (saved.id && isNew) {
-                        hook.primeSaved?.(saved);
-                        navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-                      }
-                    }
-                  }}>
-                    {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                    {ui('save')}
-                  </Button>
-                );
-              })()}
+                })}
+
+              {!saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+                && renderSaveActions(saveActionParams)}
+            </div>
           </div>
-        </div>
         )}
 
+        <ProcessParamDialog
+          open={paramDialogProcess !== null}
+          onOpenChange={makeCloseDialogHandler(setParamDialogProcess)}
+          process={paramDialogProcess}
+          onConfirm={paramValues => {
+            hook.handleProcess?.(paramDialogProcess, paramValues);
+            setParamDialogProcess(null);
+          }}
+          data-testid="ProcessParamDialog__fa3275" />
+
+        <ProcessParamDialog
+          open={detailParamDialogProcess !== null}
+          onOpenChange={makeCloseDialogHandler(setDetailParamDialogProcess)}
+          process={detailParamDialogProcess}
+          onConfirm={paramValues => {
+            executeDetailProcessImpl(detailParamDialogProcess, paramValues, detailParamDialogProcess?._rows, detailProcessDeps);
+            setDetailParamDialogProcess(null);
+          }}
+          data-testid="ProcessParamDialog__fa3275" />
+
+        {renderProcessConfirmModal(
+          confirmProcess,
+          processConfirmModal,
+          async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
+          () => setConfirmProcess(null),
+          data,
+        )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
         <div className="flex-1 flex overflow-hidden">
-        {/* Content column: tab bar (shrink-0) + scrollable form area */}
-        <div className="flex-1 flex flex-col min-w-0">
-        {/* Primary tab bar (General / Additional Info / etc.) */}
-        {primaryTabs && (
-          <div
-            className={`flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`}
-            style={tabsBarRight && tabsBarRightDivider ? { paddingRight: `calc(${tabsBarRightDivider} + 24px)` } : undefined}
-          >
-            {tabsBarRightDivider && (
-              <div className="absolute top-0 bottom-0 w-px bg-[#E8EAEF] pointer-events-none" style={{ left: `calc(100% - ${tabsBarRightDivider})` }} />
+          {/* Content column: tab bar (shrink-0) + scrollable form area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Primary tab bar (General / Additional Info / etc.) */}
+            {primaryTabs && (
+              <div
+                className={getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider)}
+                style={getTabsBarStyle(tabsBarRight, tabsBarRightDivider)}
+              >
+                {tabsBarRightDivider && (
+                  <div className="absolute top-0 bottom-0 w-px bg-[hsl(var(--border-subtle))] pointer-events-none" style={{ left: `calc(100% - ${tabsBarRightDivider})` }} />
+                )}
+                {renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu)}
+                {tabsBarAfter && (() => {
+                  const TabsBarAfterComponent = tabsBarAfter;
+                  return (
+                    <div className="ml-2 flex-shrink-0">
+                      <TabsBarAfterComponent
+                        data={data}
+                        recordId={data?.id || recordId}
+                        token={token}
+                        apiBaseUrl={apiBaseUrl}
+                        api={api}
+                        data-testid="TabsBarAfterComponent__fa3275" />
+                    </div>
+                  );
+                })()}
+                {tabsBarRight && (() => {
+                  const TabsBarRightComponent = tabsBarRight;
+                  return (
+                    <div className="ml-auto flex-shrink-0">
+                      <TabsBarRightComponent
+                        data={data}
+                        recordId={data?.id || recordId}
+                        token={token}
+                        apiBaseUrl={apiBaseUrl}
+                        api={api}
+                        data-testid="TabsBarRightComponent__fa3275" />
+                    </div>
+                  );
+                })()}
+              </div>
             )}
-            {primaryTabsVariant === 'pill' ? (
-              <div className="inline-flex items-center gap-1 p-1 h-10 rounded-xl" style={{ background: '#F5F7F9' }}>
-                {primaryTabs.map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActivePrimaryTab(tab.key)}
-                    className="h-8 px-4 text-sm font-medium rounded-lg transition-all"
-                    style={
-                      activePrimaryTab === tab.key
-                        ? { background: '#FFFFFF', color: '#121217', boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)' }
-                        : { color: '#121217' }
+            {/* Non-general primary tab: show Panel fullscreen */}
+            {isCustomPrimaryTabActive(primaryTabs, activePrimaryTab) ? (() => {
+              const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
+              return activeTab?.Panel ? (
+                <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX)}`}>
+                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} />
+                </div>
+              ) : null;
+            })() : null}
+            <div className={getDetailContentContainerClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, primaryTabs, activePrimaryTab, formScrollPaddingX, contentOverflow })}>
+              {resolveHeaderContent(headerContent, data)}
+              {(() => {
+                const slotProps = {
+                  data,
+                  isNew,
+                  entity,
+                  recordId: data?.id || recordId,
+                  token,
+                  apiBaseUrl,
+                  api,
+                  detailEntity,
+                  onFieldChange: handleChangeWithCallout,
+                  onSave: async () => {
+                    const saved = await flushAndSave(data);
+                    if (saved?.id && isNew) {
+                      hook.primeSaved?.(saved);
+                    } else {
+                      reportUnnavigableSave({ saved, isNew, windowName, ui });
                     }
-                  >
-                    {tMenu(tab.label)}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              primaryTabs.map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActivePrimaryTab(tab.key)}
-                  className={[
-                    'relative px-4 py-1.5 text-sm font-medium rounded-lg transition-colors border',
-                    activePrimaryTab === tab.key
-                      ? 'bg-white border-gray-200 shadow-sm text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground',
-                  ].join(' ')}
-                >
-                  {tMenu(tab.label)}
-                </button>
-              ))
-            )}
-            {tabsBarRight && (() => {
-              const TabsBarRightComponent = tabsBarRight;
-              return (
-                <div className="ml-auto flex-shrink-0">
-                  <TabsBarRightComponent data={data} recordId={data?.id || recordId} token={token} apiBaseUrl={apiBaseUrl} api={api} />
-                </div>
-              );
-            })()}
-          </div>
-        )}
-        {/* Non-general primary tab: show Panel fullscreen */}
-        {primaryTabs && activePrimaryTab !== 'general' ? (() => {
-          const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
-          return activeTab?.Panel ? (
-            <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel')}`}>
-              <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} />
-            </div>
-          ) : null;
-        })() : null}
-        <div className={`flex-1 min-w-0 ${linesLayout === 'inlineEditable' ? 'flex flex-col overflow-y-auto' : 'overflow-auto pb-6'} ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'content')}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`}>
-          {typeof headerContent === 'function' ? headerContent(data) : headerContent}
-          {(() => {
-            const slotProps = {
-              data,
-              isNew,
-              entity,
-              recordId: data?.id || recordId,
-              token,
-              apiBaseUrl,
-              api,
-              detailEntity,
-              onFieldChange: handleChangeWithCallout,
-              onSave: async () => {
-                if (!(await flushPendingLines())) return null;
-                const saved = await hook.handleSave(data);
-                if (saved?.id && isNew) {
-                  hook.primeSaved?.(saved);
-                }
-                return saved;
-              },
-              onAddChild: hook.handleAddChild,
-              onRefresh: (parentId = data?.id || recordId) => {
-                if (!parentId) return;
-                hook.fetchChildren?.(parentId);
-                hook.fetchById?.(parentId);
-              },
-              onRefreshChildren: () => hook.fetchChildren?.(data?.id || recordId),
-            };
-            const ocrDocType = matchOcrDocType(location.pathname);
-            return (
-              <>
-                {headerExtra && (
-                  typeof headerExtra === 'function'
-                    ? headerExtra(slotProps)
-                    : headerExtra
-                )}
-                {!headerExtra && !sidePanel && ocrDocType && (
-                  <Suspense fallback={null}>
-                    <LazyOcrInlineUploader {...slotProps} docTypeId={ocrDocType.id} />
-                  </Suspense>
-                )}
-              </>
-            );
-          })()}
-          <div className={sidePanelWrapperCls(!!sidePanel, linesLayout)}>
-          <div className={`${sidePanel ? 'flex-1 min-w-0' : 'max-w-full'} ${linesLayout === 'inlineEditable' ? 'flex flex-col' : 'space-y-2'}`}>
+                    return saved;
+                  },
+                  onAddChild: hook.handleAddChild,
+                  onRefresh: (parentId = data?.id || recordId) => {
+                    if (!parentId) return;
+                    hook.fetchChildren?.(parentId);
+                    hook.fetchById?.(parentId);
+                  },
+                  onRefreshChildren: () => hook.fetchChildren?.(data?.id || recordId),
+                };
+                const ocrDocType = matchOcrDocType(location.pathname);
+                return (
+                  <>
+                    {headerExtra && (
+                      typeof headerExtra === 'function'
+                        ? headerExtra(slotProps)
+                        : headerExtra
+                    )}
+                    {!headerExtra && !sidePanel && ocrDocType && (
+                      <Suspense fallback={null} data-testid="Suspense__fa3275">
+                        <LazyOcrInlineUploader
+                          {...slotProps}
+                          docTypeId={ocrDocType.id}
+                          data-testid="LazyOcrInlineUploader__fa3275" />
+                      </Suspense>
+                    )}
+                  </>
+                );
+              })()}
+              <div className={sidePanelWrapperCls(!!sidePanel, linesLayout)}>
+                <div className={getDetailContentClassName(sidePanel, linesLayout)}>
 
-            {/* Principal + collapsed fields wrapped in a card */}
-            <div className={`${noHeaderBorder ? '' : ' rounded-2xl border border-gray-200/70 bg-white shadow-sm'}${embedded ? ' pointer-events-none' : ''}`}>
-              <div className={linesLayout === 'inlineEditable' ? 'p-2' : 'p-6'}>
-                <Form
-                  entity={entity}
-                  data={data}
-                  onChange={handleChangeWithCallout}
-                  catalogs={catalogs}
-                  layout="horizontal"
-                  section="principal"
-                  displayLogic={{ readOnly: displayLogic?.readOnly ?? {}, visibility: {} }}
-                  api={api}
-                  token={token}
-                  apiBaseUrl={apiBaseUrl}
-                  selectorContext={selectorContextByEntity[entity]}
-                  labelOverrides={labelOverrides}
-                  registerFields={hook.registerFields}
-                  fieldErrors={hook.fieldErrors}
-                  onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}
-                />
-              </div>
+                  {/* Form section — conditionally wrapped with sidebar when sidebarAboveTabsOnly */}
+                  {(() => {
+                    // A formFooter component may opt into rendering INSIDE the header
+                    // card, aligned in the same horizontal grid as the native header
+                    // fields (single-field footers like TaxSifField), instead of the
+                    // default detached block below the card (multi-section panels like
+                    // AssetsDetailPanel). See buildHeaderFooter for the opt-in marker and
+                    // the inline `trailing`-slot wiring. Extracted to keep this render
+                    // branch's cognitive complexity within budget.
+                    const { footerInline, footerElement, inlineTrailing } = buildHeaderFooter({
+                      formFooter, embedded, data, entity, handleChangeWithCallout, hook,
+                      catalogs, api, token, apiBaseUrl,
+                    });
+                    const formSection = (
+                      <>
+                        {/* Principal + collapsed fields wrapped in a card */}
+                        <div className={`${hideFormCard ? 'hidden' : ''}${noHeaderBorder ? '' : ' rounded-2xl border border-border-subtle/70 bg-card shadow-sm'}${whiteFormBackground ? ' bg-card [&_input]:bg-card [&_textarea]:bg-card [&_textarea:disabled]:!bg-card [&_textarea:disabled]:opacity-50' : ''}${embedded ? ' pointer-events-none' : ''}`}>
+                          <div className={linesLayout === 'inlineEditable' ? 'p-2' : formCardPadding}>
+                            {lockedAlert && isProcessed && (
+                              <div
+                                className="flex flex-row items-center gap-1 rounded-lg mb-3"
+                                style={{ padding: '8px', background: 'hsl(var(--muted))' }}
+                                data-testid="locked-alert"
+                              >
+                                <span className="flex items-start pl-1 shrink-0">
+                                  <Lock className="h-6 w-6" style={{ color: 'hsl(var(--text-disabled))' }} data-testid="Lock__fa3275" />
+                                </span>
+                                <div className="flex flex-1 flex-row items-center min-w-0">
+                                  <div className="flex flex-1 items-center gap-2 px-2 min-w-0">
+                                    <span className="text-sm font-medium leading-6 shrink-0" style={{ color: 'hsl(var(--foreground))' }}>
+                                      {ui(lockedAlert.title)}
+                                    </span>
+                                    <span className="text-sm font-normal leading-6 truncate" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                                      {ui(lockedAlert.message)}
+                                    </span>
+                                  </div>
+                                  {lockedAlert.actionLabel && lockedAlert.navigateTo && (
+                                    <div className="flex justify-end items-center px-2 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => navigate(lockedAlert.navigateTo)}
+                                        className="text-sm font-medium leading-6 underline whitespace-nowrap"
+                                        style={{ color: 'hsl(var(--foreground))' }}
+                                        data-testid="locked-alert-action"
+                                      >
+                                        {ui(lockedAlert.actionLabel)}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            <Form
+                              entity={entity}
+                              windowName={windowName}
+                              data={data}
+                              onChange={handleChangeWithCallout}
+                              catalogs={catalogs}
+                              layout="horizontal"
+                              section="principal"
+                              readOnly={windowReadOnly}
+                              displayLogic={displayLogic}
+                              api={api}
+                              token={token}
+                              apiBaseUrl={apiBaseUrl}
+                              selectorContext={selectorContextByEntity[entity]}
+                              labelOverrides={labelOverrides}
+                              registerFields={hook.registerFields}
+                              fieldErrors={hook.fieldErrors}
+                              onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}
+                              trailing={inlineTrailing}
+                              data-testid="Form__fa3275" />
+                          </div>
 
-              {/* Collapsible secondary header fields (hidden if no collapsed fields or sidebarContent) */}
-              {!hideMoreDetails && !sidebarContent && (
-                <CollapsibleSection title={ui('moreDetails')}>
-                  <div className={`px-6 pb-6${embedded ? ' pointer-events-none' : ''}`}>
-                    <Form
-                      entity={entity}
-                      data={data}
-                      onChange={handleChangeWithCallout}
-                      catalogs={catalogs}
-                      layout="horizontal"
-                      section="collapsed"
-                      excludeFields={notesField ? [notesField] : []}
-                      displayLogic={displayLogic}
-                      api={api}
-                      token={token}
-                      apiBaseUrl={apiBaseUrl}
-                      selectorContext={selectorContextByEntity[entity]}
-                      labelOverrides={labelOverrides}
-                      registerFields={hook.registerFields}
-                      fieldErrors={hook.fieldErrors}
-                      onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}
-                    />
-                  </div>
-                </CollapsibleSection>
-              )}
-            </div>
+                          {/* Collapsible secondary header fields (hidden if no collapsed fields or sidebarContent) */}
+                          {!hideMoreDetails && !sidebarContent && (
+                            <CollapsibleSection title={ui('moreDetails')} data-testid="CollapsibleSection__fa3275">
+                              <div className={`px-6 pb-6${embedded ? ' pointer-events-none' : ''}`}>
+                                <Form
+                                  entity={entity}
+                                  windowName={windowName}
+                                  data={data}
+                                  onChange={handleChangeWithCallout}
+                                  catalogs={catalogs}
+                                  layout="horizontal"
+                                  section="collapsed"
+                                  readOnly={windowReadOnly}
+                                  excludeFields={notesField ? [notesField] : []}
+                                  displayLogic={displayLogic}
+                                  api={api}
+                                  token={token}
+                                  apiBaseUrl={apiBaseUrl}
+                                  selectorContext={selectorContextByEntity[entity]}
+                                  labelOverrides={labelOverrides}
+                                  registerFields={hook.registerFields}
+                                  fieldErrors={hook.fieldErrors}
+                                  onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}
+                                  data-testid="Form__fa3275" />
+                              </div>
+                            </CollapsibleSection>
+                          )}
+                        </div>
 
-            {/* Form footer: inline content below form, above tabs (e.g. BillingPreferencesForm) */}
-            {formFooter && (
-              <div className={embedded ? 'pointer-events-none' : ''}>
-                {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, catalogs, api, token, apiBaseUrl })}
-              </div>
-            )}
-
-            {/* Tabs: child entities + Others */}
-            {tabs.length > 0 && (
-              <div className={linesLayout === 'inlineEditable' ? 'mt-1 flex flex-col relative' : 'mt-6'}>
-                <div className={`flex items-center justify-between border-b border-border/50 ${linesLayout === 'inlineEditable' ? 'shrink-0' : ''}`}>
-                  <div className="flex items-center gap-0">
-                    {tabs.map((tab, idx) => {
-                      const tabIndicatorCls = linesLayout === 'inlineEditable'
-                        ? 'absolute bottom-0 left-0 right-0 h-[2px] bg-foreground'
-                        : 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
+                        {/* Form footer: detached block below the form card, above tabs
+                            (default). Single-field footers that opted into
+                            inlineInHeaderCard are rendered inside the card above and
+                            skipped here. */}
+                        {!footerInline && footerElement}
+                      </>
+                    );
+                    if (sidebarAboveTabsOnly && sidebarContent) {
                       return (
-                        <TabStripButton
-                          key={tab.key}
-                          iconKey={tab.key}
-                          label={tab.label}
-                          count={tab.count}
-                          isActive={activeTab === idx}
-                          onClick={() => { setActiveTab(idx); setSelectedLine(null); setSelectedSecondaryLine(null); }}
-                          paddingY={secondaryTabsPaddingY}
-                          showHoverLine={secondaryTabsShowHoverLine}
-                          indicatorCls={tabIndicatorCls}
-                          tMenu={tMenu}
-                          testId={`tab-${tab.key}`}
-                        />
+                        <div className={`flex items-stretch${tabsSeparator ? ' border-b border-[hsl(var(--border-subtle))]' : ''}`}>
+                          <div className="flex-1 min-w-0 space-y-2">{formSection}</div>
+                          <div className={sidebarClassName}>{sidebarContent(data)}</div>
+                        </div>
                       );
-                    })}
-                  </div>
-                </div>
+                    }
+                    return formSection;
+                  })()}
 
-                {/* Tab content: Lines.
+                  {/* Tabs: child entities + Others */}
+                  {tabs.length > 0 && (
+                    <div
+                      className={getLinesTabsSectionClassName(linesLayout)}
+                      onMouseDown={autoSaveOnBlur && linesLayout === 'inlineEditable' ? () => handleFieldBlurRef.current?.() : undefined}
+                    >
+                      <div className={`flex items-center justify-between border-b border-border/50 ${getTabStripBleedClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, formScrollPaddingX })} ${(getInlineEditableShrinkClassName(linesLayout))}`}>
+                        <div className="flex items-center gap-0">
+                          {tabs.map((tab, idx) => {
+                            const tabIndicatorCls = linesLayout === 'inlineEditable'
+                              ? 'absolute bottom-0 left-0 right-0 h-[2px] bg-foreground'
+                              : 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
+                            return (
+                              <TabStripButton
+                                key={tab.key}
+                                iconKey={tab.key}
+                                label={tab.label}
+                                count={tab.count}
+                                isActive={activeTab === idx}
+                                onClick={() => { setActiveTab(idx); setSelectedLine(null); setSelectedSecondaryLine(null); }}
+                                paddingY={secondaryTabsPaddingY}
+                                showHoverLine={secondaryTabsShowHoverLine}
+                                indicatorCls={tabIndicatorCls}
+                                tMenu={tMenu}
+                                testId={`tab-${tab.key}`}
+                                data-testid="TabStripButton__fa3275" />
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Tab content: Lines.
                     The lines wrapper flows naturally — no internal scroll, no
                     flex-1 height capture. All rows render, the bottom section
                     follows beneath them, and the outer inline-editable column
@@ -2001,1200 +3437,878 @@ export function DetailView({
                     attached so legacy effects that probe its bounding box keep
                     working; with no overflow on this wrapper they become
                     no-ops on the lines side. */}
-                <div ref={linesScrollRef}>
-                {tabs[activeTab]?.key === 'lines' && DetailTable && (
-                  // Only show the loading spinner on INITIAL load (no children yet).
-                  // Subsequent refetches (e.g., after PATCH on a child) keep the table
-                  // mounted to preserve transient state like InlineLinesPanel's
-                  // editingRowId — otherwise editing mode is silently dropped on every
-                  // autosave round-trip.
-                  hook.childrenLoading && hook.children.length === 0 ? (
-                    <div className="flex items-center justify-center py-10 text-muted-foreground">
-                      <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                    </div>
-                  ) : hook.children.length === 0 && !addingLine && LinesEmptyState && hook.editing && !isDocumentReadOnly ? (
-                    <LinesEmptyState
-                      data={data}
-                      onAddLine={handleAddLineClick}
-                      canAddLine={canAddLines}
-                      recordId={data?.id || recordId}
-                      token={token}
-                      apiBaseUrl={apiBaseUrl}
-                      onRefresh={() => {
-                        hook.fetchChildren?.(data?.id || recordId);
-                        hook.fetchById?.(data?.id || recordId);
-                      }}
-                      onSave={handleImportClick}
-                      forceOpen={forceOpenImport}
-                      onForceOpenHandled={() => setForceOpenImport(false)}
-                    />
-                  ) : (
-                  <div className={`${linesLayout === 'inlineEditable' ? '' : 'pt-3 '}flex items-start gap-4${embedded ? ' pointer-events-none' : ''}`}>
-                    {/* Table + add button */}
-                    <div className="flex-1 min-w-0">
-                      {/* Bulk delete bar (classic only) */}
-                      {linesLayout !== 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly && selectedChildRows.length > 0 && (
-                        <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted/60 border border-border/40">
-                          <span className="text-sm font-medium text-foreground">
-                            {ui('selected', { count: selectedChildRows.length })}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              disabled={deletingChildren}
-                              onClick={async () => {
-                                if (!(await confirmDelete())) return;
-                                setDeletingChildren(true);
-                                try {
-                                  const results = await Promise.allSettled(
-                                    selectedChildRows.map(row => {
-                                      const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                                        || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                                      return fetch(childUrl, {
-                                        method: 'DELETE',
-                                        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                      }).then(res => ({ res, row }));
-                                    })
-                                  );
-                                  let deleted = 0;
-                                  for (const result of results) {
-                                    if (result.status === 'fulfilled' && result.value.res.ok) {
-                                      hook.handleDeleteChild(result.value.row.id);
-                                      if (selectedLine?.id === result.value.row.id) setSelectedLine(null);
-                                      deleted++;
-                                    }
-                                  }
-                                  setSelectedChildRows([]);
-                                  if (deleted > 0) toast.success(ui('recordsDeleted', { count: deleted }));
-                                  const failed = results.length - deleted;
-                                  if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', { count: failed }));
-                                } catch (err) {
-                                  toast.error(err.message || ui('networkError'));
-                                } finally {
-                                  setDeletingChildren(false);
-                                }
-                              }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              {deletingChildren ? ui('loading') : ui('delete')}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      <DetailTable
-                        ref={inlineLinesRef}
-                        data={enrichedChildren}
-                        entity={detailEntity}
-                        token={token}
-                        apiBaseUrl={apiBaseUrl}
-                        linesLayout={linesLayout}
-                        isDocumentReadOnly={isDocumentReadOnly}
-                        onRowClick={DetailForm && linesLayout !== 'inlineEditable' ? (row) => { const line = { ...row }; roundAmounts(line); setSelectedLine(line); } : undefined}
-                        selectedRowId={selectedLine?.id}
-                        onSelectionChange={setSelectedChildRows}
-                        showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
-                        selectorContext={selectorContextByEntity[detailEntity]}
-                        hiddenColumns={[]}
-                        onUpdateRow={linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
-                          // Inline autosave with callout chain. NEO Headless expects API keys
-                          // (camelCase), an unwrapped body, and numeric strings coerced for
-                          // BigDecimal — mirrors the side-panel save at line ~1750. When a
-                          // trigger field changes (e.g., product), `handleLineFieldChange`
-                          // populates `derivedUpdates` with all callout-driven fields (price,
-                          // tax, description, etc.) so they can be PATCHed in one shot.
-                          const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                            || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                          const coerce = (v) => (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v);
-                          const payloadValue = coerce(value);
-
-                          // Build the row snapshot the callout sees: existing row + the change.
-                          // Strip null/empty inherited keys that the parent has set (e.g.
-                          // businessPartner, priceList on OrderLine). buildCalloutFormState
-                          // by contract does NOT overwrite a row value with the header's,
-                          // so without this prune the callout would receive
-                          // businessPartner=null and NEO returns listPrice=0. The addRow
-                          // flow doesn't hit this because it starts from an empty values
-                          // object, but existing rows include denormalized parent keys.
-                          const headerSnapshot = hook.editing || hook.selected || {};
-                          const cleanRow = { ...row };
-                          for (const k of Object.keys(headerSnapshot)) {
-                            const v = cleanRow[k];
-                            if (v === null || v === undefined || v === '') {
-                              delete cleanRow[k];
-                            }
-                          }
-                          const snapshot = { ...cleanRow, [fieldKey]: payloadValue };
-                          if (opts?.identifier !== undefined) {
-                            snapshot[fieldKey + '$_identifier'] = opts.identifier;
-                          }
-                          // Mirror DataTable's selector-aux merge (lines 468–512). The
-                          // selector item carries `_aux` (product_PSTD, _PLIM, _UOM, _CURR)
-                          // and top-level fields (standardPrice, isTaxIncluded, currency)
-                          // that the callout needs to compute the price. Without this, the
-                          // callout has no access to the price-list metadata and returns 0.
-                          const selectedItem = opts?.selectedItem;
-                          if (selectedItem && typeof selectedItem === 'object') {
-                            if (selectedItem._aux) {
-                              for (const [suffix, auxVal] of Object.entries(selectedItem._aux)) {
-                                snapshot[fieldKey + suffix] = auxVal;
-                              }
-                            }
-                            for (const [topField, topVal] of Object.entries(selectedItem)) {
-                              if (topField === 'id' || topField === '_aux' || topField === 'label'
-                                  || topField === 'name' || topField === 'searchKey'
-                                  || typeof topVal === 'object' || topVal === null) continue;
-                              if (topField === 'standardPrice' && topVal != null) {
-                                const isGross = selectedItem.isTaxIncluded !== false;
-                                if (isGross) {
-                                  snapshot.grossUnitPrice = topVal;
-                                  snapshot.grossListPrice = topVal;
-                                } else {
-                                  snapshot.unitPrice = topVal;
-                                  snapshot.listPrice = topVal;
-                                }
-                                continue;
-                              }
-                              const ctxKey = `${fieldKey}_${topField}`;
-                              if (!(ctxKey in snapshot)) snapshot[ctxKey] = topVal;
-                            }
-                          }
-
-                          // Run callout (no-op for fields without one). Captures derived fields
-                          // through the applyUpdates callback so we can fold them into the PATCH.
-                          let derivedUpdates = {};
-                          try {
-                            await handleLineFieldChange(fieldKey, payloadValue, snapshot, (updates) => {
-                              derivedUpdates = { ...updates };
-                            });
-                          } catch {
-                            // Callout is best-effort; PATCH continues with the user-typed value only.
-                          }
-
-                          // PATCH body: send the full row + derived + change. NEO Headless
-                          // doesn't reliably recompute derived fields (lineGrossAmount,
-                          // standardPrice) when only a partial body arrives — observed
-                          // when changing product to one with a different price. The
-                          // side-panel save (line ~1750) sends the whole row for the same
-                          // reason, so we mirror that here for parity.
-                          const fieldValues = {};
-                          // 1. Start from the cleaned row (skips already-null inherited keys).
-                          for (const [k, v] of Object.entries(cleanRow)) {
-                            if (k.endsWith('$_identifier')) continue;
-                            // Skip internal markers and metadata that aren't valid fields.
-                            if (k === '_identifier' || k === '_entityName' || k === '$ref' || k === 'id') continue;
-                            fieldValues[k] = coerce(v);
-                          }
-                          // 2. Overlay derived fields from the callout (incl. lineGrossAmount,
-                          //    standardPrice, unitPrice, listPrice).
-                          for (const [k, v] of Object.entries(derivedUpdates)) {
-                            if (k.endsWith('$_identifier')) continue;
-                            fieldValues[k] = coerce(v);
-                          }
-                          // 3. The user-changed field always wins (last-write).
-                          fieldValues[fieldKey] = payloadValue;
-
-                          // Derive unitPrice (PriceActual) = listPrice × (1 - discount/100).
-                          // Without this the backend keeps the pre-discount PriceActual and
-                          // confirmed totals don't match the discounted lineNetAmount we just
-                          // computed — matches the side-panel save flow.
-                          prepareLineForPost(fieldValues);
-
-                          const res = await fetch(childUrl, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                            body: JSON.stringify(fieldValues),
-                          });
-                          if (res.ok) {
-                            // Local update folds in derived values (incl. $_identifier keys for
-                            // FK callout outputs like tax$_identifier) so the row UI reflects
-                            // the full snapshot without a refetch.
-                            const localUpdate = { ...derivedUpdates, [fieldKey]: payloadValue };
-                            if (fieldValues.unitPrice !== undefined) localUpdate.unitPrice = fieldValues.unitPrice;
-                            if (opts?.identifier !== undefined) {
-                              localUpdate[fieldKey + '$_identifier'] = opts.identifier;
-                            }
-                            hook.handleUpdateChild?.(row.id, localUpdate);
-                          } else {
-                            const msg = await extractErrorMessage(res);
-                            toast.error(msg || ui('networkError'));
-                            throw new Error(msg || 'PATCH failed');
-                          }
-                        } : undefined}
-                        onDeleteRow={(api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly ? async (row) => {
-                          if (!(await confirmDelete())) return;
-                          try {
-                            const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                              || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                            const res = await fetch(childUrl, {
-                              method: 'DELETE',
-                              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                            });
-                            if (res.ok) {
-                              hook.handleDeleteChild(row.id);
-                              if (selectedLine?.id === row.id) setSelectedLine(null);
-                              toast.success(ui('recordDeleted'));
-                            } else {
-                              toast.error(await extractErrorMessage(res));
-                            }
-                          } catch (err) {
-                            toast.error(err.message || ui('networkError'));
-                          }
-                        } : undefined}
-                        addRow={{
-                          ref: primaryAddRowRef,
-                          active: addingLine,
-                          fields: allEntryFields,
-                          onAdd: async (lineData) => {
-                            // Send all values: entry fields + callout-derived values (tax, prices, uOM, etc.).
-                            // handleAddChild filters out internal keys (_identifier, _aux, CURSOR_FIELD, etc.)
-                            // Also include hidden entry defaults (e.g., fields with predefined values).
-                            for (const hiddenField of hiddenEntryDefaults) {
-                              if (!(hiddenField.key in lineData)) {
-                                lineData[hiddenField.key] = hiddenField.fromParent
-                                  ? _headerData?.[hiddenField.fromParent]
-                                  : hiddenField.value;
-                              }
-                            }
-                            // Derive unitPrice = listPrice × (1-discount/100) before POST.
-                            // For invoice config (priceField='unitPrice') this is a no-op.
-                            prepareLineForPost(lineData);
-                            setPendingLineValues(null);
-                            return hook.handleAddChild?.(lineData);
-                          },
-                          onCancel: () => { setAddingLine(false); setPendingLineValues(null); },
-                          catalogs,
-                          onFieldChange: handleLineFieldChange,
-                          onValuesChange: setPendingLineValues,
-                        }}
-                      />
-
-                      {/* Inline edit form for selected child row (when no DetailForm) */}
-                      {!DetailForm && editingChild && editableChildFields.length > 0 && (
-                        <div className="mt-3 p-4 border rounded-lg bg-muted/20">
-                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-3">
-                            {editableChildFields.map(f => (
-                              <div key={f.key} className="flex flex-col gap-1">
-                                <label className="text-xs font-medium text-muted-foreground">{f.label || f.key}</label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={editingChild[f.key] ?? ''}
-                                  onChange={e => setEditingChild(prev => ({ ...prev, [f.key]: e.target.value }))}
-                                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-                                />
+                      <div ref={linesScrollRef}>
+                        {tabs[activeTab]?.key === 'lines' && DetailTable && (() => {
+                          // Only show the loading spinner on INITIAL load (no children yet).
+                          // Subsequent refetches (e.g., after PATCH on a child) keep the table
+                          // mounted to preserve transient state like InlineLinesPanel's
+                          // editingRowId — otherwise editing mode is silently dropped on every
+                          // autosave round-trip.
+                          if (isInitialChildrenLoading(hook)) {
+                            return (
+                              <div className="flex items-center justify-center py-10 text-muted-foreground">
+                                <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                               </div>
-                            ))}
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              disabled={savingChild}
-                              onClick={async () => {
-                                setSavingChild(true);
-                                try {
-                                  const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', editingChild.id)
-                                    || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
-                                  const fieldValues = {};
-                                  for (const f of editableChildFields) {
-                                    fieldValues[f.column] = editingChild[f.key];
-                                  }
-                                  const res = await fetch(childUrl, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                    body: JSON.stringify({ fieldValues }),
-                                  });
-                                  if (res.ok) {
-                                    hook.handleUpdateChild(editingChild.id, editableChildFields.reduce((acc, f) => ({ ...acc, [f.key]: editingChild[f.key] }), {}));
-                                    setEditingChild(null);
-                                  }
-                                } finally { setSavingChild(false); }
-                              }}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                            >
-                              {savingChild ? ui('loading') : ui('save')}
-                            </button>
-                            <button
-                              onClick={() => setEditingChild(null)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
-                            >
-                              {ui('cancel')}
-                            </button>
-                            <button
-                              disabled={savingChild}
-                              onClick={async () => {
-                                if (!(await confirmDelete())) return;
-                                setSavingChild(true);
-                                try {
-                                  const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', editingChild.id)
-                                    || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
-                                  const res = await fetch(childUrl, {
-                                    method: 'DELETE',
-                                    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                  });
-                                  if (res.ok) { hook.handleDeleteChild(editingChild.id); setEditingChild(null); }
-                                } finally { setSavingChild(false); }
-                              }}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
-                            >
-                              {ui('delete')}
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                            );
+                          }
+                          if (shouldShowLinesEmptyState(hook, addingLine, LinesEmptyState, isDocumentReadOnly)) {
+                            return (
+                              <LinesEmptyState
+                                data={data}
+                                onAddLine={handleAddLineClick}
+                                canAddLine={canAddLines}
+                                recordId={data?.id || recordId}
+                                token={token}
+                                apiBaseUrl={apiBaseUrl}
+                                onRefresh={() => {
+                                  hook.fetchChildren?.(data?.id || recordId);
+                                  hook.fetchById?.(data?.id || recordId);
+                                }}
+                                onSave={handleImportClick}
+                                forceOpen={forceOpenImport}
+                                onForceOpenHandled={() => setForceOpenImport(false)}
+                                data-testid="LinesEmptyState__fa3275" />
+                            );
+                          }
+                          return (
+                            <div className={getLinesContainerClassName(linesLayout, embedded)}>
+                              {/* Table + add button */}
+                              <div className="flex-1 min-w-0">
+                                {/* Bulk action bar: delete + detail processes (classic only) */}
+                                {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
+                                  <LinesBulkActionBar
+                                    linesLayout={linesLayout}
+                                    api={api}
+                                    detailEntity={detailEntity}
+                                    isDocumentReadOnly={isDocumentReadOnly}
+                                    selectedChildRows={selectedChildRows}
+                                    detailProcesses={detailProcesses}
+                                    ui={ui}
+                                    executingDetailProcess={executingDetailProcess}
+                                    setDetailParamDialogProcess={setDetailParamDialogProcess}
+                                    executeDetailProcessImpl={executeDetailProcessImpl}
+                                    detailProcessDeps={detailProcessDeps}
+                                    tMenu={tMenu}
+                                    deletingChildren={deletingChildren}
+                                    setDeletingChildren={setDeletingChildren}
+                                    confirmDelete={confirmDelete}
+                                    apiBaseUrl={apiBaseUrl}
+                                    token={token}
+                                    hook={hook}
+                                    selectedLine={selectedLine}
+                                    setSelectedLine={setSelectedLine}
+                                    setSelectedChildRows={setSelectedChildRows}
+                                    data-testid="LinesBulkActionBar__7c75ad"
+                                  />
+                                )}
+                                <DetailTable
+                                  ref={inlineLinesRef}
+                                  data={enrichedChildren}
+                                  entity={detailEntity}
+                                  token={token}
+                                  apiBaseUrl={apiBaseUrl}
+                                  linesLayout={linesLayout}
+                                  labelOverrides={labelOverrides}
+                                  isDocumentReadOnly={isDocumentReadOnly}
+                                  onRowClick={buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine)}
+                                  selectedRowId={selectedLine?.id}
+                                  onSelectionChange={setSelectedChildRows}
+                                  showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
+                                  selectorContext={selectorContextByEntity[detailEntity]}
+                                  hiddenColumns={lineHiddenColumns}
+                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui })}
+                                  onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
+                                  addRow={{
+                                    ref: primaryAddRowRef,
+                                    active: addingLine,
+                                    fields: allEntryFields,
+                                    resolvedDefaults: hook.childDefaults,
+                                    onAdd: async (lineData) => {
+                                      // Send all values: entry fields + callout-derived values (tax, prices, uOM, etc.).
+                                      // handleAddChild filters out internal keys (_identifier, _aux, CURSOR_FIELD, etc.)
+                                      // Also include hidden entry defaults (e.g., fields with predefined values).
+                                      for (const hiddenField of hiddenEntryDefaults) {
+                                        if (!(hiddenField.key in lineData)) {
+                                          if (hiddenField.fromParent) {
+                                            lineData[hiddenField.key] = _headerData?.[hiddenField.fromParent];
+                                          } else if (hiddenField.fromSibling != null) {
+                                            lineData[hiddenField.key] = hook.children?.[0]?.[hiddenField.fromSibling];
+                                          } else {
+                                            lineData[hiddenField.key] = hiddenField.value;
+                                          }
+                                        }
+                                      }
+                                      // Derive unitPrice = listPrice × (1-discount/100) before POST.
+                                      // For invoice config (priceField='unitPrice') this is a no-op.
+                                      prepareLineForPost(lineData);
+                                      // Recompute gross from the discount field before POST.
+                                      // Needed when the user clears the discount field to '' and
+                                      // presses Enter without blurring: the early-return guard in
+                                      // handleLineFieldChange skips the CLIENT_SIDE_FIELDS block,
+                                      // leaving a stale grossAmount in valuesRef. This guarantees
+                                      // the POST body always reflects the normalized discount (0).
+                                      // Return-order lines have discountField:null — skip for them.
+                                      if (lineConfig.discountField) {
+                                        const grossRecompute = {};
+                                        computeLineGrossAmount(
+                                          lineConfig.discountField,
+                                          lineData[lineConfig.discountField] ?? 0,
+                                          grossRecompute,
+                                          lineData,
+                                        );
+                                        if (grossRecompute.grossAmount != null) lineData.grossAmount = grossRecompute.grossAmount;
+                                        if (grossRecompute[lineConfig.grossField] != null) lineData[lineConfig.grossField] = grossRecompute[lineConfig.grossField];
+                                      }
+                                      setPendingLineValues(null);
+                                      return hook.handleAddChild?.(lineData);
+                                    },
+                                    onCancel: () => { setAddingLine(false); setPendingLineValues(null); },
+                                    catalogs,
+                                    onFieldChange: handleLineFieldChange,
+                                    onValuesChange: setPendingLineValues,
+                                    // Convert the price-list price synchronously, at selection time,
+                                    // instead of letting the raw (org base currency) amount render
+                                    // first and get overwritten once the callout's currency-converted
+                                    // value lands — that gap is what caused the price to visibly
+                                    // flash from e.g. 12 (EUR) to 13.92 (USD).
+                                    convertOptimisticPrice: (rawPrice) => {
+                                      const conversion = activeCurrencyConversionRef.current;
+                                      if (!conversion) return rawPrice;
+                                      const { rate } = conversion;
+                                      const n = parseFloat(String(rawPrice ?? 0));
+                                      if (Number.isNaN(n) || n <= 0 || rate === 1) return rawPrice;
+                                      return parseFloat((n * rate).toFixed(2));
+                                    },
+                                  }}
+                                  data-testid="DetailTable__fa3275" />
 
-                      {hook.editing && !isDocumentReadOnly && (allEntryFields.length > 0 || DetailExtraActions) && canAddLines && (
-                        <div
-                          ref={addLineWrapperRef}
-                          className={linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-white z-10' : 'relative'}
-                          style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)', padding: linesLayout === 'inlineEditable' ? 8 : '10px 16px' }}
-                        >
-                          {allEntryFields.length > 0 && (
-                            // alignSelf:flex-start keeps this span from being stretched by
-                            // the flex-column parent — otherwise data-inline-add-portal would
-                            // cover the whole 1840px bar and the outside-click save would never fire.
-                            <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
-                              <AddLineButton
-                                onClick={handleAddLineClick}
-                                label={ui('addLine')}
-                                menuActions={getLineMenuActions
-                                  ? getLineMenuActions({ data, importRef: extraActionsRef }).map(a => ({
-                                      ...a,
-                                      label: typeof a.label === 'string' ? (ui(a.label) || a.label) : a.label,
-                                    }))
-                                  : undefined}
-                              />
-                            </span>
-                          )}
-                          {DetailExtraActions && (
-                            <DetailExtraActions
-                              ref={getLineMenuActions ? extraActionsRef : undefined}
-                              hideTrigger={!!getLineMenuActions}
-                              data={data}
-                              recordId={data?.id || recordId}
-                              token={token}
-                              apiBaseUrl={apiBaseUrl}
-                              onRefresh={() => {
-                                hook.fetchChildren?.(data?.id || recordId);
-                                hook.fetchById?.(data?.id || recordId);
-                              }}
-                              onSave={handleImportClick}
-                              forceOpen={forceOpenImport}
-                              onForceOpenHandled={() => setForceOpenImport(false)}
-                            />
-                          )}
-                          {/* Selection toolbar — portaled to document.body so the
+                                {/* Inline edit form for selected child row (when no DetailForm) */}
+                                {!DetailForm && editingChild && editableChildFields.length > 0 && (
+                                  <div className="mt-3 p-4 border rounded-lg bg-muted/20">
+                                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-3">
+                                      {editableChildFields.map(f => (
+                                        <div key={f.key} className="flex flex-col gap-1">
+                                          <label className="text-xs font-medium text-muted-foreground">{f.label || f.key}</label>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            value={editingChild[f.key] ?? ''}
+                                            onChange={e => setEditingChild(prev => ({ ...prev, [f.key]: e.target.value }))}
+                                            className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        disabled={savingChild}
+                                        onClick={async () => {
+                                          setSavingChild(true);
+                                          try {
+                                            const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', editingChild.id)
+                                              || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
+                                            const fieldValues = {};
+                                            for (const f of editableChildFields) {
+                                              fieldValues[f.column] = editingChild[f.key];
+                                            }
+                                            const res = await fetch(childUrl, {
+                                              method: 'PATCH',
+                                              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              body: JSON.stringify({ fieldValues }),
+                                            });
+                                            if (res.ok) {
+                                              hook.handleUpdateChild(editingChild.id, editableChildFields.reduce((acc, f) => ({ ...acc, [f.key]: editingChild[f.key] }), {}));
+                                              setEditingChild(null);
+                                            }
+                                          } finally { setSavingChild(false); }
+                                        }}
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                      >
+                                        {getChildSaveButtonLabel(savingChild, ui)}
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingChild(null)}
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
+                                      >
+                                        {ui('cancel')}
+                                      </button>
+                                      <button
+                                        disabled={savingChild}
+                                        onClick={async () => {
+                                          if (!(await confirmDelete())) return;
+                                          setSavingChild(true);
+                                          try {
+                                            const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', editingChild.id)
+                                              || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
+                                            const res = await fetch(childUrl, {
+                                              method: 'DELETE',
+                                              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                            });
+                                            if (res.ok) { hook.handleDeleteChild(editingChild.id); setEditingChild(null); }
+                                          } finally { setSavingChild(false); }
+                                        }}
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
+                                      >
+                                        {ui('delete')}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, DetailExtraActions, canAddLines) && (
+                                  <div
+                                    ref={addLineWrapperRef}
+                                    className={getAddLineWrapperClassName(linesLayout)}
+                                    style={getAddLineWrapperStyle(linesLayout)}
+                                  >
+                                    {allEntryFields.length > 0 && (
+                                      // alignSelf:flex-start keeps this span from being stretched by
+                                      // the flex-column parent — otherwise data-inline-add-portal would
+                                      // cover the whole 1840px bar and the outside-click save would never fire.
+                                      (<span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
+                                        <AddLineButton
+                                          onClick={handleAddLineClick}
+                                          label={ui('addLine')}
+                                          menuActions={getAddLineMenuActions(getLineMenuActions, data, extraActionsRef, ui)}
+                                          data-testid="AddLineButton__fa3275" />
+                                      </span>)
+                                    )}
+                                    {DetailExtraActions && (
+                                      <DetailExtraActions
+                                        ref={getLineMenuActionsRef(getLineMenuActions, extraActionsRef)}
+                                        hideTrigger={!!getLineMenuActions}
+                                        data={data}
+                                        recordId={data?.id || recordId}
+                                        token={token}
+                                        apiBaseUrl={apiBaseUrl}
+                                        onRefresh={() => {
+                                          hook.fetchChildren?.(data?.id || recordId);
+                                          hook.fetchById?.(data?.id || recordId);
+                                        }}
+                                        onSave={handleImportClick}
+                                        forceOpen={forceOpenImport}
+                                        onForceOpenHandled={() => setForceOpenImport(false)}
+                                        data-testid="DetailExtraActions__fa3275" />
+                                    )}
+                                    {/* Selection toolbar — portaled to document.body so the
                               downward shadow renders OUTSIDE the linesScrollRef's
                               overflow-auto clipping boundary even when scroll is
                               engaged (many rows). Positioned via fixed coords from
                               `barRect`, measured off `addLineWrapperRef`. */}
-                          {linesLayout === 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true) && (
-                            <LinesSelectionBar
-                              visible={selectionBarVisible}
-                              closing={selectionBarClosing}
-                              barRect={barRect}
-                              count={selectedChildRows.length}
-                              selectedLabel={ui('selected', { count: selectedChildRows.length })}
-                              totalLabel={bottomSection?.showLineTotals !== false ? (() => {
-                                const total = selectedChildRows.reduce((acc, row) => {
-                                  const v = parseFloat(String(row?.[lineConfig.grossField] ?? row?.lineGrossAmount ?? 0));
-                                  return acc + (Number.isFinite(v) ? v : 0);
-                                }, 0);
-                                const formatted = total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                const curr = data?.['currency$_identifier'] || '';
-                                return curr ? `${formatted} ${curr}` : formatted;
-                              })() : null}
-                              deleting={deletingChildren}
-                              deleteTitle={ui('delete')}
-                              closeTitle={ui('close')}
-                              onDelete={async () => {
-                                if (!(await confirmDelete())) return;
-                                setDeletingChildren(true);
-                                try {
-                                  const results = await Promise.allSettled(
-                                    selectedChildRows.map(row => {
-                                      const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-                                        || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-                                      return fetch(childUrl, {
-                                        method: 'DELETE',
-                                        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                      }).then(res => ({ res, row }));
-                                    })
-                                  );
-                                  let deleted = 0;
-                                  for (const result of results) {
-                                    if (result.status === 'fulfilled' && result.value.res.ok) {
-                                      hook.handleDeleteChild(result.value.row.id);
-                                      if (selectedLine?.id === result.value.row.id) setSelectedLine(null);
-                                      deleted++;
-                                    }
-                                  }
-                                  inlineLinesRef.current?.clearSelection?.();
-                                  setSelectedChildRows([]);
-                                  if (deleted > 0) toast.success(ui('recordsDeleted', { count: deleted }));
-                                  const failed = results.length - deleted;
-                                  if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', { count: failed }));
-                                } catch (err) {
-                                  toast.error(err.message || ui('networkError'));
-                                } finally {
-                                  setDeletingChildren(false);
-                                }
-                              }}
-                              onClose={() => {
-                                inlineLinesRef.current?.clearSelection?.();
-                                setSelectedChildRows([]);
-                              }}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Right sidebar: line detail form. Suppressed in inlineEditable mode —
+                                    {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) && (
+                                      <LinesSelectionBar
+                                        visible={selectionBarVisible}
+                                        closing={selectionBarClosing}
+                                        barRect={barRect}
+                                        count={selectedChildRows.length}
+                                        selectedLabel={ui('selected', { count: selectedChildRows.length })}
+                                        totalLabel={getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lineConfig, data)}
+                                        deleting={deletingChildren}
+                                        deleteTitle={ui('delete')}
+                                        closeTitle={ui('close')}
+                                        onDelete={async () => {
+                                          if (!(await confirmDelete())) return;
+                                          setDeletingChildren(true);
+                                          try {
+                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
+                                            // batchDelete.js); replaces the old two-independent-if
+                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
+                                            // pattern this bar predates.
+                                            const { succeeded, failed } = await deleteSelectedChildRows({
+                                              selectedChildRows, api, detailEntity, apiBaseUrl, token,
+                                            });
+                                            for (const row of succeeded) {
+                                              hook.handleDeleteChild(row.id);
+                                              if (selectedLine?.id === row.id) setSelectedLine(null);
+                                            }
+                                            inlineLinesRef.current?.clearSelection?.();
+                                            setSelectedChildRows([]);
+                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
+                                          } catch (err) {
+                                            toast.error(err.message || ui('networkError'));
+                                          } finally {
+                                            setDeletingChildren(false);
+                                          }
+                                        }}
+                                        onClose={() => {
+                                          inlineLinesRef.current?.clearSelection?.();
+                                          setSelectedChildRows([]);
+                                        }}
+                                        data-testid="LinesSelectionBar__fa3275" />
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              {/* Right sidebar: line detail form. Suppressed in inlineEditable mode —
                         edit happens inside the row via InlineLinesPanel. */}
-                    {linesLayout !== 'inlineEditable' && DetailForm && (selectedLine || isClosingLine) && (
-                      <div className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${isClosingLine ? 'sidebar-slide-out' : 'sidebar-slide-in'}`}>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-foreground">{ui('entityDetail', { label: tMenu(detailLabel || 'Line') })}</span>
-                          <button
-                            onClick={closeLine}
-                            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        <DetailForm
-                          data={lineEdits ?? selectedLine}
-                          readOnly={!hook.editing || isProcessed}
-                          onChange={(key, val, column) => {
-                            setLineEdits(prev => ({ ...(prev ?? selectedLine), [key]: val }));
-                            if (column) setLineEditColumns(prev => ({ ...prev, [key]: column }));
-                            // Batch all synchronous onChange calls from a single product
-                            // selection (product, product$_identifier, unitPrice/grossUnitPrice)
-                            // into ONE handleLineFieldChange with a complete snapshot.
-                            // This mirrors how DataTable builds its snapshot before the callout.
-                            if (!sidebarCalloutBatchRef.current) {
-                              sidebarCalloutBatchRef.current = {
-                                base: lineEdits ?? selectedLine ?? {},
-                                changes: {},
-                                primaryField: key,
-                                primaryVal: val,
-                              };
-                            }
-                            sidebarCalloutBatchRef.current.changes[key] = val;
-                            clearTimeout(sidebarCalloutTimerRef.current);
-                            sidebarCalloutTimerRef.current = setTimeout(() => {
-                              const batch = sidebarCalloutBatchRef.current;
-                              sidebarCalloutBatchRef.current = null;
-                              if (!batch) return;
-                              const rowSnapshot = { ...batch.base, ...batch.changes };
-                              handleLineFieldChange(
-                                batch.primaryField, batch.primaryVal,
-                                rowSnapshot,
-                                (updates) => setLineEdits(prev => ({ ...(prev ?? selectedLine), ...updates })),
-                              );
-                            }, 0);
-                          }}
-                                entity={detailEntity}
-                                catalogs={catalogs}
+                              {shouldShowDetailFormSidebar(linesLayout, DetailForm, selectedLine, isClosingLine) && (
+                                <div className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${(getSidebarSlideClassName(isClosingLine))}`}>
+                                  <div className="flex items-center justify-between mb-3">
+                                    <span className="text-sm font-medium text-foreground">{ui('entityDetail', { label: tMenu(detailLabel || 'Line') })}</span>
+                                    <button
+                                      onClick={closeLine}
+                                      className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                      <X className="h-3.5 w-3.5" data-testid="X__fa3275" />
+                                    </button>
+                                  </div>
+                                  <DetailForm
+                                    data={lineEdits ?? selectedLine}
+                                    readOnly={!hook.editing || isProcessed}
+                                    onChange={(key, val, column) => {
+                                      setLineEdits(prev => ({ ...(prev ?? selectedLine), [key]: val }));
+                                      if (column) setLineEditColumns(prev => ({ ...prev, [key]: column }));
+                                      // Batch all synchronous onChange calls from a single product
+                                      // selection (product, product$_identifier, unitPrice/grossUnitPrice)
+                                      // into ONE handleLineFieldChange with a complete snapshot.
+                                      // This mirrors how DataTable builds its snapshot before the callout.
+                                      if (!sidebarCalloutBatchRef.current) {
+                                        sidebarCalloutBatchRef.current = {
+                                          base: lineEdits ?? selectedLine ?? {},
+                                          changes: {},
+                                          primaryField: key,
+                                          primaryVal: val,
+                                        };
+                                      }
+                                      sidebarCalloutBatchRef.current.changes[key] = val;
+                                      clearTimeout(sidebarCalloutTimerRef.current);
+                                      sidebarCalloutTimerRef.current = setTimeout(() => {
+                                        const batch = sidebarCalloutBatchRef.current;
+                                        sidebarCalloutBatchRef.current = null;
+                                        if (!batch) return;
+                                        const rowSnapshot = { ...batch.base, ...batch.changes };
+                                        handleLineFieldChange(
+                                          batch.primaryField, batch.primaryVal,
+                                          rowSnapshot,
+                                          (updates) => setLineEdits(prev => ({ ...(prev ?? selectedLine), ...updates })),
+                                        );
+                                      }, 0);
+                                    }}
+                                    entity={detailEntity}
+                                    catalogs={catalogs}
+                                    token={token}
+                                    apiBaseUrl={apiBaseUrl}
+                                    selectorContext={selectorContextByEntity[detailEntity]}
+                                    labelOverrides={labelOverrides}
+                                    // ETP-4529 — only `visibility` is forwarded, and only for the
+                                    // config-only dimension macro keys: lineDisplayLogic is evaluated
+                                    // against the header (representative context), not the actual
+                                    // selected line, so any OTHER key's visibility (e.g. product,
+                                    // listPrice, grossAmount) can resolve to false noise here that
+                                    // doesn't reflect this line's real state. `readOnly` stays {} so
+                                    // each field's own readOnlyLogic (evaluated against the actual line)
+                                    // keeps controlling per-row read-only state.
+                                    // ETP-4610 — trustedDimensionKeys (not the bare global
+                                    // DIMENSION_MACRO_KEYS) so this stays consistent with
+                                    // lineHiddenColumns above for windows that widen the trusted
+                                    // set via `dimensionsPanelFieldKeys`.
+                                    displayLogic={{
+                                      readOnly: {},
+                                      visibility: Object.fromEntries(
+                                        Object.entries(lineDisplayLogic?.visibility ?? {})
+                                          .filter(([key]) => trustedDimensionKeys.has(key))
+                                      ),
+                                    }}
+                                    data-testid="DetailForm__fa3275" />
+                                  {shouldShowLineActionButtons(hook, lineEdits, selectedLine) && (
+                                    <div className="flex gap-2 mt-4">
+                                      {lineEdits && !isDocumentReadOnly && (
+                                        <>
+                                          <button
+                                            disabled={savingLine}
+                                            onClick={async () => {
+                                              setSavingLine(true);
+                                              try {
+                                                const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine.id)
+                                                  || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
+                                                // Derive unitPrice = listPrice × (1-discount/100) before PATCH.
+                                                // Merge with selectedLine so listPrice/discount are always available.
+                                                const patchData = { ...(selectedLine ?? {}), ...lineEdits };
+                                                prepareLineForPost(patchData);
+                                                const patchEdits = { ...lineEdits };
+                                                if (patchData.unitPrice !== undefined) patchEdits.unitPrice = patchData.unitPrice;
+                                                const fieldValues = {};
+                                                normalizePatchFieldValues(patchEdits, fieldValues);
+                                                const res = await fetch(childUrl, {
+                                                  method: 'PATCH',
+                                                  headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                  body: JSON.stringify(fieldValues),
+                                                });
+                                                if (res.ok) {
+                                                  setLineEdits(null);
+                                                  setLineEditColumns({});
+                                                  toast.success('Record saved');
+                                                  // Always refresh from persisted record — backend may recompute
+                                                  // derived fields (lineNetAmount, discounts) on save.
+                                                  try {
+                                                    const freshRes = await fetch(childUrl, {
+                                                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                    });
+                                                    if (freshRes.ok) {
+                                                      const freshJson = await freshRes.json();
+                                                      const freshLine = freshJson?.response?.data?.[0] ?? freshJson;
+                                                      if (freshLine?.id) {
+                                                        hook.handleUpdateChild(selectedLine.id, freshLine);
+                                                        setSelectedLine(prev => ({ ...prev, ...freshLine }));
+                                                      }
+                                                    } else {
+                                                      hook.handleUpdateChild(selectedLine.id, fieldValues);
+                                                      setSelectedLine(prev => ({ ...prev, ...fieldValues }));
+                                                    }
+                                                  } catch (_) {
+                                                    hook.handleUpdateChild(selectedLine.id, fieldValues);
+                                                    setSelectedLine(prev => ({ ...prev, ...fieldValues }));
+                                                  }
+                                                } else {
+                                                  toast.error(await extractErrorMessage(res));
+                                                }
+                                              } catch (err) {
+                                                toast.error(err.message || 'Network error');
+                                              } finally { setSavingLine(false); }
+                                            }}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                          >
+                                            {getSaveButtonLabel(savingLine, ui)}
+                                          </button>
+                                          <button
+                                            onClick={() => setLineEdits(null)}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
+                                          >
+                                            {ui('discard')}
+                                          </button>
+                                        </>
+                                      )}
+                                      {canDeleteSelectedLine(api, detailEntity, selectedLine, isDocumentReadOnly) && (
+                                        <button
+                                          disabled={savingLine}
+                                          onClick={async () => {
+                                            if (!(await confirmDelete())) return;
+                                            setSavingLine(true);
+                                            try {
+                                              const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine.id)
+                                                || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
+                                              const res = await fetch(childUrl, {
+                                                method: 'DELETE',
+                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              });
+                                              if (res.ok) {
+                                                hook.handleDeleteChild(selectedLine.id);
+                                                toast.success('Record deleted');
+                                                closeLine();
+                                              } else {
+                                                toast.error(await extractErrorMessage(res));
+                                              }
+                                            } catch (err) {
+                                              toast.error(err.message || 'Network error');
+                                            } finally { setSavingLine(false); }
+                                          }}
+                                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
+                                        >
+                                          <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
+                                          {ui('delete')}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Tab content: CustomLines (replaces standard lines table) */}
+                        {tabs[activeTab]?.key === 'customLines' && CustomLines && (
+                          <div className={getCustomLinesTabClassName(embedded)}>
+                            <CustomLines
+                              recordId={data?.id || recordId}
+                              data={data}
+                              status={data?.[statusField]}
+                              token={token}
+                              apiBaseUrl={apiBaseUrl}
+                              api={api}
+                              editing={hook.editing}
+                              catalogs={catalogs}
+                              entity={detailEntity}
+                              onCountChange={(n) => setCustomLinesCount(n)}
+                              onRefresh={() => { hook.fetchChildren?.(data?.id || recordId); hook.fetchById?.(data?.id || recordId); }}
+                              isNew={isNew}
+                              onSave={async () => {
+                                const saved = await hook.handleSave(data);
+                                if (saved?.id && isNew) {
+                                  hook.primeSaved?.(saved);
+                                  navigate(`/${windowName}/${saved.id}`, { replace: true, state: { openAddLine: true } });
+                                } else {
+                                  reportUnnavigableSave({ saved, isNew, windowName, ui });
+                                }
+                                return saved;
+                              }}
+                              data-testid="CustomLines__fa3275" />
+                          </div>
+                        )}
+
+                        {/* Tab content: secondary child entity tabs (or form-only tabs) */}
+                        {secondaryTabs.map((st, stIdx) => {
+                          const isActiveTab = tabs[activeTab]?.key === st.key;
+                          // Panel tabs are always mounted so their onCount fires eagerly (counts appear without clicking).
+                          // Non-Panel tabs stay lazy to avoid unnecessary data fetches.
+                          if (!isActiveTab && !st.Panel) return false;
+                          const secondaryLineHandlers = buildSecondaryLineHandlers({
+                            st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
+                            extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
+                            selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
+                            setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
+                            setSecondaryLineEdits, setSecondaryLineEditColumns, setSecondaryDeleting,
+                            setSecondarySelectedRows,
+                          });
+                          return (
+                          <div key={st.key} style={!isActiveTab ? { display: 'none' } : undefined} className={getSecondaryTabContentClassName(secondaryTabContentPaddingT, embedded)}>
+                            {(() => {
+                              if (st.isFormTab) return (
+                              <SecondaryFormTab data={data} hook={hook} onChange={(key, val, column) => {
+                                setSecondaryLineEdits(prev => ({...(prev ?? {}), [key]: val}));
+                                if (column) setSecondaryLineEditColumns(prev => ({...prev, [key]: column}));
+                              }} st={st} catalogs={catalogs} token={token} apiBaseUrl={apiBaseUrl}
+                                                selectorContextByEntity={selectorContextByEntity}
+                                                labelOverrides={labelOverrides}
+                                                data-testid="SecondaryFormTab__fa3275" />
+                            );
+                              if (st.Panel) return (
+                              <SecondaryPanelTab st={st} data={data} token={token} apiBaseUrl={apiBaseUrl}
+                                                 onCount={(n) => setPanelCounts(prev => ({...prev, [st.key]: n}))}
+                                                 data-testid="SecondaryPanelTab__fa3275" />
+                            );
+                              return (
+                              <SecondaryTableTab
+                                st={st}
+                                stIdx={stIdx}
+                                linesLayout={linesLayout}
+                                secondaryInlineLinesRef={getSecondaryInlineLinesRef}
+                                secondaryHooks={secondaryHooks}
                                 token={token}
                                 apiBaseUrl={apiBaseUrl}
-                                selectorContext={selectorContextByEntity[detailEntity]}
+                                selectorContextByEntity={selectorContextByEntity}
+                                catalogs={catalogs}
+                                api={api}
+                                crud={api?.crud}
+                                ui={ui}
+                                hook={hook}
                                 labelOverrides={labelOverrides}
-                              />
-                        {hook.editing && (lineEdits || selectedLine?.id) && (
-                          <div className="flex gap-2 mt-4">
-                            {lineEdits && !isDocumentReadOnly && (
-                              <>
-                                <button
-                                  disabled={savingLine}
-                                  onClick={async () => {
-                                    setSavingLine(true);
-                                    try {
-                                      const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine.id)
-                                        || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
-                                      // Derive unitPrice = listPrice × (1-discount/100) before PATCH.
-                                      // Merge with selectedLine so listPrice/discount are always available.
-                                      const patchData = { ...(selectedLine ?? {}), ...lineEdits };
-                                      prepareLineForPost(patchData);
-                                      const patchEdits = { ...lineEdits };
-                                      if (patchData.unitPrice !== undefined) patchEdits.unitPrice = patchData.unitPrice;
-                                      const fieldValues = {};
-                                      for (const [k, v] of Object.entries(patchEdits)) {
-                                        if (k.endsWith('$_identifier')) continue;
-                                        // NEO Headless PATCH expects camelCase API keys, not DB column names.
-                                        // Always use k (the API key) as the field name.
-                                        // Convert numeric strings to numbers for BigDecimal compatibility.
-                                        // Only strip when the value is already in standard format (no commas).
-                                        // Comma removal is skipped to avoid locale corruption (e.g. Spanish "10,50" = 10.5).
-                                        if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
-                                          fieldValues[k] = parseFloat(v);
-                                        } else {
-                                          fieldValues[k] = v;
-                                        }
-                                      }
-                                      const res = await fetch(childUrl, {
-                                        method: 'PATCH',
-                                        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                        body: JSON.stringify(fieldValues),
-                                      });
-                                      if (res.ok) {
-                                        setLineEdits(null);
-                                        setLineEditColumns({});
-                                        toast.success('Record saved');
-                                        // Always refresh from persisted record — backend may recompute
-                                        // derived fields (lineNetAmount, discounts) on save.
-                                        try {
-                                          const freshRes = await fetch(childUrl, {
-                                            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                          });
-                                          if (freshRes.ok) {
-                                            const freshJson = await freshRes.json();
-                                            const freshLine = freshJson?.response?.data?.[0] ?? freshJson;
-                                            if (freshLine?.id) {
-                                              hook.handleUpdateChild(selectedLine.id, freshLine);
-                                              setSelectedLine(prev => ({ ...prev, ...freshLine }));
-                                            }
-                                          } else {
-                                            hook.handleUpdateChild(selectedLine.id, fieldValues);
-                                            setSelectedLine(prev => ({ ...prev, ...fieldValues }));
-                                          }
-                                        } catch (_) {
-                                          hook.handleUpdateChild(selectedLine.id, fieldValues);
-                                          setSelectedLine(prev => ({ ...prev, ...fieldValues }));
-                                        }
-                                      } else {
-                                        toast.error(await extractErrorMessage(res));
-                                      }
-                                    } catch (err) {
-                                      toast.error(err.message || 'Network error');
-                                    } finally { setSavingLine(false); }
-                                  }}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                                >
-                                  {savingLine ? ui('loading') : ui('save')}
-                                </button>
-                                <button
-                                  onClick={() => setLineEdits(null)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
-                                >
-                                  {ui('discard')}
-                                </button>
-                              </>
-                            )}
-                            {(api?.crud?.[detailEntity]?.delete ?? true) && selectedLine?.id && !isDocumentReadOnly && (
-                              <button
-                                disabled={savingLine}
-                                onClick={async () => {
-                                  if (!(await confirmDelete())) return;
-                                  setSavingLine(true);
-                                  try {
-                                    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine.id)
-                                      || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
-                                    const res = await fetch(childUrl, {
-                                      method: 'DELETE',
-                                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                    });
-                                    if (res.ok) {
-                                      hook.handleDeleteChild(selectedLine.id);
-                                      toast.success('Record deleted');
-                                      closeLine();
-                                    } else {
-                                      toast.error(await extractErrorMessage(res));
-                                    }
-                                  } catch (err) {
-                                    toast.error(err.message || 'Network error');
-                                  } finally { setSavingLine(false); }
+                                extractErrorMessage={extractErrorMessage}
+                                enableSecondaryRowDelete={enableSecondaryRowDelete}
+                                selectedSecondaryLine={selectedSecondaryLine}
+                                secondaryLineEdits={secondaryLineEdits}
+                                closingSecondaryLine={isClosingSecondaryLine}
+                                addingSecondaryLine={addingSecondaryLine}
+                                savingLine={savingSecondaryLine}
+                                secondaryAddRowRef={getSecondaryAddRowRef(st.key)}
+                                secondaryAddRowSeed={secondaryAddRowSeed}
+                                secondaryChildDefaults={secondaryHooks[stIdx]?.childDefaults}
+                                secondaryAddLineWrapperRef={getSecondaryAddLineWrapperRef(st.key)}
+                                hideChevron={hideAddLineChevron}
+                                secondaryBarVisible={secondaryBarVisible}
+                                secondaryBarClosing={secondaryBarClosing}
+                                secondaryBarRects={secondaryBarRects}
+                                secondaryDeleting={secondaryDeleting}
+                                secondarySelectedRows={secondarySelectedRows}
+                                setSecondarySelectedRows={setSecondarySelectedRows}
+                                setCustomModalState={setCustomModalState}
+                                detailPanelTitle={ui('entityDetail', {label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label)})}
+                                addLineLabel={ui('addEntity', {label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label)})}
+                                selectedLabel={ui('selected', {count: (secondarySelectedRows[st.key] ?? []).length})}
+                                loadingLabel={ui('loading')}
+                                saveLabel={ui('save')}
+                                discardLabel={ui('discard')}
+                                deleteLabel={ui('delete')}
+                                closeTitle={ui('close')}
+                                openCustomModal={(row) => setCustomModalState({key: st.key, rowId: row.id})}
+                                openSecondaryLine={(row) => {
+                                  setSelectedSecondaryLine({...row, _tabKey: st.key});
+                                  setSecondaryLineEdits(null);
                                 }}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                {ui('delete')}
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  )
-                )}
-
-                {/* Tab content: CustomLines (replaces standard lines table) */}
-                {tabs[activeTab]?.key === 'customLines' && CustomLines && (
-                  <div className={`pt-3${embedded ? ' pointer-events-none' : ''}`}>
-                    <CustomLines
-                      recordId={data?.id || recordId}
-                      data={data}
-                      status={data?.[statusField]}
-                      token={token}
-                      apiBaseUrl={apiBaseUrl}
-                      api={api}
-                      editing={hook.editing}
-                      onRefresh={() => hook.fetchChildren?.(data?.id || recordId)}
-                    />
-                  </div>
-                )}
-
-                {/* Tab content: secondary child entity tabs (or form-only tabs) */}
-                {secondaryTabs.map((st, stIdx) => tabs[activeTab]?.key === st.key && (
-                  <div key={st.key} className={`${secondaryTabContentPaddingT} flex flex-col gap-3${embedded ? ' pointer-events-none' : ''}`}>
-                    {st.isFormTab ? (
-                      <div className="flex-1 min-w-0">
-                        <st.Form
-                          data={data ?? {}}
-                          readOnly={!hook.editing}
-                          onChange={(key, val, column) => {
-                            setSecondaryLineEdits(prev => ({ ...(prev ?? {}), [key]: val }));
-                            if (column) setSecondaryLineEditColumns(prev => ({ ...prev, [key]: column }));
-                          }}
-                          entity={st.key}
-                          catalogs={catalogs}
-                          token={token}
-                          apiBaseUrl={apiBaseUrl}
-                          selectorContext={selectorContextByEntity[st.key]}
-                          labelOverrides={labelOverrides}
-                        />
-                      </div>
-                    ) : st.Panel ? (
-                      <div className="flex-1 min-w-0">
-                        <st.Panel
-                          parentId={data?.id}
-                          token={token}
-                          apiBaseUrl={apiBaseUrl}
-                          onCount={(n) => setPanelCounts(prev => ({ ...prev, [st.key]: n }))}
-                        />
-                      </div>
-                    ) : (
-                    <>
-                    <div className="flex items-start gap-4">
-                    <div className="flex-1 min-w-0">
-                      <st.Table
-                        ref={linesLayout === 'inlineEditable' ? getSecondaryInlineLinesRef(st.key) : undefined}
-                        data={secondaryHooks[stIdx]?.children ?? []}
-                        entity={st.key}
-                        token={token}
-                        apiBaseUrl={apiBaseUrl}
-                        selectorContext={selectorContextByEntity[st.key]}
-                        linesLayout={linesLayout}
-                        onRowClick={resolveSecondaryRowClickHandler(st, {
-                          openCustomModal: (row) => setCustomModalState({ key: st.key, rowId: row.id }),
-                          openSecondaryLine: (row) => { setSelectedSecondaryLine({ ...row, _tabKey: st.key }); setSecondaryLineEdits(null); },
-                          linesLayout,
-                        })}
-                        // Pencil action for customAddModal tabs (Dirección) opens
-                        // the popup editor — rows are not editable in place.
-                        onEditRow={st.customAddModal
-                          ? (row) => setCustomModalState({ key: st.key, rowId: row.id })
-                          : undefined}
-                        selectedRowId={selectedSecondaryLine?._tabKey === st.key ? selectedSecondaryLine?.id : undefined}
-                        onSelectionChange={linesLayout === 'inlineEditable'
-                          ? (rows) => setSecondarySelectedRows(prev => ({ ...prev, [st.key]: rows }))
-                          : undefined}
-                        onDeleteRow={enableSecondaryRowDelete && (api?.crud?.[st.key]?.delete ?? true) ? (row) => {
-                          setSecondaryDeleteConfirm({
-                            tabKey: st.key,
-                            tabIndex: stIdx,
-                            id: row.id,
-                          });
-                        } : undefined}
-                        // Inline edit save for secondary-tab rows. Fires when a
-                        // cell loses focus while in edit mode. Optimistic flow:
-                        // we update the local cache FIRST so the Radix Select
-                        // (and read-mode label) reflect the new pick instantly,
-                        // then PATCH the server and roll back if it rejects.
-                        onUpdateRow={!st.customAddModal && linesLayout === 'inlineEditable' ? async (row, fieldKey, value, opts) => {
-                          const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
-                            || `${apiBaseUrl}/${st.key}/${row.id}`;
-                          const includesIdentifier = opts?.identifier !== undefined;
-                          const optimistic = includesIdentifier
-                            ? { [fieldKey]: value, [`${fieldKey}$_identifier`]: opts.identifier }
-                            : { [fieldKey]: value };
-                          // Snapshot the previous values so we can revert on failure.
-                          const previous = includesIdentifier
-                            ? { [fieldKey]: row[fieldKey], [`${fieldKey}$_identifier`]: row[`${fieldKey}$_identifier`] }
-                            : { [fieldKey]: row[fieldKey] };
-                          secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, optimistic);
-                          let res;
-                          try {
-                            res = await fetch(childUrl, {
-                              method: 'PATCH',
-                              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ [fieldKey]: value }),
-                            });
-                          } catch (err) {
-                            secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
-                            toast.error(err?.message || ui('networkError'));
-                            throw err;
-                          }
-                          if (res.ok) {
-                            const updated = await res.json().catch(() => null);
-                            // Server response wins over the optimistic cache when present
-                            // — keeps any callout-driven fields the backend computed.
-                            if (updated) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, updated);
-                          } else {
-                            secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
-                            const msg = await extractErrorMessage(res);
-                            toast.error(msg || ui('networkError'));
-                            throw new Error(msg || 'PATCH failed');
-                          }
-                        } : undefined}
-                        addRow={st.addLineFields?.entry?.length > 0 ? {
-                          ref: getSecondaryAddRowRef(st.key),
-                          active: addingSecondaryLine[st.key] ?? false,
-                          fields: st.addLineFields.entry,
-                          onAdd: async (lineData) => {
-                            const entryKeys = new Set(st.addLineFields.entry.map(f => f.key));
-                            const filtered = {};
-                            for (const [k, v] of Object.entries(lineData)) {
-                              if (entryKeys.has(k)) filtered[k] = v;
-                            }
-                            const result = await secondaryHooks[stIdx]?.handleAddChild?.(filtered);
-                            if (result) setAddingSecondaryLine(prev => ({ ...prev, [st.key]: false }));
-                            return result;
-                          },
-                          onCancel: () => setAddingSecondaryLine(prev => ({ ...prev, [st.key]: false })),
-                          catalogs,
-                        } : undefined}
-                      />
-                    </div>
-                    {st.Form && !st.Panel && (selectedSecondaryLine?._tabKey === st.key || isClosingSecondaryLine) && (
-                      <div className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${isClosingSecondaryLine ? 'sidebar-slide-out' : 'sidebar-slide-in'}`}>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-foreground">{ui('entityDetail', { label: tMenu(st.label) })}</span>
-                          <button
-                            onClick={closeSecondaryLine}
-                            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        <st.Form
-                          data={secondaryLineEdits ?? selectedSecondaryLine}
-                          readOnly={!hook.editing}
-                          onChange={(key, val, column) => {
-                            setSecondaryLineEdits(prev => ({ ...(prev ?? selectedSecondaryLine), [key]: val }));
-                            if (column) setSecondaryLineEditColumns(prev => ({ ...prev, [key]: column }));
-                          }}
-                          entity={st.key}
-                          catalogs={catalogs}
-                          token={token}
-                          apiBaseUrl={apiBaseUrl}
-                          selectorContext={selectorContextByEntity[st.key]}
-                          excludeFields={st.key === 'contact' ? ['active'] : []}
-                          labelOverrides={labelOverrides}
-                        />
-                        {hook.editing && (secondaryLineEdits || selectedSecondaryLine?.id) && (
-                          <div className="flex gap-2 mt-4">
-                            {secondaryLineEdits && (
-                              <>
-                                <button
-                                  disabled={savingSecondaryLine}
-                                  onClick={async () => {
-                                    setSavingSecondaryLine(true);
-                                    try {
-                                      const secUrl = `${apiBaseUrl}/${st.key}/${selectedSecondaryLine.id}`;
-                                      const fieldValues = {};
-                                      for (const [k, v] of Object.entries(secondaryLineEdits)) {
-                                        if (k.endsWith('$_identifier')) continue;
-                                        // NEO Headless PATCH expects camelCase API keys, not DB column names.
-                                        // Always use k (the API key) as the field name.
-                                        // Convert numeric strings to numbers for BigDecimal compatibility.
-                                        // Only strip when the value is already in standard format (no commas).
-                                        // Comma removal is skipped to avoid locale corruption (e.g. Spanish "10,50" = 10.5).
-                                        if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
-                                          fieldValues[k] = parseFloat(v);
-                                        } else {
-                                          fieldValues[k] = v;
-                                        }
-                                      }
-                                      const res = await fetch(secUrl, {
-                                        method: 'PATCH',
-                                        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                        body: JSON.stringify(fieldValues),
-                                      });
-                                      if (res.ok) {
-                                        setSelectedSecondaryLine(prev => ({ ...prev, ...secondaryLineEdits }));
-                                        setSecondaryLineEdits(null);
-                                        setSecondaryLineEditColumns({});
-                                        toast.success('Record saved');
-                                      } else {
-                                        toast.error(await extractErrorMessage(res));
-                                      }
-                                    } catch (err) {
-                                      toast.error(err.message || 'Network error');
-                                    } finally { setSavingSecondaryLine(false); }
-                                  }}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                                >
-                                  {savingSecondaryLine ? ui('loading') : ui('save')}
-                                </button>
-                                <button
-                                  onClick={() => setSecondaryLineEdits(null)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
-                                >
-                                  {ui('discard')}
-                                </button>
-                              </>
-                            )}
-                            {(api?.crud?.[st.key]?.delete ?? true) && selectedSecondaryLine?.id && (
-                              <button
-                                disabled={savingSecondaryLine}
-                                onClick={() => setSecondaryDeleteConfirm({
-                                  tabKey: st.key,
-                                  tabIndex: stIdx,
-                                  id: selectedSecondaryLine.id,
+                                onDeleteRow={(row) => setSecondaryDeleteConfirm({tabKey: st.key, tabIndex: stIdx, id: row.id})}
+                                onCloseDetailPanel={closeSecondaryLine}
+                                onChange={(key, val, column) => {
+                                  setSecondaryLineEdits(prev => ({...(prev ?? selectedSecondaryLine), [key]: val}));
+                                  if (column) setSecondaryLineEditColumns(prev => ({...prev, [key]: column}));
+                                }}
+                                onAdd={secondaryLineHandlers.onAdd}
+                                onCancel={() => setAddingSecondaryLine(prev => ({...prev, [st.key]: false}))}
+                                onAddLineClick={() => runAddLineAction(st, {
+                                  handleCustomModalAddClick,
+                                  handleSecondaryAddLineToggle,
                                 })}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                {ui('delete')}
-                              </button>
-                            )}
+                                onSaveLine={secondaryLineHandlers.onSaveLine}
+                                onDiscardLine={() => setSecondaryLineEdits(null)}
+                                onDeleteLine={() => setSecondaryDeleteConfirm({tabKey: st.key, tabIndex: stIdx, id: selectedSecondaryLine.id})}
+                                onDelete={secondaryLineHandlers.onDelete}
+                                onClose={() => {
+                                  secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
+                                  setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
+                                }}
+                                data-testid="SecondaryTableTab__fa3275" />
+                            );
+                            })()}
+                          </div>
+                          );
+                        })}
+
+                        {/* Tab content: Others (secondary header fields) */}
+                        {tabs[activeTab]?.key === 'others' && (
+                          <div className={getOthersTabClassName(embedded)}>
+                            <Form
+                              entity={entity}
+                              windowName={windowName}
+                              data={data}
+                              onChange={handleChangeWithCallout}
+                              catalogs={catalogs}
+                              layout="horizontal"
+                              section="other"
+                              displayLogic={displayLogic}
+                              api={api}
+                              token={token}
+                              apiBaseUrl={apiBaseUrl}
+                              selectorContext={selectorContextByEntity[entity]}
+                              labelOverrides={labelOverrides}
+                              fieldErrors={hook.fieldErrors}
+                              data-testid="Form__fa3275" />
                           </div>
                         )}
-                      </div>
-                    )}
-                    </div>
-                    {(st.addLineFields?.entry?.length > 0 || st.customAddModal) && hook.editing && (
-                      // Wrapper measured by the secondary selection bar — its
-                      // `position: fixed` portal overlays exactly this region.
-                      <div ref={getSecondaryAddLineWrapperRef(st.key)} className="relative">
-                        <span data-inline-add-portal="true">
-                          <AddLineButton
-                            onClick={() => {
-                              if (st.customAddModal) {
-                                void handleCustomModalAddClick(st.key);
-                              } else {
-                                void handleSecondaryAddLineToggle(st.key);
-                              }
-                            }}
-                            label={ui('addEntity', { label: tMenu(st.label) })}
-                            hideChevron={hideAddLineChevron}
-                          />
-                        </span>
-                        {linesLayout === 'inlineEditable' && (api?.crud?.[st.key]?.delete ?? true) && (
-                          <LinesSelectionBar
-                            visible={secondaryBarVisible[st.key] ?? false}
-                            closing={secondaryBarClosing[st.key] ?? false}
-                            barRect={secondaryBarRects[st.key]}
-                            count={(secondarySelectedRows[st.key] ?? []).length}
-                            selectedLabel={ui('selected', { count: (secondarySelectedRows[st.key] ?? []).length })}
-                            totalLabel={null}
-                            deleting={secondaryDeleting[st.key] ?? false}
-                            deleteTitle={ui('delete')}
-                            closeTitle={ui('close')}
-                            compact
-                            onDelete={async () => {
-                              if (!(await confirmDelete())) return;
-                              setSecondaryDeleting(prev => ({ ...prev, [st.key]: true }));
-                              const rows = secondarySelectedRows[st.key] ?? [];
-                              try {
-                                const results = await Promise.allSettled(
-                                  rows.map(row => {
-                                    const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
-                                      || `${apiBaseUrl}/${st.key}/${row.id}`;
-                                    return fetch(childUrl, {
-                                      method: 'DELETE',
-                                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                    }).then(res => ({ res, row }));
-                                  })
-                                );
-                                let deleted = 0;
-                                for (const result of results) {
-                                  if (result.status === 'fulfilled' && result.value.res.ok) {
-                                    secondaryHooks[stIdx]?.handleDeleteChild?.(result.value.row.id);
-                                    if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === result.value.row.id) {
-                                      setSelectedSecondaryLine(null);
-                                    }
-                                    deleted++;
-                                  }
-                                }
-                                secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
-                                setSecondarySelectedRows(prev => ({ ...prev, [st.key]: [] }));
-                                if (deleted > 0) toast.success(ui('recordsDeleted', { count: deleted }));
-                                const failed = results.length - deleted;
-                                if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', { count: failed }));
-                              } catch (err) {
-                                toast.error(err.message || ui('networkError'));
-                              } finally {
-                                setSecondaryDeleting(prev => ({ ...prev, [st.key]: false }));
-                              }
-                            }}
-                            onClose={() => {
-                              secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
-                              setSecondarySelectedRows(prev => ({ ...prev, [st.key]: [] }));
-                            }}
-                          />
-                        )}
-                      </div>
-                    )}
-                    </>
-                    )}
-                    </div>
-                ))}
 
-                {/* Tab content: Others (secondary header fields) */}
-                {tabs[activeTab]?.key === 'others' && (
-                  <div className={`pt-5${embedded ? ' pointer-events-none' : ''}`}>
-                    <Form
-                      entity={entity}
-                      data={data}
-                      onChange={handleChangeWithCallout}
-                      catalogs={catalogs}
-                      layout="horizontal"
-                      section="other"
-                      displayLogic={displayLogic}
-                      api={api}
-                      token={token}
-                      apiBaseUrl={apiBaseUrl}
-                      selectorContext={selectorContextByEntity[entity]}
-                      labelOverrides={labelOverrides}
-                      fieldErrors={hook.fieldErrors}
-                    />
-                  </div>
-                )}
-
-                {/* Tab content: custom tabs with placement='tab'. We always mount the
+                        {/* Tab content: custom tabs with placement='tab'. We always mount the
                     component (so it can manage its own internal state and not lose
                     scroll/pagination on tab switches) but hide inactive ones via
                     display:none and pass `isActive` so the component can defer its
                     first fetch until it actually becomes visible. */}
-                {!customTabsAfterBottom && renderCustomTabPanels((ct) => tabs[activeTab]?.key === customTabKey(ct))}
+                        {!customTabsAfterBottom && renderCustomTabPanels((ct) => tabs[activeTab]?.key === customTabKey(ct))}
 
-                </div>
+                      </div>
 
-              </div>
-            )}
+                    </div>
+                  )}
 
-            {/* Hidden probe: detect if Others form has content (outside tabs block so it fires even when tabs is empty) */}
-            {showOthers === null && (
-              <div ref={othersRef} className="hidden">
-                <Form
-                  entity={entity}
-                  data={data}
-                  onChange={() => {}}
-                  catalogs={catalogs}
-                  section="other"
-                />
-              </div>
-            )}
+                  {/* Hidden probe: detect if Others form has content (outside tabs block so it fires even when tabs is empty) */}
+                  {showOthers === null && (
+                    <div ref={othersRef} className="hidden">
+                      <Form
+                        entity={entity}
+                        windowName={windowName}
+                        data={data}
+                        onChange={() => { }}
+                        catalogs={catalogs}
+                        section="other"
+                        data-testid="Form__fa3275" />
+                    </div>
+                  )}
 
-            {/* Simple entity (no child): full form only */}
-            {!DetailTable && !isCustomTabActive && (
-              <>
-                {summary.length > 0 && (
-                  <div className="mt-1">
-                    <SummaryBar fields={summary} data={data} />
-                  </div>
-                )}
-              </>
-            )}
+                  {/* Simple entity (no child): full form only */}
+                  {!DetailTable && !isCustomTabActive && (
+                    <>
+                      {summary.length > 0 && (
+                        <div className="mt-1">
+                          <SummaryBar fields={summary} data={data} data-testid="SummaryBar__fa3275" />
+                        </div>
+                      )}
+                    </>
+                  )}
 
-            {/* Bottom section: hidden when a custom tab (Adjuntos, etc.) is active.
+                  {/* Bottom section: hidden when a custom tab (Adjuntos, etc.) is active.
                 In inlineEditable mode the wrapper is shrink-0 so it stays fixed
                 at the bottom while the lines area scrolls in the middle. */}
-            <div ref={bottomSectionRef} className={linesLayout === 'inlineEditable' ? 'shrink-0' : ''}>
-            {!isCustomTabActive && (bottomSection ? (() => {
-              const BottomComponent = bottomSection;
-              return (
-                <BottomComponent
-                  recordId={data?.id || recordId}
-                  data={data}
-                  token={token}
-                  apiBaseUrl={apiBaseUrl}
-                  api={api}
-                  summary={summary}
-                  notesField={notesField}
-                  onFieldChange={handleChangeWithCallout}
-                  notesFocused={notesFocused}
-                  setNotesFocused={setNotesFocused}
-                  lines={hook.children}
-                  pendingLine={pendingLineValues}
-                  editingLine={lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine}
-                  lineConfig={lineConfig}
-                  totalDiscountPct={Number(data?.etgoTotalDiscount ?? 0)}
-                  onTotalDiscountChange={handleTotalDiscountChange}
-                  onNotesSave={handleNotesSave}
-                />
-              );
-            })() : (
-              <>
-                {/* Totals block: DocumentTotalsPanel with optional discount expansion */}
-                {(() => {
-                  const subtotalField = summary.find(f => f.type === 'amount' && (f.key.toLowerCase().includes('summed') || f.key.toLowerCase().includes('totallines') || f.key.toLowerCase().includes('lineamount')));
-                  const totalField = summary.find(f => f.type === 'amount' && (f.key.toLowerCase().includes('grand') || (f.key.toLowerCase().includes('total') && !f.key.toLowerCase().includes('line'))));
-                  if (!subtotalField && !totalField) return null;
-                  const currency = data['currency$_identifier'];
-                  return (
-                    <DocumentTotalsPanel
-                      lines={hook.children}
-                      pendingLine={pendingLineValues}
-                      editingLine={lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine}
-                      lineConfig={lineConfig}
-                      formatAmount={formatAmount}
-                      currency={currency}
-                      readOnly={isDocumentReadOnly}
-                      totalDiscountPct={resolveTotalDiscountPct(data, hook.children)}
-                      onTotalDiscountChange={handleTotalDiscountChange}
-                    />
-                  );
-                })()}
+                  <div ref={bottomSectionRef} className={getInlineEditableShrinkClassName(linesLayout)}>
+                    {!isCustomTabActive && (bottomSection ? (() => {
+                      const BottomComponent = bottomSection;
+                      return (
+                        <BottomComponent
+                          recordId={data?.id || recordId}
+                          data={data}
+                          token={token}
+                          apiBaseUrl={apiBaseUrl}
+                          api={api}
+                          summary={summary}
+                          notesField={notesField}
+                          onFieldChange={handleChangeWithCallout}
+                          notesFocused={notesFocused}
+                          setNotesFocused={setNotesFocused}
+                          lines={hook.children}
+                          pendingLine={pendingLineValues}
+                          editingLine={balanceFooterEditingLine}
+                          lineConfig={lineConfig}
+                          totalDiscountPct={Number(data?.etgoTotalDiscount ?? 0)}
+                          onTotalDiscountChange={handleTotalDiscountChange}
+                          onNotesSave={handleNotesSave}
+                          docsRefreshSignal={docsRefreshSignal}
+                          data-testid="BottomComponent__fa3275" />
+                      );
+                    })() : (
+                      <>
+                        {/* Totals block: BalanceFooterPanel for double-entry windows, else DocumentTotalsPanel */}
+                        {renderTotalsBlock({
+                          balanceFooter,
+                          children: hook.children,
+                          pendingLine: pendingLineValues,
+                          editingLine: balanceFooterEditingLine,
+                          lineConfig,
+                          formatAmount,
+                          currency: data['currency$_identifier'],
+                          summary,
+                          isDocumentReadOnly,
+                          totalDiscountPct: resolveTotalDiscountPct(data, hook.children),
+                          onTotalDiscountChange: handleTotalDiscountChange,
+                        })}
 
-                {/* After-totals slot (e.g. payment footer) */}
-                {afterTotals && (() => {
-                  const AfterTotalsComponent = afterTotals;
-                  return <AfterTotalsComponent recordId={data?.id || recordId} data={data} token={token} apiBaseUrl={apiBaseUrl} api={api} />;
-                })()}
+                        {/* After-totals slot (e.g. payment footer) */}
+                        {afterTotals && (() => {
+                          const AfterTotalsComponent = afterTotals;
+                          return (
+                            <AfterTotalsComponent
+                              recordId={data?.id || recordId}
+                              data={data}
+                              token={token}
+                              apiBaseUrl={apiBaseUrl}
+                              api={api}
+                              data-testid="AfterTotalsComponent__fa3275" />
+                          );
+                        })()}
 
-                {/* Footer: Related Docs + Notes */}
-                {(footerCustomTabs.length > 0 || !!notesField) && (
-                  <div className="mt-1 bg-muted/20 border-t border-border/40" style={{ borderTopWidth: '0.5px' }}>
-                    {footerCustomTabs.length > 0 && (
-                      <div className={`flex items-start gap-3 px-4 py-2.5 border-b border-border/30${embedded ? ' pointer-events-none' : ''}`} style={{ borderBottomWidth: '0.5px' }}>
-                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-0.5 shrink-0 w-24">{ui('docs')}</span>
-                        <div className="flex-1">
-                          {footerCustomTabs.map(ct => {
-                            const TabComponent = ct.Component;
+                        {/* Footer: Related Docs + Notes */}
+                        {(footerCustomTabs.length > 0 || !!notesField) && (
+                          <div className="mt-1 bg-muted/20 border-t border-border/40" style={{ borderTopWidth: '0.5px' }}>
+                            {footerCustomTabs.length > 0 && (
+                              <div className={getDocsRowClassName(embedded)} style={{ borderBottomWidth: '0.5px' }}>
+                                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-0.5 shrink-0 w-24">{ui('docs')}</span>
+                                <div className="flex-1">
+                                  {footerCustomTabs.map(ct => {
+                                    const TabComponent = ct.Component;
+                                    return (
+                                      <TabComponent
+                                        key={ct.key}
+                                        recordId={data?.id || recordId}
+                                        data={data}
+                                        token={token}
+                                        apiBaseUrl={apiBaseUrl}
+                                        api={api}
+                                        layout="chips"
+                                        docsRefreshSignal={docsRefreshSignal}
+                                        {...(ct.props || {})}
+                                        data-testid="TabComponent__fa3275" />
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {notesField && (
+                              <div className={getNotesRowClassName(embedded)}>
+                                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-1.5 shrink-0 w-24">{ui('notes')}</span>
+                                <div data-testid="notes-textarea" className={`flex-1 flex flex-col border border-border/40 rounded bg-card transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
+                                  {renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui)}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ))}
+
+                    {/* customTabsAfterBottom: custom tabs rendered below the bottomSection */}
+                    {customTabsAfterBottom && tabCustomTabs.length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex items-center border-b border-border/50">
+                          {tabCustomTabs.map((ct, idx) => {
+                            const isActive = activeCustomBelowTab === idx;
                             return (
-                              <TabComponent
-                                key={ct.key}
-                                recordId={data?.id || recordId}
-                                data={data}
-                                token={token}
-                                apiBaseUrl={apiBaseUrl}
-                                api={api}
-                                layout="chips"
-                                {...(ct.props || {})}
-                              />
+                              <TabStripButton
+                                key={customTabKey(ct)}
+                                iconKey={customTabKey(ct)}
+                                label={ct.labelKey ? ui(ct.labelKey) : ct.label}
+                                count={customTabCounts[ct.key]}
+                                isActive={isActive}
+                                onClick={() => setActiveCustomBelowTab(idx)}
+                                tMenu={tMenu}
+                                testId={`tab-${customTabKey(ct)}`}
+                                data-testid="TabStripButton__fa3275" />
                             );
                           })}
                         </div>
-                      </div>
-                    )}
-                    {notesField && (
-                      <div className={`flex items-start gap-3 px-4 py-2.5${embedded ? ' pointer-events-none' : ''}`}>
-                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-1.5 shrink-0 w-24">{ui('notes')}</span>
-                        <div data-testid="notes-textarea" className={`flex-1 flex flex-col border border-border/40 rounded bg-white transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
-                          {notesFocused ? (
-                            <textarea
-                              value={data[notesField] || ''}
-                              onChange={(e) => handleChangeWithCallout(notesField, e.target.value)}
-                              onBlur={() => { handleNotesSave(data[notesField]); setNotesFocused(false); }}
-                              placeholder={ui('description')}
-                              rows={3}
-                              autoFocus
-                              className="w-full text-xs bg-transparent px-2 py-0.5 resize-none focus:outline-none placeholder:text-muted-foreground/40"
-                            />
-                          ) : (
-                            <div
-                              tabIndex={0}
-                              role="textbox"
-                              onClick={() => setNotesFocused(true)}
-                              onFocus={() => setNotesFocused(true)}
-                              className="w-full text-xs px-2 py-0.5 cursor-text min-h-[1.5rem] whitespace-pre-wrap break-words text-foreground/80"
-                            >
-                              {data[notesField] || <span className="text-muted-foreground/40">{ui('description')}</span>}
-                            </div>
-                          )}
+                        <div>
+                          {renderCustomTabPanels((ct, idx) => activeCustomBelowTab === idx)}
                         </div>
                       </div>
                     )}
                   </div>
-                )}
-              </>
-            ))}
-
-            {/* customTabsAfterBottom: custom tabs rendered below the bottomSection */}
-            {customTabsAfterBottom && tabCustomTabs.length > 0 && (
-              <div className="mt-6">
-                <div className="flex items-center border-b border-border/50">
-                  {tabCustomTabs.map((ct, idx) => {
-                    const isActive = activeCustomBelowTab === idx;
-                    return (
-                      <TabStripButton
-                        key={customTabKey(ct)}
-                        iconKey={customTabKey(ct)}
-                        label={ct.labelKey ? ui(ct.labelKey) : ct.label}
-                        count={customTabCounts[ct.key]}
-                        isActive={isActive}
-                        onClick={() => setActiveCustomBelowTab(idx)}
-                        tMenu={tMenu}
-                        testId={`tab-${customTabKey(ct)}`}
-                      />
-                    );
-                  })}
                 </div>
-                <div>
-                  {renderCustomTabPanels((ct, idx) => activeCustomBelowTab === idx)}
-                </div>
+                {sidePanel && <DetailSidePanel {...{ sidePanel, sidePanelStyle, data, recordId, token, apiBaseUrl, api, isNew }} data-testid="DetailSidePanel__7c75ad" />}
               </div>
-            )}
             </div>
-          </div>
-          {sidePanel && (
-            <div
-              className="w-[280px] shrink-0 self-stretch border-l border-gray-200 pl-3 pr-3"
-              style={sidePanelStyle}
-            >
-              {typeof sidePanel === 'function'
-                ? React.createElement(sidePanel, { recordId: data?.id || recordId, data, token, apiBaseUrl, api, isNew })
-                : sidePanel}
-            </div>
+          </div>{/* end content column wrapper */}
+          {sidebarContent && !sidebarAboveTabsOnly && (
+            // empty:hidden collapses this column when the custom sidebar component
+            // renders null (e.g. no stock section for Service-type products, ETP-4606) —
+            // the parent can't know that ahead of render, so detection happens via CSS.
+            (<div className={`${sidebarClassName} empty:hidden`}>
+              {resolveSidebarContent(sidebarContent, data)}
+            </div>)
           )}
-          </div>
-        </div>
-        </div>{/* end content column wrapper */}
-        {sidebarContent && (
-          <div className={sidebarClassName}>
-            {typeof sidebarContent === 'function' ? sidebarContent(data) : sidebarContent}
-          </div>
-        )}
         </div>
       </div>
       <DocumentPrintDrawer
         open={showPrint}
         onClose={() => setShowPrint(false)}
         windowName={windowName}
-        documentIds={recordId ? [recordId] : []}
+        documentIds={getDocumentIds(recordId)}
         token={token}
-      />
-      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{ui('deleteConfirmTitle')}</DialogTitle>
-            <DialogDescription>
+        data-testid="DocumentPrintDrawer__fa3275" />
+      {deleteConfirmModal ? (
+        showDeleteConfirm && (
+          <deleteConfirmModal.Component
+            dir={deleteConfirmModal.dir}
+            action="delete"
+            data={data}
+            onConfirm={confirmHeaderDelete}
+            onClose={() => setShowDeleteConfirm(false)}
+          />
+        )
+      ) : (
+        <Dialog
+          open={showDeleteConfirm}
+          onOpenChange={setShowDeleteConfirm}
+          data-testid="Dialog__fa3275">
+          <DialogContent className="max-w-sm" data-testid="DialogContent__fa3275">
+            <DialogHeader data-testid="DialogHeader__fa3275">
+              <DialogTitle data-testid="DialogTitle__fa3275">{ui('deleteConfirmTitle')}</DialogTitle>
+              <DialogDescription data-testid="DialogDescription__fa3275">
+                {ui('deleteConfirmMessage')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter data-testid="DialogFooter__fa3275">
+              <DialogClose asChild data-testid="DialogClose__fa3275">
+                <Button variant="outline" size="sm" data-testid="Button__fa3275">{ui('cancel')}</Button>
+              </DialogClose>
+              <Button
+                variant="destructive"
+                size="sm"
+                data-testid="action-delete-confirm"
+                onClick={confirmHeaderDelete}
+              >
+                {ui('delete')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      <Dialog
+        open={Boolean(secondaryDeleteConfirm)}
+        onOpenChange={(open) => { if (!open) setSecondaryDeleteConfirm(null); }}
+        data-testid="Dialog__fa3275">
+        <DialogContent className="max-w-sm" data-testid="DialogContent__fa3275">
+          <DialogHeader data-testid="DialogHeader__fa3275">
+            <DialogTitle data-testid="DialogTitle__fa3275">{ui('deleteConfirmTitle')}</DialogTitle>
+            <DialogDescription data-testid="DialogDescription__fa3275">
               {ui('deleteConfirmMessage')}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline" size="sm">{ui('cancel')}</Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              size="sm"
-              data-testid="action-delete-confirm"
-              onClick={async () => {
-                setShowDeleteConfirm(false);
-                await hook.handleDelete();
-                navigate(`/${windowName}`);
-              }}
-            >
-              {ui('delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={Boolean(secondaryDeleteConfirm)} onOpenChange={(open) => { if (!open) setSecondaryDeleteConfirm(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{ui('deleteConfirmTitle')}</DialogTitle>
-            <DialogDescription>
-              {ui('deleteConfirmMessage')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline" size="sm">{ui('cancel')}</Button>
+          <DialogFooter data-testid="DialogFooter__fa3275">
+            <DialogClose asChild data-testid="DialogClose__fa3275">
+              <Button variant="outline" size="sm" data-testid="Button__fa3275">{ui('cancel')}</Button>
             </DialogClose>
             <Button
               variant="destructive"
@@ -3222,7 +4336,7 @@ export function DetailView({
                   setSavingSecondaryLine(false);
                 }
               }}
-            >
+              data-testid="Button__fa3275">
               {ui('delete')}
             </Button>
           </DialogFooter>
@@ -3236,13 +4350,13 @@ export function DetailView({
             setPendingDeleteConfirm(null);
           }
         }}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{ui('deleteConfirmTitle')}</DialogTitle>
-            <DialogDescription>{ui('deleteConfirmMessage')}</DialogDescription>
+        data-testid="Dialog__fa3275">
+        <DialogContent className="max-w-sm" data-testid="DialogContent__fa3275">
+          <DialogHeader data-testid="DialogHeader__fa3275">
+            <DialogTitle data-testid="DialogTitle__fa3275">{ui('deleteConfirmTitle')}</DialogTitle>
+            <DialogDescription data-testid="DialogDescription__fa3275">{ui('deleteConfirmMessage')}</DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter data-testid="DialogFooter__fa3275">
             <Button
               variant="outline"
               size="sm"
@@ -3250,7 +4364,7 @@ export function DetailView({
                 pendingDeleteConfirm?.resolve(false);
                 setPendingDeleteConfirm(null);
               }}
-            >
+              data-testid="Button__fa3275">
               {ui('cancel')}
             </Button>
             <Button
@@ -3260,10 +4374,28 @@ export function DetailView({
                 pendingDeleteConfirm?.resolve(true);
                 setPendingDeleteConfirm(null);
               }}
-            >
+              data-testid="Button__fa3275">
               {ui('delete')}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={showProcessingModal && Boolean(draftMode?.processingModal)}
+        onOpenChange={() => {}}
+        data-testid="Dialog__verifactu-processing">
+        <DialogContent
+          className="max-w-sm [&>button]:hidden"
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          data-testid="DialogContent__verifactu-processing">
+          <div className="py-6 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" data-testid="Loader2__verifactu-processing" />
+            <p className="text-sm font-medium mt-4">
+              {ui(draftMode?.processingModal?.body) || draftMode?.processingModal?.body}
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
       {secondaryTabs.map((st, idx) => {
@@ -3271,21 +4403,61 @@ export function DetailView({
         const CustomModal = st.customAddModal;
         return (
           <CustomModal
-            key={st.key}  
+            key={st.key}
             open={customModalState.key === st.key}
             onClose={() => setCustomModalState({ key: null, rowId: null })}
             onSaved={() => {
               secondaryHooks[idx]?.handleSelect(hook.selected ?? hook.editing);
               setCustomModalState({ key: null, rowId: null });
             }}
+            onParentRefresh={() => {
+              if (parentRecordId) hook.fetchById(parentRecordId);
+            }}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
             bpId={parentRecordId}
             apiBase={apiBaseUrl}
             token={token}
             selectorContext={selectorContextByEntity[st.key] ?? {}}
-          />
+            data-testid="CustomModal__fa3275" />
         );
       })}
     </div>
   );
+}
+
+function populateIdentifierFields(api, result, detailEntity, catalogs) {
+  if (api?.selectors) {
+    for (const key of Object.keys(result)) {
+      if (key.includes('$_identifier')) continue;
+      if (result[key + '$_identifier']) continue;
+      const selConfig = api.selectors.find(s => s.field === key && s.entity === detailEntity);
+      if (!selConfig) continue;
+      const opts = getCatalogOptions(catalogs, detailEntity, selConfig);
+      const match = opts.find(o => o.id === result[key]);
+      if (match) result[key + '$_identifier'] = match.label || match.name || match._identifier || '';
+    }
+  }
+}
+
+function getButtonClass(salesTheme, p, isPrimary) {
+  if (p.style === 'ghost-danger') {
+    return 'bg-card border-[hsl(var(--destructive) / 0.3)] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)]';
+  }
+  if (salesTheme) {
+    if (p.style === 'destructive') {
+      return 'border-status-warning-border bg-status-warning text-status-warning-foreground hover:bg-status-warning';
+    } else {
+      if (isPrimary) {
+        return 'bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium';
+      } else {
+        return 'border-status-success-border bg-status-success text-status-success-foreground hover:bg-status-success';
+      }
+    }
+  } else {
+    if (p.style === 'destructive') {
+      return 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20';
+    } else {
+      return '';
+    }
+  }
 }

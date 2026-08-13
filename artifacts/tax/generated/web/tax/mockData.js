@@ -4,109 +4,304 @@ export const tax = [
   {
     "id": "mock-tax-001",
     "name": "Sample name",
+    "validFrom": "2026-01-15",
     "rate": 99.44,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "VAT 21%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-15"
+    "notTaxable": "VAT 21%",
+    "taxExempt": "VAT 21%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "VAT 21%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-002",
     "name": "Sample name",
+    "validFrom": "2026-01-16",
     "rate": 96.94,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "VAT 10%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-16"
+    "notTaxable": "VAT 10%",
+    "taxExempt": "VAT 10%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "VAT 10%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-003",
     "name": "Sample name",
+    "validFrom": "2026-01-17",
     "rate": 12.48,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "VAT 0%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-17"
+    "notTaxable": "VAT 0%",
+    "taxExempt": "VAT 0%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "VAT 0%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-004",
     "name": "Sample name",
+    "validFrom": "2026-01-18",
     "rate": 96.31,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "Sales Tax 8.5%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-18"
+    "notTaxable": "Sales Tax 8.5%",
+    "taxExempt": "Sales Tax 8.5%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "Sales Tax 8.5%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-005",
     "name": "Sample name",
+    "validFrom": "2026-01-19",
     "rate": 31.27,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "Exempt",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-19"
+    "notTaxable": "Exempt",
+    "taxExempt": "Exempt",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "Exempt",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-006",
     "name": "Sample name",
+    "validFrom": "2026-01-20",
     "rate": 76.52,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "Reduced Rate 5%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-20"
+    "notTaxable": "Reduced Rate 5%",
+    "taxExempt": "Reduced Rate 5%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "Reduced Rate 5%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-007",
     "name": "Sample name",
+    "validFrom": "2026-01-21",
     "rate": 2.66,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "Standard Rate 20%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-21"
+    "notTaxable": "Standard Rate 20%",
+    "taxExempt": "Standard Rate 20%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "Standard Rate 20%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-008",
     "name": "Sample name",
+    "validFrom": "2026-01-22",
     "rate": 10.03,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "VAT 21%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-22"
+    "notTaxable": "VAT 21%",
+    "taxExempt": "VAT 21%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "VAT 21%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-009",
     "name": "Sample name",
+    "validFrom": "2026-01-23",
     "rate": 93.97,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "VAT 10%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-23"
+    "notTaxable": "VAT 10%",
+    "taxExempt": "VAT 10%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "VAT 10%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-010",
     "name": "Sample name",
+    "validFrom": "2026-01-24",
     "rate": 1.1,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "VAT 0%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-24"
+    "notTaxable": "VAT 0%",
+    "taxExempt": "VAT 0%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "VAT 0%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-011",
     "name": "Sample name",
+    "validFrom": "2026-01-25",
     "rate": 79.99,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "Sales Tax 8.5%",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-25"
+    "notTaxable": "Sales Tax 8.5%",
+    "taxExempt": "Sales Tax 8.5%",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "Sales Tax 8.5%",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
   },
   {
     "id": "mock-tax-012",
     "name": "Sample name",
+    "validFrom": "2026-01-26",
     "rate": 53.61,
+    "applicableTo": "Sample applicableTo",
     "docTaxAmount": "Exempt",
     "baseAmount": "Sample baseAmount",
-    "applicableTo": "Sample applicableTo",
-    "validFrom": "2026-01-26"
+    "notTaxable": "Exempt",
+    "taxExempt": "Exempt",
+    "tbaiClaveregimeniva": "Sample tbaiClaveregimeniva",
+    "tbaiNonsubjectcause": "Sample tbaiNonsubjectcause",
+    "etvfacIGICRegime": "Sample etvfacIGICRegime",
+    "etvfacVatRegime": "Sample etvfacVatRegime",
+    "etvfacExemptionCause": "Sample etvfacExemptionCause",
+    "etvfacCauseNotTaxable": "Exempt",
+    "tBAICausaDeExencion": "Sample tBAICausaDeExencion",
+    "etvfacIPSIRegime": "Sample etvfacIPSIRegime"
+  }
+];
+
+export const accounting = [
+  {
+    "id": "mock-accounting-001",
+    "taxDue": "VAT 21%",
+    "taxCredit": "VAT 21%",
+    "taxId": "mock-tax-001"
+  },
+  {
+    "id": "mock-accounting-002",
+    "taxDue": "VAT 10%",
+    "taxCredit": "VAT 10%",
+    "taxId": "mock-tax-002"
+  },
+  {
+    "id": "mock-accounting-003",
+    "taxDue": "VAT 0%",
+    "taxCredit": "VAT 0%",
+    "taxId": "mock-tax-003"
+  },
+  {
+    "id": "mock-accounting-004",
+    "taxDue": "Sales Tax 8.5%",
+    "taxCredit": "Sales Tax 8.5%",
+    "taxId": "mock-tax-004"
+  },
+  {
+    "id": "mock-accounting-005",
+    "taxDue": "Exempt",
+    "taxCredit": "Exempt",
+    "taxId": "mock-tax-005"
+  },
+  {
+    "id": "mock-accounting-006",
+    "taxDue": "Reduced Rate 5%",
+    "taxCredit": "Reduced Rate 5%",
+    "taxId": "mock-tax-006"
+  },
+  {
+    "id": "mock-accounting-007",
+    "taxDue": "Standard Rate 20%",
+    "taxCredit": "Standard Rate 20%",
+    "taxId": "mock-tax-007"
+  },
+  {
+    "id": "mock-accounting-008",
+    "taxDue": "VAT 21%",
+    "taxCredit": "VAT 21%",
+    "taxId": "mock-tax-008"
+  },
+  {
+    "id": "mock-accounting-009",
+    "taxDue": "VAT 10%",
+    "taxCredit": "VAT 10%",
+    "taxId": "mock-tax-009"
+  },
+  {
+    "id": "mock-accounting-010",
+    "taxDue": "VAT 0%",
+    "taxCredit": "VAT 0%",
+    "taxId": "mock-tax-010"
+  },
+  {
+    "id": "mock-accounting-011",
+    "taxDue": "Sales Tax 8.5%",
+    "taxCredit": "Sales Tax 8.5%",
+    "taxId": "mock-tax-011"
+  },
+  {
+    "id": "mock-accounting-012",
+    "taxDue": "Exempt",
+    "taxCredit": "Exempt",
+    "taxId": "mock-tax-012"
   }
 ];

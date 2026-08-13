@@ -1,5 +1,8 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
+import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import InternalConsumptionTable from './InternalConsumptionTable';
 import InternalConsumptionForm from './InternalConsumptionForm';
 import InternalConsumptionLineTable from './InternalConsumptionLineTable';
@@ -22,7 +25,9 @@ const statusField = 'status';
 // @sf-generated-end summary:internalConsumption
 
 // @sf-generated-start extraBadges:internalConsumption
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:internalConsumption
 
 // @sf-generated-start processes:internalConsumption
@@ -32,7 +37,15 @@ const processes = [
 // @sf-generated-end processes:internalConsumption
 
 // @sf-generated-start draftMode:internalConsumption
-const draftMode = null;
+const draftMode = {
+  "enabled": true,
+  "processField": "processNow",
+  "processValue": "CO",
+  "label": "internalConsumptionProcess",
+  "extraParams": {
+    "action": "CO"
+  }
+};
 // @sf-generated-end draftMode:internalConsumption
 
 // @sf-generated-start requiredHeaderFields:internalConsumption
@@ -43,7 +56,7 @@ const requiredHeaderFields = ['movementDate', 'name'];
 const addLineFields = {
   entry: [
     { key: 'lineNo', column: 'Line', type: 'number', label: 'Line No.', defaultValue: '@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM M_INTERNAL_CONSUMPTIONLINE WHERE M_INTERNAL_CONSUMPTION_ID=@M_INTERNAL_CONSUMPTION_ID@' },
-    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'internal-consumption-product', lookupTitle: 'Product + Warehouse', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]}] },
+    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'product-stock', lookupTitle: 'Product + Warehouse', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]}] },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
     { key: 'storageBin', column: 'M_Locator_ID', type: 'search', required: true, label: 'Warehouse', reference: 'Locator', inputMode: 'search', displayFromCatalog: true },
   ],
@@ -127,6 +140,14 @@ export const api = {
       "field": "posted",
       "column": "Posted",
       "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/posted"
+    },
+    {
+      "entity": "internalConsumption",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -149,8 +170,16 @@ export const api = {
 
 // @sf-generated-start component:InternalConsumptionPage
 export default function InternalConsumptionPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('800076');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="800076" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="internalConsumption"
         detailEntity="internalConsumptionLine"
@@ -169,13 +198,17 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteWhenComplete
+        hidePrint
+        noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Internal_Consumption", config: {} } }]}
         bottomSection={InternalConsumptionBottomPanel}
         customMenuContent={InternalConsumptionActions}
+        draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
-        linesLayout="inlineEditable"
-        {...props}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -187,9 +220,14 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"hideStatusFilter":true}}
       dateFilterKey="movementDate"
+      hidePrint
+      hideLink
+      SortIconComponent={SortIcon}
+      RefreshIconComponent={RefreshIcon}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

@@ -40,8 +40,15 @@ describe('InlineLinesPanel', () => {
   });
 
   it('wires pencil → handleEditClick and trash → handleDeleteClick', () => {
-    assert.match(src, /aria-label=\{ui\('editLineTooltip'\)[^}]*\}\s*\n\s*title=\{ui\('editLineTooltip'\)[^}]*\}\s*\n\s*onClick=\{\(\)\s*=>\s*handleEditClick/);
-    assert.match(src, /aria-label=\{ui\('deleteRowTooltip'\)[^}]*\}\s*\n\s*title=\{ui\('deleteRowTooltip'\)[^}]*\}\s*\n\s*onClick=\{\(\)\s*=>\s*handleDeleteClick/);
+    // ETP-4529 — the action strip was extracted to renderRowActionStrip (Sonar
+    // complexity fix), so the click wiring is now two hops: the row callback binds
+    // onEdit/onDelete to handleEditClick/handleDeleteClick when calling
+    // renderRowActionStrip, which itself wires onClick={onEdit}/onClick={onDelete}
+    // next to the respective aria-labels.
+    assert.match(src, /onEdit:\s*\(\)\s*=>\s*handleEditClick\(row\)/);
+    assert.match(src, /onDelete:\s*\(\)\s*=>\s*handleDeleteClick\(row\)/);
+    assert.match(src, /aria-label=\{ui\('editLineTooltip'\)[^}]*\}\s*\n\s*title=\{ui\('editLineTooltip'\)[^}]*\}\s*\n\s*onClick=\{onEdit\}/);
+    assert.match(src, /aria-label=\{ui\('deleteRowTooltip'\)[^}]*\}\s*\n\s*title=\{ui\('deleteRowTooltip'\)[^}]*\}\s*\n\s*onClick=\{onDelete\}/);
   });
 
   it('locks edit and delete actions when isDocumentReadOnly is true', () => {
@@ -60,7 +67,7 @@ describe('InlineLinesPanel', () => {
 
   it('autosaves on field commit via onUpdateRow', () => {
     assert.match(src, /commitField/);
-    assert.match(src, /onUpdateRow\?\.\(row, col\.key, value/);
+    assert.match(src, /onUpdateRow\?\.\(row, col\.key, effectiveValue/);
   });
 
   it('emits a deduplicated success toast after each inline save', () => {
@@ -85,20 +92,28 @@ describe('InlineLinesPanel', () => {
     assert.match(src, /onChange=\{\(id, label\) => onCommit\(id, \{ identifier: label \|\| '' \}\)\}/);
   });
 
-  it('opens ProductSearchDrawer for lookup/popup fields instead of the dropdown', () => {
-    assert.match(src, /import ProductSearchDrawer from '\.\/ProductSearchDrawer\.jsx'/);
+  it('opens a lookup drawer for lookup/popup fields instead of the dropdown', () => {
+    // The hard-wired ProductSearchDrawer import was replaced by the registry.
+    assert.doesNotMatch(src, /import ProductSearchDrawer from '\.\/ProductSearchDrawer\.jsx'/);
+    assert.match(src, /import \{ resolveLookupDrawer \} from '\.\/lookupDrawers\.js'/);
     assert.match(src, /function LookupTrigger\(/);
     assert.match(src, /if \(col\.lookup \|\| col\.popup\) \{/);
+    // LookupTrigger resolves the per-window drawer via the registry by field.lookupDrawer
+    // and renders it generically as <Drawer ... />.
+    assert.match(src, /const Drawer = resolveLookupDrawer\(field\.lookupDrawer\)/);
+    assert.match(src, /<Drawer\b/);
+    // The drawer receives a localized title (lookupTitle → label → '').
+    assert.match(src, /title=\{field\.lookupTitle \|\| field\.label \|\| ''\}/);
     // The drawer's onSelect must commit id, identifier, AND the full item so the parent
     // can extract the auxiliary values (product_PSTD, product_PLIM, …) that the callout
     // needs to compute the price.
     assert.match(src, /onSelect=\{\(item\) => \{[\s\S]*?onCommit\(id, \{ identifier: label, selectedItem: item \}\);/);
   });
 
-  it('uses Figma design tokens (40px visible row, Inter font, #E8EAEF separator)', () => {
+  it('uses semantic design tokens (40px visible row, Inter font, subtle border)', () => {
     assert.match(src, /rowHeight: 41/);
-    assert.match(src, /'#E8EAEF'/);
-    assert.match(src, /'#121217'/);
+    assert.match(src, /hsl\(var\(--border-subtle\)\)/);
+    assert.match(src, /hsl\(var\(--foreground\)\)/);
     assert.match(src, /Inter/);
   });
 
@@ -160,5 +175,30 @@ describe('InlineLinesPanel', () => {
 
   it('emits onSelectionChange when checkbox state changes', () => {
     assert.match(src, /onSelectionChange\?\.\(/);
+  });
+
+  it('right-aligns numeric column headers via NUMERIC_TYPES conditionals', () => {
+    assert.match(src, /NUMERIC_TYPES\.has\(col\.type\) \? 'flex-end' : 'flex-start'/);
+    assert.match(src, /NUMERIC_TYPES\.has\(col\.type\) \? 'right' : 'left'/);
+  });
+
+  // ETP-4422 (follow-up): the outside-click handler MUST listen for `pointerdown` in
+  // the capture phase, not `mousedown`. Radix's SelectTrigger calls preventDefault()
+  // on its own (bubble-phase) pointerdown handler, which per the Pointer Events spec
+  // suppresses the browser's compatibility `mousedown` for that interaction — so a
+  // `mousedown` listener never fires on the FIRST click on a trigger, and a bubble-phase
+  // (non-capture) listener would observe activeElement only after Radix's own handler
+  // already ran. This guard prevents a future refactor from silently reintroducing the
+  // "autosave needs 2 clicks" bug.
+  it('registers the outside-click handler as a capture-phase pointerdown listener', () => {
+    assert.match(
+      src,
+      /document\.addEventListener\('pointerdown', handler, \{ capture: true \}\)/,
+    );
+    assert.match(
+      src,
+      /document\.removeEventListener\('pointerdown', handler, \{ capture: true \}\)/,
+    );
+    assert.doesNotMatch(src, /document\.addEventListener\('mousedown', handler\)/);
   });
 });

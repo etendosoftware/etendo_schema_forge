@@ -4,10 +4,10 @@ function SectionCard({ title, titleRight, children }) {
   return (
     <div className="mx-4 mt-5">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</span>
         {titleRight}
       </div>
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden px-4 py-2">
+      <div className="bg-card rounded-xl border border-border-subtle overflow-hidden px-4 py-2">
         {children}
       </div>
     </div>
@@ -27,15 +27,17 @@ export default function EmailsCard({ onSend }) {
     <SectionCard
       title={ui('previewCardEmails')}
       titleRight={
-        <button
-          onClick={onSend}
-          className="text-xs font-medium text-gray-900 underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
-        >
-          {ui('previewCardSendEmail')}
-        </button>
+        onSend && (
+          <button
+            onClick={onSend}
+            className="text-xs font-medium text-foreground underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
+          >
+            {ui('previewCardSendEmail')}
+          </button>
+        )
       }
-    >
-      <p className="text-xs text-gray-400 py-2 text-center">{ui('previewCardNoEmailHistory')}</p>
+      data-testid="SectionCard__d50c04">
+      <p className="text-xs text-muted-foreground py-2 text-center">{ui('previewCardNoEmailHistory')}</p>
     </SectionCard>
   );
 }

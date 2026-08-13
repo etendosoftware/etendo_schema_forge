@@ -3,6 +3,16 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 const CHAR_INTERVAL_MS = 80;
 const IDLE_TIMEOUT_MS = 100;
 
+function handleEnter(timeoutRef, bufferRef, processBuffer) {
+  if (timeoutRef.current) {
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+  }
+  if (bufferRef.current.length > 0) {
+    processBuffer();
+  }
+}
+
 /**
  * Detects barcode scanner input by monitoring keystroke speed.
  * Scanners send characters at ~50-100ms intervals followed by Enter.
@@ -58,13 +68,7 @@ export function useBarcodeScanner({ onScan, enabled = true, searchInputRef = nul
 
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-        if (bufferRef.current.length > 0) {
-          processBuffer();
-        }
+        handleEnter(timeoutRef, bufferRef, processBuffer);
         return;
       }
 

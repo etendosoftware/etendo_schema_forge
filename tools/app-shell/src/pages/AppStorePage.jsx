@@ -36,15 +36,15 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
   const Icon = pickIcon(app.icon);
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader>
+    <Card className="flex flex-col" data-testid="Card__3e8c79">
+      <CardHeader data-testid="CardHeader__3e8c79">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
-              <Icon className="h-5 w-5 text-muted-foreground" />
+              <Icon className="h-5 w-5 text-muted-foreground" data-testid="Icon__3e8c79" />
             </div>
             <div>
-              <CardTitle className="text-base leading-tight">
+              <CardTitle className="text-base leading-tight" data-testid="CardTitle__3e8c79">
                 {app.displayName}
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
@@ -53,15 +53,14 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
             </div>
           </div>
           {installed && (
-            <Badge variant="secondary" className="gap-1">
-              <CheckCircle2 className="h-3 w-3" />
+            <Badge variant="secondary" className="gap-1" data-testid="Badge__3e8c79">
+              <CheckCircle2 className="h-3 w-3" data-testid="CheckCircle2__3e8c79" />
               {ui("installed")}
             </Badge>
           )}
         </div>
       </CardHeader>
-
-      <CardContent className="flex-1 space-y-3">
+      <CardContent className="flex-1 space-y-3" data-testid="CardContent__3e8c79">
         <p className="text-sm text-muted-foreground">{app.description}</p>
 
         <div className="text-xs text-muted-foreground">
@@ -77,19 +76,18 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
         </div>
 
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <ExternalLink className="h-3 w-3" />
+          <ExternalLink className="h-3 w-3" data-testid="ExternalLink__3e8c79" />
           <span className="truncate">{app.iframeUrl}</span>
         </div>
       </CardContent>
-
-      <CardFooter className="justify-end gap-2">
+      <CardFooter className="justify-end gap-2" data-testid="CardFooter__3e8c79">
         {installed ? (
           <Button
             variant="outline"
             size="sm"
             onClick={() => onUninstall(app.appId)}
             disabled={busy}
-          >
+            data-testid="Button__3e8c79">
             {ui("uninstall")}
           </Button>
         ) : (
@@ -97,10 +95,10 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
             size="sm"
             onClick={() => onInstall(app.appId)}
             disabled={busy}
-          >
+            data-testid="Button__3e8c79">
             {busy ? (
               <>
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__3e8c79" />
                 {ui("installing")}
               </>
             ) : (
@@ -137,7 +135,7 @@ export default function AppStorePage() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-            <Store className="h-5 w-5 text-primary" />
+            <Store className="h-5 w-5 text-primary" data-testid="Store__3e8c79" />
           </div>
           <div>
             <h1 className="text-xl font-semibold">{ui("appStore")}</h1>
@@ -158,11 +156,10 @@ export default function AppStorePage() {
           size="sm"
           onClick={() => lockAppStore()}
           title={ui("hideAppStoreTitle")}
-        >
+          data-testid="Button__3e8c79">
           {ui("hideAppStore")}
         </Button>
       </div>
-
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {APP_CATALOG.map((app) => (
           <AppCard
@@ -172,7 +169,7 @@ export default function AppStorePage() {
             busy={busyId === app.appId}
             onInstall={handleInstall}
             onUninstall={handleUninstall}
-          />
+            data-testid="AppCard__3e8c79" />
         ))}
       </div>
     </div>

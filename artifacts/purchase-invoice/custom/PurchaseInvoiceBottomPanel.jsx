@@ -3,8 +3,11 @@ import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { LinesBottomSection } from '@/components/contract-ui';
 import RelatedDocuments from '@/windows/custom/purchase-invoice/RelatedDocuments.jsx';
-import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal';
 import ImportFromGoodsReceiptModal from './ImportFromGoodsReceiptModal';
+import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal';
+import ImportFromGoodsReturnModal from './ImportFromGoodsReturnModal';
+import ImportFromSourceInvoiceModal from './ImportFromSourceInvoiceModal';
+import { getApSubtype } from './purchaseInvoiceSubtype';
 
 /* eslint-disable react/prop-types */
 
@@ -23,47 +26,68 @@ export default function PurchaseInvoiceBottomPanel(props) {
   );
 }
 
+const FORCE_OPEN_TYPES = ['order', 'receipt', 'return', 'source'];
+
 function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, token, apiBaseUrl, onSave, forceOpen, onForceOpenHandled, onRefresh }) {
   const ui = useUI();
-  const [showImportOrderModal, setShowImportOrderModal] = useState(false);
   const [showImportReceiptModal, setShowImportReceiptModal] = useState(false);
-  const pendingModal = useRef('order');
+  const [showImportOrderModal, setShowImportOrderModal] = useState(false);
+  const [showImportReturnModal, setShowImportReturnModal] = useState(false);
+  const [showImportSourceModal, setShowImportSourceModal] = useState(false);
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
+  const isRectificativa = getApSubtype(data) === 'RECTIFICATIVA';
+  const pendingModal = useRef(isRectificativa ? 'return' : 'receipt');
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
   useEffect(() => {
     if (forceOpen) {
-      if (pendingModal.current === 'receipt') { setShowImportReceiptModal(true); } else { setShowImportOrderModal(true); }
+      // forceOpen carries the modal type across the save-navigate remount of a
+      // NEW record (pendingModal is reset on remount, so it can't be trusted then).
+      const type = FORCE_OPEN_TYPES.includes(forceOpen) ? forceOpen : pendingModal.current;
+      if (type === 'order') { setShowImportOrderModal(true); }
+      else if (type === 'return') { setShowImportReturnModal(true); }
+      else if (type === 'source') { setShowImportSourceModal(true); }
+      else { setShowImportReceiptModal(true); }
       onForceOpenHandled?.();
     }
   }, [forceOpen, onForceOpenHandled]);
 
-  const handleImportOrderClick = async () => {
-    pendingModal.current = 'order';
+  const handleImportClick = (type, setter) => async () => {
+    pendingModal.current = type;
     if (onSave) {
-      const shouldOpen = await onSave();
+      const shouldOpen = await onSave(type);
       if (!shouldOpen) return;
     }
-    setShowImportOrderModal(true);
+    setter(true);
   };
 
-  const handleImportReceiptClick = async () => {
-    pendingModal.current = 'receipt';
-    if (onSave) {
-      const shouldOpen = await onSave();
-      if (!shouldOpen) return;
-    }
-    setShowImportReceiptModal(true);
-  };
+  const handleImportReceiptClick = handleImportClick('receipt', setShowImportReceiptModal);
+  const handleImportOrderClick = handleImportClick('order', setShowImportOrderModal);
+  const handleImportReturnClick = handleImportClick('return', setShowImportReturnModal);
+  const handleImportSourceClick = handleImportClick('source', setShowImportSourceModal);
 
   if (!isDraft) return null;
+
+  const importIconSvg = (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+
+  const ghostBtn = { display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid hsl(var(--muted-foreground))', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' };
+
+  const emptyHintKey = isRectificativa
+    ? 'addLinesManuallyOrImportFromGoodsReturnOrSourceInvoice'
+    : 'addLinesManuallyOrImportFromOrderOrReceipt';
 
   return (
     <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
           <line x1="8" y1="13" x2="16" y2="13" />
@@ -71,33 +95,48 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
         </svg>
       </div>
       <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noLinesYet')}</span>
-      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('addLinesManuallyOrImportFromOrderOrReceipt')}</span>
+      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui(emptyHintKey)}</span>
       {canAddLine && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button type="button" onClick={onAddLine} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: '#18181b', color: '#fff', border: 'none', cursor: 'pointer' }}>
+          <button type="button" onClick={onAddLine} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', border: 'none', cursor: 'pointer' }}>
             + {ui('addLines')}
           </button>
-          {bpId && (
-            <button type="button" onClick={handleImportReceiptClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              {ui('importFromGoodsReceipt')}
-            </button>
+          {bpId && !isRectificativa && (
+            <>
+              <button type="button" onClick={handleImportReceiptClick} style={ghostBtn}>
+                {importIconSvg}
+                {ui('importFromGoodsReceipt')}
+              </button>
+              <button type="button" onClick={handleImportOrderClick} style={ghostBtn}>
+                {importIconSvg}
+                {ui('importFromPurchaseOrder')}
+              </button>
+            </>
           )}
-          {bpId && (
-            <button type="button" onClick={handleImportOrderClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              {ui('importFromPurchaseOrder')}
-            </button>
+          {bpId && isRectificativa && (
+            <>
+              <button type="button" onClick={handleImportReturnClick} style={ghostBtn}>
+                {importIconSvg}
+                {ui('importFromGoodsReturn')}
+              </button>
+              <button type="button" onClick={handleImportSourceClick} style={ghostBtn}>
+                {importIconSvg}
+                {ui('importFromSourceInvoice')}
+              </button>
+            </>
           )}
         </div>
+      )}
+      {showImportReceiptModal && createPortal(
+        <ImportFromGoodsReceiptModal
+          invoiceId={recordId}
+          bpId={bpId}
+          base={base}
+          headers={headers}
+          onClose={() => setShowImportReceiptModal(false)}
+          onSuccess={() => { setShowImportReceiptModal(false); onRefresh?.(); }}
+        />,
+        document.body,
       )}
       {showImportOrderModal && createPortal(
         <ImportFromPurchaseOrderModal
@@ -110,14 +149,25 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
         />,
         document.body,
       )}
-      {showImportReceiptModal && createPortal(
-        <ImportFromGoodsReceiptModal
+      {showImportReturnModal && createPortal(
+        <ImportFromGoodsReturnModal
           invoiceId={recordId}
           bpId={bpId}
           base={base}
           headers={headers}
-          onClose={() => setShowImportReceiptModal(false)}
-          onSuccess={() => { setShowImportReceiptModal(false); onRefresh?.(); }}
+          onClose={() => setShowImportReturnModal(false)}
+          onSuccess={() => { setShowImportReturnModal(false); onRefresh?.(); }}
+        />,
+        document.body,
+      )}
+      {showImportSourceModal && createPortal(
+        <ImportFromSourceInvoiceModal
+          invoiceId={recordId}
+          bpId={bpId}
+          base={base}
+          headers={headers}
+          onClose={() => setShowImportSourceModal(false)}
+          onSuccess={() => { setShowImportSourceModal(false); onRefresh?.(); }}
         />,
         document.body,
       )}
@@ -130,58 +180,83 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
   ref,
 ) {
   const ui = useUI();
-  const [showImportOrderModal, setShowImportOrderModal] = useState(false);
   const [showImportReceiptModal, setShowImportReceiptModal] = useState(false);
-  const pendingModal = useRef('order');
+  const [showImportOrderModal, setShowImportOrderModal] = useState(false);
+  const [showImportReturnModal, setShowImportReturnModal] = useState(false);
+  const [showImportSourceModal, setShowImportSourceModal] = useState(false);
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
+  const isRectificativa = getApSubtype(data) === 'RECTIFICATIVA';
+  const pendingModal = useRef(isRectificativa ? 'return' : 'receipt');
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
   useEffect(() => {
     if (forceOpen) {
-      if (pendingModal.current === 'receipt') { setShowImportReceiptModal(true); } else { setShowImportOrderModal(true); }
+      // forceOpen carries the modal type across the save-navigate remount of a
+      // NEW record (pendingModal is reset on remount, so it can't be trusted then).
+      const type = FORCE_OPEN_TYPES.includes(forceOpen) ? forceOpen : pendingModal.current;
+      if (type === 'order') { setShowImportOrderModal(true); }
+      else if (type === 'return') { setShowImportReturnModal(true); }
+      else if (type === 'source') { setShowImportSourceModal(true); }
+      else { setShowImportReceiptModal(true); }
       onForceOpenHandled?.();
     }
   }, [forceOpen, onForceOpenHandled]);
 
-  const openOrderModal = async () => {
-    pendingModal.current = 'order';
+  const openModal = (type, setter) => async () => {
+    pendingModal.current = type;
     if (onSave) {
-      const shouldOpen = await onSave();
+      const shouldOpen = await onSave(type);
       if (!shouldOpen) return;
     }
-    setShowImportOrderModal(true);
+    setter(true);
   };
 
-  const openReceiptModal = async () => {
-    pendingModal.current = 'receipt';
-    if (onSave) {
-      const shouldOpen = await onSave();
-      if (!shouldOpen) return;
-    }
-    setShowImportReceiptModal(true);
-  };
+  const openReceiptModal = openModal('receipt', setShowImportReceiptModal);
+  const openOrderModal = openModal('order', setShowImportOrderModal);
+  const openReturnModal = openModal('return', setShowImportReturnModal);
+  const openSourceModal = openModal('source', setShowImportSourceModal);
 
-  useImperativeHandle(ref, () => ({ openImportOrderModal: openOrderModal, openImportReceiptModal: openReceiptModal }), [onSave]);
+  useImperativeHandle(ref, () => ({
+    openImportReceiptModal: openReceiptModal,
+    openImportOrderModal: openOrderModal,
+    openImportReturnModal: openReturnModal,
+    openImportSourceModal: openSourceModal,
+  }), [onSave]);
 
   if (!isDraft || !bpId) return null;
+
+  const primaryTrigger = isRectificativa
+    ? { onClick: openReturnModal, labelKey: 'importFromGoodsReturn' }
+    : { onClick: openReceiptModal, labelKey: 'importFromGoodsReceipt' };
 
   return (
     <>
       {!hideTrigger && (
         <button
           type="button"
-          onClick={openReceiptModal}
-          style={{ all: 'unset', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary, #6b7280)', cursor: 'pointer' }}
+          onClick={primaryTrigger.onClick}
+          style={{ all: 'unset', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary, hsl(var(--muted-foreground)))', cursor: 'pointer' }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
-          {ui('importFromGoodsReceipt')}
+          {ui(primaryTrigger.labelKey)}
         </button>
+      )}
+      {showImportReceiptModal && createPortal(
+        <ImportFromGoodsReceiptModal
+          invoiceId={recordId}
+          bpId={bpId}
+          base={base}
+          headers={headers}
+          onClose={() => setShowImportReceiptModal(false)}
+          onSuccess={() => { setShowImportReceiptModal(false); onRefresh?.(); }}
+        />,
+        document.body,
       )}
       {showImportOrderModal && createPortal(
         <ImportFromPurchaseOrderModal
@@ -194,14 +269,25 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
         />,
         document.body,
       )}
-      {showImportReceiptModal && createPortal(
-        <ImportFromGoodsReceiptModal
+      {showImportReturnModal && createPortal(
+        <ImportFromGoodsReturnModal
           invoiceId={recordId}
           bpId={bpId}
           base={base}
           headers={headers}
-          onClose={() => setShowImportReceiptModal(false)}
-          onSuccess={() => { setShowImportReceiptModal(false); onRefresh?.(); }}
+          onClose={() => setShowImportReturnModal(false)}
+          onSuccess={() => { setShowImportReturnModal(false); onRefresh?.(); }}
+        />,
+        document.body,
+      )}
+      {showImportSourceModal && createPortal(
+        <ImportFromSourceInvoiceModal
+          invoiceId={recordId}
+          bpId={bpId}
+          base={base}
+          headers={headers}
+          onClose={() => setShowImportSourceModal(false)}
+          onSuccess={() => { setShowImportSourceModal(false); onRefresh?.(); }}
         />,
         document.body,
       )}
@@ -215,7 +301,22 @@ PurchaseInvoiceBottomPanel.detailExtraActions = PurchaseInvoiceLineActions;
 PurchaseInvoiceBottomPanel.lineMenuActions = function lineMenuActions({ data, importRef }) {
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
+  const isRectificativa = getApSubtype(data) === 'RECTIFICATIVA';
   if (!isDraft || !bpId) return [];
+  if (isRectificativa) {
+    return [
+      {
+        key: 'import-return',
+        label: 'importFromGoodsReturn',
+        onClick: () => importRef.current?.openImportReturnModal?.(),
+      },
+      {
+        key: 'import-source',
+        label: 'importFromSourceInvoice',
+        onClick: () => importRef.current?.openImportSourceModal?.(),
+      },
+    ];
+  }
   return [
     {
       key: 'import-receipt',

@@ -1,17 +1,29 @@
 import { useState, forwardRef, useImperativeHandle } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useUI } from '@/i18n';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertSection from './CertSection.jsx';
+import SectionSaveButton from './SectionSaveButton.jsx';
 import { getFiscalRecordId, isEtendoTrue, mapSiiRecordToForm, serializeBooleanFields } from './fiscalConfig.utils.js';
 
 const SII_ENTITY = 'siiConfiguration';
+
+// Two-column section row wrapper
+function SectionRow({ label, children, labelExtra, noBorderTop, boldLabel }) {
+  return (
+    <div className={`flex items-start py-6 gap-6 ${noBorderTop ? '' : 'border-t border-[hsl(var(--border-subtle))]'}`}>
+      <div className="w-[160px] flex-shrink-0">
+        <span className={`text-sm text-[hsl(var(--foreground))] ${boldLabel ? 'font-semibold' : 'font-medium'}`}>{label}</span>
+        {labelExtra && <div className="mt-0.5">{labelExtra}</div>}
+      </div>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  );
+}
 
 const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, onSave, variant, hideSave, hideCert }, ref) {
   const ui = useUI();
@@ -56,118 +68,166 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
 
   useImperativeHandle(ref, () => ({ save }));
 
-  const yesno = (field) => (
-    <Switch
-      checked={isEtendoTrue(form[field])}
-      onCheckedChange={v => set(field, v ? 'Y' : 'N')}
-    />
-  );
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <h3 className="text-base font-semibold">SII</h3>
-        {variant === 'sii-navarra' && (
-          <Badge variant="secondary">{ui('fiscal.sii.badge.navarra')}</Badge>
-        )}
-      </div>
-
-      <fieldset className="space-y-4 border-0 p-0 m-0">
-        <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{ui('fiscal.sii.legend.status')}</legend>
-        <div className="flex items-center justify-between">
-          <Label>{ui('fiscal.sii.field.enrolled')}</Label>
-          {yesno('acogidaAlSII')}
+    <div>
+      {/* Estado */}
+      <SectionRow
+        label={ui('fiscal.sii.legend.status')}
+        noBorderTop
+        data-testid="SectionRow__fcb159">
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-4">
+            <div className="space-y-1 w-[376px]">
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.enrollDate')}</Label>
+              <DateField
+                value={form.fechaAcogidaSII}
+                onChange={(iso) => set('fechaAcogidaSII', iso)}
+                data-testid="DateField__fcb159" />
+            </div>
+            <div className="space-y-1 w-[376px]">
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.monitorDate')}</Label>
+              <DateField
+                value={form.monitordate}
+                onChange={(iso) => set('monitordate', iso)}
+                data-testid="DateField__fcb159" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={isEtendoTrue(form.acogidaAlSII)}
+              onCheckedChange={v => set('acogidaAlSII', v ? 'Y' : 'N')}
+              data-testid="Switch__fcb159" />
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.enrolled')}</span>
+          </div>
         </div>
-        <div className="space-y-1">
-          <Label>{ui('fiscal.sii.field.enrollDate')}</Label>
-          <DateField value={form.fechaAcogidaSII} onChange={(iso) => set('fechaAcogidaSII', iso)} />
+      </SectionRow>
+      {/* Entorno */}
+      <SectionRow label={ui('fiscal.sii.legend.env')} data-testid="SectionRow__fcb159">
+        <div className="flex flex-wrap gap-4">
+          <div className="flex items-center gap-2 w-[376px]">
+            <Switch
+              checked={isEtendoTrue(form.entornoDeProduccin)}
+              onCheckedChange={v => set('entornoDeProduccin', v ? 'Y' : 'N')}
+              data-testid="Switch__fcb159" />
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.production')}</span>
+          </div>
+          <div className="flex items-center gap-2 w-[376px]">
+            <Switch
+              checked={isEtendoTrue(form.adjuntarArchivosXML)}
+              onCheckedChange={v => set('adjuntarArchivosXML', v ? 'Y' : 'N')}
+              data-testid="Switch__fcb159" />
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.attachXml')}</span>
+          </div>
         </div>
-        <div className="space-y-1">
-          <Label>{ui('fiscal.sii.field.monitorDate')}</Label>
-          <DateField value={form.monitordate} onChange={(iso) => set('monitordate', iso)} />
+      </SectionRow>
+      {/* Envíos */}
+      <SectionRow label={ui('fiscal.sii.legend.sends')} data-testid="SectionRow__fcb159">
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-4">
+            <div className="space-y-1 w-[376px]">
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.deadline')}</Label>
+              <div className="flex items-center">
+                <input
+                  type="number"
+                  min={0}
+                  value={form.plazoLmiteDeEnvoASII}
+                  onChange={e => set('plazoLmiteDeEnvoASII', e.target.value)}
+                  className="flex-1 min-w-0 h-10 rounded-l-lg border border-[hsl(var(--border-control))] px-3 text-sm bg-card [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => set('plazoLmiteDeEnvoASII', Math.max(0, +form.plazoLmiteDeEnvoASII - 1))}
+                  className="h-10 w-9 border border-l-0 border-[hsl(var(--border-control))] flex items-center justify-center text-sm hover:bg-muted/40 transition-colors"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set('plazoLmiteDeEnvoASII', +form.plazoLmiteDeEnvoASII + 1)}
+                  className="h-10 w-9 rounded-r-lg border border-l-0 border-[hsl(var(--border-control))] flex items-center justify-center text-sm hover:bg-muted/40 transition-colors"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1 w-[376px]">
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.cadenceSale')}</Label>
+              <Input
+                type="number"
+                min={0}
+                value={form.cadenciaEnvoFacturasVentaASII}
+                onChange={e => set('cadenciaEnvoFacturasVentaASII', e.target.value)}
+                className="bg-card"
+                data-testid="Input__fcb159" />
+            </div>
+            <div className="space-y-1 w-[376px]">
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.cadencePurchase')}</Label>
+              <Input
+                type="number"
+                min={0}
+                value={form.cadenciaEnvoFacturasCompraASII}
+                onChange={e => set('cadenciaEnvoFacturasCompraASII', e.target.value)}
+                className="bg-card"
+                data-testid="Input__fcb159" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={isEtendoTrue(form.postedInvoices)}
+              onCheckedChange={v => set('postedInvoices', v ? 'Y' : 'N')}
+              data-testid="Switch__fcb159" />
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.postedOnly')}</span>
+          </div>
         </div>
-      </fieldset>
-
-      <fieldset className="space-y-4 border-0 p-0 m-0">
-        <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{ui('fiscal.sii.legend.env')}</legend>
-        <div className="flex items-center justify-between">
-          <Label>{ui('fiscal.sii.field.production')}</Label>
-          {yesno('entornoDeProduccin')}
+      </SectionRow>
+      {/* Régimen especial */}
+      <SectionRow label={ui('fiscal.sii.legend.special')} data-testid="SectionRow__fcb159">
+        <div className="flex flex-wrap gap-4 items-start">
+          <div className="flex items-center gap-2 pt-1 w-[376px]">
+            <Switch
+              checked={isEtendoTrue(form.recc)}
+              onCheckedChange={v => set('recc', v ? 'Y' : 'N')}
+              data-testid="Switch__fcb159" />
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.recc')}</span>
+          </div>
+          <div className="flex items-center gap-2 pt-1 w-[376px]">
+            <Switch
+              checked={isEtendoTrue(form.redeme)}
+              onCheckedChange={v => set('redeme', v ? 'Y' : 'N')}
+              data-testid="Switch__fcb159" />
+            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.redeme')}</span>
+          </div>
+          <div className="space-y-1 w-[376px]">
+            <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.authno')}</Label>
+            <Input
+              value={form.authorizationno}
+              onChange={e => set('authorizationno', e.target.value)}
+              className="bg-card"
+              data-testid="Input__fcb159" />
+          </div>
         </div>
-        <div className="flex items-center justify-between">
-          <Label>{ui('fiscal.sii.field.attachXml')}</Label>
-          {yesno('adjuntarArchivosXML')}
-        </div>
-      </fieldset>
-
-      <fieldset className="space-y-4 border-0 p-0 m-0">
-        <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{ui('fiscal.sii.legend.sends')}</legend>
-        <div className="space-y-1">
-          <Label>{ui('fiscal.sii.field.deadline')}</Label>
-          <Input type="number" min={0} value={form.plazoLmiteDeEnvoASII} onChange={e => set('plazoLmiteDeEnvoASII', e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label>{ui('fiscal.sii.field.cadenceSale')}</Label>
-          <Input type="number" min={0} value={form.cadenciaEnvoFacturasVentaASII} onChange={e => set('cadenciaEnvoFacturasVentaASII', e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label>{ui('fiscal.sii.field.cadencePurchase')}</Label>
-          <Input type="number" min={0} value={form.cadenciaEnvoFacturasCompraASII} onChange={e => set('cadenciaEnvoFacturasCompraASII', e.target.value)} />
-        </div>
-        <div className="flex items-center justify-between">
-          <Label>{ui('fiscal.sii.field.postedOnly')}</Label>
-          {yesno('postedInvoices')}
-        </div>
-      </fieldset>
-
-      <fieldset className="space-y-4 border-0 p-0 m-0">
-        <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{ui('fiscal.sii.legend.special')}</legend>
-        <div className="flex items-center justify-between">
-          <Label>{ui('fiscal.sii.field.recc')}</Label>
-          {yesno('recc')}
-        </div>
-        <div className="flex items-center justify-between">
-          <Label>{ui('fiscal.sii.field.redeme')}</Label>
-          {yesno('redeme')}
-        </div>
-        <div className="space-y-1">
-          <Label>{ui('fiscal.sii.field.authno')}</Label>
-          <Input value={form.authorizationno} onChange={e => set('authorizationno', e.target.value)} />
-        </div>
-      </fieldset>
-
-      {!hideCert && <CertSection context="sii" orgId={orgId} apiBaseUrl={apiBaseUrl} />}
-
-      <fieldset className="space-y-4 border-0 p-0 m-0">
-        <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{ui('fiscal.sii.legend.actions')}</legend>
-        <Button
-          variant="outline"
-          type="button"
-          onClick={async () => {
-            try {
-              const recordId = getFiscalRecordId(record, 'SII');
-              if (!recordId) throw new Error(ui('fiscal.sii.err.noRecordId'));
-              const res = await apiFetch(`/sii-config/${SII_ENTITY}/${recordId}/action/validHash`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-              });
-              if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
-              onSave();
-            } catch (err) {
-              setError(err.message);
-            }
-          }}
-        >
-          {ui('fiscal.sii.action.validateHash')}
-        </Button>
-      </fieldset>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {!hideSave && (
-        <Button onClick={save} disabled={saving}>
-          {saving ? ui('fiscal.saving') : ui('fiscal.save')}
-        </Button>
+      </SectionRow>
+      {/* Certificado digital — only shown when hideCert is false */}
+      {!hideCert && (
+        <SectionRow
+          label={ui('fiscal.cert.section.legend')}
+          boldLabel
+          labelExtra={<span className="text-xs text-[hsl(var(--foreground))] leading-tight">{ui('fiscal.cert.section.hint')}</span>}
+          data-testid="SectionRow__fcb159">
+          <CertSection
+            context="sii"
+            orgId={orgId}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="CertSection__fcb159" />
+        </SectionRow>
       )}
+      <SectionSaveButton
+        error={error}
+        hideSave={hideSave}
+        save={save}
+        saving={saving}
+        ui={ui}
+        data-testid="SectionSaveButton__fcb159" />
     </div>
   );
 });

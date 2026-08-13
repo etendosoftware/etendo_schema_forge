@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import QuotationConfirmModal from './QuotationConfirmModal';
 import SendToEvaluationModal from './SendToEvaluationModal';
 import RejectQuotationModal from './RejectQuotationModal';
+import { useQuotationPdf } from '@/windows/custom/shared/useQuotationPdf.js';
 import { useUI, useMenuLabel } from '@/i18n';
 
 function CopyIcon() {
@@ -23,14 +25,14 @@ const btnCloneStyle = {
   justifyContent: 'center',
   padding: '7px',
   borderRadius: 6,
-  border: '1px solid #D1D4DB',
-  background: '#FFFFFF',
-  color: '#64748B',
+  border: '1px solid hsl(var(--border-subtle))',
+  background: 'hsl(var(--card))',
+  color: 'hsl(var(--foreground))',
   cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px #1212170D',
+  boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
 
-export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl }) {
+export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl, onSave }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -48,6 +50,11 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
 
   const status = data?.documentStatus;
 
+  // ETP-4372 — source the same client-rendered PDF the QuotationPreview panel
+  // uses, so the form-view topbar Send modal shows the document instead of the
+  // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
+  const { pdfUrl, loading: pdfLoading } = useQuotationPdf(recordId, apiBaseUrl, token);
+
   // The framework's draftMode renders a "Confirmar" primary button after Save.
   // The wrapper at tools/app-shell/src/windows/custom/sales-quotation/index.jsx
   // overrides draftMode.onConfirm so that clicking it dispatches this event,
@@ -55,7 +62,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
   useEffect(() => {
     function handler() {
       if (status === 'DR') setShowSendToEval(true);
-      else if (status === 'UE') setShowConfirm(true);
+      else if (status === 'CO' || status === 'UE') setShowConfirm(true);
     }
     window.addEventListener('sales-quotation:open-confirm-modal', handler);
     return () => window.removeEventListener('sales-quotation:open-confirm-modal', handler);
@@ -73,11 +80,15 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
 
   return (
     <>
-      <button type="button" data-testid="action-clone" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? '#F1F5F9' : '#FFFFFF'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
+      <button type="button" data-testid="action-clone" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
         <CopyIcon />
       </button>
 
-      <SendDocumentButton onClick={() => setShowSend(true)} />
+      {/* ETP-4717 — Send is available from "Bajo evaluación" (UE) onward, not
+          while still Draft (DR). Matches the grid row quick-action's gate. */}
+      {status !== 'DR' && <SendDocumentButton onClick={() => setShowSend(true)} />}
+
+      <CopyRecordLinkButton recordId={recordId} windowName="sales-quotation" />
 
       {showClone && createPortal(
         <CloneOrderModal
@@ -113,6 +124,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           data={data}
           token={token}
           apiBaseUrl={apiBaseUrl}
+          onSave={onSave}
           onClose={() => setShowConfirm(false)}
         />,
         document.body,
@@ -128,6 +140,8 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           documentId={recordId}
           windowName="sales-quotation"
           token={token}
+          pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           onClose={() => setShowSend(false)}
         />,
         document.body,

@@ -3,12 +3,12 @@
   "window": {
     "category": "sales",
     "name": "Sales Invoice",
+    "documentDateField": "invoiceDate",
     "salesTheme": true,
     "lineEntityConfig": "invoice",
     "relatedDocuments": true,
     "notesField": "description",
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
     "noHeaderBorder": true,
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",
@@ -23,6 +23,13 @@
         "component": "SifTab",
         "importFrom": "@/windows/custom/shared/SifTab.jsx",
         "placement": "tab"
+      },
+      {
+        "key": "reversedInvoices",
+        "labelKey": "rectificationsTab",
+        "component": "ReversedInvoicesPanel",
+        "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
+        "placement": "tab"
       }
     ],
     "menuActions": [
@@ -32,10 +39,27 @@
         "labelKey": "reactivate",
         "visibleWhenStatus": "CO",
         "documentAction": "RE",
-        "successKey": "reactivated"
+        "successKey": "reactivated",
+        "preUnpost": true
+      },
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
       }
     ],
-    "secondaryTabs": {},
+    "secondaryTabs": {
+      "exchangeRates": {
+        "label": "Exchange Rates",
+        "tabOrder": 50,
+        "requireSavedRecord": true,
+        "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+      }
+    },
     "processOverrides": {},
     "draftMode": {
       "enabled": true,
@@ -48,18 +72,71 @@
       "es_ES": {
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
-        "em_etgo_delivery_status": "Estado de entrega"
+        "em_etgo_delivery_status": "Estado de entrega",
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",
         "EM_Etgo_Due_Date": "Due Date",
-        "em_etgo_delivery_status": "Delivery Status"
+        "em_etgo_delivery_status": "Delivery Status",
+        "C_DocTypeTarget_ID": "Document Type"
+      }
+    },
+    "subsetFilters": [
+      {
+        "label": "allTab"
+      },
+      {
+        "label": "invoicesTab",
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D",
+        "_note": "ETP-4737: plain invoices only. Excludes the new unified 'Factura Rectificativa' doc type, which shares the ARI category with plain invoices but is distinguished via the etsgIsRectificative flag on C_DocType (see rectificativeInvoicesTab below for the full discriminator rationale)."
+      },
+      {
+        "label": "rectificativeInvoicesTab",
+        "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D",
+        "_note": "ETP-4737: merges the former separate creditNotesTab (ARC) and returnsTab (ARI_RM) into one 'Facturas rectificativas' tab, OR'd with the new unified rectificative doc type. The new 'Factura Rectificativa' doc type (EM_Etsg_Isrectificative='Y' on C_DocType) shares the plain-invoice ARI category, so documentCategory alone cannot discriminate it — confirmed empirically against the dev DB (GOClient tenant): 3 active ARI-category doc types exist there ('AR Invoice', 'Reversed Sales Invoice', 'Factura Rectificativa'), only the last has etsgIsRectificative='Y'. etsgIsRectificative is a real Hibernate-mapped boolean property on DocumentType (confirmed via C_DocType.EM_Etsg_Isrectificative / DocumentType#isEtsgIsRectificative() in com.etendoerp.go), reached here via the same 'transactionDocument$<property>' nested-criteria mechanism already proven for documentCategory in this exact subsetFilters block — this is a plain backend list-query filter, not the GET-by-ID-only 'arInvoiceSubtype' enrichment, so it is expected to work at list-query time. No live invoice yet carries the new doc type in the dev DB to smoke-test end-to-end through the running app; recommend a manual list-view check once an invoice uses it."
+      }
+    ],
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ],
+    "rowQuickActions": {
+      "actions": {
+        "email": {
+          "visibleWhen": "@DocumentStatus@='CO'"
+        }
       }
     }
   },
   "entities": {
     "header": {
       "javaQualifier": "salesInvoiceHeaderHandler",
+      "namedFilters": [
+        {
+          "name": "completed",
+          "label": "Paid",
+          "description": "Fully paid invoices (payment complete).",
+          "where": "e.paymentComplete = true"
+        },
+        {
+          "name": "pending",
+          "label": "Unpaid",
+          "description": "Unpaid invoices with nothing collected yet (outstanding equals the total).",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)"
+        },
+        {
+          "name": "partial",
+          "label": "Partially paid",
+          "description": "Invoices with a partial payment: some amount collected but a balance remains.",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)"
+        }
+      ],
       "fields": {
         "businessPartner": {
           "grid": true,
@@ -69,17 +146,20 @@
           "displayLogic": null,
           "readOnlyLogic": "@Processed@='Y'",
           "section": "principal",
-          "seq": 10
+          "seq": 10,
+          "businessCritical": true
         },
         "invoiceDate": {
           "grid": true,
           "gridOrder": 1,
           "searchable": true,
           "section": "principal",
-          "seq": 30
+          "seq": 30,
+          "businessCritical": true
         },
         "accountingDate": {
-          "visibility": "system"
+          "visibility": "system",
+          "_note": "ETP-4531 (redefined 2026-07-17): accounting date is now hidden and unified with the document date internally; the Java-side guard that used to block this cascade has been removed so the native document-date→accounting-date coupling flows through untouched."
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -110,12 +190,18 @@
           "readOnlyLogic": "@Processed@='Y'"
         },
         "currency": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": false,
-          "form": false,
-          "section": "summary",
+          "form": true,
+          "section": "principal",
           "reference": "Currency",
-          "inputMode": "selector"
+          "inputMode": "selector",
+          "readOnlyLogic": "@Processed@='Y'"
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         },
         "description": {
           "form": false
@@ -127,7 +213,8 @@
           "visibility": "discarded"
         },
         "documentAction": {
-          "visibility": "system"
+          "visibility": "system",
+          "agentPrompt": "Document workflow action for this sales invoice. Fire it with neo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it assigns the final document number, computes taxes and totals and creates the payment plan; VO voids it. From documentStatus=CO (Completed): RE reactivates it back to DR, and the UI unposts the invoice first when it was already posted — so check the posted field and expect the accounting entries to be removed. CL closes it. Preconditions for CO: at least one line, a customer with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger: posting is a separate action on this window (not a documentAction value), so never send PO here — read the posted field to know the accounting state. Read documentStatus and posted with neo_get before acting. The remaining values offered in actionValues (AP, PR, RA, RC, RJ, XL) come from the shared AD list and are not part of this window's flow."
         },
         "createLinesFromOrder": {
           "visibility": "discarded"
@@ -155,7 +242,8 @@
           "gridOrder": 2,
           "searchable": true,
           "section": "principal",
-          "seq": 20
+          "seq": 20,
+          "businessCritical": true
         },
         "documentStatus": {
           "visibility": "readOnly",
@@ -172,13 +260,32 @@
         "posted": {
           "visibility": "readOnly",
           "form": false,
-          "grid": false
+          "grid": true,
+          "gridOrder": 5,
+          "badge": true,
+          "visibleWhenCapability": "showAccountingFields",
+          "badgeLabels": {
+            "true": {
+              "en_US": "Posted",
+              "es_ES": "Contabilizado"
+            },
+            "false": {
+              "en_US": "Not posted",
+              "es_ES": "Sin contabilizar"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 5,
-          "section": "summary"
+          "gridOrder": 6,
+          "section": "summary",
+          "businessCritical": true
         },
         "summedLineAmount": {
           "visibility": "readOnly",
@@ -187,21 +294,22 @@
         "outstandingAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "form": false,
-          "section": "summary"
+          "section": "summary",
+          "businessCritical": true
         },
         "eTGODueDate": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": false,
           "searchable": true
         },
         "eTGODeliveryStatus": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 8,
+          "gridOrder": 9,
           "form": false
         },
         "isPaid": {
@@ -256,7 +364,15 @@
           "form": false
         },
         "transactionDocument": {
-          "name": "cDocTypeTargetId"
+          "visibility": "editable",
+          "section": "principal",
+          "form": true,
+          "grid": false,
+          "reference": "DocumentType",
+          "inputMode": "selector",
+          "readOnlyLogicJs": "!!record.id",
+          "readOnlyLogic": null,
+          "seq": 15
         },
         "documentType": {
           "name": "cDocTypeId"
@@ -274,10 +390,14 @@
           "visibility": "system"
         },
         "project": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "salesCampaign": {
           "visibility": "discarded"
@@ -324,15 +444,53 @@
         },
         "aeatsiiEstado": {
           "visibility": "readOnly",
-          "form": false
+          "form": false,
+          "grid": true
         },
         "tbaiIssent": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
+        },
+        "etvfacInvoiceStatus": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true
         },
         "etsgDateOperation": {
           "visibility": "editable",
           "form": false
+        },
+        "etvfacInvType": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacVerifacDesc": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacSimpinvart7273": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacInvNoIDArt61d": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacReverseinvtype": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacDateIssue": {
+          "visibility": "discarded"
+        },
+        "etvfacHash": {
+          "visibility": "discarded"
+        },
+        "etvfacQRURL": {
+          "visibility": "discarded"
+        },
+        "etvfacIssueDescription": {
+          "visibility": "discarded"
         },
         "aeatsiiEjercicio": {
           "visibility": "readOnly",
@@ -343,15 +501,15 @@
           "form": false
         },
         "tbaiSequence": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "tbaiInvoicenum": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "tbaiInvoiceseq": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         }
       }
@@ -390,7 +548,7 @@
           "order": 3,
           "gridOrder": 3,
           "section": "principal",
-          "min": 0
+          "min": false
         },
         "uOM": {
           "visibility": "system"
@@ -404,7 +562,7 @@
           "gridOrder": 4,
           "section": "principal",
           "columnType": "amount",
-          "min": 0
+          "min": false
         },
         "etgoDiscount": {
           "visibility": "editable",
@@ -416,7 +574,8 @@
           "section": "principal",
           "derivation": null,
           "readOnlyLogic": "@Processed@='Y'",
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "unitPrice": {
           "grid": false,
@@ -505,10 +664,16 @@
           "visibility": "discarded"
         },
         "project": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "costcenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "asset": {
           "visibility": "discarded"
@@ -543,14 +708,12 @@
         "salesOrderLine": {
           "visibility": "system",
           "reference": null,
-          "inputMode": null,
-          "name": "cOrderlineId"
+          "inputMode": null
         },
         "goodsShipmentLine": {
           "visibility": "system",
           "reference": null,
-          "inputMode": null,
-          "name": "mInoutlineId"
+          "inputMode": null
         }
       }
     },
@@ -595,12 +758,17 @@
       "exclude": true
     },
     "siiData": {
-      "exclude": true
+      "exclude": true,
+      "fields": {
+        "cdigoCSV": {
+          "visibility": "discarded"
+        }
+      }
     },
     "ticketbai": {
       "exclude": true
     },
-    "resultadoValidaci\u00f3n": {
+    "resultadoValidación": {
       "exclude": true
     },
     "cashVat": {
@@ -613,13 +781,92 @@
       "exclude": true
     },
     "reversedInvoices": {
-      "exclude": true
-    },
-    "exchangeRates": {
-      "exclude": true
+      "label": "Rectificaciones",
+      "tabOrder": 90,
+      "renderTab": false,
+      "displayLogic": "@isRectificative@='true'",
+      "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'",
+      "fields": {
+        "reversedInvoice": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 1,
+          "form": true,
+          "required": true,
+          "lookup": true,
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349IsCorrective": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 5,
+          "form": true,
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349CYear": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 10,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349Period": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 20,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349BPBaseAmount": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 30,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349BPBaseAmountS": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 40,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349CBpartner": {
+          "visibility": "discarded"
+        }
+      }
     },
     "accounting": {
       "exclude": true
+    },
+    "exchangeRates": {
+      "fields": {
+        "active": {
+          "visibility": "system"
+        },
+        "currency": {
+          "grid": true,
+          "form": false,
+          "visibility": "readOnly",
+          "gridReadOnly": true
+        },
+        "toCurrency": {
+          "grid": true,
+          "visibility": "readOnly",
+          "gridReadOnly": true
+        },
+        "rate": {
+          "grid": true
+        },
+        "foreignAmount": {
+          "grid": true
+        }
+      },
+      "javaQualifier": "invoiceExchangeRateHandler"
     }
   },
   "rules": {
@@ -663,7 +910,22 @@
       "type": "callout",
       "entity": "invoice",
       "decision": "Keep",
-      "description": "When dateInvoiced changes, auto-fill dateAcct with the same value unless manually overridden"
+      "description": "ETP-4531 (redefined 2026-07-17): C_Invoice.DateInvoiced carries AD_Column.AD_Callout_ID = com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout, which extends org.openbravo.erpCommon.ad_callouts.SE_Invoice_AccountingDate and calls super.execute() to auto-fill dateAcct from dateInvoiced. NeoCalloutService/NeoCalloutEndpoint in com.etendoerp.go execute this same callout server-side (create-time cascade and interactive per-field callout), so it fires in the GO SPA too. accountingDate is now hidden (visibility: system) and unified with the document date — the native cascade is intentionally kept as-is (the com.etendoerp.go-side guard that used to block it, per the earlier independent-editable-field design, was removed) so this is the primary mechanism keeping accountingDate in sync. AbstractInvoiceHeaderHandler#mirrorAccountingDate is a server-side safety net for write paths that don't trigger this callout (e.g. a bare PATCH).",
+      "impactIfOmitted": "If this native callout were blocked again, accountingDate would only stay in sync via the mirrorAccountingDate safety net — any gap between the two would desynchronize the hidden accounting date from the visible document date."
+    },
+    "READONLY_Posted_AccountingDate": {
+      "type": "readOnlyLogic",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Accounting date becomes read-only once the invoice is posted (Posted=Y). Mirrors Goods Receipt/Goods Shipment. Uses Posted rather than Processed so the date can still be corrected if a posting attempt failed and the document needs to be re-posted.",
+      "impactIfOmitted": "Users could change accounting date on already-posted invoices, desynchronizing the frontend from the accounting facts already generated."
+    },
+    "SE_Invoice_TaxDate": {
+      "type": "callout",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "ETP-4531 (redefined 2026-07-17): C_Invoice.DateAcct carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate, reachable whenever accountingDate is written (now hidden/visibility: system, unified with the document date, rather than the earlier independent-editable-field design). It only fires an update when the callout request's formState already carries a non-empty 'taxDate' that differs from the new accountingDate value (info.getStringParameter(\"inptaxdate\")). taxDate IS present in contract.json as a backend-only field (visibility: system — it exists in the backend contract but is never sent to the frontend form), so the frontend never sends a 'taxDate' key in formState; the callout's isNotEmpty(strTaxDate) guard is always false and it never produces an update. Verified harmless — kept as-is, not implemented client-side.",
+      "impactIfOmitted": "None observed: the callout's only effect targets a field this window never exposes, so there is nothing to omit."
     },
     "Currency_From_PriceList": {
       "type": "callout",

@@ -28,7 +28,7 @@ describe('getAllWindowNames', () => {
     const names = getAllWindowNames();
     assert.ok(names.includes('sales-order'));
     assert.ok(names.includes('business-partner'));
-    assert.ok(names.includes('unit-of-measure'));
+    assert.ok(names.includes('product'));
     assert.ok(names.length >= 11);
   });
 });

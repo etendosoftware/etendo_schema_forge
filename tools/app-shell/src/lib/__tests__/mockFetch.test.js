@@ -125,6 +125,19 @@ describe('createMockFetch', () => {
     assert.equal(order.docStatus, 'VO');
   });
 
+  it('POST email contract send returns a mock contract success', async () => {
+    const mockFetch = createMockFetch(mockData, basePath);
+    const res = await mockFetch(`${basePath}/email-contracts/sales-invoice-send/send`, {
+      method: 'POST',
+      body: JSON.stringify({ version: 'v1', recordId: 'mock-001', intent: 'send-document' }),
+    });
+    assert.equal(res.ok, true);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.status, 'SENT');
+    assert.match(data.auditId, /^mock-email-/);
+  });
+
   it('PUT to unknown entity returns 404', async () => {
     const mockFetch = createMockFetch(mockData, basePath);
     const res = await mockFetch(`${basePath}/invoice/mock-001`, {
@@ -147,6 +160,19 @@ describe('createMockFetch', () => {
     assert.equal(res.status, 404);
     const data = await res.json();
     assert.equal(data.error, 'Record not found');
+  });
+
+  it('GET SFWindowAccessMap returns full access regardless of basePath', async () => {
+    const mockFetch = createMockFetch(mockData, basePath);
+    // This endpoint lives under /sws/neo/, not under `basePath` — it must be
+    // intercepted anyway (see ETP-4520 App.jsx `fetchWindowAccess`).
+    const res = await mockFetch('/etendo_sf/sws/neo/windowaccessmap');
+    assert.equal(res.ok, true);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.windowAccess['any-window-id'], 'full');
+    assert.equal(data.windowAccess['another-window-id'], 'full');
+    assert.equal(data.capabilities.showAccountingFields, true);
   });
 
   it('non-API URL returns undefined (passthrough)', async () => {

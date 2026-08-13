@@ -10,8 +10,11 @@ export const returnMaterialReceipt = [
     "warehouse": "Main Warehouse",
     "partnerAddress": "Acme Corp",
     "documentStatus": "DR",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00001"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00001",
+    "invoiceStatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00001"
   },
   {
     "id": "mock-returnMaterialReceipt-002",
@@ -22,8 +25,11 @@ export const returnMaterialReceipt = [
     "warehouse": "East Distribution Center",
     "partnerAddress": "TechFlow Inc",
     "documentStatus": "CO",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00002"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00002",
+    "invoiceStatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00002"
   },
   {
     "id": "mock-returnMaterialReceipt-003",
@@ -34,8 +40,11 @@ export const returnMaterialReceipt = [
     "warehouse": "West Hub",
     "partnerAddress": "Global Trade Ltd",
     "documentStatus": "VO",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00003"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00003",
+    "invoiceStatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00003"
   },
   {
     "id": "mock-returnMaterialReceipt-004",
@@ -46,8 +55,11 @@ export const returnMaterialReceipt = [
     "warehouse": "North Storage",
     "partnerAddress": "Summit Industries",
     "documentStatus": "IP",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00004"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00004",
+    "invoiceStatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00004"
   },
   {
     "id": "mock-returnMaterialReceipt-005",
@@ -58,8 +70,11 @@ export const returnMaterialReceipt = [
     "warehouse": "South Logistics",
     "partnerAddress": "Pacific Partners",
     "documentStatus": "DR",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00005"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00005",
+    "invoiceStatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00005"
   },
   {
     "id": "mock-returnMaterialReceipt-006",
@@ -70,8 +85,11 @@ export const returnMaterialReceipt = [
     "warehouse": "Central Depot",
     "partnerAddress": "Alpine Solutions",
     "documentStatus": "CO",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00006"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00006",
+    "invoiceStatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00006"
   },
   {
     "id": "mock-returnMaterialReceipt-007",
@@ -82,8 +100,11 @@ export const returnMaterialReceipt = [
     "warehouse": "Regional Warehouse A",
     "partnerAddress": "Meridian Group",
     "documentStatus": "VO",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00007"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00007",
+    "invoiceStatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00007"
   },
   {
     "id": "mock-returnMaterialReceipt-008",
@@ -94,8 +115,11 @@ export const returnMaterialReceipt = [
     "warehouse": "Regional Warehouse B",
     "partnerAddress": "Vertex Systems",
     "documentStatus": "IP",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00008"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00008",
+    "invoiceStatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00008"
   },
   {
     "id": "mock-returnMaterialReceipt-009",
@@ -106,8 +130,11 @@ export const returnMaterialReceipt = [
     "warehouse": "Main Warehouse",
     "partnerAddress": "Atlas Manufacturing",
     "documentStatus": "DR",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00009"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00009",
+    "invoiceStatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00009"
   },
   {
     "id": "mock-returnMaterialReceipt-010",
@@ -118,8 +145,11 @@ export const returnMaterialReceipt = [
     "warehouse": "East Distribution Center",
     "partnerAddress": "Nova Enterprises",
     "documentStatus": "CO",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00010"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00010",
+    "invoiceStatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00010"
   },
   {
     "id": "mock-returnMaterialReceipt-011",
@@ -130,8 +160,11 @@ export const returnMaterialReceipt = [
     "warehouse": "West Hub",
     "partnerAddress": "Pinnacle Services",
     "documentStatus": "VO",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00011"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00011",
+    "invoiceStatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00011"
   },
   {
     "id": "mock-returnMaterialReceipt-012",
@@ -142,8 +175,11 @@ export const returnMaterialReceipt = [
     "warehouse": "North Storage",
     "partnerAddress": "Horizon Labs",
     "documentStatus": "IP",
-    "salesOrder": "Sample salesOrder",
-    "trackingNo": "RE-00012"
+    "posted": "Sample posted",
+    "trackingNo": "RE-00012",
+    "invoiceStatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00012"
   }
 ];
 

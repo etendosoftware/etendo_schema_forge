@@ -13,7 +13,7 @@ describe('OrderCreateInvoice', () => {
   });
 
   it('accepts data, recordId, token, and apiBaseUrl props', () => {
-    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl\s*\}/);
+    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl/);
   });
 
   it('renders confirm flow only for draft orders (status DR)', () => {
@@ -214,14 +214,98 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /onClick=\{disabled\s*\?\s*undefined\s*:\s*onChange\}/);
     });
 
-    it('switches border and background to a green/done palette when disabled', () => {
-      assert.match(src, /disabled\s*\?\s*'2px solid #10B981'/);
-      assert.match(src, /disabled\s*\?\s*'#ECFDF5'/);
-      assert.match(src, /disabled\s*\?\s*'#10B981'/);
+    it('switches to semantic success roles when disabled', () => {
+      assert.match(src, /disabled\s*\?\s*'2px solid var\(--status-success-border\)'/);
+      assert.match(src, /background:\s*disabled\s*\?\s*'var\(--status-success-bg\)'/);
+      assert.match(src, /color:\s*disabled\s*\?\s*'var\(--status-success-fg\)'/);
     });
 
     it('renders the checkmark for both checked and disabled states', () => {
       assert.match(src, /\(checked\s*\|\|\s*disabled\)\s*&&\s*\(/);
+    });
+  });
+
+  describe('semantic color roles (ETP-4767)', () => {
+    it('uses foreground roles for selected and completed checkbox indicators', () => {
+      assert.match(src, /background:\s*disabled\s*\?\s*'var\(--status-success-fg\)'\s*:\s*\(checked\s*\?\s*'var\(--status-info-fg\)'/);
+    });
+
+    it('uses semantic surface roles for the confirmation summary and warning', () => {
+      assert.match(src, /background: 'var\(--status-info-bg\)', border: '0\.5px solid var\(--status-info-border\)'/);
+      assert.match(src, /background: 'var\(--status-warning-bg\)', border: '1px solid var\(--status-warning-border\)'/);
+    });
+  });
+
+  // ETP-4312: the modal must DERIVE the view label from each doc's type. Passing
+  // a hardcoded primary={ui('soViewInvoice')} would force "Ver factura" on a
+  // shipment-only result. The arrow now comes from the modal's SVG, not the label.
+  describe('ConfirmResultModal primary label (ETP-4312 regression)', () => {
+    it('does not force a hardcoded soViewInvoice primary label', () => {
+      assert.doesNotMatch(src, /primary=\{ui\('soViewInvoice'\)\}/);
+    });
+
+    it('does not pass any hardcoded primary view label to the modal', () => {
+      assert.doesNotMatch(src, /primary=\{ui\('(soViewInvoice|poViewInvoice|soViewShipment|poViewReceipt|sqViewOrder)'\)\}/);
+    });
+  });
+
+  // ETP-4468: "Confirmar" must not discard an unsaved header edit — force-save
+  // first, and the in-memory data prop must win over the stale server fetch.
+  describe('force-save before confirm (ETP-4468)', () => {
+    it('accepts an onSave prop on the default-exported component', () => {
+      assert.match(src, /export default function OrderCreateInvoice\(\{[^}]*onSave[^}]*\}\)/);
+    });
+
+    it('threads onSave down to the internal ConfirmModal usage', () => {
+      assert.match(src, /<ConfirmModal[\s\S]*?onSave=\{onSave\}[\s\S]*?\/>/);
+    });
+
+    it('ConfirmModal accepts an onSave prop', () => {
+      assert.match(src, /export function ConfirmModal\(\{[^}]*onSave[^}]*\}\)/);
+    });
+
+    it('in-memory data wins over the stale freshData fetch', () => {
+      assert.match(src, /const d\s*=\s*data \|\| freshData \|\| \{\}/);
+      assert.doesNotMatch(src, /const d\s*=\s*freshData \|\| data \|\| \{\}/);
+    });
+
+    it('calls onSave before the documentAction POST and aborts on failure', () => {
+      assert.match(
+        src,
+        /if\s*\(onSave\)\s*\{\s*const saved\s*=\s*await onSave\(\);\s*if\s*\(!saved\?\.id\)\s*\{[\s\S]*?setError\([\s\S]*?setLoading\(false\);\s*return;\s*\}\s*\}/,
+      );
+      // The onSave guard runs before Step 1's documentAction POST
+      const saveGuardIdx = src.indexOf('if (onSave) {');
+      const step1Idx = src.indexOf('action/documentAction');
+      assert.ok(saveGuardIdx >= 0 && step1Idx >= 0 && saveGuardIdx < step1Idx);
+    });
+
+    it('shows the dedicated soSaveBeforeConfirmError message on save-guard failure (not the generic soErrorOccurred)', () => {
+      assert.match(src, /if\s*\(!saved\?\.id\)\s*\{\s*setError\(ui\('soSaveBeforeConfirmError'\)\);/);
+    });
+  });
+
+  // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
+  // the order is Confirmed (CO), not while it is still Draft (DR). Grid and
+  // Form-view must agree on the same rule.
+  describe('Send button visibility gated by document status (ETP-4717)', () => {
+    it('does NOT show the Send button while the order is still Draft (DR)', () => {
+      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+    });
+
+    it('shows the Send button only when the order is Completed (CO)', () => {
+      assert.match(src, /\{isCompleted && <SendDocumentButton/);
+    });
+
+    it('does NOT gate the SendDocumentModal render on isDraft', () => {
+      assert.doesNotMatch(
+        src,
+        /\{\(isDraft \|\| isCompleted\) && showSend && createPortal\(\s*<SendDocumentModal/,
+      );
+    });
+
+    it('gates the SendDocumentModal render on isCompleted only', () => {
+      assert.match(src, /\{isCompleted && showSend && createPortal\(\s*<SendDocumentModal/);
     });
   });
 });

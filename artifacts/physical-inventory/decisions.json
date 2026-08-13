@@ -4,6 +4,7 @@
     "category": "inventory",
     "name": "Physical Inventory",
     "statusField": "processed",
+    "hideDeleteWhenComplete": true,
     "processOverrides": {
       "processNow": {
         "requiresLines": true
@@ -14,46 +15,110 @@
       "bottomSection": "PhysicalInventoryBottomPanel"
     },
     "dateFilterKey": "movementDate",
-    "linesLayout": "inlineEditable"
+    "linesLayout": "inlineEditable",
+    "hidePrint": true,
+    "hideLink": true,
+    "listViewOptions": {
+      "hideStatusFilter": true
+    },
+    "statusEnumLabels": {
+      "true": "statusProcessed",
+      "false": "statusDraft"
+    },
+    "summaryFields": [],
+    "noHeaderBorder": true,
+    "lockedAlert": {
+      "title": "goodsMovementsLockedTitle",
+      "message": "goodsMovementsLockedMessage",
+      "actionLabel": "goodsMovementsLockedAction",
+      "navigateTo": "/physical-inventory/new"
+    },
+    "draftMode": {
+      "enabled": true,
+      "processField": "processNow",
+      "processValue": "Y",
+      "label": "confirm",
+      "disableWhenEmpty": true
+    },
+    "labelOverrides": {
+      "en_US": {
+        "Processed": "Status"
+      },
+      "es_ES": {
+        "Processed": "Estado"
+      }
+    },
+    "menuActions": [
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      }
+    ],
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ]
   },
   "entities": {
     "header": {
       "name": "inventory",
+      "javaQualifier": "inventory",
       "fields": {
         "warehouse": {
           "grid": true,
+          "gridOrder": 3,
           "searchable": true,
           "readOnlyLogic": null
         },
         "movementDate": {
           "grid": true,
+          "gridOrder": 1,
           "searchable": true,
           "readOnlyLogic": null
         },
         "inventoryType": {
-          "grid": true,
-          "searchable": true,
+          "grid": false,
+          "searchable": false,
+          "form": false,
           "readOnlyLogic": null
         },
         "name": {
-          "grid": true
+          "grid": true,
+          "gridOrder": 2,
+          "readOnlyLogic": "@Processed@='Y'"
         },
         "description": {
           "readOnlyLogic": null,
-          "section": "other"
+          "form": false
         },
         "processed": {
           "visibility": "readOnly",
           "label": "Status",
           "grid": true,
+          "gridOrder": 4,
           "form": false,
-          "columnType": "status"
+          "columnType": "status",
+          "enumValues": [
+            { "value": "true", "name": "statusProcessed" },
+            { "value": "false", "name": "statusDraft" }
+          ]
         },
         "project": {
-          "section": "other"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "processNow": {
-          "visibility": "editable"
+          "visibility": "system"
         },
         "generateList": {
           "visibility": "system"
@@ -65,7 +130,25 @@
           "visibility": "discarded"
         },
         "costCenter": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
+        },
+        "posted": {
+          "visibility": "readOnly",
+          "type": "boolean",
+          "form": false,
+          "grid": true,
+          "gridOrder": 5,
+          "badge": true,
+          "badgeLabels": {
+            "true":  { "en_US": "Posted",     "es_ES": "Contabilizado"   },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          }
         }
       }
     },
@@ -79,24 +162,42 @@
         },
         "product": {
           "grid": true,
+          "gridOrder": 1,
+          "grow": true,
           "lookup": true,
           "forceCalloutFields": ["quantityCount", "bookQuantity"],
           "readOnlyLogic": null
         },
         "lineNo": {
-          "grid": true,
+          "grid": false,
           "readOnlyLogic": null
         },
         "bookQuantity": {
           "visibility": "readOnly",
           "label": "System Count",
           "grid": true,
+          "gridOrder": 3,
+          "grow": true,
+          "columnWidth": 192,
           "readOnlyLogic": null
         },
         "quantityCount": {
           "visibility": "editable",
           "label": "User Count",
           "grid": true,
+          "gridOrder": 4,
+          "grow": true,
+          "columnWidth": 192,
+          "readOnlyLogic": null
+        },
+        "etgoQtydiff": {
+          "visibility": "readOnly",
+          "label": "Difference",
+          "columnType": "signedDelta",
+          "grid": true,
+          "gridOrder": 5,
+          "grow": true,
+          "columnWidth": 192,
           "readOnlyLogic": null
         },
         "adjustmentQuantity": {
@@ -107,6 +208,9 @@
         "uOM": {
           "visibility": "readOnly",
           "grid": true,
+          "gridOrder": 2,
+          "grow": true,
+          "gridReadOnly": true,
           "inputMode": "selector",
           "readOnlyLogic": null
         },
@@ -197,9 +301,8 @@
     "PROCESS_Posted": {
       "type": "process",
       "entity": "inventory",
-      "decision": "Omit",
-      "description": "Posted hardcoded button. Not applicable to simplified UI.",
-      "impactIfOmitted": "Accounting posting handled through backend."
+      "decision": "Keep",
+      "description": "Post to accounting — exposed via menuActions post action, visible when processed=Y and not yet posted."
     }
   },
   "discardPatterns": [

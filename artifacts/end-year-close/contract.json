@@ -1,0 +1,571 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-07-13T13:35:37.405Z",
+  "updatedAt": "2026-07-21T12:35:25.423Z",
+  "checksum": "db9b2ce7708db6da",
+  "frontendContract": {
+    "window": {
+      "id": "B5673F73F613496C8BEA22FB55E4E1E4",
+      "name": "End Year Close",
+      "primaryEntity": "accounting",
+      "category": "finance",
+      "secondaryTabs": {},
+      "detailEntity": null,
+      "layoutType": "default"
+    },
+    "entities": {
+      "accounting": {
+        "tableName": "FinancialMgmtAccountingFactEndYearHQL",
+        "tabId": "6A77F910DAF24EA8BE7FF3F5084FED67",
+        "tabName": "Accounting",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "type",
+            "apiKey": "type",
+            "column": "Factaccttype",
+            "label": "Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "C",
+                "name": "Closing Entry",
+                "labels": {
+                  "es_ES": "Asiento de cierre"
+                }
+              },
+              {
+                "value": "D",
+                "name": "Divide Up",
+                "labels": {
+                  "es_ES": "Reparto de reservas"
+                }
+              },
+              {
+                "value": "R",
+                "name": "Income Statement",
+                "labels": {
+                  "es_ES": "Entrada de regularización"
+                }
+              },
+              {
+                "value": "O",
+                "name": "Opening Entry",
+                "labels": {
+                  "es_ES": "Asiento de apertura"
+                }
+              },
+              {
+                "value": "N",
+                "name": "Regular Entry",
+                "labels": {
+                  "es_ES": "Asiento normal"
+                }
+              }
+            ],
+            "gridOrder": 4,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "account",
+            "apiKey": "account",
+            "column": "Account_ID",
+            "label": "Account",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 1,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "debit",
+            "apiKey": "debit",
+            "column": "Debit",
+            "label": "Debit",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 2
+            }
+          },
+          {
+            "name": "credit",
+            "apiKey": "credit",
+            "column": "Credit",
+            "label": "Credit",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 3,
+            "validation": {
+              "maxLength": 2
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 5,
+            "validation": {
+              "maxLength": 255
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [],
+        "javaQualifier": "year-accounting"
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "B5673F73F613496C8BEA22FB55E4E1E4",
+      "name": "End Year Close",
+      "primaryEntity": "accounting",
+      "category": "finance",
+      "secondaryTabs": {},
+      "detailEntity": null
+    },
+    "entities": {
+      "accounting": {
+        "tableName": "FinancialMgmtAccountingFactEndYearHQL",
+        "tabId": "6A77F910DAF24EA8BE7FF3F5084FED67",
+        "tabName": "Accounting",
+        "fields": [
+          {
+            "name": "generalLedger",
+            "apiKey": "generalLedger",
+            "column": "C_Acctschema_ID",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "type",
+            "apiKey": "type",
+            "column": "Factaccttype",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "account",
+            "apiKey": "account",
+            "column": "Account_ID",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "debit",
+            "apiKey": "debit",
+            "column": "Debit",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "credit",
+            "apiKey": "credit",
+            "column": "Credit",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "description",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "accountingFact",
+            "apiKey": "accountingFact",
+            "column": "Fact_Acct_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fact_Acct_End_Year_V_ID",
+            "type": "id",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "cYearCloseVID",
+            "apiKey": "cYearCloseVID",
+            "column": "C_Year_Close_V_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          }
+        ],
+        "javaQualifier": "year-accounting"
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "end-year-close",
+    "baseUrl": "/sws/neo/end-year-close",
+    "crud": {
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/end-year-close/accounting",
+        "detailUrl": "/sws/neo/end-year-close/accounting/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-crud-flags-accounting",
+        "category": "crud-flags",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "CRUD flags for 'accounting' should all be booleans"
+      },
+      {
+        "id": "t-field-presence-accounting-account",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "account",
+        "runner": "node",
+        "description": "Field 'account' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-credit",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "credit",
+        "runner": "node",
+        "description": "Field 'credit' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-debit",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "debit",
+        "runner": "node",
+        "description": "Field 'debit' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-description",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-type",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "type",
+        "runner": "node",
+        "description": "Field 'type' should be present in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-account",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "account",
+        "runner": "node",
+        "description": "Field 'account' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-credit",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "credit",
+        "runner": "node",
+        "description": "Field 'credit' should have type 'number' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-debit",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "debit",
+        "runner": "node",
+        "description": "Field 'debit' should have type 'number' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-description",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-type",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "type",
+        "runner": "node",
+        "description": "Field 'type' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-rule-declared-Year-Close",
+        "category": "rule-declared",
+        "rule": "Year Close",
+        "runner": "node",
+        "description": "Rule 'Year Close' (process) should be declared"
+      },
+      {
+        "id": "t-system-field-accounting-accountingFact",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "accountingFact",
+        "runner": "node",
+        "description": "System field 'accountingFact' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-active",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-client",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-createdBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-creationDate",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-cYearCloseVID",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "cYearCloseVID",
+        "runner": "node",
+        "description": "System field 'cYearCloseVID' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-generalLedger",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "generalLedger",
+        "runner": "node",
+        "description": "System field 'generalLedger' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-id",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-organization",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updated",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updatedBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-visibility-accounting",
+        "category": "visibility",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "Entity 'accounting' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 24,
+      "byCategory": {
+        "crud-flags": 1,
+        "field-presence": 5,
+        "field-type": 5,
+        "rule-declared": 1,
+        "system-field": 11,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 24,
+        "junit": 0
+      }
+    }
+  }
+}

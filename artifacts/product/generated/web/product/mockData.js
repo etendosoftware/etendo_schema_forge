@@ -17,10 +17,14 @@ export const product = [
     "weight": 99.44,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "DR"
+    "mProductStatusID": "DR",
+    "eTGOPurchasePrice": 38907,
+    "eTGOSalePrice": 38907,
+    "eTGOStock": 99.44
   },
   {
     "id": "mock-product-002",
@@ -38,10 +42,14 @@ export const product = [
     "weight": 96.94,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "CO"
+    "mProductStatusID": "CO",
+    "eTGOPurchasePrice": 9306,
+    "eTGOSalePrice": 9306,
+    "eTGOStock": 96.94
   },
   {
     "id": "mock-product-003",
@@ -59,10 +67,14 @@ export const product = [
     "weight": 12.48,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "VO"
+    "mProductStatusID": "VO",
+    "eTGOPurchasePrice": 11544,
+    "eTGOSalePrice": 11544,
+    "eTGOStock": 12.48
   },
   {
     "id": "mock-product-004",
@@ -80,10 +92,14 @@ export const product = [
     "weight": 96.31,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "IP"
+    "mProductStatusID": "IP",
+    "eTGOPurchasePrice": 11872,
+    "eTGOSalePrice": 11872,
+    "eTGOStock": 96.31
   },
   {
     "id": "mock-product-005",
@@ -101,10 +117,14 @@ export const product = [
     "weight": 31.27,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "DR"
+    "mProductStatusID": "DR",
+    "eTGOPurchasePrice": 48460,
+    "eTGOSalePrice": 48460,
+    "eTGOStock": 31.27
   },
   {
     "id": "mock-product-006",
@@ -122,10 +142,14 @@ export const product = [
     "weight": 76.52,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "CO"
+    "mProductStatusID": "CO",
+    "eTGOPurchasePrice": 45418,
+    "eTGOSalePrice": 45418,
+    "eTGOStock": 76.52
   },
   {
     "id": "mock-product-007",
@@ -143,10 +167,14 @@ export const product = [
     "weight": 2.66,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "VO"
+    "mProductStatusID": "VO",
+    "eTGOPurchasePrice": 33840,
+    "eTGOSalePrice": 33840,
+    "eTGOStock": 2.66
   },
   {
     "id": "mock-product-008",
@@ -164,10 +192,14 @@ export const product = [
     "weight": 10.03,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "IP"
+    "mProductStatusID": "IP",
+    "eTGOPurchasePrice": 25716,
+    "eTGOSalePrice": 25716,
+    "eTGOStock": 10.03
   },
   {
     "id": "mock-product-009",
@@ -185,10 +217,14 @@ export const product = [
     "weight": 93.97,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "DR"
+    "mProductStatusID": "DR",
+    "eTGOPurchasePrice": 44780,
+    "eTGOSalePrice": 44780,
+    "eTGOStock": 93.97
   },
   {
     "id": "mock-product-010",
@@ -206,10 +242,14 @@ export const product = [
     "weight": 1.1,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "CO"
+    "mProductStatusID": "CO",
+    "eTGOPurchasePrice": 12483,
+    "eTGOSalePrice": 12483,
+    "eTGOStock": 1.1
   },
   {
     "id": "mock-product-011",
@@ -227,10 +267,14 @@ export const product = [
     "weight": 79.99,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "VO"
+    "mProductStatusID": "VO",
+    "eTGOPurchasePrice": 46022,
+    "eTGOSalePrice": 46022,
+    "eTGOStock": 79.99
   },
   {
     "id": "mock-product-012",
@@ -248,10 +292,14 @@ export const product = [
     "weight": 53.61,
     "uOMForWeight": "Sample uOMForWeight",
     "attributeSet": "Sample attributeSet",
+    "active": "Sample active",
     "uPCEAN": "Sample uPCEAN",
     "brand": "Sample brand",
     "returnable": "Sample returnable",
-    "mProductStatusID": "IP"
+    "mProductStatusID": "IP",
+    "eTGOPurchasePrice": 38634,
+    "eTGOSalePrice": 38634,
+    "eTGOStock": 53.61
   }
 ];
 
@@ -437,6 +485,105 @@ export const priceRuleVersion = [
     "active": "Sample active",
     "validFromDate": "2026-01-26",
     "servicePriceRule": "Sample servicePriceRule",
+    "productId": "mock-product-012"
+  }
+];
+
+export const accounting = [
+  {
+    "id": "mock-accounting-001",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Laptop Pro 15",
+    "productRevenue": "Laptop Pro 15",
+    "productCOGS": "Laptop Pro 15",
+    "productId": "mock-product-001"
+  },
+  {
+    "id": "mock-accounting-002",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "USB-C Cable",
+    "productRevenue": "USB-C Cable",
+    "productCOGS": "USB-C Cable",
+    "productId": "mock-product-002"
+  },
+  {
+    "id": "mock-accounting-003",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Wireless Mouse",
+    "productRevenue": "Wireless Mouse",
+    "productCOGS": "Wireless Mouse",
+    "productId": "mock-product-003"
+  },
+  {
+    "id": "mock-accounting-004",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Mechanical Keyboard",
+    "productRevenue": "Mechanical Keyboard",
+    "productCOGS": "Mechanical Keyboard",
+    "productId": "mock-product-004"
+  },
+  {
+    "id": "mock-accounting-005",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Monitor 27\"",
+    "productRevenue": "Monitor 27\"",
+    "productCOGS": "Monitor 27\"",
+    "productId": "mock-product-005"
+  },
+  {
+    "id": "mock-accounting-006",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Webcam HD",
+    "productRevenue": "Webcam HD",
+    "productCOGS": "Webcam HD",
+    "productId": "mock-product-006"
+  },
+  {
+    "id": "mock-accounting-007",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Headset Pro",
+    "productRevenue": "Headset Pro",
+    "productCOGS": "Headset Pro",
+    "productId": "mock-product-007"
+  },
+  {
+    "id": "mock-accounting-008",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Docking Station",
+    "productRevenue": "Docking Station",
+    "productCOGS": "Docking Station",
+    "productId": "mock-product-008"
+  },
+  {
+    "id": "mock-accounting-009",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "SSD 1TB",
+    "productRevenue": "SSD 1TB",
+    "productCOGS": "SSD 1TB",
+    "productId": "mock-product-009"
+  },
+  {
+    "id": "mock-accounting-010",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "RAM 16GB",
+    "productRevenue": "RAM 16GB",
+    "productCOGS": "RAM 16GB",
+    "productId": "mock-product-010"
+  },
+  {
+    "id": "mock-accounting-011",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Power Supply 750W",
+    "productRevenue": "Power Supply 750W",
+    "productCOGS": "Power Supply 750W",
+    "productId": "mock-product-011"
+  },
+  {
+    "id": "mock-accounting-012",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Network Switch",
+    "productRevenue": "Network Switch",
+    "productCOGS": "Network Switch",
     "productId": "mock-product-012"
   }
 ];

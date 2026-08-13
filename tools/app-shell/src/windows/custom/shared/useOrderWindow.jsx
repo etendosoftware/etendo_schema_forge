@@ -1,11 +1,15 @@
 import { useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
+import { fetchOptionalJson } from './pdfUtils.js';
 import { useSavedPreviewRecord } from './useSavedPreviewRecord.js';
+import { useRowEmailModal } from './useRowEmailModal.jsx';
 import OrderPreview from './OrderPreview.jsx';
+import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 
 export function useOrderWindow({
   windowName,
@@ -21,6 +25,10 @@ export function useOrderWindow({
   ManageDocsLauncher,
   setCloneTargets,
   showReactivate = false,
+  // ETP-4372 — per-window PDF hook + localized document label so the row-hover
+  // envelope opens SendDocumentModal WITH a PDF preview (see useRowEmailModal).
+  usePdf,
+  documentType,
 }) {
   useBulkActionToast();
   const ui = useUI();
@@ -39,6 +47,16 @@ export function useOrderWindow({
 
   const { effectiveRecord, clearSavedRecord } = useSavedPreviewRecord();
 
+  // ETP-4372 — row-hover email envelope with PDF preview. When `usePdf` is not
+  // supplied the modal is omitted and ListView keeps its no-preview fallback.
+  const { onEmail: onRowEmail, emailModalPortal } = useRowEmailModal({
+    usePdf,
+    apiBaseUrl,
+    token,
+    windowName,
+    documentType,
+  });
+
   const renderPreview = useCallback(({ row, onClose, onEdit }) => (
     <OrderPreview
       order={row}
@@ -48,7 +66,7 @@ export function useOrderWindow({
       specName={specName}
       onClose={onClose}
       onEdit={onEdit}
-    />
+      data-testid="OrderPreview__4b313b" />
   ), [token, apiBaseUrl, windowName, specName]);
 
   const rowQuickActions = useMemo(() => ({
@@ -59,10 +77,13 @@ export function useOrderWindow({
       edit: { show: true },
       duplicate: { show: true },
       delete: { show: true },
+      // ETP-4717 — see sendActionVisibility.js
+      email: { visibleWhen: SEND_VISIBLE_WHEN_CONFIRMED },
     },
     documentPreview: true,
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onClone: (row) => setCloneTargets([row]),
+    onEmail: onRowEmail,
     onDelete: requestDelete,
     menuActions: ({ row, status }) => {
       const delivery = Number(row?.[deliveryKey] ?? 100);
@@ -78,7 +99,30 @@ export function useOrderWindow({
           key: 'confirm',
           label: ui(confirmLabelKey),
           visible: status === 'DR',
-          onClick: ({ row: r }) => setConfirmRow(r),
+          onClick: async ({ row: r }) => {
+            const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+            const docCurrency = r['currency$_identifier'] || r.currency;
+            if (docCurrency && r.orderDate) {
+              try {
+                const session = await fetchOptionalJson(`${base}/session`, token);
+                const orgCurrency = session?.organization?.['currency$_identifier'];
+                const orgCurrencyId = session?.organization?.currency;
+                if (orgCurrency && docCurrency !== orgCurrency) {
+                  const fromCurrency = r.currency || docCurrency;
+                  const toCurrency = orgCurrencyId ?? orgCurrency;
+                  const rateData = await fetchOptionalJson(
+                    `${base}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrency)}&toCurrency=${encodeURIComponent(toCurrency)}&date=${encodeURIComponent(r.orderDate)}`,
+                    token,
+                  );
+                  if (rateData && !rateData.hasRate) {
+                    toast.error(ui('noExchangeRateAvailable'));
+                    return;
+                  }
+                }
+              } catch { /* non-fatal — allow confirmation to proceed */ }
+            }
+            setConfirmRow(r);
+          },
         },
         {
           key: 'manage',
@@ -99,7 +143,7 @@ export function useOrderWindow({
     onMenuActionExecuted: (action) => {
       if (action.documentAction) setRefreshKey(k => k + 1);
     },
-  }), [navigate, windowName, requestDelete, ui, deliveryKey, manageLabelKeys, confirmLabelKey, setCloneTargets, showReactivate]);
+  }), [navigate, windowName, requestDelete, ui, deliveryKey, manageLabelKeys, confirmLabelKey, setCloneTargets, showReactivate, onRowEmail]);
 
   const confirmPortal = confirmRow && !confirmedDocs ? createPortal(
     <ConfirmModal
@@ -109,7 +153,7 @@ export function useOrderWindow({
       headers={headers}
       onClose={() => setConfirmRow(null)}
       onConfirmed={(docs) => setConfirmedDocs(docs)}
-    />,
+      data-testid="ConfirmModal__4b313b" />,
     document.body,
   ) : null;
 
@@ -121,21 +165,24 @@ export function useOrderWindow({
       token={token}
       onClose={() => setManageRow(null)}
       onCreated={() => { setManageRow(null); setRefreshKey(k => k + 1); }}
-    />
+      data-testid="ManageDocsLauncher__4b313b" />
   ) : null;
 
   const confirmResultPortal = confirmedDocs ? createPortal(
     <ConfirmResultModal
-      docs={confirmedDocs}
-      ui={ui}
-      navigate={navigate}
+      title={ui('soConfirmedTitle')}
+      docs={[
+        confirmedDocs.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, amount: confirmedDocs.shipment.amount, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
+        confirmedDocs.invoice?.id  && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
+      ].filter(Boolean)}
       currency={confirmRow?.['currency$_identifier'] || ''}
+      navigate={navigate}
       onClose={() => {
         setConfirmedDocs(null);
         setConfirmRow(null);
         setRefreshKey(k => k + 1);
       }}
-    />,
+      data-testid="ConfirmResultModal__4b313b" />,
     document.body,
   ) : null;
 
@@ -150,5 +197,6 @@ export function useOrderWindow({
     confirmPortal,
     manageLauncher,
     confirmResultPortal,
+    emailModalPortal,
   };
 }

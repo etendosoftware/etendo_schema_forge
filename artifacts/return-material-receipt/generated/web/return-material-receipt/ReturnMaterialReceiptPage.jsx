@@ -1,5 +1,8 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
+import { toast } from 'sonner';
 import ReturnMaterialReceiptTable from './ReturnMaterialReceiptTable';
 import ReturnMaterialReceiptForm from './ReturnMaterialReceiptForm';
 import ReturnMaterialReceiptLineTable from './ReturnMaterialReceiptLineTable';
@@ -7,6 +10,7 @@ import ReturnMaterialReceiptLineForm from './ReturnMaterialReceiptLineForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import ReturnMaterialReceiptBottomPanel from '../../../custom/ReturnMaterialReceiptBottomPanel';
+import ConfirmWithCreditButton from '@/windows/custom/return-material-receipt/ConfirmWithCreditButton';
 import catalogs from './mockCatalogs';
 
 
@@ -16,19 +20,22 @@ const breadcrumb = 'Sales / Return Material Receipt';
 // @sf-generated-start summary:returnMaterialReceipt
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'salesOrder', column: 'C_Order_ID', type: 'selector' },
+  { key: 'etblkpBulkposting', column: 'EM_Etblkp_Bulkposting', type: 'string' },
+  { key: 'sourceShipmentDocNo', column: 'sourceShipmentDocNo', type: 'string' },
 ];
 
 const statusField = 'documentStatus';
 // @sf-generated-end summary:returnMaterialReceipt
 
 // @sf-generated-start extraBadges:returnMaterialReceipt
-const extraBadges = [];
+const extraBadges = [
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
+];
 // @sf-generated-end extraBadges:returnMaterialReceipt
 
 // @sf-generated-start processes:returnMaterialReceipt
 const processes = [
-  { name: 'Process Receipt', label: 'Process  Receipt', style: 'positive', columnName: 'documentAction' },
+
 ];
 // @sf-generated-end processes:returnMaterialReceipt
 
@@ -37,7 +44,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:returnMaterialReceipt
 
 // @sf-generated-start requiredHeaderFields:returnMaterialReceipt
-const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', 'warehouse', 'partnerAddress'];
+const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', 'warehouse', 'partnerAddress', 'etblkpBulkposting'];
 // @sf-generated-end requiredHeaderFields:returnMaterialReceipt
 
 // @sf-generated-start addLineFields:returnMaterialReceiptLine
@@ -111,15 +118,16 @@ export const api = {
       "column": "C_BPartner_Location_ID",
       "reference": "BusinessPartnerLocation",
       "inputMode": "dependent",
-      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/partnerAddress"
-    },
-    {
-      "entity": "returnMaterialReceipt",
-      "field": "salesOrder",
-      "column": "C_Order_ID",
-      "reference": "Order",
-      "inputMode": "search",
-      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/salesOrder"
+      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/partnerAddress",
+      "context": {
+        "required": [
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
     },
     {
       "entity": "returnMaterialReceiptLine",
@@ -171,12 +179,6 @@ export const api = {
     },
     {
       "entity": "returnMaterialReceipt",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/posted"
-    },
-    {
-      "entity": "returnMaterialReceipt",
       "field": "calculateFreight",
       "column": "Calculate_Freight",
       "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/calculateFreight",
@@ -185,10 +187,10 @@ export const api = {
     },
     {
       "entity": "returnMaterialReceipt",
-      "field": "sendMaterials",
-      "column": "RM_Shipment_Pickedit",
-      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
-      "processId": "4AD70293357245AB96E59C2CDB43A35D",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -206,6 +208,14 @@ export const api = {
       "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/updateLines",
       "processId": "800010",
       "processType": "classic"
+    },
+    {
+      "entity": "returnMaterialReceipt",
+      "field": "sendMaterials",
+      "column": "RM_Shipment_Pickedit",
+      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
+      "processId": "4AD70293357245AB96E59C2CDB43A35D",
+      "processType": "obuiapp"
     },
     {
       "entity": "returnMaterialReceipt",
@@ -255,13 +265,35 @@ export const api = {
   },
   "window": {
     "category": "sales"
+  },
+  "labelOverrides": {
+    "es_ES": {
+      "sourceShipmentDocNo": "Albarán origen",
+      "movementQuantity": "Cant. a devolver",
+      "orderQuantity": "Cant. entregada original"
+    },
+    "en_US": {
+      "sourceShipmentDocNo": "Source Shipment",
+      "movementQuantity": "Return Qty",
+      "orderQuantity": "Original Delivered Qty"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:ReturnMaterialReceiptPage
 export default function ReturnMaterialReceiptPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('123271B9AD60469BAE8A924841456B63');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="123271B9AD60469BAE8A924841456B63" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="returnMaterialReceipt"
         detailEntity="returnMaterialReceiptLine"
@@ -280,14 +312,22 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteWhenComplete
+        noHeaderBorder
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={ReturnMaterialReceiptBottomPanel}
+        topbarRight={ConfirmWithCreditButton}
+        menuActions={({ data, status }) => [
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+        ]}
         requiredHeaderFields={requiredHeaderFields}
-        linesLayout="inlineEditable"
-        sendDocument
-        {...props}
+        addLineGuard={(_, children) => children.length < 0}
+        labelOverrides={labelOverrides}
+        sendDocument={{"enabled":false}}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -300,9 +340,10 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="movementDate"
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument
-      {...props}
+      sendDocument={{"enabled":false}}
+      {...props} window={effectiveWindow}
     />
   );
 }

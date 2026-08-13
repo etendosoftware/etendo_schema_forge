@@ -7,9 +7,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Main Warehouse",
     "description": "Standard order for Q1 delivery",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -18,9 +19,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "East Distribution Center",
     "description": "Rush order - priority shipping required",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -29,9 +31,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "West Hub",
     "description": "Bulk purchase for warehouse restocking",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -40,9 +43,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "North Storage",
     "description": "Sample order for client evaluation",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -51,9 +55,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "South Logistics",
     "description": "Recurring monthly supply order",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -62,9 +67,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Central Depot",
     "description": "Special pricing agreement applies",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -73,9 +79,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Regional Warehouse A",
     "description": "Consolidated order from multiple requests",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -84,9 +91,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Regional Warehouse B",
     "description": "Trial order for new product line",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -95,9 +103,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Main Warehouse",
     "description": "Replacement for damaged goods",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -106,9 +115,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "East Distribution Center",
     "description": "Pre-season inventory build-up",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -117,9 +127,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "West Hub",
     "description": "Customer-specific configuration",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   },
   {
@@ -128,9 +139,10 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "North Storage",
     "description": "Government contract fulfillment",
-    "processNow": "Sample processNow",
+    "posted": "Sample posted",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
+    "costCenter": "Sample costCenter",
     "processed": "Sample processed"
   }
 ];
@@ -147,6 +159,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 402,
     "cost": 99.44,
+    "etgoQtydiff": 5,
     "inventoryId": "mock-inventory-001"
   },
   {
@@ -160,6 +173,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 54,
     "cost": 96.94,
+    "etgoQtydiff": 33,
     "inventoryId": "mock-inventory-002"
   },
   {
@@ -173,6 +187,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 150,
     "cost": 12.48,
+    "etgoQtydiff": 86,
     "inventoryId": "mock-inventory-003"
   },
   {
@@ -186,6 +201,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 97,
     "cost": 96.31,
+    "etgoQtydiff": 3,
     "inventoryId": "mock-inventory-004"
   },
   {
@@ -199,6 +215,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 311,
     "cost": 31.27,
+    "etgoQtydiff": 91,
     "inventoryId": "mock-inventory-005"
   },
   {
@@ -212,6 +229,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 451,
     "cost": 76.52,
+    "etgoQtydiff": 31,
     "inventoryId": "mock-inventory-006"
   },
   {
@@ -225,6 +243,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 496,
     "cost": 2.66,
+    "etgoQtydiff": 89,
     "inventoryId": "mock-inventory-007"
   },
   {
@@ -238,6 +257,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 284,
     "cost": 10.03,
+    "etgoQtydiff": 39,
     "inventoryId": "mock-inventory-008"
   },
   {
@@ -251,6 +271,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 225,
     "cost": 93.97,
+    "etgoQtydiff": 49,
     "inventoryId": "mock-inventory-009"
   },
   {
@@ -264,6 +285,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 479,
     "cost": 1.1,
+    "etgoQtydiff": 72,
     "inventoryId": "mock-inventory-010"
   },
   {
@@ -277,6 +299,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 123,
     "cost": 79.99,
+    "etgoQtydiff": 25,
     "inventoryId": "mock-inventory-011"
   },
   {
@@ -290,6 +313,7 @@ export const inventoryLine = [
     "uOM": "Sample uOM",
     "bookQuantity": 337,
     "cost": 53.61,
+    "etgoQtydiff": 21,
     "inventoryId": "mock-inventory-012"
   }
 ];

@@ -43,10 +43,13 @@ export default function EditDescriptionDialog({ open, attachment, onClose, onSav
   };
 
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (!value) onClose?.(); }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{ui('attachmentsEditDescription')}</DialogTitle>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => { if (!value) onClose?.(); }}
+      data-testid="Dialog__5db62a">
+      <DialogContent data-testid="DialogContent__5db62a">
+        <DialogHeader data-testid="DialogHeader__5db62a">
+          <DialogTitle data-testid="DialogTitle__5db62a">{ui('attachmentsEditDescription')}</DialogTitle>
         </DialogHeader>
         <textarea
           value={description}
@@ -56,11 +59,15 @@ export default function EditDescriptionDialog({ open, attachment, onClose, onSav
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder={ui('attachmentsDescriptionPlaceholder')}
         />
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onClose?.()}>
+        <DialogFooter data-testid="DialogFooter__5db62a">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onClose?.()}
+            data-testid="Button__5db62a">
             {ui('cancel')}
           </Button>
-          <Button type="button" onClick={handleSave}>
+          <Button type="button" onClick={handleSave} data-testid="Button__5db62a">
             {ui('save')}
           </Button>
         </DialogFooter>

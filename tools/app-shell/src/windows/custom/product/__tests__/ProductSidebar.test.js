@@ -16,9 +16,16 @@ describe('ProductSidebar — Y-axis formatting', () => {
     assert.doesNotMatch(src, /function formatCompact/);
   });
 
-  it('uses formatDashboardAxisTick for the Y-axis labels', () => {
-    assert.match(src, /formatDashboardAxisTick\(maxVal\)/);
-    assert.match(src, /formatDashboardAxisTick\(Math\.round\(/);
+  it('imports niceScale alongside formatDashboardAxisTick from the shared lib', () => {
+    assert.match(src, /import.*niceScale.*formatDashboardAxisTick.*from.*@\/lib\/dashboardNumberFormat/);
+  });
+
+  it('calls niceScale to compute Y-axis ticks', () => {
+    assert.match(src, /niceScale\(/);
+  });
+
+  it('builds Y-axis labels by mapping ticks through formatDashboardAxisTick', () => {
+    assert.match(src, /formatDashboardAxisTick\(t\)/);
   });
 
   it('does not call formatCompact anywhere', () => {

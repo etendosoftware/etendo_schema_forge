@@ -3,13 +3,17 @@
   "version": 2,
   "window": {
     "category": "settings",
-    "name": "User"
+    "name": "User",
+    "headerExtra": {
+      "customForm": "AssignRoleControl"
+    }
   },
   "discardPatterns": ["EM_*"],
   "entities": {
     "rxServicesAccess": { "exclude": true },
     "token": { "exclude": true },
     "user": {
+      "javaQualifier": "user",
       "fields": {
         "name": {
           "visibility": "editable",
@@ -18,10 +22,9 @@
           "section": "principal"
         },
         "username": {
-          "visibility": "editable",
-          "grid": true,
-          "searchable": true,
-          "section": "principal"
+          "visibility": "system",
+          "derivation": { "type": "fromField", "source": "email" },
+          "reason": "ETP-4829: never shown or independently editable on the admin-facing form (create or edit) — always a direct copy of email, matching the convention EtendoGoJwtDalHelper/AD_User.username already relies on to link an AD_User row to its etgo_account row by matching value. Frontend never renders or sends this field; UserRoleAssignmentHandler.handle() enforces username=email server-side on POST (defense in depth, since generated code has no beforeSave derivation support per docs/possible-limitations.md L1)."
         },
         "firstName": {
           "visibility": "editable",
@@ -35,15 +38,17 @@
         },
         "email": {
           "visibility": "editable",
+          "required": true,
           "grid": true,
           "searchable": true,
-          "section": "principal"
+          "section": "principal",
+          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it."
         },
         "password": {
           "visibility": "editable",
           "section": "security",
           "displayLogic": null,
-          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave)"
+          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave). ETP-4829: on create, this same field doubles as an optional temporary workaround — if an admin types a password here, com.etendoerp.go's UserRoleAssignmentHandler also uses it (hashed, validated against PasswordPolicy.isStrong) to create the linked etgo_account already active, instead of pending on ETP-4830's invite-email flow. AD_User.Password itself is unaffected (unrelated password store)."
         },
         "isPasswordExpired": {
           "visibility": "readOnly",
@@ -89,12 +94,11 @@
           "reason": "Supervisor for escalation workflows"
         },
         "defaultRole": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": true,
+          "form": false,
           "section": "defaults",
-          "inputMode": "selector",
-          "reference": "Role",
-          "reason": "Default role at login, essential config field"
+          "reason": "Editing moved to the AssignRoleControl headerExtra (ETP-4512), which writes this same field but sources its dropdown options from the unrestricted userRoles.role selector instead of this field's own EXISTS-restricted native selector (which only lists roles the user already has, useless for assigning a NEW one). Shown here as a read-only grid badge only; the AssignRoleControl.jsx headerExtra is the only editing surface. Still cascades defaultClient/defaultOrganization via dependsOn below, unaffected by this change. No columnType/enumValues override: a hardcoded value->name map assumed every tenant reuses GOClient's exact role ids (fixed 2026-07-27 — showed the raw AD_Role_ID for any other tenant's users, see SFRolesOverview.java's javadoc for the same class of bug). The default foreignKey grid renderer already resolves this field's own `$_identifier` companion value (the role's real, per-tenant name) via resolveIdentifier(), which is correct for every tenant without a static map."
         },
         "defaultLanguage": {
           "visibility": "editable",
@@ -162,18 +166,18 @@
       }
     },
     "userRoles": {
+      "hideDelete": true,
       "fields": {
         "role": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": true,
           "searchable": true,
-          "inputMode": "selector",
-          "reference": "Role"
+          "reason": "Role assignment now happens exclusively via the user header's AssignRoleControl (ETP-4512), which enforces a single active role and is the only writer of AD_User_Roles (via UserRoleAssignmentHandler in com.etendoerp.go). This grid becomes a read-only confirmation view; visibility:readOnly on every field in this entity empties addLineFields.entry so the Add-line button no longer renders."
         },
         "roleAdmin": {
-          "visibility": "editable",
+          "visibility": "readOnly",
           "grid": true,
-          "reason": "Controls whether user can administer the role"
+          "reason": "See role field above — locked read-only alongside it."
         }
       }
     },
@@ -300,10 +304,10 @@
     "AD_Role_of_User": {
       "type": "validation",
       "entity": "user",
-      "decision": "Keep",
+      "decision": "Omit",
       "description": "Restricts default role selection to roles assigned to this user",
-      "impactIfOmitted": "Users could select a role they don't have access to",
-      "reason": "Data integrity constraint for role-based cascade"
+      "impactIfOmitted": "No impact — the native defaultRole selector this rule filters no longer has a form control (ETP-4512: form:false, replaced by AssignRoleControl headerExtra). This EXISTS-based restriction is exactly why the native selector couldn't be reused for assigning a NEW role in the first place — see defaultRole's decisions.json reason.",
+      "reason": "Superseded 2026-07-21 (ETP-4512): moot now that defaultRole is read-only/form:false. Left documented here rather than silently dropped, since the underlying raw AD validation rule is unchanged — only this window's use of it changed."
     },
     "AD_Client_of_Role": {
       "type": "validation",

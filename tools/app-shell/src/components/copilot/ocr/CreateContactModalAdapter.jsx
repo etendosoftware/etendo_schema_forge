@@ -24,6 +24,6 @@ export default function CreateContactModalAdapter({ item, apiBaseUrl, token, onC
       documentType={item?.payload?.documentType || null}
       onClose={onCancel}
       onCreated={(record) => onSubmit({ created: record })}
-    />
+      data-testid="CreateContactModal__fc9c1d" />
   );
 }

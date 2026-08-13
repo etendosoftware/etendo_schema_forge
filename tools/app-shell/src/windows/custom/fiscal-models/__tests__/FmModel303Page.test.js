@@ -13,21 +13,21 @@ describe('FmModel303Page — exports', () => {
 
 describe('FmModel303Page — composition', () => {
   it('renders FmBoxes303', () => assert.match(src, /FmBoxes303/));
-  it('renders StatusPillMenu', () => assert.match(src, /StatusPillMenu/));
+  it('renders KpiWidget for incidents', () => assert.match(src, /KpiWidget/));
   it('renders Tabs', () => assert.match(src, /Tabs/));
   it('has back navigation (onBack)', () => assert.match(src, /onBack/));
-  it('renders Stepper', () => assert.match(src, /Stepper/));
+  it('renders KpiWidget for summary values', () => assert.match(src, /KpiWidget/));
   it('uses STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX/));
   it('renders ConfigDrawer', () => assert.match(src, /ConfigDrawer/));
   it('renders CompareDrawer', () => assert.match(src, /CompareDrawer/));
 });
 
 describe('FmModel303Page — stepper', () => {
-  it('defines all 7 statuses in STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX/));
-  it('passes steps from i18n keys', () => assert.match(src, /fm\.stepper\./));
-  it('uses fm.stepper.ready (not listo)', () => assert.match(src, /fm\.stepper\.ready/));
-  it('uses fm.stepper.presented (not presentado)', () => assert.match(src, /fm\.stepper\.presented/));
-  it('derives current from status via STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX\[status\]/));
+  it('defines STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX/));
+  it('STEPPER_INDEX maps draft to 0', () => assert.match(src, /draft:\s*0/));
+  it('STEPPER_INDEX maps ready to 1', () => assert.match(src, /ready:\s*1/));
+  it('STEPPER_INDEX maps submitted to 2', () => assert.match(src, /submitted:\s*2/));
+  it('STEPPER_INDEX maps skipped to -1', () => assert.match(src, /skipped:\s*-1/));
 });
 
 describe('FmModel303Page — i18n completeness', () => {

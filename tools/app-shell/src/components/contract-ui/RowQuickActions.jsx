@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Pencil, Copy, Mail, MoreVertical, Trash2, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
+import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 
@@ -30,6 +31,10 @@ import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
  *
  * NOTE: this component is generic — every prop is optional and gates behavior
  * gracefully. It is safe to mount on every list row regardless of window config.
+ *
+ * `readOnly` (window.readOnly): when true, the mutating actions (Edit, Clone, Delete)
+ * are hidden so a view-only window (e.g. Conversion Rates in GO) cannot be edited from
+ * the list. Row click still navigates to the read-only detail.
  */
 export default function RowQuickActions({
   row,
@@ -51,6 +56,12 @@ export default function RowQuickActions({
   // row kebab can mirror the detail kebab's per-state visibility logic.
   menuActions = [],
   hideDeleteWhenComplete = false,
+  // Unconditional Delete-button opt-out — set from decisions.json → window.hideDeleteButton
+  // (threaded through DataTable's `rowQuickActions.hideDeleteButton`). Unlike
+  // `hideDeleteWhenComplete`, this does not depend on record status: when true, the
+  // Delete icon never renders for any row in this window, mirroring DetailView's toolbar.
+  // Defaults to false → identical to pre-feature behavior when unset.
+  hideDeleteButton = false,
   statusField = null,
   // Handlers (host-controlled to keep this component decoupled from routing/modals)
   onEdit,
@@ -65,6 +76,12 @@ export default function RowQuickActions({
   // for canonical buttons are still derived from the existing props (documentPreview, statusField,
   // hideDeleteWhenComplete) — `actionsConfig` only refines visibility further.
   actionsConfig = null,
+  // View-only window (decisions.json → window.readOnly, threaded via ListView →
+  // DataTable). When true the write actions (Edit, Clone, Delete) are suppressed so
+  // a GO tenant cannot mutate the record from the list; row click still opens the
+  // read-only detail for viewing. Non-mutating affordances (Email/Send, kebab
+  // menu actions) stay gated by their own config. Defaults to false → unchanged.
+  readOnly = false,
 }) {
   const ui = useUI();
   const [showMenu, setShowMenu] = useState(false);
@@ -73,6 +90,9 @@ export default function RowQuickActions({
   const moreRef = useRef(null);
   const menuRef = useRef(null);
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
+  // ETP-4298 — declarative NEO action endpoint (e.g. post/unpost). `apiBaseUrl`
+  // is already scoped to the spec; entity segment mirrors useDocumentAction.
+  const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
 
   // visibleWhen lookup for a given action key. Falls back to `true` when no expression set.
   const passesVisibleWhen = useCallback((key) => {
@@ -132,16 +152,19 @@ export default function RowQuickActions({
   }, [showMenu]);
 
   // Same gate as DetailView's edit toolbar — centralized in utils/recordActions.js.
-  const showDelete = isDeleteVisibleForRecord({
+  // `hideDeleteButton` short-circuits before the status-based gate: it's an
+  // unconditional opt-out, not a conditional one.
+  const showDelete = !readOnly && !hideDeleteButton && isDeleteVisibleForRecord({
     record: row,
     statusField,
     hideDeleteWhenComplete,
+    hideDeleteButton,
   });
 
   const stop = (e) => { e.stopPropagation(); };
 
   const resolvedMenuActions = typeof menuActions === 'function'
-    ? menuActions({ row, status: statusField ? row?.[statusField] : undefined })
+    ? menuActions({ row, data: row, status: statusField ? row?.[statusField] : undefined })
     : menuActions;
   const visibleMenuActions = (Array.isArray(resolvedMenuActions) ? resolvedMenuActions : [])
     .filter(a => a && a.visible !== false)
@@ -153,11 +176,11 @@ export default function RowQuickActions({
     ));
 
   // ETP-3504 — Figma exact colors:
-  // - Neutral icons (Edit, Clone, Email, More): #828FA3
-  // - Delete: #D50B3E
+  // - Neutral icons (Edit, Clone, Email, More): hsl(var(--text-disabled))
+  // - Delete: hsl(var(--destructive))
   // Hover darkens slightly: neutrals → text-foreground; delete → red-700.
-  const neutralBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[#828FA3] hover:text-foreground hover:bg-muted/60 transition-colors';
-  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 transition-colors';
+  const neutralBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60 transition-colors';
+  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive transition-colors';
 
   const handleMenuActionClick = useCallback(async (action) => {
     setShowMenu(false);
@@ -167,6 +190,11 @@ export default function RowQuickActions({
     try {
       if (action.documentAction) {
         const result = await docAction.execute(row?.id, action.documentAction);
+        onMenuActionExecuted?.(action, result);
+        return;
+      }
+      if (action.neoAction) {
+        const result = await neoAction.execute(row?.id, action.neoAction);
         onMenuActionExecuted?.(action, result);
         return;
       }
@@ -189,7 +217,7 @@ export default function RowQuickActions({
         return next;
       });
     }
-  }, [docAction, row, windowName, apiBaseUrl, token, onMenuActionExecuted, inFlight]);
+  }, [docAction, neoAction, row, windowName, apiBaseUrl, token, onMenuActionExecuted, inFlight]);
 
   return (
     <div
@@ -197,8 +225,8 @@ export default function RowQuickActions({
       data-testid="row-quick-actions"
       onClick={stop}
     >
-      {/* Edit */}
-      {passesVisibleWhen('edit') && (
+      {/* Edit — suppressed on read-only windows (row click still opens the view). */}
+      {!readOnly && passesVisibleWhen('edit') && (
         <button
           type="button"
           onClick={(e) => { stop(e); runWithInFlight('edit', onEdit)(row); }}
@@ -208,12 +236,11 @@ export default function RowQuickActions({
           title={ui('quickAction.edit')}
           data-testid="row-quick-action-edit"
         >
-          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-5 w-5" />}
+          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Pencil className="h-5 w-5" data-testid="Pencil__ec6673" />}
         </button>
       )}
-
-      {/* Clone — only when host wires onClone (no generic default exists). */}
-      {onClone && passesVisibleWhen('duplicate') && (
+      {/* Clone — only when host wires onClone (no generic default exists); never on read-only. */}
+      {!readOnly && onClone && passesVisibleWhen('duplicate') && (
         <button
           type="button"
           onClick={(e) => { stop(e); runWithInFlight('duplicate', onClone)(row); }}
@@ -223,10 +250,9 @@ export default function RowQuickActions({
           title={ui('quickAction.clone')}
           data-testid="row-quick-action-clone"
         >
-          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" /> : <Copy className="h-5 w-5" />}
+          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Copy className="h-5 w-5" data-testid="Copy__ec6673" />}
         </button>
       )}
-
       {/* Email — gated by sendDocument.enabled (default true for eligible
           documental windows) with the legacy `documentPreview` truthy as
           fallback for callers that haven't migrated. */}
@@ -240,10 +266,9 @@ export default function RowQuickActions({
           title={ui('quickAction.email')}
           data-testid="row-quick-action-email"
         >
-          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mail className="h-5 w-5" />}
+          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Mail className="h-5 w-5" data-testid="Mail__ec6673" />}
         </button>
       )}
-
       {/* More — popover with menuActions[] */}
       {visibleMenuActions.length > 0 && (
         <div className="relative" ref={moreRef}>
@@ -255,7 +280,7 @@ export default function RowQuickActions({
             title={ui('quickAction.more')}
             data-testid="row-quick-action-more"
           >
-            <MoreVertical className="h-5 w-5" />
+            <MoreVertical className="h-5 w-5" data-testid="MoreVertical__ec6673" />
           </button>
           {showMenu && menuPos && createPortal(
             <>
@@ -268,12 +293,12 @@ export default function RowQuickActions({
               <div className="fixed inset-0 z-[60]" aria-hidden="true" />
             <div
               ref={menuRef}
-              className="fixed z-[61] bg-white py-2 min-w-[160px] rounded-lg"
+              className="fixed z-[61] bg-card py-2 min-w-[160px] rounded-lg"
               style={{
                 top: menuPos.top,
                 right: menuPos.right,
                 boxShadow:
-                  '0px 0px 0px 1px rgba(18,18,23,0.1), 0px 24px 48px rgba(18,18,23,0.03), 0px 10px 18px rgba(18,18,23,0.03), 0px 5px 8px rgba(18,18,23,0.04), 0px 2px 4px rgba(18,18,23,0.04)',
+                  '0px 0px 0px 1px hsl(var(--foreground) / 0.1), 0px 24px 48px hsl(var(--foreground) / 0.03), 0px 10px 18px hsl(var(--foreground) / 0.03), 0px 5px 8px hsl(var(--foreground) / 0.04), 0px 2px 4px hsl(var(--foreground) / 0.04)',
               }}
             >
               {visibleMenuActions.map((action, i) => {
@@ -285,21 +310,24 @@ export default function RowQuickActions({
                   <button
                     key={action.key || i}
                     type="button"
+                    data-testid={`menu-action-${action.key ?? i}`}
                     disabled={pending || docAction.loading}
                     onClick={(e) => { stop(e); handleMenuActionClick(action); }}
                     className={[
                       'w-full text-left px-3 py-1.5 text-sm leading-6 transition-colors flex items-center gap-2',
-                      action.destructive ? 'text-red-600 hover:bg-red-50' : 'text-foreground hover:bg-secondary',
+                      action.destructive ? 'text-destructive hover:bg-destructive hover:text-destructive-foreground' : 'text-foreground hover:bg-secondary',
                       (pending || docAction.loading) ? 'opacity-50 cursor-not-allowed' : '',
                     ].filter(Boolean).join(' ')}
                   >
                     {pending ? (
-                      <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
+                      <Loader2
+                        className="h-4 w-4 flex-shrink-0 animate-spin"
+                        data-testid="Loader2__ec6673" />
                     ) : ActionIcon && (
                       <ActionIcon
                         className="h-4 w-4 flex-shrink-0"
-                        style={{ color: action.destructive ? undefined : '#828FA3' }}
-                      />
+                        style={{ color: action.destructive ? undefined : 'hsl(var(--text-disabled))' }}
+                        data-testid="ActionIcon__ec6673" />
                     )}
                     <span>{label}</span>
                   </button>
@@ -311,7 +339,6 @@ export default function RowQuickActions({
           )}
         </div>
       )}
-
       {/* Delete */}
       {showDelete && passesVisibleWhen('delete') && (
         <button
@@ -323,7 +350,7 @@ export default function RowQuickActions({
           title={ui('quickAction.delete')}
           data-testid="row-quick-action-delete"
         >
-          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__ec6673" />}
         </button>
       )}
     </div>

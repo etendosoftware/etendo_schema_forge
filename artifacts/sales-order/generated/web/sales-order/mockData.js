@@ -19,7 +19,8 @@ export const header = [
     "deliveryStatus": "DR",
     "invoiceStatus": "DR",
     "etgoTotalDiscount": 99.44,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-002",
@@ -39,7 +40,8 @@ export const header = [
     "deliveryStatus": "CO",
     "invoiceStatus": "CO",
     "etgoTotalDiscount": 96.94,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-003",
@@ -59,7 +61,8 @@ export const header = [
     "deliveryStatus": "VO",
     "invoiceStatus": "VO",
     "etgoTotalDiscount": 12.48,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-004",
@@ -79,7 +82,8 @@ export const header = [
     "deliveryStatus": "IP",
     "invoiceStatus": "IP",
     "etgoTotalDiscount": 96.31,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-005",
@@ -99,7 +103,8 @@ export const header = [
     "deliveryStatus": "DR",
     "invoiceStatus": "DR",
     "etgoTotalDiscount": 31.27,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-006",
@@ -119,7 +124,8 @@ export const header = [
     "deliveryStatus": "CO",
     "invoiceStatus": "CO",
     "etgoTotalDiscount": 76.52,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-007",
@@ -139,7 +145,8 @@ export const header = [
     "deliveryStatus": "VO",
     "invoiceStatus": "VO",
     "etgoTotalDiscount": 2.66,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-008",
@@ -159,7 +166,8 @@ export const header = [
     "deliveryStatus": "IP",
     "invoiceStatus": "IP",
     "etgoTotalDiscount": 10.03,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-009",
@@ -179,7 +187,8 @@ export const header = [
     "deliveryStatus": "DR",
     "invoiceStatus": "DR",
     "etgoTotalDiscount": 93.97,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-010",
@@ -199,7 +208,8 @@ export const header = [
     "deliveryStatus": "CO",
     "invoiceStatus": "CO",
     "etgoTotalDiscount": 1.1,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-011",
@@ -219,7 +229,8 @@ export const header = [
     "deliveryStatus": "VO",
     "invoiceStatus": "VO",
     "etgoTotalDiscount": 79.99,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-012",
@@ -239,7 +250,8 @@ export const header = [
     "deliveryStatus": "IP",
     "invoiceStatus": "IP",
     "etgoTotalDiscount": 53.61,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP"
   }
 ];
 
@@ -255,6 +267,7 @@ export const lines = [
     "lineGrossAmount": 38907,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "USD",
     "headerId": "mock-header-001"
   },
   {
@@ -268,6 +281,7 @@ export const lines = [
     "lineGrossAmount": 9306,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "EUR",
     "headerId": "mock-header-002"
   },
   {
@@ -281,6 +295,7 @@ export const lines = [
     "lineGrossAmount": 11544,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "GBP",
     "headerId": "mock-header-003"
   },
   {
@@ -294,6 +309,7 @@ export const lines = [
     "lineGrossAmount": 11872,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "USD",
     "headerId": "mock-header-004"
   },
   {
@@ -307,6 +323,7 @@ export const lines = [
     "lineGrossAmount": 48460,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "EUR",
     "headerId": "mock-header-005"
   },
   {
@@ -320,6 +337,7 @@ export const lines = [
     "lineGrossAmount": 45418,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "GBP",
     "headerId": "mock-header-006"
   },
   {
@@ -333,6 +351,7 @@ export const lines = [
     "lineGrossAmount": 33840,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "USD",
     "headerId": "mock-header-007"
   },
   {
@@ -346,6 +365,7 @@ export const lines = [
     "lineGrossAmount": 25716,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "EUR",
     "headerId": "mock-header-008"
   },
   {
@@ -359,6 +379,7 @@ export const lines = [
     "lineGrossAmount": 44780,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "GBP",
     "headerId": "mock-header-009"
   },
   {
@@ -372,6 +393,7 @@ export const lines = [
     "lineGrossAmount": 12483,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "USD",
     "headerId": "mock-header-010"
   },
   {
@@ -385,6 +407,7 @@ export const lines = [
     "lineGrossAmount": 46022,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "EUR",
     "headerId": "mock-header-011"
   },
   {
@@ -398,6 +421,7 @@ export const lines = [
     "lineGrossAmount": 38634,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "GBP",
     "headerId": "mock-header-012"
   }
 ];

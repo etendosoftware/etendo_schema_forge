@@ -18,8 +18,12 @@ vi.mock('../useShipmentPdf.js', () => ({
   useShipmentPdf: vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null })),
 }));
 
-vi.mock('@generated/goods-shipment/custom/RelatedDocuments', () => ({
-  default: () => <div data-testid="related-docs" />,
+const capturedSpecs = { current: null };
+vi.mock('../../shared/preview-cards/RelatedDocumentsCard.jsx', () => ({
+  default: ({ documentId, specs }) => {
+    capturedSpecs.current = specs;
+    return <div data-testid="related-docs-card" data-doc-id={documentId} />;
+  },
 }));
 
 vi.mock('../../shared/GenericPreviewModal.jsx', () => ({
@@ -90,6 +94,10 @@ vi.mock('@/components/related-documents/constants.jsx', () => ({
 import { render, screen, fireEvent } from '@testing-library/react';
 import GoodsShipmentPreview from '../GoodsShipmentPreview.jsx';
 import { useShipmentPdf } from '../useShipmentPdf.js';
+import {
+  expectPresenceGatedByStatus,
+  expectDisabledGatedByStatus,
+} from '../../shared/__tests__/testUtils/sendActionGatingCases.js';
 
 const defaultShipment = {
   id: 'ship-1',
@@ -146,17 +154,20 @@ describe('GoodsShipmentPreview', () => {
     expect(title).toContain('ALB-001');
   });
 
-  it('renders 4 tabs: general, messages, history, documents', () => {
+  it('renders 3 tabs: general, messages, history (no standalone documents tab)', () => {
     renderGSPreview();
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();
     expect(screen.getByTestId('tab-messages')).toBeInTheDocument();
     expect(screen.getByTestId('tab-history')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-documents')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-documents')).not.toBeInTheDocument();
   });
 
-  it('renders related documents component in the documents tab', () => {
+  it('renders RelatedDocumentsCard inside the general tab with the shipment id', () => {
     renderGSPreview();
-    expect(screen.getByTestId('related-docs')).toBeInTheDocument();
+    const card = screen.getByTestId('related-docs-card');
+    expect(card).toBeInTheDocument();
+    expect(card.closest('[data-testid="tab-general"]')).toBeInTheDocument();
+    expect(card.getAttribute('data-doc-id')).toBe('ship-1');
   });
 
   it('shows send modal when email button is clicked', () => {
@@ -166,11 +177,80 @@ describe('GoodsShipmentPreview', () => {
     expect(screen.getByTestId('send-modal')).toBeInTheDocument();
   });
 
+  // ── ETP-4372 regression ──────────────────────────────────────────────────
+  // GoodsShipmentPreview previously did not render EmailsCard at all. The fix
+  // renders <EmailsCard onSend={openEmailModal} /> in the general tab. The real
+  // (un-mocked) EmailsCard exposes a "previewCardSendEmail" link.
+  it('ETP-4372: renders the EMAILS section with a send link in the general tab', () => {
+    renderGSPreview();
+    const link = screen.getByText('previewCardSendEmail');
+    expect(link).toBeInTheDocument();
+    expect(link.closest('[data-testid="tab-general"]')).toBeInTheDocument();
+  });
+
+  it('ETP-4372: clicking the EMAILS-section send link opens the SendDocumentModal', () => {
+    renderGSPreview();
+    expect(screen.queryByTestId('send-modal')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('previewCardSendEmail'));
+    expect(screen.getByTestId('send-modal')).toBeInTheDocument();
+  });
+
   it('download button is disabled when pdfBlob is null', () => {
     useShipmentPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
     renderGSPreview();
     const downloadBtn = screen.getByTestId('icon-download').closest('button');
     expect(downloadBtn).toBeDisabled();
+  });
+
+  // ── ETP-4717 Pair 3 regression: preview drawer Send gating ────────────────
+  // GoodsShipmentPreview never gated its Send action by documentStatus — the
+  // primary action-bar Button (Mail icon) is a raw always-rendered button,
+  // and EmailsCard's onSend is always openEmailModal. The fix will only wire
+  // these up when shipment.documentStatus === 'CO'. These DR cases must FAIL
+  // against the current (unfixed) source.
+  describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the action-bar Send (mail) button when shipment.documentStatus is DR (draft)',
+      shownIt: 'renders the action-bar Send (mail) button when shipment.documentStatus is CO (completed)',
+      renderHidden: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } }),
+      renderShown: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } }),
+      findElement: () => screen.queryByTestId('icon-mail'),
+    });
+
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the EMAILS-section send link when shipment.documentStatus is DR (draft)',
+      shownIt: 'renders the EMAILS-section send link when shipment.documentStatus is CO (completed)',
+      renderHidden: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } }),
+      renderShown: () => renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } }),
+      findElement: () => screen.queryByText('previewCardSendEmail'),
+    });
+  });
+
+  // ── ETP-4789: Download PDF gating by documentStatus ───────────────────────
+  // The download button was only gated by pdfBlob — never by documentStatus.
+  // The fix reuses the same isSendable variable already computed for Send
+  // (documentStatus === 'CO'). These cases must FAIL against the current
+  // (unfixed) source.
+  describe('Download PDF gating by documentStatus (ETP-4789)', () => {
+    function renderWithPdf(shipment) {
+      useShipmentPdf.mockReturnValue({
+        pdfUrl: 'blob:test',
+        pdfBlob: new Blob(['%PDF'], { type: 'application/pdf' }),
+        loading: false,
+        error: null,
+      });
+      global.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/test');
+      global.URL.revokeObjectURL = vi.fn();
+      return renderGSPreview({ shipment });
+    }
+
+    expectDisabledGatedByStatus({
+      hiddenIt: 'disables the download button when shipment.documentStatus is DR (draft), even with a PDF available',
+      shownIt: 'enables the download button when shipment.documentStatus is CO (completed)',
+      renderHidden: () => renderWithPdf({ ...defaultShipment, documentStatus: 'DR' }),
+      renderShown: () => renderWithPdf({ ...defaultShipment, documentStatus: 'CO' }),
+      findElement: () => screen.getByTestId('icon-download').closest('button'),
+    });
   });
 
   it('download button is not disabled when pdfBlob is set', () => {
@@ -185,5 +265,114 @@ describe('GoodsShipmentPreview', () => {
     renderGSPreview();
     const downloadBtn = screen.getByTestId('icon-download').closest('button');
     expect(downloadBtn).not.toBeDisabled();
+  });
+
+  describe('shipmentDocSpecs fetch functions', () => {
+    const shipmentId = 'ship-1';
+    const token = 'tok';
+    const base = '/api/goods-shipment';
+
+    function mockDetailFetch(detail) {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { data: [detail] } }),
+        }),
+      );
+    }
+
+    beforeEach(() => {
+      capturedSpecs.current = null;
+    });
+
+    it('orders spec fetches linkedOrders from the detail endpoint', async () => {
+      mockDetailFetch({ linkedOrders: [{ id: 'ord-1' }], linkedInvoices: [], returnReceipts: [] });
+      renderGSPreview();
+      const specs = capturedSpecs.current;
+      expect(specs).toHaveLength(3);
+      const result = await specs[0].fetch(shipmentId, token, base);
+      expect(result).toEqual([{ id: 'ord-1' }]);
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${base}/goodsShipment/${shipmentId}`,
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${token}` }) }),
+      );
+    });
+
+    it('invoices spec fetches linkedInvoices from the detail endpoint', async () => {
+      mockDetailFetch({ linkedOrders: [], linkedInvoices: [{ id: 'inv-1' }], returnReceipts: [] });
+      renderGSPreview();
+      const specs = capturedSpecs.current;
+      const result = await specs[1].fetch(shipmentId, token, base);
+      expect(result).toEqual([{ id: 'inv-1' }]);
+    });
+
+    it('returns spec fetches returnReceipts from the detail endpoint', async () => {
+      mockDetailFetch({ linkedOrders: [], linkedInvoices: [], returnReceipts: [{ id: 'ret-1' }] });
+      renderGSPreview();
+      const specs = capturedSpecs.current;
+      const result = await specs[2].fetch(shipmentId, token, base);
+      expect(result).toEqual([{ id: 'ret-1' }]);
+    });
+
+    it('all three specs share one HTTP call (caching)', async () => {
+      mockDetailFetch({ linkedOrders: [{ id: 'ord-1' }], linkedInvoices: [{ id: 'inv-1' }], returnReceipts: [] });
+      renderGSPreview();
+      const specs = capturedSpecs.current;
+      await Promise.all([
+        specs[0].fetch(shipmentId, token, base),
+        specs[1].fetch(shipmentId, token, base),
+        specs[2].fetch(shipmentId, token, base),
+      ]);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns empty arrays when the fetch response is missing fields', async () => {
+      mockDetailFetch({});
+      renderGSPreview();
+      const specs = capturedSpecs.current;
+      const [orders, invoices, returns] = await Promise.all([
+        specs[0].fetch(shipmentId, token, base),
+        specs[1].fetch(shipmentId, token, base),
+        specs[2].fetch(shipmentId, token, base),
+      ]);
+      expect(orders).toEqual([]);
+      expect(invoices).toEqual([]);
+      expect(returns).toEqual([]);
+    });
+
+    it('resolves to empty arrays when fetch rejects (error path)', async () => {
+      global.fetch = vi.fn(() => Promise.reject(new Error('Network error')));
+      renderGSPreview();
+      const specs = capturedSpecs.current;
+      const [orders, invoices, returns] = await Promise.all([
+        specs[0].fetch(shipmentId, token, base),
+        specs[1].fetch(shipmentId, token, base),
+        specs[2].fetch(shipmentId, token, base),
+      ]);
+      expect(orders).toEqual([]);
+      expect(invoices).toEqual([]);
+      expect(returns).toEqual([]);
+    });
+
+    it('resolves to empty arrays when fetch returns a non-ok response', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }),
+      );
+      renderGSPreview();
+      const specs = capturedSpecs.current;
+      const result = await specs[0].fetch(shipmentId, token, base);
+      expect(result).toEqual([]);
+    });
+
+    it('spec keys and types are set correctly', () => {
+      renderGSPreview();
+      const specs = capturedSpecs.current;
+      expect(specs[0].key).toBe('orders');
+      expect(specs[0].type).toBe('sales-order');
+      expect(specs[1].key).toBe('invoices');
+      expect(specs[1].type).toBe('sales-invoice');
+      expect(specs[2].key).toBe('returns');
+      expect(specs[2].type).toBe('return-material-receipt');
+    });
   });
 });

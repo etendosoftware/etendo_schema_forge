@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
-import { toast } from 'sonner';
-import FinPaymentTable from './FinPaymentTable';
+import { useState, useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
+import FinPaymentTable from '../../../custom/PaymentHeaderTable';
 import FinPaymentForm from './FinPaymentForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
-import { AttachmentsTab } from '@/components/attachments';
 import PaymentBottomPanel from '../../../custom/PaymentBottomPanel';
-import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
+import PaymentConciliadoBadge from '../../../custom/PaymentConciliadoBadge';
+import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import NewPaymentModal from '../../../custom/NewPaymentModal';
+import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
 import catalogs from './mockCatalogs';
 
 
@@ -23,13 +25,17 @@ const statusField = 'status';
 // @sf-generated-end summary:finPayment
 
 // @sf-generated-start extraBadges:finPayment
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:finPayment
 
 // @sf-generated-start processes:finPayment
 const processes = [
-  { name: 'aPRMProcessPayment', label: 'Process Payment', style: 'positive', columnName: 'aPRMProcessPayment',
-    displayLogicRaw: "@status@='RPAP'" },
+  { name: 'Payment Process', label: 'processConfirm', style: 'positive', columnName: 'aPRMProcessPayment',
+    displayLogicRaw: "@status@ = 'RPAP'", confirmModal: true },
+  { name: 'etprReactivatePayment', label: 'processReactivate', style: 'ghost-danger', columnName: 'etprReactivatePayment',
+    displayLogicRaw: "@status@ != 'RPAP'" },
 ];
 // @sf-generated-end processes:finPayment
 
@@ -97,7 +103,16 @@ export const api = {
       "column": "Fin_Financial_Account_ID",
       "reference": "Financial_Account",
       "inputMode": "dependent",
-      "url": "/sws/neo/payment-in/finPayment/selectors/account"
+      "url": "/sws/neo/payment-in/finPayment/selectors/account",
+      "context": {
+        "required": [
+          {
+            "param": "Fin_Paymentmethod_ID",
+            "source": "field",
+            "field": "paymentMethod"
+          }
+        ]
+      }
     },
     {
       "entity": "finPayment",
@@ -105,7 +120,16 @@ export const api = {
       "column": "C_Currency_ID",
       "reference": "Currency",
       "inputMode": "dependent",
-      "url": "/sws/neo/payment-in/finPayment/selectors/currency"
+      "url": "/sws/neo/payment-in/finPayment/selectors/currency",
+      "context": {
+        "required": [
+          {
+            "param": "FIN_Financial_Account_ID",
+            "source": "field",
+            "field": "account"
+          }
+        ]
+      }
     },
     {
       "entity": "finPaymentScheduleDetail",
@@ -168,6 +192,38 @@ export const api = {
       "url": "/sws/neo/payment-in/finPayment/{id}/action/aeatsiiSend",
       "processId": "EA02D79CA1DE4B46909EA6EF64A66B53",
       "processType": "obuiapp"
+    },
+    {
+      "entity": "finPayment",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/payment-in/finPayment/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "finPayment",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/payment-in/finPayment/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "finPayment",
+      "field": "etprReactivatePayment",
+      "column": "EM_Etpr_Reactivate_Payment",
+      "url": "/sws/neo/payment-in/finPayment/{id}/action/etprReactivatePayment",
+      "processId": "84628BC70CDB49B58054E80C20BCBFEE",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "finPayment",
+      "field": "eTPRRemovePayment",
+      "column": "em_etpr_remove_payment",
+      "url": "/sws/neo/payment-in/finPayment/{id}/action/eTPRRemovePayment",
+      "processId": "FB79E902A5384754990AD145F6CAC9FB",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -190,9 +246,17 @@ export const api = {
 
 // @sf-generated-start component:FinPaymentPage
 export default function FinPaymentPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('E547CE89D4C04429B6340FFA44E70716');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
   const [showNewModal, setShowNewModal] = useState(false);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="E547CE89D4C04429B6340FFA44E70716" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="finPayment"
         Form={FinPaymentForm}
@@ -206,20 +270,25 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        documentPreview={{ titlePrefix: 'Payment', pdfUrl: null }}
         hideDeleteWhenComplete
         customTabsAfterBottom
+        hidePrint
+        hideSaveStatuses={["RDNC","RPPC","RPR","RPVOID","PWNC"]}
+        toolbarBorderBottom
+        hideFormCard
         notesField="description"
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Payment", config: {} } }]}
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }]}
         bottomSection={PaymentBottomPanel}
-        topbarRight={PaymentActivityToggle}
-        menuActions={({ status }) => [
-          { key: 'reverse', label: 'Reverse Payment', destructive: true, visible: ["RPPC","RPR","RDNC"].includes(status), columnName: 'aPRMReversePayment',  }
-        ]}
-        salesTheme
+        topbarExtra={PaymentConciliadoBadge}
+        sidePanel={PaymentDetailSidebar}
+        sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid hsl(var(--border-subtle))","padding":0}}
+        processConfirmModal={ReactivarConfirmModal}
+        statusEnumLabels={{"RPAP":"statusDraft","RPR":"cobroDepositado","RDNC":"cobroDepositado","RPPC":"cobroDepositado","PPM":"cobroDepositado","PWNC":"cobroDepositado"}}
+        statusFieldLabel="statusColumnLabel"
         sendDocument
-        {...props}
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -233,9 +302,11 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="paymentDate"
+      hidePrint
+      hideCreate
       rowQuickActions={{}}
       sendDocument
-      {...props}
+      {...props} window={effectiveWindow}
       onNew={() => setShowNewModal(true)}
     />
     {showNewModal && <NewPaymentModal token={props.token} apiBaseUrl={props.apiBaseUrl} windowName={windowName} onClose={() => setShowNewModal(false)} />}

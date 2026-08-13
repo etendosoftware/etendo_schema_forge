@@ -1,0 +1,363 @@
+{
+  "version": "0.3.0",
+  "generatedAt": "2026-07-01T17:11:14.893Z",
+  "updatedAt": "2026-07-30T16:59:23.380Z",
+  "contractChecksum": "729a406f2943003b",
+  "apiPrediction": {
+    "specName": "business-partner-category",
+    "baseUrl": "/sws/neo/business-partner-category",
+    "crud": {
+      "businessPartnerCategory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/business-partner-category/businessPartnerCategory",
+        "detailUrl": "/sws/neo/business-partner-category/businessPartnerCategory/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/business-partner-category/accounting",
+        "detailUrl": "/sws/neo/business-partner-category/accounting/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "accounting",
+        "field": "customerReceivablesNo",
+        "column": "C_Receivable_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/customerReceivablesNo"
+      },
+      {
+        "entity": "accounting",
+        "field": "customerPrepayment",
+        "column": "C_Prepayment_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/customerPrepayment"
+      },
+      {
+        "entity": "accounting",
+        "field": "writeoff",
+        "column": "WriteOff_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/writeoff"
+      },
+      {
+        "entity": "accounting",
+        "field": "writeoffRevAcct",
+        "column": "Writeoff_Rev_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/writeoffRevAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "vendorLiability",
+        "column": "V_Liability_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/vendorLiability"
+      },
+      {
+        "entity": "accounting",
+        "field": "vendorPrepayment",
+        "column": "V_Prepayment_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/vendorPrepayment"
+      },
+      {
+        "entity": "accounting",
+        "field": "nonInvoicedReceipts",
+        "column": "NotInvoicedReceipts_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/nonInvoicedReceipts"
+      },
+      {
+        "entity": "accounting",
+        "field": "nonInvoicedReceivables",
+        "column": "NotInvoicedReceivables_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/nonInvoicedReceivables"
+      },
+      {
+        "entity": "accounting",
+        "field": "nonInvoicedRevenues",
+        "column": "NotInvoicedRevenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/nonInvoicedRevenues"
+      },
+      {
+        "entity": "accounting",
+        "field": "paymentDiscountExpense",
+        "column": "PayDiscount_Exp_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/paymentDiscountExpense"
+      },
+      {
+        "entity": "accounting",
+        "field": "paymentDiscountRevenue",
+        "column": "PayDiscount_Rev_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/paymentDiscountRevenue"
+      },
+      {
+        "entity": "accounting",
+        "field": "realizedGainAcct",
+        "column": "RealizedGain_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/realizedGainAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "realizedLossAcct",
+        "column": "RealizedLoss_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/realizedLossAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "unearnedRevenue",
+        "column": "UnEarnedRevenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/unearnedRevenue"
+      },
+      {
+        "entity": "accounting",
+        "field": "unrealizedGainsAcct",
+        "column": "UnrealizedGain_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/unrealizedGainsAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "unrealizedLossesAcct",
+        "column": "UnrealizedLoss_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/unrealizedLossesAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "vendorServiceLiability",
+        "column": "V_Liability_Services_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/vendorServiceLiability"
+      },
+      {
+        "entity": "accounting",
+        "field": "doubtfulDebtAccount",
+        "column": "Doubtfuldebt_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/doubtfulDebtAccount"
+      },
+      {
+        "entity": "accounting",
+        "field": "badDebtExpenseAccount",
+        "column": "BadDebtExpense_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/badDebtExpenseAccount"
+      },
+      {
+        "entity": "accounting",
+        "field": "badDebtRevenueAccount",
+        "column": "Baddebtrevenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/badDebtRevenueAccount"
+      },
+      {
+        "entity": "accounting",
+        "field": "allowanceForDoubtfulDebtAccount",
+        "column": "AllowanceForDoubtful_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/allowanceForDoubtfulDebtAccount"
+      }
+    ],
+    "actions": [
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "accounting",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/business-partner-category/accounting/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "112",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "contact"
+    }
+  },
+  "formState": {
+    "entities": {
+      "businessPartnerCategory": {
+        "fields": {
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "description": {},
+          "default": {
+            "required": true
+          }
+        }
+      },
+      "accounting": {
+        "fields": {
+          "customerReceivablesNo": {
+            "required": true
+          },
+          "customerPrepayment": {},
+          "writeoff": {
+            "required": true
+          },
+          "writeoffRevAcct": {},
+          "vendorLiability": {
+            "required": true
+          },
+          "vendorPrepayment": {},
+          "nonInvoicedReceipts": {},
+          "nonInvoicedReceivables": {},
+          "nonInvoicedRevenues": {},
+          "paymentDiscountExpense": {},
+          "paymentDiscountRevenue": {},
+          "realizedGainAcct": {},
+          "realizedLossAcct": {},
+          "unearnedRevenue": {},
+          "unrealizedGainsAcct": {},
+          "unrealizedLossesAcct": {},
+          "vendorServiceLiability": {},
+          "doubtfulDebtAccount": {},
+          "badDebtExpenseAccount": {},
+          "badDebtRevenueAccount": {},
+          "allowanceForDoubtfulDebtAccount": {}
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage business partner category records.",
+    "whenToUse": [
+      "Use for business partner category management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "default"
+      ],
+      "lineFields": [
+        "customerReceivablesNo",
+        "writeoff",
+        "vendorLiability"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "processNow"
+    ],
+    "workflow": [],
+    "edgeCases": [
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "default"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "56a678ed71d2e498"
+}

@@ -3,7 +3,28 @@
   "window": {
     "category": "inventory",
     "name": "Goods Movements",
+    "menuActions": [
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
+      }
+    ],
     "statusField": "processed",
+    "hideDeleteWhenComplete": true,
     "processOverrides": {
       "processNow": {
         "requiresLines": true
@@ -11,27 +32,83 @@
     },
     "dateFilterKey": "movementDate",
     "linesLayout": "inlineEditable",
+    "noHeaderBorder": true,
+    "sendDocument": {
+      "enabled": false
+    },
+    "draftMode": {
+      "enabled": true,
+      "processField": "processNow",
+      "processValue": "Y",
+      "label": "processMovements",
+      "disableWhenEmpty": true,
+      "completedStatuses": ["true"]
+    },
+    "statusEnumLabels": {
+      "true": "statusProcessed",
+      "false": "statusDraft"
+    },
+    "lockedAlert": {
+      "title": "goodsMovementsLockedTitle",
+      "message": "goodsMovementsLockedMessage",
+      "actionLabel": "goodsMovementsLockedAction",
+      "navigateTo": "/physical-inventory/new"
+    },
+    "whiteFormBackground": true,
+    "listbarPaddingX": "px-2",
+    "tablePaddingX": "px-2",
+    "hideLink": true,
+    "hidePrint": true,
+    "listViewOptions": {
+      "hideStatusFilter": true
+    },
+    "labelOverrides": {
+      "en_US": {
+        "Processed": "Status",
+        "M_Locator_ID": "Source Warehouse",
+        "M_LocatorTo_ID": "Destination Warehouse",
+        "MovementQty": "Quantity"
+      },
+      "es_ES": {
+        "Processed": "Estado",
+        "M_Locator_ID": "Almacén origen",
+        "M_LocatorTo_ID": "Almacén destino",
+        "MovementQty": "Cantidad"
+      }
+    },
     "customComponents": {
       "bottomSection": "GoodsMovementsBottomPanel"
-    }
+    },
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ]
   },
   "entities": {
     "header": {
+      "javaQualifier": "document-posting",
       "name": "movement",
+      "javaQualifier": "goodsMovementsHeaderHandler",
       "fields": {
         "name": {
           "grid": true,
           "searchable": true,
+          "readOnlyLogic": "@Processed@='Y'",
           "gridOrder": 1
         },
         "movementDate": {
           "grid": true,
           "searchable": true,
           "readOnlyLogic": null,
+          "dot": false,
           "gridOrder": 2
         },
         "description": {
-          "section": "other",
+          "form": false,
           "readOnlyLogic": null
         },
         "moveBetweenLocators": {
@@ -44,24 +121,33 @@
           "grid": true,
           "form": false,
           "columnType": "status",
+          "enumValues": [
+            { "value": "true", "name": "statusProcessed" },
+            { "value": "false", "name": "statusDraft" }
+          ],
           "gridOrder": 4
         },
         "documentNo": {
           "visibility": "readOnly",
           "grid": true,
+          "section": "principal",
           "readOnlyLogic": null,
+          "required": false,
+          "reason": "Sequence assigned at process time (empty in drafts) — excluded from the add-line gate so + Add line works before processing",
           "gridOrder": 3
         },
         "processNow": {
-          "visibility": "editable"
+          "visibility": "system"
         },
         "project": {
-          "visibility": "discarded",
-          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not relevant for simplified inventory movements' discard. Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costCenter": {
-          "visibility": "discarded",
-          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Supersedes the prior 'not relevant for simplified inventory movements' discard. Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "asset": {
           "visibility": "discarded",
@@ -87,36 +173,53 @@
     },
     "lines": {
       "name": "movementLine",
+      "javaQualifier": "goodsMovementLineHandler",
       "fields": {
         "lineNo": {
-          "grid": true,
+          "grid": false,
           "readOnlyLogic": null
         },
         "product": {
           "grid": true,
           "searchable": true,
           "lookup": true,
-          "readOnlyLogic": null
+          "lookupDrawer": "product-stock",
+          "lookupTitle": "Product",
+          "onSelectMappings": [
+            {
+              "from": "_aux._LOC",
+              "to": "storageBin",
+              "labelFrom": ["warehouse", "warehouse$_identifier", "storageBin"]
+            }
+          ],
+          "readOnlyLogic": null,
+          "gridOrder": 1
         },
         "storageBin": {
           "grid": true,
           "readOnlyLogic": null,
-          "reason": "Source storage bin — key field for movement lines"
+          "reason": "Source storage bin — key field for movement lines",
+          "gridOrder": 3
         },
         "newStorageBin": {
           "grid": true,
           "readOnlyLogic": null,
-          "reason": "Destination storage bin — key field for movement lines"
+          "excludeValueOf": "storageBin",
+          "reason": "Destination storage bin — key field for movement lines; cannot equal the source bin",
+          "gridOrder": 4
         },
         "movementQuantity": {
           "grid": true,
           "readOnlyLogic": null,
-          "defaultValue": "1"
+          "defaultValue": "1",
+          "columnWidth": 160,
+          "gridOrder": 5
         },
         "uOM": {
           "visibility": "readOnly",
           "grid": true,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "gridOrder": 2
         },
         "description": {
           "readOnlyLogic": null,

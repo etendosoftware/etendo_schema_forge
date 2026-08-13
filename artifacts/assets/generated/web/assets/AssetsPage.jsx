@@ -1,10 +1,14 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import AssetsTable from './AssetsTable';
 import AssetsForm from './AssetsForm';
-import AssetsAmortizationPanel from '@/windows/custom/assets/AssetsAmortizationPanel';
-import AssetsConfigPanel from '@/windows/custom/assets/AssetsConfigPanel';
+import AssetAcctTable from './AssetAcctTable';
+import AssetAcctForm from './AssetAcctForm';
+import AssetsDetailPanel from '@/windows/custom/assets/AssetsDetailPanel';
 import { AttachmentsTab } from '@/components/attachments';
+import AssetsAmortizationPanel from '@/windows/custom/assets/AssetsAmortizationPanel';
 import catalogs from './mockCatalogs';
 
 import AssetsSidebar from '@/windows/custom/assets/AssetsSidebar';
@@ -21,13 +25,15 @@ const statusField = null;
 // @sf-generated-end summary:assets
 
 // @sf-generated-start extraBadges:assets
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:assets
 
 // @sf-generated-start processes:assets
 const processes = [
   { name: 'processAsset', label: 'Create Amortization', style: 'positive',
-    displayLogicRaw: "@Depreciate@='Y'" },
+    displayLogicRaw: "@Depreciate@='Y' AND @etgoAmortizationStatus@!='100'", requiresFieldMax: [{"field":"annualDepreciation","max":100,"conditionalOnField":"calculateType","conditionalValue":"PE","errorKey":"assetsValidationAnnualDepreciationMax"}], labelToggle: {"field":"processed","equals":"Y","label":"Recalculate Amortization"} },
 ];
 // @sf-generated-end processes:assets
 
@@ -36,7 +42,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:assets
 
 // @sf-generated-start requiredHeaderFields:assets
-const requiredHeaderFields = ['searchKey', 'name', 'assetCategory'];
+const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:assets
 
 
@@ -58,8 +64,7 @@ export const api = {
         "searchKey",
         "name",
         "assetCategory",
-        "depreciate",
-        "fullyDepreciated"
+        "depreciate"
       ]
     },
     "amortizationLine": {
@@ -101,6 +106,22 @@ export const api = {
       "reference": "Currency",
       "inputMode": "selector",
       "url": "/sws/neo/assets/assets/selectors/currency"
+    },
+    {
+      "entity": "assets",
+      "field": "product",
+      "column": "M_Product_ID",
+      "reference": "Product",
+      "inputMode": "search",
+      "url": "/sws/neo/assets/assets/selectors/product"
+    },
+    {
+      "entity": "assets",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "search",
+      "url": "/sws/neo/assets/assets/selectors/project"
     },
     {
       "entity": "amortizationLine",
@@ -157,8 +178,8 @@ export const api = {
       "field": "processAsset",
       "column": "Process_Asset",
       "url": "/sws/neo/assets/assets/{id}/action/processAsset",
-      "processId": "85601427EAEE401FA0250FF0A6DD62EF",
-      "processType": "classic"
+      "processId": "D1E4EC58B04D4D3FA0060FF28094B39B",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -176,13 +197,49 @@ export const api = {
   },
   "window": {
     "category": "finance"
+  },
+  "labelOverrides": {
+    "es_ES": {
+      "C_Project_ID": "Proyecto",
+      "EM_Etadas_Costcenter_ID": "Centro de coste",
+      "C_BPartner_ID": "Contacto",
+      "EM_Etadas_User1_ID": "1ª Dimensión",
+      "EM_Etadas_User2_ID": "2ª Dimensión",
+      "EM_Etadas_Salesregion_ID": "Región de ventas",
+      "EM_Etadas_C_Activity_ID": "Actividad",
+      "EM_Etadas_Campaign_ID": "Campaña",
+      "EM_Etgo_Amortization_Status": "Estado de amortización",
+      "M_Product_ID": "Producto"
+    },
+    "en_US": {
+      "C_Project_ID": "Project",
+      "EM_Etadas_Costcenter_ID": "Cost Center",
+      "C_BPartner_ID": "Business Partner",
+      "EM_Etadas_User1_ID": "1st Dimension",
+      "EM_Etadas_User2_ID": "2nd Dimension",
+      "EM_Etadas_Salesregion_ID": "Sales Region",
+      "EM_Etadas_C_Activity_ID": "Activity",
+      "EM_Etadas_Campaign_ID": "Sales Campaign",
+      "EM_Etgo_Amortization_Status": "Amortization Status",
+      "M_Product_ID": "Product"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:AssetsPage
 export default function AssetsPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('800027');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="800027" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="assets"
         Form={AssetsForm}
@@ -196,21 +253,34 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        formFooter={AssetsAmortizationPanel}
-        primaryTabs={[
-          { key: 'general', label: 'Overview' },
-          { key: 'configuration', label: 'Depreciation Setup', Panel: AssetsConfigPanel },
+        secondaryTabs={[
+          { key: 'assetAcct', label: 'Accounting', Table: AssetAcctTable, Form: AssetAcctForm, addLineFields: { entry: [
+          { key: 'accountingSchema', column: 'C_AcctSchema_ID', type: 'selector', required: true, label: 'General Ledger', reference: 'AcctSchema', inputMode: 'selector' },
+          { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', required: true, label: 'Accumulated Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', required: true, label: 'Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 1000 },
         ]}
+        formFooter={AssetsDetailPanel}
         hidePrint
         hideMoreMenu
         hideMoreDetails
-        contentBg="bg-slate-50"
-        customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "A_Asset", config: {} } }]}
-        requiredHeaderFields={requiredHeaderFields}
+        toolbarBorderBottom
+        compactSidebarPadding
+        whiteFormBackground
+        hideFormCard
+        sidebarAboveTabsOnly
+        tabsSeparator
+        sidebarClassName="w-[30%] shrink-0 border-l border-border-subtle p-2"
+        toolbarPaddingX="px-2"
+        toolbarButtonSize="default"
+        contentBg="bg-card"
+        formScrollPaddingX="px-2"
+        customTabs={[{ key: 'amortizationPlan', labelKey: 'assetsAmortizationPlanTab', Component: AssetsAmortizationPanel, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "A_Asset", config: {} } }]}
         detailSortBy="sEQNoAsset asc"
         titleField="name"
         lockWhenProcessed={false}
-        {...props}
+        labelOverrides={labelOverrides}
+        {...props} window={effectiveWindow}
         sidebarContent={(data) => (
           <AssetsSidebar
             recordId={recordId}
@@ -220,6 +290,7 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
           />
         )}
       />
+      </>
     );
   }
 
@@ -231,14 +302,14 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      dateFilterKey="purchaseDate"
+      listbarPaddingX="px-2"
+      tablePaddingX="px-2"
       hidePrint
       hideMoreMenu
-      hideListFilters
       hideLink
-      hideEyeCount
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

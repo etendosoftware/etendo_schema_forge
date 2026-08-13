@@ -1,0 +1,173 @@
+{
+  "version": "0.12.0",
+  "generatedAt": "2026-04-27T19:18:32.198Z",
+  "updatedAt": "2026-08-03T18:55:28.096Z",
+  "contractChecksum": "68ca7a8c50c51372",
+  "apiPrediction": {
+    "specName": "tax-rate",
+    "baseUrl": "/sws/neo/tax-rate",
+    "crud": {
+      "tax": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/tax-rate/tax",
+        "detailUrl": "/sws/neo/tax-rate/tax/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/tax-rate/accounting",
+        "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "accounting",
+        "field": "taxDue",
+        "column": "T_Due_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/tax-rate/accounting/selectors/taxDue"
+      },
+      {
+        "entity": "accounting",
+        "field": "taxCredit",
+        "column": "T_Credit_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/tax-rate/accounting/selectors/taxCredit"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "settings"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Nombre",
+        "Rate": "Índice",
+        "SOPOType": "Tipo venta/compra",
+        "ValidFrom": "Válido desde",
+        "Description": "Descripción"
+      },
+      "en_US": {
+        "Name": "Name",
+        "Rate": "Rate",
+        "SOPOType": "Sales/Purchase Type",
+        "ValidFrom": "Valid From",
+        "Description": "Description"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "tax": {
+        "fields": {
+          "name": {
+            "readOnly": true,
+            "required": true
+          },
+          "validFrom": {
+            "readOnly": true,
+            "required": true
+          },
+          "rate": {
+            "readOnly": true,
+            "required": true
+          },
+          "applicableTo": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "B"
+          },
+          "docTaxAmount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "D"
+          },
+          "baseAmount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "LNA"
+          },
+          "notTaxable": {
+            "readOnly": true
+          },
+          "taxExempt": {
+            "readOnly": true,
+            "required": true
+          },
+          "tbaiClaveregimeniva": {},
+          "tbaiNonsubjectcause": {},
+          "etvfacIGICRegime": {},
+          "etvfacVatRegime": {},
+          "etvfacExemptionCause": {},
+          "etvfacCauseNotTaxable": {},
+          "tBAICausaDeExencion": {},
+          "etvfacIPSIRegime": {}
+        }
+      },
+      "accounting": {
+        "fields": {
+          "taxDue": {
+            "required": true
+          },
+          "taxCredit": {
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage tax rate records.",
+    "whenToUse": [
+      "Use for tax rate management."
+    ],
+    "minimumCreate": {
+      "lineFields": [
+        "taxDue",
+        "taxCredit"
+      ],
+      "recommendedOrder": [
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [],
+    "examples": [],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "2b06b6b67fe2cb0e"
+}

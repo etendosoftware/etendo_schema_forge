@@ -88,8 +88,7 @@ export function PartnerAddressPicker({
         token={token}
         createLabel={ui('addAddress')}
         onCreateRequest={contactsApiBase && parentValue ? handleCreateRequest : undefined}
-      />
-
+        data-testid={"CreatableSearchSelect__" + field.id} />
       <LocationEditorModal
         open={modalOpen}
         onClose={handleClose}
@@ -99,7 +98,7 @@ export function PartnerAddressPicker({
         apiBase={contactsApiBase}
         token={token}
         selectorContext={selectorContext}
-      />
+        data-testid={"LocationEditorModal__" + field.id} />
     </>
   );
 }

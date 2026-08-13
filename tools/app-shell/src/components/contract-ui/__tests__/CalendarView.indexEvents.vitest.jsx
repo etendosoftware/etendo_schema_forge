@@ -80,4 +80,100 @@ describe('indexEvents (CalendarView)', () => {
   it('returns an empty object for no events', () => {
     expect(indexEvents([])).toEqual({});
   });
+
+  it('does not index any day when endDate is before date', () => {
+    const evt = {
+      id: 'rev',
+      title: 'reversed',
+      date: localDate(2026, 5, 20),
+      endDate: localDate(2026, 5, 18),
+    };
+    const map = indexEvents([evt]);
+    expect(map).toEqual({});
+  });
+
+  it('indexes a 30-day span under exactly 30 consecutive date keys', () => {
+    const evt = {
+      id: 'long',
+      title: 'long-span',
+      date: localDate(2026, 5, 1),
+      endDate: localDate(2026, 5, 30),
+    };
+    const map = indexEvents([evt]);
+    const keys = Object.keys(map).sort();
+    expect(keys).toHaveLength(30);
+    for (let i = 1; i <= 30; i++) {
+      expect(keys).toContain(localKey(2026, 5, i));
+    }
+  });
+
+  it('indexes correctly across a DST spring-forward boundary', () => {
+    // Europe/Madrid spring-forward 2026-03-29 (and US 2026-03-08).
+    // Whatever the runner TZ, a 4-day span covering late March must yield 4 keys.
+    const evt = {
+      id: 'dst',
+      title: 'dst-span',
+      date: localDate(2026, 3, 28),
+      endDate: localDate(2026, 3, 31),
+    };
+    const map = indexEvents([evt]);
+    const keys = Object.keys(map).sort();
+    expect(keys).toEqual([
+      localKey(2026, 3, 28),
+      localKey(2026, 3, 29),
+      localKey(2026, 3, 30),
+      localKey(2026, 3, 31),
+    ]);
+  });
+
+  it('matches original behavior when start and end have different times-of-day', () => {
+    // Original behavior: iterate calendar days from `start` at start's time-of-day
+    // until cursor > end. With start at 01:00 and end at 23:00 three days later,
+    // 22@01:00 <= 22@23:00 so day 22 is included; 23@01:00 > 22@23:00 so it stops.
+    // Days indexed: 19, 20, 21, 22 (NOT 23).
+    const start = new Date(2026, 4, 19, 1, 0); // May 19 01:00
+    const end = new Date(2026, 4, 22, 23, 0);  // May 22 23:00
+    const evt = { id: 'tod', title: 'time-of-day', date: start, endDate: end };
+    const map = indexEvents([evt]);
+    const keys = Object.keys(map).sort();
+    expect(keys).toEqual([
+      localKey(2026, 5, 19),
+      localKey(2026, 5, 20),
+      localKey(2026, 5, 21),
+      localKey(2026, 5, 22),
+    ]);
+  });
+
+  it('matches original behavior when end time-of-day is before start time-of-day', () => {
+    // start at 23:00 May 19, end at 01:00 May 22.
+    // Original: 19@23, 20@23, 21@23 (≤ 22@01). 22@23 > 22@01, stop. → 3 keys.
+    const evt = {
+      id: 'tod2',
+      title: 'reverse-tod',
+      date: new Date(2026, 4, 19, 23, 0),
+      endDate: new Date(2026, 4, 22, 1, 0),
+    };
+    const map = indexEvents([evt]);
+    const keys = Object.keys(map).sort();
+    expect(keys).toEqual([
+      localKey(2026, 5, 19),
+      localKey(2026, 5, 20),
+      localKey(2026, 5, 21),
+    ]);
+  });
+
+  it('indexes correctly across a DST fall-back boundary', () => {
+    // Europe/Madrid fall-back 2026-10-25 (US 2026-11-01).
+    const evt = {
+      id: 'dst2',
+      title: 'dst-span-fall',
+      date: localDate(2026, 10, 24),
+      endDate: localDate(2026, 11, 2),
+    };
+    const map = indexEvents([evt]);
+    const keys = Object.keys(map).sort();
+    expect(keys).toHaveLength(10);
+    expect(keys[0]).toBe(localKey(2026, 10, 24));
+    expect(keys[keys.length - 1]).toBe(localKey(2026, 11, 2));
+  });
 });

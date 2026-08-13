@@ -15,10 +15,12 @@ const columnsBlock =
 
 const expectedKeysInOrder = [
   'invoiceDate',
+  'transactionDocument',
   'orderReference',
   'eTGODueDate',
   'businessPartner',
   'documentStatus',
+  'posted',
   'grandTotalAmount',
   'outstandingAmount',
   'eTGODeliveryStatus',
@@ -33,7 +35,7 @@ describe('PurchaseInvoiceHeaderTable — columns', () => {
     assert.ok(columnsBlock, 'expected `const columns = useMemo(() => [...], [])` block');
   });
 
-  it('renders the eight expected columns in order', () => {
+  it('renders the ten expected columns in order (transactionDocument is visible badge + type filter)', () => {
     const block = columnsBlock[1];
     const keys = [...block.matchAll(/key:\s*'([^']+)'/g)].map(m => m[1]);
     assert.deepEqual(keys, expectedKeysInOrder);
@@ -46,7 +48,7 @@ describe('PurchaseInvoiceHeaderTable — columns', () => {
     assert.match(src, /key: 'businessPartner', column: 'C_BPartner_ID'/);
     assert.match(src, /key: 'documentStatus', column: 'DocStatus'/);
     assert.match(src, /key: 'grandTotalAmount', column: 'GrandTotal'/);
-    assert.match(src, /key: 'outstandingAmount', column: 'OutstandingAmt'/);
+    assert.match(src, /key: 'outstandingAmount',\s+column: 'OutstandingAmt'/);
     assert.match(src, /key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status'/);
   });
 
@@ -56,6 +58,52 @@ describe('PurchaseInvoiceHeaderTable — columns', () => {
       /key: 'eTGODeliveryStatus'.*type: 'percent'/,
       'eTGODeliveryStatus must use type: "percent" so DataTable renders the progress bar',
     );
+  });
+
+  it('does NOT use isTypeFilter — type filtering is handled by subsetFilters in index.jsx', () => {
+    assert.doesNotMatch(src, /isTypeFilter:\s*true/,
+      'isTypeFilter was replaced by subsetFilters pills in the window index (ETP-4036)');
+    assert.doesNotMatch(src, /backendFilterKey:\s*'transactionDocument\$_identifier'/);
+  });
+
+  // ETP-4737: SUBTYPE_BADGE is keyed by the unified subtype (FAC/RECTIFICATIVA)
+  // resolved via getApSubtype — purchases collapse credit-memo AND return/reversal
+  // doc types into a single RECTIFICATIVA badge (there is no separate returnInvoiceTab
+  // badge on the purchase side, unlike sales-invoice which does distinguish returns).
+  it('uses SUBTYPE_BADGE with i18n label keys for the AP doc subtypes', () => {
+    assert.match(src, /label:\s*'invoicesTab'/);
+    assert.match(src, /label:\s*'rectificativeInvoicesTab'/);
+  });
+
+  it('resolves the badge subtype via getApSubtype, not a hardcoded doc-type name', () => {
+    assert.match(src, /import \{ getApSubtype \} from '@generated\/purchase-invoice\/custom\/purchaseInvoiceSubtype\.js'/);
+    assert.match(src, /SUBTYPE_BADGE\[getApSubtype\(row\)\]/);
+  });
+});
+
+// ── ETP-4125: fiscal status read directly from row data ──────────────────────
+// Risk: regression to batch GET hook would silently reintroduce the nginx URL
+// length issue (403 on 53+ invoices).
+
+describe('PurchaseInvoiceHeaderTable — fiscal status columns (ETP-4125)', () => {
+  it('does NOT import useInvoiceListFiscalStatus (batch hook eliminated)', () => {
+    assert.doesNotMatch(src, /useInvoiceListFiscalStatus/,
+      'The batch-fetch hook was removed in ETP-4125 to fix nginx URL-length errors');
+  });
+
+  it('reads SII status directly from row.aeatsiiEstado', () => {
+    assert.match(src, /row\.aeatsiiEstado/,
+      'SII status must come from the row field, not a separate fetch');
+  });
+
+  it('does not render a Verifactu column (purchase invoices only have SII)', () => {
+    assert.doesNotMatch(src, /row\.etvfacInvoiceStatus/,
+      'Verifactu is sales-only — purchase invoices must not render an etvfacInvoiceStatus column');
+  });
+
+  it('does not maintain a statusMap or fiscalLoading variable', () => {
+    assert.doesNotMatch(src, /statusMap/);
+    assert.doesNotMatch(src, /fiscalLoading/);
   });
 });
 
@@ -84,5 +132,49 @@ describe('PurchaseInvoiceHeaderTable — due date column', () => {
   it('formats the date with the active locale, not a hardcoded region', () => {
     assert.match(src, /useLocaleSwitch/);
     assert.match(src, /formatCalendarDate\(d, locale\)/);
+  });
+});
+
+// ── ETP-4681: custom-rendered columns must declare their filter semantics ─────
+// Risk: `type: 'custom'` tells the filter layer nothing about the underlying
+// data type, so resolveFilterMode falls back to 'text'. A text-mode operator
+// set has no greaterThan / before / after, which makes the Dashboard's
+// `?filter=overdue` preload render an empty operator select.
+
+describe('PurchaseInvoiceHeaderTable — custom column filter modes (ETP-4681)', () => {
+  it('declares filterMode numeric on the outstandingAmount column', () => {
+    assert.match(
+      src,
+      /key: 'outstandingAmount',[\s\S]{0,600}?filterMode: 'numeric'/,
+      'outstandingAmount renders status pills (type: custom) but filters as an amount',
+    );
+  });
+
+  it('declares filterMode numeric on the grandTotalAmount column', () => {
+    assert.match(
+      src,
+      /key: 'grandTotalAmount',[\s\S]{0,600}?filterMode: 'numeric'/,
+      'grandTotalAmount sign-flips credit notes (type: custom) but filters as an amount',
+    );
+  });
+
+  it('declares filterMode date on the eTGODueDate column', () => {
+    assert.match(
+      src,
+      /key: 'eTGODueDate',[\s\S]{0,600}?filterMode: 'date'/,
+      'eTGODueDate renders a coloured dot (type: custom) but filters as a date',
+    );
+  });
+
+  it('keeps all three columns on type custom (the rich cell renderers stay)', () => {
+    assert.match(src, /key: 'outstandingAmount',\s+column: 'OutstandingAmt',\s+type: 'custom'/);
+    assert.match(src, /key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom'/);
+    assert.match(src, /key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom'/);
+  });
+
+  it('declares exactly one filterMode per custom column (no duplicates)', () => {
+    const modes = [...src.matchAll(/filterMode: '([^']+)'/g)].map((m) => m[1]);
+    assert.deepEqual(modes.filter((m) => m === 'numeric').length, 2);
+    assert.deepEqual(modes.filter((m) => m === 'date').length, 1);
   });
 });

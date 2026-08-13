@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.4.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-05-15T16:00:46.252Z",
-  "checksum": "56046e99f3e5f238",
+  "updatedAt": "2026-07-21T12:35:23.811Z",
+  "checksum": "3499dd205a5c6052",
   "frontendContract": {
     "window": {
       "id": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A",
@@ -35,7 +35,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "fechaAcogidaSII",
@@ -48,6 +52,9 @@
             "required": false,
             "grid": false,
             "form": true,
+            "validation": {
+              "maxLength": 19
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -70,6 +77,10 @@
               "source": "8"
             },
             "defaultValue": "8",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -92,6 +103,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -114,6 +129,10 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "validation": {
+              "required": true,
+              "maxLength": 2
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -136,6 +155,10 @@
               "source": "Y"
             },
             "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -158,6 +181,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -180,6 +207,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Insiisystem@ & @Taxtype@='IVA'",
               "evaluable": true
@@ -201,7 +232,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "monitordate",
@@ -219,6 +254,9 @@
               "source": "01-01-2017"
             },
             "defaultValue": "01-01-2017",
+            "validation": {
+              "maxLength": 19
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -241,6 +279,10 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
             "displayLogic": {
               "raw": "@Insiisystem@",
               "evaluable": true
@@ -256,7 +298,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 15
+            }
           },
           {
             "name": "validHash",
@@ -274,7 +319,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "cIF",
@@ -286,7 +335,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "conexiones",
@@ -298,7 +350,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "cashVAT",
@@ -310,7 +365,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 0
+            }
           },
           {
             "name": "lastQueryBook",
@@ -326,13 +384,22 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Issued"
+                "name": "Issued",
+                "labels": {
+                  "es_ES": "Emitidas"
+                }
               },
               {
                 "value": "R",
-                "name": "Received"
+                "name": "Received",
+                "labels": {
+                  "es_ES": "Recibidas"
+                }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "lastQueryExercise",
@@ -344,7 +411,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 4
+            }
           },
           {
             "name": "lastQueryPeriod",
@@ -360,53 +430,92 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - January"
+                "name": "1 - January",
+                "labels": {
+                  "es_ES": "1 - Enero"
+                }
               },
               {
                 "value": "10",
-                "name": "10 - October"
+                "name": "10 - October",
+                "labels": {
+                  "es_ES": "10 - Octubre"
+                }
               },
               {
                 "value": "11",
-                "name": "11 - November"
+                "name": "11 - November",
+                "labels": {
+                  "es_ES": "11 - Noviembre"
+                }
               },
               {
                 "value": "12",
-                "name": "12 - December"
+                "name": "12 - December",
+                "labels": {
+                  "es_ES": "12 - Diciembre"
+                }
               },
               {
                 "value": "2",
-                "name": "2 - February"
+                "name": "2 - February",
+                "labels": {
+                  "es_ES": "2 - Febrero"
+                }
               },
               {
                 "value": "3",
-                "name": "3 - March"
+                "name": "3 - March",
+                "labels": {
+                  "es_ES": "3 - Marzo"
+                }
               },
               {
                 "value": "4",
-                "name": "4 - April"
+                "name": "4 - April",
+                "labels": {
+                  "es_ES": "4 - Abril"
+                }
               },
               {
                 "value": "5",
-                "name": "5 - May"
+                "name": "5 - May",
+                "labels": {
+                  "es_ES": "5 - Mayo"
+                }
               },
               {
                 "value": "6",
-                "name": "6 - June"
+                "name": "6 - June",
+                "labels": {
+                  "es_ES": "6 - Junio"
+                }
               },
               {
                 "value": "7",
-                "name": "7 - July"
+                "name": "7 - July",
+                "labels": {
+                  "es_ES": "7 - Julio"
+                }
               },
               {
                 "value": "8",
-                "name": "8 - August"
+                "name": "8 - August",
+                "labels": {
+                  "es_ES": "8 - Agosto"
+                }
               },
               {
                 "value": "9",
-                "name": "9 - September"
+                "name": "9 - September",
+                "labels": {
+                  "es_ES": "9 - Septiembre"
+                }
               }
-            ]
+            ],
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "name": "sinceJanuary2017",
@@ -424,7 +533,11 @@
               "type": "computed",
               "source": "N"
             },
-            "defaultValue": "N"
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [],
@@ -537,7 +650,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "logs",
@@ -549,7 +666,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1000000
+            }
           }
         ],
         "searchableFields": [],
@@ -732,14 +852,6 @@
             "required": true
           },
           {
-            "name": "configuracinSII",
-            "apiKey": "configuracinSII",
-            "column": "Aeatsii_Config_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "nuevaConsultaFacturasASII",
             "apiKey": "nuevaConsultaFacturasASII",
             "column": "BTN_Consultar_Fact",
@@ -850,6 +962,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Config_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ]
       },
@@ -891,14 +1011,6 @@
             "required": true
           },
           {
-            "name": "logHash",
-            "apiKey": "logHash",
-            "column": "Aeatsii_Config_Log_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -935,6 +1047,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Config_Log_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -1869,12 +1989,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for logHash"
       },
       {
-        "id": "t-system-field-logHash-logHash",
+        "id": "t-system-field-logHash-id",
         "category": "system-field",
         "entity": "logHash",
-        "field": "logHash",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'logHash' should exist in backend but not frontend for logHash"
+        "description": "System field 'id' should exist in backend but not frontend for logHash"
       },
       {
         "id": "t-system-field-logHash-organization",
@@ -1925,14 +2045,6 @@
         "description": "System field 'client' should exist in backend but not frontend for siiConfiguration"
       },
       {
-        "id": "t-system-field-siiConfiguration-configuracinSII",
-        "category": "system-field",
-        "entity": "siiConfiguration",
-        "field": "configuracinSII",
-        "runner": "node",
-        "description": "System field 'configuracinSII' should exist in backend but not frontend for siiConfiguration"
-      },
-      {
         "id": "t-system-field-siiConfiguration-createdBy",
         "category": "system-field",
         "entity": "siiConfiguration",
@@ -1955,6 +2067,14 @@
         "field": "guipuzcoa",
         "runner": "node",
         "description": "System field 'guipuzcoa' should exist in backend but not frontend for siiConfiguration"
+      },
+      {
+        "id": "t-system-field-siiConfiguration-id",
+        "category": "system-field",
+        "entity": "siiConfiguration",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for siiConfiguration"
       },
       {
         "id": "t-system-field-siiConfiguration-informeltimaConexinSII",

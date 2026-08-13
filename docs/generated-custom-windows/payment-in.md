@@ -27,7 +27,9 @@ The current repo evidence shows a generated finance window with payment-in-speci
 - Header defaulting is partially evidenced. The contract defaults `paymentDate` to the current date, `amount` to `0`, and `status` to `RPAP` (Awaiting Payment). The modal also initializes the date to today and auto-selects the first available account after accounts are fetched.
 - The `date` field in `NewPaymentModal.jsx` uses the generic `DateField` component (`tools/app-shell/src/components/ui/date-field.jsx`) — Figma-aligned calendar popover with always-visible calendar icon, month/year picker, and Etendo yellow hover on filled-black elements.
 - Invoice-linked intake reacts to the chosen invoice in the specialized modal. After a customer and invoice are selected, the modal preloads the payment amount from the invoice outstanding amount and calls the sales-invoice payment registration action rather than creating a freeform header directly.
-- Payment-state reactions are clearly visible on the detail page. `Process Payment` is exposed only when status is `RPAP`, while `Reverse Payment` is exposed only when status is `RPPC`, `RPR`, or `RDNC`. The page also hides deletion once the payment is considered complete.
+- Payment-state reactions are clearly visible on the detail page. `Process Payment` is exposed only when status is `RPAP`, while `Reverse Payment` is exposed only when status is `RPPC`, `RPR`, or `RDNC`.
+- The detail-view delete (trash icon) button itself is wired to the **Remove Payment** NEO action rather than a plain header DELETE. It is visible for both draft (`RPAP`) and confirmed/deposited statuses and only hides once the payment is `RPVOID` — a plain DELETE would fail once the record has ever been referenced (FK constraints), so this button now calls `eTPRRemovePayment` (`RemovePayment`, `OBUIAPP_PROCESS_ID = FB79E902A5384754990AD145F6CAC9FB`) via `neoAction.execute`, which reactivates and then removes the payment server-side before navigating back to the list. **This is NOT decisions.json-driven** — it's a hardcoded `windowName` → action lookup (`WINDOW_DELETE_ACTIONS['payment-in'] = 'eTPRRemovePayment'`) in the shared `DetailView.jsx` component, a deliberate exception to the usual "customize via decisions.json" rule, because the `decisions.json → generator` wiring for a generic `deleteAction` field is not published in `schema_forge_core` (see ETP-4479). `decisions.json` still has `hideDeleteWhenComplete: true`, but it is dead for this window since `isDeleteButtonVisible` checks the resolved delete action first and short-circuits before ever consulting it.
+- The same **Remove Payment** action is also available from the row-level "Delete" action in the list view (`PaymentHeaderTableBase.jsx`), gated by the identical `status != 'RPVOID'` rule. Both entry points (form-view delete button, list-row delete) converge on the same `eTPRRemovePayment` process. The detail-view kebab (⋮) menu that used to duplicate this as a `window.menuActions` entry (key `removePayment`) was removed in ETP-4479 — it was redundant with the trash-icon delete button, so `decisions.json` no longer declares `menuActions` and the kebab button does not render for this window (the "more" button only renders when there is at least one visible menu action or custom menu content, per `docs/ui-customization.md`).
 - The allocation-line relationship is parent-driven. The child `finPaymentScheduleDetail` dataset is fetched with `parentId={paymentId}`, so line visibility and related-document lookups depend on the selected payment header.
 - Amount allocation reactions are partially evidenced through the payment-specific bottom panel. That panel recalculates applied amount indirectly from child lines with `invoicePaymentSchedule`, computes remaining unallocated credit against the header amount, and shows linked invoices resolved from those schedule lines.
 - Activity and related-document surfaces also react to the payment state and allocations. The activity panel builds timeline entries from payment date, status, linked invoice schedules, and appended notes; the related-documents tab resolves invoices from payment schedule lines. No discount, tax, or order-style total recalculation is visible in the current evidence for this window.
@@ -45,14 +47,16 @@ The current repo evidence shows a generated finance window with payment-in-speci
 3. In credit/advance mode, select a customer, payment method, and deposit account, enter an amount, save, and confirm the created record opens in `/payment-in/:recordId`.
 4. In invoice-linked mode, select a customer with open invoices, pick an invoice, and verify the modal preloads the amount from the invoice outstanding balance before creating the payment.
 5. Open a saved payment and confirm the detail page shows the related-documents tab, the bottom summary panel, and the top-right activity toggle.
-6. On a payment in `RPAP`, confirm `Process Payment` is available. After processing the payment to `RPR`, `RDNC`, or `RPPC`, confirm `Reverse Payment` becomes visible and delete is no longer the expected completion path.
+6. On a payment in `RPAP`, confirm `Process Payment` is available. After processing the payment to `RPR`, `RDNC`, or `RPPC`, confirm `Reverse Payment` becomes visible.
+6a. Confirm the form-view delete (trash icon) button is visible on a draft (`RPAP`) payment AND on a payment processed to `RPR`/`RDNC`/`RPPC`; confirm clicking it calls the `eTPRRemovePayment` action (not a plain delete) and returns to the list on success; confirm the button disappears once the payment is `RPVOID`.
+6b. Confirm the detail-view "more" (⋮) button is no longer rendered at all on the payment-in detail page, in any status — the kebab-menu **Remove Payment** entry was removed in ETP-4479 as redundant with the trash-icon delete button.
 7. Open the `Lines` child dataset for a payment with allocations and confirm the line surface exposes at least due date, received amount, and invoice payment schedule, all scoped to the current payment via `parentId`.
 8. Create or edit allocation lines tied to invoice schedules and confirm the bottom panel reflects linked invoices and any remaining unallocated credit after refresh.
 9. Scroll below the `PaymentBottomPanel` and confirm the **Attachments** tab strip and content area are visible. Upload a file, verify it appears in the table with file name, size, upload date, and uploader. Download it, then delete it and confirm the row disappears. When multiple files exist, confirm the "Download all (ZIP)" and "Delete all" actions appear in the table header, and that "Delete all" shows a confirmation dialog before removing all files.
 
 ## Automated evidence
 - `e2e/tests/flows/attachments.mocked.spec.js` (Suites A–D) provides browser-level E2E coverage for the Attachments tab: tab visibility in the `customTabsAfterBottom` strip, empty state, upload (valid file, file too large, invalid MIME, duplicate name), single delete with confirmation, Delete All, individual file download, and Download All (ZIP). All API calls are mocked; no real backend is required.
-- There is no dedicated payment-in UI test in `tools/app-shell` covering the specialized create flow, payment-state actions, or allocation panels.
+- There is no dedicated payment-in UI test in `tools/app-shell` covering the specialized create flow, payment-state actions, or allocation panels. The form-view delete button's `deleteAction` wiring (ETP-4479) IS covered by `tools/app-shell/src/components/contract-ui/__tests__/DetailView.deleteActionFallback.vitest.jsx`. The previously-planned **Remove Payment** kebab action was removed (ETP-4479) instead of being tested — see the Reactive behavior note above.
 - The contract itself contains generated validation coverage for field presence, field types, searchable filters, and default-value typing for `finPayment` and `finPaymentScheduleDetail`, but those checks do not assert rendered payment-specific behavior.
 - Shared shell loading and route behavior are documented centrally in `docs/generated-custom-windows/app-shell-functional-flows.md`.
 - `artifacts/payment-in/decisions.json` declares `customTabsAfterBottom: true`, which positions the generic `AttachmentsTab` below `PaymentBottomPanel` rather than in the primary tab strip.
@@ -76,3 +80,22 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - `requiredHeaderFields` is now emitted in the page component; this window has no required header fields so the array is empty and there is no behavioral change.
 - LinesTable template updated in ETP-3908 to include the inline-editable add-row alignment fix. This window uses `linesLayout: "classic"` so the new template branch is dead code here — no behavioral change.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
+
+## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
+
+`com.etendoerp.go` now depends on the **PSD2** module, which adds the
+`EM_Psd2_Generate_Bank_Payment` ("Generate Bank Payment") column to the shared
+core table this window sits on (`C_Order` / `C_Invoice` / `FIN_Payment`). Because
+Schema Forge extracts from AD, that column surfaces in this window's contract as a
+**system field** — present in the backend contract but **not** rendered in the
+frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
+this note only records why the contract was regenerated when the PSD2 dependency
+was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## Theme roles
+
+The window's live artifact custom components use the shared semantic theme.
+Structural surfaces and controls consume background, card, foreground, muted, and
+border roles; operational feedback uses success, warning, information, neutral,
+and destructive roles. No local palette is used, so the active application theme
+controls the appearance.

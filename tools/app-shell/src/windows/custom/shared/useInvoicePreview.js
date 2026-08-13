@@ -20,14 +20,11 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const ui = useUI();
   const [invoiceData, setInvoiceData] = useState(invoice);
   const [showSifModal, setShowSifModal] = useState(false);
-  const [sifPhase, setSifPhase] = useState('confirm');
-  const [sifResults, setSifResults] = useState({});
   const { token, selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
   const { profile } = useFiscalConfig(orgId, apiBaseUrl);
   const neoBaseUrl = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(apiBaseUrl);
-  const baseApiFetch = useApiFetch(neoBaseUrl);
   const jsonHeaders = useMemo(() => ({ 'Content-Type': 'application/json' }), []);
   const updateEventName = `${specName}:invoice-updated`;
 
@@ -105,42 +102,7 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const canSendToSif = invoiceData?.documentStatus === 'CO' && hasPendingTargets;
   const sifBodyKey = getSifBodyKey(pendingTargets);
 
-  const callSifProcess = useCallback(async (columnName) => {
-    const res = await baseApiFetch(
-      `/${specName}/header/${invoiceData?.id}/action/${columnName}`,
-      { method: 'POST', headers: jsonHeaders, body: '{}' },
-    );
-    if (!res.ok) {
-      const json = await res.json().catch(() => null);
-      throw new Error(json?.response?.message || json?.message || `HTTP ${res.status}`);
-    }
-    return res.json().catch(() => null);
-  }, [baseApiFetch, invoiceData?.id, jsonHeaders, specName]);
-
-  const closeSifModal = useCallback(() => {
-    setShowSifModal(false);
-    setSifPhase('confirm');
-    setSifResults({});
-  }, []);
-
-  const handleSendToSif = useCallback(async () => {
-    setSifPhase('sending');
-    const next = {};
-    if (pendingTargets.sendSii) {
-      try { await callSifProcess('Em_aeatsii_send'); next.sii = { ok: true }; }
-      catch (err) { next.sii = { ok: false, error: err.message }; }
-    }
-    if (pendingTargets.sendTbai) {
-      try { await callSifProcess('Em_Tbai_Xmlgenerator'); next.tbai = { ok: true }; }
-      catch (err) { next.tbai = { ok: false, error: err.message }; }
-    }
-    setSifResults(next);
-    if (Object.values(next).some((r) => r?.ok)) {
-      await refetchInvoice();
-      fetchPayments();
-    }
-    setSifPhase('results');
-  }, [callSifProcess, fetchPayments, pendingTargets, refetchInvoice]);
+  const closeSifModal = useCallback(() => setShowSifModal(false), []);
 
   const handleDownloadPdf = useCallback(() => {
     if (!pdfUrl) return;
@@ -186,7 +148,10 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
     // email modal
     showSendModal, sendModalClosing, openEmailModal, closeEmailModal,
     // SIF
-    showSifModal, setShowSifModal, sifPhase, sifResults,
-    handleSendToSif, closeSifModal, canSendToSif, sifBodyKey,
+    showSifModal, setShowSifModal,
+    closeSifModal, canSendToSif, sifBodyKey,
+    pendingTargets,
+    sifBase: neoBaseUrl,
+    refetchInvoice,
   };
 }

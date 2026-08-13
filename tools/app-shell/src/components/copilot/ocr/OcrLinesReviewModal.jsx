@@ -31,32 +31,32 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/30 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-card shadow-2xl">
         <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">{ui('ocrLinesReviewTitle')}</h2>
-            <p className="mt-1 text-sm text-gray-500">{ui('ocrLinesReviewSubtitle')}</p>
+            <h2 className="text-lg font-semibold text-foreground">{ui('ocrLinesReviewTitle')}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{ui('ocrLinesReviewSubtitle')}</p>
           </div>
           <button
             type="button"
             onClick={onCancel}
             aria-label={ui('ocrReviewCancel')}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-muted-foreground hover:text-muted-foreground"
           >
-            <X size={18} />
+            <X size={18} data-testid="X__cdff87" />
           </button>
         </div>
 
         <div className="flex-1 overflow-auto px-6 py-3">
           {rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
+            <div className="rounded-lg border border-dashed border-border-control px-4 py-8 text-center text-sm text-muted-foreground">
               {ui('ocrLinesEmpty')}
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs uppercase tracking-wide text-gray-500">
+                <tr className="text-xs uppercase tracking-wide text-muted-foreground">
                   {columns.map((column) => (
                     <th key={column.key} className={`px-2 py-2 text-left font-medium ${column.width || ''}`}>
                       {ui(column.label)}
@@ -66,7 +66,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
               </thead>
               <tbody>
                 {rows.map((row, idx) => (
-                  <tr key={row._rowId} className="border-t border-gray-100 align-middle">
+                  <tr key={row._rowId} className="border-t border-border-subtle align-middle">
                     {columns.map((column) => (
                       <td key={column.key} className="px-2 py-2">
                         <KindRenderer
@@ -81,7 +81,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
                           onChange={(value) => update(idx, column.kind === 'entity'
                             ? { tax_id: value?.id || null, [column.extractFrom]: value?.label || row[column.extractFrom] }
                             : { [column.extractFrom]: value })}
-                        />
+                          data-testid="KindRenderer__cdff87" />
                       </td>
                     ))}
                   </tr>
@@ -91,18 +91,18 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-6 py-4">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-full border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+            className="rounded-full border border-border-control bg-card px-5 py-2 text-sm font-medium text-foreground hover:bg-muted"
           >
             {ui('ocrReviewCancel')}
           </button>
           <button
             type="button"
             onClick={handleSubmit}
-            className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800"
+            className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-foreground"
           >
             {ui('ocrReviewSubmit')}
           </button>

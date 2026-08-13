@@ -10,6 +10,7 @@ const COMPONENT_MAP = { AddressSection, FinancialSection };
 
 const EMPTY_OPTS = {
   taxIdTypes: { options: [], loading: false, error: null },
+  businessPartnerCategories: { options: [], loading: false, error: null },
   salesPriceLists: { options: [], loading: false, error: null },
   purchasePriceLists: { options: [], loading: false, error: null },
   paymentMethods: { options: [], loading: false, error: null },
@@ -33,7 +34,7 @@ function ContactModeToggle({ contactType, onChange }) {
   return (
     <div
       className="flex items-center gap-1 p-1 rounded-xl"
-      style={{ background: '#F5F7F9', width: '240px' }}
+      style={{ background: 'hsl(var(--muted))', width: '240px' }}
     >
       <button
         type="button"
@@ -42,11 +43,11 @@ function ContactModeToggle({ contactType, onChange }) {
         style={
           contactType === 'person'
             ? {
-                background: '#FFFFFF',
-                color: '#121217',
-                boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)',
+                background: 'hsl(var(--card))',
+                color: 'hsl(var(--foreground))',
+                boxShadow: '0px 1px 3px hsl(var(--foreground) / 0.10), 0px 1px 2px hsl(var(--foreground) / 0.06)',
               }
-            : { color: '#121217' }
+            : { color: 'hsl(var(--foreground))' }
         }
       >
         {ui('Person')}
@@ -58,17 +59,43 @@ function ContactModeToggle({ contactType, onChange }) {
         style={
           contactType === 'company'
             ? {
-                background: '#FFFFFF',
-                color: '#121217',
-                boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)',
+                background: 'hsl(var(--card))',
+                color: 'hsl(var(--foreground))',
+                boxShadow: '0px 1px 3px hsl(var(--foreground) / 0.10), 0px 1px 2px hsl(var(--foreground) / 0.06)',
               }
-            : { color: '#121217' }
+            : { color: 'hsl(var(--foreground))' }
         }
       >
         {ui('company')}
       </button>
     </div>
   );
+}
+
+export function getBillingPatch(opts, form) {
+  const first = (key) => opts[key]?.options?.[0]?.id;
+  const salesPriceList = form.salesPriceList || first('salesPriceLists');
+  const paymentMethod = form.paymentMethod || first('paymentMethods');
+  const paymentTerm = form.paymentTerm || first('paymentTerms');
+  const financialAccount = form.financialAccount || first('financialAccounts');
+  const purchasePriceList = form.purchasePriceList || first('purchasePriceLists');
+  const paymentMethodPO = form.paymentMethodPO || first('paymentMethods');
+  const paymentTermPO = form.paymentTermPO || first('paymentTerms');
+  const financialAccountPO = form.financialAccountPO || first('financialAccounts');
+
+  const billingPatch = {
+    ...(form.isCustomer && salesPriceList && {priceList: salesPriceList}),
+    ...(form.isCustomer && paymentMethod && {paymentMethod}),
+    ...(form.isCustomer && paymentTerm && {paymentTerms: paymentTerm}),
+    ...(form.isCustomer && financialAccount && {account: financialAccount}),
+    ...(form.isCustomer && {customerBlocking: form.customerBlock}),
+    ...(form.isVendor && purchasePriceList && {purchasePricelist: purchasePriceList}),
+    ...(form.isVendor && paymentMethodPO && {pOPaymentMethod: paymentMethodPO}),
+    ...(form.isVendor && paymentTermPO && {pOPaymentTerms: paymentTermPO}),
+    ...(form.isVendor && financialAccountPO && {pOFinancialAccount: financialAccountPO}),
+    ...(form.isVendor && {vendorBlocking: form.paymentBlock}),
+  };
+  return billingPatch;
 }
 
 /**
@@ -111,6 +138,7 @@ export default function CreateContactModal({
     setOpts(o => ({
       ...o,
       taxIdTypes: { ...o.taxIdTypes, loading: true, error: null },
+      businessPartnerCategories: { ...o.businessPartnerCategories, loading: true, error: null },
       salesPriceLists: { ...o.salesPriceLists, loading: true, error: null },
       purchasePriceLists: { ...o.purchasePriceLists, loading: true, error: null },
       paymentMethods: { ...o.paymentMethods, loading: true, error: null },
@@ -162,6 +190,7 @@ export default function CreateContactModal({
 
     Promise.all([
       fetchSel(`${bp}/selectors/EM_OBTIK_Tax_ID_Key`),
+      fetchSel(`${bp}/selectors/C_BP_Group_ID`),
       fetchSel(`${bp}/selectors/M_PriceList_ID`),
       fetchSel(`${vc}/selectors/PO_PriceList_ID`),
       fetchSel(`${bp}/selectors/FIN_Paymentmethod_ID`),
@@ -169,11 +198,12 @@ export default function CreateContactModal({
       fetchSel(`${bp}/selectors/FIN_Financial_Account_ID`),
       fetchCountries(),
     ])
-      .then(([taxIdTypes, salesPriceLists, purchasePriceLists, paymentMethods, paymentTerms, financialAccounts, countries]) => {
+      .then(([taxIdTypes, businessPartnerCategories, salesPriceLists, purchasePriceLists, paymentMethods, paymentTerms, financialAccounts, countries]) => {
         if (cancelled) return;
         setOpts(o => ({
           ...o,
           taxIdTypes: { options: taxIdTypes, loading: false, error: null },
+          businessPartnerCategories: { options: businessPartnerCategories, loading: false, error: null },
           salesPriceLists: { options: salesPriceLists, loading: false, error: null },
           purchasePriceLists: { options: purchasePriceLists, loading: false, error: null },
           paymentMethods: { options: paymentMethods, loading: false, error: null },
@@ -188,6 +218,7 @@ export default function CreateContactModal({
         setOpts(o => ({
           ...o,
           taxIdTypes: { ...o.taxIdTypes, loading: false, error: msg },
+          businessPartnerCategories: { ...o.businessPartnerCategories, loading: false, error: msg },
           salesPriceLists: { ...o.salesPriceLists, loading: false, error: msg },
           purchasePriceLists: { ...o.purchasePriceLists, loading: false, error: msg },
           paymentMethods: { ...o.paymentMethods, loading: false, error: msg },
@@ -242,6 +273,13 @@ export default function CreateContactModal({
   const headerFields = useMemo(() => {
     const commonFields = [
       {
+        id: 'businessPartnerCategory',
+        labelKey: 'contactCategoryField',
+        type: 'dynamicSelect',
+        optionsKey: 'businessPartnerCategories',
+        required: true,
+      },
+      {
         id: 'taxIdType',
         labelKey: 'taxIdTypeField',
         type: 'dynamicSelect',
@@ -274,8 +312,8 @@ export default function CreateContactModal({
   const requiredFields = useMemo(
     () => {
       return contactType === 'company'
-        ? ['name', 'taxIdType', 'taxID', 'country']
-        : ['etgoFirstname', 'etgoLastname', 'taxIdType', 'taxID', 'country'];
+        ? ['name', 'businessPartnerCategory', 'taxIdType', 'taxID', 'country']
+        : ['etgoFirstname', 'etgoLastname', 'businessPartnerCategory', 'taxIdType', 'taxID', 'country'];
     },
     [contactType],
   );
@@ -302,6 +340,7 @@ export default function CreateContactModal({
     ...opts,
     regions: { ...opts.regions, onRetry: () => setRetryRegionCount(c => c + 1) },
     taxIdTypes: { ...opts.taxIdTypes, onRetry: () => setRetryCount(c => c + 1) },
+    businessPartnerCategories: { ...opts.businessPartnerCategories, onRetry: () => setRetryCount(c => c + 1) },
     salesPriceLists: { ...opts.salesPriceLists, onRetry: () => setRetryCount(c => c + 1) },
     purchasePriceLists: { ...opts.purchasePriceLists, onRetry: () => setRetryCount(c => c + 1) },
     paymentMethods: { ...opts.paymentMethods, onRetry: () => setRetryCount(c => c + 1) },
@@ -322,6 +361,7 @@ export default function CreateContactModal({
       ...(contactType === 'person' && firstName && { etgoFirstname: firstName }),
       ...(contactType === 'person' && lastName && { etgoLastname: lastName }),
       etgoIsperson: contactType === 'person',
+      businessPartnerCategory: form.businessPartnerCategory,
       taxID: form.taxID?.trim(),
       oBTIKTaxIDKey: form.taxIdType || '1',
       creditLimit: Number(form.creditLimit) || 0,
@@ -351,7 +391,7 @@ export default function CreateContactModal({
         toErrMsg(errData?.message) ||
         toErrMsg(errData?.error) ||
         toErrMsg(errData?.response?.error) ||
-        `${ui('createContactError')} (HTTP ${res.status})`
+        ui('createContactError')
       );
     }
 
@@ -389,28 +429,7 @@ export default function CreateContactModal({
       const contacts = (repeatables.contacts ?? []).filter(c => c.firstName || c.lastName || c.email || c.phone);
       const banks = (repeatables.bankAccount ?? []).filter(b => b.bankName || b.iban || b.genericAccountNo);
 
-      const first = (key) => opts[key]?.options?.[0]?.id;
-      const salesPriceList    = form.salesPriceList    || first('salesPriceLists');
-      const paymentMethod     = form.paymentMethod     || first('paymentMethods');
-      const paymentTerm       = form.paymentTerm       || first('paymentTerms');
-      const financialAccount  = form.financialAccount  || first('financialAccounts');
-      const purchasePriceList = form.purchasePriceList || first('purchasePriceLists');
-      const paymentMethodPO   = form.paymentMethodPO   || first('paymentMethods');
-      const paymentTermPO     = form.paymentTermPO     || first('paymentTerms');
-      const financialAccountPO = form.financialAccountPO || first('financialAccounts');
-
-      const billingPatch = {
-        ...(form.isCustomer && salesPriceList    && { priceList: salesPriceList }),
-        ...(form.isCustomer && paymentMethod     && { paymentMethod }),
-        ...(form.isCustomer && paymentTerm       && { paymentTerms: paymentTerm }),
-        ...(form.isCustomer && financialAccount  && { account: financialAccount }),
-        ...(form.isCustomer && { customerBlocking: form.customerBlock }),
-        ...(form.isVendor   && purchasePriceList && { purchasePricelist: purchasePriceList }),
-        ...(form.isVendor   && paymentMethodPO   && { pOPaymentMethod: paymentMethodPO }),
-        ...(form.isVendor   && paymentTermPO     && { pOPaymentTerms: paymentTermPO }),
-        ...(form.isVendor   && financialAccountPO && { pOFinancialAccount: financialAccountPO }),
-        ...(form.isVendor   && { vendorBlocking: form.paymentBlock }),
-      };
+      const billingPatch = getBillingPatch(opts, form);
 
       await Promise.all([
         // Step 3 — contact persons (C_BPartner_Contact)
@@ -492,7 +511,10 @@ export default function CreateContactModal({
       title={ui('newContact')}
       saveLabel={ui('saveContact')}
       {...contactModalConfig}
-      titleRightContent={<ContactModeToggle contactType={contactType} onChange={setContactType} />}
+      titleRightContent={<ContactModeToggle
+        contactType={contactType}
+        onChange={setContactType}
+        data-testid="ContactModeToggle__d67dd1" />}
       headerFields={headerFields}
       requiredFields={requiredFields}
       progressFields={progressFields}
@@ -501,6 +523,7 @@ export default function CreateContactModal({
         name: '',
         etgoFirstname: '',
         etgoLastname: '',
+        businessPartnerCategory: '',
         taxID: '',
         taxIdType: '1',
         creditLimit: 0,
@@ -532,6 +555,6 @@ export default function CreateContactModal({
       onSave={handleSave}
       onCancel={onClose}
       onFieldChange={handleFieldChange}
-    />
+      data-testid="EntityCreationModal__d67dd1" />
   );
 }

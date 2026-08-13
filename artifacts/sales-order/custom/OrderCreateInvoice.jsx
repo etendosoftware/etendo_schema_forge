@@ -2,7 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
+import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import { ConfirmResultModal } from '@/components/contract-ui';
+import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
+import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
+import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
+import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -28,7 +35,7 @@ function Spinner() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }) {
+export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, onRefresh, onSave }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -51,6 +58,11 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
+
+  // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
+  // so the form-view topbar Send modal shows the document instead of the
+  // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
+  const { pdfUrl, loading: pdfLoading } = useOrderPdf(recordId, apiBaseUrl, token);
 
 
   // draftMode confirm button (DetailView) dispatches this event to open the confirm modal
@@ -104,20 +116,22 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }
   const confirmedPanel = confirmedDocs
     ? createPortal(
         <ConfirmResultModal
-          docs={confirmedDocs}
-          title={confirmedTitle}
-          onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); }}
-          navigate={navigate}
-          ui={ui}
+          title={confirmedTitle || ui('soConfirmedTitle')}
+          docs={[
+            confirmedDocs?.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, amount: confirmedDocs.shipment.amount, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
+          ].filter(Boolean)}
           currency={data?.['currency$_identifier'] || ''}
-        />,
+          navigate={navigate}
+          onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); emitSurveyTrigger(); onRefresh?.(); }}
+          data-testid="ConfirmResultModal__18d1f0" />,
         document.body,
       )
     : null;
 
   const cloneButton = (
-    <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? '#F1F5F9' : '#FFFFFF'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
-      <CopyIcon />
+    <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
+      <CopyIcon data-testid="CopyIcon__18d1f0" />
     </button>
   );
   const clonePortal = showClone ? createPortal(
@@ -128,13 +142,13 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }
       headers={headers}
       onClose={() => setShowClone(false)}
       onCloned={(newId) => navigate(`/sales-order/${newId}`)}
-    />,
+      data-testid="CloneModal__18d1f0" />,
     document.body,
   ) : null;
 
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
   if (isCompleted && !fetched) {
-    return <>{confirmedPanel}<span style={{ fontSize: 12, color: '#9CA3AF', padding: '4px 8px' }}>…</span></>;
+    return <>{confirmedPanel}<CopyRecordLinkButton recordId={recordId} windowName="sales-order" /><span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
   // ── COMPLETED — compute derived values ─────────────────────────────────────
@@ -192,7 +206,14 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }
         </button>
       )}
       {cloneButton}
-      {isDraft && <SendDocumentButton onClick={() => setShowSend(true)} />}
+      {/* ETP-4717 — Send is only available once the order is Confirmed (CO),
+          matching the grid row quick-action's status gate. Previously also
+          shown on Draft (ETP-4372); that was inconsistent with the other
+          document windows and has been corrected. */}
+      {isCompleted && <SendDocumentButton
+        onClick={() => setShowSend(true)}
+        data-testid="SendDocumentButton__18d1f0" />}
+      <CopyRecordLinkButton recordId={recordId} windowName="sales-order" />
       {clonePortal}
       {isDraft && showConfirm && createPortal(
         <ConfirmModal
@@ -200,9 +221,10 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }
           data={data}
           apiBaseUrl={apiBaseUrl}
           headers={headers}
+          onSave={onSave}
           onClose={() => setShowConfirm(false)}
           onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
-        />,
+          data-testid="ConfirmModal__18d1f0" />,
         document.body,
       )}
       {isCompleted && showActions && createPortal(
@@ -215,10 +237,10 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }
           derived={derived}
           onClose={() => setShowActions(false)}
           onCreated={(docs) => { setShowActions(false); setConfirmedTitle(ui('soDocsCreatedTitle')); setConfirmedDocs(docs); }}
-        />,
+          data-testid="CreateDocsModal__18d1f0" />,
         document.body,
       )}
-      {isDraft && showSend && createPortal(
+      {isCompleted && showSend && createPortal(
         <SendDocumentModal
           documentType={tMenu('Sales Order')}
           documentNo={data?.documentNo}
@@ -228,8 +250,10 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }
           documentId={recordId}
           windowName="sales-order"
           token={token}
+          pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           onClose={() => setShowSend(false)}
-        />,
+          data-testid="SendDocumentModal__18d1f0" />,
         document.body,
       )}
       {confirmedPanel}
@@ -239,7 +263,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }
 
 // ── ConfirmModal ───────────────────────────────────────────────────────────────
 
-export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed }) {
+export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed, onSave }) {
   const ui       = useUI();
   const [createShipment,  setCreateShipment]  = useState(false);
   const [createInvoice,   setCreateInvoice]   = useState(false);
@@ -274,7 +298,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     return () => { cancelled = true; };
   }, [orderId, apiBaseUrl, headers]);
 
-  const d              = freshData || data || {};
+  // ETP-4468 — the in-memory `data` prop (which already reflects any unsaved
+  // header edit the user made before clicking Confirm) must win over the
+  // server-fetched `freshData` (stale because nothing was saved yet). The
+  // fresh fetch is only a fallback for the very first render before `data`
+  // arrives, or if `data` is genuinely empty.
+  const d              = data || freshData || {};
   const documentNo     = d.documentNo || '';
   const bpName         = d['businessPartner$_identifier'] || '';
   // Apply etgoTotalDiscount client-side only while the order is still in DR — at
@@ -301,6 +330,19 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     setLoading(true);
     setError(null);
 
+    // ETP-4468 — force-save any unsaved header edit before confirming. Without
+    // this, an edit made right before clicking Confirm (without hitting Save
+    // first) would be silently discarded — the order gets confirmed with the
+    // OLD header values. Abort the whole confirm flow if the save fails.
+    if (onSave) {
+      const saved = await onSave();
+      if (!saved?.id) {
+        setError(ui('soSaveBeforeConfirmError'));
+        setLoading(false);
+        return;
+      }
+    }
+
     // Step 1: Confirm the order — must succeed before anything else.
     // If this fails the order is still in DR, so the rest of the flow makes no sense.
     if (!orderConfirmed) {
@@ -311,9 +353,11 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
-          throw new Error(e?.response?.message || `Error (${processRes.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || `Error (${processRes.status})`);
         }
         setOrderConfirmed(true);
+        incrementSurveyCounter('order');
+        trackTransactionPosted();
         window.dispatchEvent(new CustomEvent('sales-order:document-created'));
       } catch (e) {
         setError(e.message || ui('soErrorOccurred'));
@@ -335,11 +379,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedShipmentError') + (e?.response?.message || `Error (${res.status})`));
+          throw new Error(ui('soOrderConfirmedShipmentError') + (e?.error?.message || e?.response?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
         setShipmentResult(currentShipment);
+        trackDocumentCreated('goods-shipment');
       } catch (e) {
         errors.push(e.message || ui('soErrorOccurred'));
       }
@@ -353,11 +398,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.response?.message || `Error (${res.status})`));
+          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.error?.message || e?.response?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
         setInvoiceResult(currentInvoice);
+        trackDocumentCreated('sales-invoice');
       } catch (e) {
         errors.push(e.message || ui('soErrorOccurred'));
       }
@@ -408,8 +454,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
         {/* Title row */}
-        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>
+        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {ui('soConfirmTitle', { number: documentNo })}
           </div>
           <button type="button" onClick={handleClose} style={closeBtn}>&times;</button>
@@ -417,26 +463,26 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
         {/* Blue summary card */}
         <div style={{ padding: '14px 20px' }}>
-          <div style={{ background: '#E6F1FB', border: '0.5px solid #B5D4F4', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
-              <div style={{ fontSize: 11, color: '#185FA5' }}>
+              <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
                 {bpName}
               </div>
             )}
-            <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {grandTotal > 0 ? `${fmtNum(grandTotal)}${currency ? ` ${currency}` : ''}` : '0,00'}
+            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
+              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
             </div>
-            <div style={{ fontSize: 11, color: '#185FA5', marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--status-info-fg)', marginBottom: 10 }}>
               {lineCount != null ? (lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })) : '…'}
-              {' '}<span style={{ color: '#85B7EB' }}>·</span>{' '}
+              {' '}<span style={{ color: 'var(--status-info-fg)' }}>·</span>{' '}
               {ui('soSubtotal')}{' '}
-              <span style={{ fontWeight: 500, color: '#042C53' }}>
-                {fmtNum(totalLines)}{currency ? ` ${currency}` : ''}
+              <span style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>
+                {formatCurrency(currency, totalLines)}
               </span>
             </div>
-            <div style={{ borderRadius: 6, background: '#FFFBEB', border: '1px solid #FDE68A', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ borderRadius: 6, background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>🔒</span>
-              <span style={{ fontSize: 12, color: '#92400E', lineHeight: 1.4 }}>
+              <span style={{ fontSize: 12, color: 'var(--status-warning-fg)', lineHeight: 1.4 }}>
                 {ui('soConfirmWarning')}
               </span>
             </div>
@@ -445,7 +491,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
         {/* Checkboxes — both optional, both can be selected simultaneously */}
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', marginBottom: 2 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soGenerateDocs')}
           </div>
           <SoCheckboxCard
@@ -455,7 +501,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateShipmentTitle')}
             subtitle={shipmentResult ? ui('soAlreadyCreated') : ui('soCreateShipmentCheckDesc')}
             disabled={Boolean(shipmentResult)}
-          />
+            data-testid="SoCheckboxCard__18d1f0" />
           <SoCheckboxCard
             checked={createInvoice || Boolean(invoiceResult)}
             onChange={() => !invoiceResult && setCreateInvoice(v => !v)}
@@ -463,22 +509,22 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateInvoiceTitle')}
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('soCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
-          />
+            data-testid="SoCheckboxCard__18d1f0" />
         </div>
 
         {error && (
-          <div style={{ padding: '8px 20px', fontSize: 12, color: '#DC2626', background: '#FEF2F2', borderTop: '0.5px solid #FECACA', whiteSpace: 'pre-line' }}>
+          <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid #E5E7EB' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
           <button type="button" onClick={handleClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
           <button type="button" onClick={handleConfirm} disabled={loading}
             style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {loading && <Spinner />}
+            {loading && <Spinner data-testid="Spinner__18d1f0" />}
             {loading ? ui('soProcessing') : primaryLabel}
           </button>
         </div>
@@ -497,31 +543,31 @@ function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) 
         display: 'flex', alignItems: 'center', gap: 12,
         padding: checked ? '11px 13px' : '12px 14px', borderRadius: 8,
         cursor: disabled ? 'default' : 'pointer',
-        border: disabled ? '2px solid #10B981' : (checked ? '2px solid #3B82F6' : '1px solid #E5E7EB'),
-        background: disabled ? '#ECFDF5' : (checked ? '#EFF6FF' : '#fff'),
+        border: disabled ? '2px solid var(--status-success-border)' : (checked ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--border-subtle))'),
+        background: disabled ? 'var(--status-success-bg)' : (checked ? 'var(--status-info-bg)' : 'hsl(var(--card))'),
         opacity: disabled ? 0.85 : 1,
         transition: 'border-color 0.15s, background 0.15s',
       }}
     >
       <span style={{ fontSize: 15, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: disabled ? '#059669' : (checked ? '#2563EB' : '#111827') }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: disabled ? 'var(--status-success-fg)' : (checked ? 'var(--status-info-border)' : 'hsl(var(--foreground))') }}>
           {title}
         </div>
-        <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 3, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.4 }}>
           {subtitle}
         </div>
       </div>
       {/* Checkbox indicator */}
       <div style={{
         width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-        border: (checked || disabled) ? 'none' : '1.5px solid #D1D5DB',
-        background: disabled ? '#10B981' : (checked ? '#3B82F6' : '#fff'),
+        border: (checked || disabled) ? 'none' : '1.5px solid hsl(var(--border-subtle))',
+        background: disabled ? 'var(--status-success-fg)' : (checked ? 'var(--status-info-fg)' : 'hsl(var(--card))'),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'background 0.15s',
       }}>
         {(checked || disabled) && (
-          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="1 4 4 7.5 10 1" />
           </svg>
         )}
@@ -559,8 +605,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
 
   const invoiceSubtitle = totalOrder > 0
     ? (totalInvoiced > 0
-        ? ui('soAmountInvoicedOf', { invoiced: `${fmtNum(totalInvoiced)}${currency ? ` ${currency}` : ''}`, total: `${fmtNum(totalOrder)}${currency ? ` ${currency}` : ''}`, pending: `${fmtNum(totalPending)}${currency ? ` ${currency}` : ''}` })
-        : ui('soAmountPendingInvoice', { pending: `${fmtNum(totalPending)}${currency ? ` ${currency}` : ''}` }))
+        ? ui('soAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), total: formatCurrency(currency, totalOrder), pending: formatCurrency(currency, totalPending) })
+        : ui('soAmountPendingInvoice', { pending: formatCurrency(currency, totalPending) }))
     : ui('soCreateInvoiceCheckDesc');
 
   const handleCreate = async () => {
@@ -575,10 +621,11 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        trackDocumentCreated('goods-shipment');
       }
 
       if (createInvoice) {
@@ -586,10 +633,11 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         result.invoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        trackDocumentCreated('sales-invoice');
       }
 
       window.dispatchEvent(new CustomEvent('sales-order:document-created'));
@@ -607,8 +655,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
         {/* Title row */}
-        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>
+        <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {ui('soManageDocsTitle')}
           </div>
           <button type="button" onClick={onClose} style={closeBtn}>&times;</button>
@@ -616,21 +664,21 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
 
         {/* Blue summary card — no warning since order is already confirmed */}
         <div style={{ padding: '14px 20px' }}>
-          <div style={{ background: '#E6F1FB', border: '0.5px solid #B5D4F4', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && (
-              <div style={{ fontSize: 11, color: '#185FA5' }}>
+              <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
                 {bpName}
               </div>
             )}
-            <div style={{ fontSize: 28, fontWeight: 500, color: '#042C53', lineHeight: 1, marginTop: 4 }}>
-              {grandTotal > 0 ? `${fmtNum(grandTotal)}${currency ? ` ${currency}` : ''}` : '0,00'}
+            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4 }}>
+              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
             </div>
           </div>
         </div>
 
         {/* Only show checkboxes for pending actions; subtitle shows outstanding qty/amount */}
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', marginBottom: 2 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soGenerateDocs')}
           </div>
           {needsShip && (
@@ -640,7 +688,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🚚"
               title={ui('soCreateShipmentTitle')}
               subtitle={shipmentSubtitle}
-            />
+              data-testid="SoCheckboxCard__18d1f0" />
           )}
           {needsInvoice && (
             <SoCheckboxCard
@@ -649,23 +697,23 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🧾"
               title={ui('soCreateInvoiceTitle')}
               subtitle={invoiceSubtitle}
-            />
+              data-testid="SoCheckboxCard__18d1f0" />
           )}
         </div>
 
         {error && (
-          <div style={{ padding: '8px 20px', fontSize: 12, color: '#DC2626', background: '#FEF2F2', borderTop: '0.5px solid #FECACA', whiteSpace: 'pre-line' }}>
+          <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid #E5E7EB' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--card))' }}>
           <button type="button" onClick={onClose} disabled={loading} style={{ ...btnSecondary, opacity: loading ? 0.5 : 1 }}>
             {ui('cancel')}
           </button>
           <button type="button" onClick={handleCreate} disabled={loading || !canCreate}
             style={{ ...btnPrimaryStyle, opacity: (loading || !canCreate) ? 0.6 : 1, cursor: (loading || !canCreate) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {loading && <Spinner />}
+            {loading && <Spinner data-testid="Spinner__18d1f0" />}
             {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}
           </button>
         </div>
@@ -709,17 +757,17 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
   }, [orderId, apiBaseUrl, headers]);
 
   const statusMap = {
-    DR: { label: ui('orderStatusDraft'),     bg: '#FEF3C7', color: '#D97706' },
-    CO: { label: ui('orderStatusCompleted'), bg: '#DCFCE7', color: '#16A34A' },
-    CL: { label: ui('orderStatusClosed'),    bg: '#F3F4F6', color: '#6B7280' },
-    VO: { label: ui('orderStatusVoided'),    bg: '#FEE2E2', color: '#DC2626' },
+    DR: { label: ui('orderStatusDraft'),     bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
+    CO: { label: ui('orderStatusCompleted'), bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
+    CL: { label: ui('orderStatusClosed'),    bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' },
+    VO: { label: ui('orderStatusVoided'),    bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive))' },
   };
-  const badge = statusMap[status] || { label: status, bg: '#F3F4F6', color: '#6B7280' };
+  const badge = statusMap[status] || { label: status, bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' };
 
   const lineCount   = lines?.length ?? null;
   const productLine = lineCount === null
     ? '…'
-    : `${lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })}  ·  ${currency} ${fmtNum(total)}`;
+    : `${lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })}  ·  ${formatCurrency(currency, total)}`;
 
   const handleClone = async () => {
     setLoading(true);
@@ -746,22 +794,22 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
       <div style={{ ...cardStyle, width: 440 }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 16px 0' }}>
-          <span style={{ fontWeight: 600, fontSize: 15, color: '#111827' }}>{ui('cloneOrderConfirmTitle')}</span>
+          <span style={{ fontWeight: 600, fontSize: 15, color: 'hsl(var(--foreground))' }}>{ui('cloneOrderConfirmTitle')}</span>
           <button type="button" onClick={onClose} style={closeBtn}>×</button>
         </div>
 
         <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Summary card */}
-          <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ border: '1px solid hsl(var(--card))', borderRadius: 8, overflow: 'hidden' }}>
             {/* Row 1: contact · docNo · badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#F9FAFB' }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#111827', flex: 1,
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'hsl(var(--card))' }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', flex: 1,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {bpName}
               </span>
               {documentNo && (
-                <span style={{ fontSize: 12, color: '#9CA3AF', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {documentNo}
                 </span>
               )}
@@ -773,15 +821,15 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
               )}
             </div>
             {/* Row 2: products + total */}
-            <div style={{ padding: '6px 14px 9px', background: '#F9FAFB', borderTop: '1px solid #F3F4F6' }}>
-              <span style={{ fontSize: 12, color: '#9CA3AF' }}>{productLine}</span>
+            <div style={{ padding: '6px 14px 9px', background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))' }}>
+              <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{productLine}</span>
             </div>
           </div>
 
           {/* Explanatory text — same horizontal inset as card content */}
-          <p style={{ fontSize: 13, color: '#6B7280', margin: 0, padding: '0 2px' }}>{ui('cloneOrderConfirmBody')}</p>
+          <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', margin: 0, padding: '0 2px' }}>{ui('cloneOrderConfirmBody')}</p>
 
-          {error && <div style={{ color: '#ef4444', fontSize: 12 }}>{error}</div>}
+          {error && <div style={{ color: 'hsl(var(--destructive))', fontSize: 12 }}>{error}</div>}
 
           {/* Buttons */}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -790,7 +838,7 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
             </button>
             <button type="button" onClick={handleClone} disabled={loading}
               style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
-              {loading && <Spinner />}
+              {loading && <Spinner data-testid="Spinner__18d1f0" />}
               {loading ? ui('soProcessing') : ui('cloneOrderAction')}
             </button>
           </div>
@@ -805,165 +853,45 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: 'rgba(0,0,0,0.3)',
+  backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
 const cardStyle = {
   width: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB',
+  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 const btnPrimaryStyle = {
   padding: '5px 14px', borderRadius: 6, border: 'none',
-  background: '#185FA5', color: '#fff', fontWeight: 500, fontSize: 13,
+  background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid #D1D5DB', background: 'transparent', color: '#6B7280', cursor: 'pointer',
+  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
 };
 
 const iconBtnStyle = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   width: 32, height: 32, borderRadius: 6,
-  border: '1px solid var(--color-border, #e5e7eb)',
-  background: 'transparent', color: 'var(--color-muted-foreground, #6b7280)',
+  border: '1px solid var(--color-border, hsl(var(--foreground)))',
+  background: 'transparent', color: 'var(--color-muted-foreground, hsl(var(--muted)))',
   cursor: 'pointer',
 };
 
 const btnCloneStyle = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   padding: '7px', borderRadius: 6,
-  border: '1px solid #D1D4DB', background: '#FFFFFF', color: '#64748B', cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px #1212170D',
+  border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
+  boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
 
 const closeBtn = {
   fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-  background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF',
+  background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
 };
-
-// ── ConfirmResultModal ─────────────────────────────────────────────────────────
-// Shown after order confirmation (always). Displays created docs as clickable cards.
-// Cases: no docs (only confirmed), shipment only, invoice only, or both.
-
-export function ConfirmResultModal({ docs, onClose, navigate, ui, currency, title }) {
-  const { shipment, invoice } = docs;
-  const hasDocs = Boolean(shipment?.id || invoice?.id);
-
-  return (
-    <div style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 400 }}>
-
-        {/* Check + title */}
-        <div style={{ padding: '28px 24px 20px', textAlign: 'center' }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: '50%', margin: '0 auto 14px',
-            background: '#ECFDF5',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>
-            {title || ui('soConfirmedTitle')}
-          </div>
-          {hasDocs && (
-            <div style={{ fontSize: 12, color: '#6B7280', marginTop: 5, lineHeight: 1.4 }}>
-              {ui('soConfirmedSubtitle')}
-            </div>
-          )}
-        </div>
-
-        {/* Doc cards */}
-        {hasDocs && (
-          <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {shipment?.id && (
-              <ResultDocCard
-                icon="🚚"
-                label={ui('shipmentDoc', { number: shipment.documentNo })}
-                amount={shipment.amount}
-                currency={currency}
-                color="blue"
-                ui={ui}
-                onClick={() => { onClose(); navigate(`/goods-shipment/${shipment.id}`); }}
-              />
-            )}
-            {invoice?.id && (
-              <ResultDocCard
-                icon="🧾"
-                label={ui('invoiceDoc', { number: invoice.documentNo })}
-                amount={invoice.amount}
-                currency={currency}
-                color="green"
-                ui={ui}
-                onClick={() => { onClose(); navigate(`/sales-invoice/${invoice.id}`); }}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div style={{
-          display: 'flex', justifyContent: 'flex-end',
-          padding: '12px 16px', borderTop: '0.5px solid #E5E7EB',
-        }}>
-          <button type="button" onClick={() => { onClose(); window.location.reload(); }} style={btnSecondary}>
-            {ui('soClose')}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ResultDocCard({ icon, label, amount, currency, color, ui, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  const isBlue   = color === 'blue';
-  const accent   = isBlue ? '#185FA5' : '#059669';
-  const bg       = isBlue ? '#EFF6FF' : '#ECFDF5';
-  const border   = isBlue ? '#BFDBFE' : '#A7F3D0';
-  const hoverBg  = isBlue ? '#DBEAFE' : '#D1FAE5';
-
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-        borderRadius: 10, cursor: 'pointer',
-        border: `1px solid ${border}`,
-        background: hovered ? hoverBg : bg,
-        transition: 'background 0.15s',
-      }}
-    >
-      <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: accent }}>{label}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-          {amount != null && Number(amount) !== 0 && (
-            <span style={{ fontSize: 12, color: '#6B7280' }}>
-              {fmtNum(amount)}{currency ? ` ${currency}` : ''}
-            </span>
-          )}
-          <span style={{
-            fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-            background: '#FEF3C7', color: '#92400E',
-          }}>
-            {ui('statusDraft')}
-          </span>
-        </div>
-      </div>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" style={{ flexShrink: 0 }}>
-        <path d="M9 18l6-6-6-6" />
-      </svg>
-    </div>
-  );
-}
 
 // ── ManageDocsLauncher ──────────────────────────────────────────────────────
 // Self-contained mount point for the "Gestionar envío/factura" flow from the
@@ -1007,11 +935,11 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
     // Lightweight overlay so the user gets feedback while the row's docs load.
     return createPortal(
       <div style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 9998,
+        position: 'fixed', inset: 0, background: 'hsl(var(--foreground) / 0.2)', zIndex: 9998,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <div style={{ background: '#fff', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Spinner /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
+        <div style={{ background: 'hsl(var(--card))', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Spinner data-testid="Spinner__18d1f0" /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
         </div>
       </div>,
       document.body,
@@ -1062,7 +990,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
       derived={derived}
       onClose={onClose}
       onCreated={onCreated}
-    />,
+      data-testid="CreateDocsModal__18d1f0" />,
     document.body,
   );
 }

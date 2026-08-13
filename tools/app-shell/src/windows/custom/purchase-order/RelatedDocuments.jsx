@@ -31,7 +31,7 @@ async function fetchPayments(orderId, token, apiBaseUrl) {
   return results.filter(Boolean);
 }
 
-export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, docsRefreshSignal }) {
   const [related, setRelated] = useState({});
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +54,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         setPayments(paymentResults);
         setLoading(false);
       });
-  }, [recordId, token, apiBaseUrl, refreshKey]);
+  }, [recordId, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
 
   const chips = [];
 
@@ -65,19 +65,25 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         <DocChip
           key={`${spec.key}-${row.id}`}
           {...docChipProps({ type: spec.type, doc: row, ui, navigate, iconKey: spec.iconKey })}
-        />
+          data-testid="DocChip__4efe59" />
       );
     }
   }
 
   for (const p of payments) {
     chips.push(
-      <DocChip key={`payment-${p.id}`} {...docChipProps({ type: 'payment', doc: p, ui, navigate })} />
+      <DocChip
+        key={`payment-${p.id}`}
+        {...docChipProps({ type: 'payment', doc: p, ui, navigate })}
+        data-testid="DocChip__4efe59" />
     );
   }
 
   return (
-    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
+    <RelatedDocumentsShell
+      loading={loading}
+      onRefresh={() => setRefreshKey(k => k + 1)}
+      data-testid="RelatedDocumentsShell__4efe59">
       {chips}
     </RelatedDocumentsShell>
   );

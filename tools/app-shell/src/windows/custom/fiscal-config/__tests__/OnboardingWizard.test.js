@@ -182,9 +182,8 @@ describe('OnboardingWizard — cert status fetch on applied step', () => {
     assert.match(src, /data\?\.exists[\s\S]*?setCert|setCert[\s\S]*?data\?\.exists/);
   });
 
-  it('fetches certificate via apiFetch without orgId query param', () => {
-    assert.match(src, /apiFetch\(['"]\/certificate['"]\)/);
-    assert.doesNotMatch(src, /certificate\?orgId/);
+  it('fetches certificate via apiFetch with orgId query param', () => {
+    assert.match(src, /apiFetch\(`\/certificate\?\$\{new URLSearchParams\(\{ orgId \}\)\}`\)/);
   });
 });
 

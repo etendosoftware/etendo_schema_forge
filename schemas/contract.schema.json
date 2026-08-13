@@ -132,6 +132,52 @@
       },
       "additionalProperties": true
     },
+    "formState": {
+      "type": "object",
+      "required": ["entities"],
+      "properties": {
+        "entities": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["fields"],
+            "properties": {
+              "fields": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "visible": { "type": "boolean" },
+                    "readOnly": { "type": "boolean" },
+                    "required": { "type": "boolean" },
+                    "displayLogic": { "type": "string" },
+                    "readOnlyLogic": { "type": "string" },
+                    "calloutTriggers": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "defaultValue": {}
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "agentProfile": {
+      "type": "object",
+      "properties": {
+        "window": { "type": "object", "additionalProperties": true },
+        "entities": { "type": "object", "additionalProperties": true },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
     "testManifest": {
       "type": "object",
       "required": ["tests", "summary"],

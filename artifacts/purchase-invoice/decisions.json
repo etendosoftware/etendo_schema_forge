@@ -3,10 +3,12 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Invoice",
+    "documentDateField": "invoiceDate",
     "sendDocument": {
       "allowEmail": false
     },
     "hideDeleteWhenComplete": true,
+    "hidePrint": true,
     "relatedDocuments": true,
     "notesField": "description",
     "noHeaderBorder": true,
@@ -17,7 +19,17 @@
         "labelKey": "reactivate",
         "visibleWhenStatus": "CO",
         "documentAction": "RE",
-        "successKey": "reactivated"
+        "successKey": "reactivated",
+        "preUnpost": true
+      },
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
       }
     ],
     "customComponents": {
@@ -32,6 +44,19 @@
       "label": "Confirm"
     },
     "dateFilterKey": "invoiceDate",
+    "subsetFilters": [
+      {
+        "label": "allTab"
+      },
+      {
+        "label": "invoicesTab",
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D"
+      },
+      {
+        "label": "rectificativeInvoicesTab",
+        "filter": "criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D%7D%5D"
+      }
+    ],
     "lineEntityConfig": "invoice",
     "linesLayout": "inlineEditable",
     "extraTabs": [
@@ -41,6 +66,13 @@
         "component": "SifTab",
         "importFrom": "@/windows/custom/shared/SifTab.jsx",
         "placement": "tab"
+      },
+      {
+        "key": "reversedInvoices",
+        "labelKey": "rectificationsTab",
+        "component": "ReversedInvoicesPanel",
+        "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
+        "placement": "tab"
       }
     ],
     "labelOverrides": {
@@ -48,19 +80,58 @@
         "POReference": "Nº documento",
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
-        "em_etgo_delivery_status": "Estado de entrega"
+        "em_etgo_delivery_status": "Estado de recepción",
+        "C_DocTypeTarget_ID": "Tipo de documento",
+        "PriceList": "Precio"
       },
       "en_US": {
         "POReference": "Document No.",
         "OutstandingAmt": "Pending Payment",
         "EM_Etgo_Due_Date": "Due Date",
-        "em_etgo_delivery_status": "Delivery Status"
+        "em_etgo_delivery_status": "Reception Status",
+        "C_DocTypeTarget_ID": "Document Type"
       }
-    }
+    },
+    "secondaryTabs": {
+      "exchangeRates": {
+        "label": "Exchange Rates",
+        "tabOrder": 50,
+        "requireSavedRecord": true,
+        "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"
+      }
+    },
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ]
   },
   "entities": {
     "header": {
       "javaQualifier": "purchaseInvoiceHeaderHandler",
+      "namedFilters": [
+        {
+          "name": "completed",
+          "label": "Paid",
+          "description": "Fully paid invoices (payment complete).",
+          "where": "e.paymentComplete = true"
+        },
+        {
+          "name": "pending",
+          "label": "Unpaid",
+          "description": "Unpaid invoices with nothing paid yet (outstanding equals the total).",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)"
+        },
+        {
+          "name": "partial",
+          "label": "Partially paid",
+          "description": "Invoices with a partial payment: some amount paid but a balance remains.",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)"
+        }
+      ],
       "fields": {
         "documentNo": {
           "visibility": "readOnly",
@@ -69,14 +140,17 @@
           "form": false,
           "searchable": true,
           "readOnlyLogic": null,
-          "seq": 20
+          "seq": 20,
+          "businessCritical": true
         },
         "transactionDocument": {
           "visibility": "editable",
-          "section": "other",
-          "form": false,
+          "section": "principal",
+          "form": true,
+          "seq": 15,
           "reference": "DocumentType",
           "inputMode": "selector",
+          "readOnlyLogicJs": "!!record.id",
           "readOnlyLogic": null
         },
         "invoiceDate": {
@@ -85,7 +159,8 @@
           "searchable": true,
           "section": "principal",
           "readOnlyLogic": null,
-          "seq": 30
+          "seq": 30,
+          "businessCritical": true
         },
         "businessPartner": {
           "grid": true,
@@ -95,7 +170,8 @@
           "reference": "BusinessPartner",
           "readOnlyLogic": "@Processed@='Y'",
           "displayLogic": null,
-          "seq": 10
+          "seq": 10,
+          "businessCritical": true
         },
         "partnerAddress": {
           "section": "principal",
@@ -110,14 +186,20 @@
         },
         "currency": {
           "visibility": "editable",
-          "section": "other",
+          "section": "principal",
+          "form": true,
+          "grid": false,
+          "seq": 65,
+          "readOnlyLogic": "@Processed@='Y'"
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
           "form": false,
           "grid": false
         },
         "accountingDate": {
-          "section": "other",
-          "form": false,
-          "readOnlyLogic": null
+          "visibility": "system",
+          "_note": "ETP-4531 (redefined 2026-07-17): accounting date is now hidden and unified with the document date internally; the Java-side guard that used to block this cascade has been removed so the native document-date→accounting-date coupling flows through untouched."
         },
         "paymentTerms": {
           "section": "principal",
@@ -186,16 +268,15 @@
           "readOnlyLogic": null
         },
         "project": {
-          "section": "other",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
-          "visibility": "discarded",
+          "visibility": "editable",
+          "section": "principal",
           "reference": "CostCenter",
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "asset": {
           "visibility": "discarded",
@@ -227,7 +308,8 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
-          "gridOrder": 5
+          "gridOrder": 6,
+          "businessCritical": true
         },
         "summedLineAmount": {
           "visibility": "readOnly",
@@ -256,22 +338,22 @@
         },
         "outstandingAmount": {
           "visibility": "readOnly",
-          "form": false,
           "grid": true,
-          "gridOrder": 6,
-          "displayLogic": null
+          "gridOrder": 7,
+          "form": false,
+          "businessCritical": true
         },
         "eTGODueDate": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": false,
           "searchable": true
         },
         "eTGODeliveryStatus": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 8,
+          "gridOrder": 9,
           "form": false
         },
         "dueAmount": {
@@ -298,7 +380,8 @@
         "documentAction": {
           "visibility": "system",
           "form": false,
-          "displayLogic": null
+          "displayLogic": null,
+          "agentPrompt": "Document workflow action for this purchase invoice. Fire it with neo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it computes taxes and totals and creates the payment plan; VO voids it. From documentStatus=CO (Completed): RE reactivates it back to DR, and the UI unposts the invoice first when it was already posted — so check the posted field and expect the accounting entries to be removed. CL closes it. Preconditions for CO: at least one line, a vendor with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger: posting is a separate action on this window (not a documentAction value), so never send PO here — read the posted field to know the accounting state. Read documentStatus and posted with neo_get before acting. The remaining values offered in actionValues (AP, PR, RA, RC, RJ, XL) come from the shared AD list and are not part of this window's flow."
         },
         "createLinesFromOrder": {
           "visibility": "discarded",
@@ -309,7 +392,27 @@
           "displayLogic": null
         },
         "posted": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 5,
+          "badge": true,
+          "visibleWhenCapability": "showAccountingFields",
+          "badgeLabels": {
+            "true": {
+              "en_US": "Posted",
+              "es_ES": "Contabilizado"
+            },
+            "false": {
+              "en_US": "Not posted",
+              "es_ES": "Sin contabilizar"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         },
         "trxOrganization": {
           "visibility": "discarded"
@@ -379,7 +482,8 @@
         },
         "aeatsiiEstado": {
           "visibility": "readOnly",
-          "form": false
+          "form": false,
+          "grid": true
         },
         "etsgDateOperation": {
           "visibility": "editable",
@@ -398,7 +502,7 @@
           "form": false
         },
         "tbaiIssent": {
-          "visibility": "readOnly",
+          "visibility": "discarded",
           "form": false
         },
         "etvfacInvoiceStatus": {
@@ -428,6 +532,11 @@
         "cdigoCSV": {
           "visibility": "readOnly",
           "form": false
+        },
+        "processed": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": false
         }
       }
     },
@@ -487,7 +596,7 @@
           "gridOrder": 3,
           "section": "principal",
           "readOnlyLogic": null,
-          "min": 0
+          "min": false
         },
         "uOM": {
           "visibility": "system"
@@ -505,7 +614,7 @@
           "gridOrder": 4,
           "section": "principal",
           "columnType": "amount",
-          "min": 0
+          "min": false
         },
         "etgoDiscount": {
           "visibility": "editable",
@@ -517,7 +626,8 @@
           "section": "principal",
           "derivation": null,
           "readOnlyLogic": "@Processed@='Y'",
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "lineNetAmount": {
           "visibility": "system",
@@ -552,15 +662,17 @@
           "inputMode": "selector"
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "costcenter": {
-          "form": false,
+          "visibility": "editable",
+          "grid": false,
           "reference": "CostCenter",
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "asset": {
           "form": false,
@@ -748,12 +860,62 @@
       "javaQualifier": "factAcctHandler"
     },
     "reversedInvoices": {
-      "name": "reversedInvoices",
+      "label": "Rectificaciones",
+      "tabOrder": 90,
+      "renderTab": false,
+      "displayLogic": "@isRectificative@='true'",
+      "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'",
       "fields": {
         "reversedInvoice": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": true,
-          "readOnlyLogic": null
+          "gridOrder": 1,
+          "form": true,
+          "required": true,
+          "lookup": true,
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349IsCorrective": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 5,
+          "form": true,
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349CYear": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 10,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349Period": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 20,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349BPBaseAmount": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 30,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349BPBaseAmountS": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 40,
+          "form": true,
+          "displayLogic": "@aEAT349IsCorrective@='Y'",
+          "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+        },
+        "aEAT349CBpartner": {
+          "visibility": "discarded"
         }
       }
     },
@@ -794,34 +956,100 @@
         }
       }
     },
-    "exchangeRates": {
-      "exclude": true
-    },
     "intrastat": {
       "fields": {
-        "client": { "order": 1 },
-        "organization": { "order": 2 },
-        "invoiceLine": { "order": 3 },
-        "product": { "order": 4 },
-        "incoterms": { "order": 5 },
-        "transactionType": { "order": 6 },
-        "transportationType": { "order": 7 },
-        "portAirport": { "order": 8 },
-        "statisticalRegime": { "order": 9 },
-        "origCountry": { "order": 10 },
-        "nC8Code": { "order": 11 },
-        "netMassKg": { "order": 12 },
-        "hasSuplementaryUnit": { "order": 13 },
-        "conversionRate": { "order": 14 },
-        "staticalValue": { "order": 15 },
-        "supplementaryUOM": { "order": 16 },
-        "active": { "order": 17 },
-        "intrCInvoiceline": { "order": 18 },
-        "creationDate": { "order": 19 },
-        "createdBy": { "order": 20 },
-        "updated": { "order": 21 },
-        "updatedBy": { "order": 22 }
+        "client": {
+          "order": 1
+        },
+        "organization": {
+          "order": 2
+        },
+        "invoiceLine": {
+          "order": 3
+        },
+        "product": {
+          "order": 4
+        },
+        "incoterms": {
+          "order": 5
+        },
+        "transactionType": {
+          "order": 6
+        },
+        "transportationType": {
+          "order": 7
+        },
+        "portAirport": {
+          "order": 8
+        },
+        "statisticalRegime": {
+          "order": 9
+        },
+        "origCountry": {
+          "order": 10
+        },
+        "nC8Code": {
+          "order": 11
+        },
+        "netMassKg": {
+          "order": 12
+        },
+        "hasSuplementaryUnit": {
+          "order": 13
+        },
+        "conversionRate": {
+          "order": 14
+        },
+        "staticalValue": {
+          "order": 15
+        },
+        "supplementaryUOM": {
+          "order": 16
+        },
+        "active": {
+          "order": 17
+        },
+        "intrCInvoiceline": {
+          "order": 18
+        },
+        "creationDate": {
+          "order": 19
+        },
+        "createdBy": {
+          "order": 20
+        },
+        "updated": {
+          "order": 21
+        },
+        "updatedBy": {
+          "order": 22
+        }
       }
+    },
+    "exchangeRates": {
+      "fields": {
+        "active": {
+          "visibility": "system"
+        },
+        "currency": {
+          "grid": true,
+          "form": false,
+          "visibility": "readOnly",
+          "gridReadOnly": true
+        },
+        "toCurrency": {
+          "grid": true,
+          "visibility": "readOnly",
+          "gridReadOnly": true
+        },
+        "rate": {
+          "grid": true
+        },
+        "foreignAmount": {
+          "grid": true
+        }
+      },
+      "javaQualifier": "invoiceExchangeRateHandler"
     }
   },
   "rules": {
@@ -845,9 +1073,23 @@
     },
     "SE_Invoice_AccountingDate": {
       "entity": "invoice",
-      "decision": "Omit",
-      "description": "Auto-fill accounting date. Backend default applies on save.",
-      "impactIfOmitted": "Backend sets accounting date on save."
+      "decision": "Keep",
+      "description": "ETP-4531 (redefined 2026-07-17): C_Invoice.DateInvoiced carries AD_Column.AD_Callout_ID = com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout, which extends org.openbravo.erpCommon.ad_callouts.SE_Invoice_AccountingDate and calls super.execute() to auto-fill dateAcct from dateInvoiced. com.etendoerp.go's NeoCalloutService executes this same callout server-side, so it fires in the GO SPA too (create-time cascade and interactive per-field callout). accountingDate is now hidden (visibility: system) and unified with the document date — the native cascade is intentionally kept as-is (the com.etendoerp.go-side guard that used to block it, per the earlier independent-editable-field design, was removed) so this is the primary mechanism keeping accountingDate in sync. AbstractInvoiceHeaderHandler#mirrorAccountingDate is a server-side safety net for write paths that don't trigger this callout (e.g. a bare PATCH).",
+      "impactIfOmitted": "If this native callout were blocked again, accountingDate would only stay in sync via the mirrorAccountingDate safety net — any gap between the two would desynchronize the hidden accounting date from the visible document date."
+    },
+    "READONLY_Posted_AccountingDate": {
+      "type": "readOnlyLogic",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Accounting date becomes read-only once the invoice is posted (Posted=Y). Mirrors Goods Receipt/Goods Shipment. Uses Posted rather than Processed so the date can still be corrected if a posting attempt failed and the document needs to be re-posted.",
+      "impactIfOmitted": "Users could change accounting date on already-posted invoices, desynchronizing the frontend from the accounting facts already generated."
+    },
+    "SE_Invoice_TaxDate": {
+      "type": "callout",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "ETP-4531 (redefined 2026-07-17): C_Invoice.DateAcct carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate, reachable whenever accountingDate is written (now hidden/visibility: system, unified with the document date, rather than the earlier independent-editable-field design). It only fires an update when the callout request's formState already carries a non-empty 'taxDate' that differs from the new accountingDate value (info.getStringParameter(\"inptaxdate\")). taxDate is classified visibility:discarded in this window, so the frontend never sends a 'taxDate' key in formState; the callout's isNotEmpty(strTaxDate) guard is always false and it never produces an update. Verified harmless — kept as-is, not implemented client-side.",
+      "impactIfOmitted": "None observed: the callout's only effect targets a field this window discards, so there is nothing to omit."
     },
     "SL_Invoice_PriceList": {
       "entity": "invoice",
@@ -939,7 +1181,7 @@
       "type": "readOnlyLogic",
       "entity": "invoice",
       "decision": "Keep",
-      "description": "Most header fields become read-only when document is processed (Processed=Y). Covers: documentNo, invoiceDate, businessPartner, partnerAddress, currency, paymentTerms, paymentMethod, priceList, transactionDocument.",
+      "description": "Most header fields become read-only when document is processed (Processed=Y). Covers: documentNo, invoiceDate, businessPartner, partnerAddress, currency, paymentTerms, paymentMethod, priceList. Note: transactionDocument uses readOnlyLogicJs (locks after first save via d=>!!d.id).",
       "impactIfOmitted": "Users could edit fields on confirmed invoices, breaking data integrity."
     },
     "READONLY_Processed_Lines": {

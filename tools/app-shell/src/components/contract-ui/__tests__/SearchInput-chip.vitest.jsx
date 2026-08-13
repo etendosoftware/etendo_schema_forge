@@ -52,7 +52,7 @@ const SEARCH_FIELD = {
  * onChange('', '') properly removes the value from the next render. This is
  * required to verify the "click X → cleared" scenario without leaking state.
  */
-function Harness({ initialData = {}, onChangeSpy }) {
+function Harness({ initialData = {}, onChangeSpy, fields = [SEARCH_FIELD], entity, apiBaseUrl, token }) {
   const [data, setData] = React.useState(initialData);
   const handleChange = (key, value /*, column */) => {
     onChangeSpy?.(key, value);
@@ -60,9 +60,12 @@ function Harness({ initialData = {}, onChangeSpy }) {
   };
   return (
     <EntityForm
-      fields={[SEARCH_FIELD]}
+      entity={entity}
+      fields={fields}
       data={data}
       onChange={handleChange}
+      apiBaseUrl={apiBaseUrl}
+      token={token}
     />
   );
 }
@@ -148,10 +151,138 @@ describe('SearchInput chip mode (ETP-4000)', () => {
     const { container } = render(<Harness initialData={{}} />);
     const chevron = container.querySelector('svg.lucide-chevron-down');
     expect(chevron).not.toBeNull();
-    // Regression: chevron must keep ml-auto so chip vs input share the same right anchor.
-    expect(chevron.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+    // Regression: chevron button must keep ml-auto so chip vs input share the same right anchor.
+    expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
     // It must not render the loader at the same time.
     expect(container.querySelector('svg.lucide-loader')).toBeNull();
+  });
+
+  // Regression (purchase-order warehouse): a value auto-filled by a callout arrives
+  // WITHOUT its `$_identifier` (displayValue empty). A `search` FK field must resolve
+  // the label on-demand via the selector `?id=` endpoint so the chip shows the record
+  // NAME ("Almacen GO"), not the raw ID. This is why purchase-order's warehouse is
+  // declared `inputMode: "search"` (matching sales-order) instead of a plain dropdown,
+  // which would show the raw ID until the user opened it.
+  it('resolves the label on-demand for a value that has no $_identifier (callout-filled FK)', async () => {
+    const warehouseId = '1FF18B068AA94146A2A49C51E13C7300';
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ id: warehouseId, label: 'Almacen GO' }] }),
+    });
+    const WAREHOUSE_FIELD = {
+      key: 'warehouse',
+      label: 'Warehouse',
+      type: 'search',
+      column: 'M_Warehouse_ID',
+      reference: 'Warehouse',
+    };
+
+    render(
+      <Harness
+        fields={[WAREHOUSE_FIELD]}
+        initialData={{ warehouse: warehouseId }}
+        entity="purchase-order"
+        apiBaseUrl="/sws/neo"
+        token="test-token"
+      />
+    );
+
+    // The chip renders immediately (value present) — initially with the raw ID as text,
+    // then updated to the resolved name once the on-demand fetch settles.
+    const chip = await screen.findByTestId('field-warehouse-chip');
+    await waitFor(() => expect(chip).toHaveTextContent('Almacen GO'));
+    expect(chip).not.toHaveTextContent(warehouseId);
+
+    // The resolution used the selector endpoint with the current id.
+    expect(globalThis.fetch).toHaveBeenCalled();
+    expect(globalThis.fetch.mock.calls[0][0]).toContain('/sws/neo/purchase-order/selectors/M_Warehouse_ID');
+  });
+
+  // Edge case (purchase-order warehouse, gap found in QA): the on-demand resolution fetch
+  // can fail (network error, non-200, id not found in the selector response). The effect's
+  // `.catch(() => {})` + "only setQuery on match" logic must fail SAFE — no crash, no infinite
+  // spinner — falling back to showing the raw id as text, exactly like it did before this fix.
+  it('falls back to showing the raw id when the on-demand resolution fetch rejects (network error)', async () => {
+    const warehouseId = '1FF18B068AA94146A2A49C51E13C7300';
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('network down'));
+    const WAREHOUSE_FIELD = {
+      key: 'warehouse',
+      label: 'Warehouse',
+      type: 'search',
+      column: 'M_Warehouse_ID',
+      reference: 'Warehouse',
+    };
+
+    render(
+      <Harness
+        fields={[WAREHOUSE_FIELD]}
+        initialData={{ warehouse: warehouseId }}
+        entity="purchase-order"
+        apiBaseUrl="/sws/neo"
+        token="test-token"
+      />
+    );
+
+    const chip = await screen.findByTestId('field-warehouse-chip');
+    // No throw, no error boundary trip — chip renders with the raw id as its (fallback) text.
+    await waitFor(() => expect(chip).toHaveTextContent(warehouseId));
+  });
+
+  it('falls back to showing the raw id when the selector responds ok but the id has no match in items', async () => {
+    const warehouseId = '1FF18B068AA94146A2A49C51E13C7300';
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [] }), // id not found server-side
+    });
+    const WAREHOUSE_FIELD = {
+      key: 'warehouse',
+      label: 'Warehouse',
+      type: 'search',
+      column: 'M_Warehouse_ID',
+      reference: 'Warehouse',
+    };
+
+    render(
+      <Harness
+        fields={[WAREHOUSE_FIELD]}
+        initialData={{ warehouse: warehouseId }}
+        entity="purchase-order"
+        apiBaseUrl="/sws/neo"
+        token="test-token"
+      />
+    );
+
+    const chip = await screen.findByTestId('field-warehouse-chip');
+    await waitFor(() => expect(chip).toHaveTextContent(warehouseId));
+  });
+
+  // Edge case (purchase-order warehouse): when the callout-filled value already carries its
+  // `$_identifier` (already resolved/cached upstream), the on-demand resolution effect must
+  // NOT fire an extra network request — the chip shows the cached label immediately.
+  it('does not call fetch when the value already has a cached $_identifier', async () => {
+    const warehouseId = '1FF18B068AA94146A2A49C51E13C7300';
+    globalThis.fetch = vi.fn();
+    const WAREHOUSE_FIELD = {
+      key: 'warehouse',
+      label: 'Warehouse',
+      type: 'search',
+      column: 'M_Warehouse_ID',
+      reference: 'Warehouse',
+    };
+
+    render(
+      <Harness
+        fields={[WAREHOUSE_FIELD]}
+        initialData={{ warehouse: warehouseId, 'warehouse$_identifier': 'Almacen GO' }}
+        entity="purchase-order"
+        apiBaseUrl="/sws/neo"
+        token="test-token"
+      />
+    );
+
+    const chip = await screen.findByTestId('field-warehouse-chip');
+    expect(chip).toHaveTextContent('Almacen GO');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it('renders the ChevronDown icon (right-anchored) when the chip is visible', () => {
@@ -160,6 +291,6 @@ describe('SearchInput chip mode (ETP-4000)', () => {
     );
     const chevron = container.querySelector('svg.lucide-chevron-down');
     expect(chevron).not.toBeNull();
-    expect(chevron.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+    expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
   });
 });

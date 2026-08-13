@@ -14,6 +14,22 @@ color: green
 - **Core Logic:** Read the source, understand the contract, write tests that prove it works, run them, fix until green.
 </identity>
 
+<repo_topology>
+## Repo Topology (post-split — read before writing tests)
+
+Schema Forge is now **two sibling repos + one runtime module**:
+
+| Where | Location / remote | Holds | Tests you write here |
+|-------|-------------------|-------|----------------------|
+| **etendo_schema_forge** (functional) | `etendosoftware/etendo_schema_forge` | `tools/app-shell/**` (React windows + components), `artifacts/**`, `e2e/**`, per-window `decisions.json` | app-shell Vitest component tests, `artifacts/**/__tests__` tests, Playwright E2E flows |
+| **schema_forge_core** (platform/tooling) | `etendosoftware/schema_forge_core` (sibling `../schema_forge_core`) | `packages/**`, pipeline CLI (generators, extractors, `pipeline.js`, `push-to-neo.js`, `resolve-curated.js`), `templates/`, `schemas/` | generator/extractor/pipeline unit tests (run in the core repo) |
+| **com.etendoerp.go** (runtime) | `{etendo_root}/modules/com.etendoerp.go` | NEO Headless engine (Java), ETGO_SF_* tables | JUnit / OBBaseTest (Java) |
+
+**What this means for you:** the app-shell React/Vitest tests and the Playwright E2E flows live HERE in `etendo_schema_forge` — your `cd tools/app-shell && npx vitest run …`, `node --test 'tools/app-shell/src/**/__tests__/*.test.js'`, and `cd e2e && npx playwright test` commands are all still correct, and the `@` → `tools/app-shell/src/` alias is unchanged. But tests for the **pipeline tooling** (generators, extractors, `resolve-curated`, `push-to-neo`, contract generation) belong in `schema_forge_core` and are written/run from that checkout — this repo consumes that tooling as a published npm package (`@etendosoftware/schema-forge-cli`), so there is no generator source here to unit-test. If asked to test a generator/pipeline behavior, do it in the `schema_forge_core` repo, not here.
+
+> **Local-source dev mode (opt-in, env-gated — implemented):** the `LOCAL_CORE` flag pulls the CLI + React from a local `../schema_forge_core` checkout — wired in the `Makefile` and `tools/app-shell/vite.config.js`, strictly opt-in and never the default. Do not rely on it for tests — CI uses the published packages. See `docs/repo-topology.md`.
+</repo_topology>
+
 <what_i_do>
 - Generate unit tests for React components, hooks, and utility functions
 - Generate Playwright E2E specs for cross-window UI flows (mocked or live)
@@ -388,6 +404,10 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 ```
+
+## Currency/Amount Formatting Convention
+
+**Never write your own money formatter inside a test's mocked component or fixture.** Every component that displays an amount must go through `formatCurrency(currencyCode, value)` / `getCurrencySymbol(currencyCode)` (`tools/app-shell/src/lib/formatCurrency.js`) — assert against its real output (e.g. `'1.234,50 €'`), not a loosely-tolerant regex that would also pass with the old buggy `en-US`/no-grouping output. If the file under test hand-rolls `Intl.NumberFormat`/`toLocaleString` for currency instead of importing the canonical utility, that is itself the bug to report — see CLAUDE.md § Currency & Amount Formatting.
 
 ## Fetch Mocking Convention
 

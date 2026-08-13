@@ -1,32 +1,13 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Loader2, Minus, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { parseBoolean } from '@/lib/parseBoolean.js';
+import { AddLineButton } from '@/components/ui/add-line-button.jsx';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
+import { InlineCreateModal } from '@/components/contract-ui/InlineCreateModal.jsx';
+import { buildCreateUrl } from '@/components/contract-ui/InlineCreateSelector.jsx';
 import { useUI } from '@/i18n';
-import { useCurrency } from '@/hooks/useCurrency';
-import { formatCurrency } from '@/lib/formatCurrency';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-
-function parseBoolean(value) {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') {
-    if (value === 1) return true;
-    if (value === 0) return false;
-    return null;
-  }
-  if (typeof value !== 'string') return null;
-
-  const normalized = value.trim().toLowerCase();
-  if (['true', 'y', 'yes', '1'].includes(normalized)) return true;
-  if (['false', 'n', 'no', '0'].includes(normalized)) return false;
-  return null;
-}
 
 function getSalesFlagFromOption(option) {
   if (!option || typeof option !== 'object') return null;
@@ -40,36 +21,6 @@ function getSalesFlagFromOption(option) {
 
 function getSalesFlagFromRow(row) {
   return parseBoolean(row?.['priceListVersion$salesPriceList']);
-}
-
-async function extractErrorMessage(res) {
-  try {
-    const data = await res.json();
-    if (data?.error?.message) return data.error.message;
-    if (data?.response?.error?.message) return data.response.error.message;
-    if (typeof data?.response?.error === 'string') return data.response.error;
-    const validationErrors = data?.response?.errors;
-    if (validationErrors && typeof validationErrors === 'object') {
-      const messages = Object.entries(validationErrors)
-        .map(([field, detail]) => {
-          if (typeof detail === 'string') return `${field}: ${detail}`;
-          if (detail?.errorMessage) return `${field}: ${detail.errorMessage}`;
-          if (detail?.message) return `${field}: ${detail.message}`;
-          return null;
-        })
-        .filter(Boolean);
-      if (messages.length > 0) return messages.join(' | ');
-    }
-    if (data?.message) return data.message;
-  } catch {
-    // Ignore non-JSON responses.
-  }
-  return `Error ${res.status}`;
-}
-
-function toFiniteNumber(value) {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function extractReferenceId(value) {
@@ -88,671 +39,119 @@ function extractReferenceId(value) {
   return null;
 }
 
-function sanitizeDefaults(defaults) {
-  const clean = {};
-  if (!defaults || typeof defaults !== 'object') return clean;
+async function extractErrorMessage(res) {
+  try {
+    const data = await res.json();
+    if (data?.error?.message) return data.error.message;
+    if (data?.response?.error?.message) return data.response.error.message;
+    if (typeof data?.response?.error === 'string') return data.response.error;
+    if (data?.message) return data.message;
+  } catch {
+    // Ignore non-JSON responses.
+  }
+  return `Error ${res.status}`;
+}
 
-  for (const [key, rawValue] of Object.entries(defaults)) {
-    if (rawValue == null) continue;
-    if (key === 'id') continue;
+const CURRENCY_SYMBOLS = { EUR: '€', USD: '$', GBP: '£', JPY: '¥' };
 
-    if (typeof rawValue === 'object') {
-      const refId = extractReferenceId(rawValue);
-      if (refId != null) clean[key] = refId;
-      continue;
-    }
+function getCurrencySymbol(iso) {
+  return CURRENCY_SYMBOLS[iso] ?? iso ?? '';
+}
 
-    clean[key] = rawValue;
+/**
+ * Numeric field with a currency prefix and − / + stepper buttons.
+ * Edits are committed on blur or (debounced) after a step. Matches the
+ * Credit limit stepper styling used in the Contact window.
+ */
+function PriceStepper({ value, prefix, disabled, onCommit }) {
+  const [local, setLocal] = useState(String(value ?? ''));
+  const debounceRef = useRef(null);
+
+  useEffect(() => { setLocal(String(value ?? '')); }, [value]);
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+
+  const num = local === '' || local == null ? 0 : Number(local);
+
+  function step(delta) {
+    if (disabled) return;
+    const base = Number.isFinite(num) ? num : 0;
+    const next = Math.max(0, base + delta);
+    setLocal(String(next));
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onCommit(next);
+      debounceRef.current = null;
+    }, 400);
   }
 
-  return clean;
-}
-
-function looksLikeEtendoId(value) {
-  if (typeof value !== 'string') return false;
-  const trimmed = value.trim();
-  return /^[0-9]+$/.test(trimmed) || /^[0-9A-Fa-f]{32}$/.test(trimmed);
-}
-
-function resolveOptionId(options, candidate) {
-  const normalizedCandidate = extractReferenceId(candidate);
-  if (!normalizedCandidate) return null;
-  if (!Array.isArray(options) || options.length === 0) return null;
-
-  const byId = options.find(opt => extractReferenceId(opt?.id) === normalizedCandidate);
-  if (byId) return extractReferenceId(byId.id);
-
-  const byName = options.find(opt => {
-    const name = typeof opt?.name === 'string' ? opt.name.trim() : null;
-    return name && name === normalizedCandidate;
-  });
-  if (byName) return extractReferenceId(byName.id);
-
-  if (looksLikeEtendoId(normalizedCandidate)) return null;
-  return null;
-}
-
-const PRICE_TABLE_TONES = {
-  sales: {
-    shell: 'border-blue-200 bg-blue-50/70',
-    badge: 'bg-blue-100 text-blue-700',
-    listPrice: 'text-blue-700',
-  },
-  purchase: {
-    shell: 'border-emerald-200 bg-emerald-50/70',
-    badge: 'bg-emerald-100 text-emerald-700',
-    listPrice: 'text-emerald-700',
-  },
-  neutral: {
-    shell: 'border-gray-200 bg-gray-50',
-    badge: 'bg-gray-100 text-gray-700',
-    listPrice: 'text-gray-900',
-  },
-};
-
-function PriceTable({ title, rows, variant = 'neutral' }) {
-  const ui = useUI();
-  const orgCurrency = useCurrency() ?? 'USD';
-  const isEmpty = !rows || rows.length === 0;
-  const tone = PRICE_TABLE_TONES[variant] ?? PRICE_TABLE_TONES.neutral;
-
   return (
-    <div className={`rounded-2xl border p-3 ${tone.shell}`}>
-      <div className="flex items-center justify-between px-2 pb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-gray-800">{title}</span>
-          {!isEmpty && (
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone.badge}`}>
-              {rows.length} {rows.length === 1 ? ui('priceSingleList') : ui('priceMultiList')}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {isEmpty ? (
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-xs text-gray-400">
-          {ui('priceNoLists')}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <table className="w-full table-fixed">
-            <colgroup>
-              <col />
-              <col className="w-36" />
-              <col className="w-36" />
-            </colgroup>
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-4 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{ui('name')}</th>
-                <th className="w-36 text-right px-4 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{ui('priceColUnitPrice')}</th>
-                <th className="w-36 text-right px-4 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{ui('priceColListPrice')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => {
-                const unitPrice = Number(row.standardPrice) || 0;
-                const listPrice = Number(row.listPrice) || 0;
-                const name = row['priceListVersion$_identifier'] || row['priceList$_identifier'] || 'Unknown';
-                return (
-                  <tr key={row.id} className={`${idx > 0 ? 'border-t border-gray-100' : ''}`}>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-800 truncate">{name}</td>
-                    <td className="w-36 px-4 py-3 text-sm text-gray-500 text-right">{formatCurrency(orgCurrency, unitPrice)}</td>
-                    <td className={`w-36 px-4 py-3 text-sm font-bold text-right ${tone.listPrice}`}>{formatCurrency(orgCurrency, listPrice)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <div className="flex flex-row items-center h-10 border border-[hsl(var(--border-control))] rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] overflow-hidden bg-card focus-within:border-[hsl(var(--foreground))] focus-within:shadow-[0px_0px_0px_1px_hsl(var(--foreground))] transition-colors">
+      {prefix && <span className="pl-3 text-sm text-[hsl(var(--foreground))] select-none">{prefix}</span>}
+      <input
+        type="number"
+        step="0.01"
+        value={local}
+        disabled={disabled}
+        onChange={e => setLocal(e.target.value)}
+        onBlur={() => onCommit(local === '' ? 0 : Number(local))}
+        className="flex-1 px-3 text-sm text-[hsl(var(--foreground))] bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <button
+        type="button"
+        onClick={() => step(-1)}
+        disabled={disabled}
+        className="w-10 h-[38px] flex items-center justify-center border-l border-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))] hover:bg-muted disabled:opacity-40 shrink-0"
+      >
+        <Minus size={16} data-testid="Minus__d76b90" />
+      </button>
+      <button
+        type="button"
+        onClick={() => step(1)}
+        disabled={disabled}
+        className="w-10 h-[38px] flex items-center justify-center border-l border-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))] hover:bg-muted disabled:opacity-40 shrink-0"
+      >
+        <Plus size={16} data-testid="Plus__d76b90" />
+      </button>
     </div>
   );
 }
 
-
-function PricingDialog({
-  open,
-  onOpenChange,
-  priceRows,
-  apiBaseUrl,
-  token,
-  onSaved,
-  selectorOptions = [],
-  selectorColumn = 'M_PriceList_Version_ID',
-  productId,
-}) {
-  const ui = useUI();
-  const [drafts, setDrafts] = useState({});
-  const [saving, setSaving] = useState(false);
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-  const [pendingSale, setPendingSale] = useState(null);
-  const [pendingPurchase, setPendingPurchase] = useState(null);
-  const [stagedAdds, setStagedAdds] = useState([]);
-  const [stagedDeletes, setStagedDeletes] = useState([]);
-  const [lazyOptions, setLazyOptions] = useState([]);
-  const [lazyLoading, setLazyLoading] = useState(false);
-
-  useEffect(() => {
-    if (open && Array.isArray(priceRows)) {
-      const initial = {};
-      for (const row of priceRows) {
-        initial[row.id] = {
-          standardPrice: String(row.standardPrice ?? ''),
-          listPrice: String(row.listPrice ?? ''),
-        };
-      }
-      setDrafts(initial);
-      setPendingSale(null);
-      setPendingPurchase(null);
-      setStagedAdds([]);
-      setStagedDeletes([]);
-    }
-  }, [open, priceRows]);
-
-  // Catalogs are not eagerly loaded (see useCatalogs). Fetch price list version
-  // options lazily when the dialog opens so the add-row dropdown is populated.
-  useEffect(() => {
-    if (!open) return undefined;
-    if (Array.isArray(selectorOptions) && selectorOptions.length > 0) return undefined;
-    if (!apiBaseUrl || !token) return undefined;
-
-    let aborted = false;
-    setLazyLoading(true);
-    fetch(`${apiBaseUrl}/price/selectors/${selectorColumn}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(res => (res.ok ? res.json() : null))
-      .then(payload => {
-        if (aborted) return;
-        const options = (payload?.items ?? []).map(item => ({
-          id: item.id,
-          name: item.label || item.name || item.id,
-          ...item,
-        }));
-        setLazyOptions(options);
-      })
-      .catch(() => {
-        if (!aborted) setLazyOptions([]);
-      })
-      .finally(() => {
-        if (!aborted) setLazyLoading(false);
-      });
-
-    return () => {
-      aborted = true;
-    };
-  }, [open, selectorOptions, apiBaseUrl, token, selectorColumn]);
-
-  const effectiveSelectorOptions = useMemo(() => (
-    Array.isArray(selectorOptions) && selectorOptions.length > 0 ? selectorOptions : lazyOptions
-  ), [selectorOptions, lazyOptions]);
-
-  const saleOptions = useMemo(() => {
-    if (!Array.isArray(effectiveSelectorOptions) || effectiveSelectorOptions.length === 0) return [];
-    const filtered = effectiveSelectorOptions.filter(opt => getSalesFlagFromOption(opt) === true);
-    return filtered.length > 0 ? filtered : effectiveSelectorOptions;
-  }, [effectiveSelectorOptions]);
-
-  const purchaseOptions = useMemo(() => {
-    if (!Array.isArray(effectiveSelectorOptions) || effectiveSelectorOptions.length === 0) return [];
-    const filtered = effectiveSelectorOptions.filter(opt => getSalesFlagFromOption(opt) === false);
-    return filtered.length > 0 ? filtered : effectiveSelectorOptions;
-  }, [effectiveSelectorOptions]);
-
-  const handleAddRow = (pending, clearPending, options, variant) => {
-    if (!pending?.plvId) {
-      toast.error('Select a price list version first.');
-      return;
-    }
-    const existsInCurrent = (priceRows ?? []).some(row => String(row.priceListVersion) === String(pending.plvId));
-    const existsInStaged = stagedAdds.some(row => String(row.priceListVersion) === String(pending.plvId));
-    if (existsInCurrent || existsInStaged) {
-      toast.error('This price list version is already present.');
-      return;
-    }
-
-    const selected = options.find(opt => String(extractReferenceId(opt.id)) === String(pending.plvId));
-    const label = selected?.name || selected?.label || pending.plvId;
-    const isSales = variant === 'sales';
-
-    const newId = `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setStagedAdds(prev => ([
-      ...prev,
-      {
-        id: newId,
-        isNewRow: true,
-        priceListVersion: pending.plvId,
-        'priceListVersion$_identifier': label,
-        'priceListVersion$salesPriceList': isSales,
-        standardPrice: pending.stdPrice || '0',
-        listPrice: pending.listPrice || '0',
-      },
-    ]));
-    setDrafts(prev => ({
-      ...prev,
-      [newId]: {
-        standardPrice: String(pending.stdPrice || '0'),
-        listPrice: String(pending.listPrice || '0'),
-      },
-    }));
-
-    clearPending(null);
-  };
-
-  const handleDeleteRow = (rowId) => {
-    if (String(rowId).startsWith('new-')) {
-      setStagedAdds(prev => prev.filter(row => row.id !== rowId));
-      setDrafts(prev => {
-        const next = { ...prev };
-        delete next[rowId];
-        return next;
-      });
-      return;
-    }
-    setStagedDeletes(prev => (prev.includes(rowId) ? prev : [...prev, rowId]));
-  };
-
-  const effectiveRows = useMemo(() => {
-    const baseRows = (priceRows ?? []).filter(row => !stagedDeletes.includes(row.id));
-    return [...baseRows, ...stagedAdds];
-  }, [priceRows, stagedDeletes, stagedAdds]);
-
-  const saleRows = useMemo(() => {
-    if (!Array.isArray(effectiveRows)) return [];
-    return effectiveRows.filter(r => getSalesFlagFromRow(r) === true);
-  }, [effectiveRows]);
-
-  const purchaseRows = useMemo(() => {
-    if (!Array.isArray(effectiveRows)) return [];
-    return effectiveRows.filter(r => getSalesFlagFromRow(r) === false);
-  }, [effectiveRows]);
-
-  const updateDraft = (id, field, value) => {
-    setDrafts(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
-  };
-
-  const hasDraftChanges = useMemo(() => {
-    return Array.isArray(priceRows) && priceRows.some(row => {
-      if (stagedDeletes.includes(row.id)) return false;
-      const draft = drafts[row.id];
-      if (!draft) return false;
-      return draft.standardPrice !== String(row.standardPrice ?? '')
-        || draft.listPrice !== String(row.listPrice ?? '');
-    });
-  }, [drafts, priceRows, stagedDeletes]);
-
-  const hasPendingDraft = Boolean(pendingSale || pendingPurchase);
-  const hasUnsavedChanges = hasDraftChanges || stagedAdds.length > 0 || stagedDeletes.length > 0 || hasPendingDraft;
-
-  const handleSave = async () => {
-    if (!Array.isArray(priceRows)) return;
-    if (pendingSale || pendingPurchase) {
-      toast.info('There are unfinished new rows. Complete or cancel them before saving.');
-      return false;
-    }
-
-    setSaving(true);
-    try {
-      for (const rowId of stagedDeletes) {
-        const res = await fetch(`${apiBaseUrl}/price/${rowId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error(await extractErrorMessage(res));
-      }
-
-      for (const row of stagedAdds) {
-        const draft = drafts[row.id] ?? {
-          standardPrice: String(row.standardPrice ?? '0'),
-          listPrice: String(row.listPrice ?? '0'),
-        };
-        const res = await fetch(`${apiBaseUrl}/price`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            parentId: productId,
-            product: productId,
-            priceListVersion: row.priceListVersion,
-            standardPrice: draft.standardPrice || '0',
-            listPrice: draft.listPrice || '0',
-            priceLimit: draft.listPrice || '0',
-          }),
-        });
-        if (!res.ok) throw new Error(await extractErrorMessage(res));
-      }
-
-      const changedRows = priceRows.filter(row => {
-        if (stagedDeletes.includes(row.id)) return false;
-        const draft = drafts[row.id];
-        if (!draft) return false;
-        return draft.standardPrice !== String(row.standardPrice ?? '')
-          || draft.listPrice !== String(row.listPrice ?? '');
-      });
-
-      for (const row of changedRows) {
-        const draft = drafts[row.id];
-        const res = await fetch(`${apiBaseUrl}/price/${row.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            standardPrice: draft.standardPrice,
-            listPrice: draft.listPrice,
-          }),
-        });
-        if (!res.ok) {
-          throw new Error(await extractErrorMessage(res));
-        }
-      }
-
-      toast.success(ui('pricingUpdated'));
-      if (onSaved) await onSaved();
-      setStagedAdds([]);
-      setStagedDeletes([]);
-      setPendingSale(null);
-      setPendingPurchase(null);
-      return true;
-    } catch (err) {
-      toast.error(err?.message || 'Unable to save pricing.');
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRequestClose = (open) => {
-    if (!open && hasUnsavedChanges) {
-      setShowCloseConfirm(true);
-      return;
-    }
-    onOpenChange(open);
-  };
-
-  const handleDiscard = () => {
-    setShowCloseConfirm(false);
-    onOpenChange(false);
-  };
-
-  const handleSaveAndClose = async () => {
-    setShowCloseConfirm(false);
-    const saved = await handleSave();
-    if (saved) {
-      onOpenChange(false);
-    }
-  };
-
-  const renderSection = (title, rows, pending, setPending, options, variant = 'neutral') => {
-    const showTable = rows.length > 0 || pending;
-    const tone = variant === 'sales'
-      ? {
-        shell: 'border-blue-200 bg-blue-50/70',
-        badge: 'bg-blue-100 text-blue-700',
-        focus: 'focus:ring-blue-500',
-        pending: 'border-t border-blue-100 bg-blue-50/30',
-      }
-      : {
-        shell: 'border-emerald-200 bg-emerald-50/70',
-        badge: 'bg-emerald-100 text-emerald-700',
-        focus: 'focus:ring-emerald-500',
-        pending: 'border-t border-emerald-100 bg-emerald-50/30',
-      };
-
-    return (
-      <div className={`flex-1 min-w-0 rounded-2xl border p-3 ${tone.shell}`}>
-        <div className="flex items-center justify-between px-2 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="text-sm font-bold text-gray-800">{title}</div>
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone.badge}`}>
-              {(rows.length + (pending ? 1 : 0))} {rows.length + (pending ? 1 : 0) === 1 ? ui('priceSingleList') : ui('priceMultiList')}
-            </span>
-          </div>
-          {!pending && (
-            <button
-              type="button"
-              onClick={() => setPending({ plvId: '', stdPrice: '', listPrice: '' })}
-              className="w-6 h-6 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 transition-colors font-medium shrink-0 text-sm"
-            >
-              +
-            </button>
-          )}
-        </div>
-
-        {!showTable && (
-          <div className="rounded-xl border border-gray-200 bg-white px-4 py-4 text-xs text-gray-400">
-            {ui('priceNoLists')}
-          </div>
-        )}
-
-        {showTable && (
-          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-            <table className="w-full table-fixed text-sm">
-              <colgroup>
-                <col />
-                <col className="w-32" />
-                <col className="w-32" />
-                <col className="w-14" />
-              </colgroup>
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="w-full text-left px-3 py-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{ui('priceColName')}</th>
-                  <th className="whitespace-nowrap text-right px-3 py-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{ui('priceColUnitPrice')}</th>
-                  <th className="whitespace-nowrap text-right px-3 py-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{ui('priceColListPrice')}</th>
-                  <th className="w-14" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, idx) => {
-                  const draft = drafts[row.id] ?? {
-                    standardPrice: String(row.standardPrice ?? ''),
-                    listPrice: String(row.listPrice ?? ''),
-                  };
-                  return (
-                    <tr key={row.id} className={idx > 0 ? 'border-t border-gray-100' : ''}>
-                      <td className="px-3 py-2 font-medium text-gray-700 truncate">
-                        {row['priceListVersion$_identifier'] || 'Unknown'}
-                      </td>
-                      <td className="px-2 py-1.5 text-right">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={draft.standardPrice}
-                          onChange={e => updateDraft(row.id, 'standardPrice', e.target.value)}
-                          className={`w-28 text-right text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 ${tone.focus}`}
-                        />
-                      </td>
-                      <td className="px-2 py-1.5 text-right">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={draft.listPrice}
-                          onChange={e => updateDraft(row.id, 'listPrice', e.target.value)}
-                          className={`w-28 text-right text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 ${tone.focus}`}
-                        />
-                      </td>
-                      <td className="w-14 px-1 py-1.5 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteRow(row.id)}
-                          title={ui('priceRemove')}
-                          className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 bg-white text-gray-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors disabled:opacity-40"
-                        >
-                          <span className="text-[11px] leading-none">✕</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {pending && (
-                  <tr className={tone.pending}>
-                    <td className="px-2 py-1.5">
-                      <select
-                        value={pending.plvId}
-                        onChange={e => setPending(p => ({ ...p, plvId: e.target.value }))}
-                        disabled={lazyLoading && options.length === 0}
-                        className={`w-full text-sm border border-gray-200 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 ${tone.focus} disabled:opacity-60`}
-                        autoFocus
-                      >
-                        <option value="">
-                          {lazyLoading && options.length === 0
-                            ? ui('loadingPricing')
-                            : ui('priceSelectVersion')}
-                        </option>
-                        {options.map(opt => {
-                          const id = extractReferenceId(opt.id);
-                          return (
-                            <option key={id} value={id}>
-                              {opt.name || opt.label || id}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </td>
-                    <td className="px-2 py-1.5 text-right">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={pending.stdPrice}
-                        onChange={e => setPending(p => ({ ...p, stdPrice: e.target.value }))}
-                        placeholder={ui('priceZeroPlaceholder')}
-                        className={`w-28 text-right text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 ${tone.focus}`}
-                      />
-                    </td>
-                    <td className="px-2 py-1.5 text-right">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={pending.listPrice}
-                        onChange={e => setPending(p => ({ ...p, listPrice: e.target.value }))}
-                        placeholder={ui('priceZeroPlaceholder')}
-                        className={`w-28 text-right text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 ${tone.focus}`}
-                      />
-                    </td>
-                    <td className="w-14 px-1 py-1.5">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setPending(null)}
-                          title={ui('cancel')}
-                          className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition-colors text-xs"
-                        >
-                          ✕
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleAddRow(pending, setPending, options, variant)}
-                          disabled={!pending.plvId}
-                          title={ui('add')}
-                          className="w-6 h-6 flex items-center justify-center rounded border border-transparent bg-gray-900 text-white hover:bg-gray-700 transition-colors disabled:opacity-40 text-xs"
-                        >
-                          ✓
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    );
-  };
-
+function FieldLabel({ children }) {
   return (
-    <Dialog open={open} onOpenChange={handleRequestClose}>
-      <DialogContent className="max-w-5xl w-full">
-        <div className="relative">
-          <DialogHeader>
-            <DialogTitle className="text-lg">{ui('managePricing')}</DialogTitle>
-            <DialogDescription className="mt-1">
-              {ui('managePricingDesc')}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex gap-4 pt-2 max-h-[60vh] overflow-y-auto items-start">
-            {renderSection(ui('priceSalesLists'), saleRows, pendingSale, setPendingSale, saleOptions, 'sales')}
-            {renderSection(ui('pricePurchaseLists'), purchaseRows, pendingPurchase, setPendingPurchase, purchaseOptions, 'purchase')}
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 mt-1">
-            <button
-              type="button"
-              onClick={() => handleRequestClose(false)}
-              disabled={saving}
-              className="text-xs px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 transition-colors"
-            >
-              {ui('cancel')}
-            </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || !hasUnsavedChanges}
-                className="text-xs px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-              >
-              {saving && <Loader2 size={11} className="animate-spin" />}
-              {ui('saveChanges')}
-            </button>
-          </div>
-
-          {showCloseConfirm && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/75 backdrop-blur-[2px]">
-              <div className="bg-white rounded-xl border border-gray-200 shadow-xl p-5 max-w-xs w-full mx-4">
-                <div className="text-sm font-semibold text-gray-900 mb-1">{ui('unsavedChanges')}</div>
-                <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                  {ui('unsavedChangesDesc')}
-                </p>
-                <div className="flex gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={handleDiscard}
-                    disabled={saving}
-                    className="text-xs px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 transition-colors"
-                  >
-                    {ui('discardChanges')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveAndClose}
-                    disabled={saving}
-                    className="text-xs px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {saving && <Loader2 size={11} className="animate-spin" />}
-                    {ui('saveChanges')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+    <div className="flex items-center h-6">
+      <span className="text-sm font-medium text-[hsl(var(--foreground))]">{children}</span>
+    </div>
   );
 }
 
-export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api }) {
+export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api, onCountChange }) {
   const ui = useUI();
   const recordId = data?.id;
-  const [priceRows, setPriceRows] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  // Create-flow drafts (used only when no rows exist yet). Each side maps
-  // to its own M_ProductPrice row (sales vs purchase price list version).
-  const [saleStandardDraft, setSaleStandardDraft] = useState('');
-  const [saleListDraft, setSaleListDraft] = useState('');
-  const [purchaseStandardDraft, setPurchaseStandardDraft] = useState('');
-  const [purchaseListDraft, setPurchaseListDraft] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [priceRows, setPriceRows] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [activeSection, setActiveSection] = useState('sales');
+  const [savingId, setSavingId] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [lazyOptions, setLazyOptions] = useState([]);
+  // Whether the option list for the CURRENT add-row session has been resolved. Gates
+  // the "every tariff is already priced" message so it never flashes while fetching.
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createInitialName, setCreateInitialName] = useState('');
+  // Draft prices for the add-tariff row (mirrors the Figma: the new row shows the
+  // unit/list price steppers alongside the selector, committed on tariff selection).
+  const [draftUnitPrice, setDraftUnitPrice] = useState(0);
+  const [draftListPrice, setDraftListPrice] = useState(0);
+  const addRowRef = useRef(null);
 
   const priceSelector = useMemo(() => (
     api?.selectors?.find(sel => sel.entity === 'price' && (sel.field === 'priceListVersion' || sel.column === 'M_PriceList_Version_ID'))
   ), [api]);
 
-  const selectorOptions = useMemo(() => (
+  const selectorColumn = priceSelector?.column ?? 'M_PriceList_Version_ID';
+
+  const eagerOptions = useMemo(() => (
     priceSelector ? getCatalogOptions(catalogs, 'price', priceSelector) : []
   ), [catalogs, priceSelector]);
 
@@ -761,7 +160,6 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
       setPriceRows([]);
       return;
     }
-
     setLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/price?parentId=${recordId}&_startRow=0&_endRow=200`, {
@@ -777,388 +175,460 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     }
   }, [recordId, token, apiBaseUrl]);
 
+  useEffect(() => { refreshPrices(); }, [refreshPrices]);
+
   useEffect(() => {
-    refreshPrices();
-  }, [refreshPrices]);
+    if (priceRows !== null) onCountChange?.(priceRows.length);
+  }, [priceRows, onCountChange]);
+
+  // Fetch the price list version options EVERY time the add row opens. A fetch-once
+  // cache left tariffs created during the session (via "+ Create tariff", which links
+  // the new version by id) permanently out of the list, so deleting their price could
+  // never bring them back. Refetching per open also picks up tariffs created in
+  // another tab. The previous list is kept while the request is in flight (no flicker).
+  // `limit` is explicit because the server defaults to 20 (NeoSelectorEndpoint).
+  useEffect(() => {
+    if (!adding) return undefined;
+    if (Array.isArray(eagerOptions) && eagerOptions.length > 0) {
+      setOptionsLoaded(true);
+      return undefined;
+    }
+    if (!apiBaseUrl || !token) return undefined;
+
+    let aborted = false;
+    fetch(`${apiBaseUrl}/price/selectors/${selectorColumn}?limit=200`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => (res.ok ? res.json() : null))
+      .then(payload => {
+        if (aborted) return;
+        // Spread first so the tariff-name override below always wins over a raw
+        // `name` column coming from the selector grid fields.
+        const options = (payload?.items ?? []).map(item => ({
+          ...item,
+          id: item.id,
+          name: item['priceList$_identifier'] || item.label || item.name || item.id,
+        }));
+        setLazyOptions(options);
+        setOptionsLoaded(true);
+      })
+      .catch(() => {
+        if (aborted) return;
+        setLazyOptions([]);
+        setOptionsLoaded(true);
+      });
+
+    return () => { aborted = true; };
+  }, [adding, eagerOptions, apiBaseUrl, token, selectorColumn]);
+
+  // Reset the draft prices whenever we leave "adding" mode (cancel, Escape, outside
+  // click, section toggle, or a successful add), so reopening starts clean.
+  useEffect(() => {
+    if (!adding) {
+      setDraftUnitPrice(0);
+      setDraftListPrice(0);
+      setOptionsLoaded(false);
+    }
+  }, [adding]);
+
+  // While adding, allow leaving the mode without picking a tariff: press Escape or
+  // click anywhere outside the selector (and its portaled dropdown). Skipped while the
+  // create-tariff modal is open — there Escape/clicks belong to the modal.
+  useEffect(() => {
+    if (!adding) return undefined;
+    const onKeyDown = e => {
+      if (e.key === 'Escape' && !createOpen) setAdding(false);
+    };
+    const onPointerDown = e => {
+      if (createOpen) return;
+      const target = e.target;
+      if (addRowRef.current?.contains(target)) return;
+      // The options list is portaled to document.body, outside addRowRef.
+      const panel = document.querySelector('[data-testid="options-priceListVersion"]');
+      if (panel?.contains(target)) return;
+      setAdding(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onPointerDown);
+    };
+  }, [adding, createOpen]);
 
   const hasRows = Array.isArray(priceRows) && priceRows.length > 0;
-  const displaySaleRows = hasRows ? priceRows.filter(r => getSalesFlagFromRow(r) === true) : [];
-  const displayPurchaseRows = hasRows ? priceRows.filter(r => getSalesFlagFromRow(r) === false) : [];
+  const saleRows = hasRows ? priceRows.filter(r => getSalesFlagFromRow(r) === true) : [];
+  const purchaseRows = hasRows ? priceRows.filter(r => getSalesFlagFromRow(r) === false) : [];
 
-  const resolveCreateDefaults = useCallback(async () => {
-    const empty = {
-      salesPriceListVersion: null,
-      salesPriceList: null,
-      purchasePriceListVersion: null,
-      purchasePriceList: null,
-    };
-    if (!token || !apiBaseUrl) return empty;
+  const isSales = activeSection === 'sales';
+  const sectionRows = isSales ? saleRows : purchaseRows;
 
-    const defaultUrl = recordId
-      ? `${apiBaseUrl}/price/defaults?parentId=${recordId}`
-      : `${apiBaseUrl}/price/defaults`;
+  const currencySymbol = useMemo(() => {
+    const fromRow = (priceRows ?? []).find(r => r.currencySymbol)?.currencySymbol;
+    return fromRow || getCurrencySymbol(null);
+  }, [priceRows]);
 
-    let defaultPlv = null;
-    let defaultPl = null;
+  const effectiveOptions = (Array.isArray(eagerOptions) && eagerOptions.length > 0) ? eagerOptions : lazyOptions;
 
+  const availableOptions = useMemo(() => {
+    if (!Array.isArray(effectiveOptions)) return [];
+    const presentIds = new Set((priceRows ?? []).map(r => String(r.priceListVersion)));
+    return effectiveOptions.filter(opt => {
+      const flag = getSalesFlagFromOption(opt);
+      const matchesSection = flag === null ? true : flag === isSales;
+      const id = extractReferenceId(opt.id);
+      return matchesSection && id && !presentIds.has(String(id));
+    });
+  }, [effectiveOptions, priceRows, isSales]);
+
+  // Normalize to the { id, name } shape CreatableSearchSelect expects. The user picks a
+  // TARIFF, so the label is the price list name (injected by ProductPriceHandler as
+  // priceList$_identifier); the version identifier is only a fallback for unenriched
+  // options, since a version is often named differently ("Version Lista de venta ...").
+  const selectOptions = useMemo(() => (
+    availableOptions
+      .map(opt => ({
+        id: extractReferenceId(opt.id),
+        name: opt['priceList$_identifier'] || opt.name || opt.label || extractReferenceId(opt.id),
+      }))
+      .filter(o => o.id)
+  ), [availableOptions]);
+
+  const patchField = useCallback(async (row, field, value) => {
+    const current = String(row[field] ?? '');
+    if (String(value) === current) return;
+    setSavingId(row.id);
+    // Optimistic local update.
+    setPriceRows(prev => (prev ?? []).map(r => (r.id === row.id ? { ...r, [field]: value } : r)));
     try {
-      const defaultsRes = await fetch(defaultUrl, {
+      const res = await fetch(`${apiBaseUrl}/price/${row.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ [field]: String(value) }),
+      });
+      if (!res.ok) throw new Error(await extractErrorMessage(res));
+      toast.success(ui('pricingUpdated'));
+    } catch (err) {
+      toast.error(err?.message || ui('priceUnableToSave'));
+      await refreshPrices();
+    } finally {
+      setSavingId(null);
+    }
+  }, [apiBaseUrl, token, ui, refreshPrices]);
+
+  const handleDelete = useCallback(async (row) => {
+    setSavingId(row.id);
+    try {
+      const res = await fetch(`${apiBaseUrl}/price/${row.id}`, {
+        method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (defaultsRes.ok) {
-        const defaultsPayload = await defaultsRes.json();
-        const defaults = sanitizeDefaults(defaultsPayload?.defaults ?? {});
-        defaultPlv = extractReferenceId(
-          defaults.priceListVersion
-          ?? defaults.M_PriceList_Version_ID
-          ?? defaults.priceListVersionId
-        );
-        defaultPl = extractReferenceId(
-          defaults.priceList
-          ?? defaults.M_PriceList_ID
-          ?? defaults.priceListId
-        );
-      }
-    } catch {
-      // Continue with selector fallback.
+      if (!res.ok) throw new Error(await extractErrorMessage(res));
+      await refreshPrices();
+    } catch (err) {
+      toast.error(err?.message || ui('priceUnableToSave'));
+    } finally {
+      setSavingId(null);
     }
+  }, [apiBaseUrl, token, ui, refreshPrices]);
 
-    const findInOptions = (options, isSales) => {
-      if (!Array.isArray(options) || options.length === 0) return null;
-      const match = options.find(opt => getSalesFlagFromOption(opt) === isSales);
-      return extractReferenceId(match?.id);
-    };
-
-    let salesPriceListVersion = findInOptions(selectorOptions, true);
-    let purchasePriceListVersion = findInOptions(selectorOptions, false);
-    let salesPriceList = null;
-    let purchasePriceList = null;
-
-    // If the /defaults endpoint returned a PLV, route it to the matching side.
-    if (defaultPlv) {
-      const normalized = resolveOptionId(selectorOptions, defaultPlv) ?? defaultPlv;
-      const matched = (selectorOptions ?? []).find(opt => extractReferenceId(opt.id) === normalized);
-      const flag = getSalesFlagFromOption(matched);
-      if (flag === true) {
-        salesPriceListVersion = salesPriceListVersion ?? normalized;
-        salesPriceList = defaultPl;
-      } else if (flag === false) {
-        purchasePriceListVersion = purchasePriceListVersion ?? normalized;
-        purchasePriceList = defaultPl;
-      }
-    }
-
-    // Last-chance fallback: fetch the selector endpoint directly.
-    if (!salesPriceListVersion || !purchasePriceListVersion) {
-      const selectorColumn = priceSelector?.column ?? 'M_PriceList_Version_ID';
-      try {
-        const selectorRes = await fetch(`${apiBaseUrl}/price/selectors/${selectorColumn}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (selectorRes.ok) {
-          const selectorPayload = await selectorRes.json();
-          const options = (selectorPayload?.items ?? []).map(item => ({
-            id: item.id,
-            name: item.label || item.name || item.id,
-            ...item,
-          }));
-          salesPriceListVersion = salesPriceListVersion ?? findInOptions(options, true);
-          purchasePriceListVersion = purchasePriceListVersion ?? findInOptions(options, false);
-        }
-      } catch {
-        // Keep nulls and let the create flow surface a clear error.
-      }
-    }
-
-    return {
-      salesPriceListVersion,
-      salesPriceList,
-      purchasePriceListVersion,
-      purchasePriceList,
-    };
-  }, [recordId, token, apiBaseUrl, selectorOptions, priceSelector]);
-
-  const handleOpenDialog = () => {
-    if (hasRows) {
-      setDialogOpen(true);
-    } else {
-      setSaleStandardDraft('');
-      setSaleListDraft('');
-      setPurchaseStandardDraft('');
-      setPurchaseListDraft('');
-      setCreating(true);
-    }
-  };
-
-  const handleDialogSaved = async () => {
-    await refreshPrices();
-    setDialogOpen(false);
-  };
-
-  const cancelCreate = () => setCreating(false);
-
-  const saveCreate = async () => {
-    if (!recordId) {
-      toast.info(ui('saveProductFirstPricing'));
-      return;
-    }
-
-    const saleStandard = toFiniteNumber(saleStandardDraft);
-    const saleList = toFiniteNumber(saleListDraft);
-    const purchaseStandard = toFiniteNumber(purchaseStandardDraft);
-    const purchaseList = toFiniteNumber(purchaseListDraft);
-
-    const hasSaleRow = saleStandard !== null || saleList !== null;
-    const hasPurchaseRow = purchaseStandard !== null || purchaseList !== null;
-
-    if (!hasSaleRow && !hasPurchaseRow) {
-      toast.info(ui('enterAtLeastOneValueCreatePricing'));
-      return;
-    }
-
-    setSaving(true);
-    let savedSuccessfully = false;
+  const handleAdd = useCallback(async (plvId, unitPrice = 0, listPrice = 0) => {
+    if (!plvId) return;
+    setSavingId('new');
+    const unit = Number(unitPrice) || 0;
+    const list = Number(listPrice) || 0;
     try {
-      const {
-        salesPriceListVersion,
-        salesPriceList,
-        purchasePriceListVersion,
-        purchasePriceList,
-      } = await resolveCreateDefaults();
-
-      if (hasSaleRow && !salesPriceListVersion) {
-        throw new Error(ui('unableToSavePricing'));
-      }
-      if (hasPurchaseRow && !purchasePriceListVersion) {
-        throw new Error(ui('unableToSavePricing'));
-      }
-
-      const organizationId = extractReferenceId(data?.organization);
-      const clientId = extractReferenceId(data?.client);
-
-      const postRow = async ({ priceListVersion, priceList, standard, list }) => {
-        // Within a single row, when only one column is provided, fall back
-        // to the other to keep standardPrice / listPrice / priceLimit consistent.
-        const standardValue = standard ?? list ?? 0;
-        const listValue = list ?? standard ?? 0;
-        const limitValue = listValue;
-
-        const payload = {
+      const res = await fetch(`${apiBaseUrl}/price`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
           parentId: recordId,
           product: recordId,
-          priceListVersion,
-          standardPrice: String(standardValue),
-          listPrice: String(listValue),
-          priceLimit: String(limitValue),
-        };
-        if (priceList) payload.priceList = priceList;
-        if (organizationId) payload.organization = organizationId;
-        if (clientId) payload.client = clientId;
-
-        const res = await fetch(`${apiBaseUrl}/price`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          throw new Error(await extractErrorMessage(res));
-        }
-      };
-
-      if (hasSaleRow) {
-        await postRow({
-          priceListVersion: salesPriceListVersion,
-          priceList: salesPriceList,
-          standard: saleStandard,
-          list: saleList,
-        });
-      }
-
-      if (hasPurchaseRow) {
-        await postRow({
-          priceListVersion: purchasePriceListVersion,
-          priceList: purchasePriceList,
-          standard: purchaseStandard,
-          list: purchaseList,
-        });
-      }
-
-      toast.success(ui('pricingCreatedUsingDefaultValues'));
+          priceListVersion: plvId,
+          standardPrice: String(unit),
+          listPrice: String(list),
+          priceLimit: String(list || unit),
+        }),
+      });
+      if (!res.ok) throw new Error(await extractErrorMessage(res));
+      setAdding(false);
+      setDraftUnitPrice(0);
+      setDraftListPrice(0);
       await refreshPrices();
-      savedSuccessfully = true;
+      toast.success(ui('priceTariffAdded'));
     } catch (err) {
-      toast.error(err?.message || ui('unableToSavePricing'));
+      toast.error(err?.message || ui('priceUnableToSave'));
     } finally {
-      setSaving(false);
-      if (savedSuccessfully) {
-        setCreating(false);
-      }
+      setSavingId(null);
     }
-  };
+  }, [apiBaseUrl, token, recordId, ui, refreshPrices]);
 
-  const handleCreateKeyDown = (e) => {
-    if (e.key === 'Escape') cancelCreate();
-    if (e.key === 'Enter') saveCreate();
-  };
+  // CreatableSearchSelect asks us to open a creation UI. We link the new tariff to
+  // the product ourselves (see submitCreateTariff), so we don't need its `onCreated`
+  // callback — the select unmounts as soon as handleAdd closes "adding" mode anyway.
+  // Calling both onCreated (which re-fires our onChange -> handleAdd) AND handleAdd
+  // directly would double-POST /price and hit the (PriceListVersion, Product) unique
+  // constraint, so onCreated is intentionally left untouched.
+  const handleCreateRequest = useCallback((query) => {
+    setCreateInitialName(query || '');
+    setCreateOpen(true);
+  }, []);
 
-  const renderPricingBody = () => {
-    if (loading) {
-      return (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500 flex items-center gap-2">
-          <Loader2 size={14} className="animate-spin" />
-          {ui('loadingPricing')}
-        </div>
-      );
-    }
-    if (creating && !hasRows) {
-      return (
-        <div className="flex gap-3">
-          <div className="flex-1 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
-            <div className="text-sm font-semibold text-gray-800 mb-1">{ui('priceSalesPrice')}</div>
-            <p className="text-xs text-gray-400 mb-3">{ui('priceSalesDescription')}</p>
-            <div className="flex gap-3">
-              <label className="flex-1 text-xs text-gray-500">
-                <div className="mb-1 uppercase tracking-wide font-semibold">{ui('priceColUnitPrice')}</div>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={saleStandardDraft}
-                  onChange={e => setSaleStandardDraft(e.target.value)}
-                  onKeyDown={handleCreateKeyDown}
-                  placeholder={ui('priceZeroPlaceholder')}
-                  className="w-full text-xl font-bold text-gray-900 bg-white border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
-                  autoFocus
-                />
-              </label>
-              <label className="flex-1 text-xs text-gray-500">
-                <div className="mb-1 uppercase tracking-wide font-semibold">{ui('priceColListPrice')}</div>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={saleListDraft}
-                  onChange={e => setSaleListDraft(e.target.value)}
-                  onKeyDown={handleCreateKeyDown}
-                  placeholder={ui('priceZeroPlaceholder')}
-                  className="w-full text-xl font-bold text-gray-900 bg-white border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </label>
-            </div>
-          </div>
-          <div className="flex-1 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
-            <div className="text-sm font-semibold text-gray-800 mb-1">{ui('pricePurchasePrice')}</div>
-            <p className="text-xs text-gray-400 mb-3">{ui('pricePurchaseDescription')}</p>
-            <div className="flex gap-3">
-              <label className="flex-1 text-xs text-gray-500">
-                <div className="mb-1 uppercase tracking-wide font-semibold">{ui('priceColUnitPrice')}</div>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={purchaseStandardDraft}
-                  onChange={e => setPurchaseStandardDraft(e.target.value)}
-                  onKeyDown={handleCreateKeyDown}
-                  placeholder={ui('priceZeroPlaceholder')}
-                  className="w-full text-xl font-bold text-gray-900 bg-white border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </label>
-              <label className="flex-1 text-xs text-gray-500">
-                <div className="mb-1 uppercase tracking-wide font-semibold">{ui('priceColListPrice')}</div>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={purchaseListDraft}
-                  onChange={e => setPurchaseListDraft(e.target.value)}
-                  onKeyDown={handleCreateKeyDown}
-                  placeholder={ui('priceZeroPlaceholder')}
-                  className="w-full text-xl font-bold text-gray-900 bg-white border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    if (!hasRows) {
-      return (
-        <div className="rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-400">
-          {ui('noPricingConfigured')}
-        </div>
-      );
-    }
-    return (
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 items-start">
-        <PriceTable title={ui('priceSalesLists')} rows={displaySaleRows} variant="sales" />
-        <PriceTable title={ui('pricePurchaseLists')} rows={displayPurchaseRows} variant="purchase" />
-      </div>
-    );
-  };
+  // Create a new tariff (price list) with just a name. Currency is inherited from
+  // the organization (injected by PriceListHeaderHandler); sales vs. purchase is
+  // inferred from the active section; the remaining flags default to false. The
+  // header handler auto-creates the hidden price list version and returns its id,
+  // which we then link to the product via handleAdd.
+  const submitCreateTariff = useCallback(async (name) => {
+    const res = await fetch(buildCreateUrl(apiBaseUrl, 'price-list', 'priceList'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name,
+        salesPriceList: isSales,
+        costBasedPriceList: false,
+        priceIncludesTax: false,
+        default: false,
+      }),
+    });
+    if (!res.ok) throw new Error(await extractErrorMessage(res));
+    const json = await res.json();
+    const rec = json?.response?.data?.[0] ?? json?.response?.data ?? json?.data ?? json;
+    const versionId = extractReferenceId(rec?.priceListVersion);
+    if (!versionId) throw new Error(ui('priceUnableToSave'));
+    setCreateOpen(false);
+    await handleAdd(versionId, draftUnitPrice, draftListPrice);
+  }, [apiBaseUrl, token, isSales, ui, handleAdd, draftUnitPrice, draftListPrice]);
 
   if (!recordId) {
     return (
-      <div className="rounded-2xl border border-gray-200/70 bg-white shadow-sm p-5 mb-2">
-        <div className="text-sm font-semibold text-gray-800">{ui('pricing')}</div>
-        <div className="text-sm text-gray-500 mt-1">
-          {ui('saveProductFirstPricing')}
+      <div className="p-2">
+        <div className="text-sm text-muted-foreground mt-1">{ui('saveProductFirstPricing')}</div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="p-2">
+        <div className="rounded-xl border border-border-subtle bg-card p-4 text-sm text-muted-foreground flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" data-testid="Loader2__d76b90" />
+          {ui('loadingPricing')}
         </div>
       </div>
     );
   }
 
+  const sectionTitle = isSales ? ui('priceSalesListsTitle') : ui('pricePurchaseListsTitle');
+
   return (
-    <div className="rounded-2xl border border-gray-200/70 bg-white shadow-sm pt-2 pb-5 px-5">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <div className="text-base font-semibold text-gray-800">{ui('pricing')}</div>
-          <div className="text-sm text-gray-400 mt-0.5">
-            {ui('configureMainSaleAndPurchasePrice')}
+    // Tight top padding: the custom-tab panel wrapper already adds p-2, so anything more
+    // here reads as a gap between the "Price" tab strip and the section title.
+    <div className="flex flex-row items-start gap-14 px-3 pt-1 pb-3">
+      {/* Left column — Sales / Purchase toggle */}
+      <div className="flex flex-col gap-2 shrink-0">
+        {[
+          { key: 'sales', label: ui('priceTabSales'), testId: 'price-tab-sales' },
+          { key: 'purchase', label: ui('priceTabPurchase'), testId: 'price-tab-purchase' },
+        ].map(opt => (
+          <button
+            key={opt.key}
+            type="button"
+            data-testid={opt.testId}
+            onClick={() => { setActiveSection(opt.key); setAdding(false); }}
+            className={[
+              'flex items-center justify-center px-3 h-10 rounded-lg text-sm font-medium transition-colors',
+              activeSection === opt.key
+                ? 'bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]'
+                : 'text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/60',
+            ].join(' ')}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {/* Right column — active section */}
+      <div className="flex-1 min-w-0 flex flex-col gap-3">
+        {/* Section header — the add action lives HERE, so it stays in place no matter how
+            many tariffs the product has (the tab itself scrolls). The header mirrors the
+            column grid of the rows below (300 / 201 / 201 with gap-5) and the action is
+            right-aligned in the last slot, so its right edge lands on the right edge of
+            every "List price" stepper underneath — a real shared edge, instead of floating
+            at the START of that column, which aligns with nothing. (The per-row delete
+            button sits further right, but it is a hover affordance, not a column.)
+            The title box is min-w so a longer translation grows it — the action just
+            shifts right instead of overlapping. */}
+        <div className="flex flex-row items-center gap-5 h-8" data-testid="price-section-header">
+          <div className="min-w-[300px] shrink-0 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-[hsl(var(--foreground))]">{sectionTitle}</h3>
+            <span className="inline-flex items-center px-2 h-6 text-xs text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] border border-[hsl(var(--border-control))] rounded-lg">
+              {sectionRows.length}
+            </span>
+          </div>
+          {/* Spacer over the "Unit price" column */}
+          <div className="w-[201px] shrink-0" aria-hidden="true" />
+          <div className="w-[201px] shrink-0 flex justify-end">
+            {!adding && (
+              // Same control as "Add line" in the order/invoice lines panels (shared
+              // AddLineButton). It hardcodes data-testid="action-add-line", which is not
+              // unique in this window (the Accounting secondary tab renders one too), so the
+              // wrapper carries the pricing-specific hook — mirroring DetailView's own
+              // data-inline-add-portal span around the same component.
+              (<span data-testid="price-add-tariff">
+                <AddLineButton
+                  onClick={() => setAdding(true)}
+                  label={ui('priceAddTariff')}
+                  data-testid="AddLineButton__d76b90" />
+              </span>)
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0 ml-4">
-          {creating ? (
-            <>
+
+        {sectionRows.length === 0 && !adding && (
+          <div className="text-sm text-muted-foreground">{ui('priceNoLists')}</div>
+        )}
+
+        {/* Column headers — rendered once, not repeated per row */}
+        {(sectionRows.length > 0 || adding) && (
+          <div className="flex flex-row gap-5">
+            <div className="w-[300px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColName')}</FieldLabel></div>
+            <div className="w-[201px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColUnitPrice')}</FieldLabel></div>
+            <div className="w-[201px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColListPrice')}</FieldLabel></div>
+          </div>
+        )}
+
+        {/* Add-tariff row — pick/create a tariff and set its prices, mirroring the saved
+            rows. It sits at the TOP of the list, right under the header that holds the
+            "+ Add new tariff" action, so it is always next to the control that opened it
+            (the tab has no inner scroller: the detail content column scrolls instead). */}
+        {adding && (
+          <div ref={addRowRef} className="flex flex-row items-end gap-5" data-testid="price-add-tariff-row">
+            {/* Name selector — white at rest, whole box greys uniformly on hover (Figma).
+                The color lives on the root box so the input + chevron (transparent) match it,
+                instead of only the input greying (the product-window rule targets input:hover). */}
+            {/* No `preferDown`: the panel is position:fixed, so when the row happens to sit
+                near the viewport bottom a forced-down panel is drawn off-screen and no
+                scrolling can reveal it. Auto-flip opens upward only when there is no room. */}
+            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-card [&>div:hover]:!bg-[hsl(var(--muted))]">
+              <CreatableSearchSelect
+                key={selectOptions.map(o => o.id).join(',')}
+                field={{ key: 'priceListVersion', id: 'priceListVersion', required: false }}
+                value=""
+                displayValue=""
+                onChange={id => { if (id) handleAdd(id, draftUnitPrice, draftListPrice); }}
+                resolvedLabel={ui('priceColName')}
+                staticOptions={selectOptions}
+                createLabel={ui('priceCreateTariff')}
+                onCreateRequest={handleCreateRequest}
+                data-testid="CreatableSearchSelect__d76b90" />
+            </div>
+            {/* Unit price */}
+            <div className="w-[201px] shrink-0">
+              <PriceStepper
+                value={draftUnitPrice}
+                prefix={currencySymbol}
+                disabled={savingId === 'new'}
+                onCommit={setDraftUnitPrice}
+                data-testid="PriceStepper__d76b90" />
+            </div>
+            {/* List price */}
+            <div className="w-[201px] shrink-0">
+              <PriceStepper
+                value={draftListPrice}
+                prefix={currencySymbol}
+                disabled={savingId === 'new'}
+                onCommit={setDraftListPrice}
+                data-testid="PriceStepper__d76b90" />
+            </div>
+            {/* Cancel add */}
+            <div className="flex items-center h-10 shrink-0">
               <button
-                onClick={cancelCreate}
-                disabled={saving}
-                className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 transition-colors"
+                type="button"
+                onClick={() => setAdding(false)}
+                disabled={savingId === 'new'}
+                title={ui('cancel')}
+                data-testid="price-add-cancel"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive hover:bg-destructive disabled:opacity-40 transition-all"
               >
-                {ui('cancel')}
+                <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />
               </button>
-              <button
-                onClick={saveCreate}
-                disabled={saving}
-                className="text-xs px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-700 transition-colors flex items-center gap-1.5"
-              >
-                {saving && <Loader2 size={11} className="animate-spin" />}
-                {ui('savePricing')}
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={handleOpenDialog}
-              disabled={loading}
-              className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-100 transition-colors font-medium"
-            >
-              {hasRows ? ui('editPricing') : ui('setPricing')}
-            </button>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
+
+        {/* Every tariff of this section already has a price: without this the dropdown
+            renders just "+ Create tariff" with no explanation (CreatableSearchSelect only
+            shows its no-results text when the user typed something), which reads as a bug. */}
+        {adding && optionsLoaded && selectOptions.length === 0 && (
+          <div className="text-sm text-muted-foreground" data-testid="price-no-available-tariffs">
+            {isSales ? ui('priceAllSalesTariffsAssigned') : ui('priceAllPurchaseTariffsAssigned')}
+          </div>
+        )}
+
+        {sectionRows.map(row => {
+          // Show the TARIFF name (M_PriceList.Name), not the version name — they differ
+          // for the onboarding-created lists ("Version Lista de venta (sin impuestos)")
+          // and for legacy data ("Customer A USD" -> "Customer A USD 2014").
+          const name = row['priceList$_identifier'] || row['priceListVersion$_identifier'] || '';
+          const saving = savingId === row.id;
+
+          return (
+            <div key={row.id} className="flex flex-col gap-1 group/row">
+              <div className="flex flex-row items-end gap-5">
+                {/* Name */}
+                <div className="w-[300px] shrink-0">
+                  <input
+                    type="text"
+                    readOnly
+                    value={name}
+                    className="h-10 w-full px-3 text-sm text-[hsl(var(--foreground))] bg-card border border-[hsl(var(--border-control))] rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] outline-none truncate"
+                  />
+                </div>
+                {/* Unit price */}
+                <div className="w-[201px] shrink-0">
+                  <PriceStepper
+                    value={row.standardPrice}
+                    prefix={currencySymbol}
+                    disabled={saving}
+                    onCommit={v => patchField(row, 'standardPrice', v)}
+                    data-testid="PriceStepper__d76b90" />
+                </div>
+                {/* List price */}
+                <div className="w-[201px] shrink-0">
+                  <PriceStepper
+                    value={row.listPrice}
+                    prefix={currencySymbol}
+                    disabled={saving}
+                    onCommit={v => patchField(row, 'listPrice', v)}
+                    data-testid="PriceStepper__d76b90" />
+                </div>
+                {/* Delete */}
+                <div className="flex items-center h-10 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(row)}
+                    disabled={saving}
+                    title={ui('priceRemove')}
+                    data-testid={`price-delete-${row.id}`}
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive disabled:opacity-40 opacity-0 group-hover/row:opacity-100 transition-all"
+                  >
+                    {saving ? <Loader2 size={18} className="animate-spin" data-testid="Loader2__d76b90" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <InlineCreateModal
+          open={createOpen}
+          title={ui('priceCreateTariffTitle')}
+          namePlaceholder={ui('priceTariffNamePlaceholder')}
+          initialName={createInitialName}
+          onCancel={() => setCreateOpen(false)}
+          onSubmit={submitCreateTariff}
+          data-testid="InlineCreateModal__d76b90" />
       </div>
-
-      {renderPricingBody()}
-
-      <PricingDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        priceRows={priceRows}
-        apiBaseUrl={apiBaseUrl}
-        token={token}
-        onSaved={handleDialogSaved}
-        selectorOptions={selectorOptions}
-        selectorColumn={priceSelector?.column ?? 'M_PriceList_Version_ID'}
-        productId={recordId}
-      />
     </div>
   );
 }

@@ -3,41 +3,49 @@ import { createPortal } from 'react-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Switch } from '@/components/ui/switch';
 import { Search, Inbox, X, ChevronDown, Trash2, Copy, Loader2, Pencil, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useUI, useLocale, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
-import { getStatusDotColor, statusLabel } from '@/lib/statusBadge.js';
-import { StatusTag } from '@/components/ui/status-tag';
-import { Tag } from '@/components/ui/tag';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
-import { formatAmount } from '@/lib/formatAmount.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
+import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
+import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
 function flexSpec(col, idx) {
   const [g, , b] = columnFlex(col, idx).split(' ');
   return { grow: parseInt(g, 10), basis: parseInt(b, 10) };
 }
-import ProductSearchDrawer from './ProductSearchDrawer.jsx';
-import InternalConsumptionProductSearchDrawer from './InternalConsumptionProductSearchDrawer.jsx';
+
+// Reproduces flexbox's exact width formula for `flex-grow: 1` columns when
+// mirrored into an HTML `<table style="table-layout: fixed">` colgroup.
+// Flexbox distributes leftover space EQUALLY among growing items ON TOP OF
+// each item's own basis (own basis + leftover/N). But a width-less <col> in
+// a fixed-layout table splits the leftover space equally while IGNORING each
+// column's own basis — so two grow columns with different bases (e.g. 192px
+// vs 224px) render as EQUAL width in the table, even though the real flex
+// rows always keep them a fixed 32px apart. This calc() expression restores
+// that per-column basis so both layouts match pixel-for-pixel.
+function growColumnWidth(basisPx, fixedTotalPx, growCount) {
+  if (!growCount) return undefined;
+  return `calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px)`;
+}
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
+import { ComputedFreshnessHint } from './ComputedFreshnessHint.jsx';
+import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
-
-// Lookup drawer registry. Each entry is a drawer component keyed by the value
-// of a field's contract-level `lookupDrawer` property. Fields without that
-// property fall back to `default`. New drawers (asset, lot, etc.) plug in here
-// without touching the generic DataTable render path.
-const LOOKUP_DRAWERS = {
-  default: ProductSearchDrawer,
-  'internal-consumption-product': InternalConsumptionProductSearchDrawer,
-};
+import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
+import { LOOKUP_DRAWERS } from './lookupDrawers.js';
 
 /**
  * Resolve a value from an object using a dotted path (e.g. `_aux._LOC`).
@@ -110,25 +118,6 @@ export function buildDisplayCatalogMaps(visibleColumns, addRow, entity) {
 }
 
 
-function getDateDotColor(dateValue) {
-  if (!dateValue) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const str = String(dateValue);
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(str) ? new Date(str + 'T00:00:00') : new Date(str);
-  d.setHours(0, 0, 0, 0);
-  if (d.getTime() === today.getTime()) return null;
-  return d > today ? 'bg-emerald-500' : 'bg-red-500';
-}
-
-function isTruthyBoolean(value) {
-  return value === true || value === 'Y' || value === 'true';
-}
-
-function isFalsyBoolean(value) {
-  return value === false || value === 'N' || value === 'false';
-}
-
 const INLINE_ADD_IGNORED_PORTAL_SELECTORS = [
   '[role="dialog"]',
   '[data-inline-add-portal="true"]',
@@ -137,6 +126,16 @@ const INLINE_ADD_IGNORED_PORTAL_SELECTORS = [
 ];
 
 function isClickInsideIgnoredPortal(target) {
+  // Radix primitives that render via a DismissableLayer with
+  // disableOutsidePointerEvents (e.g. <Select>, <Dialog>) set
+  // document.body.style.pointerEvents = 'none' while open, so a click meant
+  // for an underlying field never reaches it — the browser resolves the
+  // event target to <html> instead. That target matches none of the
+  // selectors below (it isn't a descendant of the listbox/dialog), so
+  // without this check it reads as "genuinely outside, nothing touched" and
+  // wrongly discards the row. Treat any click while such a layer is active
+  // as belonging to that layer, regardless of what element it resolves to.
+  if (document.body.style.pointerEvents === 'none') return true;
   if (!(target instanceof Element)) return false;
   return INLINE_ADD_IGNORED_PORTAL_SELECTORS.some(sel => target.closest(sel));
 }
@@ -191,14 +190,18 @@ function TableSkeleton({ columns }) {
       {/* Header skeleton */}
       <div className="flex gap-3 px-2">
         {columns.map(col => (
-          <Skeleton key={col.key} className="h-4 flex-1" />
+          <Skeleton key={col.key} className="h-4 flex-1" data-testid="Skeleton__eb5261" />
         ))}
       </div>
       {/* Row skeletons */}
       {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="flex gap-3 px-2">
           {columns.map(col => (
-            <Skeleton key={col.key} className="h-8 flex-1" style={{ opacity: 1 - i * 0.15 }} />
+            <Skeleton
+              key={col.key}
+              className="h-8 flex-1"
+              style={{ opacity: 1 - i * 0.15 }}
+              data-testid="Skeleton__eb5261" />
           ))}
         </div>
       ))}
@@ -213,7 +216,7 @@ function EmptyState({ hasFilter, totalCount }) {
   const ui = useUI();
   return (
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-      <Inbox className="h-10 w-10 mb-3 opacity-40" />
+      <Inbox className="h-10 w-10 mb-3 opacity-40" data-testid="Inbox__eb5261" />
       {hasFilter ? (
         <>
           <p className="text-sm font-medium">{ui('noMatchingRecords')}</p>
@@ -231,10 +234,27 @@ function EmptyState({ hasFilter, totalCount }) {
 
 const NUMERIC_FIELD_TYPES = new Set(['number', 'integer', 'decimal', 'quantity', 'amount']);
 
-function isMissingRequired(f, valuesRef) {
+function isMissingRequired(f, valuesRef, fields = []) {
   if (!f.required) return false;
-  const v = valuesRef.current[f.key];
-  return v == null || v === '' || (typeof v === 'string' && v.trim() === '');
+  // A boolean/checkbox always carries a valid value (false = deliberately
+  // unchecked), so it can never be "missing". Mirrors the header guard in
+  // useEntity.handleSave and stops a required checkbox left off (e.g. a journal
+  // line's Open Items) from blocking the row.
+  if (f.type === 'checkbox' || f.type === 'boolean') return false;
+  const hasVal = (key) => {
+    const v = valuesRef.current[key];
+    return !(v == null || v === '' || (typeof v === 'string' && v.trim() === ''));
+  };
+  if (hasVal(f.key)) return false;
+  // clearsField forms a mutually-exclusive group (e.g. a journal line is a debit
+  // OR a credit, never both). The requirement is "one of the group", so the empty
+  // member must not be flagged while a sibling it clears — or that clears it —
+  // carries a value.
+  if (f.clearsField && hasVal(f.clearsField)) return false;
+  for (const g of fields) {
+    if (g.clearsField === f.key && hasVal(g.key)) return false;
+  }
+  return true;
 }
 
 function isBelowMin(f, valuesRef) {
@@ -244,13 +264,405 @@ function isBelowMin(f, valuesRef) {
   return !isNaN(Number(v)) && Number(v) < f.min;
 }
 
+// Format guard for the inline add-row (email + phone). Empty is valid (these
+// fields are optional — never made required); only a non-empty malformed value is
+// flagged. Returns the i18n error KEY (or null) via the shared format helpers.
+function getFieldFormatError(f, valuesRef) {
+  const v = valuesRef.current[f.key];
+  return getEmailFieldError(f, v) ?? getPhoneFieldError(f, v);
+}
+
+function buildSelectorUrl(apiBaseUrl, entity, field) {
+  return apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${field.column}` : null;
+}
+
+function displayOrDash(displayVal) {
+  return displayVal != null && displayVal !== '' ? displayVal : '—';
+}
+
+function getNumericCellAlignClass(isNumeric) {
+  return isNumeric ? ' text-right tabular-nums' : '';
+}
+
+function resolveNumericInputMode(field, isNumeric) {
+  let numericInputMode = field.inputMode;
+  if (!numericInputMode && isNumeric) {
+    numericInputMode = field.type === 'integer' ? 'numeric' : 'decimal';
+  }
+  return numericInputMode;
+}
+
+function formatNumericInputValue(isTwoDecimal, rawValue, formatTwoDecimals) {
+  return isTwoDecimal && rawValue !== '' && rawValue != null
+    ? formatTwoDecimals(rawValue)
+    : (rawValue ?? '');
+}
+
+function isLookupSearchField(field) {
+  return field.type === 'search' && field.lookup;
+}
+
+// Human-readable label for a picked lookup item, trying the common shapes in
+// priority order (label > name > _identifier).
+function resolveLookupItemLabel(item) {
+  return item.label || item.name || item._identifier;
+}
+
+// Conditional visibility: a field with `displayIf` is hidden while its
+// controlling sibling field is falsy (not 'Y'/true/'true').
+function isColumnHidden(field, values) {
+  if (!field?.displayIf) return false;
+  const ctrlVal = values[field.displayIf];
+  return !(ctrlVal === true || ctrlVal === 'Y' || ctrlVal === 'true');
+}
+
+function isStaticSelectField(field) {
+  return field.type === 'select' && field.options?.length;
+}
+
+/**
+ * Renders the inline-add-row cell for a `selector` field. Always uses the
+ * searchable <InlineSearchCombo>, preloaded with the catalog's options (if any)
+ * and backed by the selector URL for server-side search / lazy loading —
+ * mirroring the `search`-type add-row cell and the header's unified selector.
+ */
+function renderSelectorCell({
+  catalogs, entity, field, apiBaseUrl, col, values, touchedFieldsRef,
+  handleChange, handleFieldChange, handleKeyDown, isFirst, firstInputRef,
+  fieldLabel, selectorContext, token,
+}) {
+  const allOptions = getCatalogOptions(catalogs, entity, field);
+  const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
+  // Exclude the option equal to the current value of a sibling field on this add-line row
+  // (e.g. newStorageBin can't equal storageBin). Applies to both the preloaded catalog and
+  // any server-side search results.
+  const excludeId = field.excludeValueOf ? (values[field.excludeValueOf] ?? null) : null;
+  const options = excludeId != null ? allOptions.filter(o => o.id !== excludeId) : allOptions;
+
+  if (options.length === 0 && !selectorUrl) {
+    return (
+      <TableCell
+        key={col.key}
+        className="py-1 px-2"
+        data-testid={"TableCell__" + field.id} />
+    );
+  }
+
+  return (
+    <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+      <InlineSearchCombo
+        field={field}
+        value={values[field.key] ?? ''}
+        displayLabel={values[field.key + '$_identifier'] || ''}
+        options={options}
+        onChange={(id, label, selectedItem) => {
+          touchedFieldsRef.current.add(field.key);
+          handleChange(field.key + '$_identifier', label || '');
+          handleFieldChange(field.key, id, selectedItem);
+        }}
+        onKeyDown={handleKeyDown}
+        inputRef={isFirst ? firstInputRef : undefined}
+        placeholder={fieldLabel}
+        selectorUrl={selectorUrl}
+        selectorContext={selectorContext}
+        excludeId={excludeId}
+        token={token}
+        data-testid={"InlineSearchCombo__" + field.id} />
+    </TableCell>
+  );
+}
+
+// Two-decimal display formatter for amount/price inputs. Pure (only reads `raw`),
+// kept at module scope so it doesn't count against renderInputCell's complexity.
+function formatTwoDecimals(raw) {
+  if (raw == null || raw === '') return '';
+  const n = typeof raw === 'string' ? Number.parseFloat(raw) : raw;
+  return Number.isFinite(n) ? n.toFixed(2) : raw;
+}
+
+function renderInputCell({
+  field, col, values, invalidFields, isFirst, firstInputRef,
+  handleFieldChange, handleKeyDown, fieldLabel,
+}) {
+  const isNumeric = NUMERIC_FIELD_TYPES.has(field.type);
+  const isTwoDecimal = field.type === 'amount' || field.type === 'price';
+  // Numeric `inputMode` only for numeric fields — integers get the digits-only
+  // on-screen keyboard, the rest the decimal pad (Sonar S3358: flat conditional).
+  const numericInputMode = resolveNumericInputMode(field, isNumeric);
+  const displayValue = formatNumericInputValue(isTwoDecimal, values[field.key], formatTwoDecimals);
+  // Unambiguous partial-number patterns: no two adjacent unbounded `\d*`, so no
+  // super-linear backtracking (ReDoS-safe). Integer -> digits; decimal -> digits
+  // then an optional `.digits` group. Raw strings are kept while typing so
+  // in-progress decimals ("1.") survive; numeric coercion happens at commit.
+  const partialPattern = field.type === 'integer' ? /^-?\d*$/ : /^-?\d*(?:\.\d*)?$/;
+  const onChange = (e) => {
+    const raw = e.target.value;
+    if (!isNumeric || raw === '' || partialPattern.test(raw)) {
+      handleFieldChange(field.key, raw);
+    }
+  };
+  const onBlur = isNumeric
+    ? () => {
+        const raw = values[field.key];
+        if (raw === '' || raw == null) {
+          // Empty numeric → restore defaultValue (or min) so the POST body never
+          // omits the field and lets the backend apply a wrong implicit default.
+          if (field.defaultValue !== undefined) handleFieldChange(field.key, String(field.defaultValue));
+          else if (field.min !== undefined) handleFieldChange(field.key, String(field.min));
+          return;
+        }
+        const num = Number(raw);
+        if (isNaN(num)) return;
+        if (field.max !== undefined && num > field.max) handleFieldChange(field.key, String(field.max));
+        if (field.min !== undefined && num < field.min) handleFieldChange(field.key, String(field.min));
+      }
+    : undefined;
+  // Always type="text" — numeric type renders spinner buttons; the numeric
+  // on-screen keyboard is preserved via inputMode.
+  return (
+    <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+      <input
+        data-testid={`inline-add-field-${field.key}`}
+        ref={isFirst ? firstInputRef : undefined}
+        type="text"
+        inputMode={numericInputMode}
+        value={displayValue}
+        onChange={onChange}
+        onBlur={onBlur}
+        onKeyDown={handleKeyDown}
+        placeholder={fieldLabel}
+        required={field.required}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
+      />
+    </TableCell>
+  );
+}
+
+// Renders the derived (contract-computed, non-editable) cell shown when a column
+// has no matching editable field — a read-only display of the callout result.
+function renderDerivedAddCell(col, values) {
+  const rawVal = values[col.key];
+  const identVal = values[col.key + '$_identifier'];
+  const isNumericDerived = NUMERIC_FIELD_TYPES.has(col.type);
+  const isTwoDecimalDerived = col.type === 'amount' || col.type === 'price';
+  const displayVal = formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived);
+  return (
+    <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className={`text-muted-foreground text-sm${getNumericCellAlignClass(isNumericDerived)}`}>
+      {displayOrDash(displayVal)}
+    </TableCell>
+  );
+}
+
+// Renders the interactive control for an editable inline-add field, dispatching
+// on its type (lookup, search, static select, selector, boolean, or plain input).
+function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
+  values, firstInputRef, selectorContext, token, apiBaseUrl, entity, catalogs,
+  handleChange, handleFieldChange, handleKeyDown, touchedFieldsRef, invalidFields, locale,
+}) {
+  if (isLookupSearchField(field)) {
+    const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
+    const displayLabel = values[field.key + '$_identifier'] || '';
+    const drawerKey = field.lookupDrawer || 'default';
+    const lookupTitle = field.lookupTitle || fieldLabel;
+    return (
+      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+        <LookupField
+          value={displayLabel}
+          fieldKey={field.key}
+          placeholder={fieldLabel}
+          selectorUrl={selectorUrl}
+          selectorContext={selectorContext}
+          token={token}
+          inputRef={isFirst ? firstInputRef : undefined}
+          isInvalid={invalidFields.has(field.key)}
+          onSelect={(item) => {
+            touchedFieldsRef.current.add(field.key);
+            handleChange(field.key + '$_identifier', resolveLookupItemLabel(item));
+            handleFieldChange(field.key, item.id, item);
+            applyOnSelectMappings(field, item, handleChange);
+          }}
+          onKeyDown={handleKeyDown}
+          title={lookupTitle}
+          drawerKey={drawerKey}
+          data-testid="LookupField__eb5261" />
+      </TableCell>
+    );
+  }
+  if (field.type === 'search') {
+    const options = getCatalogOptions(catalogs, entity, field);
+    const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
+    const excludeId = field.excludeValueOf ? (values[field.excludeValueOf] ?? null) : null;
+    return (
+      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+        <InlineSearchCombo
+          field={field}
+          value={values[field.key] ?? ''}
+          displayLabel={values[field.key + '$_identifier'] || ''}
+          options={options}
+          excludeId={excludeId}
+          inputRef={isFirst ? firstInputRef : undefined}
+          placeholder={fieldLabel}
+          onChange={(id, label, selectedItem) => {
+            touchedFieldsRef.current.add(field.key);
+            handleChange(field.key + '$_identifier', label);
+            handleFieldChange(field.key, id, selectedItem);
+          }}
+          onKeyDown={handleKeyDown}
+          selectorUrl={selectorUrl}
+          selectorContext={selectorContext}
+          token={token}
+          data-testid="InlineSearchCombo__eb5261" />
+      </TableCell>
+    );
+  }
+  if (isStaticSelectField(field)) {
+    return (
+      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+        <Select
+          value={values[field.key] || undefined}
+          onValueChange={(val) => handleFieldChange(field.key, val === '__empty__' ? '' : val)}
+          required={field.required}
+          data-testid="Select__eb5261">
+          <SelectTrigger
+            ref={isFirst ? firstInputRef : undefined}
+            data-testid={`inline-add-field-${field.key}`}
+            onKeyDown={(e) => { if (e.key === 'Escape') handleKeyDown(e); }}
+            className="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
+          >
+            <SelectValue placeholder={field.label ?? field.key} data-testid="SelectValue__eb5261" />
+          </SelectTrigger>
+          <SelectContent data-testid="SelectContent__eb5261">
+            {!field.required && <SelectItem value="__empty__" data-testid="SelectItem__eb5261">&nbsp;</SelectItem>}
+            {field.options.map(opt => (
+              // ETP-4685 — each option carries a per-locale `labels` map (same shape
+              // the form view already resolves) alongside the raw AD `label`; prefer
+              // it or this always shows the raw English name regardless of locale.
+              (<SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__eb5261">{opt.labels?.[locale] ?? opt.label}</SelectItem>)
+            ))}
+          </SelectContent>
+        </Select>
+      </TableCell>
+    );
+  }
+  if (field.type === 'selector') {
+    return renderSelectorCell({
+      catalogs, entity, field, apiBaseUrl, col, values, touchedFieldsRef,
+      handleChange, handleFieldChange, handleKeyDown, isFirst, firstInputRef,
+      fieldLabel, selectorContext, token,
+    });
+  }
+  if (field.type === 'checkbox' || field.type === 'boolean') {
+    const checked = values[field.key] === true || values[field.key] === 'Y' || values[field.key] === 'true';
+    return (
+      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+        <PillToggle
+          checked={checked}
+          onCheckedChange={(next) => {
+            touchedFieldsRef.current.add(field.key);
+            handleFieldChange(field.key, next);
+          }}
+          data-testid={`inline-add-field-${field.key}`} />
+      </TableCell>
+    );
+  }
+  return renderInputCell({
+    field, col, values, invalidFields, isFirst, firstInputRef,
+    handleFieldChange, handleKeyDown, fieldLabel,
+  });
+}
+
+function renderInlineAddCell(col, ctx) {
+  const { fieldMap, values, t, locale, firstInputCtx } = ctx;
+  const field = fieldMap[col.key];
+  const fieldLabel = getFieldLabel(field, t, col, locale);
+  if (isColumnHidden(field, values)) {
+    return <TableCell key={col.key} aria-hidden="true" data-testid={`inline-add-cell-${col.key}`} />;
+  }
+  if (!field) {
+    return renderDerivedAddCell(col, values);
+  }
+  const isFirst = !firstInputCtx.assigned;
+  if (isFirst) firstInputCtx.assigned = true;
+  return renderInlineAddFieldControl(col, field, isFirst, fieldLabel, ctx);
+}
+
 /**
  * Inline editable row rendered at the bottom of the table for rapid line entry.
  * Controlled by the `addRow` prop on DataTable.
  */
-const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, ilpHasNoAmountCol = false, ilpTrailing = false }, ref) {
-  const t = useLabel();
+// Stable empty seed: a fresh `{}` default would change identity every render and
+// make buildEmpty's effect re-run, wiping in-progress input. Share one frozen ref.
+const EMPTY_SEED = {};
+
+// First pass of buildEmpty: seed every field with its literal default, the
+// auto-computed lineNo, or '' when neither applies.
+function buildFieldDefaults(fields, defaultLineNo) {
+  const empty = {};
+  for (const f of fields) {
+    if (f.key === 'lineNo') {
+      empty[f.key] = defaultLineNo;
+    } else if (f.defaultValue !== undefined && !/^@[^@]+@$/.test(String(f.defaultValue))) {
+      empty[f.key] = f.defaultValue;
+    } else {
+      empty[f.key] = '';
+    }
+  }
+  return empty;
+}
+
+// Seed display-only (non-editable) columns — e.g. a parent-derived currency —
+// so they render their value immediately instead of "—" until the row is saved.
+// Editable fields are never overwritten; the seed only fills keys with no input.
+function applyDisplaySeed(empty, seedValues, fieldMap) {
+  for (const [key, val] of Object.entries(seedValues)) {
+    if (!fieldMap[key]) empty[key] = val;
+  }
+  return empty;
+}
+
+// HandleDefaults: fill EMPTY editable fields from backend-resolved line
+// defaults (e.g. a macro default like @DESCRIPTION1@ → the parent's value).
+// Fill-empties-only: never override a literal default, the client lineNo, a
+// display seed, or a field opted out via skipDefault.
+function applyResolvedFieldDefaults(empty, resolvedDefaults, fieldMap) {
+  for (const [key, val] of Object.entries(resolvedDefaults)) {
+    if (key.endsWith('$_identifier')) continue; // handled by applyResolvedIdentifiers
+    const f = fieldMap[key];
+    if (!f || f.skipDefault) continue;
+    const cur = empty[key];
+    if ((cur == null || cur === '') && val != null && val !== '') {
+      empty[key] = val;
+    }
+  }
+  return empty;
+}
+
+// Companion `<key>$_identifier` labels (e.g. country$_identifier: "Spain") have no
+// entry in `fieldMap` — they're display text for a selector field, not a field of
+// their own — so applyResolvedFieldDefaults always skips them. Without this, a
+// selector/search field resolved from resolvedDefaults (e.g. country: "106") renders
+// a chip with a working Clear button but an EMPTY label, because InlineSearchCombo's
+// `displayLabel` reads `values[field.key + '$_identifier']` and finds nothing. Only
+// seed the identifier when its base field actually received ITS value from
+// resolvedDefaults (not from a literal decisions.json defaultValue or a seeded
+// display column) so a stale label never gets attached to an unrelated value.
+function applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap) {
+  for (const [key, val] of Object.entries(resolvedDefaults)) {
+    if (!key.endsWith('$_identifier')) continue;
+    const baseKey = key.slice(0, -'$_identifier'.length);
+    const f = fieldMap[baseKey];
+    if (!f || f.skipDefault) continue;
+    if (empty[baseKey] === resolvedDefaults[baseKey] && val != null && val !== '') {
+      empty[key] = val;
+    }
+  }
+  return empty;
+}
+
+const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false }, ref) {
+  const t = useLabel(labelOverrides);
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const fieldMap = useMemo(() => {
     const map = {};
     for (const f of fields) map[f.key] = f;
@@ -264,18 +676,12 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
   }, [data]);
 
   const buildEmpty = useCallback(() => {
-    const empty = {};
-    for (const f of fields) {
-      if (f.key === 'lineNo') {
-        empty[f.key] = defaultLineNo;
-      } else if (f.defaultValue !== undefined && !/^@[^@]+@$/.test(String(f.defaultValue))) {
-        empty[f.key] = f.defaultValue;
-      } else {
-        empty[f.key] = '';
-      }
-    }
+    let empty = buildFieldDefaults(fields, defaultLineNo);
+    empty = applyDisplaySeed(empty, seedValues, fieldMap);
+    empty = applyResolvedFieldDefaults(empty, resolvedDefaults, fieldMap);
+    empty = applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap);
     return empty;
-  }, [fields, defaultLineNo]);
+  }, [fields, defaultLineNo, seedValues, fieldMap, resolvedDefaults]);
 
   const [values, setValues] = useState(buildEmpty);
   const [isSaving, setIsSaving] = useState(false);
@@ -323,7 +729,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     // Validate required fields BEFORE entering the in-flight state — a missing
     // value should leave the row open for the user to complete. Reads from the
     // valuesRef so an in-flight callout cannot mask a still-empty user field.
-    const missing = fields.filter(f => isMissingRequired(f, valuesRef));
+    const missing = fields.filter(f => isMissingRequired(f, valuesRef, fields));
     if (missing.length > 0) {
       setInvalidFields(new Set(missing.map(f => f.key)));
       toast.error(ui('requiredFieldsMissing'));
@@ -332,11 +738,34 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       inputEl?.focus?.({ preventScroll: true });
       return Promise.resolve(false);
     }
+    // Clamp any above-max values before validation so submitLine is consistent
+    // with the onBlur autocorrect (guards the mousedown-before-blur race).
+    for (const f of fields) {
+      if (f.max === undefined) continue;
+      const num = Number(valuesRef.current[f.key]);
+      if (!isNaN(num) && num > f.max) valuesRef.current = { ...valuesRef.current, [f.key]: String(f.max) };
+    }
     const belowMin = fields.filter(f => isBelowMin(f, valuesRef));
     if (belowMin.length > 0) {
       setInvalidFields(new Set(belowMin.map(f => f.key)));
-      toast.error(ui('fieldMinValueError'));
+      // Interpolate the offending field's `min` so the message is precise
+      // ("Value must be at least 1") rather than the imprecise negative wording.
+      toast.error(ui('fieldMinValueError', { min: belowMin[0].min }));
       const firstInvalid = belowMin[0];
+      const inputEl = document.querySelector(`[data-testid="field-${firstInvalid.key}"]`);
+      inputEl?.focus?.({ preventScroll: true });
+      return Promise.resolve(false);
+    }
+    // Format validation (email + phone) — mirrors the required/min checks: flag the
+    // cell (red border via invalidFields), toast the specific error, focus, and block
+    // the commit. Empty stays valid, so an untouched optional field never blocks the row.
+    const formatInvalid = fields
+      .map(f => ({ f, err: getFieldFormatError(f, valuesRef) }))
+      .filter(({ err }) => err !== null);
+    if (formatInvalid.length > 0) {
+      setInvalidFields(new Set(formatInvalid.map(({ f }) => f.key)));
+      toast.error(ui(formatInvalid[0].err));
+      const firstInvalid = formatInvalid[0].f;
       const inputEl = document.querySelector(`[data-testid="field-${firstInvalid.key}"]`);
       inputEl?.focus?.({ preventScroll: true });
       return Promise.resolve(false);
@@ -351,14 +780,8 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
           await Promise.all(pendingCalloutsRef.current);
         }
         // Read from ref (always current) instead of the stale `values` closure.
-        const coercedValues = { ...valuesRef.current };
-        for (const f of fields) {
-          if (NUMERIC_FIELD_TYPES.has(f.type) && coercedValues[f.key] !== '' && coercedValues[f.key] != null) {
-            const raw = String(coercedValues[f.key]);
-            const parsed = f.type === 'integer' ? Number.parseInt(raw, 10) : Number.parseFloat(raw);
-            if (!Number.isNaN(parsed)) coercedValues[f.key] = parsed;
-          }
-        }
+        const coercedValues = coerceFieldValues(valuesRef, fields);
+
         const result = await onAdd(coercedValues);
         if (result === false || result == null) {
           return false;
@@ -367,25 +790,18 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
           onCancel();
           return true;
         }
-        // Reset for next rapid entry — recompute lineNo
+        // Reset for next rapid entry — recompute lineNo. Reuses buildEmpty() (single
+        // source of truth for the macro-defaultValue guard, resolvedDefaults fill and
+        // its $_identifier companion pass) instead of re-deriving field defaults here —
+        // a prior duplicated loop applied `f.defaultValue` unconditionally, so an
+        // unresolved AD macro token (e.g. '@COUNTRYDEF@') on a selector/search field
+        // would leak into the next line's value, and resolvedDefaults (with its
+        // identifier labels) was never reapplied at all.
         const nums = [...(data || []).map(r => Number(r.lineNo) || 0), Number(valuesRef.current.lineNo) || 0];
         const nextLineNo = Math.max(...nums) + 10;
-        const next = {};
-        for (const f of fields) {
-          if (f.key === 'lineNo') {
-            next[f.key] = nextLineNo;
-          } else if (f.defaultValue === undefined) {
-            next[f.key] = '';
-          } else {
-            next[f.key] = f.defaultValue;
-          }
-        }
-        // Clear any $_identifier companion values
-        for (const key of Object.keys(valuesRef.current)) {
-          if (key.includes('$_identifier') && !(key in next)) {
-            next[key] = '';
-          }
-        }
+        const next = buildEmpty();
+        next.lineNo = nextLineNo;
+
         valuesRef.current = next;
         setValues(next);
         touchedFieldsRef.current = new Set();
@@ -399,7 +815,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     })();
     inflightRef.current = run;
     return run;
-  }, [data, fields, onAdd, onCancel, ui]);
+  }, [data, fields, onAdd, onCancel, ui, buildEmpty]);
 
   // Enter → confirm without closing (rapid entry). Outside-click / parent flush close.
   const handleConfirm = useCallback(() => submitLine({ closeAfterSave: false }), [submitLine]);
@@ -417,6 +833,9 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       }
       const ok = await submitLine({ closeAfterSave });
       return ok !== false;
+    },
+    setFieldValues: (updates) => {
+      setValues(prev => ({ ...prev, ...updates }));
     },
   }), [onCancel, submitLine]);
 
@@ -438,11 +857,21 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       if (touchedFieldsRef.current.size === 0) {
         onCancel();
       } else {
-        void submitLine({ closeAfterSave: true });
+        submitLine({ closeAfterSave: true }).catch((err) => {
+          // Errors are surfaced to the user via toast inside onAdd; log for diagnostics.
+          console.error('Failed to submit inline line on outside click:', err);
+        });
       }
     };
-    document.addEventListener('mousedown', handler, true);
-    return () => document.removeEventListener('mousedown', handler, true);
+    // Listen for `pointerdown` (not `mousedown`): elements that call
+    // preventDefault() on pointerdown — e.g. Radix SelectTrigger and the header
+    // selector controls — suppress the browser's compatibility mouse events for
+    // that interaction, so a `mousedown` listener would never fire on the FIRST
+    // click on such a control and the new line would silently not be saved.
+    // `pointerdown` itself is never suppressed. Mirrors the identical fix in
+    // InlineLinesPanel.jsx (flush-pending-edit-on-outside-pointerdown).
+    document.addEventListener('pointerdown', handler, true);
+    return () => document.removeEventListener('pointerdown', handler, true);
   }, [onCancel, submitLine]);
 
   // Wrap handleChange to also notify parent (for callout triggering)
@@ -457,6 +886,18 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     // Build a snapshot of current + new values for the callout formState
     const snapshot = { ...values, [key]: val };
     handleChange(key, val);
+    // Mutual-exclusion: zero the paired field when a non-zero value is entered (e.g. debit ↔ credit).
+    // Use '0' not '' so the sibling still passes required-field validation.
+    // Gate on a FINITE non-zero value: renderInputCell permits partial numeric
+    // input ('-', '.', '-.') where Number(val) is NaN — without the isFinite
+    // check the paired field would be cleared mid-typing.
+    const clearsKey = fieldMap[key]?.clearsField;
+    const clearsNumVal = Number(val);
+    if (clearsKey && val !== '' && val !== null && val !== undefined
+        && Number.isFinite(clearsNumVal) && clearsNumVal !== 0) {
+      handleChange(clearsKey, '0');
+      snapshot[clearsKey] = '0';
+    }
     // Store _aux data from selector items as auxiliaryValues (e.g., product_UOM, product_PSTD)
     if (selectedItem?._aux) {
       for (const [suffix, auxVal] of Object.entries(selectedItem._aux)) {
@@ -467,47 +908,17 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     // Also fire top-level display fields from selectedItem (mirrors EntityForm behavior).
     // Skips structural/object fields; fires e.g. product_uOM = "Unit" for identifier resolution.
     if (selectedItem && typeof selectedItem === 'object') {
-      for (const [topField, topVal] of Object.entries(selectedItem)) {
-        if (topField === 'id' || topField === '_aux' || topField === 'label'
-            || topField === 'name' || topField === 'searchKey'
-            || typeof topVal === 'object' || topVal === null) continue;
-        // Price from the document's price list. Mapping depends on price list type:
-        //   - Gross list (isTaxIncluded=true): standardPrice is the gross price → grossUnitPrice
-        //   - Net list   (isTaxIncluded=false): standardPrice is the net price   → unitPrice
-        // Mark the target field as touched so the callout does not overwrite it (some callouts
-        // look up the price themselves and may return a different value from another price list).
-        if (topField === 'standardPrice' && topVal != null) {
-          const isGross = selectedItem?.isTaxIncluded !== false;
-          if (isGross) {
-            snapshot['grossUnitPrice'] = topVal;
-            handleChange('grossUnitPrice', topVal);
-            snapshot['grossListPrice'] = topVal;
-            handleChange('grossListPrice', topVal);
-            touchedFieldsRef.current.add('grossUnitPrice');
-            touchedFieldsRef.current.add('grossListPrice');
-          } else {
-            snapshot['unitPrice'] = topVal;
-            handleChange('unitPrice', topVal);
-            snapshot['listPrice'] = topVal;
-            handleChange('listPrice', topVal);
-            touchedFieldsRef.current.add('unitPrice');
-            touchedFieldsRef.current.add('listPrice');
-          }
-          continue;
-        }
-        const ctxKey = `${key}_${topField}`;
-        if (!(ctxKey in snapshot)) {
-          // Keep display hints only in the callout snapshot.
-          // Persisting these transient keys in row state can leak them into POST payloads.
-          snapshot[ctxKey] = topVal;
-        }
-      }
+      updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key, convertOptimisticPrice);
     }
     // Notify parent for callout execution — pass computed snapshot (not stale React state).
     // applyUpdates updates valuesRef synchronously so submitLine always reads the latest
     // values even if React hasn't re-rendered yet when Enter is pressed.
     const calloutPromise = onFieldChange?.(key, val, snapshot, (updates, forceFields = new Set()) => {
-      const next = applyCalloutUpdates(valuesRef.current, updates, forceFields, key, touchedFieldsRef.current);
+      // Don't let the callout overwrite the field being typed: a cascade can echo
+      // it back normalized (e.g. rate "11." -> 11), erasing in-progress decimals.
+      const derived = { ...updates };
+      delete derived[key];
+      const next = applyCalloutUpdates(valuesRef.current, derived, forceFields, key, touchedFieldsRef.current);
       valuesRef.current = next;
       setValues(next);
     });
@@ -517,7 +928,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         pendingCalloutsRef.current = pendingCalloutsRef.current.filter(p => p !== calloutPromise);
       });
     }
-  }, [handleChange, onFieldChange, values]);
+  }, [handleChange, onFieldChange, values, fieldMap, convertOptimisticPrice]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -529,263 +940,133 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     }
   };
 
-  let firstInputAssigned = false;
+  // Mutable flag shared into renderInlineAddCell so only the FIRST rendered input
+  // gets the autofocus ref. An object (not a bare boolean) so the callee can flip it.
+  const firstInputCtx = { assigned: false };
 
   return (
-    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-blue-50/50 border-t-2 border-primary/20">
+    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">
+      {/* ETP-4735 — matches the leading CHEVRON_COLUMN_WIDTH <col> renderLinesColgroup
+          reserves when hasDimensionsPanel. A <col> alone doesn't reserve visual space —
+          table column widths/positions are driven by the actual cells present in a row,
+          so without this empty cell every cell after it (product, movementQuantity, …)
+          renders one column-slot too far left relative to InlineLinesPanel's rows above. */}
+      {hasDimensionsPanel && <TableCell aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableCell__eb5261" />}
       {/* Saving spinner — aligned with selection checkbox column (empty when idle). */}
       {selectable && (
-        <TableCell className="w-10 px-1">
+        <TableCell className="w-10 px-1" data-testid="TableCell__eb5261">
           <div className="flex items-center justify-center h-7">
-            {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Saving line" />}
+            {isSaving && <Loader2
+              className="h-4 w-4 animate-spin text-muted-foreground"
+              aria-label="Saving line"
+              data-testid="Loader2__eb5261" />}
           </div>
         </TableCell>
       )}
-      {columns.map(col => {
-        const field = fieldMap[col.key];
-        const fieldLabel = field ? (t(field.column) ?? field.label ?? field.key) : (t(col.column) ?? col.label ?? col.key);
-        if (!field) {
-          // Show callout-derived values if available, otherwise dash.
-          // Prefer $_identifier (human-readable) over raw ID for FK fields.
-          const rawVal = values[col.key];
-          const identVal = values[col.key + '$_identifier'];
-          const isNumericDerived = NUMERIC_FIELD_TYPES.has(col.type);
-          const isTwoDecimalDerived = col.type === 'amount' || col.type === 'price';
-          let displayVal = identVal || rawVal;
-          if (isTwoDecimalDerived && displayVal != null && displayVal !== '') {
-            const n = typeof displayVal === 'string' ? Number.parseFloat(displayVal) : displayVal;
-            if (Number.isFinite(n)) displayVal = n.toFixed(2);
-          }
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className={`text-muted-foreground text-sm${isNumericDerived ? ' text-right tabular-nums' : ''}`}>
-              {displayVal != null && displayVal !== '' ? displayVal : '—'}
-            </TableCell>
-          );
-        }
-        const isFirst = !firstInputAssigned;
-        if (isFirst) firstInputAssigned = true;
-
-        // Lookup fields: click to open search modal (no inline combo)
-        if (field.type === 'search' && field.lookup) {
-          const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${field.column}` : null;
-          const displayLabel = values[field.key + '$_identifier'] || '';
-          const drawerKey = field.lookupDrawer || 'default';
-          const lookupTitle = field.lookupTitle || fieldLabel;
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-              <LookupField
-                value={displayLabel}
-                fieldKey={field.key}
-                placeholder={fieldLabel}
-                selectorUrl={selectorUrl}
-                selectorContext={selectorContext}
-                token={token}
-                inputRef={isFirst ? firstInputRef : undefined}
-                isInvalid={invalidFields.has(field.key)}
-                onSelect={(item) => {
-                  touchedFieldsRef.current.add(field.key);
-                  handleChange(field.key + '$_identifier', item.label || item.name || item._identifier);
-                  handleFieldChange(field.key, item.id, item);
-                  // Declarative auto-fill from the contract — see field.onSelectMappings.
-                  applyOnSelectMappings(field, item, handleChange);
-                }}
-                onKeyDown={handleKeyDown}
-                title={lookupTitle}
-                drawerKey={drawerKey}
-              />
-            </TableCell>
-          );
-        }
-
-        // Search fields render as compact combobox (text input + filtered dropdown)
-        if (field.type === 'search') {
-          const options = getCatalogOptions(catalogs, entity, field);
-          const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${field.column}` : null;
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-              <InlineSearchCombo
-                field={field}
-                value={values[field.key] ?? ''}
-                displayLabel={values[field.key + '$_identifier'] || ''}
-                options={options}
-                inputRef={isFirst ? firstInputRef : undefined}
-                placeholder={fieldLabel}
-                onChange={(id, label, selectedItem) => {
-                  touchedFieldsRef.current.add(field.key);
-                  handleChange(field.key + '$_identifier', label);
-                  handleFieldChange(field.key, id, selectedItem);
-                }}
-                onKeyDown={handleKeyDown}
-                selectorUrl={selectorUrl}
-                selectorContext={selectorContext}
-                token={token}
-              />
-            </TableCell>
-          );
-        }
-
-        // Select fields with inline static options array
-        if (field.type === 'select' && field.options?.length) {
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-              <Select
-                value={values[field.key] || undefined}
-                onValueChange={(val) => handleFieldChange(field.key, val === '__empty__' ? '' : val)}
-                required={field.required}
-              >
-                <SelectTrigger
-                  ref={isFirst ? firstInputRef : undefined}
-                  data-testid={`inline-add-field-${field.key}`}
-                  onKeyDown={(e) => { if (e.key === 'Escape') handleKeyDown(e); }}
-                  className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
-                >
-                  <SelectValue placeholder={field.label ?? field.key} />
-                </SelectTrigger>
-                <SelectContent>
-                  {!field.required && <SelectItem value="__empty__">&nbsp;</SelectItem>}
-                  {field.options.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </TableCell>
-          );
-        }
-
-        // Selector fields render as native <select> dropdowns (few options).
-        // When catalog options are not pre-loaded, render the shared SelectorInput
-        // (Radix-based dropdown that lazy-loads from the selector URL). It does NOT
-        // accept free-text typing — the user has to pick from the list, matching the
-        // form-mode UX. Mirrors the InlineAddRow behavior for the line tax field.
-        if (field.type === 'selector') {
-          const options = getCatalogOptions(catalogs, entity, field);
-          if (options.length === 0) {
-            const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${field.column}` : null;
-            if (!selectorUrl) return <TableCell key={col.key} className="py-1 px-2" />;
-            return (
-              <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-                <InlineSearchCombo
-                  field={field}
-                  value={values[field.key] ?? ''}
-                  displayLabel={values[field.key + '$_identifier'] || ''}
-                  options={[]}
-                  onChange={(id, label, selectedItem) => {
-                    touchedFieldsRef.current.add(field.key);
-                    handleChange(field.key + '$_identifier', label || '');
-                    handleFieldChange(field.key, id, selectedItem);
-                  }}
-                  onKeyDown={handleKeyDown}
-                  inputRef={isFirst ? firstInputRef : undefined}
-                  placeholder={fieldLabel}
-                  selectorUrl={selectorUrl}
-                  selectorContext={selectorContext}
-                  token={token}
-                />
-              </TableCell>
-            );
-          }
-          return (
-            <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-              <Select
-                value={values[field.key] || undefined}
-                onValueChange={(val) => {
-                  if (val === '__empty__') {
-                    handleChange(field.key + '$_identifier', '');
-                    handleFieldChange(field.key, '', null);
-                    return;
-                  }
-                  const opt = options.find(o => o.id === val);
-                  if (opt) {
-                    handleChange(field.key + '$_identifier', opt.name || opt.label || opt._identifier || '');
-                  }
-                  handleFieldChange(field.key, val, opt);
-                }}
-              >
-                <SelectTrigger
-                  ref={isFirst ? firstInputRef : undefined}
-                  data-testid={`inline-add-field-${field.key}`}
-                  onKeyDown={(e) => { if (e.key === 'Escape') handleKeyDown(e); }}
-                  className="w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary"
-                >
-                  <SelectValue placeholder={fieldLabel} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__empty__">&nbsp;</SelectItem>
-                  {options.map(opt => (
-                    <SelectItem key={opt.id} value={opt.id}>{opt.name || opt.label || opt._identifier || opt.id}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </TableCell>
-          );
-        }
-
-        const isNumeric = NUMERIC_FIELD_TYPES.has(field.type);
-        const isTwoDecimal = field.type === 'amount' || field.type === 'price';
-        // Pick a numeric `inputMode` only for numeric fields. Integer fields
-        // surface the digits-only on-screen keyboard, the rest get the decimal
-        // pad. Resolved via an intermediate variable so the call site stays a
-        // flat conditional (Sonar S3358).
-        let numericInputMode = field.inputMode;
-        if (!numericInputMode && isNumeric) {
-          numericInputMode = field.type === 'integer' ? 'numeric' : 'decimal';
-        }
-        const formatTwoDecimals = (raw) => {
-          if (raw == null || raw === '') return '';
-          const n = typeof raw === 'string' ? Number.parseFloat(raw) : raw;
-          return Number.isFinite(n) ? n.toFixed(2) : raw;
-        };
-        // Always type="text" — numeric inputs would render browser spinner
-        // buttons; the numeric on-screen keyboard is preserved via inputMode.
-        const inputType = 'text';
-        const rawValue = values[field.key];
-        const displayValue = isTwoDecimal && rawValue !== '' && rawValue != null
-          ? formatTwoDecimals(rawValue)
-          : (rawValue ?? '');
-        return (
-          <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-            <input
-              data-testid={`inline-add-field-${field.key}`}
-              ref={isFirst ? firstInputRef : undefined}
-              type={inputType}
-              inputMode={numericInputMode}
-              value={displayValue}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (isNumeric && raw !== '' && raw !== '-') {
-                  const parsed = field.type === 'integer' ? Number.parseInt(raw, 10) : Number.parseFloat(raw);
-                  handleFieldChange(field.key, Number.isNaN(parsed) ? raw : parsed);
-                } else {
-                  handleFieldChange(field.key, raw);
-                }
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={fieldLabel}
-              required={field.required}
-              className={`w-full h-8 text-sm rounded-md border bg-white px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-red-500 focus:ring-red-500' : ' border-input focus:ring-primary'}`}
-            />
-          </TableCell>
-        );
-      })}
+      {columns.map(col => renderInlineAddCell(col, {
+        fieldMap, values, t, locale, firstInputCtx, firstInputRef,
+        selectorContext, token, apiBaseUrl, entity, catalogs,
+        handleChange, handleFieldChange, handleKeyDown,
+        touchedFieldsRef, invalidFields,
+      }))}
       {/* Skip action cells in inlineEditable add-row mode — actions belong to
           InlineLinesPanel's 160px slot, not to separate columns here. */}
       {!ilpTrailing && (hoverRowActions ? (
         <>
-          <TableCell className="w-10" />
-          {hoverRowHasDelete && <TableCell className="w-10" />}
+          <TableCell className="w-10" data-testid="TableCell__eb5261" />
+          {hoverRowHasDelete && <TableCell className="w-10" data-testid="TableCell__eb5261" />}
         </>
       ) : (
         <>
-          {hasDeleteColumn && <TableCell className="w-10" />}
-          {hasCloneColumn && <TableCell className="w-10" />}
+          {hasDeleteColumn && <TableCell className="w-10" data-testid="TableCell__eb5261" />}
+          {hasCloneColumn && <TableCell className="w-10" data-testid="TableCell__eb5261" />}
         </>
       ))}
-      {!ilpTrailing && hasQuickActionsColumn && <TableCell className="w-10" />}
-      {ilpHasNoAmountCol && <TableCell aria-hidden="true" />}
-      {ilpTrailing && <TableCell aria-hidden="true" />}
+      {!ilpTrailing && hasQuickActionsColumn && <TableCell className="w-10" data-testid="TableCell__eb5261" />}
+      {ilpHasNoAmountCol && <TableCell aria-hidden="true" data-testid="TableCell__eb5261" />}
+      {ilpTrailing && <TableCell aria-hidden="true" data-testid="TableCell__eb5261" />}
     </TableRow>
   );
 });
+
+function getFieldLabel(field, t, col, locale) {
+  const f = field ?? col;
+  const pinned = f?.labels?.[locale] ?? f?.labels?.en_US;
+  if (pinned) return pinned;
+  return field ? (t(field.column) ?? field.label ?? field.key) : (t(col.column) ?? col.label ?? col.key);
+}
+
+function formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived) {
+  let displayVal = identVal || rawVal;
+  if (isTwoDecimalDerived && displayVal != null && displayVal !== '') {
+    const n = typeof displayVal === 'string' ? Number.parseFloat(displayVal) : displayVal;
+    if (Number.isFinite(n)) {
+      displayVal = n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+    }
+  }
+  return displayVal;
+}
+
+function updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, touchedFieldsRef, key, convertOptimisticPrice) {
+  for (const [topField, topVal] of Object.entries(selectedItem)) {
+    if (topField === 'id' || topField === '_aux' || topField === 'label'
+      || topField === 'name' || topField === 'searchKey'
+      || typeof topVal === 'object' || topVal === null) continue;
+    // Price from the document's price list. Mapping depends on price list type:
+    //   - Gross list (isTaxIncluded=true): standardPrice is the gross price → grossUnitPrice
+    //   - Net list   (isTaxIncluded=false): standardPrice is the net price   → unitPrice
+    // Mark the target field as touched so the callout does not overwrite it (some callouts
+    // look up the price themselves and may return a different value from another price list).
+    if (topField === 'standardPrice' && topVal != null) {
+      // Apply the header's currency conversion (if any) up front so the price never
+      // renders in the org base currency for a beat before the callout corrects it.
+      const priceVal = convertOptimisticPrice ? convertOptimisticPrice(topVal) : topVal;
+      const isGross = selectedItem?.isTaxIncluded !== false;
+      if (isGross) {
+        snapshot['grossUnitPrice'] = priceVal;
+        handleChange('grossUnitPrice', priceVal);
+        snapshot['grossListPrice'] = priceVal;
+        handleChange('grossListPrice', priceVal);
+        touchedFieldsRef.current.add('grossUnitPrice');
+        touchedFieldsRef.current.add('grossListPrice');
+      } else {
+        snapshot['unitPrice'] = priceVal;
+        handleChange('unitPrice', priceVal);
+        snapshot['listPrice'] = priceVal;
+        handleChange('listPrice', priceVal);
+        touchedFieldsRef.current.add('unitPrice');
+        touchedFieldsRef.current.add('listPrice');
+      }
+      continue;
+    }
+    const ctxKey = `${key}_${topField}`;
+    if (!(ctxKey in snapshot)) {
+      // Keep display hints only in the callout snapshot.
+      // Persisting these transient keys in row state can leak them into POST payloads.
+      snapshot[ctxKey] = topVal;
+    }
+  }
+}
+
+function resolveNumericFieldValue(f, val) {
+  if (val === '' || val == null) {
+    if (f.defaultValue !== undefined) return f.defaultValue;
+    if (f.min !== undefined) return f.min;
+    return val;
+  }
+  const raw = String(val);
+  const parsed = f.type === 'integer' ? Number.parseInt(raw, 10) : Number.parseFloat(raw);
+  return Number.isNaN(parsed) ? val : parsed;
+}
+
+function coerceFieldValues(valuesRef, fields) {
+  const coercedValues = { ...valuesRef.current };
+  for (const f of fields) {
+    if (!NUMERIC_FIELD_TYPES.has(f.type)) continue;
+    coercedValues[f.key] = resolveNumericFieldValue(f, coercedValues[f.key]);
+  }
+  return coercedValues;
+}
 
 /**
  * Inline field that shows selected value and opens modal on click/focus.
@@ -818,9 +1099,11 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); }
           else if (onKeyDown) onKeyDown(e);
         }}
-        className={`w-full h-8 text-sm rounded-md border bg-white px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-red-500 focus:ring-red-500' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-destructive focus:ring-destructive' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
       >
-        <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <Search
+          className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+          data-testid="Search__eb5261" />
         {value ? (
           <span className="truncate text-foreground">{value}</span>
         ) : (
@@ -841,16 +1124,17 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
         selectorContext={selectorContext}
         token={token}
         title={title || undefined}
-      />
+        data-testid="Drawer__eb5261" />
     </>
   );
 }
 
 /**
- * Small button that opens the ProductSearchDrawer for lookup-enabled fields.
+ * Small button that opens the default product lookup drawer for lookup-enabled fields.
  */
 function LookupButton({ selectorUrl, selectorContext, token, onSelect, title }) {
   const [open, setOpen] = useState(false);
+  const DefaultDrawer = LOOKUP_DRAWERS.default;
   return (
     <>
       <button
@@ -859,9 +1143,9 @@ function LookupButton({ selectorUrl, selectorContext, token, onSelect, title }) 
         className="h-8 w-8 flex items-center justify-center rounded border border-input hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors shrink-0"
         title={title || ''}
       >
-        <Search className="h-3.5 w-3.5" />
+        <Search className="h-3.5 w-3.5" data-testid="Search__eb5261" />
       </button>
-      <ProductSearchDrawer
+      <DefaultDrawer
         open={open}
         onClose={() => setOpen(false)}
         onSelect={(item) => { onSelect(item); setOpen(false); }}
@@ -869,8 +1153,623 @@ function LookupButton({ selectorUrl, selectorContext, token, onSelect, title }) 
         selectorContext={selectorContext}
         token={token}
         title={title || undefined}
-      />
+        data-testid="ProductSearchDrawer__eb5261" />
     </>
+  );
+}
+
+function computeSelectionState(filteredData, selectedRows, isRowSelectable) {
+  const allSelected = filteredData.length > 0 && selectedRows.size === filteredData.length;
+  const someSelected = selectedRows.size > 0 && !allSelected;
+
+  const selectableData = isRowSelectable ? filteredData.filter(isRowSelectable) : filteredData;
+  return { allSelected, someSelected, selectableData };
+}
+
+function oneIfTrue(bool) {
+  return bool ? 1 : 0;
+}
+
+function getTableContainerStyle(hideHeader) {
+  return hideHeader ? { tableLayout: 'fixed', width: '100%' } : undefined;
+}
+
+function renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled) {
+  return hoverRowActions ? (
+    <>
+      <TableHead className="w-10 px-2" data-testid="TableHead__eb5261" />
+      {onDeleteRow && <TableHead className="w-10 px-2" data-testid="TableHead__eb5261" />}
+    </>
+  ) : (
+    <>
+      {legacyDeleteEnabled && <TableHead className="w-10 px-2" data-testid="TableHead__eb5261" />}
+      {onCloneRow && !quickActionsEnabled && <TableHead className="w-10 px-2" data-testid="TableHead__eb5261" />}
+    </>
+  );
+}
+
+function renderRowActionFooterCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled) {
+  return hoverRowActions ? (
+    <>
+      <TableCell data-testid="TableCell__eb5261" />
+      {onDeleteRow && <TableCell data-testid="TableCell__eb5261" />}
+    </>
+  ) : (
+    <>
+      {legacyDeleteEnabled && <TableCell data-testid="TableCell__eb5261" />}
+      {onCloneRow && !quickActionsEnabled && <TableCell data-testid="TableCell__eb5261" />}
+    </>
+  );
+}
+
+function isQuickActionsEnabled(rowQuickActions) {
+  return !!rowQuickActions && rowQuickActions.enabled !== false;
+}
+
+/**
+ * `rowHoverStyle` picks how a clickable row reacts to hover:
+ *   - `tint` (default) tints the background, the behaviour every grid has today.
+ *   - `elevated` lifts the row instead — an opaque background plus a drop shadow
+ *     and `z-10`, so the shadow spills over the neighbouring row separators. Used
+ *     by card-like lists (Accounts) where the row reads as a raised surface.
+ * Selection always wins over hover, in both styles.
+ */
+function getRowClassName({
+  onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine,
+  rowHoverStyle = 'tint',
+}) {
+  const clickable = onRowClick || onNavigate;
+  const elevated = rowHoverStyle === 'elevated';
+  // `bg-card` is what makes the drop shadow readable, but it competes with the
+  // selection backgrounds below on the same CSS property (Tailwind resolves that
+  // by stylesheet order, not by class order), so only opt in when no selection
+  // state is painting the row.
+  const selectionPainted = isChecked || isSelectedLine || (selectedId != null && row.id === selectedId);
+  let hoverClass;
+  if (isSelectedLine) {
+    hoverClass = 'hover:bg-muted';
+  } else if (!clickable) {
+    hoverClass = '';
+  } else if (elevated) {
+    hoverClass = 'hover:z-10 hover:bg-card hover:shadow-lg';
+  } else {
+    hoverClass = 'hover:bg-muted/50';
+  }
+  return [
+    'h-12 group/row',
+    elevated ? 'relative transition-shadow' : 'transition-colors',
+    elevated && !selectionPainted ? 'bg-card' : '',
+    clickable ? 'cursor-pointer' : 'cursor-default',
+    isChecked ? selectedRowBg : '',
+    selectedId != null && row.id === selectedId ? 'bg-primary/10' : '',
+    isSelectedLine ? 'bg-muted ring-1 ring-focus-ring' : '',
+    hoverClass,
+  ].filter(Boolean).join(' ');
+}
+
+// Sums the pixel widths reserved in the fixed-layout <colgroup> for the
+// selection checkbox column and every row-action slot (hover actions, legacy
+// delete/clone, quick actions), mirroring the 40px/48px/160px slots rendered
+// by InlineLinesPanel and the row-action cells in the table body. Extracted
+// from a single chained sum of ternaries so each conditional slot keeps its
+// own branch instead of adding flat complexity to the caller.
+function computeActionColsWidthPx({
+  selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+  onCloneRow, quickActionsEnabled, ilpHasNoAmountCol,
+}) {
+  const showHoverActions = !ilpTrailing && hoverRowActions;
+  const showHoverDelete = showHoverActions && onDeleteRow;
+  const showLegacyDelete = !ilpTrailing && !hoverRowActions && legacyDeleteEnabled;
+  const showLegacyClone = !ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled;
+  const showQuickActions = !ilpTrailing && quickActionsEnabled;
+
+  return oneIfTrue(selectable) * 40
+    + oneIfTrue(showHoverActions) * 40
+    + oneIfTrue(showHoverDelete) * 40
+    + oneIfTrue(showLegacyDelete) * 40
+    + oneIfTrue(showLegacyClone) * 40
+    + oneIfTrue(showQuickActions) * 40
+    + oneIfTrue(ilpHasNoAmountCol) * 160
+    + oneIfTrue(ilpTrailing) * 48;
+}
+
+/**
+ * Renders the <colgroup> that drives column widths in add-row-only mode
+ * (hideHeader=true), mirroring InlineLinesPanel's flex layout with fixed
+ * pixel widths for flex-grow:0 columns and calc()-based widths (via
+ * growColumnWidth) for flex-grow:1 columns — see growColumnWidth() above for
+ * why grow columns can't be left width-less. Returns null when the table
+ * renders its own header instead (table-layout: fixed then drives widths via
+ * the real <TableHead> cells). Extracted from DataTable's render body so this
+ * mode's branching doesn't add nesting to the parent's complexity.
+ *
+ * ETP-4735 — when the entity has a dimensionsPanel column, InlineLinesPanel's rows
+ * reserve a leading CHEVRON_COLUMN_WIDTH slot (expand-chevron) before the checkbox.
+ * This colgroup must reserve the identical slot so the add-row's inputs land under
+ * the same columns as the rows above instead of drifting left by that width.
+ */
+export function renderLinesColgroup({
+  hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
+  ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
+  quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+}) {
+  if (!hideHeader) return null;
+  return (
+    <colgroup>
+      {hasDimensionsPanel && <col style={{ width: CHEVRON_COLUMN_WIDTH }} />}
+      {selectable && <col style={{ width: 40 }} />}
+      {visibleColumns.map((col, colIdx) => {
+        const { grow, basis } = colFlexSpecs[colIdx];
+        return grow === 0
+          ? <col key={col.key} style={{ width: basis }} />
+          : <col key={col.key} style={{ width: growColumnWidth(basis, fixedColsTotalPx, growCount) }} />;
+      })}
+      {/* In inlineEditable add-row mode (ilpTrailing), all row actions live
+          inside InlineLinesPanel's 160px action slot — never add separate
+          action cols here or the flex columns shrink by 40px. */}
+      {!ilpTrailing && hoverRowActions && <col style={{ width: 40 }} />}
+      {!ilpTrailing && hoverRowActions && onDeleteRow && <col style={{ width: 40 }} />}
+      {!ilpTrailing && !hoverRowActions && legacyDeleteEnabled && <col style={{ width: 40 }} />}
+      {!ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled && <col style={{ width: 40 }} />}
+      {!ilpTrailing && quickActionsEnabled && <col style={{ width: 40 }} />}
+      {ilpHasNoAmountCol && <col style={{ width: 160 }} />}
+      {ilpTrailing && <col style={{ width: 48 }} />}
+    </colgroup>
+  );
+}
+
+/**
+ * Renders the header for a `multiField` column as N independently sortable
+ * segments joined by `col.partSeparator` (default ' & '). Each segment sorts on
+ * its own `part.key` (a real NEO field), reusing the same none→asc→desc→clear
+ * cycle as any other column via `onSort(part.key)`. The direction arrow shows
+ * only on the currently active part (single active part at a time).
+ */
+function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle }) {
+  const separator = col.partSeparator ?? ' & ';
+  return (
+    <TableHead
+      key={col.key}
+      data-testid={`column-header-${col.key}`}
+      className="align-middle"
+      style={headStyle}
+    >
+      <span className="inline-flex items-center text-xs leading-4 font-semibold text-text-primary tracking-normal">
+        {col.parts.map((part, partIdx) => {
+          const partLabel = resolveColumnLabel(part, locale, t);
+          const partSorted = sortColumn === part.key;
+          const partSortable = onSort && part.sortable !== false;
+          const arrow = partSorted
+            ? <span className="text-primary/70 pointer-events-none ml-0.5">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+            : null;
+          return (
+            <span key={part.key} className="inline-flex items-center">
+              {partIdx > 0 && (
+                <span className="mx-0.5 font-normal text-text-primary/40 select-none">{separator}</span>
+              )}
+              {partSortable ? (
+                <button
+                  type="button"
+                  data-testid={`column-header-sort-${part.key}`}
+                  className="inline-flex items-center cursor-pointer select-none transition-colors bg-transparent border-0 p-0 font-semibold text-inherit"
+                  onClick={() => onSort(part.key)}
+                >
+                  {partLabel}
+                  {arrow}
+                </button>
+              ) : (
+                <span
+                  data-testid={`column-header-sort-${part.key}`}
+                  className="inline-flex items-center"
+                >
+                  {partLabel}
+                  {arrow}
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </span>
+    </TableHead>
+  );
+}
+
+/**
+ * Renders a single sortable column header cell, including the sort-direction
+ * arrow. Extracted from the `visibleColumns.map(...)` callback in DataTable's
+ * header row so its onSort/isSorted branching lives in its own function.
+ */
+function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t }) {
+  const colLabel = resolveColumnLabel(col, locale, t);
+  const isSorted = sortColumn === col.key;
+  const isSortable = col.sortable !== false;
+  const headStyle = linesLayout === 'inlineEditable'
+    ? { minWidth: columnMinWidthPx(col, colIdx) }
+    : undefined;
+  // `multiField` columns expose N constituent fields as independently
+  // sortable header segments (e.g. "Identifier & Name"); each part cycles the
+  // sort on its own NEO field key. Non-multiField columns keep the single-label
+  // branch below untouched.
+  if (Array.isArray(col.parts) && col.parts.length > 0) {
+    return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle });
+  }
+  const sortArrowClass = NUMERIC_FIELD_TYPES.has(col.type)
+    ? 'left-0 -translate-x-full pr-0.5'
+    : 'right-0 translate-x-full pl-0.5';
+  return (
+    <TableHead
+      key={col.key}
+      data-testid={`column-header-${col.key}`}
+      className={[
+        'align-middle',
+        NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : '',
+        // Opt-in fixed-width / per-column header styling. Needed by list windows
+        // whose design pins column widths (e.g. financial-account's Figma layout,
+        // where the "Cuenta" header must align with the row avatar). Absent =
+        // unchanged auto layout, so every existing window is unaffected.
+        col.headClass || '',
+      ].filter(Boolean).join(' ')}
+      style={headStyle}
+    >
+      {onSort && isSortable ? (
+        <button
+          type="button"
+          className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
+          onClick={() => onSort(col.key)}
+        >
+          <span className="inline-flex items-center gap-1 align-middle">
+            {colLabel}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
+          </span>
+          {isSorted && (
+            <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
+          )}
+        </button>
+      ) : (
+        <span className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
+          <span className="inline-flex items-center gap-1 align-middle">
+            {colLabel}
+            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
+          </span>
+          {isSorted && (
+            <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
+          )}
+        </span>
+      )}
+    </TableHead>
+  );
+}
+
+// Shared delete-click handler for both the hover-actions delete button and
+// the legacy delete button: marks the row as "deleting" for the spinner,
+// awaits the caller's onDeleteRow, then always clears the flag. Extracted
+// so the try/finally bookkeeping isn't duplicated (and doesn't add nested
+// complexity) in each button's onClick in TableDataRow.
+async function handleDeleteRowClick(row, onDeleteRow, setDeletingRows) {
+  const deleteKey = row.id;
+  setDeletingRows(prev => ({ ...prev, [deleteKey]: true }));
+  try {
+    await onDeleteRow(row);
+  } finally {
+    setDeletingRows(prev => {
+      const next = { ...prev };
+      delete next[deleteKey];
+      return next;
+    });
+  }
+}
+
+/**
+ * Renders a single data row: the selection checkbox, visible-column cells,
+ * row-action cells (hover edit/delete, or legacy delete/clone), and the
+ * quick-actions overlay cell. Extracted from the `filteredData.map(...)` body
+ * that used to live inside `DataTable` so per-row branching does not nest
+ * inside — and inflate — the parent component's cognitive complexity.
+ */
+function TableDataRow({
+  row,
+  idx,
+  selectable,
+  isRowSelectable,
+  isChecked,
+  toggleRow,
+  visibleColumns,
+  trailingHoverColumn,
+  renderCellValue,
+  onRowClick,
+  onNavigate,
+  selectedRowBg,
+  selectedId,
+  selectedRowId,
+  rowHoverStyle,
+  editingRowId,
+  handleRowActivation,
+  hoverRowActions,
+  onSaveRow,
+  onCancelEdit,
+  onEditRow,
+  onDeleteRow,
+  deletingRows,
+  setDeletingRows,
+  ui,
+  legacyDeleteEnabled,
+  onCloneRow,
+  quickActionsEnabled,
+  rowQuickActions,
+  entity,
+  apiBaseUrl,
+  token,
+  hasDimensionsPanel = false,
+}) {
+  const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
+  const rowDisabled = isRowSelectable && !isRowSelectable(row);
+
+  return (
+    <TableRow
+      role="row"
+      data-testid={`row-${row.id ?? idx}`}
+      data-row-status={row.documentStatus}
+      onClick={() => {
+        if (editingRowId === row.id) return;
+        handleRowActivation(row, idx);
+      }}
+      className={getRowClassName({
+        onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine, rowHoverStyle,
+      })}
+    >
+      {/* ETP-4735 — see the matching comment on InlineAddRow's leading cell. */}
+      {hasDimensionsPanel && <TableCell aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableCell__eb5261" />}
+      {selectable && (
+        <TableCell
+          className="w-10 px-3"
+          onClick={(e) => e.stopPropagation()}
+          data-testid="TableCell__eb5261">
+          <Checkbox
+            checked={isChecked}
+            disabled={rowDisabled}
+            onChange={(e) => toggleRow(e, row)}
+            onClick={(e) => e.stopPropagation()}
+            data-testid="Checkbox__eb5261" />
+        </TableCell>
+      )}
+      {visibleColumns.map(col => {
+        const isTrailingHover = trailingHoverColumn != null && col === trailingHoverColumn;
+        return (
+          <TableCell
+            key={col.key}
+            data-testid={`cell-${row.id ?? idx}-${col.key}`}
+            data-value={row[col.key] ?? ''}
+            className={[
+              'text-sm',
+              NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right tabular-nums' : '',
+              // Opt-in per-column cell styling, the body-side counterpart of
+              // `col.headClass` (see renderColumnHeaderCell). Lets a window pin a
+              // column's width so header and cells stay aligned. Absent = unchanged.
+              col.cellClass || '',
+            ].filter(Boolean).join(' ')}
+          >
+            {isTrailingHover ? (
+              <span className="block transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
+                {renderCellValue(row, col)}
+              </span>
+            ) : (
+              renderCellValue(row, col)
+            )}
+          </TableCell>
+        );
+      })}
+      {hoverRowActions ? (
+        <>
+          <TableCell
+            className="w-10 px-2"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="TableCell__eb5261">
+            {editingRowId === row.id ? (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onSaveRow?.(); }}
+                className="h-8 w-8 flex items-center justify-center rounded-full text-[var(--status-success-fg)] hover:bg-[var(--status-success-bg)] transition-all"
+                aria-label={ui('save')}
+              >
+                <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onEditRow) { onEditRow(row); }
+                  else { handleRowActivation(row, idx); }
+                }}
+                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
+                aria-label={ui('edit')}
+              >
+                <Pencil className="h-5 w-5" aria-hidden="true" data-testid="Pencil__eb5261" />
+              </button>
+            )}
+          </TableCell>
+          {onDeleteRow && (
+            <TableCell
+              className="w-10 px-2"
+              onClick={(e) => e.stopPropagation()}
+              data-testid="TableCell__eb5261">
+              {editingRowId === row.id ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onCancelEdit?.(); }}
+                  className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
+                  aria-label={ui('cancel')}
+                >
+                  <X className="h-5 w-5" aria-hidden="true" data-testid="X__eb5261" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!!deletingRows[row.id]}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await handleDeleteRowClick(row, onDeleteRow, setDeletingRows);
+                  }}
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] transition-all"
+                  aria-label={ui('deleteRowTooltip')}
+                  data-testid={`row-delete-${row.id}`}
+                >
+                  {deletingRows[row.id]
+                    ? <Loader2
+                    className="h-5 w-5 animate-spin"
+                    aria-hidden="true"
+                    data-testid="Loader2__eb5261" />
+                    : <Trash2 className="h-5 w-5" aria-hidden="true" data-testid="Trash2__eb5261" />}
+                </button>
+              )}
+            </TableCell>
+          )}
+        </>
+      ) : (
+        <>
+          {legacyDeleteEnabled && (
+            <TableCell
+              className="w-10 px-2"
+              onClick={(e) => e.stopPropagation()}
+              data-testid="TableCell__eb5261">
+              <button
+                type="button"
+                disabled={!!deletingRows[row.id]}
+                onClick={async () => {
+                  await handleDeleteRowClick(row, onDeleteRow, setDeletingRows);
+                }}
+                className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title={ui('deleteRowTooltip')}
+                aria-label={ui('deleteRowTooltip')}
+                data-testid={`row-delete-${row.id}`}
+              >
+                {deletingRows[row.id] ? <Loader2
+                  className="h-3.5 w-3.5 animate-spin"
+                  aria-hidden="true"
+                  data-testid="Loader2__eb5261" /> : <Trash2 className="h-3.5 w-3.5" aria-hidden="true" data-testid="Trash2__eb5261" />}
+              </button>
+            </TableCell>
+          )}
+          {onCloneRow && !quickActionsEnabled && (
+            <TableCell
+              className="w-10 px-2"
+              onClick={(e) => e.stopPropagation()}
+              data-testid="TableCell__eb5261">
+              <div className="relative group/clonebtn flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => onCloneRow(row)}
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
+                  style={{ width: 26, height: 26 }}
+                  aria-label={ui('cloneOrderBtn')}
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__eb5261" />
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-primary-foreground bg-foreground rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
+                  {ui('cloneOrderBtn')}
+                </div>
+              </div>
+            </TableCell>
+          )}
+        </>
+      )}
+      {quickActionsEnabled && (
+        <TableCell
+          className="w-10 px-2 relative"
+          onClick={(e) => e.stopPropagation()}
+          data-testid="TableCell__eb5261">
+          <RowQuickActions
+            row={row}
+            entity={entity}
+            apiBaseUrl={apiBaseUrl}
+            token={token}
+            documentPreview={rowQuickActions.documentPreview}
+            sendDocument={rowQuickActions.sendDocument}
+            menuActions={rowQuickActions.menuActions}
+            hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
+            hideDeleteButton={rowQuickActions.hideDeleteButton}
+            readOnly={rowQuickActions.readOnly}
+            statusField={rowQuickActions.statusField}
+            onEdit={rowQuickActions.onEdit}
+            onClone={rowQuickActions.onClone}
+            onEmail={rowQuickActions.onEmail}
+            onDelete={rowQuickActions.onDelete}
+            onMenuActionExecuted={rowQuickActions.onMenuActionExecuted}
+            actionsConfig={rowQuickActions.actions}
+            data-testid="RowQuickActions__eb5261" />
+        </TableCell>
+      )}
+    </TableRow>
+  );
+}
+
+/**
+ * Renders the table body content: the shared empty-state row when there is
+ * no data (and no active add-row), otherwise one `TableDataRow` per visible
+ * record. Extracted so the empty/rows branch and the per-row nesting it used
+ * to wrap don't count against DataTable's own cognitive complexity.
+ */
+function renderTableRows({
+  hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
+  ...rowProps
+}) {
+  if (hideDataRows) return null;
+  if (filteredData.length === 0 && !addRow?.active) {
+    return (
+      <TableRow data-empty-state="" data-testid="TableRow__eb5261">
+        <TableCell colSpan={colSpan} className="p-0" data-testid="TableCell__eb5261">
+          <EmptyState
+            hasFilter={hasActiveFilter}
+            totalCount={data.length}
+            data-testid="EmptyState__eb5261" />
+        </TableCell>
+      </TableRow>
+    );
+  }
+  return filteredData.map((row, idx) => (
+    <TableDataRow
+      key={row.id ?? idx}
+      row={row}
+      idx={idx}
+      isChecked={selectedRows.has(row.id)}
+      {...rowProps}
+      data-testid="TableDataRow__eb5261"
+    />
+  ));
+}
+
+/**
+ * Renders the footer row showing per-column totals (currently only `amount`
+ * columns) plus the matching row-action spacer cells. Returns null when
+ * there is nothing to total or the caller opted out via `showFooterTotals`.
+ * Extracted so its column-mapping branches don't nest inside DataTable.
+ */
+function renderFooterRow({
+  totals, showFooterTotals, selectable, visibleColumns, filteredData,
+  hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
+  hasDimensionsPanel = false,
+}) {
+  if (!totals || !showFooterTotals) return null;
+  return (
+    <TableFooter data-testid="TableFooter__eb5261">
+      <TableRow className="font-medium" data-testid="TableRow__eb5261">
+        {/* ETP-4735 — see the matching comment on InlineAddRow's leading cell. */}
+        {hasDimensionsPanel && <TableCell aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableCell__eb5261" />}
+        {selectable && <TableCell data-testid="TableCell__eb5261" />}
+        {visibleColumns.map((col) => (
+          <TableCell
+            key={col.key}
+            className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}
+            data-testid="TableCell__eb5261">
+            {col.type === 'amount'
+              ? formatCurrency(filteredData[0]?.['currency$_identifier'], totals[col.key])
+              : ''}
+          </TableCell>
+        ))}
+        {renderRowActionFooterCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
+        {quickActionsEnabled && <TableCell data-testid="TableCell__eb5261" />}
+      </TableRow>
+    </TableFooter>
   );
 }
 
@@ -893,6 +1792,7 @@ function LookupButton({ selectorUrl, selectorContext, token, onSelect, title }) 
  */
 export function DataTable({
   entity,
+  specName,
   columns = [],
   filters = [],
   data = [],
@@ -901,6 +1801,7 @@ export function DataTable({
   onRowClick,
   selectedRowId,
   selectedId,
+  rowHoverStyle = 'tint',
   compact,
   loading,
   addRow,
@@ -938,6 +1839,7 @@ export function DataTable({
    *     documentPreview?: boolean | object, // truthy ⇒ show Email button
    *     statusField?: string,
    *     hideDeleteWhenComplete?: boolean,
+   *     hideDeleteButton?: boolean,          // unconditional Delete opt-out (window.hideDeleteButton)
    *     onMenuActionExecuted?: (action, result) => void,
    *     // Per-action overrides from decisions.json → window.rowQuickActions.actions.
    *     // Keyed by canonical name ('edit', 'duplicate', 'email', 'delete') or processKey.
@@ -958,6 +1860,13 @@ export function DataTable({
   onSaveRow = null,
   onCancelEdit = null,
   clearSelectionTrigger = 0,
+  // ETP-4656 — partial bulk-delete outcome: bump `deselectTrigger` with the ids
+  // of the rows that succeeded (`deselectRowIds`) so only those drop out of the
+  // internal selection Set, leaving the failed rows checked. A dedicated pair
+  // instead of overloading `clearSelectionTrigger` (which always clears
+  // everything) so existing full-clear callers stay untouched.
+  deselectTrigger = 0,
+  deselectRowIds = [],
   hideHeader = false,
   hideDataRows = false,
 }) {
@@ -966,6 +1875,8 @@ export function DataTable({
   const ui = useUI();
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
+  // ETP-4520 — capability map for visibleWhenCapability-gated columns (below).
+  const capabilities = useCapabilitiesSafe();
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale.replace('_', '-'), { year: 'numeric', month: '2-digit', day: '2-digit' }),
     [locale]
@@ -978,9 +1889,24 @@ export function DataTable({
     setSelectedRows(new Set());
   }, [clearSelectionTrigger]);
 
+  useEffect(() => {
+    if (!deselectTrigger || !deselectRowIds?.length) return;
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      deselectRowIds.forEach((id) => next.delete(id));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deselectTrigger]);
+
   const [optimisticToggles, setOptimisticToggles] = useState({});
   const [savingToggles, setSavingToggles] = useState({});
   const [deletingRows, setDeletingRows] = useState({});
+
+  // Track add-row live values so displayIf-controlled columns can auto-hide
+  // their headers when neither any saved row nor the add-row activates them.
+  const [addRowValues, setAddRowValues] = useState({});
+  useEffect(() => { if (!addRow?.active) setAddRowValues({}); }, [addRow?.active]);
 
   useEffect(() => {
     setOptimisticToggles({});
@@ -1007,10 +1933,51 @@ export function DataTable({
     return rowFilter ? searched.filter(rowFilter) : searched;
   }, [data, filters, searchQuery, onFilterChange, rowFilter]);
 
-  const visibleColumns = useMemo(
-    () => hiddenColumns.length > 0 ? columns.filter(col => !hiddenColumns.includes(col.key)) : columns,
-    [columns, hiddenColumns]
+  // Build a map of { columnKey → controllerKey } from addLineFields displayIf entries.
+  // addRow.fields is the entry array directly (set by DetailView as addLineFields.entry).
+  const displayIfControllers = useMemo(() => {
+    const map = {};
+    for (const f of (addRow?.fields ?? [])) {
+      if (f.displayIf) map[f.key] = f.displayIf;
+    }
+    return map;
+  }, [addRow?.fields]);
+
+  // ETP-4735 — a `dimensionsPanel` column is never a real grid column: InlineLinesPanel
+  // excludes it too and instead renders its own leading expand-chevron + sub-row UX (see
+  // hasDimensionsPanel there). DataTable previously had no equivalent exclusion, so its
+  // add-row-only companion table (rendered under InlineLinesPanel when addRow.active) rendered
+  // a real ~120px placeholder cell for it — both cluttering the row and, via
+  // growColumnWidth()'s fixedColsTotalPx, shrinking the grow column ahead of it (e.g. product),
+  // shifting every column after it (e.g. movementQuantity) out of alignment with the rows above.
+  const hasDimensionsPanel = useMemo(
+    () => (columns || []).some(c => c.type === 'dimensionsPanel'),
+    [columns]
   );
+
+  const visibleColumns = useMemo(() => {
+    // Start from explicit hiddenColumns prop
+    let base = hiddenColumns.length > 0 ? columns.filter(col => !hiddenColumns.includes(col.key)) : columns;
+    // ETP-4735 — never render dimensionsPanel as a normal column (see comment above).
+    base = base.filter(col => col.type !== 'dimensionsPanel');
+    // Auto-hide columns whose controlling field (displayIf) is inactive in ALL
+    // saved rows AND in the current add-row values.
+    if (Object.keys(displayIfControllers).length > 0) {
+      const isTruthy = (v) => v === true || v === 'Y' || v === 'true';
+      base = base.filter(col => {
+        const ctrl = displayIfControllers[col.key];
+        if (!ctrl) return true;
+        const anyDataRow = (data ?? []).some(row => isTruthy(row[ctrl]));
+        const addRowActive = isTruthy(addRowValues[ctrl]);
+        return anyDataRow || addRowActive;
+      });
+    }
+    // ETP-4520 — drop columns gated by a capability the current role doesn't
+    // hold (e.g. `posted` on sales-invoice/purchase-invoice, restricted to
+    // "showAccountingFields"). Absent visibleWhenCapability ⇒ always kept.
+    base = base.filter(col => isCapabilityVisible(capabilities, col.visibleWhenCapability));
+    return base;
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities]);
 
   const amountColumns = useMemo(
     () => visibleColumns.filter(col => col.type === 'amount'),
@@ -1023,7 +1990,7 @@ export function DataTable({
   // looks specifically for a trailing `amount` column — headers can end in any type
   // (status, date, etc.), so we always pick the last visible column.
   const trailingHoverColumn = useMemo(() => {
-    const enabled = !!rowQuickActions && rowQuickActions.enabled !== false;
+    const enabled = isQuickActionsEnabled(rowQuickActions);
     if (!enabled || visibleColumns.length === 0) return null;
     return visibleColumns[visibleColumns.length - 1];
   }, [visibleColumns, rowQuickActions]);
@@ -1055,224 +2022,55 @@ export function DataTable({
   }, [apiBaseUrl, entity, onDataMutated, token]);
 
   const renderCellValue = (row, col) => {
-    // === custom-render: DE ACA ===
-    // Extract to: renderCustomCell(row, col, { entity, token, apiBaseUrl })
-    // Custom render function takes priority
     if (typeof col.render === 'function') return col.render(row, { entity, token, apiBaseUrl });
-    // === custom-render: HASTA ACA ===
 
-    // === resolve-display: DE ACA ===
-    // Extract to helper: resolveCellDisplay(row, col, { optimisticToggles, displayCatalogMaps })
-    // → returns { toggleKey, rawValue, display }
-    const toggleKey = `${row.id}:${col.key}`;
-    const rawValue = Object.hasOwn(optimisticToggles, toggleKey)
-      ? optimisticToggles[toggleKey]
-      : row[col.key];
-    let display = resolveIdentifier(row, col.key);
-    const displayMap = displayCatalogMaps.get(col.key);
-    if (displayMap) {
-      const fkId = row?.[col.key];
-      if (fkId != null) {
-        const mapped = displayMap.get(String(fkId));
-        if (mapped) display = mapped;
-      }
-    }
-    // === resolve-display: HASTA ACA ===
-
-    // === first-column-pill: DE ACA ===
-    // Extract to: renderFirstColumnWithPill({ display, pill: col.pill, row })
-    // Only applies when col is the first visible column AND type === 'string'.
-    if (col === visibleColumns[0] && col.type === 'string') {
-      const pill = col.pill;
-      const pillLabel = pill?.when(row) ? pill.label : null;
-      return (
-        <span className="inline-flex items-center gap-2">
-          <span>{display}</span>
-          {pillLabel && (
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-gray-50 text-gray-600 border-gray-200'}`} style={{ borderWidth: '0.5px' }}>
-              {pillLabel}
-            </span>
-          )}
-        </span>
-      );
-    }
-    // === first-column-pill: HASTA ACA ===
-
-    // === enum-cell: DE ACA ===
-    // Extract to: renderEnumCell({ rawValue, col, tMenu })
-    // 3 sub-variants: display === 'dot' | enumVariants (Tag) | plain <span>.
-    if (col.type === 'enum') {
-      const raw = rawValue;
-      const label = tMenu(col.enumLabels?.[raw] ?? raw);
-      if (col.display === 'dot') {
-        const dotColor = getStatusDotColor(raw);
-        return (
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
-            {label}
-          </span>
-        );
-      }
-      if (col.enumVariants) {
-        const variant = col.enumVariants[raw] ?? 'neutral';
-        return <Tag variant={variant} label={label} />;
-      }
-      return <span>{label}</span>;
-    }
-    // === enum-cell: HASTA ACA ===
-
-    // === status-cell: DE ACA ===
-    // Extract to: renderStatusCell({ row, col, dictionary })
-    // Variants: display === 'dot' | <StatusTag>.
-    if (col.type === 'status') {
-      const raw = row[col.key];
-      const label = statusLabel(raw, dictionary);
-      if (col.display === 'dot') {
-        const dotColor = getStatusDotColor(raw);
-        return (
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
-            {label}
-          </span>
-        );
-      }
-      return <StatusTag status={raw} label={label} />;
-    }
-    // === status-cell: HASTA ACA ===
-
-    // === percent-cell: DE ACA ===
-    // Extract to: renderPercentCell({ value: row[col.key] })
-    // Pure UI — no closure deps beyond the raw numeric value.
-    if (col.type === 'percent') {
-      const val = Number(row[col.key]);
-      const pct = Number.isNaN(val) ? 0 : val;
-      const color = pct >= 100 ? 'bg-emerald-500' : pct > 0 ? 'bg-amber-400' : 'bg-slate-200';
-      const textColor = pct >= 100 ? 'text-emerald-700' : pct > 0 ? 'text-amber-700' : 'text-slate-400';
-      return (
-        <div className="flex items-center gap-2">
-          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-          </div>
-          <span className={`text-xs tabular-nums ${textColor}`}>{pct}%</span>
-        </div>
-      );
-    }
-    // === percent-cell: HASTA ACA ===
-
-    // === boolean-cell: DE ACA ===
-    // Extract to: renderBooleanCell({ row, col, rawValue, toggleKey, savingToggles,
-    //                                  handleInlineToggle, locale, t, ui })
-    // Has 3 internal blocks (toggle / badge / fallback yes-no-dash) — each can be
-    // its own helper if cognitive complexity is still high after the first split.
-    if (col.type === 'boolean') {
-      const val = rawValue;
-      // --- boolean-toggle: DE ACA --- (extract: renderBooleanToggle)
-      if (col.toggle) {
-        const checked = isTruthyBoolean(val);
-        const disabled = !!savingToggles[toggleKey] || (!isTruthyBoolean(val) && !isFalsyBoolean(val));
-        return (
-          <div
-            className="flex items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <Switch
-              checked={checked}
-              disabled={disabled}
-              onCheckedChange={(nextChecked) => {
-                void handleInlineToggle(row, col, nextChecked);
-              }}
-              aria-label={resolveColumnLabel(col, locale, t)}
-            />
-          </div>
-        );
-      }
-      // --- boolean-toggle: HASTA ACA ---
-      // --- boolean-badge: DE ACA --- (extract: renderBooleanBadge — colors OR variants)
-      if (col.badge) {
-        const resolveBadgeLabel = (raw, fallback) => {
-          if (raw && typeof raw === 'object') return raw[locale] ?? raw.en_US ?? fallback;
-          return raw ?? fallback;
-        };
-        const trueLabel  = resolveBadgeLabel(col.badgeLabels?.true,  ui('statusComplete'));
-        const falseLabel = resolveBadgeLabel(col.badgeLabels?.false, ui('statusInProcess'));
-        if (col.badgeColors) {
-          const trueColor  = col.badgeColors.true  ?? 'bg-emerald-100 text-emerald-800';
-          const falseColor = col.badgeColors.false ?? 'bg-amber-100 text-amber-700';
-          if (isTruthyBoolean(val)) return (
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${trueColor}`}>
-              {trueLabel}
-            </span>
-          );
-          if (isFalsyBoolean(val)) return (
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${falseColor}`}>
-              {falseLabel}
-            </span>
-          );
-        } else {
-          const trueVariant = col.badgeVariants?.true ?? 'green';
-          const falseVariant = col.badgeVariants?.false ?? 'neutral';
-          if (isTruthyBoolean(val)) return <Tag variant={trueVariant} label={trueLabel} />;
-          if (isFalsyBoolean(val)) return <Tag variant={falseVariant} label={falseLabel} />;
-        }
-      }
-      // --- boolean-badge: HASTA ACA ---
-      // --- boolean-fallback: DE ACA --- (extract: renderBooleanFallback — yes / no / em-dash)
-      if (isTruthyBoolean(val)) return <span className="text-emerald-600">{ui('yes')}</span>;
-      if (isFalsyBoolean(val)) return <span className="text-slate-400">{ui('no')}</span>;
-      return <span className="text-slate-300">&mdash;</span>;
-      // --- boolean-fallback: HASTA ACA ---
-    }
-    // === boolean-cell: HASTA ACA ===
-
-    // === date-cell: DE ACA ===
-    // Extract to: renderDateCell({ raw: row[col.key], col, dateFormatter })
-    // Edge cases under test: yyyy-MM-dd (date-only, no TZ shift), full ISO, null/empty.
-    if (col.type === 'date') {
-      const raw = row[col.key];
-      // Parse date-only strings (yyyy-MM-dd) as local to avoid timezone shift
-      const parsed = raw ? (/^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(raw + 'T00:00:00') : new Date(raw)) : null;
-      const formatted = parsed && !Number.isNaN(parsed) ? dateFormatter.format(parsed) : '\u2014';
-      const dotColor = col.dot === false ? null : getDateDotColor(raw);
-      return (
-        <span className="inline-flex items-center gap-1.5">
-          {dotColor && <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${dotColor}`} />}
-          {formatted}
-        </span>
-      );
-    }
-    // === date-cell: HASTA ACA ===
-
-    // === amount-cell: DE ACA ===
-    // Extract to: renderAmountCell({ row, col }) — one-liner, optional but consistent.
-    if (col.type === 'amount') {
-      return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
-    }
-    // === amount-cell: HASTA ACA ===
-
-    // === truncated-fallback: DE ACA ===
-    // Extract to: renderTruncatedText({ display }) — the default branch when no
-    // specialized type matched. Truncates string values longer than 30 chars.
-    const val = display;
-    if (typeof val === 'string' && val.length > 30) {
-      return <span className="block max-w-[200px] truncate" title={val}>{val}</span>;
-    }
-    return val;
-    // === truncated-fallback: HASTA ACA ===
+    const { display, rawValue, toggleKey } = resolveCellDisplay(row, col, optimisticToggles, displayCatalogMaps);
+    const renderer = CELL_RENDERERS[col.type] ?? CELL_RENDERERS.default;
+    return renderer({
+      row,
+      col,
+      display,
+      rawValue,
+      toggleKey,
+      visibleColumns,
+      tMenu,
+      dictionary,
+      savingToggles,
+      handleInlineToggle,
+      locale,
+      t,
+      ui,
+      dateFormatter,
+      token,
+      apiBaseUrl,
+    });
   };
+
+  const handleRowActivation = useCallback((row, idx) => {
+    if (hasActiveFilter) {
+      trackSearchResultSelected({
+        entity,
+        specName,
+        source: hasColumnFilter ? 'table_filter' : 'table_search',
+        type: hasColumnFilter ? 'filter' : 'search',
+        position: idx + 1,
+      });
+    }
+    if (onRowClick) onRowClick(row);
+    else if (onNavigate) onNavigate(row);
+    else onRowSelect?.(row);
+  }, [entity, specName, hasActiveFilter, hasColumnFilter, onRowClick, onNavigate, onRowSelect]);
 
   if (loading) {
     return (
       <div className="space-y-4">
-        <TableSkeleton columns={visibleColumns.length > 0 ? visibleColumns : [{ key: '_1' }, { key: '_2' }, { key: '_3' }]} />
+        <TableSkeleton
+          columns={visibleColumns.length > 0 ? visibleColumns : [{ key: '_1' }, { key: '_2' }, { key: '_3' }]}
+          data-testid="TableSkeleton__eb5261" />
       </div>
     );
   }
-
-  const allSelected = filteredData.length > 0 && selectedRows.size === filteredData.length;
-  const someSelected = selectedRows.size > 0 && !allSelected;
-
-  const selectableData = isRowSelectable ? filteredData.filter(isRowSelectable) : filteredData;
+  const { allSelected, someSelected, selectableData } = computeSelectionState(filteredData, selectedRows, isRowSelectable);
 
   const toggleAll = (e) => {
     e.stopPropagation();
@@ -1298,14 +2096,14 @@ export function DataTable({
     });
   };
 
-  const quickActionsEnabled = !!rowQuickActions && rowQuickActions.enabled !== false;
+  const quickActionsEnabled = isQuickActionsEnabled(rowQuickActions);
   const legacyDeleteEnabled = !!onDeleteRow && (hoverRowActions || !quickActionsEnabled);
-  const deleteCol = legacyDeleteEnabled ? 1 : 0;
-  const cloneCol = onCloneRow && !quickActionsEnabled ? 1 : 0;
-  const quickActionsCol = quickActionsEnabled ? 1 : 0;
+  const deleteCol = oneIfTrue(legacyDeleteEnabled);
+  const cloneCol = oneIfTrue(onCloneRow && !quickActionsEnabled);
+  const quickActionsCol = oneIfTrue(quickActionsEnabled);
   const actionCols = hoverRowActions ? 1 + deleteCol : deleteCol + cloneCol;
-  const colSpan = visibleColumns.length + (selectable ? 1 : 0) + actionCols + quickActionsCol;
-  const selectedRowBg = hoverRowActions ? 'bg-[#F5F7F9]' : 'bg-primary/5';
+  const colSpan = visibleColumns.length + oneIfTrue(selectable) + actionCols + quickActionsCol;
+  const selectedRowBg = hoverRowActions ? 'bg-[hsl(var(--muted))]' : 'bg-primary/5';
 
   // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders
   // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel
@@ -1315,308 +2113,83 @@ export function DataTable({
     && !visibleColumns.some(c => c.type === 'amount');
   const ilpTrailing = hideHeader && linesLayout === 'inlineEditable';
 
+  // Precompute the flex specs once so the colgroup below can both build the
+  // fixed/grow <col> widths AND feed growColumnWidth() the totals it needs
+  // (sum of every fixed-width slot + count of growing columns) — see the
+  // colgroup comment for why growing columns can't just be left width-less.
+  const colFlexSpecs = hideHeader ? visibleColumns.map((col, colIdx) => flexSpec(col, colIdx)) : [];
+  const growCount = colFlexSpecs.filter((s) => s.grow > 0).length;
+  const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
+  const fixedColsTotalPx = fixedColsBasisPx + computeActionColsWidthPx({
+    selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+    onCloneRow, quickActionsEnabled, ilpHasNoAmountCol,
+  });
+
   return (
     <div className="space-y-0">
-      <div className={linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible'}>
-        <Table style={hideHeader ? { tableLayout: 'fixed', width: '100%' } : undefined}>
+      {/*
+        `overflow-y-visible` next to `overflow-x-auto` is computed as `auto` by the CSS
+        spec, so this wrapper does clip vertically. With `rowHoverStyle="elevated"` the
+        hovered row's `shadow-lg` reaches ~22px below it (10px offset + 15px blur - 3px
+        spread); for the LAST row that lands past the table and got clipped away, which
+        read as "hover doesn't work on the last row". Overflow clips at the PADDING box,
+        so 24px of bottom padding gives the shadow room inside the visible area.
+      */}
+      <div
+        className={[
+          linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible',
+          rowHoverStyle === 'elevated' ? 'pb-6' : '',
+        ].filter(Boolean).join(' ')}
+      >
+        <Table style={getTableContainerStyle(hideHeader)} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), a <colgroup> drives column
-              widths with the same fixed/auto split used by InlineLinesPanel's flex
-              layout. Fixed-size columns (flex-grow: 0) get explicit pixel widths;
-              flexible columns (flex-grow: 1) get no width so the browser shares
-              remaining space equally — matching flex's equal-grow distribution.
-              table-layout: fixed makes the browser honour those col widths exactly. */}
-          {hideHeader && (
-            <colgroup>
-              {selectable && <col style={{ width: 40 }} />}
-              {visibleColumns.map((col, colIdx) => {
-                const { grow, basis } = flexSpec(col, colIdx);
-                return grow === 0
-                  ? <col key={col.key} style={{ width: basis }} />
-                  : <col key={col.key} />;
-              })}
-              {/* In inlineEditable add-row mode (ilpTrailing), all row actions
-                  live inside InlineLinesPanel's 160px action slot — never add
-                  separate action cols here or the flex columns shrink by 40px. */}
-              {!ilpTrailing && hoverRowActions && <col style={{ width: 40 }} />}
-              {!ilpTrailing && hoverRowActions && onDeleteRow && <col style={{ width: 40 }} />}
-              {!ilpTrailing && !hoverRowActions && legacyDeleteEnabled && <col style={{ width: 40 }} />}
-              {!ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled && <col style={{ width: 40 }} />}
-              {!ilpTrailing && quickActionsEnabled && <col style={{ width: 40 }} />}
-              {ilpHasNoAmountCol && <col style={{ width: 160 }} />}
-              {ilpTrailing && <col style={{ width: 48 }} />}
-            </colgroup>
-          )}
+              widths — see renderLinesColgroup() above for the full rationale. */}
+          {renderLinesColgroup({
+            hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
+            ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
+            quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+          })}
           <TableHeader
-            className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-white' : ''}
+            className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
             aria-hidden={hideHeader || undefined}
             style={hideHeader ? { display: 'none' } : undefined}
-          >
-            <TableRow className="border-b border-border/40">
+            data-testid="TableHeader__eb5261">
+            <TableRow className="border-b border-border/40" data-testid="TableRow__eb5261">
+              {/* ETP-4735 — mirrors the leading chevron cell added to InlineAddRow/TableDataRow
+                  below: keeps this table's own header self-consistent with its body whenever a
+                  dimensionsPanel column is present (only actually exercised in hideHeader mode,
+                  where InlineLinesPanel's rows are what this table's add-row must align with —
+                  see renderLinesColgroup's leading <col>). */}
+              {hasDimensionsPanel && <TableHead aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableHead__eb5261" />}
               {selectable && (
                 <TableHead
                   className="w-10 px-3 align-middle"
                   onClick={(e) => e.stopPropagation()}
-                >
+                  data-testid="TableHead__eb5261">
                   <Checkbox
                     checked={allSelected}
                     indeterminate={someSelected}
                     onChange={toggleAll}
                     onClick={(e) => e.stopPropagation()}
-                  />
+                    data-testid="Checkbox__eb5261" />
                 </TableHead>
               )}
-              {visibleColumns.map((col, colIdx) => {
-                const colLabel = resolveColumnLabel(col, locale, t);
-                const isSorted = sortColumn === col.key;
-                const isSortable = col.sortable !== false;
-                const headStyle = linesLayout === 'inlineEditable'
-                  ? { minWidth: columnMinWidthPx(col, colIdx) }
-                  : undefined;
-                return (
-                  <TableHead
-                    key={col.key}
-                    data-testid={`column-header-${col.key}`}
-                    className="align-middle"
-                    style={headStyle}
-                  >
-                    {onSort && isSortable ? (
-                        <button
-                          type="button"
-                          className="text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 text-left"
-                          onClick={() => onSort(col.key)}
-                        >
-                          {colLabel}
-                          {isSorted && (
-                            <span className="ml-1 text-primary/70">{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
-                          )}
-                        </button>
-                      ) : (
-                        <span className="text-xs leading-4 font-semibold text-text-primary tracking-normal">
-                          {colLabel}
-                          {isSorted && (
-                            <span className="ml-1 text-primary/70">{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
-                          )}
-                        </span>
-                      )}
-                  </TableHead>
-                );
-              })}
-              {hoverRowActions ? (
-                <>
-                  <TableHead className="w-10 px-2" />
-                  {onDeleteRow && <TableHead className="w-10 px-2" />}
-                </>
-              ) : (
-                <>
-                  {legacyDeleteEnabled && <TableHead className="w-10 px-2" />}
-                  {onCloneRow && !quickActionsEnabled && <TableHead className="w-10 px-2" />}
-                </>
-              )}
-              {quickActionsEnabled && <TableHead className="w-10 px-2" aria-hidden="true" />}
+              {visibleColumns.map((col, colIdx) => renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t }))}
+              {renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
+              {quickActionsEnabled && <TableHead className="w-10 px-2" aria-hidden="true" data-testid="TableHead__eb5261" />}
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {!hideDataRows && (filteredData.length === 0 && !addRow?.active ? (
-              <TableRow data-empty-state="">
-                <TableCell colSpan={colSpan} className="p-0">
-                  <EmptyState hasFilter={hasActiveFilter} totalCount={data.length} />
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredData.map((row, idx) => {
-                const isChecked = selectedRows.has(row.id);
-                const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
-                return (
-                  <TableRow
-                    key={row.id ?? idx}
-                    data-testid={`row-${row.id ?? idx}`}
-                    onClick={() => {
-                      if (editingRowId === row.id) return;
-                      if (onRowClick) onRowClick(row);
-                      else if (onNavigate) onNavigate(row);
-                      else onRowSelect?.(row);
-                    }}
-                    className={[
-                      'transition-colors h-12 group/row',
-                      (onRowClick || onNavigate) ? 'cursor-pointer' : 'cursor-default',
-                      isChecked ? selectedRowBg : '',
-                      selectedId != null && row.id === selectedId ? 'bg-primary/10' : '',
-                      isSelectedLine ? 'bg-slate-200/90 ring-1 ring-slate-300' : '',
-                      isSelectedLine ? 'hover:bg-slate-300/80' : (onRowClick || onNavigate) ? 'hover:bg-muted/50' : '',
-                    ].filter(Boolean).join(' ')}
-                  >
-                    {selectable && (() => {
-                      const rowDisabled = isRowSelectable && !isRowSelectable(row);
-                      return (
-                        <TableCell className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={isChecked}
-                            disabled={rowDisabled}
-                            onChange={(e) => toggleRow(e, row)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </TableCell>
-                      );
-                    })()}
-                    {visibleColumns.map(col => {
-                      const isTrailingHover = trailingHoverColumn != null && col === trailingHoverColumn;
-                      return (
-                        <TableCell
-                          key={col.key}
-                          data-testid={`cell-${row.id ?? idx}-${col.key}`}
-                          data-value={row[col.key] ?? ''}
-                          className={['text-sm', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right tabular-nums' : ''].filter(Boolean).join(' ')}
-                        >
-                          {isTrailingHover ? (
-                            <span className="block transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
-                              {renderCellValue(row, col)}
-                            </span>
-                          ) : (
-                            renderCellValue(row, col)
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                    {hoverRowActions ? (
-                      <>
-                        <TableCell className="w-10 px-2" onClick={(e) => e.stopPropagation()}>
-                          {editingRowId === row.id ? (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); onSaveRow?.(); }}
-                              className="h-8 w-8 flex items-center justify-center rounded-full text-[#17663A] hover:bg-[#EEFBF4] transition-all"
-                              aria-label={ui('save')}
-                            >
-                              <Check className="h-5 w-5" aria-hidden="true" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onEditRow) { onEditRow(row); }
-                                else if (onNavigate) { onNavigate(row); }
-                                else { onRowClick?.(row); }
-                              }}
-                              className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
-                              aria-label={ui('edit')}
-                            >
-                              <Pencil className="h-5 w-5" aria-hidden="true" />
-                            </button>
-                          )}
-                        </TableCell>
-                        {onDeleteRow && (
-                          <TableCell className="w-10 px-2" onClick={(e) => e.stopPropagation()}>
-                            {editingRowId === row.id ? (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); onCancelEdit?.(); }}
-                                className="h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
-                                aria-label={ui('cancel')}
-                              >
-                                <X className="h-5 w-5" aria-hidden="true" />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={!!deletingRows[row.id]}
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const deleteKey = row.id;
-                                  setDeletingRows(prev => ({ ...prev, [deleteKey]: true }));
-                                  try { await onDeleteRow(row); }
-                                  finally {
-                                    setDeletingRows(prev => {
-                                      const next = { ...prev };
-                                      delete next[deleteKey];
-                                      return next;
-                                    });
-                                  }
-                                }}
-                                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:bg-[#FEF0F4] transition-all"
-                                aria-label={ui('deleteRowTooltip')}
-                              >
-                                {deletingRows[row.id]
-                                  ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-                                  : <Trash2 className="h-5 w-5" aria-hidden="true" />}
-                              </button>
-                            )}
-                          </TableCell>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        {legacyDeleteEnabled && (
-                          <TableCell className="w-10 px-2" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              disabled={!!deletingRows[row.id]}
-                              onClick={async () => {
-                                const deleteKey = row.id;
-                                setDeletingRows(prev => ({ ...prev, [deleteKey]: true }));
-                                try {
-                                  await onDeleteRow(row);
-                                } finally {
-                                  setDeletingRows(prev => {
-                                    const next = { ...prev };
-                                    delete next[deleteKey];
-                                    return next;
-                                  });
-                                }
-                              }}
-                              className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                              title={ui('deleteRowTooltip')}
-                              aria-label={ui('deleteRowTooltip')}
-                            >
-                              {deletingRows[row.id] ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />}
-                            </button>
-                          </TableCell>
-                        )}
-                        {onCloneRow && !quickActionsEnabled && (
-                          <TableCell className="w-10 px-2" onClick={(e) => e.stopPropagation()}>
-                            <div className="relative group/clonebtn flex items-center justify-center">
-                              <button
-                                type="button"
-                                onClick={() => onCloneRow(row)}
-                                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-white text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
-                                style={{ width: 26, height: 26 }}
-                                aria-label={ui('cloneOrderBtn')}
-                              >
-                                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                              </button>
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
-                                {ui('cloneOrderBtn')}
-                              </div>
-                            </div>
-                          </TableCell>
-                        )}
-                      </>
-                    )}
-                    {quickActionsEnabled && (
-                      <TableCell className="w-10 px-2 relative" onClick={(e) => e.stopPropagation()}>
-                        <RowQuickActions
-                          row={row}
-                          entity={entity}
-                          apiBaseUrl={apiBaseUrl}
-                          token={token}
-                          documentPreview={rowQuickActions.documentPreview}
-                          sendDocument={rowQuickActions.sendDocument}
-                          menuActions={rowQuickActions.menuActions}
-                          hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
-                          statusField={rowQuickActions.statusField}
-                          onEdit={rowQuickActions.onEdit}
-                          onClone={rowQuickActions.onClone}
-                          onEmail={rowQuickActions.onEmail}
-                          onDelete={rowQuickActions.onDelete}
-                          onMenuActionExecuted={rowQuickActions.onMenuActionExecuted}
-                          actionsConfig={rowQuickActions.actions}
-                        />
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })
-            ))}
+          <TableBody data-testid="TableBody__eb5261">
+            {renderTableRows({
+              hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
+              selectable, isRowSelectable, toggleRow, visibleColumns, trailingHoverColumn,
+              renderCellValue, onRowClick, onNavigate, selectedRowBg, selectedId, selectedRowId,
+              rowHoverStyle,
+              editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
+              onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
+              onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,
+              hasDimensionsPanel,
+            })}
             {addRow?.active && (
               <InlineAddRow
                 ref={addRow.ref}
@@ -1627,48 +2200,32 @@ export function DataTable({
                 data={data}
                 catalogs={addRow.catalogs}
                 onFieldChange={addRow.onFieldChange}
-                onValuesChange={addRow.onValuesChange}
-                  selectable={selectable}
-                  hasDeleteColumn={!hoverRowActions && legacyDeleteEnabled}
-                  hasCloneColumn={!hoverRowActions && !!onCloneRow && !quickActionsEnabled}
-                  hoverRowActions={hoverRowActions}
-                  hoverRowHasDelete={hoverRowActions && !!onDeleteRow}
-                  hasQuickActionsColumn={quickActionsEnabled}
-                  token={token}
-                  apiBaseUrl={apiBaseUrl}
-                  entity={entity}
-                  selectorContext={selectorContext}
-                  ilpHasNoAmountCol={ilpHasNoAmountCol}
-                  ilpTrailing={ilpTrailing}
-                />
-              )}
+                onValuesChange={(vals) => { setAddRowValues(vals ?? {}); addRow.onValuesChange?.(vals); }}
+                seedValues={addRow.seedValues}
+                resolvedDefaults={addRow.resolvedDefaults}
+                convertOptimisticPrice={addRow.convertOptimisticPrice}
+                selectable={selectable}
+                hasDeleteColumn={!hoverRowActions && legacyDeleteEnabled}
+                hasCloneColumn={!hoverRowActions && !!onCloneRow && !quickActionsEnabled}
+                hoverRowActions={hoverRowActions}
+                hoverRowHasDelete={hoverRowActions && !!onDeleteRow}
+                hasQuickActionsColumn={quickActionsEnabled}
+                token={token}
+                apiBaseUrl={apiBaseUrl}
+                entity={entity}
+                selectorContext={selectorContext}
+                ilpHasNoAmountCol={ilpHasNoAmountCol}
+                ilpTrailing={ilpTrailing}
+                labelOverrides={labelOverrides}
+                hasDimensionsPanel={hasDimensionsPanel}
+                data-testid="InlineAddRow__eb5261" />
+            )}
           </TableBody>
-          {totals && showFooterTotals && (
-            <TableFooter>
-              <TableRow className="font-medium">
-                {selectable && <TableCell />}
-                {visibleColumns.map((col, idx) => (
-                  <TableCell key={col.key} className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}>
-                    {col.type === 'amount'
-                      ? formatAmount(totals[col.key], filteredData[0]?.['currency$_identifier'])
-                      : ''}
-                  </TableCell>
-                ))}
-                {hoverRowActions ? (
-                  <>
-                    <TableCell />
-                    {onDeleteRow && <TableCell />}
-                  </>
-                ) : (
-                  <>
-                    {legacyDeleteEnabled && <TableCell />}
-                    {onCloneRow && !quickActionsEnabled && <TableCell />}
-                  </>
-                )}
-                {quickActionsEnabled && <TableCell />}
-              </TableRow>
-            </TableFooter>
-          )}
+          {renderFooterRow({
+            totals, showFooterTotals, selectable, visibleColumns, filteredData,
+            hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
+            hasDimensionsPanel,
+          })}
         </Table>
       </div>
       {addRow?.active && (
@@ -1678,4 +2235,20 @@ export function DataTable({
       )}
     </div>
   );
+}
+function resolveCellDisplay(row, col, optimisticToggles, displayCatalogMaps) {
+  const toggleKey = `${row.id}:${col.key}`;
+  const rawValue = Object.hasOwn(optimisticToggles, toggleKey)
+    ? optimisticToggles[toggleKey]
+    : row[col.key];
+  let display = resolveIdentifier(row, col.key);
+  const displayMap = displayCatalogMaps.get(col.key);
+  if (displayMap) {
+    const fkId = row?.[col.key];
+    if (fkId != null) {
+      const mapped = displayMap.get(String(fkId));
+      if (mapped) display = mapped;
+    }
+  }
+  return { display, rawValue, toggleKey };
 }

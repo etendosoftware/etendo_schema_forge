@@ -18,10 +18,21 @@ const ROWS = [
 
 /**
  * Per-window expected buttons (canonical RowQuickActions) derived from each
- * window's custom wiring in `tools/app-shell/src/windows/custom/<w>/index.jsx`.
+ * window's custom wiring in `tools/app-shell/src/windows/custom/<w>/index.jsx`
+ * (or its shared hook — `useOrderWindow.jsx` for sales-order/purchase-order,
+ * `useInvoiceWindow.js` for sales-invoice/purchase-invoice).
  *
  *   clone   → window passes `onClone`
- *   email   → window declares `documentPreview: true` + passes `onEmail`
+ *   email   → window declares `documentPreview: true` + passes `onEmail`.
+ *             For sales-order, purchase-order, and sales-invoice the button
+ *             is ALSO gated by `SEND_VISIBLE_WHEN_CONFIRMED` (ETP-4717,
+ *             see `shared/sendActionVisibility.js`): it only renders once
+ *             `documentStatus === 'CO'`. DOC-001 below is Draft, so
+ *             `expects.email` is `false` for these three windows even
+ *             though the window does wire `onEmail` — `emailGate:
+ *             'confirmed'` additionally asserts the button DOES appear on
+ *             DOC-002 (Completado), so this spec still covers the
+ *             positive case for the button's wiring, not just its absence.
  *   more    → window passes `menuActions` (kebab)
  *
  * Edit and Delete are always expected (Delete fully visible because the test
@@ -30,15 +41,18 @@ const ROWS = [
 const FIELDS = {
   'sales-order': {
     extra: { 'businessPartner$_identifier': 'Test BP', grandTotalAmount: 100, deliveryStatus: 50, invoiceStatus: 50, orderDate: '2026-01-15' },
-    expects: { clone: true, email: true, more: true },
+    expects: { clone: true, email: false, more: true },
+    emailGate: 'confirmed',
   },
   'purchase-order': {
     extra: { 'businessPartner$_identifier': 'Test BP', grandTotalAmount: 100, deliveryStatus: 50, invoiceStatus: 50, orderDate: '2026-01-15' },
-    expects: { clone: true, email: true, more: true },
+    expects: { clone: true, email: false, more: true },
+    emailGate: 'confirmed',
   },
   'sales-invoice': {
     extra: { 'businessPartner$_identifier': 'Test BP', grandTotalAmount: 100, invoiceDate: '2026-01-15' },
-    expects: { clone: true, email: true, more: false },
+    expects: { clone: true, email: false, more: false },
+    emailGate: 'confirmed',
   },
   'purchase-invoice': {
     // List shows orderReference (POReference) instead of documentNo — keep the
@@ -68,7 +82,7 @@ async function installListMock(page, spec) {
     [docNoField]: r.documentNo, // some windows use a different key (e.g. orderReference)
     ...cfg.extra,
   }));
-  await page.route(`**/sws/neo/${spec}/${entityPath}**`, async (route) => {
+  await page.route(`**/sws/neo/${spec}/${entityPath}{/**,}**`, async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !new RegExp(`/${entityPath}/[^/?]+`).test(url)) {
@@ -112,7 +126,8 @@ for (const spec of SPECS) {
       await firstRow.hover();
 
       const overlay = firstRow.getByTestId('row-quick-actions');
-      await expect(overlay).toBeVisible();
+      // Allow the CSS hover transition to settle before asserting children.
+      await expect(overlay).toBeVisible({ timeout: 5_000 });
 
       // Always-on canonical buttons.
       await expect(firstRow.getByTestId('row-quick-action-edit')).toBeVisible();
@@ -121,7 +136,7 @@ for (const spec of SPECS) {
       // Per-window wiring: assert each conditional button is present or absent
       // as declared in the custom window file. Catches regressions where a
       // window stops passing onClone / onEmail / menuActions.
-      const { expects } = FIELDS[spec];
+      const { expects, emailGate } = FIELDS[spec];
       const clone = firstRow.getByTestId('row-quick-action-clone');
       const email = firstRow.getByTestId('row-quick-action-email');
       const more  = firstRow.getByTestId('row-quick-action-more');
@@ -134,6 +149,16 @@ for (const spec of SPECS) {
 
       if (expects.more)  await expect(more).toBeVisible();
       else               await expect(more).toHaveCount(0);
+
+      // Positive case for the CO-only email gate (ETP-4717): DOC-001 above is
+      // Draft, so email correctly stays hidden there for these windows — but
+      // the button's wiring must still show up once the document is
+      // Completado, otherwise this spec would only ever assert absence.
+      if (emailGate === 'confirmed') {
+        const secondRow = page.locator('tbody tr').filter({ hasText: 'DOC-002' }).first();
+        await secondRow.hover();
+        await expect(secondRow.getByTestId('row-quick-action-email')).toBeVisible({ timeout: 5_000 });
+      }
     });
 
     test('Edit button navigates to detail view', async ({ page }) => {

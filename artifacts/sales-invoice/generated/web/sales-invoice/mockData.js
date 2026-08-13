@@ -4,6 +4,7 @@ export const header = [
   {
     "id": "mock-header-001",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00001",
     "invoiceDate": "2026-01-15",
     "businessPartner": "Acme Corp",
@@ -19,11 +20,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 38907,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-15",
-    "tbaiSequence": 90,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "DR",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -33,14 +38,16 @@ export const header = [
     "aeatsiiPeriodo": 90,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 99.44,
-    "eTGODueDate": "2026-01-15",
-    "eTGODeliveryStatus": "DR"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD",
+    "eTGODeliveryStatus": "DR",
+    "eTGODueDate": "2026-01-15"
   },
   {
     "id": "mock-header-002",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00002",
     "invoiceDate": "2026-01-16",
     "businessPartner": "TechFlow Inc",
@@ -56,11 +63,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 9306,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-16",
-    "tbaiSequence": 93,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "CO",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -70,14 +81,16 @@ export const header = [
     "aeatsiiPeriodo": 93,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 96.94,
-    "eTGODueDate": "2026-01-16",
-    "eTGODeliveryStatus": "CO"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR",
+    "eTGODeliveryStatus": "CO",
+    "eTGODueDate": "2026-01-16"
   },
   {
     "id": "mock-header-003",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00003",
     "invoiceDate": "2026-01-17",
     "businessPartner": "Global Trade Ltd",
@@ -93,11 +106,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 11544,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-17",
-    "tbaiSequence": 8,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "VO",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -107,14 +124,16 @@ export const header = [
     "aeatsiiPeriodo": 8,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 12.48,
-    "eTGODueDate": "2026-01-17",
-    "eTGODeliveryStatus": "VO"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP",
+    "eTGODeliveryStatus": "VO",
+    "eTGODueDate": "2026-01-17"
   },
   {
     "id": "mock-header-004",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00004",
     "invoiceDate": "2026-01-18",
     "businessPartner": "Summit Industries",
@@ -130,11 +149,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 11872,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-18",
-    "tbaiSequence": 91,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "IP",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -144,14 +167,16 @@ export const header = [
     "aeatsiiPeriodo": 91,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 96.31,
-    "eTGODueDate": "2026-01-18",
-    "eTGODeliveryStatus": "IP"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD",
+    "eTGODeliveryStatus": "IP",
+    "eTGODueDate": "2026-01-18"
   },
   {
     "id": "mock-header-005",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00005",
     "invoiceDate": "2026-01-19",
     "businessPartner": "Pacific Partners",
@@ -167,11 +192,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 48460,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-19",
-    "tbaiSequence": 72,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "DR",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -181,14 +210,16 @@ export const header = [
     "aeatsiiPeriodo": 72,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 31.27,
-    "eTGODueDate": "2026-01-19",
-    "eTGODeliveryStatus": "DR"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR",
+    "eTGODeliveryStatus": "DR",
+    "eTGODueDate": "2026-01-19"
   },
   {
     "id": "mock-header-006",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00006",
     "invoiceDate": "2026-01-20",
     "businessPartner": "Alpine Solutions",
@@ -204,11 +235,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 45418,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-20",
-    "tbaiSequence": 78,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "CO",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -218,14 +253,16 @@ export const header = [
     "aeatsiiPeriodo": 78,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 76.52,
-    "eTGODueDate": "2026-01-20",
-    "eTGODeliveryStatus": "CO"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP",
+    "eTGODeliveryStatus": "CO",
+    "eTGODueDate": "2026-01-20"
   },
   {
     "id": "mock-header-007",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00007",
     "invoiceDate": "2026-01-21",
     "businessPartner": "Meridian Group",
@@ -241,11 +278,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 33840,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-21",
-    "tbaiSequence": 31,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "VO",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -255,14 +296,16 @@ export const header = [
     "aeatsiiPeriodo": 31,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 2.66,
-    "eTGODueDate": "2026-01-21",
-    "eTGODeliveryStatus": "VO"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD",
+    "eTGODeliveryStatus": "VO",
+    "eTGODueDate": "2026-01-21"
   },
   {
     "id": "mock-header-008",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00008",
     "invoiceDate": "2026-01-22",
     "businessPartner": "Vertex Systems",
@@ -278,11 +321,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 25716,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-22",
-    "tbaiSequence": 97,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "IP",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -292,14 +339,16 @@ export const header = [
     "aeatsiiPeriodo": 97,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 10.03,
-    "eTGODueDate": "2026-01-22",
-    "eTGODeliveryStatus": "IP"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR",
+    "eTGODeliveryStatus": "IP",
+    "eTGODueDate": "2026-01-22"
   },
   {
     "id": "mock-header-009",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00009",
     "invoiceDate": "2026-01-23",
     "businessPartner": "Atlas Manufacturing",
@@ -315,11 +364,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 44780,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-23",
-    "tbaiSequence": 70,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "DR",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -329,14 +382,16 @@ export const header = [
     "aeatsiiPeriodo": 70,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 93.97,
-    "eTGODueDate": "2026-01-23",
-    "eTGODeliveryStatus": "DR"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP",
+    "eTGODeliveryStatus": "DR",
+    "eTGODueDate": "2026-01-23"
   },
   {
     "id": "mock-header-010",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00010",
     "invoiceDate": "2026-01-24",
     "businessPartner": "Nova Enterprises",
@@ -352,11 +407,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 12483,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-24",
-    "tbaiSequence": 77,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "CO",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -366,14 +425,16 @@ export const header = [
     "aeatsiiPeriodo": 77,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 1.1,
-    "eTGODueDate": "2026-01-24",
-    "eTGODeliveryStatus": "CO"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD",
+    "eTGODeliveryStatus": "CO",
+    "eTGODueDate": "2026-01-24"
   },
   {
     "id": "mock-header-011",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00011",
     "invoiceDate": "2026-01-25",
     "businessPartner": "Pinnacle Services",
@@ -389,11 +450,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 46022,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-25",
-    "tbaiSequence": 32,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "VO",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -403,14 +468,16 @@ export const header = [
     "aeatsiiPeriodo": 32,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 79.99,
-    "eTGODueDate": "2026-01-25",
-    "eTGODeliveryStatus": "VO"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR",
+    "eTGODeliveryStatus": "VO",
+    "eTGODueDate": "2026-01-25"
   },
   {
     "id": "mock-header-012",
     "adOrgId": "Sample adOrgId",
+    "transactionDocument": "Sample transactionDocument",
     "documentNo": "HE-00012",
     "invoiceDate": "2026-01-26",
     "businessPartner": "Horizon Labs",
@@ -426,11 +493,15 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 38634,
     "priceList": "Sample priceList",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-26",
-    "tbaiSequence": 26,
-    "tbaiInvoicenum": "Sample tbaiInvoicenum",
-    "tbaiInvoiceseq": "Sample tbaiInvoiceseq",
-    "tbaiIssent": "Sample tbaiIssent",
+    "etvfacInvoiceStatus": "IP",
+    "etvfacInvType": "Sample etvfacInvType",
+    "etvfacVerifacDesc": "Sample etvfacVerifacDesc",
+    "etvfacReverseinvtype": "Sample etvfacReverseinvtype",
+    "etvfacSimpinvart7273": "Sample etvfacSimpinvart7273",
+    "etvfacInvNoIDArt61d": "Sample etvfacInvNoIDArt61d",
     "aeatsiiIssent": "Sample aeatsiiIssent",
     "aeatsiiClaveTipo": "Sample aeatsiiClaveTipo",
     "aeatsiiDescription": "Sample aeatsiiDescription",
@@ -440,10 +511,11 @@ export const header = [
     "aeatsiiPeriodo": 26,
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
-    "processed": "Sample processed",
     "etgoTotalDiscount": 53.61,
-    "eTGODueDate": "2026-01-26",
-    "eTGODeliveryStatus": "IP"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP",
+    "eTGODeliveryStatus": "IP",
+    "eTGODueDate": "2026-01-26"
   }
 ];
 
@@ -459,6 +531,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 38907,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-001"
   },
   {
@@ -472,6 +546,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 9306,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-002"
   },
   {
@@ -485,6 +561,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 11544,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-003"
   },
   {
@@ -498,6 +576,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 11872,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-004"
   },
   {
@@ -511,6 +591,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 48460,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-005"
   },
   {
@@ -524,6 +606,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 45418,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-006"
   },
   {
@@ -537,6 +621,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 33840,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-007"
   },
   {
@@ -550,6 +636,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 25716,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-008"
   },
   {
@@ -563,6 +651,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 44780,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-009"
   },
   {
@@ -576,6 +666,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 12483,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-010"
   },
   {
@@ -589,6 +681,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 46022,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-011"
   },
   {
@@ -602,6 +696,8 @@ export const lines = [
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
     "grossAmount": 38634,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "headerId": "mock-header-012"
   }
 ];
@@ -621,7 +717,6 @@ export const paymentPlan = [
     "numberOfPayments": 90,
     "description": "Standard order for Q1 delivery",
     "totalDebtAmount": 38907,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-001"
   },
   {
@@ -638,7 +733,6 @@ export const paymentPlan = [
     "numberOfPayments": 93,
     "description": "Rush order - priority shipping required",
     "totalDebtAmount": 9306,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-002"
   },
   {
@@ -655,7 +749,6 @@ export const paymentPlan = [
     "numberOfPayments": 8,
     "description": "Bulk purchase for warehouse restocking",
     "totalDebtAmount": 11544,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-003"
   },
   {
@@ -672,7 +765,6 @@ export const paymentPlan = [
     "numberOfPayments": 91,
     "description": "Sample order for client evaluation",
     "totalDebtAmount": 11872,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-004"
   },
   {
@@ -689,7 +781,6 @@ export const paymentPlan = [
     "numberOfPayments": 72,
     "description": "Recurring monthly supply order",
     "totalDebtAmount": 48460,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-005"
   },
   {
@@ -706,7 +797,6 @@ export const paymentPlan = [
     "numberOfPayments": 78,
     "description": "Special pricing agreement applies",
     "totalDebtAmount": 45418,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-006"
   },
   {
@@ -723,7 +813,6 @@ export const paymentPlan = [
     "numberOfPayments": 31,
     "description": "Consolidated order from multiple requests",
     "totalDebtAmount": 33840,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-007"
   },
   {
@@ -740,7 +829,6 @@ export const paymentPlan = [
     "numberOfPayments": 97,
     "description": "Trial order for new product line",
     "totalDebtAmount": 25716,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-008"
   },
   {
@@ -757,7 +845,6 @@ export const paymentPlan = [
     "numberOfPayments": 70,
     "description": "Replacement for damaged goods",
     "totalDebtAmount": 44780,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-009"
   },
   {
@@ -774,7 +861,6 @@ export const paymentPlan = [
     "numberOfPayments": 77,
     "description": "Pre-season inventory build-up",
     "totalDebtAmount": 12483,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-010"
   },
   {
@@ -791,7 +877,6 @@ export const paymentPlan = [
     "numberOfPayments": 32,
     "description": "Customer-specific configuration",
     "totalDebtAmount": 46022,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-011"
   },
   {
@@ -808,7 +893,228 @@ export const paymentPlan = [
     "numberOfPayments": 26,
     "description": "Government contract fulfillment",
     "totalDebtAmount": 38634,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
+    "headerId": "mock-header-012"
+  }
+];
+
+export const reversedInvoices = [
+  {
+    "id": "mock-reversedInvoices-001",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 38907,
+    "aEAT349BPBaseAmountS": 38907,
+    "headerId": "mock-header-001"
+  },
+  {
+    "id": "mock-reversedInvoices-002",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 9306,
+    "aEAT349BPBaseAmountS": 9306,
+    "headerId": "mock-header-002"
+  },
+  {
+    "id": "mock-reversedInvoices-003",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 11544,
+    "aEAT349BPBaseAmountS": 11544,
+    "headerId": "mock-header-003"
+  },
+  {
+    "id": "mock-reversedInvoices-004",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 11872,
+    "aEAT349BPBaseAmountS": 11872,
+    "headerId": "mock-header-004"
+  },
+  {
+    "id": "mock-reversedInvoices-005",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 48460,
+    "aEAT349BPBaseAmountS": 48460,
+    "headerId": "mock-header-005"
+  },
+  {
+    "id": "mock-reversedInvoices-006",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 45418,
+    "aEAT349BPBaseAmountS": 45418,
+    "headerId": "mock-header-006"
+  },
+  {
+    "id": "mock-reversedInvoices-007",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 33840,
+    "aEAT349BPBaseAmountS": 33840,
+    "headerId": "mock-header-007"
+  },
+  {
+    "id": "mock-reversedInvoices-008",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 25716,
+    "aEAT349BPBaseAmountS": 25716,
+    "headerId": "mock-header-008"
+  },
+  {
+    "id": "mock-reversedInvoices-009",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 44780,
+    "aEAT349BPBaseAmountS": 44780,
+    "headerId": "mock-header-009"
+  },
+  {
+    "id": "mock-reversedInvoices-010",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 12483,
+    "aEAT349BPBaseAmountS": 12483,
+    "headerId": "mock-header-010"
+  },
+  {
+    "id": "mock-reversedInvoices-011",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 46022,
+    "aEAT349BPBaseAmountS": 46022,
+    "headerId": "mock-header-011"
+  },
+  {
+    "id": "mock-reversedInvoices-012",
+    "reversedInvoice": "Sample reversedInvoice",
+    "aEAT349IsCorrective": "Sample aEAT349IsCorrective",
+    "aEAT349CYear": "Sample aEAT349CYear",
+    "aEAT349Period": "Sample aEAT349Period",
+    "aEAT349BPBaseAmount": 38634,
+    "aEAT349BPBaseAmountS": 38634,
+    "headerId": "mock-header-012"
+  }
+];
+
+export const exchangeRates = [
+  {
+    "id": "mock-exchangeRates-001",
+    "currency": "USD",
+    "toCurrency": "USD",
+    "rate": "Sample rate",
+    "foreignAmount": 38907,
+    "headerId": "mock-header-001"
+  },
+  {
+    "id": "mock-exchangeRates-002",
+    "currency": "EUR",
+    "toCurrency": "EUR",
+    "rate": "Sample rate",
+    "foreignAmount": 9306,
+    "headerId": "mock-header-002"
+  },
+  {
+    "id": "mock-exchangeRates-003",
+    "currency": "GBP",
+    "toCurrency": "GBP",
+    "rate": "Sample rate",
+    "foreignAmount": 11544,
+    "headerId": "mock-header-003"
+  },
+  {
+    "id": "mock-exchangeRates-004",
+    "currency": "USD",
+    "toCurrency": "USD",
+    "rate": "Sample rate",
+    "foreignAmount": 11872,
+    "headerId": "mock-header-004"
+  },
+  {
+    "id": "mock-exchangeRates-005",
+    "currency": "EUR",
+    "toCurrency": "EUR",
+    "rate": "Sample rate",
+    "foreignAmount": 48460,
+    "headerId": "mock-header-005"
+  },
+  {
+    "id": "mock-exchangeRates-006",
+    "currency": "GBP",
+    "toCurrency": "GBP",
+    "rate": "Sample rate",
+    "foreignAmount": 45418,
+    "headerId": "mock-header-006"
+  },
+  {
+    "id": "mock-exchangeRates-007",
+    "currency": "USD",
+    "toCurrency": "USD",
+    "rate": "Sample rate",
+    "foreignAmount": 33840,
+    "headerId": "mock-header-007"
+  },
+  {
+    "id": "mock-exchangeRates-008",
+    "currency": "EUR",
+    "toCurrency": "EUR",
+    "rate": "Sample rate",
+    "foreignAmount": 25716,
+    "headerId": "mock-header-008"
+  },
+  {
+    "id": "mock-exchangeRates-009",
+    "currency": "GBP",
+    "toCurrency": "GBP",
+    "rate": "Sample rate",
+    "foreignAmount": 44780,
+    "headerId": "mock-header-009"
+  },
+  {
+    "id": "mock-exchangeRates-010",
+    "currency": "USD",
+    "toCurrency": "USD",
+    "rate": "Sample rate",
+    "foreignAmount": 12483,
+    "headerId": "mock-header-010"
+  },
+  {
+    "id": "mock-exchangeRates-011",
+    "currency": "EUR",
+    "toCurrency": "EUR",
+    "rate": "Sample rate",
+    "foreignAmount": 46022,
+    "headerId": "mock-header-011"
+  },
+  {
+    "id": "mock-exchangeRates-012",
+    "currency": "GBP",
+    "toCurrency": "GBP",
+    "rate": "Sample rate",
+    "foreignAmount": 38634,
     "headerId": "mock-header-012"
   }
 ];

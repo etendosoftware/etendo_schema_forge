@@ -5,6 +5,7 @@ import { useLocaleSwitch } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { formatDashboardAmount, localeFromUi } from '@/lib/dashboardNumberFormat.js';
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
+import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 import { DashboardCard, DashboardEmptyState, DashboardRowChevron } from './_shared';
 
 const UUID_RE = /^[0-9A-F]{32}$/i;
@@ -21,7 +22,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
   const { open: openCopilot } = useCopilot();
 
   return (
-    <DashboardCard title={ui('recentSalesTitle')}>
+    <DashboardCard title={ui('recentSalesTitle')} data-testid="DashboardCard__4af5f2">
       {invoices.length === 0 ? (
         <DashboardEmptyState
           title={ui('recentSalesEmptyTitle')}
@@ -31,7 +32,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
             { key: 'copilot', icon: Sparkles, label: ui('createWithCopilot'), onClick: openCopilot, variant: 'secondary' },
             { key: 'new', icon: Plus, label: ui('newSale'), onClick: () => navigate('/sales-invoice/new'), variant: 'primary' },
           ]}
-        />
+          data-testid="DashboardEmptyState__4af5f2" />
       ) : (
       <div
         data-testid="recent-sales-list"
@@ -55,7 +56,12 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                   key={inv.id || i}
                   data-testid={`recent-sales-item-${inv.id || i}`}
                   to={target}
-                  className="hover:bg-[#F5F7F9] transition-colors"
+                  onClick={() => trackDashboardKpi('dashboard_document_opened', {
+                    kpiId: DASHBOARD_KPI_IDS.dashboardToDocument,
+                    entityType: 'sales_invoice',
+                    source: 'dashboard_recent_sales',
+                  })}
+                  className="hover:bg-[hsl(var(--muted))] transition-colors"
                   style={{
                     display: 'flex',
                     flexDirection: 'row',
@@ -87,7 +93,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                         fontWeight: 400,
                         fontSize: '14px',
                         lineHeight: '24px',
-                        color: '#121217',
+                        color: 'hsl(var(--foreground))',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -115,7 +121,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                         alignItems: 'center',
                         padding: '4px 8px',
                         height: '24px',
-                        background: '#F5F7F9',
+                        background: 'hsl(var(--muted))',
                         borderRadius: '360px',
                       }}
                     >
@@ -137,7 +143,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                             fontWeight: 400,
                             fontSize: '12px',
                             lineHeight: '16px',
-                            color: '#3F3F50',
+                            color: 'hsl(var(--muted-foreground))',
                             whiteSpace: 'nowrap',
                           }}
                         >
@@ -166,7 +172,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                         alignItems: 'center',
                         padding: '0px 8px',
                         height: '24px',
-                        border: '1px solid #D1D4DB',
+                        border: '1px solid hsl(var(--border-control))',
                         borderRadius: '360px',
                       }}
                     >
@@ -178,7 +184,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                           fontWeight: 400,
                           fontSize: '12px',
                           lineHeight: '24px',
-                          color: '#6C6C89',
+                          color: 'hsl(var(--muted-foreground))',
                           whiteSpace: 'nowrap',
                         }}
                       >
@@ -186,7 +192,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                       </span>
                     </div>
                   </div>
-                  <DashboardRowChevron />
+                  <DashboardRowChevron data-testid="DashboardRowChevron__4af5f2" />
                 </Link>
               );
             })

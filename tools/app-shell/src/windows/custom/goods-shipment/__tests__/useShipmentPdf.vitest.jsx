@@ -12,19 +12,24 @@ const mockFetchLocationAddress = vi.fn(() => Promise.resolve(null));
 const mockFetchImageDataUrl = vi.fn(() => Promise.resolve(null));
 const mockBuildLocationAddressLines = vi.fn(() => []);
 
-vi.mock('../../shared/pdfUtils.js', () => ({
-  COMMON_HANDLEBARS_HELPERS: '',
-  fetchJson: (...args) => mockFetchJson(...args),
-  fetchAll: (...args) => mockFetchAll(...args),
-  fetchOptionalJson: (...args) => mockFetchOptionalJson(...args),
-  fetchLocationAddress: (...args) => mockFetchLocationAddress(...args),
-  fetchImageDataUrl: (...args) => mockFetchImageDataUrl(...args),
-  buildLocationAddressLines: (...args) => mockBuildLocationAddressLines(...args),
-  renderPdf: (...args) => mockRenderPdf(...args),
-}));
+vi.mock('../../shared/pdfUtils.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    COMMON_HANDLEBARS_HELPERS: '',
+    COMMON_PDF_CSS: '',
+    fetchJson: (...args) => mockFetchJson(...args),
+    fetchAll: (...args) => mockFetchAll(...args),
+    fetchOptionalJson: (...args) => mockFetchOptionalJson(...args),
+    fetchLocationAddress: (...args) => mockFetchLocationAddress(...args),
+    fetchImageDataUrl: (...args) => mockFetchImageDataUrl(...args),
+    buildLocationAddressLines: (...args) => mockBuildLocationAddressLines(...args),
+    renderPdf: (...args) => mockRenderPdf(...args),
+  };
+});
 
 import { renderHook, waitFor } from '@testing-library/react';
-import { useShipmentPdf, getShipmentPdfLabels, generateShipmentPdf } from '../useShipmentPdf.js';
+import { useShipmentPdf, getShipmentPdfLabels } from '../useShipmentPdf.js';
 
 // ── getShipmentPdfLabels ──────────────────────────────────────────────────────
 
@@ -107,32 +112,5 @@ describe('useShipmentPdf', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);
     expect(result.current.pdfUrl).toBe('blob:http://localhost/test');
-  });
-});
-
-// ── generateShipmentPdf ───────────────────────────────────────────────────────
-
-describe('generateShipmentPdf', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockFetchJson.mockResolvedValue({
-      documentNo: 'ALB-001',
-      movementDate: '2024-01-01',
-      'businessPartner$_identifier': 'Client A',
-      issuerOrg: { name: 'My Company' },
-    });
-    mockFetchAll.mockResolvedValue([]);
-    mockFetchOptionalJson.mockResolvedValue(null);
-    mockFetchLocationAddress.mockResolvedValue(null);
-    mockFetchImageDataUrl.mockResolvedValue(null);
-    mockBuildLocationAddressLines.mockReturnValue([]);
-    mockRenderPdf.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
-  });
-
-  it('calls renderPdf and returns a Blob', async () => {
-    const labels = { title: 'Delivery Note', taxId: 'NIF' };
-    const blob = await generateShipmentPdf('ship-1', '/api/goods-shipment', 'tok', labels);
-    expect(mockRenderPdf).toHaveBeenCalled();
-    expect(blob).toBeInstanceOf(Blob);
   });
 });

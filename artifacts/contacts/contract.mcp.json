@@ -1,0 +1,1255 @@
+{
+  "version": "0.48.0",
+  "generatedAt": "2026-07-31T19:26:59.736Z",
+  "updatedAt": "2026-08-05T11:53:17.917Z",
+  "contractChecksum": "3199e5602e3ebad9",
+  "apiPrediction": {
+    "specName": "contacts",
+    "baseUrl": "/sws/neo/contacts",
+    "crud": {
+      "businessPartner": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/businessPartner",
+        "detailUrl": "/sws/neo/contacts/businessPartner/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      },
+      "customer": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/customer",
+        "detailUrl": "/sws/neo/contacts/customer/{id}",
+        "supportedFilters": []
+      },
+      "customerAccounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/contacts/customerAccounting",
+        "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
+        "supportedFilters": []
+      },
+      "intrastatShipments": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/intrastatShipments",
+        "detailUrl": "/sws/neo/contacts/intrastatShipments/{id}",
+        "supportedFilters": []
+      },
+      "vendorCreditor": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/vendorCreditor",
+        "detailUrl": "/sws/neo/contacts/vendorCreditor/{id}",
+        "supportedFilters": []
+      },
+      "vendorAccounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/contacts/vendorAccounting",
+        "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
+        "supportedFilters": []
+      },
+      "intrastatAdquisitions": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/intrastatAdquisitions",
+        "detailUrl": "/sws/neo/contacts/intrastatAdquisitions/{id}",
+        "supportedFilters": []
+      },
+      "employee": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/employee",
+        "detailUrl": "/sws/neo/contacts/employee/{id}",
+        "supportedFilters": []
+      },
+      "employeeAccounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/employeeAccounting",
+        "detailUrl": "/sws/neo/contacts/employeeAccounting/{id}",
+        "supportedFilters": []
+      },
+      "costSalaryCategory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/costSalaryCategory",
+        "detailUrl": "/sws/neo/contacts/costSalaryCategory/{id}",
+        "supportedFilters": []
+      },
+      "bankAccount": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/bankAccount",
+        "detailUrl": "/sws/neo/contacts/bankAccount/{id}",
+        "supportedFilters": []
+      },
+      "documentType": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/documentType",
+        "detailUrl": "/sws/neo/contacts/documentType/{id}",
+        "supportedFilters": []
+      },
+      "locationAddress": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/locationAddress",
+        "detailUrl": "/sws/neo/contacts/locationAddress/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      },
+      "contact": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/contact",
+        "detailUrl": "/sws/neo/contacts/contact/{id}",
+        "supportedFilters": [
+          "name",
+          "email"
+        ]
+      },
+      "basicDiscount": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/contacts/basicDiscount",
+        "detailUrl": "/sws/neo/contacts/basicDiscount/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "businessPartner",
+        "field": "businessPartnerCategory",
+        "column": "C_BP_Group_ID",
+        "reference": "BusinessPartnerCategory",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/businessPartnerCategory"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "greeting",
+        "column": "C_Greeting_ID",
+        "reference": "Greeting",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/greeting"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "bPCurrencyID",
+        "column": "BP_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/businessPartner/selectors/bPCurrencyID"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "paymentTerms",
+        "column": "C_PaymentTerm_ID",
+        "reference": "PaymentTerm",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/paymentTerms"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "salaryCategory",
+        "column": "C_Salary_Category_ID",
+        "reference": "Salary_Category",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/salaryCategory"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "account",
+        "column": "FIN_Financial_Account_ID",
+        "reference": "FIN_Financial_Account",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/account"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "paymentMethod",
+        "column": "FIN_Paymentmethod_ID",
+        "reference": "PaymentMethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/paymentMethod"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "priceList",
+        "column": "M_PriceList_ID",
+        "reference": "PriceList",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/priceList"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "pOFinancialAccount",
+        "column": "PO_Financial_Account_ID",
+        "reference": "FIN_Financial_Account",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/pOFinancialAccount",
+        "context": {
+          "required": [
+            {
+              "param": "PO_Paymentmethod_ID",
+              "source": "field",
+              "field": "pOPaymentMethod"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "businessPartner",
+        "field": "pOPaymentTerms",
+        "column": "PO_PaymentTerm_ID",
+        "reference": "PaymentTerm",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentTerms"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "pOPaymentMethod",
+        "column": "PO_Paymentmethod_ID",
+        "reference": "PaymentMethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/pOPaymentMethod"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "purchasePricelist",
+        "column": "PO_PriceList_ID",
+        "reference": "PriceList",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/businessPartner/selectors/purchasePricelist"
+      },
+      {
+        "entity": "customer",
+        "field": "priceList",
+        "column": "M_PriceList_ID",
+        "reference": "PriceList",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/customer/selectors/priceList"
+      },
+      {
+        "entity": "customer",
+        "field": "paymentMethod",
+        "column": "FIN_Paymentmethod_ID",
+        "reference": "PaymentMethod",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/customer/selectors/paymentMethod"
+      },
+      {
+        "entity": "customer",
+        "field": "paymentTerms",
+        "column": "C_PaymentTerm_ID",
+        "reference": "PaymentTerm",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/customer/selectors/paymentTerms"
+      },
+      {
+        "entity": "customer",
+        "field": "account",
+        "column": "FIN_Financial_Account_ID",
+        "reference": "Financial_Account",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/customer/selectors/account"
+      },
+      {
+        "entity": "customer",
+        "field": "salesRepresentative",
+        "column": "SalesRep_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/customer/selectors/salesRepresentative"
+      },
+      {
+        "entity": "customer",
+        "field": "invoiceSchedule",
+        "column": "C_InvoiceSchedule_ID",
+        "reference": "InvoiceSchedule",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/customer/selectors/invoiceSchedule"
+      },
+      {
+        "entity": "customer",
+        "field": "sOBPTaxCategory",
+        "column": "SO_Bp_Taxcategory_ID",
+        "reference": "BP_TaxCategory",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/customer/selectors/sOBPTaxCategory"
+      },
+      {
+        "entity": "customerAccounting",
+        "field": "customerReceivablesNo",
+        "column": "C_Receivable_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/customerAccounting/selectors/customerReceivablesNo"
+      },
+      {
+        "entity": "customerAccounting",
+        "field": "customerPrepayment",
+        "column": "C_Prepayment_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/customerAccounting/selectors/customerPrepayment"
+      },
+      {
+        "entity": "intrastatShipments",
+        "field": "businessPartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/intrastatShipments/selectors/businessPartner"
+      },
+      {
+        "entity": "vendorCreditor",
+        "field": "purchasePricelist",
+        "column": "PO_PriceList_ID",
+        "reference": "PriceList",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/vendorCreditor/selectors/purchasePricelist"
+      },
+      {
+        "entity": "vendorCreditor",
+        "field": "pOPaymentMethod",
+        "column": "PO_Paymentmethod_ID",
+        "reference": "PaymentMethod",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/vendorCreditor/selectors/pOPaymentMethod"
+      },
+      {
+        "entity": "vendorCreditor",
+        "field": "pOPaymentTerms",
+        "column": "PO_PaymentTerm_ID",
+        "reference": "PaymentTerm",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/vendorCreditor/selectors/pOPaymentTerms"
+      },
+      {
+        "entity": "vendorCreditor",
+        "field": "pOFinancialAccount",
+        "column": "PO_Financial_Account_ID",
+        "reference": "Financial_Account",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/vendorCreditor/selectors/pOFinancialAccount",
+        "context": {
+          "required": [
+            {
+              "param": "PO_Paymentmethod_ID",
+              "source": "parentField",
+              "field": "pOPaymentMethod"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "vendorCreditor",
+        "field": "taxCategory",
+        "column": "PO_BP_TaxCategory_ID",
+        "reference": "BP_TaxCategory",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/vendorCreditor/selectors/taxCategory"
+      },
+      {
+        "entity": "vendorAccounting",
+        "field": "vendorLiability",
+        "column": "V_Liability_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/vendorAccounting/selectors/vendorLiability"
+      },
+      {
+        "entity": "vendorAccounting",
+        "field": "vendorPrepayment",
+        "column": "V_Prepayment_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/vendorAccounting/selectors/vendorPrepayment"
+      },
+      {
+        "entity": "intrastatAdquisitions",
+        "field": "businessPartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/intrastatAdquisitions/selectors/businessPartner"
+      },
+      {
+        "entity": "intrastatAdquisitions",
+        "field": "country",
+        "column": "C_Country_ID",
+        "reference": "Country",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/intrastatAdquisitions/selectors/country"
+      },
+      {
+        "entity": "employee",
+        "field": "salaryCategory",
+        "column": "C_Salary_Category_ID",
+        "reference": "Salary_Category",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/employee/selectors/salaryCategory"
+      },
+      {
+        "entity": "employeeAccounting",
+        "field": "accountingSchema",
+        "column": "C_AcctSchema_ID",
+        "reference": "AcctSchema",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/employeeAccounting/selectors/accountingSchema"
+      },
+      {
+        "entity": "costSalaryCategory",
+        "field": "salaryCategory",
+        "column": "C_Salary_Category_ID",
+        "reference": "Salary_Category",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/costSalaryCategory/selectors/salaryCategory"
+      },
+      {
+        "entity": "bankAccount",
+        "field": "country",
+        "column": "C_Country_ID",
+        "reference": "Country",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/bankAccount/selectors/country"
+      },
+      {
+        "entity": "bankAccount",
+        "field": "userContact",
+        "column": "AD_User_ID",
+        "reference": "User",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/bankAccount/selectors/userContact"
+      },
+      {
+        "entity": "documentType",
+        "field": "cDoctypeID",
+        "column": "C_Doctype_ID",
+        "reference": "DocType",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/documentType/selectors/cDoctypeID"
+      },
+      {
+        "entity": "locationAddress",
+        "field": "locationAddress",
+        "column": "C_Location_ID",
+        "reference": "Location",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/locationAddress/selectors/locationAddress"
+      },
+      {
+        "entity": "basicDiscount",
+        "field": "discount",
+        "column": "C_Discount_ID",
+        "reference": "Discount",
+        "inputMode": "selector",
+        "url": "/sws/neo/contacts/basicDiscount/selectors/discount"
+      }
+    ],
+    "actions": [
+      {
+        "name": "setNewCurrency",
+        "actionType": "utilityAction",
+        "entity": "businessPartner",
+        "column": "Update_Currency",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/contacts/businessPartner/{id}/action/setNewCurrency",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "B5C942145F354ABEBC9F16235D80D776",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "setNewCurrency",
+        "actionType": "utilityAction",
+        "entity": "customer",
+        "column": "Update_Currency",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/contacts/customer/{id}/action/setNewCurrency",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "B5C942145F354ABEBC9F16235D80D776",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "setNewCurrency",
+        "actionType": "utilityAction",
+        "entity": "vendorCreditor",
+        "column": "Update_Currency",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/contacts/vendorCreditor/{id}/action/setNewCurrency",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "B5C942145F354ABEBC9F16235D80D776",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "setNewCurrency",
+        "actionType": "utilityAction",
+        "entity": "employee",
+        "column": "Update_Currency",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/contacts/employee/{id}/action/setNewCurrency",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "B5C942145F354ABEBC9F16235D80D776",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "grantPortalAccess",
+        "actionType": "utilityAction",
+        "entity": "contact",
+        "column": "Grant_Portal_Access",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/contacts/contact/{id}/action/grantPortalAccess",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "97FFD59B991D49BFB5153C309B009272",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "contact",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/contacts/contact/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "contact"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "Name": "Legal Name",
+        "FIN_Financial_Account_ID": "Account",
+        "PO_Financial_Account_ID": "Expense Account",
+        "EM_Etgo_Web": "Website",
+        "EM_Etgo_Firstname": "First Name",
+        "EM_Etgo_Lastname": "Last Name",
+        "C_BP_Group_ID": "Contact Category"
+      },
+      "es_ES": {
+        "Name": "Razón Social",
+        "EM_Etgo_Identifier": "Identificador",
+        "FIN_Financial_Account_ID": "Cuenta",
+        "PO_Financial_Account_ID": "Cuenta contable de gastos",
+        "EM_Etgo_Web": "Página web",
+        "EM_Etgo_Firstname": "Nombre",
+        "EM_Etgo_Lastname": "Apellidos",
+        "C_BP_Group_ID": "Categoría de contacto"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "businessPartner": {
+        "fields": {
+          "etgoIdentifier": {
+            "readOnly": true
+          },
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "businessPartnerCategory": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+          },
+          "etgoFirstname": {
+            "required": true
+          },
+          "etgoLastname": {
+            "required": true
+          },
+          "oBTIKTaxIDKey": {
+            "required": true,
+            "defaultValue": "'1'"
+          },
+          "taxID": {},
+          "oBTIKVIESStatus": {
+            "readOnly": true,
+            "defaultValue": "P"
+          },
+          "etgoWeb": {},
+          "etgoEmail": {},
+          "etgoPhone": {},
+          "etgoIsperson": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "name2": {},
+          "description": {},
+          "uRL": {},
+          "referenceNo": {},
+          "consumptionDays": {
+            "defaultValue": "1000"
+          },
+          "active": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "greeting": {},
+          "customer": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "vendor": {
+            "required": true
+          },
+          "employee": {
+            "required": true
+          },
+          "setNewCurrency": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "creditLimit": {
+            "required": true
+          },
+          "bPCurrencyID": {},
+          "isCustomerConsent": {
+            "defaultValue": "N"
+          },
+          "operator": {
+            "defaultValue": "N"
+          },
+          "creditUsed": {
+            "readOnly": true,
+            "required": true
+          },
+          "paymentTerms": {},
+          "salaryCategory": {
+            "readOnly": true
+          },
+          "customerBlocking": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "account": {},
+          "paymentMethod": {},
+          "isSalesRepresentative": {
+            "required": true
+          },
+          "priceList": {},
+          "pOFinancialAccount": {},
+          "pOPaymentTerms": {},
+          "pOPaymentMethod": {},
+          "purchasePricelist": {},
+          "vendorBlocking": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "eTGOLocation": {
+            "readOnly": true
+          }
+        }
+      },
+      "customer": {
+        "fields": {
+          "customer": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "priceList": {},
+          "paymentMethod": {},
+          "paymentTerms": {},
+          "account": {},
+          "salesRepresentative": {},
+          "invoiceTerms": {
+            "defaultValue": "I"
+          },
+          "invoiceSchedule": {},
+          "taxExempt": {},
+          "customerBlocking": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "salesOrder": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "goodsShipment": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "salesInvoice": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "paymentIn": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "sOBPTaxCategory": {},
+          "maturityDate1": {},
+          "maturityDate2": {},
+          "maturityDate3": {},
+          "birthDay": {},
+          "birthPlace": {},
+          "aeatsiiDefaultsiikey": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiSiikeylist": {
+            "defaultValue": "F1"
+          }
+        }
+      },
+      "customerAccounting": {
+        "fields": {
+          "customerReceivablesNo": {
+            "required": true
+          },
+          "customerPrepayment": {}
+        }
+      },
+      "intrastatShipments": {
+        "fields": {
+          "businessPartner": {
+            "readOnly": true,
+            "required": true
+          },
+          "sOTransportationType": {},
+          "port": {},
+          "statisticalAmtPercentSo": {},
+          "privateCustomer": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "vendorCreditor": {
+        "fields": {
+          "vendor": {
+            "required": true
+          },
+          "purchasePricelist": {},
+          "pOPaymentMethod": {},
+          "pOPaymentTerms": {},
+          "pOFinancialAccount": {},
+          "pOMaturityDate1": {},
+          "pOMaturityDate2": {},
+          "pOMaturityDate3": {},
+          "taxCategory": {},
+          "cashVAT": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "vendorBlocking": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "purchaseOrder": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "goodsReceipt": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "purchaseInvoice": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "paymentOut": {
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      },
+      "vendorAccounting": {
+        "fields": {
+          "vendorLiability": {
+            "required": true
+          },
+          "vendorPrepayment": {}
+        }
+      },
+      "intrastatAdquisitions": {
+        "fields": {
+          "businessPartner": {
+            "readOnly": true,
+            "required": true
+          },
+          "country": {},
+          "transportationType": {},
+          "portAirport": {},
+          "statisticalAmtPercentPo": {}
+        }
+      },
+      "employee": {
+        "fields": {
+          "employee": {
+            "required": true
+          },
+          "isSalesRepresentative": {
+            "required": true
+          },
+          "operator": {
+            "defaultValue": "N"
+          },
+          "salaryCategory": {
+            "readOnly": true
+          }
+        }
+      },
+      "employeeAccounting": {
+        "fields": {
+          "accountingSchema": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "costSalaryCategory": {
+        "fields": {
+          "startingDate": {
+            "required": true
+          },
+          "salaryCategory": {
+            "required": true
+          }
+        }
+      },
+      "bankAccount": {
+        "fields": {
+          "bankName": {},
+          "country": {
+            "defaultValue": "@COUNTRYDEF@"
+          },
+          "userContact": {},
+          "bankFormat": {
+            "required": true,
+            "defaultValue": "GENERIC"
+          },
+          "accountNo": {},
+          "iBAN": {},
+          "swiftCode": {},
+          "displayedAccount": {
+            "readOnly": true
+          }
+        }
+      },
+      "documentType": {
+        "fields": {
+          "documentcategory": {
+            "required": true
+          },
+          "issotrx": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "cDoctypeID": {
+            "required": true
+          },
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      },
+      "locationAddress": {
+        "fields": {
+          "locationAddress": {
+            "required": true
+          },
+          "phone": {},
+          "alternativePhone": {},
+          "name": {
+            "required": true,
+            "defaultValue": "."
+          },
+          "fax": {},
+          "shipToAddress": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "invoiceToAddress": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "active": {
+            "readOnly": true,
+            "required": true
+          },
+          "taxLocation": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "contact": {
+        "fields": {
+          "firstName": {},
+          "lastName": {},
+          "name": {
+            "readOnly": true,
+            "required": true
+          },
+          "email": {},
+          "phone": {},
+          "alternativePhone": {},
+          "position": {},
+          "comments": {},
+          "active": {
+            "readOnly": true,
+            "required": true
+          },
+          "isdefaultfordocs": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "grantPortalAccess": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "commercialauth": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "viasms": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "viaemail": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "basicDiscount": {
+        "fields": {
+          "lineNo": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_BPARTNER_DISCOUNT WHERE C_BPARTNER_ID=@C_BPARTNER_ID@"
+          },
+          "discount": {
+            "required": true
+          },
+          "customer": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "vendor": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "applyInOrder": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "cascade": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage contacts records.",
+    "whenToUse": [
+      "Use for contacts management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "businessPartnerCategory",
+        "etgoFirstname",
+        "etgoLastname",
+        "oBTIKTaxIDKey",
+        "etgoIsperson",
+        "customer",
+        "vendor",
+        "employee",
+        "setNewCurrency",
+        "creditLimit",
+        "customerBlocking",
+        "isSalesRepresentative",
+        "vendorBlocking"
+      ],
+      "lineFields": [
+        "customer",
+        "customerBlocking",
+        "salesOrder",
+        "goodsShipment",
+        "salesInvoice",
+        "paymentIn",
+        "aeatsiiDefaultsiikey",
+        "customerReceivablesNo",
+        "privateCustomer",
+        "vendor",
+        "cashVAT",
+        "vendorBlocking",
+        "purchaseOrder",
+        "goodsReceipt",
+        "purchaseInvoice",
+        "paymentOut",
+        "vendorLiability",
+        "employee",
+        "isSalesRepresentative",
+        "startingDate",
+        "salaryCategory",
+        "bankFormat",
+        "documentcategory",
+        "issotrx",
+        "cDoctypeID",
+        "active",
+        "locationAddress",
+        "name",
+        "shipToAddress",
+        "invoiceToAddress",
+        "taxLocation",
+        "isdefaultfordocs",
+        "grantPortalAccess",
+        "commercialauth",
+        "viasms",
+        "viaemail",
+        "lineNo",
+        "discount",
+        "customer",
+        "vendor",
+        "applyInOrder",
+        "cascade"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "businessPartner",
+        "field": "pOFinancialAccount",
+        "context": {
+          "required": [
+            {
+              "param": "PO_Paymentmethod_ID",
+              "source": "field",
+              "field": "pOPaymentMethod"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "vendorCreditor",
+        "field": "pOFinancialAccount",
+        "context": {
+          "required": [
+            {
+              "param": "PO_Paymentmethod_ID",
+              "source": "parentField",
+              "field": "pOPaymentMethod"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [
+      "processNow"
+    ],
+    "workflow": [],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "businessPartnerCategory",
+          "etgoFirstname",
+          "etgoLastname",
+          "oBTIKTaxIDKey",
+          "etgoIsperson",
+          "customer",
+          "vendor",
+          "employee",
+          "setNewCurrency",
+          "creditLimit",
+          "customerBlocking",
+          "isSalesRepresentative",
+          "vendorBlocking"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": [],
+    "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead."
+  },
+  "checksum": "90debdaa28d4b368"
+}

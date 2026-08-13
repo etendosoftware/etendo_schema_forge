@@ -37,8 +37,10 @@ User  -->  OnboardingPage.jsx  -->  POST /sws/go/onboarding  (new environment)
 **Key files:**
 - `src/auth/api.js` -- `createApiFetch()` with auto-401 handling, `buildHeaders()`
 - `src/auth/AuthContext.jsx` -- React context providing `token`, `username`, `isAuthenticated`, `logout()`
+- `src/auth/useLogout.js` -- `useLogout()` hook: the single logout choke point (clears session-scoped UI state, then calls the core `logout()`). See [Logout Choke Point](#logout-choke-point-uselogout).
 - `src/pages/OnboardingPage.jsx` -- Onboarding and environment login UI
 - `src/pages/onboarding/onboardingApi.js` -- API helpers for platform login, environment login, and onboarding stream
+- `src/pages/onboarding/onboardingSso.js` -- Provider-agnostic SSO frontend adapter; Google Identity Services is the first provider implementation
 - `com.etendoerp.go.onboarding.OnboardingSequenceGeneratorService` -- backend service that runs sequence generation during onboarding with explicit client admin context
 
 ### Base URL Detection
@@ -61,6 +63,43 @@ When deployed under Etendo (e.g., `/etendo_sf/web/app-shell/`), the base URL is 
 
 On mount, `AuthContext` reads the Etendo auth token from localStorage to restore the protected session. On logout, it clears both the Etendo session keys and the onboarding platform token (`sf_platform_token`) so the user returns to a fully signed-out state.
 
+### Session-Scoped UI State
+
+Not all persisted client state lives in `localStorage`. UI preferences that should reset when the browser session ends are stored in `sessionStorage` instead, so they survive in-app navigation but not a browser close or a fresh login.
+
+| Storage | What | Lifetime | Reset on logout |
+|---------|------|----------|-----------------|
+| `sessionStorage` | `dashboard_date_range` — the Dashboard period filter (`lastYear` default; valid values `lastYear`, `last90d`, `last30d`, `mtd`, `ytd`) | Until the browser tab/session closes | Yes — cleared by `clearStoredDateRange()` |
+
+`src/components/dashboard/DashboardDateRangeContext.jsx` owns this value:
+- `readStoredRange()` falls back to the `lastYear` default when nothing valid is stored, so a new session always opens the Dashboard at "Último año".
+- `clearStoredDateRange()` removes the `sessionStorage` key **and** the legacy `localStorage` key (the value lived in `localStorage` before the session-scoping migration), so no orphaned range survives a logout on an already-upgraded browser.
+
+### Logout Choke Point (`useLogout`)
+
+**Convention: every logout path MUST call `useLogout()` from `src/auth/useLogout.js` — never `useAuth().logout` directly.**
+
+`useLogout()` is the single choke point for signing out. It clears session-scoped UI state and then delegates to the core `AuthContext` `logout()`:
+
+```js
+// src/auth/useLogout.js
+export function useLogout() {
+  const { logout } = useAuth();
+  return useCallback(() => {
+    clearStoredDateRange(); // reset session-scoped UI state
+    logout();               // clears auth tokens + platform token
+  }, [logout]);
+}
+```
+
+Centralizing here eliminates the "forgot to clear on this path" class of bug: without it, a user who logs out and logs back in (or a different user on a shared browser) would inherit the previous session's Dashboard period filter. Callers currently wired through this hook:
+
+- `src/components/UserAvatarButton.jsx` — the user-menu "Log out" action.
+- `src/hooks/useEntity.js` — automatic logout on an HTTP 401 response.
+- `src/pages/OAuth2ClientsPage.jsx`, `src/pages/AuthorizePage.jsx` — post-password-change and OAuth2 authorization exit paths.
+
+**When you add any new session-scoped UI state**, clear it inside its own `clearStored*()` export and call that export from `useLogout()`, so the choke point stays the complete list of "things that reset on logout." When you add a new logout entry point, route it through `useLogout()` rather than `useAuth().logout`.
+
 ### Auth Guard
 
 `AuthGuard` wraps all protected routes. If `isAuthenticated` is false (no token), the user is redirected to `/onboarding`. The `/onboarding` route itself is public and always renders `OnboardingPage`, which can resume the onboarding/environment-selection flow based on the current platform session.
@@ -75,13 +114,24 @@ On mount, `AuthContext` reads the Etendo auth token from localStorage to restore
 `OnboardingPage.jsx` currently handles four public auth/onboarding states before the protected app loads:
 
 1. **Register** -- create the platform account.
-2. **Login** -- sign in with an existing platform account.
+2. **Login** -- sign in with an existing platform account using local credentials or a configured SSO provider.
 3. **Pre-create setup** -- a two-step onboarding wizard collects the user profile and initial company data before environment creation starts.
 4. **Creation progress modal** -- while `/sws/go/onboarding` runs, the UI switches to a centered modal-style progress state (20% / 50% / 80% / 100%) over a blurred application background until the new environment is ready.
 
 After a successful platform login or registration, `routeByEnvironments()` decides whether to:
 - open the setup wizard when the account has no environments yet, or
 - auto-login to the first available environment and redirect to `/dashboard`.
+
+### Provider-Agnostic SSO
+
+The app-shell keeps SSO provider-specific behavior outside the account flow:
+
+- `loginWithSsoProvider(fetchImpl, baseUrl, provider, payload)` posts to `POST /sws/go/sso/{provider}`.
+- Provider payloads are allowlisted per implementation. The Google Identity Services callback implementation sends only `credential`; browser code must not send account authority fields such as `email`, `name`, or `subject`.
+- `onboardingSso.js` resolves configured providers and renders provider-specific buttons. Google uses Google Identity Services with FedCM enabled for the button flow.
+- SSO success stores the same `sf_platform_token` used by local login and then routes through the existing environment-selection/onboarding logic.
+
+Google requires a public Web OAuth client id in `VITE_GOOGLE_CLIENT_ID`. This is a client identifier, not a secret. Google client secrets, provider API keys, signing secrets, and backend SSO policy configuration must never be exposed in the frontend bundle.
 
 ### API Call Authentication
 
@@ -130,7 +180,7 @@ Etendo stores active sessions in the `AD_Session` table:
 | **Login** | New `AD_Session` row created; token returned to client |
 | **API request** | Token validated against `AD_Session`; session must be active |
 | **Timeout** | Etendo marks session as inactive after configurable idle period |
-| **Logout** | Client calls logout endpoint; `Session_Active` set to `N`; client clears localStorage |
+| **Logout** | Client calls logout endpoint; `Session_Active` set to `N`; `useLogout()` clears session-scoped UI state (Dashboard period filter) then clears localStorage auth/platform tokens — see [Logout Choke Point](#logout-choke-point-uselogout) |
 | **Admin kill** | Admin marks session as inactive in Etendo Classic UI |
 | **Multiple sessions** | Etendo allows multiple concurrent sessions per user (different browsers/devices) |
 
@@ -167,7 +217,7 @@ Each role has explicit window access grants:
 | `IsReadWrite` | `Y` = full access, `N` = read-only |
 | `IsActive` | Whether this grant is active |
 
-**Frontend enforcement**: The SPA should hide windows and action buttons that the user's role cannot access. This is a UX improvement, not a security boundary.
+**Frontend enforcement**: The SPA's sidebar hides menu items (windows/processes) the current role cannot access — it fetches the `SFListMenu` webhook's role-pruned tree and filters the static `menu.json`-driven sidebar against it (see [06 -- Frontend Delivery: Menu and Registry](06-frontend-delivery.md#menu-and-registry)). Action-button-level hiding per role is not yet implemented. This remains a UX improvement, not a security boundary.
 
 **Backend enforcement (mandatory)**: Every RequestHandler MUST validate that the current user's role has access to the requested window/entity before processing any CRUD operation. Frontend-only enforcement is trivially bypassed.
 
@@ -233,7 +283,7 @@ If the SPA and API are on different origins, overly permissive CORS headers (`Ac
 - **Mitigation**: Set `Access-Control-Allow-Origin` to the exact SPA origin. Never use `*` with credentials.
 
 **Secrets in Frontend Bundle**
-No API keys, database credentials, internal URLs, or service tokens should appear in the JavaScript bundle. The only acceptable environment variable is `VITE_API_BASE` (a relative path) and `VITE_MOCK` (a boolean flag).
+No API keys, database credentials, internal URLs, service tokens, Google client secrets, or provider signing secrets should appear in the JavaScript bundle. Acceptable frontend variables are `VITE_API_BASE` (a relative path), `VITE_MOCK` (a boolean flag), and public provider client identifiers such as `VITE_GOOGLE_CLIENT_ID`.
 - **Mitigation**: Audit the build output (`dist/`) for sensitive strings. Vite only exposes variables prefixed with `VITE_`.
 
 **Token in localStorage**
@@ -250,6 +300,19 @@ The API may return all fields visible to the role, even if the current UI view d
 
 **Audit Logging**
 Etendo has `AD_Audit_Trail` for tracking data changes. Ensure it is enabled for sensitive entities (user management, financial transactions, role changes).
+
+**Transactional Email**
+Transactional email must be protected as a server-side contract system:
+- The frontend must never call the provider endpoint directly.
+- Provider endpoint URLs, API keys, sender identities, and signing secrets must stay in server configuration only.
+- No browser-visible endpoint may accept an arbitrary email payload such as `to`, `template`, and `data`.
+- Each send must execute a versioned contract that defines authorization, recipient resolution, variables, throttle, idempotency, audit, suppression, and kill switch behavior.
+- Recipients must be derived from trusted server records by default.
+- Caller-provided recipients are allowed only for explicit admin/support contracts.
+- Reply-To must be disabled by default or constrained to a documented allowlist policy.
+- Controlled custom HTML email requires role checks, reason capture, sanitizer, strict throttle, and audit.
+
+See [../transactional-email-framework.md](../transactional-email-framework.md), [../email-contracts.md](../email-contracts.md), and [../ops/transactional-email-security.md](../ops/transactional-email-security.md).
 
 ## HTTPS / TLS
 
@@ -289,11 +352,12 @@ Recommended CSP headers for the SPA:
 ```
 Content-Security-Policy:
   default-src 'self';
-  script-src 'self';
+  script-src 'self' https://accounts.google.com;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data:;
   font-src 'self';
-  connect-src 'self' https://api.example.com;
+  connect-src 'self' https://api.example.com https://accounts.google.com;
+  frame-src https://accounts.google.com;
   frame-ancestors 'none';
   base-uri 'self';
   form-action 'self';
@@ -303,6 +367,7 @@ Notes:
 - `'unsafe-inline'` for styles is required by TailwindCSS and Radix UI (inline style attributes)
 - `frame-ancestors 'none'` prevents clickjacking
 - `connect-src` must include the API origin if different from the SPA origin
+- Google SSO requires `script-src`, `connect-src`, and `frame-src` entries for `https://accounts.google.com` so Google Identity Services and FedCM can render the button flow
 
 ## Dependency Security
 

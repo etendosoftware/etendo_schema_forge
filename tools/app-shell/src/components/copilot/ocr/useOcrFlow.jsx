@@ -124,7 +124,7 @@ export function useOcrFlow({
         token={token}
         onSubmit={(picks) => close(picks)}
         onCancel={() => close(null)}
-      />
+        data-testid="ProductResolverPopup__ebdfaa" />
     );
   }), [token]);
 
@@ -275,7 +275,7 @@ export function useOcrFlow({
         apiBaseUrl={apiBaseUrl}
         onSubmit={(value) => closeLines(value)}
         onCancel={() => closeLines(null)}
-      />
+        data-testid="OcrLinesReviewModal__ebdfaa" />
     );
   }
   if (reviewOpen) {
@@ -290,7 +290,7 @@ export function useOcrFlow({
         token={token}
         onSubmit={(value) => closeReview(value)}
         onCancel={() => closeReview(null)}
-      />
+        data-testid="OcrReviewModal__ebdfaa" />
     );
   }
 

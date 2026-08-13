@@ -7,6 +7,7 @@
   },
   "entities": {
     "cabeceraDeConfiguraciónVerifactu": {
+      "javaQualifier": "verifactu-config-ready-handler",
       "fields": {
         "organization": {
           "visibility": "system",
@@ -39,15 +40,11 @@
           "visibility": "editable"
         },
         "inVfactuSystem": {
-          "visibility": "readOnly"
+          "visibility": "discarded"
         },
         "client": {
           "visibility": "system",
           "derivation": "fromParent"
-        },
-        "verifactuConfig": {
-          "visibility": "system",
-          "derivation": "fromConfig"
         },
         "creationDate": {
           "visibility": "system",
@@ -65,10 +62,6 @@
           "visibility": "system",
           "derivation": "fromConfig"
         },
-        "refreshData": {
-          "visibility": "system",
-          "derivation": "fromConfig"
-        },
         "updated": {
           "visibility": "system",
           "derivation": "fromConfig"
@@ -76,6 +69,9 @@
         "updatedBy": {
           "visibility": "system",
           "derivation": "fromConfig"
+        },
+        "refreshData": {
+          "visibility": "discarded"
         }
       }
     }

@@ -97,14 +97,14 @@ async function installQuotationMocks(page, state) {
       return;
     }
 
-    if ((entity === 'quotation' || entity === 'header') && req.method() === 'GET') {
-      const detailMap = {
-        [ORIGINAL_ID]: ORIGINAL_QUOTE,
-        [CLONE_ID]: CLONED_QUOTE,
-        [UE_ID]: UE_QUOTE,
-        [DELETE_ID]: DELETE_QUOTE,
-      };
+    const detailMap = {
+      [ORIGINAL_ID]: ORIGINAL_QUOTE,
+      [CLONE_ID]: CLONED_QUOTE,
+      [UE_ID]: UE_QUOTE,
+      [DELETE_ID]: DELETE_QUOTE,
+    };
 
+    if ((entity === 'quotation' || entity === 'header') && req.method() === 'GET') {
       if (idOrSubpath && detailMap[idOrSubpath]) {
         await route.fulfill({
           status: 200,
@@ -122,6 +122,31 @@ async function installQuotationMocks(page, state) {
         });
         return;
       }
+    }
+
+    // ETP-4468 — QuotationConfirmModal now calls onSave() (handleSave, a PATCH
+    // to `${apiBaseUrl}/quotation/${id}`) before converting the quotation.
+    // Without an explicit PATCH echo here, the request fell through to the
+    // generic `**/sws/**` catch-all in auth.js, which replies with a
+    // synthetic `{ id: 'e2e-record-id', ... }` (wrong id, no NEO envelope).
+    // useEntity's refetchAfterSave then refetched by that fake id — a URL
+    // this route also matches (`sales-quotation/quotation/e2e-record-id`),
+    // but not present in detailMap, so it fell through to `route.fallback()`
+    // and got an empty record from the catch-all, overwriting the header
+    // state and losing `documentStatus` (UE) before the invoice-creation
+    // step ran. Echo back the real record (matched by id) to keep the
+    // refetch consistent, exactly like a real backend would.
+    if (
+      entity === 'quotation'
+      && (req.method() === 'PATCH' || req.method() === 'PUT')
+      && idOrSubpath && detailMap[idOrSubpath]
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ ...detailMap[idOrSubpath] }] } }),
+      });
+      return;
     }
 
     if (entity === 'quotation' && req.method() === 'POST' && action === 'cloneRecord' && idOrSubpath === ORIGINAL_ID) {
@@ -214,8 +239,13 @@ test.describe('Sales Quotation — ETP-4006 regressions (mocked)', () => {
     await page.getByTestId('action-clone-record').click();
     await expect.poll(() => state.cloneCalls, { timeout: 5_000 }).toBe(1);
     await page.waitForURL(new RegExp(`/sales-quotation/${CLONE_ID}$`), { timeout: 10_000 });
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(page.getByText(CLONED_QUOTE.documentNo, { exact: true })).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByTestId('field-priceList')).toContainText(CLONED_QUOTE['priceList$_identifier']);
+    // ETP-4600: a field with a committed value renders as a chip
+    // (`field-priceList-chip`) — the plain input testid is not in the DOM
+    // while a value is set. The chip's <span> holds the value label.
+    await expect(page.getByTestId('field-priceList-chip')).toContainText(CLONED_QUOTE['priceList$_identifier']);
 
     await openQuotationConfirmModal(page);
     await expect(page.getByTestId('confirm-summary-total')).toHaveText(/90([.,])00/, { timeout: 5_000 });

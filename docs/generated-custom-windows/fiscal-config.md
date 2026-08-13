@@ -6,6 +6,13 @@ Use this window to configure the electronic invoicing system for an organization
 
 The window serves two distinct phases: onboarding (first-time setup via a guided wizard) and ongoing configuration maintenance (editing the records created during onboarding).
 
+## Theme roles
+
+The configuration forms, certificate workflow, expiry banner and onboarding
+steps use the shared semantic theme. Structural UI resolves from shared surface
+and control roles; certificate state and validation feedback use success,
+warning, information, neutral and destructive roles.
+
 ## What this window should allow
 
 - Guide new organizations through fiscal territory selection and system assignment via a 6-screen onboarding wizard.
@@ -166,7 +173,7 @@ Without this fetch the wizard's top-level `cert` state would only update when th
 - `cli/test/useFiscalConfig.test.js` — 16 tests covering source guards (named export, Promise.all, entity constants, detectProfile wiring), `fetchRecord` URL construction via `useApiFetch` (no manual Authorization header), response parsing (empty/missing data), and error handling.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/SiiSection.test.js` — 17 component source-guard tests: forwardRef/`useImperativeHandle`, navarra badge, form fields, PUT endpoint contract, hideSave/hideCert.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/TbaiSection.test.js` — 17 component source-guard tests: enroll date + invoice description validation, PUT endpoint, boolean serialization.
-- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/VerifactuSection.test.js` — 17 component source-guard tests: locked/unlocked badge from `isReady`, disabled controls when locked, tax type select.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/VerifactuSection.test.js` — 18 component source-guard tests: `isLocked` derived from `isReady` (no status badge — removed, lock behavior unaffected), disabled controls when locked, tax type select, absence of the removed `inVfactuSystem` field/enrollment date, PUT payload contract.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/OnboardingWizard.test.js` — 36 component source-guard tests: all 7 territories, wizard steps, system resolution, record creation via POST, cert modal, navigation callbacks, cert auto-check on applied step, removed placeholder NextItems.
 - `tools/app-shell/src/windows/custom/fiscal-config/certExpiryUtils.js` — pure `daysUntil` helper (no React deps); validates month (1–12) and day (1–31); round-trips the constructed `Date.UTC` value through `getUTCFullYear/Month/Date` to reject impossible dates (e.g. `2026-02-31` → March); builds `todayUtc` from `getUTCFullYear/Month/Date` so the boundary is UTC midnight in every timezone; imported by `useCertExpiry.js` and directly importable in Node.js tests.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/certExpiryUtils.test.js` — 21 tests: exports guard (named function, `Date.UTC`, `getUTCFullYear` usage, round-trip check), null/falsy inputs, future dates (1/30/60 days, today=0), past dates, non-ISO inputs (bare string, slash-delimited), out-of-range components (month 0, month 13, day 0, day 32, impossible Feb 31, impossible Apr 31 → all `null`).

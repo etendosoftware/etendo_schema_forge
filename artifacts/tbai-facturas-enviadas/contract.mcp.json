@@ -1,0 +1,135 @@
+{
+  "version": "0.3.0",
+  "generatedAt": "2026-05-04T17:05:55.224Z",
+  "updatedAt": "2026-08-04T14:03:25.704Z",
+  "contractChecksum": "351c5d78b41384f2",
+  "apiPrediction": {
+    "specName": "tbai-facturas-enviadas",
+    "baseUrl": "/sws/neo/tbai-facturas-enviadas",
+    "crud": {
+      "sincronización": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/tbai-facturas-enviadas/sincronización",
+        "detailUrl": "/sws/neo/tbai-facturas-enviadas/sincronización/{id}",
+        "supportedFilters": []
+      },
+      "resultadoValidación": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación",
+        "detailUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "sincronización",
+        "field": "invoice",
+        "column": "C_Invoice_ID",
+        "reference": "Invoice",
+        "inputMode": "selector",
+        "url": "/sws/neo/tbai-facturas-enviadas/sincronización/selectors/invoice"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "monitor",
+      "readOnly": true
+    }
+  },
+  "formState": {
+    "entities": {
+      "sincronización": {
+        "fields": {
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "estado": {
+            "readOnly": true
+          },
+          "descripcion": {
+            "readOnly": true
+          },
+          "invoice": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "resultadoValidación": {
+        "fields": {
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "codigo": {
+            "readOnly": true
+          },
+          "descripcion": {
+            "readOnly": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage tbai facturas enviadas records.",
+    "whenToUse": [
+      "Use for tbai facturas enviadas management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "active"
+      ],
+      "lineFields": [
+        "active"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "active"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "d4a913e1adbd8bbd"
+}

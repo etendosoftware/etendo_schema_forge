@@ -5,7 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'firstName', column: 'Firstname', type: 'string', label: 'First Name' },
   { key: 'lastName', column: 'Lastname', type: 'string', label: 'Last Name' },
-  { key: 'email', column: 'Email', type: 'string', label: 'Email' },
+  { key: 'email', column: 'Email', type: 'string', label: 'Email', minWidth: 320 },
   { key: 'phone', column: 'Phone', type: 'string', label: 'Phone' },
   { key: 'position', column: 'Title', type: 'string', label: 'Position' },
 ];

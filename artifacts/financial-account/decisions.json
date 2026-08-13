@@ -1,0 +1,198 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "agentPrompt": "#REF#agent-prompts/financial-account/spec.md",
+    "category": "finance",
+    "name": "Accounts",
+    "detailEntity": null,
+    "customComponents": {
+      "headerTable": "AccountsHeaderTable"
+    },
+    "rowQuickActions": { "enabled": false },
+    "hideCreate": true,
+    "hidePrint": true,
+    "hideMoreMenu": true,
+    "hideListFilters": true,
+    "labelOverrides": {
+      "en_US": { "pendingCount": "Pending" },
+      "es_ES": { "pendingCount": "Por conciliar" }
+    }
+  },
+  "entities": {
+    "account": {
+      "javaQualifier": "financialAccountHeaderHandler",
+      "agentPrompt": "#REF#agent-prompts/financial-account/account.md",
+      "virtualFields": [
+        {
+          "name": "pendingCount",
+          "column": "pendingCount",
+          "label": "Pending",
+          "type": "integer",
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 4
+        }
+      ],
+      "fields": {
+        "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true, "gridLabelKey": "financeAccountsColAccount", "cellType": "accountName" },
+        "type": { "visibility": "editable", "grid": true, "gridOrder": 2, "gridLabelKey": "financeAccountsColType", "cellType": "accountType", "agentPrompt": "#REF#agent-prompts/financial-account/account.type.md" },
+        "currency": { "visibility": "editable", "grid": false, "required": true },
+        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "gridLabelKey": "financeAccountsColBalance", "cellType": "accountBalance" },
+        "description": { "visibility": "editable", "grid": false },
+        "iBAN": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.iban.md" },
+        "swiftCode": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.swift-code.md" },
+        "bankCode": { "visibility": "editable", "grid": false },
+        "branchCode": { "visibility": "editable", "grid": false },
+        "partialAccountNo": { "visibility": "editable", "grid": false },
+        "accountNo": { "visibility": "editable", "grid": false, "agentPrompt": "#REF#agent-prompts/financial-account/account.account-no.md" },
+        "businessPartner": { "visibility": "system" },
+        "matchingAlgorithm": { "visibility": "system" },
+        "initialBalance": { "visibility": "system" },
+        "creditLimit": { "visibility": "discarded" },
+        "locationAddress": { "visibility": "discarded" },
+        "default": { "visibility": "readOnly", "grid": false },
+        "genericAccountNo": { "visibility": "discarded" },
+        "iNENo": { "visibility": "discarded" },
+        "country": { "visibility": "system" },
+        "bankFormat": { "visibility": "discarded" },
+        "typewriteoff": { "visibility": "discarded" },
+        "writeofflimit": { "visibility": "discarded" },
+        "bankDigitcontrol": { "visibility": "discarded" },
+        "accountDigitcontrol": { "visibility": "discarded" },
+        "routingNo": { "visibility": "discarded" },
+        "lastreconciliation": { "visibility": "system" },
+        "lastreconbalance": { "visibility": "system" },
+        "aprmIsfundstransEnabled": { "visibility": "discarded" },
+        "aprmGlitemDiff": { "visibility": "discarded" },
+        "eTGODateTolerance": { "visibility": "editable" },
+        "eTGOAmountTolerance": { "visibility": "editable" }
+      }
+    },
+    "transaction": {
+      "javaQualifier": "document-posting",
+      "fields": {
+        "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
+        "businessPartner": { "visibility": "readOnly", "grid": true, "gridOrder": 3, "displayLogic": "@Trxtype@!''", "displayLogicJs": "record['transactionType'] !== ''", "reason": "ETP-4529 — Contacto is always shown regardless of the accounting-dimension config (strips @ACCT_DIMENSION_DISPLAY@ from the raw '@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!\\'\\'' expression), but the unrelated Trxtype condition is preserved as client-evaluable JS: Trxtype (Transaction Type — BP Deposit/Withdrawal/Bank fee) is mandatory with a default, so this only hides the field for the instant before a type is set on a brand-new record." },
+        "description": { "visibility": "readOnly", "grid": true, "gridOrder": 4 },
+        "status": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
+        "transactionType": { "visibility": "readOnly", "grid": true, "gridOrder": 6 },
+        "gLItem": { "visibility": "readOnly", "grid": true, "gridOrder": 7 },
+        "depositAmount": { "visibility": "readOnly", "grid": false },
+        "paymentAmount": { "visibility": "readOnly", "grid": false },
+        "posted": {
+          "visibility": "readOnly",
+          "type": "boolean",
+          "form": false,
+          "grid": true,
+          "badge": true,
+          "badgeLabels": {
+            "true":  { "en_US": "Posted",     "es_ES": "Contabilizado"   },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          }
+        },
+        "finPaymentID": { "visibility": "system" },
+        "currency": { "visibility": "system" },
+        "organization": { "visibility": "readOnly", "grid": false },
+        "project": { "visibility": "readOnly", "grid": false },
+        "costCenter": { "visibility": "readOnly", "grid": false },
+        "activity": { "visibility": "readOnly", "grid": false },
+        "salesCampaign": { "visibility": "readOnly", "grid": false },
+        "salesRegion": { "visibility": "readOnly", "grid": false },
+        "stDimension": { "visibility": "readOnly", "grid": false },
+        "ndDimension": { "visibility": "readOnly", "grid": false },
+        "product": { "visibility": "discarded" },
+        "lineNo": { "visibility": "system" },
+        "reconciliation": { "visibility": "system" },
+        "dateAcct": { "visibility": "system" },
+        "processed": { "visibility": "system" },
+        "processNow": { "visibility": "discarded" },
+        "createdByAlgorithm": { "visibility": "discarded" },
+        "aprmFinaccTransOrigin": { "visibility": "discarded" },
+        "aprmProcessed": { "visibility": "discarded" },
+        "foreignCurrency": { "visibility": "discarded" },
+        "foreignAmount": { "visibility": "discarded" },
+        "foreignConversionRate": { "visibility": "discarded" }
+      }
+    },
+    "importedBankStatements": {
+      "fields": {
+        "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "name": { "visibility": "editable", "grid": true, "gridOrder": 2 },
+        "fileName": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "notes": { "visibility": "editable", "grid": true, "gridOrder": 4 },
+        "importdate": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
+        "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 6 },
+        "posted": { "visibility": "system" },
+        "documentType": { "visibility": "system" },
+        "fINReconciliationID": { "visibility": "system" },
+        "aPRMProcessBankStatementForce": { "visibility": "discarded" },
+        "aPRMProcessBankStatement": { "visibility": "system" }
+      }
+    },
+    "bankStatementLines": {
+      "fields": {
+        "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "description": { "visibility": "editable", "grid": true, "gridOrder": 2 },
+        "bpartnername": { "visibility": "editable", "grid": true, "gridOrder": 3 },
+        "businessPartner": { "visibility": "editable", "grid": true, "gridOrder": 4 },
+        "gLItem": { "visibility": "editable", "grid": true, "gridOrder": 5 },
+        "referenceNo": { "visibility": "editable", "grid": true, "gridOrder": 6 },
+        "dramount": { "visibility": "editable", "grid": true, "gridOrder": 7 },
+        "cramount": { "visibility": "editable", "grid": true, "gridOrder": 8 },
+        "lineNo": { "visibility": "system" },
+        "financialAccountTransaction": { "visibility": "system" },
+        "matchingtype": { "visibility": "system" },
+        "matchedDocument": { "visibility": "system" },
+        "bankStatement": { "visibility": "system" },
+        "c43Description": { "visibility": "discarded" },
+        "pSD2TransactionIdentifier": { "visibility": "discarded" },
+        "pSD2BalanceAfterTransaction": { "visibility": "discarded" }
+      }
+    },
+    "accountingHistory": { "exclude": true },
+    "exchangeRates": { "exclude": true },
+    "accountingConfiguration": {
+      "javaQualifier": "financialAccountAccountingHandler",
+      "fields": {
+        "fINAssetAcct": { "visibility": "editable", "grid": false, "required": true },
+        "fINTransitoryAcct": { "visibility": "editable", "grid": false },
+        "accountingSchema": { "visibility": "system" },
+        "active": { "visibility": "system" },
+        "id": { "visibility": "system" },
+        "account": { "visibility": "system" },
+        "organization": { "visibility": "system" },
+        "client": { "visibility": "system" },
+        "creationDate": { "visibility": "system" },
+        "createdBy": { "visibility": "system" },
+        "updated": { "visibility": "system" },
+        "updatedBy": { "visibility": "system" },
+        "enablebankstatement": { "visibility": "discarded" },
+        "fINBankrevaluationgainAcct": { "visibility": "discarded" },
+        "fINBankrevaluationlossAcct": { "visibility": "discarded" },
+        "fINBankfeeAcct": { "visibility": "discarded" },
+        "inTransitPaymentAccountIN": { "visibility": "discarded" },
+        "depositAccount": { "visibility": "discarded" },
+        "clearedPaymentAccount": { "visibility": "discarded" },
+        "fINOutIntransitAcct": { "visibility": "discarded" },
+        "withdrawalAccount": { "visibility": "discarded" },
+        "clearedPaymentAccountOUT": { "visibility": "discarded" },
+        "receivePaymentAccount": { "visibility": "discarded" },
+        "makePaymentAccount": { "visibility": "discarded" },
+        "creditAccount": { "visibility": "discarded" },
+        "debitAccount": { "visibility": "discarded" }
+      }
+    },
+    "paymentMethod": { "exclude": true },
+    "reconciliations": { "exclude": true },
+    "clearedItems": { "exclude": true },
+    "accounting": { "exclude": true },
+    "bankConnections": { "exclude": true }
+  },
+  "version": 2
+}

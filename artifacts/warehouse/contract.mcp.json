@@ -1,0 +1,451 @@
+{
+  "version": "0.22.0",
+  "generatedAt": "2026-04-29T18:11:37.816Z",
+  "updatedAt": "2026-07-30T17:29:30.175Z",
+  "contractChecksum": "c1f1462e22d5c7bf",
+  "apiPrediction": {
+    "specName": "warehouse",
+    "baseUrl": "/sws/neo/warehouse",
+    "crud": {
+      "warehouse": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/warehouse/warehouse",
+        "detailUrl": "/sws/neo/warehouse/warehouse/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      },
+      "storageBin": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/warehouse/storageBin",
+        "detailUrl": "/sws/neo/warehouse/storageBin/{id}",
+        "supportedFilters": []
+      },
+      "productTransactions": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/warehouse/productTransactions",
+        "detailUrl": "/sws/neo/warehouse/productTransactions/{id}",
+        "supportedFilters": []
+      },
+      "binContents": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/warehouse/binContents",
+        "detailUrl": "/sws/neo/warehouse/binContents/{id}",
+        "supportedFilters": []
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/warehouse/accounting",
+        "detailUrl": "/sws/neo/warehouse/accounting/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "warehouse",
+        "field": "locationAddress",
+        "column": "C_Location_ID",
+        "reference": "Location",
+        "inputMode": "search",
+        "url": "/sws/neo/warehouse/warehouse/selectors/locationAddress"
+      },
+      {
+        "entity": "storageBin",
+        "field": "inventoryStatus",
+        "column": "M_InventoryStatus_ID",
+        "reference": "InventoryStatus",
+        "inputMode": "selector",
+        "url": "/sws/neo/warehouse/storageBin/selectors/inventoryStatus"
+      },
+      {
+        "entity": "productTransactions",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/warehouse/productTransactions/selectors/product"
+      },
+      {
+        "entity": "productTransactions",
+        "field": "goodsShipmentLine",
+        "column": "M_InOutLine_ID",
+        "reference": "InOutLine",
+        "inputMode": "search",
+        "url": "/sws/neo/warehouse/productTransactions/selectors/goodsShipmentLine"
+      },
+      {
+        "entity": "productTransactions",
+        "field": "physicalInventoryLine",
+        "column": "M_InventoryLine_ID",
+        "reference": "InventoryLine",
+        "inputMode": "search",
+        "url": "/sws/neo/warehouse/productTransactions/selectors/physicalInventoryLine"
+      },
+      {
+        "entity": "productTransactions",
+        "field": "movementLine",
+        "column": "M_MovementLine_ID",
+        "reference": "MovementLine",
+        "inputMode": "search",
+        "url": "/sws/neo/warehouse/productTransactions/selectors/movementLine"
+      },
+      {
+        "entity": "productTransactions",
+        "field": "productionLine",
+        "column": "M_ProductionLine_ID",
+        "reference": "ProductionLine",
+        "inputMode": "search",
+        "url": "/sws/neo/warehouse/productTransactions/selectors/productionLine"
+      },
+      {
+        "entity": "productTransactions",
+        "field": "projectIssue",
+        "column": "C_ProjectIssue_ID",
+        "reference": "ProjectIssue",
+        "inputMode": "search",
+        "url": "/sws/neo/warehouse/productTransactions/selectors/projectIssue"
+      },
+      {
+        "entity": "binContents",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/warehouse/binContents/selectors/product"
+      },
+      {
+        "entity": "binContents",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/warehouse/binContents/selectors/uOM"
+      },
+      {
+        "entity": "binContents",
+        "field": "orderUOM",
+        "column": "M_Product_Uom_Id",
+        "reference": "Product_Uom",
+        "inputMode": "selector",
+        "url": "/sws/neo/warehouse/binContents/selectors/orderUOM"
+      },
+      {
+        "entity": "binContents",
+        "field": "referencedInventory",
+        "column": "M_RefInventory_ID",
+        "reference": "RefInventory",
+        "inputMode": "selector",
+        "url": "/sws/neo/warehouse/binContents/selectors/referencedInventory"
+      },
+      {
+        "entity": "accounting",
+        "field": "warehouseDifferences",
+        "column": "W_Differences_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/warehouse/accounting/selectors/warehouseDifferences"
+      }
+    ],
+    "actions": [
+      {
+        "name": "changeStatus",
+        "actionType": "utilityAction",
+        "entity": "storageBin",
+        "column": "Change_Status",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/warehouse/storageBin/{id}/action/changeStatus",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "3A4E13B0AB764F188CB062DDE2A9B685",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "manualcostadjustment",
+        "actionType": "utilityAction",
+        "entity": "productTransactions",
+        "column": "Manualcostadjustment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/warehouse/productTransactions/{id}/action/manualcostadjustment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "D395B727675C45C98320F8A40E0768E7",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "inventory"
+    }
+  },
+  "formState": {
+    "entities": {
+      "warehouse": {
+        "fields": {
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "description": {},
+          "locationAddress": {
+            "required": true
+          }
+        }
+      },
+      "storageBin": {
+        "fields": {
+          "searchKey": {
+            "required": true
+          },
+          "rowX": {
+            "required": true
+          },
+          "stackY": {
+            "required": true
+          },
+          "levelZ": {
+            "required": true
+          },
+          "relativePriority": {
+            "required": true,
+            "defaultValue": "50"
+          },
+          "barcode": {},
+          "inventoryStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "7B3DC15A20234C418D26EECDC5D59003"
+          },
+          "default": {
+            "required": true
+          },
+          "changeStatus": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "productTransactions": {
+        "fields": {
+          "product": {
+            "readOnly": true,
+            "required": true
+          },
+          "attributeSetValue": {
+            "readOnly": true,
+            "required": true
+          },
+          "movementQuantity": {
+            "readOnly": true,
+            "required": true
+          },
+          "movementDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "movementType": {
+            "readOnly": true,
+            "required": true
+          },
+          "goodsShipmentLine": {
+            "readOnly": true
+          },
+          "physicalInventoryLine": {
+            "readOnly": true
+          },
+          "movementLine": {
+            "readOnly": true
+          },
+          "productionLine": {
+            "readOnly": true
+          },
+          "projectIssue": {
+            "readOnly": true
+          }
+        }
+      },
+      "binContents": {
+        "fields": {
+          "product": {
+            "required": true
+          },
+          "attributeSetValue": {
+            "readOnly": true
+          },
+          "lastInventoryCountDate": {
+            "readOnly": true
+          },
+          "uOM": {
+            "required": true
+          },
+          "orderUOM": {},
+          "quantityOnHand": {
+            "readOnly": true,
+            "required": true
+          },
+          "onHandOrderQuanity": {},
+          "quantityInDraftTransactions": {
+            "readOnly": true
+          },
+          "quantityOrderInDraftTransactions": {
+            "readOnly": true
+          },
+          "referencedInventory": {
+            "readOnly": true
+          },
+          "etgoValuation": {
+            "readOnly": true
+          },
+          "etgoCost": {
+            "readOnly": true
+          }
+        }
+      },
+      "accounting": {
+        "fields": {
+          "warehouseDifferences": {
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage warehouse inventory operations.",
+    "whenToUse": [
+      "Use for stock and warehouse operations."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "locationAddress"
+      ],
+      "lineFields": [
+        "searchKey",
+        "rowX",
+        "stackY",
+        "levelZ",
+        "relativePriority",
+        "default",
+        "changeStatus",
+        "product",
+        "uOM",
+        "warehouseDifferences"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line"
+    ],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Required field without default value must be provided",
+      "Validate the current form state before running lifecycle actions",
+      "Do not run destructive lifecycle actions without explicit user confirmation"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "locationAddress"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "searchKey",
+          "rowX",
+          "stackY",
+          "levelZ",
+          "relativePriority",
+          "default",
+          "changeStatus",
+          "product",
+          "uOM",
+          "warehouseDifferences"
+        ]
+      }
+    ],
+    "warnings": [
+      "System lifecycle actions are present but are not exposed as editable agent actions",
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "9fedcbbf05e3b0a9"
+}

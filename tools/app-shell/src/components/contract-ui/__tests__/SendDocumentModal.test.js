@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'SendDocumentModal.jsx'), 'utf8');
+const sendSrc = readFileSync(join(__dirname, '..', 'documentEmailSend.js'), 'utf8');
 
 describe('SendDocumentModal', () => {
   it('exports a default function component', () => {
@@ -43,8 +44,19 @@ describe('SendDocumentModal', () => {
     assert.match(src, /\$\{documentType\}.*#\$\{documentNo\}/);
   });
 
-  it('disables Send button when email is invalid or sending', () => {
-    assert.match(src, /!isValidEmail\(to\)\s*\|\|\s*sending/);
+  it('disables Send button when documentId is missing or sending', () => {
+    assert.match(src, /!documentId\s*\|\|\s*sending/);
+  });
+
+  it('sends document email through the email contracts endpoint', () => {
+    assert.match(src, /sendDocumentEmail/);
+    assert.match(sendSrc, /email-contracts\/\$\{contractName\}\/send/);
+    assert.match(sendSrc, /buildEmailContractCommand/);
+  });
+
+  it('derives email contract names from the window name without document-specific branches', () => {
+    assert.match(sendSrc, /return `\$\{windowName\}-send`/);
+    assert.doesNotMatch(sendSrc, /windowName\s*===\s*'sales-invoice'/);
   });
 
   it('uses toast for send confirmation', () => {
@@ -60,15 +72,30 @@ describe('SendDocumentModal', () => {
     assert.match(src, /\$\{windowName\}-\$\{documentNo\}\.pdf/);
   });
 
-  // ── ETP-4003: isValidEmail uses indexOf, not regex ─────────────────────────
+  // ── ETP-4089: recipient handling is contract-driven ───────────────────────
 
-  it('isValidEmail does NOT use a regex for email validation', () => {
-    // The function must use indexOf-based logic, never a regex literal like /^.*@.*$/
-    assert.doesNotMatch(src, /\/\^.*@.*\$\//);
+  it('does not keep local email validation for contract sends', () => {
+    assert.doesNotMatch(src, /function\s+isValidEmail/);
+    assert.doesNotMatch(src, /sendModalNoEmail/);
   });
 
-  it('isValidEmail uses indexOf to find the @ character', () => {
-    assert.match(src, /indexOf\s*\(\s*'@'\s*\)/);
+  // NOTE: the subject/message fields used to be hard-coded read-only here.
+  // ETP-4717 made them operator-editable — that behavior (not read-only,
+  // onChange wires typed edits into state, edits flow into the send payload
+  // as `messageEdits`) is now covered with real DOM assertions in the
+  // `SendDocumentModal — subject and message editing (ETP-4717)` describe
+  // block of the sibling `SendDocumentModal.vitest.jsx`, which is a stronger
+  // guarantee than a source-regex check and supersedes the old assertion.
+
+  it('does not send caller-provided provider payload fields', () => {
+    const commandStart = sendSrc.indexOf('export function buildEmailContractCommand');
+    const commandEnd = sendSrc.indexOf('export async function readEmailContractResponse');
+    assert.ok(commandStart > -1, 'buildEmailContractCommand export not found');
+    assert.ok(commandEnd > commandStart, 'readEmailContractResponse export not found after command builder');
+    const commandSrc = sendSrc.slice(commandStart, commandEnd);
+    assert.doesNotMatch(commandSrc, /\bto\b/);
+    assert.doesNotMatch(commandSrc, /\btemplate\b/);
+    assert.doesNotMatch(commandSrc, /\bdata\b/);
   });
 
   // ── ETP-4003: EmailFormPanel is module-level ───────────────────────────────

@@ -8,6 +8,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Standard order for Q1 delivery",
     "currency": "USD",
+    "product": "Laptop Pro 15",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -27,8 +28,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 38907,
     "depreciatedPlan": 38907,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "DR"
   },
   {
     "id": "mock-assets-002",
@@ -37,6 +39,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Rush order - priority shipping required",
     "currency": "EUR",
+    "product": "USB-C Cable",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -56,8 +59,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 9306,
     "depreciatedPlan": 9306,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "CO"
   },
   {
     "id": "mock-assets-003",
@@ -66,6 +70,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Bulk purchase for warehouse restocking",
     "currency": "GBP",
+    "product": "Wireless Mouse",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -85,8 +90,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 11544,
     "depreciatedPlan": 11544,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "VO"
   },
   {
     "id": "mock-assets-004",
@@ -95,6 +101,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Sample order for client evaluation",
     "currency": "USD",
+    "product": "Mechanical Keyboard",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -114,8 +121,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 11872,
     "depreciatedPlan": 11872,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "IP"
   },
   {
     "id": "mock-assets-005",
@@ -124,6 +132,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Recurring monthly supply order",
     "currency": "EUR",
+    "product": "Monitor 27\"",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -143,8 +152,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 48460,
     "depreciatedPlan": 48460,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "DR"
   },
   {
     "id": "mock-assets-006",
@@ -153,6 +163,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Special pricing agreement applies",
     "currency": "GBP",
+    "product": "Webcam HD",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -172,8 +183,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 45418,
     "depreciatedPlan": 45418,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "CO"
   },
   {
     "id": "mock-assets-007",
@@ -182,6 +194,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Consolidated order from multiple requests",
     "currency": "USD",
+    "product": "Headset Pro",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -201,8 +214,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 33840,
     "depreciatedPlan": 33840,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "VO"
   },
   {
     "id": "mock-assets-008",
@@ -211,6 +225,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Trial order for new product line",
     "currency": "EUR",
+    "product": "Docking Station",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -230,8 +245,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 25716,
     "depreciatedPlan": 25716,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "IP"
   },
   {
     "id": "mock-assets-009",
@@ -240,6 +256,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Replacement for damaged goods",
     "currency": "GBP",
+    "product": "SSD 1TB",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -259,8 +276,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 44780,
     "depreciatedPlan": 44780,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "DR"
   },
   {
     "id": "mock-assets-010",
@@ -269,6 +287,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Pre-season inventory build-up",
     "currency": "USD",
+    "product": "RAM 16GB",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -288,8 +307,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 12483,
     "depreciatedPlan": 12483,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "CO"
   },
   {
     "id": "mock-assets-011",
@@ -298,6 +318,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Customer-specific configuration",
     "currency": "EUR",
+    "product": "Power Supply 750W",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -317,8 +338,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 46022,
     "depreciatedPlan": 46022,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "VO"
   },
   {
     "id": "mock-assets-012",
@@ -327,6 +349,7 @@ export const assets = [
     "assetCategory": "Sample assetCategory",
     "description": "Government contract fulfillment",
     "currency": "GBP",
+    "product": "Network Switch",
     "depreciate": "Sample depreciate",
     "depreciationType": "Sample depreciationType",
     "calculateType": "Sample calculateType",
@@ -346,8 +369,9 @@ export const assets = [
     "processed": "Sample processed",
     "depreciatedValue": 38634,
     "depreciatedPlan": 38634,
-    "fullyDepreciated": "Sample fullyDepreciated",
-    "processAsset": "Sample processAsset"
+    "project": "Sample project",
+    "processAsset": "Sample processAsset",
+    "etgoAmortizationStatus": "IP"
   }
 ];
 

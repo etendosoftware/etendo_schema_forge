@@ -1,11 +1,13 @@
 import { useUI } from '@/i18n';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 
+// `DocumentTotalsPanel`/`BalanceFooterPanel` call their `formatAmount` prop as
+// (value, currency) — keep that signature here and delegate to the shared
+// formatCurrency(currencyCode, value) util, whose argument order is reversed.
 function fmt(val, curr) {
-  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  const s = n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return curr ? `${s} ${curr}` : s;
+  return formatCurrency(curr, val);
 }
 
 /**
@@ -43,6 +45,7 @@ export default function LinesBottomSection({
   totalDiscountPct,
   onTotalDiscountChange,
   onNotesSave,
+  docsRefreshSignal,
   relatedDocuments: RelatedDocumentsComponent,
   totalsField = 'etgoTotalDiscount',
   // Inventory / shipment-style windows (albaranes, recepciones, movimientos)
@@ -79,15 +82,15 @@ export default function LinesBottomSection({
                   apiBaseUrl={apiBaseUrl}
                   api={api}
                   layout="chips"
-                />
+                  docsRefreshSignal={docsRefreshSignal}
+                  data-testid="RelatedDocumentsComponent__751847" />
               </div>
             </div>
           )}
 
           {notesField && (
             <div
-              className={`flex items-start gap-3 px-3 ${RelatedDocumentsComponent ? 'mt-3 pt-3 border-t border-border/40' : ''}`}
-              style={RelatedDocumentsComponent ? { borderTopWidth: '0.5px' } : undefined}
+              className={`flex items-start gap-3 px-3 ${RelatedDocumentsComponent ? 'mt-3 border-t border-border-subtle pt-3' : ''}`}
             >
               <span className="text-[11px] font-medium text-foreground uppercase shrink-0 w-24 pt-1.5" style={{ letterSpacing: '0.04em' }}>
                 {ui('notes')}
@@ -101,8 +104,7 @@ export default function LinesBottomSection({
                     placeholder={ui('addNoteHint')}
                     rows={2}
                     autoFocus
-                    className="w-full text-xs bg-white border border-border/40 rounded px-2.5 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/40"
-                    style={{ borderWidth: '0.5px' }}
+                    className="w-full resize-none rounded border border-border-control bg-card px-2.5 py-1.5 text-xs placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-focus-ring"
                   />
                 ) : (
                   <div
@@ -110,7 +112,7 @@ export default function LinesBottomSection({
                     role="textbox"
                     onClick={() => setNotesFocused?.(true)}
                     onFocus={() => setNotesFocused?.(true)}
-                    className="w-full text-xs px-2.5 py-1.5 cursor-text min-h-[1.5rem] text-foreground/80 border border-transparent rounded hover:border-border/30 transition-colors"
+                    className="w-full min-h-[1.5rem] cursor-text rounded border border-transparent px-2.5 py-1.5 text-xs text-foreground/80 transition-colors hover:border-border-subtle"
                   >
                     {data?.[notesField] || <span className="text-muted-foreground/40">{ui('addNoteHint')}</span>}
                   </div>
@@ -123,21 +125,21 @@ export default function LinesBottomSection({
               SifDataTabs. Rendered as a React component with standard
               data/recordId/token props. */}
           {NotesExtraComponent && (
-            <div className="px-3 pt-3 mt-3 border-t border-border/40" style={{ borderTopWidth: '0.5px' }}>
+            <div className="mt-3 border-t border-border px-3 pt-3">
               <NotesExtraComponent
                 data={data}
                 recordId={recordId}
                 token={token}
                 apiBaseUrl={apiBaseUrl}
                 api={api}
-              />
+                data-testid="NotesExtraComponent__751847" />
             </div>
           )}
         </div>
 
         {showTotals && (
           <>
-            <div className="border-l border-border/50" style={{ borderLeftWidth: '0.5px' }} />
+            <div className="border-l border-border" />
 
             {/* Right column: Totals — fixed 520px wide, with a soft
                 minHeight: 200 floor so the panel keeps a stable visual rhythm
@@ -156,7 +158,7 @@ export default function LinesBottomSection({
                 readOnly={isReadOnly}
                 totalDiscountPct={resolveTotalDiscountPct(data, lines, totalDiscountPct, totalsField)}
                 onTotalDiscountChange={onTotalDiscountChange}
-              />
+                data-testid="DocumentTotalsPanel__751847" />
             </div>
           </>
         )}

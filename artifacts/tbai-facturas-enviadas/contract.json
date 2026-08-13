@@ -1,14 +1,17 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "generatedAt": "2026-05-04T17:05:55.224Z",
-  "updatedAt": "2026-05-15T11:47:05.207Z",
-  "checksum": "258ea027602cfe96",
+  "updatedAt": "2026-08-04T14:03:25.704Z",
+  "checksum": "351c5d78b41384f2",
   "frontendContract": {
     "window": {
       "id": "71F24BF89DE748B483BE87594747D6FB",
       "name": "TBAI Facturas Enviadas",
       "primaryEntity": "sincronización",
       "category": "monitor",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "attachments": false,
       "layoutType": "default"
     },
@@ -35,7 +38,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "estado",
@@ -47,7 +54,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "descripcion",
@@ -59,7 +69,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "name": "invoice",
@@ -74,7 +87,11 @@
             "form": true,
             "sourceRequired": true,
             "reference": "Invoice",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -110,7 +127,11 @@
               "type": "computed",
               "source": "Y"
             },
-            "defaultValue": "Y"
+            "defaultValue": "Y",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
           },
           {
             "name": "codigo",
@@ -122,7 +143,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "descripcion",
@@ -134,7 +158,10 @@
             "visibility": "readOnly",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "validation": {
+              "maxLength": 1000
+            }
           }
         ],
         "searchableFields": [],
@@ -156,6 +183,9 @@
       "name": "TBAI Facturas Enviadas",
       "primaryEntity": "sincronización",
       "category": "monitor",
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
       "attachments": false
     },
     "entities": {
@@ -205,14 +235,6 @@
             "required": true
           },
           {
-            "name": "tbaiSyncinvoiceID",
-            "apiKey": "tbaiSyncinvoiceID",
-            "column": "Tbai_Syncinvoice_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -249,6 +271,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Tbai_Syncinvoice_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -300,14 +330,6 @@
             "required": true
           },
           {
-            "name": "tbaiValcodeID",
-            "apiKey": "tbaiValcodeID",
-            "column": "Tbai_Valcode_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -344,6 +366,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Tbai_Valcode_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -421,10 +451,10 @@
       "sincronización": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/tbai-facturas-enviadas/sincronización",
         "detailUrl": "/sws/neo/tbai-facturas-enviadas/sincronización/{id}",
         "supportedFilters": []
@@ -432,10 +462,10 @@
       "resultadoValidación": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación",
         "detailUrl": "/sws/neo/tbai-facturas-enviadas/resultadoValidación/{id}",
         "supportedFilters": []
@@ -466,7 +496,8 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "monitor"
+      "category": "monitor",
+      "readOnly": true
     }
   },
   "testManifest": {
@@ -646,6 +677,14 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for resultadoValidación"
       },
       {
+        "id": "t-system-field-resultadoValidaci-n-id",
+        "category": "system-field",
+        "entity": "resultadoValidación",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for resultadoValidación"
+      },
+      {
         "id": "t-system-field-resultadoValidaci-n-organization",
         "category": "system-field",
         "entity": "resultadoValidación",
@@ -660,14 +699,6 @@
         "field": "tbaiSyncinvoiceID",
         "runner": "node",
         "description": "System field 'tbaiSyncinvoiceID' should exist in backend but not frontend for resultadoValidación"
-      },
-      {
-        "id": "t-system-field-resultadoValidaci-n-tbaiValcodeID",
-        "category": "system-field",
-        "entity": "resultadoValidación",
-        "field": "tbaiValcodeID",
-        "runner": "node",
-        "description": "System field 'tbaiValcodeID' should exist in backend but not frontend for resultadoValidación"
       },
       {
         "id": "t-system-field-resultadoValidaci-n-updated",
@@ -710,20 +741,20 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for sincronización"
       },
       {
+        "id": "t-system-field-sincronizaci-n-id",
+        "category": "system-field",
+        "entity": "sincronización",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for sincronización"
+      },
+      {
         "id": "t-system-field-sincronizaci-n-organization",
         "category": "system-field",
         "entity": "sincronización",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for sincronización"
-      },
-      {
-        "id": "t-system-field-sincronizaci-n-tbaiSyncinvoiceID",
-        "category": "system-field",
-        "entity": "sincronización",
-        "field": "tbaiSyncinvoiceID",
-        "runner": "node",
-        "description": "System field 'tbaiSyncinvoiceID' should exist in backend but not frontend for sincronización"
       },
       {
         "id": "t-system-field-sincronizaci-n-updated",

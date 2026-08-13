@@ -41,8 +41,13 @@ async function get(apiFetch, spec, entity, params) {
 }
 
 async function fetchConfigRecord(apiFetch, spec, entity, orgId) {
-  const resp = await get(apiFetch, spec, entity, { organization: orgId, _limit: '1' });
-  return resp.data?.[0] ?? null;
+  try {
+    const resp = await get(apiFetch, spec, entity, { organization: orgId, _limit: '1' });
+    return resp.data?.[0] ?? null;
+  } catch {
+    // 404 = spec/module not installed for this org → treat as not configured
+    return null;
+  }
 }
 
 async function fetchCount(apiFetch, spec, entity, params) {
@@ -54,8 +59,15 @@ async function fetchSiiParentId(apiFetch, orgId) {
   // The sii-monitor spec's child entities (issuedInvoices, receivedInvoices, etc.) are
   // child tabs of the "organizations" (aeatsii_config) entity. NEO Headless requires
   // a parentId (the aeatsii_config record PK) to correctly resolve the tab HQL tokens.
+  // NEO does not expose `id` for this entity — extract the PK from the $ref field
+  // (format: "aeatsii_config/<UUID>") or fall back to the configuracínSII field.
   const resp = await get(apiFetch, SII_SPEC, 'organizations', { organization: orgId, _limit: '1' });
-  return resp.data?.[0]?.id ?? null;
+  const row = resp.data?.[0];
+  if (!row) return null;
+  if (row.id) return row.id;
+  const ref = row['$ref'];
+  if (ref) return ref.split('/').pop() ?? null;
+  return row.configuracinSII ?? null;
 }
 
 async function fetchSiiMonitorData(apiFetch, orgId) {
@@ -77,12 +89,15 @@ async function fetchSiiMonitorData(apiFetch, orgId) {
 }
 
 async function fetchVerifactuMonitorData(apiFetch, orgId) {
-  const orgParams = { organization: orgId };
+  // The monitor-verifactu child tabs filter only by verifactuSendingStatus (HQL fixed to
+  // not include @AD_Org_id@). OBDal/OBQuery applies org visibility automatically from the
+  // JWT context, so passing _org is sufficient for scoping.
+  const vfParams = { _org: orgId };
   const [accepted, partial, rejected, invalid] = await Promise.all([
-    fetchCount(apiFetch, VF_SPEC, VF_ACEPTADAS_ENTITY,  orgParams),
-    fetchCount(apiFetch, VF_SPEC, VF_PARCIAL_ENTITY,    orgParams),
-    fetchCount(apiFetch, VF_SPEC, VF_RECHAZADAS_ENTITY, orgParams),
-    fetchCount(apiFetch, VF_SPEC, VF_INVALIDAS_ENTITY,  orgParams),
+    fetchCount(apiFetch, VF_SPEC, VF_ACEPTADAS_ENTITY,  vfParams),
+    fetchCount(apiFetch, VF_SPEC, VF_PARCIAL_ENTITY,    vfParams),
+    fetchCount(apiFetch, VF_SPEC, VF_RECHAZADAS_ENTITY, vfParams),
+    fetchCount(apiFetch, VF_SPEC, VF_INVALIDAS_ENTITY,  vfParams),
   ]);
   return { accepted, partiallyAccepted: partial, rejected, invalid };
 }

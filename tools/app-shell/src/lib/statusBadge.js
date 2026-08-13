@@ -1,4 +1,49 @@
 /**
+ * Canonical business-flow ordering for status codes, independent of
+ * data-source arrival order (in-memory rows vs. backend distinct-values
+ * fetch). Buckets follow: Draft -> In process -> Awaiting -> Completed ->
+ * Closed -> Voided. Codes not listed here are unknown to this catalog and
+ * are sorted alphabetically after all known codes (see compareStatusCodes).
+ */
+export const STATUS_ORDER = [
+  // Draft / not started
+  'DR', 'DRAFT', 'FALSE', 'N',
+  // In process
+  'IP', 'M', 'UE', 'RPAE',
+  // Awaiting
+  'RPAP',
+  // Completed
+  'CO', 'CA', 'ETGO_CI', 'TRUE', 'Y', 'YES', 'PROCESSED',
+  'RPR', 'RPPC', 'PPM', 'PWNC', 'RDNC',
+  // Closed
+  'CL', 'PA',
+  // Voided / rejected
+  'VO', 'CJ', 'RPVOID', 'P',
+];
+
+/**
+ * Deterministic comparator for status codes, used to keep the "All
+ * statuses" dropdown order fixed across re-renders — regardless of whether
+ * codes came first from in-memory rows or from the (uncached) backend
+ * distinct-values fetch resolving later. Known codes follow STATUS_ORDER;
+ * unknown codes are pushed to the end, sorted alphabetically so they are
+ * still stable relative to each other.
+ */
+export function compareStatusCodes(a, b) {
+  const normalize = (c) => String(c ?? '').toUpperCase();
+  const na = normalize(a);
+  const nb = normalize(b);
+  const ia = STATUS_ORDER.indexOf(na);
+  const ib = STATUS_ORDER.indexOf(nb);
+  if (ia !== -1 && ib !== -1) return ia - ib;
+  if (ia !== -1) return -1;
+  if (ib !== -1) return 1;
+  if (na < nb) return -1;
+  if (na > nb) return 1;
+  return 0;
+}
+
+/**
  * Map a status code to one of the 4 Figma semantic tones.
  * Used by StatusTag (grid). Does NOT affect DetailView.
  */
@@ -6,16 +51,18 @@ export function getStatusTone(status) {
   const s = String(status ?? '').toLowerCase();
   if (
     s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'pa' || s === 'rppc' || s === 'ppm' ||
-    s === 'pwnc' || s === 'rdnc' ||
+    s === 'pwnc' || s === 'rdnc' || s === 'o' ||
     s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' ||
-    s === 'paid' || s === 'true' || s === 'processed'
+    s === 'paid' || s === 'true' || s === 'processed' || s === 'y' || s === 'yes'
   ) return 'success';
+  if (s === 'rpr' || s === 'rpae') return 'success';
   if (
-    s === 'ip' || s === 'ue' || s === 'rpae' || s === 'rpap' || s === 'rpr' ||
+    s === 'ip' || s === 'ue' || s === 'm' ||
     s === 'in process' || s === 'under evaluation'
   ) return 'warning';
+  if (s === 'rpap') return 'neutral';
   if (
-    s === 'vo' || s === 'cj' || s === 'rpvoid' || s === 'rpvd' ||
+    s === 'vo' || s === 'cj' || s === 'rpvoid' || s === 'rpvd' || s === 'p' ||
     s === 'voided' || s === 'cancelled' || s === 'void' || s === 'rejected'
   ) return 'destructive';
   return 'neutral';
@@ -28,7 +75,7 @@ export function getStatusTone(status) {
 export function getStatusBadgeProps(status) {
   const s = String(status ?? '').toLowerCase();
   if (s === 'true' || s === 'processed') {
-    return { variant: 'default', className: 'bg-emerald-600 hover:bg-emerald-700 border-transparent text-white' };
+    return { variant: 'default', className: 'border-status-success-border bg-status-success text-status-success-foreground' };
   }
   if (s === 'false' || s === 'not processed') {
     return { variant: 'secondary' };
@@ -37,63 +84,95 @@ export function getStatusBadgeProps(status) {
     return { variant: 'secondary' };
   }
   if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') {
-    return { variant: 'default', className: 'bg-emerald-600 hover:bg-emerald-700 border-transparent text-white' };
+    return { variant: 'default', className: 'border-status-success-border bg-status-success text-status-success-foreground' };
   }
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') {
-    return { variant: 'default', className: 'bg-blue-600 hover:bg-blue-700 border-transparent text-white' };
+    return { variant: 'default', className: 'border-status-info-border bg-status-info text-status-info-foreground' };
   }
   if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') {
     return { variant: 'destructive' };
   }
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpap' || s === 'rpr') {
-    return { variant: 'outline', className: 'border-amber-300 bg-amber-50 text-amber-700' };
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') {
+    return { variant: 'outline', className: 'border-status-warning-border bg-status-warning text-status-warning-foreground' };
+  }
+  if (s === 'rpap') {
+    return { variant: 'outline', className: 'border-border-subtle bg-muted text-muted-foreground' };
   }
   if (s === 'under evaluation' || s === 'ue') {
-    return { variant: 'outline', className: 'border-purple-300 bg-purple-50 text-purple-700' };
+    return { variant: 'outline', className: 'border-status-info-border bg-status-info text-status-info-foreground' };
   }
   return { variant: 'outline' };
 }
 
 export function getStatusDotColor(status) {
   const s = String(status ?? '').toLowerCase();
-  if (s === 'true' || s === 'processed') return 'bg-emerald-500';
-  if (s === 'false' || s === 'not processed') return 'bg-gray-400';
-  if (s === 'draft' || s === 'dr') return 'bg-gray-400';
-  if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-emerald-500';
-  if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-blue-500';
-  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-red-500';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpap' || s === 'rpr') return 'bg-amber-400';
-  if (s === 'under evaluation' || s === 'ue') return 'bg-purple-500';
-  return 'bg-gray-400';
+  if (s === 'true' || s === 'processed') return 'bg-status-success-foreground';
+  if (s === 'false' || s === 'not processed') return 'bg-status-neutral-foreground';
+  if (s === 'draft' || s === 'dr') return 'bg-status-neutral-foreground';
+  if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success-foreground';
+  if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-status-info-foreground';
+  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-destructive';
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-status-warning-foreground';
+  if (s === 'rpap') return 'bg-status-neutral-foreground';
+  if (s === 'under evaluation' || s === 'ue') return 'bg-status-info-foreground';
+  return 'bg-status-neutral-foreground';
 }
 
 export function getStatusPillClass(status) {
   const s = String(status ?? '').toLowerCase();
-  if (s === 'true' || s === 'processed') return 'bg-emerald-50 text-emerald-800';
-  if (s === 'false' || s === 'not processed') return 'bg-gray-100 text-gray-700';
-  if (s === 'draft' || s === 'dr') return 'bg-gray-100 text-gray-700';
-  if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-emerald-50 text-emerald-800';
-  if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-blue-50 text-blue-800';
-  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-red-50 text-red-800';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpap' || s === 'rpr') return 'bg-amber-50 text-amber-800';
-  if (s === 'under evaluation' || s === 'ue') return 'bg-purple-50 text-purple-800';
-  return 'bg-gray-100 text-gray-700';
+  if (s === 'true' || s === 'processed') return 'bg-status-success text-status-success-foreground';
+  if (s === 'false' || s === 'not processed') return 'bg-muted text-foreground';
+  if (s === 'draft' || s === 'dr') return 'bg-muted text-foreground';
+  if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success text-status-success-foreground';
+  if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-status-info text-status-info-foreground';
+  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-destructive/10 text-destructive';
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-status-warning text-status-warning-foreground';
+  if (s === 'rpap') return 'bg-muted text-foreground';
+  if (s === 'under evaluation' || s === 'ue') return 'bg-status-info text-status-info-foreground';
+  return 'bg-muted text-foreground';
 }
 
 export function getStatusGridPillClass(status) {
   const s = String(status ?? '').toLowerCase();
-  if (s === 'true' || s === 'processed') return 'bg-emerald-500 text-white';
-  if (s === 'false' || s === 'not processed') return 'bg-gray-200 text-gray-700';
-  if (s === 'draft' || s === 'dr') return 'bg-gray-100 text-gray-600 border border-gray-300';
-  if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-emerald-500 text-white';
-  if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-slate-500 text-white';
-  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-red-500 text-white';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpap' || s === 'rpr') return 'bg-amber-500 text-white';
-  if (s === 'under evaluation' || s === 'ue') return 'bg-purple-500 text-white';
-  return 'bg-gray-100 text-gray-600 border border-gray-300';
+  if (s === 'true' || s === 'processed') return 'bg-status-success text-status-success-foreground';
+  if (s === 'false' || s === 'not processed') return 'bg-muted text-foreground';
+  if (s === 'draft' || s === 'dr') return 'bg-muted text-muted-foreground border border-border-control';
+  if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-status-success text-status-success-foreground';
+  if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-status-info text-status-info-foreground';
+  if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-destructive text-destructive-foreground';
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-status-warning text-status-warning-foreground';
+  if (s === 'rpap') return 'bg-muted text-muted-foreground border border-border-control';
+  if (s === 'under evaluation' || s === 'ue') return 'bg-status-info text-status-info-foreground';
+  return 'bg-muted text-muted-foreground border border-border-control';
 }
 
-export function statusLabel(status, dictionary, translate) {
+/**
+ * Resolves a column-declared enumLabels entry as an i18n key.
+ * Returns the localized string when the declared value resolves via genericLabels or translate;
+ * returns null when it does not resolve (literal label — must fall through to the MAP path).
+ * Keeping this logic here avoids +2 decision points inside statusLabel.
+ */
+function resolveEnumLabel(status, dictionary, translate, enumLabels) {
+  if (!enumLabels) return null;
+  const declared = enumLabels[status];
+  if (declared == null) return null;
+  // Resolve the declared value as an i18n key. If it does NOT resolve (it is a
+  // literal AD label, not a key), return null so the caller falls through to the
+  // dictionary/MAP logic. Only i18n-key enumLabels (e.g. statusProcessed/statusDraft)
+  // short-circuit here.
+  if (dictionary?.genericLabels?.[declared]) return dictionary.genericLabels[declared];
+  if (translate) {
+    const translated = translate(declared);
+    if (translated && translated !== declared) return translated;
+  }
+  return null;
+}
+
+export function statusLabel(status, dictionary, translate, enumLabels) {
+  // 0. Column-declared enumLabels win (i18n-key values only — literals fall through).
+  const fromEnum = resolveEnumLabel(status, dictionary, translate, enumLabels);
+  if (fromEnum != null) return fromEnum;
+
   // 1. DB-sourced translation from AD_Ref_List_Trl (via extract-labels.js)
   if (dictionary?.statuses?.[status]?.label) return dictionary.statuses[status].label;
 
@@ -101,6 +180,7 @@ export function statusLabel(status, dictionary, translate) {
   const MAP = {
     // Boolean processed fields
     true: 'Processed', false: 'Not Processed',
+    Y: 'statusProcessed', N: 'statusDraft',
     // Document statuses
     DR: 'statusDraft', CO: 'statusComplete', VO: 'statusVoid', IP: 'statusInProcess',
     CL: 'statusClosed', PA: 'statusPaid', UE: 'statusUnderEvaluation', CA: 'statusOrderCreated',

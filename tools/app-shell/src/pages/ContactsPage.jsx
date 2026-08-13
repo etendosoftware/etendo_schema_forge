@@ -66,8 +66,13 @@ function DetailPanel({ contact, onClose }) {
       <div className="p-4">
         {/* Close button */}
         <div className="flex justify-end mb-2">
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label={ui("closeDetailPanel")}>
-            <X className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            aria-label={ui("closeDetailPanel")}
+            data-testid="Button__af5294">
+            <X className="h-4 w-4" data-testid="X__af5294" />
           </Button>
         </div>
 
@@ -78,37 +83,43 @@ function DetailPanel({ contact, onClose }) {
           </div>
           <h2 className="text-lg font-semibold">{contact.title}</h2>
           <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-            <MapPin className="h-3.5 w-3.5" />
+            <MapPin className="h-3.5 w-3.5" data-testid="MapPin__af5294" />
             {contact.subtitle}
           </p>
         </div>
 
-        <Separator className="my-4" />
+        <Separator className="my-4" data-testid="Separator__af5294" />
 
         {/* Contact info */}
         <div className="space-y-3">
           <div className="flex items-center gap-3 text-sm">
-            <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Mail
+              className="h-4 w-4 text-muted-foreground shrink-0"
+              data-testid="Mail__af5294" />
             <span className="truncate">{MOCK_EMAILS[contact.id] || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Phone
+              className="h-4 w-4 text-muted-foreground shrink-0"
+              data-testid="Phone__af5294" />
             <span>{MOCK_PHONES[contact.id] || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+            <MapPin
+              className="h-4 w-4 text-muted-foreground shrink-0"
+              data-testid="MapPin__af5294" />
             <span>{contact.subtitle}</span>
           </div>
         </div>
 
-        <Separator className="my-4" />
+        <Separator className="my-4" data-testid="Separator__af5294" />
 
         {/* Activity summary */}
-        <Card>
-          <CardHeader className="p-3 pb-2">
-            <CardTitle className="text-sm font-medium">{ui("activitySummary")}</CardTitle>
+        <Card data-testid="Card__af5294">
+          <CardHeader className="p-3 pb-2" data-testid="CardHeader__af5294">
+            <CardTitle className="text-sm font-medium" data-testid="CardTitle__af5294">{ui("activitySummary")}</CardTitle>
           </CardHeader>
-          <CardContent className="p-3 pt-0 space-y-2">
+          <CardContent className="p-3 pt-0 space-y-2" data-testid="CardContent__af5294">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">{ui("lastSale")}</span>
               {/* i18n-allowlist: ["Mar 2, 2026"] */}
@@ -128,7 +139,7 @@ function DetailPanel({ contact, onClose }) {
         {/* Tags */}
         <div className="flex flex-wrap gap-1.5 mt-4">
           {tags.map((tag) => (
-            <Badge key={tag} variant="secondary">{tag}</Badge>
+            <Badge key={tag} variant="secondary" data-testid="Badge__af5294">{tag}</Badge>
           ))}
         </div>
 
@@ -138,7 +149,7 @@ function DetailPanel({ contact, onClose }) {
           entityId={contact.id}
           messages={CHATTER_MESSAGES}
           collapsed={false}
-        />
+          data-testid="Chatter__af5294" />
       </div>
     </div>
   );
@@ -168,7 +179,7 @@ function ListView({ contacts, onRowClick }) {
             >
               <td className="p-3 font-medium">{c.title}</td>
               <td className="p-3">
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-xs" data-testid="Badge__af5294">
                   {CATEGORY_LABEL[c.columnId]}
                 </Badge>
               </td>
@@ -213,7 +224,7 @@ export default function ContactsPage() {
     <div className="flex h-full">
       <div className="flex-1 min-w-0 p-6 overflow-y-auto">
         {/* KPIs */}
-        <KPIHeader kpis={KPIS} />
+        <KPIHeader kpis={KPIS} data-testid="KPIHeader__af5294" />
 
         {/* Tab switcher */}
         <div className="flex gap-1 mb-4">
@@ -221,14 +232,14 @@ export default function ContactsPage() {
             variant={activeView === 'kanban' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setActiveView('kanban')}
-          >
+            data-testid="Button__af5294">
             {ui('viewKanban')}
           </Button>
           <Button
             variant={activeView === 'list' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setActiveView('list')}
-          >
+            data-testid="Button__af5294">
             {ui('viewList')}
           </Button>
         </div>
@@ -240,18 +251,20 @@ export default function ContactsPage() {
             cards={filteredCards}
             onDragEnd={handleDragEnd}
             onCardClick={handleCardClick}
-          />
+            data-testid="KanbanBoard__af5294" />
         ) : (
-          <ListView contacts={filteredCards} onRowClick={handleCardClick} />
+          <ListView
+            contacts={filteredCards}
+            onRowClick={handleCardClick}
+            data-testid="ListView__af5294" />
         )}
       </div>
-
       {/* Detail side panel */}
       {selectedContact && (
         <DetailPanel
           contact={selectedContact}
           onClose={() => setSelectedContact(null)}
-        />
+          data-testid="DetailPanel__af5294" />
       )}
     </div>
   );

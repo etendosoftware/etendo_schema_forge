@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { ListView } from '@/components/contract-ui';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
+import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import HeaderPage from '@generated/sales-invoice/generated/web/sales-invoice/HeaderPage';
@@ -17,15 +19,17 @@ import { CreateContactContext } from '@/components/contract-ui/CreateContactCont
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { useInvoicePdf } from '../shared/useInvoicePdf.js';
 import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord } from '../shared/useInvoiceWindow.js';
+import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 
 /* eslint-disable react/prop-types */
 
 const LIST_COLUMNS = [
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.' },
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount' },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
 ];
 // Mirrors artifacts/sales-invoice/decisions.json → window.labelOverrides.
 // The list view here bypasses the generated HeaderPage and renders ListView
@@ -45,22 +49,51 @@ const LABEL_OVERRIDES = {
 // Mirrors InvoiceHeaderTable columns (key + column + type only) so that
 // buildAdvancedFilterCriteria can resolve filter modes on the first render,
 // before DataTable fires onColumnsReady.
+// ETP-4737: kept in sync by hand with artifacts/sales-invoice/decisions.json's
+// window.subsetFilters (rectificativeInvoicesTab block) — this hand-rolled
+// SalesInvoiceWindow component bypasses the generated HeaderPage.jsx, so the
+// generator's decisions.json → contract.json → HeaderPage.jsx flow does not
+// reach this array. Any future change to the subsetFilters discriminator in
+// decisions.json MUST be mirrored here too.
+const SUBSET_FILTERS = [
+  { label: 'allTab' },
+  {
+    label: 'invoicesTab',
+    filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D',
+  },
+  {
+    label: 'rectificativeInvoicesTab',
+    filter: 'criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D',
+  },
+];
+
 const OVERDUE_INITIAL_COLUMNS = [
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
+  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', required: true },
+  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', required: true },
   { key: 'eTGODueDate', column: 'em_etgo_due_date', type: 'date' },
 ];
 
 function SalesInvoiceBulkAction(props) {
-  return <BulkDocumentAction {...props} labelKey="confirmBulk" />;
+  return (
+    <>
+      <BulkDocumentAction
+        {...props}
+        labelKey="confirmBulk"
+        data-testid="BulkDocumentAction__c01c21" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__c01c21" />
+    </>
+  );
 }
 
 function SalesInvoiceTable(props) {
-  return <InvoiceHeaderTable {...props} />;
+  return <InvoiceHeaderTable {...props} data-testid="InvoiceHeaderTable__c01c21" />;
 }
 
 /**
@@ -84,6 +117,10 @@ export default function SalesInvoiceWindow(props) {
   const [searchParams] = useSearchParams();
   const ui = useUI();
   const tMenu = useMenuLabel();
+  const { selectedOrg } = useAuth();
+  const orgId = selectedOrg?.id ?? null;
+  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
+  const { showVerifactu } = getInvoiceFiscalTargets('sales-invoice', profile);
   const [savedRecord, setSavedRecord] = useState(null);
   const [cloneTargets, setCloneTargets] = useState(null);
   const [emailRow, setEmailRow] = useState(null);
@@ -109,7 +146,23 @@ export default function SalesInvoiceWindow(props) {
   const effectiveRecord = savedRecord ?? location.state?.savedRecord ?? null;
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
-  const draftModeOverride = getInvoiceDraftMode(ui);
+  const draftModeOverride = getInvoiceDraftMode(ui, { showVerifactuProcessingModal: showVerifactu });
+
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('167');
+  // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
+  // ListView below never picked up the read-only tier either, unlike GeneratedApp
+  // (which already forces window.readOnly internally for the detail branch).
+  // Computed unconditionally, before the early return below, so hook order stays
+  // stable across renders regardless of windowAccessTier.
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="167" data-testid="WindowAccessGuard__c01c21" />;
+  }
 
   if (recordId) {
     return (
@@ -123,7 +176,7 @@ export default function SalesInvoiceWindow(props) {
           onAfterSave={true}
           refetchAfterSave={true}
           breadcrumb={breadcrumb}
-        />
+          data-testid="HeaderPage__c01c21" />
         {contactPortal}
       </CreateContactContext.Provider>
     );
@@ -162,12 +215,14 @@ export default function SalesInvoiceWindow(props) {
         entityLabel="Sales Invoice"
         breadcrumb={breadcrumb}
         labelOverrides={LABEL_OVERRIDES}
+        subsetFilters={SUBSET_FILTERS}
         initialColumnFilters={initialColumnFilters}
         initialAdvancedFilter={initialAdvancedFilter}
         initialColumns={isInvoiceFilter ? OVERDUE_INITIAL_COLUMNS : null}
         dateFilterKey="invoiceDate"
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         rowQuickActions={rowQuickActions}
+        hideLink
         bulkActions={SalesInvoiceBulkAction}
         refreshTrigger={refreshKey}
         renderPreview={({ row, onClose, onEdit }) => (
@@ -180,11 +235,12 @@ export default function SalesInvoiceWindow(props) {
             onClose={onClose}
             onEdit={onEdit}
             onInvoiceUpdated={() => setRefreshKey(k => k + 1)}
-          />
+            data-testid="InvoicePreview__c01c21" />
         )}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
-      />
+        window={effectiveWindow}
+        data-testid="ListView__c01c21" />
       {deleteDialog}
       {emailRow && createPortal(
         <SendDocumentModal
@@ -199,7 +255,7 @@ export default function SalesInvoiceWindow(props) {
           pdfBlobUrl={emailPdfUrl}
           pdfBlobLoading={emailPdfLoading}
           onClose={() => setEmailRow(null)}
-        />,
+          data-testid="SendDocumentModal__c01c21" />,
         document.body,
       )}
       {cloneTargets && createPortal(
@@ -212,7 +268,7 @@ export default function SalesInvoiceWindow(props) {
           processingKey="invoiceProcessing"
           onClose={() => setCloneTargets(null)}
           onCloned={() => setRefreshKey(k => k + 1)}
-        />,
+          data-testid="CloneOrderModal__c01c21" />,
         document.body,
       )}
     </>

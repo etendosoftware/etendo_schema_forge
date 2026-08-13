@@ -47,7 +47,7 @@ export function CompactHeader({
             </div>
             {!expanded && summary.length > 0 && (
               <div className="mt-1.5">
-                <SummaryBar fields={summary} data={data} />
+                <SummaryBar fields={summary} data={data} data-testid="SummaryBar__e10eb7" />
               </div>
             )}
           </div>
@@ -56,16 +56,15 @@ export function CompactHeader({
             size="sm"
             className="shrink-0 text-xs gap-1"
             onClick={() => setExpanded(!expanded)}
-          >
+            data-testid="Button__e10eb7">
             {expanded ? (
-              <>Close <ChevronUp className="h-3 w-3" /></>
+              <>Close <ChevronUp className="h-3 w-3" data-testid="ChevronUp__e10eb7" /></>
             ) : (
-              <>Edit <ChevronDown className="h-3 w-3" /></>
+              <>Edit <ChevronDown className="h-3 w-3" data-testid="ChevronDown__e10eb7" /></>
             )}
           </Button>
         </div>
       </div>
-
       {/* Expandable form */}
       <div
         className="transition-all duration-200 ease-out"
@@ -81,7 +80,7 @@ export function CompactHeader({
             data={data}
             onChange={onChange}
             catalogs={catalogs}
-          />
+            data-testid="Form__e10eb7" />
         </div>
       </div>
     </div>

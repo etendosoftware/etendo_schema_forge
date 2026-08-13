@@ -70,26 +70,24 @@ export default function SalesPage() {
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <KPIHeader kpis={KPIS} />
-
+      <KPIHeader kpis={KPIS} data-testid="KPIHeader__66080a" />
       {/* Tab switcher */}
       <div className="flex items-center gap-2">
         <Button
           variant={activeTab === 'kanban' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setActiveTab('kanban')}
-        >
+          data-testid="Button__66080a">
           {ui("viewKanban")}
         </Button>
         <Button
           variant={activeTab === 'list' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setActiveTab('list')}
-        >
+          data-testid="Button__66080a">
           {ui("viewList")}
         </Button>
       </div>
-
       {/* Tab content */}
       {activeTab === 'kanban' && (
         <KanbanBoard
@@ -98,15 +96,14 @@ export default function SalesPage() {
           onDragEnd={handleDragEnd}
           onCardClick={handleCardClick}
           emptyMessage={ui("noResults")}
-        />
+          data-testid="KanbanBoard__66080a" />
       )}
-
       {activeTab === 'list' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{ui("quotations")}</CardTitle>
+        <Card data-testid="Card__66080a">
+          <CardHeader data-testid="CardHeader__66080a">
+            <CardTitle data-testid="CardTitle__66080a">{ui("quotations")}</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0" data-testid="CardContent__66080a">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -129,7 +126,9 @@ export default function SalesPage() {
                       <td className="px-4 py-3 text-muted-foreground">{card.subtitle}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(card.value)}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={STATUS_VARIANT[card.columnId] || 'secondary'}>
+                        <Badge
+                          variant={STATUS_VARIANT[card.columnId] || 'secondary'}
+                          data-testid="Badge__66080a">
                           {STATUS_LABEL[card.columnId] || card.columnId}
                         </Badge>
                       </td>

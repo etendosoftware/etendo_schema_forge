@@ -49,8 +49,8 @@ describe('SiiMonitorSection — period segmented control', () => {
     assert.match(src, /useState\(['"]current['"]\)/);
   });
 
-  it('renders current and previous period buttons inside fm-segmented', () => {
-    assert.match(src, /fm-segmented/);
+  it('renders current and previous period buttons inside fm-filter-pills', () => {
+    assert.match(src, /fm-filter-pills/);
     assert.match(src, /fiscalMonitor\.sii\.period\.current/);
     assert.match(src, /fiscalMonitor\.sii\.period\.previous/);
   });
@@ -143,16 +143,6 @@ describe('SiiMonitorSection — data fetching', () => {
   });
 });
 
-describe('SiiMonitorSection — section title', () => {
-  it('renders the SII section title from i18n', () => {
-    assert.match(src, /fiscalMonitor\.sii\.title/);
-  });
-
-  it('includes a badge-system SII badge', () => {
-    assert.match(src, /badge-system/);
-  });
-});
-
 // Guards: pending status rows open invoice preview instead of the contact popup
 describe('SiiMonitorSection — pending status opens invoice preview', () => {
   it('imports isPendingStatus from FmPrimitives', () => {
@@ -178,5 +168,36 @@ describe('SiiMonitorSection — pending status opens invoice preview', () => {
 
   it('passes fiscalMonitor.openInvoice as title on pending rows', () => {
     assert.match(src, /fiscalMonitor\.openInvoice/);
+  });
+});
+
+// Guards: export button and related state/constants are present
+describe('SiiMonitorSection — CSV export wiring', () => {
+  it('imports fetchCsvAndDownload from FmPrimitives', () => {
+    assert.match(src, /fetchCsvAndDownload.*from.*FmPrimitives/);
+  });
+
+  it('declares SII_EXPORT_COLS constant', () => {
+    assert.match(src, /const SII_EXPORT_COLS/);
+  });
+
+  it('SII_EXPORT_COLS is an array with at least one column definition', () => {
+    assert.match(src, /SII_EXPORT_COLS\s*=\s*\[/);
+  });
+
+  it('declares exporting state with useState', () => {
+    assert.match(src, /const\s+\[exporting,\s*setExporting\]\s*=\s*useState\(false\)/);
+  });
+
+  it('export button has onClick={handleExport}', () => {
+    assert.match(src, /onClick=\{handleExport\}/);
+  });
+
+  it('export button is disabled when loading or exporting', () => {
+    assert.match(src, /disabled=\{loading \|\| exporting\}/);
+  });
+
+  it('handleExport calls fetchCsvAndDownload with SII_EXPORT_COLS', () => {
+    assert.match(src, /fetchCsvAndDownload[\s\S]*?SII_EXPORT_COLS/);
   });
 });

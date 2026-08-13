@@ -15,11 +15,11 @@ const btnStyle = {
   justifyContent: 'center',
   padding: '7px',
   borderRadius: 6,
-  border: '1px solid #D1D4DB',
-  background: '#FFFFFF',
-  color: '#64748B',
+  border: '1px solid hsl(var(--border-control))',
+  background: 'hsl(var(--card))',
+  color: 'hsl(var(--muted-foreground))',
   cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px #1212170D',
+  boxShadow: '0px 1px 2px 0px hsl(var(--foreground))0D',
 };
 
 export default function CloneButton({ onClick, title }) {
@@ -28,12 +28,12 @@ export default function CloneButton({ onClick, title }) {
     <button
       type="button"
       onClick={onClick}
-      style={{ ...btnStyle, background: hovered ? '#F1F5F9' : '#FFFFFF' }}
+      style={{ ...btnStyle, background: hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))' }}
       title={title}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <CopyIcon />
+      <CopyIcon data-testid="CopyIcon__b4cd7a" />
     </button>
   );
 }

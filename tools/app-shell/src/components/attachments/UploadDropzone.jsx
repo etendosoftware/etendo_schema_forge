@@ -46,7 +46,7 @@ export default function UploadDropzone({ onFiles, config = {}, disabled = false 
     const files = Array.from(fileList);
     files.forEach((file) => {
       if (file.size > maxBytes) {
-        toast.error(ui('attachmentsFileTooLarge'));
+        toast.error(ui('attachmentsFileTooLarge', { max: maxSizeMB }));
         return;
       }
       if (!isMimeAllowed(file, allowedMimeTypes)) {
@@ -114,11 +114,12 @@ export default function UploadDropzone({ onFiles, config = {}, disabled = false 
         type="button"
         onClick={handleBrowseClick}
         disabled={disabled}
-        className="flex items-center justify-center w-8 h-8 bg-white border border-border rounded-lg shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted/50 transition-colors disabled:opacity-50"
+        className="flex items-center justify-center w-8 h-8 bg-card border border-border rounded-lg shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted/50 transition-colors disabled:opacity-50"
       >
-        <UploadIcon className="w-5 h-5 text-muted-foreground" />
+        <UploadIcon
+          className="w-5 h-5 text-muted-foreground"
+          data-testid="UploadIcon__d91a1b" />
       </button>
-
       <div className="flex flex-col items-center px-8">
         <span className="text-sm text-foreground">{ui('attachmentsDropHere')}</span>
         <p className="text-xs text-muted-foreground text-center">
@@ -134,7 +135,6 @@ export default function UploadDropzone({ onFiles, config = {}, disabled = false 
           {'. '}{ui('attachmentsAllowedFormats', { types: typesLabel ?? '' })}
         </p>
       </div>
-
       <input
         ref={fileInputRef}
         type="file"

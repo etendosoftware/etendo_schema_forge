@@ -23,13 +23,25 @@ describe('useCertExpiry — hook structure', () => {
     assert.match(src, /mockDaysLeft/);
   });
 
+  it('accepts orgId option and guards the fetch when orgId is absent', () => {
+    assert.match(src, /orgId = null/);
+    assert.match(src, /!\s*orgId/);
+  });
+
+  it('clears daysLeft when orgId or apiBaseUrl is absent (no stale state)', () => {
+    assert.match(src, /if \(!apiBaseUrl \|\| !orgId\) \{\s*setDaysLeft\(null\)/);
+  });
+
+  it('includes orgId in the effect dependency array', () => {
+    assert.match(src, /\[apiFetch,\s*mockDaysLeft,\s*apiBaseUrl,\s*orgId\]/);
+  });
+
   it('returns daysLeft from the hook', () => {
     assert.match(src, /return.*daysLeft/);
   });
 
-  it('fetches from the /certificate endpoint without orgId query param', () => {
-    assert.match(src, /apiFetch\(['"]\/certificate['"]/);
-    assert.doesNotMatch(src, /certificate\?orgId/);
+  it('fetches from the /certificate endpoint with orgId query param', () => {
+    assert.match(src, /apiFetch\(`\/certificate\?\$\{new URLSearchParams\(\{ orgId \}\)\}`/);
   });
 
   it('uses useApiFetch to obtain the authenticated fetch function', () => {

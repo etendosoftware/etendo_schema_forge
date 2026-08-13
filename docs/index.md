@@ -5,6 +5,10 @@
 | File | Description |
 |------|-------------|
 | [architecture-overview.md](architecture-overview.md) | System architecture: Schema Forge (tooling) + Etendo Go (runtime), data flow, component inventory |
+| [repo-topology.md](repo-topology.md) | The 3-repo split, the two dev profiles (functional-only vs core), published-package default vs `LOCAL_CORE` local-source mode (React + CLI), GitHub Packages auth |
+| [transactional-email-framework.md](transactional-email-framework.md) | Transactional email framework: contract-driven execution, security boundary, lifecycle, edge cases, and agent checklist |
+| [email-contracts.md](email-contracts.md) | Email contracts guide: descriptor schema, request/response contract, recipient policies, versioning, and initial contract sketches |
+| [document-email-contract-implementation.md](document-email-contract-implementation.md) | Agent/developer tutorial for defining document-send email contracts and wiring frontend/backend behavior |
 | [NEO Headless API Reference](../modules/com.etendoerp.go/docs/neo-headless.md) | Full API reference for the runtime module (NeoServlet, selectors, processes, webhooks) |
 | [NEO Headless Extensibility Guide](neo-headless-extensibility.md) | How to extend/customize NEO Headless: NeoHandler hooks, configuration, patterns |
 | [NEO Entity Naming Investigation](neo-entity-naming-investigation.md) | Investigation report on `push-to-neo` naming, duplicate entities/fields, runtime endpoint resolution, and unification rule |
@@ -36,6 +40,7 @@
 | [ui-design-guidelines.md](ui-design-guidelines.md) | **UI design guidelines**: z-index scale, scrim opacity, overlay/drawer patterns, monetary amount formatting (`formatCurrency` vs `formatDashboardAmount`), column alignment |
 | [list-filters.md](list-filters.md) | **List view filters reference**: subset filters, quick filters, document-type filters, advanced filter popover — composition rules, URL-param hooks, when to use which |
 | [pipeline-validator-reference.md](pipeline-validator-reference.md) | **Pipeline completeness validator**: rules F1–F10, artifact classification, CLI flags, exit codes, and troubleshooting |
+| [contract-generation-ownership.md](contract-generation-ownership.md) | **Contract/generated output ownership**: producers, consumers, regeneration triggers, and split-ready artifact rules |
 | [line-pricing-model.md](line-pricing-model.md) | **Line pricing model**: client-side lineGrossAmount calculation for orders/quotations, field roles, callout vs client-side split, invoice refactor checklist |
 
 ## Design Specs
@@ -66,6 +71,15 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 |------|-------------|
 | [i18n-guide.md](i18n-guide.md) | **i18n reference**: hooks (`useUI`, `useLabel`, `useMenuLabel`), locale JSON structure, rules for adding translations, decision tree |
 
+## Feature Flags
+
+| Path | Description |
+|------|-------------|
+| [feature-flags.md](feature-flags.md) | **Feature flag reference**: OpenFeature as the app API over a local provider (Mixpanel planned), `useFeatureFlag`, safe defaults, the "visual gating only, never authorization" rule, `VITE_FEATURE_FLAGS`, the single swap point for changing control plane, exposure events, the flag code layout rule, and the tenant upgrade flow |
+| [flag-debt.md](flag-debt.md) | **Flag debt scorecard** (`make flag-debt`): scores per-flag technical debt — touch points, missing tests, coverage, TTL overrun, and open items (deferred decisions the flag still carries) — derived from `flags-registry.json`, which is canonical for per-flag paths. Report-only in v0 |
+| [technical-debt-playbook.md](technical-debt-playbook.md) | **How to handle technical debt here** (agent-facing): debt belongs to the feature and the flag is the unit of accounting, so every feature is born behind a flag registered on day one. The taxonomy (4 spec states, `deferredItems`, `$knownGapComment`), the protocols (accepted debt is always a human decision; verify claims by grep pattern; never document a property the code lacks), and the flag lifecycle through retirement. Companion to the `feature-debt` skill |
+| [paid-tenant-infrastructure.md](paid-tenant-infrastructure.md) | **The `tenant-upgrade` feature as one linear narrative** (ETP-4686), self-contained and readable without the code: the product story from free tenant to second productive tenant, the flag architecture on both sides, the paywall contract and plan marker, the debt system through the current scorecard, and the two futures (hosted control plane, real payments) with their preconditions. Snapshot — the canonical sources are named in its header |
+
 ## Generated/custom windows
 
 | Path | Description |
@@ -78,20 +92,24 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 
 | File | Description |
 |------|-------------|
+| [surveys.md](surveys.md) | **In-app survey system (NPS/CSAT)**: architecture, survey types, anti-fatigue rules, localStorage schema, how to add a new survey or emit a trigger from a window |
 | [developer-tools.md](developer-tools.md) | CLI tools used by the team: RTK (token optimization) and GWS (Google Workspace CLI) |
 | [claude-md-best-practices.md](claude-md-best-practices.md) | Best practices for writing effective CLAUDE.md files (research compilation) |
 | [self-documentation-policy.md](self-documentation-policy.md) | Self-documentation policy: triggers, checklists, and phase responsibilities for keeping docs in sync with code |
-| [feedback.md](feedback.md) | Known bug patterns and root-cause lessons: double-discount on line PATCH, callout price suppression for invoices, add-line row field key alignment, ETP-4007 discount display fixes (etgoDiscount field name, listPrice vs unitPrice, grossAmount vs lineNetAmount, taxAmount formula, missing PDF discount breakdown rows) |
+| [feedback.md](feedback.md) | Known bug patterns and root-cause lessons: double-discount on line PATCH, callout price suppression for invoices, add-line row field key alignment, ETP-4007 discount display fixes (etgoDiscount field name, listPrice vs unitPrice, grossAmount vs lineNetAmount, taxAmount formula, missing PDF discount breakdown rows), ETP-4277 empty numeric field saved as backend default (DataTable/InlineLinesPanel defaultValue substitution), ETP-4543 non-grid line fields invisible under inlineEditable line layout (InlineLinesPanel/DetailView hiddenColumns wiring) |
 
 ## Operations
 
 | File | Description |
 |------|-------------|
 | [ops/cloudfront-alb-routing.md](ops/cloudfront-alb-routing.md) | CloudFront + ALB routing for the SPA, same-origin `/etendo/*` forwarding, and deployment runbook |
+| [ops/transactional-email-security.md](ops/transactional-email-security.md) | Transactional email security runbook: secrets, throttle, suppression, kill switches, incident response, and metrics |
 | [ops/copilot-pr-review.md](ops/copilot-pr-review.md) | Copilot-aligned PR review gate: review instructions, deterministic findings, PR comments, and request-changes behavior |
 | [ops/window-doc-freshness.md](ops/window-doc-freshness.md) | Window-specific doc freshness warning: diff-based CI review for `docs/generated-custom-windows/<window>.md` |
 | [ops/epic-rollup-report.md](ops/epic-rollup-report.md) | Develop-targeted epic rollout report: included feature PRs, prior review findings, and aggregated release-risk summary |
 | [ops/app-shell-observability.md](ops/app-shell-observability.md) | App Shell observability: providers, env vars, v1 events, privacy rules, and extension guide |
+| [ops/mixpanel-kpi-emission-spec.md](ops/mixpanel-kpi-emission-spec.md) | Mixpanel KPI emission spec: frontend/backend runtime config, emitted events, advanced KPI gaps, and validation evidence |
+| [ops/saas-kpis/README.md](ops/saas-kpis/README.md) | Etendo SaaS KPI instrumentation catalog grouped by dimension, with Mixpanel-ready contracts and backend/definition gaps |
 
 ## Proposals
 
@@ -122,6 +140,7 @@ Plans follow a lifecycle: active in `plans/`, completed in `plans/completed/YYYY
 | [plans/neo-report-endpoint.md](plans/neo-report-endpoint.md) | NEO Headless Report Endpoint — **Implemented** (NeoReportService, binary responses, OpenAPI docs) |
 | [plans/2026-03-05-vertical-slice-design.md](plans/2026-03-05-vertical-slice-design.md) | Vertical slice design |
 | [plans/2026-03-05-vertical-slice-plan.md](plans/2026-03-05-vertical-slice-plan.md) | Vertical slice execution plan |
+| [plans/ETP-4214-saas-kpi-instrumentation-plan.md](plans/ETP-4214-saas-kpi-instrumentation-plan.md) | Etendo SaaS KPI instrumentation execution plan and Jira task breakdown |
 | [plans/evaluations/architecture-review.md](plans/evaluations/architecture-review.md) | Architecture review |
 | [plans/evaluations/day-1-decisions.md](plans/evaluations/day-1-decisions.md) | Day 1 decisions |
 | [plans/evaluations/decisions-resolved.md](plans/evaluations/decisions-resolved.md) | Resolved design decisions |

@@ -3,8 +3,8 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:header
 const fields = [
   { key: 'orderReference', column: 'POReference', type: 'text', label: 'RMA vendor ref.', section: 'principal' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', required: true, section: 'principal', reference: 'BPartner', inputMode: 'search', readOnlySource: 'server', readOnlyLogicReason: 'session-variable' },
-  { key: 'partnerAddress', column: 'C_BPartner_Location_ID', type: 'selector', label: 'Partner Address', required: true, section: 'principal', reference: 'BPartner_Location', inputMode: 'selector', readOnlyLogic: (record) => record['processed'] === true },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', required: true, section: 'principal', reference: 'BusinessPartner', inputMode: 'search', readOnlySource: 'server', readOnlyLogicReason: 'session-variable' },
+  { key: 'partnerAddress', column: 'C_BPartner_Location_ID', type: 'dependent', label: 'Partner Address', required: true, section: 'principal', reference: 'BusinessPartnerLocation', inputMode: 'dependent', dependsOn: { field: 'businessPartner', filterKey: 'C_BPartner_ID' }, readOnlyLogic: (record) => record['processed'] === true },
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true, section: 'principal', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'accountingDate', column: 'DateAcct', type: 'date', label: 'Accounting Date', required: true, section: 'other', readOnlyLogic: (record) => record['posted'] === 'Y' },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', label: 'Warehouse', required: true, section: 'other', reference: 'Warehouse', inputMode: 'selector', readOnlyLogic: (record) => record['processed'] === true },

@@ -1,8 +1,8 @@
 {
-  "version": "0.6.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-05-20T11:15:42.892Z",
-  "checksum": "3026a7617b32b170",
+  "updatedAt": "2026-08-03T18:55:28.096Z",
+  "checksum": "68ca7a8c50c51372",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -10,16 +10,21 @@
       "primaryEntity": "tax",
       "category": "settings",
       "hidePrint": true,
+      "hideCreate": true,
       "hideMoreMenu": true,
+      "hideDelete": true,
+      "hideDeleteButton": true,
       "breadcrumb": "Settings / Tax",
-      "detailEntity": null,
+      "detailEntity": "accounting",
+      "headerExtra": {
+        "customForm": "TaxSifField"
+      },
       "labelOverrides": {
         "es_ES": {
           "Name": "Nombre",
           "Rate": "Índice",
           "SOPOType": "Tipo venta/compra",
           "ValidFrom": "Válido desde",
-          "IsActive": "Activo",
           "Description": "Descripción"
         },
         "en_US": {
@@ -27,11 +32,11 @@
           "Rate": "Rate",
           "SOPOType": "Sales/Purchase Type",
           "ValidFrom": "Valid From",
-          "IsActive": "Active",
           "Description": "Description"
         }
       },
-      "layoutType": "default"
+      "layoutType": "default",
+      "maxDetailLines": 1
     },
     "entities": {
       "tax": {
@@ -47,13 +52,36 @@
             "label": "Name",
             "type": "string",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 1
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "validFrom",
+            "apiKey": "validFrom",
+            "column": "ValidFrom",
+            "label": "Valid From Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal",
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
           },
           {
             "name": "rate",
@@ -62,7 +90,7 @@
             "label": "Rate",
             "type": "decimal",
             "tsType": "number",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -70,6 +98,10 @@
             "section": "principal",
             "seq": 2,
             "cellType": "taxRate",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
             "validationRule": {
               "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
               "contextParams": [
@@ -83,13 +115,61 @@
             }
           },
           {
+            "name": "applicableTo",
+            "apiKey": "applicableTo",
+            "column": "SOPOType",
+            "label": "Sales/Purchase Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "B"
+            },
+            "enumValues": [
+              {
+                "value": "B",
+                "name": "Both",
+                "labels": {
+                  "es_ES": "Ambos"
+                }
+              },
+              {
+                "value": "P",
+                "name": "Purchase Tax",
+                "labels": {
+                  "es_ES": "Impuesto compras"
+                }
+              },
+              {
+                "value": "S",
+                "name": "Sales Tax",
+                "labels": {
+                  "es_ES": "Impuesto ventas"
+                }
+              }
+            ],
+            "defaultValue": "B",
+            "section": "principal",
+            "seq": 3,
+            "cellType": "taxScope",
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
             "name": "docTaxAmount",
             "apiKey": "docTaxAmount",
             "column": "DocTaxAmount",
             "label": "Document Tax Amount Calculation",
             "type": "enum",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": false,
             "form": true,
@@ -101,16 +181,26 @@
             "enumValues": [
               {
                 "value": "D",
-                "name": "Document based amount by rate"
+                "name": "Document based amount by rate",
+                "labels": {
+                  "es_ES": "Suma de las bases imponibles de las lineas por el porcentaje"
+                }
               },
               {
                 "value": "L",
-                "name": "Line based amount by rate"
+                "name": "Line based amount by rate",
+                "labels": {
+                  "es_ES": "Suma del importe de los impuestos de las lineas"
+                }
               }
             ],
             "defaultValue": "D",
             "section": "principal",
             "seq": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N'",
               "evaluable": true
@@ -123,7 +213,7 @@
             "label": "Base Amount",
             "type": "enum",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": false,
             "form": true,
@@ -135,88 +225,584 @@
             "enumValues": [
               {
                 "value": "TBA",
-                "name": "Alternate Tax Base Amount"
+                "name": "Alternate Tax Base Amount",
+                "labels": {
+                  "es_ES": "Base de impuesto alternativa"
+                }
               },
               {
                 "value": "TBATAX",
-                "name": "Alternate Tax Base Amount + Tax Amount"
+                "name": "Alternate Tax Base Amount + Tax Amount",
+                "labels": {
+                  "es_ES": "Base imponible alternativa + Impuestos"
+                }
               },
               {
                 "value": "LNA",
-                "name": "Line Net Amount"
+                "name": "Line Net Amount",
+                "labels": {
+                  "es_ES": "Importe neto de línea"
+                }
               },
               {
                 "value": "LNATAX",
-                "name": "Line Net Amount + Tax Amount"
+                "name": "Line Net Amount + Tax Amount",
+                "labels": {
+                  "es_ES": "Importe neto de línea + Importe de impuestos"
+                }
               },
               {
                 "value": "TAX",
-                "name": "Tax Amount"
+                "name": "Tax Amount",
+                "labels": {
+                  "es_ES": "Importe de impuestos"
+                }
               }
             ],
             "defaultValue": "LNA",
             "section": "principal",
             "seq": 6,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
             "displayLogic": {
               "raw": "@IsSummary@='N'",
               "evaluable": true
             }
           },
           {
-            "name": "applicableTo",
-            "apiKey": "applicableTo",
-            "column": "SOPOType",
-            "label": "Sales/Purchase Type",
+            "name": "notTaxable",
+            "apiKey": "notTaxable",
+            "column": "IsNoTaxable",
+            "label": "Not Taxable",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "taxExempt",
+            "apiKey": "taxExempt",
+            "column": "IsTaxExempt",
+            "label": "Tax Exempt",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "tbaiClaveregimeniva",
+            "apiKey": "tbaiClaveregimeniva",
+            "column": "EM_Tbai_Claveregimeniva",
+            "label": "Clave de Régimen Especial de IVA",
             "type": "enum",
             "tsType": "string",
             "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "B"
-            },
+            "required": false,
+            "grid": false,
+            "form": false,
             "enumValues": [
               {
-                "value": "B",
-                "name": "Both"
+                "value": "01",
+                "name": "Operación de régimen general"
               },
               {
-                "value": "P",
-                "name": "Purchase Tax"
+                "value": "02",
+                "name": "Exportación"
               },
               {
-                "value": "S",
-                "name": "Sales Tax"
+                "value": "03",
+                "name": "Operaciones a las que se aplique el régimen especial"
+              },
+              {
+                "value": "04",
+                "name": "Régimen especial del oro de inversión"
+              },
+              {
+                "value": "05",
+                "name": "Régimen especial de las agencias de viajes"
+              },
+              {
+                "value": "06",
+                "name": "Régimen especial grupo de entidades en IVA (Nivel Avanzado)"
+              },
+              {
+                "value": "07",
+                "name": "Régimen especial del criterio de caja"
+              },
+              {
+                "value": "08",
+                "name": "Operaciones sujetas al IPSI / IGIC"
+              },
+              {
+                "value": "09",
+                "name": "Facturación de las prestaciones de servicios de viaje"
+              },
+              {
+                "value": "10",
+                "name": "Cobros por cuenta de terceros"
+              },
+              {
+                "value": "11",
+                "name": "Operaciones de arrendamiento de local de negocio sujetos"
+              },
+              {
+                "value": "12",
+                "name": "Operaciones de arrendamiento de local de negocio no sujetos "
+              },
+              {
+                "value": "13",
+                "name": "Operaciones de arrendamiento de local sujetas y no sujetas"
+              },
+              {
+                "value": "14",
+                "name": "Factura con IVA pendiente de devengo (Adm. publica)"
+              },
+              {
+                "value": "15",
+                "name": "Factura con IVA pendiente de devengo tracto sucesivo"
+              },
+              {
+                "value": "17",
+                "name": "Regímenes previstos en el Capítulo XI, Título IX(OSS e IOSS)"
+              },
+              {
+                "value": "19",
+                "name": "Régimen Especial de Agricultura, Ganadería y Pesca (REAGYP)"
+              },
+              {
+                "value": "51",
+                "name": "Operaciones en recargo de equivalencia"
+              },
+              {
+                "value": "52",
+                "name": "Operaciones en régimen simplificado"
+              },
+              {
+                "value": "54",
+                "name": "Operaciones de establecimientos en Canarias, Ceuta y Melilla"
+              },
+              {
+                "value": "53",
+                "name": "Operaciones de no empresarios/profesionales en IVA."
               }
             ],
-            "defaultValue": "B",
-            "section": "principal",
-            "seq": 3,
-            "cellType": "taxScope"
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@isTaxExempt@='N' & @IsNoTaxable@='N'",
+              "evaluable": true
+            }
           },
           {
-            "name": "validFrom",
-            "apiKey": "validFrom",
-            "column": "ValidFrom",
-            "label": "Valid From Date",
-            "type": "date",
+            "name": "tbaiNonsubjectcause",
+            "apiKey": "tbaiNonsubjectcause",
+            "column": "EM_Tbai_Nonsubjectcause",
+            "label": "TBAI - Causa de No Sujeción",
+            "type": "enum",
             "tsType": "string",
             "visibility": "editable",
-            "required": true,
+            "required": false,
             "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "section": "principal",
-            "seq": 4
+            "form": false,
+            "enumValues": [
+              {
+                "value": "IE",
+                "name": "No sujeto en el TAI por reglas de localización"
+              },
+              {
+                "value": "OT",
+                "name": "No sujeto por el artículo 7 de la Ley del IVA. Otros supuest"
+              },
+              {
+                "value": "RL",
+                "name": "No sujeto por reglas de localización. "
+              },
+              {
+                "value": "VT",
+                "name": "No sujeto, ventas realizadas por cuenta de terceros"
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@IsNoTaxable@='Y' & @isTaxExempt@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "etvfacIGICRegime",
+            "apiKey": "etvfacIGICRegime",
+            "column": "em_etvfac_igic_regime",
+            "label": "Régimen Especial IGIC",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "01",
+                "name": "01 - Operación de régimen general."
+              },
+              {
+                "value": "02",
+                "name": "02 - Exportación"
+              },
+              {
+                "value": "03",
+                "name": "03 - Op. rég. bienes usados, arte, antigüedades y colección"
+              },
+              {
+                "value": "04",
+                "name": "04 - Régimen especial del oro de inversión"
+              },
+              {
+                "value": "05",
+                "name": "05 - Régimen especial de las agencias de viajes"
+              },
+              {
+                "value": "07",
+                "name": "07 - Régimen especial del criterio de caja"
+              },
+              {
+                "value": "08",
+                "name": "08 - Operaciones sujetas al IPSI/IVA"
+              },
+              {
+                "value": "09",
+                "name": "09 - Facturación de servicios de agencias de viajes"
+              },
+              {
+                "value": "10",
+                "name": "10 - Cobros por cuenta de terceros"
+              },
+              {
+                "value": "11",
+                "name": "11 - Operaciones de arrendamiento de local de negocio"
+              },
+              {
+                "value": "14",
+                "name": "14 - Factura con IGIC pendiente de devengo (Admin. Pública)"
+              },
+              {
+                "value": "15",
+                "name": "15 - Factura con IGIC pendiente de devengo (Tracto sucesivo)"
+              },
+              {
+                "value": "17",
+                "name": "17 - Régimen especial de comerciante minorista"
+              },
+              {
+                "value": "18",
+                "name": "18 - Régimen especial del pequeño empresario o profesional"
+              },
+              {
+                "value": "19",
+                "name": "19 - Operaciones interiores exentas art. 25 Ley 19/1994"
+              },
+              {
+                "value": "20",
+                "name": "20 - Operaciones sujetas al IPSI"
+              },
+              {
+                "value": "21",
+                "name": "21 - Régimen simplificado"
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@isTaxExempt@='N' & @IsNoTaxable@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "etvfacVatRegime",
+            "apiKey": "etvfacVatRegime",
+            "column": "EM_Etvfac_Vat_Regime",
+            "label": "Régimen Especial IVA",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "01",
+                "name": "01 - Operación de régimen general"
+              },
+              {
+                "value": "02",
+                "name": "02 - Exportación"
+              },
+              {
+                "value": "03",
+                "name": "03 - Op. rég. bienes usados, arte, antigüedades y colección"
+              },
+              {
+                "value": "04",
+                "name": "04 - Régimen especial del oro de inversión"
+              },
+              {
+                "value": "05",
+                "name": "05 - Régimen especial de las agencias de viajes"
+              },
+              {
+                "value": "07",
+                "name": "07 - Régimen especial del criterio de caja."
+              },
+              {
+                "value": "08",
+                "name": "08 - Operaciones sujetas al IPSI/IGIC"
+              },
+              {
+                "value": "09",
+                "name": "09 - Facturación de servicios de agencias de viaje"
+              },
+              {
+                "value": "10",
+                "name": "10 - Cobros por cuenta de terceros"
+              },
+              {
+                "value": "11",
+                "name": "11 - Operaciones de arrendamiento de local de negocio"
+              },
+              {
+                "value": "14",
+                "name": "14 - Factura con IVA pendiente de devengo (Admin. Pública)"
+              },
+              {
+                "value": "15",
+                "name": "15 - Factura con IVA pendiente de devengo en tracto sucesivo"
+              },
+              {
+                "value": "17",
+                "name": "17 - Op. acogida a regímenes cap. XI de titulo IX (OSS/IOSS)"
+              },
+              {
+                "value": "18",
+                "name": "18 - Recargo de equivalencia"
+              },
+              {
+                "value": "19",
+                "name": "19 - Rég. esp. Agricultura, Ganadería y Pesca (REAGYP)"
+              },
+              {
+                "value": "20",
+                "name": "20 - Régimen simplificado"
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@isTaxExempt@='N' & @IsNoTaxable@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "etvfacExemptionCause",
+            "apiKey": "etvfacExemptionCause",
+            "column": "EM_Etvfac_Exemption_Cause",
+            "label": "Verifactu - Causa de Exención",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "E1",
+                "name": "E1 - Exenta por el artículo 20"
+              },
+              {
+                "value": "E2",
+                "name": "E2 - Exenta por el artículo 21"
+              },
+              {
+                "value": "E3",
+                "name": "E3 - Exenta por el artículo 22"
+              },
+              {
+                "value": "E4",
+                "name": "E4 - Exenta por los artículos 23 y 24"
+              },
+              {
+                "value": "E5",
+                "name": "E5 - Exenta por el artículo 25"
+              },
+              {
+                "value": "E6",
+                "name": "E6 - Exenta por otros"
+              },
+              {
+                "value": "E7",
+                "name": "E7 - Exenta por el artículo 110 Ley 4/2012"
+              },
+              {
+                "value": "E8",
+                "name": "E8 - Exenta por otros"
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@isTaxExempt@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "etvfacCauseNotTaxable",
+            "apiKey": "etvfacCauseNotTaxable",
+            "column": "em_etvfac_cause_not_taxable",
+            "label": "Verifactu - Causa No Sujeción",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "N1",
+                "name": "N1 - Operación No Sujeta artículo 7, 14, otros."
+              },
+              {
+                "value": "N2",
+                "name": "N2 - Operación No Sujeta por Reglas de localización"
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@IsNoTaxable@='Y' & @isTaxExempt@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "tBAICausaDeExencion",
+            "apiKey": "tBAICausaDeExencion",
+            "column": "EM_Tbai_Exemptioncause",
+            "label": "TBAI - Causa de Exención",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "E1",
+                "name": "Exenta por el artículo 20 de la Ley del IVA. "
+              },
+              {
+                "value": "E2",
+                "name": "Exenta por el artículo 21 de la Ley del IVA. "
+              },
+              {
+                "value": "E3",
+                "name": "Exenta por el artículo 22 de la Ley del IVA. "
+              },
+              {
+                "value": "E4",
+                "name": "Exenta por el artículo 23 y 24 de la Ley del IVA. "
+              },
+              {
+                "value": "E5",
+                "name": "Exenta por el artículo 25 de La ley del IVA."
+              },
+              {
+                "value": "E6",
+                "name": "Exenta por otra causa."
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@isTaxExempt@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "etvfacIPSIRegime",
+            "apiKey": "etvfacIPSIRegime",
+            "column": "EM_Etvfac_Ipsi_Regime",
+            "label": "Régimen Especial IPSI",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "01",
+                "name": "01 - Operación de régimen general"
+              },
+              {
+                "value": "08",
+                "name": "08 - Operaciones sujetas al IGIC/IVA (Imp Gral Ind Canario)"
+              },
+              {
+                "value": "11",
+                "name": "11 - Operaciones de arrendamiento de local de negocio"
+              },
+              {
+                "value": "18",
+                "name": "18 - Operaciones recogidas en el artículo 73. 4 y 5"
+              },
+              {
+                "value": "19",
+                "name": "19 - Operaciones interiores exentas"
+              },
+              {
+                "value": "20",
+                "name": "20 - Régimen estimación objetiva."
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@isTaxExempt@='N' & @IsNoTaxable@='N'",
+              "evaluable": true
+            }
           }
         ],
         "searchableFields": [
           "name"
         ],
         "computedFields": [
+          {
+            "name": "applicableTo",
+            "derivation": {
+              "type": "computed",
+              "source": "B"
+            }
+          },
           {
             "name": "docTaxAmount",
             "derivation": {
@@ -230,14 +816,64 @@
               "type": "computed",
               "source": "LNA"
             }
+          }
+        ]
+      },
+      "accounting": {
+        "tableName": "C_Tax_Acct",
+        "tabId": "333",
+        "tabName": "Accounting",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "taxDue",
+            "apiKey": "taxDue",
+            "column": "T_Due_Acct",
+            "label": "Tax Due",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 1,
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
+            }
           },
           {
-            "name": "applicableTo",
-            "derivation": {
-              "type": "computed",
-              "source": "B"
+            "name": "taxCredit",
+            "apiKey": "taxCredit",
+            "column": "T_Credit_Acct",
+            "label": "Tax Credit",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 2,
+            "grow": true,
+            "validation": {
+              "required": true,
+              "maxLength": 32
             }
           }
+        ],
+        "searchableFields": [],
+        "computedFields": [],
+        "javaQualifier": "taxAccountingHandler",
+        "hideDelete": true,
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
         ]
       }
     }
@@ -249,16 +885,21 @@
       "primaryEntity": "tax",
       "category": "settings",
       "hidePrint": true,
+      "hideCreate": true,
       "hideMoreMenu": true,
+      "hideDelete": true,
+      "hideDeleteButton": true,
       "breadcrumb": "Settings / Tax",
-      "detailEntity": null,
+      "detailEntity": "accounting",
+      "headerExtra": {
+        "customForm": "TaxSifField"
+      },
       "labelOverrides": {
         "es_ES": {
           "Name": "Nombre",
           "Rate": "Índice",
           "SOPOType": "Tipo venta/compra",
           "ValidFrom": "Válido desde",
-          "IsActive": "Activo",
           "Description": "Descripción"
         },
         "en_US": {
@@ -266,10 +907,10 @@
           "Rate": "Rate",
           "SOPOType": "Sales/Purchase Type",
           "ValidFrom": "Valid From",
-          "IsActive": "Active",
           "Description": "Description"
         }
-      }
+      },
+      "maxDetailLines": 1
     },
     "entities": {
       "tax": {
@@ -290,7 +931,15 @@
             "apiKey": "name",
             "column": "Name",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "validFrom",
+            "apiKey": "validFrom",
+            "column": "ValidFrom",
+            "type": "date",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -314,7 +963,15 @@
             "apiKey": "rate",
             "column": "Rate",
             "type": "decimal",
-            "visibility": "editable",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "applicableTo",
+            "apiKey": "applicableTo",
+            "column": "SOPOType",
+            "type": "enum",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -322,7 +979,7 @@
             "apiKey": "docTaxAmount",
             "column": "DocTaxAmount",
             "type": "enum",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -346,7 +1003,7 @@
             "apiKey": "baseAmount",
             "column": "BaseAmount",
             "type": "enum",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -474,7 +1131,7 @@
             "apiKey": "notTaxable",
             "column": "IsNoTaxable",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -554,7 +1211,7 @@
             "apiKey": "taxExempt",
             "column": "IsTaxExempt",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -582,6 +1239,14 @@
             "required": true
           },
           {
+            "name": "tbaiClaveregimeniva",
+            "apiKey": "tbaiClaveregimeniva",
+            "column": "EM_Tbai_Claveregimeniva",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
             "name": "obsptiReceiveOss",
             "apiKey": "obsptiReceiveOss",
             "column": "EM_Obspti_Receive_Oss",
@@ -590,11 +1255,19 @@
             "required": false
           },
           {
-            "name": "tbaiClaveregimeniva",
-            "apiKey": "tbaiClaveregimeniva",
-            "column": "EM_Tbai_Claveregimeniva",
+            "name": "tbaiNonsubjectcause",
+            "apiKey": "tbaiNonsubjectcause",
+            "column": "EM_Tbai_Nonsubjectcause",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "etvfacIGICRegime",
+            "apiKey": "etvfacIGICRegime",
+            "column": "em_etvfac_igic_regime",
+            "type": "enum",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -606,27 +1279,11 @@
             "required": true
           },
           {
-            "name": "etvfacIGICRegime",
-            "apiKey": "etvfacIGICRegime",
-            "column": "em_etvfac_igic_regime",
-            "type": "enum",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "tbaiNonsubjectcause",
-            "apiKey": "tbaiNonsubjectcause",
-            "column": "EM_Tbai_Nonsubjectcause",
-            "type": "enum",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "etvfacVatRegime",
             "apiKey": "etvfacVatRegime",
             "column": "EM_Etvfac_Vat_Regime",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -634,7 +1291,7 @@
             "apiKey": "etvfacExemptionCause",
             "column": "EM_Etvfac_Exemption_Cause",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -642,7 +1299,7 @@
             "apiKey": "etvfacCauseNotTaxable",
             "column": "em_etvfac_cause_not_taxable",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -658,7 +1315,7 @@
             "apiKey": "tBAICausaDeExencion",
             "column": "EM_Tbai_Exemptioncause",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -666,7 +1323,7 @@
             "apiKey": "etvfacIPSIRegime",
             "column": "EM_Etvfac_Ipsi_Regime",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -732,24 +1389,152 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "applicableTo",
-            "apiKey": "applicableTo",
-            "column": "SOPOType",
-            "type": "enum",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "validFrom",
-            "apiKey": "validFrom",
-            "column": "ValidFrom",
-            "type": "date",
-            "visibility": "editable",
-            "required": true
           }
         ]
+      },
+      "accounting": {
+        "tableName": "C_Tax_Acct",
+        "tabId": "333",
+        "tabName": "Accounting",
+        "fields": [
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "taxDue",
+            "apiKey": "taxDue",
+            "column": "T_Due_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "taxCredit",
+            "apiKey": "taxCredit",
+            "column": "T_Credit_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "taxExpense",
+            "apiKey": "taxExpense",
+            "column": "T_Expense_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "taxLiability",
+            "apiKey": "taxLiability",
+            "column": "T_Liability_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "taxReceivables",
+            "apiKey": "taxReceivables",
+            "column": "T_Receivables_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "taxDueTransitory",
+            "apiKey": "taxDueTransitory",
+            "column": "T_Due_Trans_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "taxCreditTransitory",
+            "apiKey": "taxCreditTransitory",
+            "column": "T_Credit_Trans_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "tax",
+            "apiKey": "tax",
+            "column": "C_Tax_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Tax_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ],
+        "javaQualifier": "taxAccountingHandler"
       }
     },
     "endpoints": [
@@ -784,6 +1569,36 @@
         "path": "/tax/:id",
         "entity": "tax",
         "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
       }
     ],
     "processEndpoints": []
@@ -798,15 +1613,43 @@
         "post": true,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/tax-rate/tax",
         "detailUrl": "/sws/neo/tax-rate/tax/{id}",
         "supportedFilters": [
           "name"
         ]
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/tax-rate/accounting",
+        "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
+        "supportedFilters": []
       }
     },
-    "selectors": [],
+    "selectors": [
+      {
+        "entity": "accounting",
+        "field": "taxDue",
+        "column": "T_Due_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/tax-rate/accounting/selectors/taxDue"
+      },
+      {
+        "entity": "accounting",
+        "field": "taxCredit",
+        "column": "T_Credit_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/tax-rate/accounting/selectors/taxCredit"
+      }
+    ],
     "actions": [],
     "queryParams": {
       "pagination": {
@@ -830,7 +1673,6 @@
         "Rate": "Índice",
         "SOPOType": "Tipo venta/compra",
         "ValidFrom": "Válido desde",
-        "IsActive": "Activo",
         "Description": "Descripción"
       },
       "en_US": {
@@ -838,13 +1680,19 @@
         "Rate": "Rate",
         "SOPOType": "Sales/Purchase Type",
         "ValidFrom": "Valid From",
-        "IsActive": "Active",
         "Description": "Description"
       }
     }
   },
   "testManifest": {
     "tests": [
+      {
+        "id": "t-crud-flags-accounting",
+        "category": "crud-flags",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "CRUD flags for 'accounting' should all be booleans"
+      },
       {
         "id": "t-crud-flags-tax",
         "category": "crud-flags",
@@ -893,12 +1741,76 @@
         "description": "Display logic for 'docTaxAmount' in tax should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-tax-etvfacCauseNotTaxable",
+        "category": "displaylogic-evaluable",
+        "entity": "tax",
+        "field": "etvfacCauseNotTaxable",
+        "runner": "node",
+        "description": "Display logic for 'etvfacCauseNotTaxable' in tax should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-tax-etvfacExemptionCause",
+        "category": "displaylogic-evaluable",
+        "entity": "tax",
+        "field": "etvfacExemptionCause",
+        "runner": "node",
+        "description": "Display logic for 'etvfacExemptionCause' in tax should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-tax-etvfacIGICRegime",
+        "category": "displaylogic-evaluable",
+        "entity": "tax",
+        "field": "etvfacIGICRegime",
+        "runner": "node",
+        "description": "Display logic for 'etvfacIGICRegime' in tax should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-tax-etvfacIPSIRegime",
+        "category": "displaylogic-evaluable",
+        "entity": "tax",
+        "field": "etvfacIPSIRegime",
+        "runner": "node",
+        "description": "Display logic for 'etvfacIPSIRegime' in tax should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-tax-etvfacVatRegime",
+        "category": "displaylogic-evaluable",
+        "entity": "tax",
+        "field": "etvfacVatRegime",
+        "runner": "node",
+        "description": "Display logic for 'etvfacVatRegime' in tax should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-tax-rate",
         "category": "displaylogic-evaluable",
         "entity": "tax",
         "field": "rate",
         "runner": "node",
         "description": "Display logic for 'rate' in tax should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-tax-tBAICausaDeExencion",
+        "category": "displaylogic-evaluable",
+        "entity": "tax",
+        "field": "tBAICausaDeExencion",
+        "runner": "node",
+        "description": "Display logic for 'tBAICausaDeExencion' in tax should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-tax-tbaiClaveregimeniva",
+        "category": "displaylogic-evaluable",
+        "entity": "tax",
+        "field": "tbaiClaveregimeniva",
+        "runner": "node",
+        "description": "Display logic for 'tbaiClaveregimeniva' in tax should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-tax-tbaiNonsubjectcause",
+        "category": "displaylogic-evaluable",
+        "entity": "tax",
+        "field": "tbaiNonsubjectcause",
+        "runner": "node",
+        "description": "Display logic for 'tbaiNonsubjectcause' in tax should have evaluable flag"
       },
       {
         "id": "t-displaylogic-valid-tax-baseAmount",
@@ -917,12 +1829,92 @@
         "description": "Display logic for 'docTaxAmount' in tax should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-tax-etvfacCauseNotTaxable",
+        "category": "displaylogic-valid",
+        "entity": "tax",
+        "field": "etvfacCauseNotTaxable",
+        "runner": "node",
+        "description": "Display logic for 'etvfacCauseNotTaxable' in tax should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-tax-etvfacExemptionCause",
+        "category": "displaylogic-valid",
+        "entity": "tax",
+        "field": "etvfacExemptionCause",
+        "runner": "node",
+        "description": "Display logic for 'etvfacExemptionCause' in tax should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-tax-etvfacIGICRegime",
+        "category": "displaylogic-valid",
+        "entity": "tax",
+        "field": "etvfacIGICRegime",
+        "runner": "node",
+        "description": "Display logic for 'etvfacIGICRegime' in tax should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-tax-etvfacIPSIRegime",
+        "category": "displaylogic-valid",
+        "entity": "tax",
+        "field": "etvfacIPSIRegime",
+        "runner": "node",
+        "description": "Display logic for 'etvfacIPSIRegime' in tax should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-tax-etvfacVatRegime",
+        "category": "displaylogic-valid",
+        "entity": "tax",
+        "field": "etvfacVatRegime",
+        "runner": "node",
+        "description": "Display logic for 'etvfacVatRegime' in tax should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-tax-rate",
         "category": "displaylogic-valid",
         "entity": "tax",
         "field": "rate",
         "runner": "node",
         "description": "Display logic for 'rate' in tax should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-tax-tBAICausaDeExencion",
+        "category": "displaylogic-valid",
+        "entity": "tax",
+        "field": "tBAICausaDeExencion",
+        "runner": "node",
+        "description": "Display logic for 'tBAICausaDeExencion' in tax should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-tax-tbaiClaveregimeniva",
+        "category": "displaylogic-valid",
+        "entity": "tax",
+        "field": "tbaiClaveregimeniva",
+        "runner": "node",
+        "description": "Display logic for 'tbaiClaveregimeniva' in tax should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-tax-tbaiNonsubjectcause",
+        "category": "displaylogic-valid",
+        "entity": "tax",
+        "field": "tbaiNonsubjectcause",
+        "runner": "node",
+        "description": "Display logic for 'tbaiNonsubjectcause' in tax should be valid JS"
+      },
+      {
+        "id": "t-field-presence-accounting-taxCredit",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "taxCredit",
+        "runner": "node",
+        "description": "Field 'taxCredit' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-taxDue",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "taxDue",
+        "runner": "node",
+        "description": "Field 'taxDue' should be present in accounting"
       },
       {
         "id": "t-field-presence-tax-applicableTo",
@@ -949,12 +1941,60 @@
         "description": "Field 'docTaxAmount' should be present in tax"
       },
       {
+        "id": "t-field-presence-tax-etvfacCauseNotTaxable",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "etvfacCauseNotTaxable",
+        "runner": "node",
+        "description": "Field 'etvfacCauseNotTaxable' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-etvfacExemptionCause",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "etvfacExemptionCause",
+        "runner": "node",
+        "description": "Field 'etvfacExemptionCause' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-etvfacIGICRegime",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "etvfacIGICRegime",
+        "runner": "node",
+        "description": "Field 'etvfacIGICRegime' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-etvfacIPSIRegime",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "etvfacIPSIRegime",
+        "runner": "node",
+        "description": "Field 'etvfacIPSIRegime' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-etvfacVatRegime",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "etvfacVatRegime",
+        "runner": "node",
+        "description": "Field 'etvfacVatRegime' should be present in tax"
+      },
+      {
         "id": "t-field-presence-tax-name",
         "category": "field-presence",
         "entity": "tax",
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-notTaxable",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "notTaxable",
+        "runner": "node",
+        "description": "Field 'notTaxable' should be present in tax"
       },
       {
         "id": "t-field-presence-tax-rate",
@@ -965,12 +2005,60 @@
         "description": "Field 'rate' should be present in tax"
       },
       {
+        "id": "t-field-presence-tax-taxExempt",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "taxExempt",
+        "runner": "node",
+        "description": "Field 'taxExempt' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-tBAICausaDeExencion",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "tBAICausaDeExencion",
+        "runner": "node",
+        "description": "Field 'tBAICausaDeExencion' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-tbaiClaveregimeniva",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "tbaiClaveregimeniva",
+        "runner": "node",
+        "description": "Field 'tbaiClaveregimeniva' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-tbaiNonsubjectcause",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "tbaiNonsubjectcause",
+        "runner": "node",
+        "description": "Field 'tbaiNonsubjectcause' should be present in tax"
+      },
+      {
         "id": "t-field-presence-tax-validFrom",
         "category": "field-presence",
         "entity": "tax",
         "field": "validFrom",
         "runner": "node",
         "description": "Field 'validFrom' should be present in tax"
+      },
+      {
+        "id": "t-field-type-accounting-taxCredit",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "taxCredit",
+        "runner": "node",
+        "description": "Field 'taxCredit' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-taxDue",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "taxDue",
+        "runner": "node",
+        "description": "Field 'taxDue' should have type 'string' in accounting"
       },
       {
         "id": "t-field-type-tax-applicableTo",
@@ -997,6 +2085,46 @@
         "description": "Field 'docTaxAmount' should have type 'string' in tax"
       },
       {
+        "id": "t-field-type-tax-etvfacCauseNotTaxable",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "etvfacCauseNotTaxable",
+        "runner": "node",
+        "description": "Field 'etvfacCauseNotTaxable' should have type 'string' in tax"
+      },
+      {
+        "id": "t-field-type-tax-etvfacExemptionCause",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "etvfacExemptionCause",
+        "runner": "node",
+        "description": "Field 'etvfacExemptionCause' should have type 'string' in tax"
+      },
+      {
+        "id": "t-field-type-tax-etvfacIGICRegime",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "etvfacIGICRegime",
+        "runner": "node",
+        "description": "Field 'etvfacIGICRegime' should have type 'string' in tax"
+      },
+      {
+        "id": "t-field-type-tax-etvfacIPSIRegime",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "etvfacIPSIRegime",
+        "runner": "node",
+        "description": "Field 'etvfacIPSIRegime' should have type 'string' in tax"
+      },
+      {
+        "id": "t-field-type-tax-etvfacVatRegime",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "etvfacVatRegime",
+        "runner": "node",
+        "description": "Field 'etvfacVatRegime' should have type 'string' in tax"
+      },
+      {
         "id": "t-field-type-tax-name",
         "category": "field-type",
         "entity": "tax",
@@ -1005,12 +2133,52 @@
         "description": "Field 'name' should have type 'string' in tax"
       },
       {
+        "id": "t-field-type-tax-notTaxable",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "notTaxable",
+        "runner": "node",
+        "description": "Field 'notTaxable' should have type 'boolean' in tax"
+      },
+      {
         "id": "t-field-type-tax-rate",
         "category": "field-type",
         "entity": "tax",
         "field": "rate",
         "runner": "node",
         "description": "Field 'rate' should have type 'number' in tax"
+      },
+      {
+        "id": "t-field-type-tax-taxExempt",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "taxExempt",
+        "runner": "node",
+        "description": "Field 'taxExempt' should have type 'boolean' in tax"
+      },
+      {
+        "id": "t-field-type-tax-tBAICausaDeExencion",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "tBAICausaDeExencion",
+        "runner": "node",
+        "description": "Field 'tBAICausaDeExencion' should have type 'string' in tax"
+      },
+      {
+        "id": "t-field-type-tax-tbaiClaveregimeniva",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "tbaiClaveregimeniva",
+        "runner": "node",
+        "description": "Field 'tbaiClaveregimeniva' should have type 'string' in tax"
+      },
+      {
+        "id": "t-field-type-tax-tbaiNonsubjectcause",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "tbaiNonsubjectcause",
+        "runner": "node",
+        "description": "Field 'tbaiNonsubjectcause' should have type 'string' in tax"
       },
       {
         "id": "t-field-type-tax-validFrom",
@@ -1246,6 +2414,142 @@
         "description": "Field 'name' should be a supported filter for tax"
       },
       {
+        "id": "t-selector-endpoint-accounting-taxCredit",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "taxCredit",
+        "runner": "node",
+        "description": "Selector endpoint for 'taxCredit' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-taxDue",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "taxDue",
+        "runner": "node",
+        "description": "Selector endpoint for 'taxDue' in accounting should exist"
+      },
+      {
+        "id": "t-system-field-accounting-accountingSchema",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-active",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-client",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-createdBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-creationDate",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-id",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-organization",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-tax",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "tax",
+        "runner": "node",
+        "description": "System field 'tax' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-taxCreditTransitory",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "taxCreditTransitory",
+        "runner": "node",
+        "description": "System field 'taxCreditTransitory' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-taxDueTransitory",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "taxDueTransitory",
+        "runner": "node",
+        "description": "System field 'taxDueTransitory' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-taxExpense",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "taxExpense",
+        "runner": "node",
+        "description": "System field 'taxExpense' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-taxLiability",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "taxLiability",
+        "runner": "node",
+        "description": "System field 'taxLiability' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-taxReceivables",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "taxReceivables",
+        "runner": "node",
+        "description": "System field 'taxReceivables' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updated",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updatedBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
+      },
+      {
         "id": "t-system-field-tax-active",
         "category": "system-field",
         "entity": "tax",
@@ -1366,46 +2670,6 @@
         "description": "System field 'destinationRegion' should exist in backend but not frontend for tax"
       },
       {
-        "id": "t-system-field-tax-etvfacCauseNotTaxable",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "etvfacCauseNotTaxable",
-        "runner": "node",
-        "description": "System field 'etvfacCauseNotTaxable' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-etvfacExemptionCause",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "etvfacExemptionCause",
-        "runner": "node",
-        "description": "System field 'etvfacExemptionCause' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-etvfacIGICRegime",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "etvfacIGICRegime",
-        "runner": "node",
-        "description": "System field 'etvfacIGICRegime' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-etvfacIPSIRegime",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "etvfacIPSIRegime",
-        "runner": "node",
-        "description": "System field 'etvfacIPSIRegime' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-etvfacVatRegime",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "etvfacVatRegime",
-        "runner": "node",
-        "description": "System field 'etvfacVatRegime' should exist in backend but not frontend for tax"
-      },
-      {
         "id": "t-system-field-tax-id",
         "category": "system-field",
         "entity": "tax",
@@ -1436,14 +2700,6 @@
         "field": "lineNo",
         "runner": "node",
         "description": "System field 'lineNo' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-notTaxable",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "notTaxable",
-        "runner": "node",
-        "description": "System field 'notTaxable' should exist in backend but not frontend for tax"
       },
       {
         "id": "t-system-field-tax-notTaxdeductable",
@@ -1606,44 +2862,12 @@
         "description": "System field 'taxCategory' should exist in backend but not frontend for tax"
       },
       {
-        "id": "t-system-field-tax-taxExempt",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "taxExempt",
-        "runner": "node",
-        "description": "System field 'taxExempt' should exist in backend but not frontend for tax"
-      },
-      {
         "id": "t-system-field-tax-taxSearchKey",
         "category": "system-field",
         "entity": "tax",
         "field": "taxSearchKey",
         "runner": "node",
         "description": "System field 'taxSearchKey' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-tBAICausaDeExencion",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "tBAICausaDeExencion",
-        "runner": "node",
-        "description": "System field 'tBAICausaDeExencion' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-tbaiClaveregimeniva",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "tbaiClaveregimeniva",
-        "runner": "node",
-        "description": "System field 'tbaiClaveregimeniva' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-tbaiNonsubjectcause",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "tbaiNonsubjectcause",
-        "runner": "node",
-        "description": "System field 'tbaiNonsubjectcause' should exist in backend but not frontend for tax"
       },
       {
         "id": "t-system-field-tax-updated",
@@ -1670,6 +2894,13 @@
         "description": "System field 'withholdingTax' should exist in backend but not frontend for tax"
       },
       {
+        "id": "t-visibility-accounting",
+        "category": "visibility",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "Entity 'accounting' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-tax",
         "category": "visibility",
         "entity": "tax",
@@ -1678,21 +2909,22 @@
       }
     ],
     "summary": {
-      "total": 108,
+      "total": 157,
       "byCategory": {
-        "crud-flags": 1,
+        "crud-flags": 2,
         "default-value-type": 3,
-        "displaylogic-evaluable": 3,
-        "displaylogic-valid": 3,
-        "field-presence": 6,
-        "field-type": 6,
+        "displaylogic-evaluable": 11,
+        "displaylogic-valid": 11,
+        "field-presence": 18,
+        "field-type": 18,
         "rule-declared": 31,
         "searchable-filters": 1,
-        "system-field": 53,
-        "visibility": 1
+        "selector-endpoint": 2,
+        "system-field": 58,
+        "visibility": 2
       },
       "byRunner": {
-        "node": 108,
+        "node": 157,
         "junit": 0
       }
     }

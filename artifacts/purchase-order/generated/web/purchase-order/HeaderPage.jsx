@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';
+import { useMemo, useEffect } from 'react';
+import { ListView } from '@/components/contract-ui/ListView.jsx';
+import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import HeaderTable from './HeaderTable';
 import HeaderForm from './HeaderForm';
 import LinesTable from './LinesTable';
@@ -14,21 +16,6 @@ import catalogs from './mockCatalogs';
 
 const breadcrumb = 'Purchases / Purchase Order';
 
-const labelOverrides = {
-  "es_ES": {
-    "C_BPartner_ID": "Contacto",
-    "DatePromised": "Fecha de entrega esperada",
-    "DeliveryStatusPurchase": "Estado de entrega",
-    "InvoiceStatus": "Estado de facturación"
-  },
-  "en_US": {
-    "C_BPartner_ID": "Contact",
-    "DatePromised": "Expected Delivery Date",
-    "DeliveryStatusPurchase": "Delivery Status",
-    "InvoiceStatus": "Invoicing Status"
-  }
-};
-
 
 // @sf-generated-start summary:header
 const summary = [
@@ -41,7 +28,9 @@ const statusField = 'documentStatus';
 // @sf-generated-end summary:header
 
 // @sf-generated-start extraBadges:header
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:header
 
 // @sf-generated-start processes:header
@@ -60,7 +49,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['businessPartner', 'documentNo', 'orderDate', 'partnerAddress', 'scheduledDeliveryDate', 'paymentTerms', 'priceList', 'grandTotalAmount', 'summedLineAmount'];
+const requiredHeaderFields = ['businessPartner', 'documentNo', 'orderDate', 'partnerAddress', 'scheduledDeliveryDate', 'warehouse', 'paymentTerms', 'priceList', 'grandTotalAmount', 'summedLineAmount', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -68,9 +57,9 @@ const addLineFields = {
   entry: [
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', forceCalloutFields: ["listPrice","unitPrice","tax","uOM","grossUnitPrice","discount"] },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
-    { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', required: true, label: 'Ordered Quantity', defaultValue: 1, min: 0 },
-    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'Net List Price', min: 0 },
-    { key: 'discount', column: 'Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0 },
+    { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', required: true, label: 'Ordered Quantity', defaultValue: 1 },
+    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'Net List Price' },
+    { key: 'discount', column: 'Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', required: true, label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineGrossAmount","grossUnitPrice","lineNetAmount"] },
   ],
   derived: [
@@ -169,21 +158,38 @@ export const api = {
       "column": "C_BPartner_Location_ID",
       "reference": "BusinessPartnerLocation",
       "inputMode": "dependent",
-      "url": "/sws/neo/purchase-order/header/selectors/partnerAddress"
+      "url": "/sws/neo/purchase-order/header/selectors/partnerAddress",
+      "context": {
+        "required": [
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
       "field": "transactionDocument",
       "column": "C_DocTypeTarget_ID",
       "reference": "DocumentType",
-      "url": "/sws/neo/purchase-order/header/selectors/transactionDocument"
+      "url": "/sws/neo/purchase-order/header/selectors/transactionDocument",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
       "field": "warehouse",
       "column": "M_Warehouse_ID",
       "reference": "Warehouse",
-      "inputMode": "selector",
+      "inputMode": "search",
       "url": "/sws/neo/purchase-order/header/selectors/warehouse"
     },
     {
@@ -192,7 +198,15 @@ export const api = {
       "column": "FIN_Paymentmethod_ID",
       "reference": "PaymentMethod",
       "inputMode": "selector",
-      "url": "/sws/neo/purchase-order/header/selectors/paymentMethod"
+      "url": "/sws/neo/purchase-order/header/selectors/paymentMethod",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
@@ -208,12 +222,22 @@ export const api = {
       "column": "M_PriceList_ID",
       "reference": "PriceList",
       "inputMode": "selector",
-      "url": "/sws/neo/purchase-order/header/selectors/priceList"
+      "url": "/sws/neo/purchase-order/header/selectors/priceList",
+      "context": {
+        "required": [
+          {
+            "param": "isSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
       "field": "currency",
       "column": "C_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
       "url": "/sws/neo/purchase-order/header/selectors/currency"
     },
     {
@@ -228,7 +252,16 @@ export const api = {
       "column": "BillTo_ID",
       "reference": "BusinessPartnerLocation",
       "inputMode": "dependent",
-      "url": "/sws/neo/purchase-order/header/selectors/invoiceFrom"
+      "url": "/sws/neo/purchase-order/header/selectors/invoiceFrom",
+      "context": {
+        "required": [
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
@@ -255,7 +288,20 @@ export const api = {
       "column": "C_Project_ID",
       "reference": "Project",
       "inputMode": "search",
-      "url": "/sws/neo/purchase-order/header/selectors/project"
+      "url": "/sws/neo/purchase-order/header/selectors/project",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "C_BPartner_ID",
+            "source": "field",
+            "field": "businessPartner"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
@@ -303,7 +349,21 @@ export const api = {
       "column": "C_Tax_ID",
       "reference": "Tax",
       "inputMode": "selector",
-      "url": "/sws/neo/purchase-order/lines/selectors/tax"
+      "url": "/sws/neo/purchase-order/lines/selectors/tax",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "DateInvoiced",
+            "source": "parentField",
+            "field": "orderDate",
+            "format": "DD-MM-YYYY"
+          }
+        ]
+      }
     },
     {
       "entity": "lines",
@@ -311,7 +371,20 @@ export const api = {
       "column": "C_Aum",
       "reference": "UOM",
       "inputMode": "selector",
-      "url": "/sws/neo/purchase-order/lines/selectors/operativeUOM"
+      "url": "/sws/neo/purchase-order/lines/selectors/operativeUOM",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "M_Product_ID",
+            "source": "field",
+            "field": "product"
+          }
+        ]
+      }
     },
     {
       "entity": "lines",
@@ -339,7 +412,16 @@ export const api = {
       "field": "partnerAddress",
       "column": "C_BPartner_Location_ID",
       "reference": "BusinessPartnerLocation",
-      "url": "/sws/neo/purchase-order/lines/selectors/partnerAddress"
+      "url": "/sws/neo/purchase-order/lines/selectors/partnerAddress",
+      "context": {
+        "required": [
+          {
+            "param": "C_BPartner_ID",
+            "source": "parentField",
+            "field": "businessPartner"
+          }
+        ]
+      }
     },
     {
       "entity": "lines",
@@ -574,6 +656,22 @@ export const api = {
       "processType": "obuiapp"
     },
     {
+      "entity": "header",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/purchase-order/header/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/purchase-order/header/{id}/action/eTPRRemovePayment",
+      "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+      "processType": "obuiapp"
+    },
+    {
       "entity": "lines",
       "field": "managePrereservation",
       "column": "Manage_Prereservation",
@@ -626,22 +724,33 @@ export const api = {
     "es_ES": {
       "C_BPartner_ID": "Contacto",
       "DatePromised": "Fecha de entrega esperada",
-      "DeliveryStatusPurchase": "Estado de entrega",
-      "InvoiceStatus": "Estado de facturación"
+      "DeliveryStatusPurchase": "Estado de recepción",
+      "InvoiceStatus": "Estado de facturación",
+      "PriceList": "Precio"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
       "DatePromised": "Expected Delivery Date",
-      "DeliveryStatusPurchase": "Delivery Status",
+      "DeliveryStatusPurchase": "Reception Status",
       "InvoiceStatus": "Invoicing Status"
     }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:HeaderPage
 export default function HeaderPage({ windowName, recordId, ...props }) {
+  const windowAccessTier = useWindowAccess('181');
+  const effectiveWindow = useMemo(() => (
+    windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
+  ), [windowAccessTier, props.window]);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="181" />;
+  }
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         detailEntity="lines"
@@ -661,7 +770,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrint
         hideSaveStatuses={["CO","CL","VO"]}
         noHeaderBorder
         notesField="description"
@@ -671,11 +779,13 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         topbarExtra={PurchaseOrderDraftChips}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        documentDateField="orderDate"
         labelOverrides={labelOverrides}
-        linesLayout="inlineEditable"
         sendDocument
-        {...props}
+        selectorPriceCurrency="org"
+        {...props} window={effectiveWindow}
       />
+      </>
     );
   }
 
@@ -688,11 +798,10 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="orderDate"
-      hidePrint
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@='CO'"}}}}
       sendDocument
-      {...props}
+      {...props} window={effectiveWindow}
     />
   );
 }

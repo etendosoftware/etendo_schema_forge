@@ -1,8 +1,10 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useMemo, useState } from 'react';
+import { Check, Plus } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useLocaleSwitch } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { formatCalendarDate, getCalendarDateRelation } from '@/lib/dateOnly';
+import { formatCalendarDate } from '@/lib/dateOnly';
+import { formatCurrency } from '@/lib/formatCurrency';
 import {
   getDueDateState,
   getDueDateDotStyle,
@@ -10,46 +12,29 @@ import {
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
-import { useInvoiceListFiscalStatus } from '@/windows/custom/shared/useInvoiceListFiscalStatus.js';
-import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
+import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
+import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
+import { getArSubtype } from './invoiceSubtype';
 
 // ─── Invoice-specific status logic ───────────────────────────────
 
-function isCreditNote(row) {
-  return (row['transactionDocument$_identifier'] || '').toLowerCase().includes('credit');
+// ETP-4737: the former separate credit-note (NC) and return-invoice (DEV)
+// subtypes are unified into a single RECTIFICATIVA subtype (see
+// invoiceSubtype.js). Both used negative-total/"Saldo a favor" treatment
+// identically, so a single predicate now covers what isCreditType used to.
+function isRectificativa(row) { return getArSubtype(row) === 'RECTIFICATIVA'; }
+
+function fmtAmt(val, currency) {
+  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
+  return formatCurrency(currency || 'EUR', n);
 }
 
-function getInvoiceStatus(row) {
-  const docStatus = row.documentStatus;
-  if (docStatus === 'DR') return 'draft';
-  if (docStatus === 'VO') return 'voided';
-  if (docStatus === 'CL') return 'closed';
-  const grand = row.grandTotalAmount ?? 0;
-  const outstanding = row.outstandingAmount ?? grand;
-  const paid = grand - outstanding;
-  if (outstanding <= 0 || row.paymentComplete === true || row.paymentComplete === 'Y')
-    return 'paid';
-  if (row.eTGODueDate) {
-    if (getCalendarDateRelation(row.eTGODueDate) === 'past' && outstanding > 0) return 'overdue';
-  }
-  if (paid > 0) return 'partial';
-  return 'pending';
-}
-
-function getPaymentFilter(row) {
-  const s = getInvoiceStatus(row);
-  if (s === 'paid') return 'paid';
-  if (s === 'partial') return 'partial';
-  if (s === 'pending' || s === 'overdue') return 'pending';
-  return null;
-}
-
-const filters = ['documentNo', 'invoiceDate', 'businessPartner'];
+const FILTERS = ['documentNo', 'invoiceDate', 'businessPartner'];
 
 // ─── Component ──────────────────────────────────────────────────
 
 export default function InvoiceHeaderTable(props) {
-  const { token, apiBaseUrl, data } = props;
+  const { apiBaseUrl } = props;
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
   const gl = dictionary?.genericLabels || {};
@@ -61,10 +46,9 @@ export default function InvoiceHeaderTable(props) {
 
   const targets = useMemo(() => getInvoiceFiscalTargets('sales-invoice', profile), [profile]);
 
-  const ids = useMemo(() => (data || []).map(r => r.id).filter(Boolean), [data]);
-  const { statusMap, loading: fiscalLoading } = useInvoiceListFiscalStatus(ids, 'sales-invoice', profile, apiBaseUrl, orgId);
+  const [paymentRow, setPaymentRow] = useState(null);
 
-  // Derive stable label strings from gl (avoids putting the unstable ui() fn in useMemo deps)
+  // Derive stable label strings from gl
   const siiColLabel  = gl['invoiceList.col.siiStatus']       || 'SII Status';
   const tbaiColLabel = gl['invoiceList.col.tbaiStatus']      || 'TBAI Status';
   const vfColLabel   = gl['invoiceList.col.verifactuStatus'] || 'Verifactu Status';
@@ -75,37 +59,62 @@ export default function InvoiceHeaderTable(props) {
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
-        render: (row) => <FiscalStatusBadge status={statusMap?.[row.id]?.sii} loading={fiscalLoading && !statusMap} />,
+        render: (row) => <FiscalStatusBadge status={row.aeatsiiEstado ?? null} />,
       });
     }
     if (targets.showTbai) {
       fiscalCols.push({
         key: '_tbaiStatus', type: 'custom', label: tbaiColLabel,
-        render: (row) => <FiscalStatusBadge status={statusMap?.[row.id]?.tbai ?? 'Pendiente'} loading={fiscalLoading && !statusMap} />,
+        render: (row) => <FiscalStatusBadge status={row.tbaiSyncEstado ?? 'Pendiente'} />,
       });
     }
     if (targets.showVerifactu) {
       fiscalCols.push({
         key: '_vfStatus', type: 'custom', label: vfColLabel,
-        render: (row) => <FiscalStatusBadge status={statusMap?.[row.id]?.verifactu} loading={fiscalLoading && !statusMap} />,
+        render: (row) => <FiscalStatusBadge status={normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? null)} />,
       });
     }
 
     return [
-      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false },
+      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false, required: true },
       {
-        key: 'documentNo', column: 'DocumentNo', type: 'string',
-        pill: {
-          when: (row) => isCreditNote(row),
-          label: t('creditNoteLabel'),
-          className: 'bg-purple-50 text-purple-700 border-purple-200',
+        key: 'transactionDocument',
+        column: 'C_DocTypeTarget_ID',
+        type: 'custom',
+        required: true,
+        // `type: 'custom'` drives the badge cell render, but that would make the
+        // advanced filter fall back to a free-text input. `filterMode` (honored
+        // first by resolveFilterMode, ignored by DataTable) restores the correct
+        // identifier picker for this FK column without touching the grid cell.
+        filterMode: 'identifier',
+        labels: { [locale]: t('documentType') },
+        label: t('documentType'),
+        render: (row) => {
+          const sub = getArSubtype(row);
+          const cfg = sub === 'RECTIFICATIVA'
+            ? { color: 'hsl(var(--primary))', bg: 'hsl(var(--primary) / 0.1)', label: t('rectificativeInvoicesTab') }
+            : { color: 'var(--status-info-fg)', bg: 'var(--status-info-bg)', label: t('invoicesTab') };
+          return (
+            <span
+              className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+              style={{ color: cfg.color, backgroundColor: cfg.bg }}
+            >
+              {cfg.label}
+            </span>
+          );
         },
       },
+      { key: 'documentNo', column: 'DocumentNo', type: 'string', label: gl['documentNo'] || 'Document No.', required: true },
       {
         key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        // The cell renders a coloured due-date dot, so it must stay `custom` —
+        // but the underlying column is a plain date. Without this the advanced
+        // filter would offer text operators instead of Before/After/Between.
+        filterMode: 'date',
         render: (row) => {
           const d = row.eTGODueDate;
           if (!d) return <span className="text-muted-foreground">—</span>;
+          if (isRectificativa(row)) return <span className="text-muted-foreground">{formatCalendarDate(d, locale)}</span>;
           const state = getDueDateState(d, row.outstandingAmount);
           return (
             <span className="inline-flex items-center gap-1.5" style={getDueDateTextStyle(state)}>
@@ -115,117 +124,89 @@ export default function InvoiceHeaderTable(props) {
           );
         },
       },
-      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
-      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusColumn') },
+      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string', required: true },
+      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn'), required: true },
+      { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
       ...fiscalCols,
-      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-      { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: t('impTotal'), required: true },
+      {
+        key: 'outstandingAmount',
+        column: 'OutstandingAmt',
+        type: 'custom',
+        required: true,
+        label: t('pendingPaymentColumn'),
+        // The cell renders status pills and a payment button, so it must stay
+        // `custom` — but the underlying column is an amount. Without this the
+        // `?filter=overdue` preload (outstandingAmount greaterThan 0) resolves
+        // to text mode, which has no `greaterThan`, and the operator select
+        // renders empty (ETP-4681).
+        filterMode: 'numeric',
+        render: (row) => {
+          const outstanding = parseFloat(row.outstandingAmount ?? 0);
+          const currency = row['currency$_identifier'] || 'EUR';
+          if (row.documentStatus !== 'CO') return <span className="text-muted-foreground">—</span>;
+          if (isRectificativa(row)) {
+            const outstandingAbs = Math.abs(outstanding);
+            if (outstandingAbs < 0.001) {
+              return (
+                <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
+                  <Check size={12}/>Aplicada
+                </span>
+              );
+            }
+            // A credit note / return always represents money owed back to the
+            // customer, never money still owed by them — the label stays
+            // "Saldo a favor" for any remaining unused balance, however much
+            // of it has already been applied elsewhere.
+            return (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
+                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'hsl(var(--primary))',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+              >
+                <span style={{width:8,height:8,borderRadius:'50%',background:'hsl(var(--primary))',flexShrink:0,display:'inline-block'}}/>
+                Saldo a favor · {fmtAmt(outstandingAbs, currency)}
+              </button>
+            );
+          }
+          if (outstanding <= 0) {
+            return (
+              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'var(--status-success-bg)',color:'var(--status-success-fg)'}}>
+                <Check size={12}/>{t('cobrada')}
+              </span>
+            );
+          }
+          return (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
+              aria-label={t('addCobro')}
+              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-warning-bg)',border:'1px solid var(--status-warning-border)',color:'var(--status-warning-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+            >
+              <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
+              {fmtAmt(outstanding, currency)}
+              <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13}/></span>
+            </button>
+          );
+        },
+      },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, locale, targets, fiscalLoading, statusMap, siiColLabel, tbaiColLabel, vfColLabel]);
-
-  // ─── Filter options ───────────────────────────────────────────
-  const TYPE_OPTIONS = useMemo(() => [
-    { value: 'all',          label: t('allTab') },
-    { value: 'invoices',     label: t('invoicesTab') },
-    { value: 'credit-notes', label: t('creditNotesTab') },
-  ], [gl]);
-
-  const PAYMENT_STATUS_OPTIONS = useMemo(() => [
-    { value: 'all',     label: t('allPayments') },
-    { value: 'paid',    label: t('statusPaid'),    dot: 'bg-emerald-500' },
-    { value: 'pending', label: t('statusPending'), dot: 'bg-amber-500' },
-    { value: 'partial', label: t('statusPartial'), dot: 'bg-blue-500' },
-  ], [gl]);
-
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [paymentFilter, setPaymentFilter] = useState('all');
-  const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    if (!showPaymentDropdown) return;
-    const handleClick = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setShowPaymentDropdown(false); };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showPaymentDropdown]);
-
-  const filteredData = useMemo(() => {
-    let rows = data;
-    if (!rows) return rows;
-    if (typeFilter === 'credit-notes') rows = rows.filter(isCreditNote);
-    else if (typeFilter === 'invoices') rows = rows.filter(r => !isCreditNote(r));
-    if (paymentFilter !== 'all') rows = rows.filter(r => getPaymentFilter(r) === paymentFilter);
-    return rows;
-  }, [data, typeFilter, paymentFilter]);
-
-  const activePaymentLabel = PAYMENT_STATUS_OPTIONS.find(o => o.value === paymentFilter)?.label || t('allPayments');
+  }, [gl, locale, targets, siiColLabel, tbaiColLabel, vfColLabel]);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        {/* Type tabs */}
-        <div className="flex items-center gap-0.5">
-          {TYPE_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setTypeFilter(opt.value)}
-              className={`text-xs px-2.5 py-1.5 transition-colors relative ${
-                typeFilter === opt.value
-                  ? 'text-foreground font-semibold bg-muted/50 rounded-t-md'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {opt.label}
-              {typeFilter === opt.value && (
-                <span className="absolute bottom-0 left-1 right-1 h-[2px] bg-primary rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Payment status dropdown */}
-        <div className="relative" ref={dropdownRef}>
-          <button
-            type="button"
-            onClick={() => setShowPaymentDropdown(v => !v)}
-            className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-              paymentFilter !== 'all'
-                ? 'border-primary/30 bg-primary/5 text-foreground font-medium'
-                : 'border-border text-muted-foreground hover:text-foreground'
-            }`}
-            style={{ borderWidth: '0.5px' }}
-          >
-            {paymentFilter !== 'all' && (
-              <span className={`w-1.5 h-1.5 rounded-full ${PAYMENT_STATUS_OPTIONS.find(o => o.value === paymentFilter)?.dot}`} />
-            )}
-            {activePaymentLabel}
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
-          </button>
-          {showPaymentDropdown && (
-            <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-border/60 rounded-lg shadow-lg py-1 min-w-[140px]" style={{ borderWidth: '0.5px' }}>
-              {PAYMENT_STATUS_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => { setPaymentFilter(opt.value); setShowPaymentDropdown(false); }}
-                  className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
-                    paymentFilter === opt.value ? 'bg-muted/50 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground'
-                  }`}
-                >
-                  {opt.dot && <span className={`w-1.5 h-1.5 rounded-full ${opt.dot}`} />}
-                  {opt.label}
-                  {paymentFilter === opt.value && (
-                    <svg className="w-3 h-3 ml-auto text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      <DataTable columns={columns} filters={filters} {...props} data={filteredData} />
-    </div>
+    <>
+      <DataTable columns={columns} filters={FILTERS} {...props} />
+      {paymentRow && (
+        <InvoicePaymentHistoryModal
+          invoiceId={paymentRow.id}
+          invoiceData={paymentRow}
+          specName="sales-invoice"
+          apiBaseUrl={apiBaseUrl}
+          onClose={() => setPaymentRow(null)}
+          onPaymentAdded={() => { setPaymentRow(null); props.onDataMutated?.(); }}
+        />
+      )}
+    </>
   );
 }

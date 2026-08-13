@@ -91,7 +91,22 @@ From the user's perspective, responsiveness determines whether the system feels 
 | **Window load failure** | White screen | No ErrorBoundary | Show error boundary with "This window could not be loaded. Try again." button |
 | **Unhandled JS exception** | White screen (entire SPA crashes) | No top-level ErrorBoundary | Show app-level error boundary with "Something went wrong" and option to return to dashboard |
 
-### 3.2 Error Message Guidelines
+### 3.2 Transactional Email States
+
+Email sending UI must call Etendo Go email contracts and map executor outcomes directly. The UI must never call the provider endpoint or send arbitrary provider payloads.
+
+| Contract Result | What the User Sees | Required Behavior |
+|-----------------|--------------------|-------------------|
+| `SENT` | Success confirmation | Close or update the send modal and preserve request reference if shown |
+| `DUPLICATE` | Already sent or recently sent | Treat as non-fatal and do not ask the user to retry immediately |
+| `THROTTLED` | Too many attempts | Show wait/retry guidance without provider details |
+| `UNAUTHORIZED` | Permission denied | Hide the action when possible and show a permission message if reached |
+| `NO_RECIPIENT` | Missing recipient | Ask the user to fix the business contact data |
+| `SUPPRESSED` | Delivery disabled | Explain that the recipient/domain cannot receive email and direct to support |
+| `KILL_SWITCHED` | Email temporarily unavailable | Keep the document/action state unchanged and show a support-safe message |
+| `PROVIDER_FAILED` | Send failed | Offer retry or support escalation with request reference |
+
+### 3.3 Error Message Guidelines
 
 - Use plain language, not technical jargon
 - Tell the user what happened and what they can do about it

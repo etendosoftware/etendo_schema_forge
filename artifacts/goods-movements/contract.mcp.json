@@ -1,0 +1,404 @@
+{
+  "version": "0.18.0",
+  "generatedAt": "2026-07-29T14:51:09.206Z",
+  "contractChecksum": "adbcca35cb666fa1",
+  "apiPrediction": {
+    "specName": "goods-movements",
+    "baseUrl": "/sws/neo/goods-movements",
+    "crud": {
+      "movement": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/goods-movements/movement",
+        "detailUrl": "/sws/neo/goods-movements/movement/{id}",
+        "supportedFilters": [
+          "name",
+          "movementDate"
+        ]
+      },
+      "movementLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/goods-movements/movementLine",
+        "detailUrl": "/sws/neo/goods-movements/movementLine/{id}",
+        "supportedFilters": [
+          "product"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "movement",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-movements/movement/selectors/project"
+      },
+      {
+        "entity": "movement",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-movements/movement/selectors/costCenter"
+      },
+      {
+        "entity": "movementLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-movements/movementLine/selectors/product"
+      },
+      {
+        "entity": "movementLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-movements/movementLine/selectors/uOM"
+      },
+      {
+        "entity": "movementLine",
+        "field": "storageBin",
+        "column": "M_Locator_ID",
+        "reference": "Locator",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-movements/movementLine/selectors/storageBin"
+      },
+      {
+        "entity": "movementLine",
+        "field": "newStorageBin",
+        "column": "M_LocatorTo_ID",
+        "reference": "Locator",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-movements/movementLine/selectors/newStorageBin"
+      }
+    ],
+    "actions": [
+      {
+        "name": "moveBetweenLocators",
+        "actionType": "utilityAction",
+        "entity": "movement",
+        "column": "Move_FromTo_Locator",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-movements/movement/{id}/action/moveBetweenLocators",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "800048",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "movement",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-movements/movement/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "122",
+        "processType": "classic"
+      },
+      {
+        "name": "posted",
+        "actionType": "documentAction",
+        "entity": "movement",
+        "column": "Posted",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-movements/movement/{id}/action/posted",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "movement",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-movements/movement/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "inventory"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "Processed": "Status",
+        "M_Locator_ID": "Source Warehouse",
+        "M_LocatorTo_ID": "Destination Warehouse",
+        "MovementQty": "Quantity"
+      },
+      "es_ES": {
+        "Processed": "Estado",
+        "M_Locator_ID": "Almacén origen",
+        "M_LocatorTo_ID": "Almacén destino",
+        "MovementQty": "Cantidad"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "movement": {
+        "fields": {
+          "name": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "movementDate": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "description": {},
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costCenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "processed": {
+            "readOnly": true,
+            "required": true
+          },
+          "documentNo": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          }
+        }
+      },
+      "movementLine": {
+        "fields": {
+          "lineNo": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_MovementLine WHERE M_Movement_ID=@M_Movement_ID@"
+          },
+          "product": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "description": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "movementQuantity": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
+            "defaultValue": "1"
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true
+          },
+          "storageBin": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "newStorageBin": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage goods movements inventory operations.",
+    "whenToUse": [
+      "Use for stock and warehouse operations."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name",
+        "movementDate"
+      ],
+      "lineFields": [
+        "lineNo",
+        "product",
+        "movementQuantity",
+        "storageBin",
+        "newStorageBin"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "processNow",
+      "posted",
+      "etblkpBulkposting"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required field without default value must be provided",
+      "Validate the current form state before running lifecycle actions",
+      "Do not run destructive lifecycle actions without explicit user confirmation"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name",
+          "movementDate"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "lineNo",
+          "product",
+          "movementQuantity",
+          "storageBin",
+          "newStorageBin"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "processNow"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "d2be6814d9140611"
+}

@@ -58,6 +58,16 @@ Analysis of failure modes, resilience patterns, and recovery objectives for Sche
 | **Dynamic import failure** | Specific window will not load | Browser console: `Failed to fetch dynamically imported module` | Usually caused by cache serving old chunk references after deployment. Force refresh or clear PWA cache. Mitigate with proper cache-busting hashes in filenames |
 | **Auth token expired** | Silent 401 errors, confusing UX | API calls return 401, no user-visible indication | Frontend should intercept 401 responses globally and redirect to login. Currently no centralized auth error handling |
 
+### 2.5 Transactional Email Failures
+
+| Failure | Impact | Detection | Recovery |
+|---------|--------|-----------|----------|
+| **Provider unavailable** | Email sends fail after local validation | `PROVIDER_FAILED` metrics/logs spike | Keep audit records, show retry/support state, and retry only through explicit contract policy |
+| **Duplicate UI submission** | Multiple emails could be sent for one action | Idempotency duplicate count | Return `DUPLICATE` without a provider call |
+| **Throttle misconfiguration** | Spam risk or legitimate sends blocked | Throttle metrics by contract/tenant | Adjust contract limits and keep audit trail of blocked sends |
+| **Recipient suppression** | User expects an email that is not delivered | `SUPPRESSED` audit/metric | Explain safe UI state, resolve suppression only through support workflow |
+| **Kill switch activation** | All or scoped email sends disabled | Kill switch metric/alert | Confirm scope, fix incident, smoke test, then re-enable |
+
 ---
 
 ## 3. Resilience Patterns
@@ -75,6 +85,8 @@ Analysis of failure modes, resilience patterns, and recovery objectives for Sche
 | **Graceful degradation** | None | WARNING | Show last-known cached data when API is unreachable (read-only mode) |
 | **Connection pool monitoring** | Default HikariCP settings | WARNING | Expose pool metrics (active, idle, waiting). Alert when utilization exceeds 80% |
 | **Rate limiting** | None | WARNING | Nginx `limit_req` zone or Tomcat valve. Prevent accidental DoS from misbehaving clients |
+| **Email contract idempotency** | Required for new transactional email work | CRITICAL | Derive or require an idempotency key per contract so repeated sends do not call the provider twice |
+| **Email kill switches** | Required for new transactional email work | CRITICAL | Support global, tenant, contract, provider, recipient, and domain disablement |
 | **Backup automation** | Likely manual `pg_dump` | WARNING | Automated daily `pg_dump` with retention policy. Periodic restore test |
 
 ### 3.2 Implementation Priority

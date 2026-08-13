@@ -1,0 +1,281 @@
+{
+  "version": "0.12.0",
+  "generatedAt": "2026-04-29T18:12:11.134Z",
+  "updatedAt": "2026-07-23T13:43:58.733Z",
+  "contractChecksum": "382886c1cf629dbd",
+  "apiPrediction": {
+    "specName": "price-list",
+    "baseUrl": "/sws/neo/price-list",
+    "crud": {
+      "priceList": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/price-list/priceList",
+        "detailUrl": "/sws/neo/price-list/priceList/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      },
+      "priceListVersion": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/price-list/priceListVersion",
+        "detailUrl": "/sws/neo/price-list/priceListVersion/{id}",
+        "supportedFilters": []
+      },
+      "productPrice": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/price-list/productPrice",
+        "detailUrl": "/sws/neo/price-list/productPrice/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "priceList",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/price-list/priceList/selectors/currency"
+      },
+      {
+        "entity": "priceListVersion",
+        "field": "priceListSchema",
+        "column": "M_DiscountSchema_ID",
+        "reference": "DiscountSchema",
+        "inputMode": "selector",
+        "url": "/sws/neo/price-list/priceListVersion/selectors/priceListSchema"
+      },
+      {
+        "entity": "priceListVersion",
+        "field": "basePriceListVersion",
+        "column": "M_Pricelist_Version_Base_ID",
+        "reference": "PriceList_Version",
+        "inputMode": "search",
+        "url": "/sws/neo/price-list/priceListVersion/selectors/basePriceListVersion"
+      },
+      {
+        "entity": "productPrice",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "selector",
+        "url": "/sws/neo/price-list/productPrice/selectors/product"
+      }
+    ],
+    "actions": [
+      {
+        "name": "create",
+        "actionType": "createFrom",
+        "entity": "priceListVersion",
+        "column": "ProcCreate",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/price-list/priceListVersion/{id}/action/create",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "103",
+        "processType": "classic"
+      },
+      {
+        "name": "generatePriceListVersion",
+        "actionType": "createFrom",
+        "entity": "priceListVersion",
+        "column": "M_Pricelist_Version_Generate",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/price-list/priceListVersion/{id}/action/generatePriceListVersion",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "800069",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "settings"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Nombre",
+        "C_Currency_ID": "Moneda",
+        "IsSOPriceList": "Tarifa de venta",
+        "Costbased": "Basado en coste",
+        "IsTaxIncluded": "Precio incluye impuesto",
+        "IsDefault": "Por defecto",
+        "IsActive": "Activo"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "priceList": {
+        "fields": {
+          "name": {
+            "required": true
+          },
+          "salesPriceList": {
+            "required": true
+          },
+          "default": {
+            "required": true
+          },
+          "etgoProductcount": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "active": {
+            "required": true
+          },
+          "currency": {
+            "readOnly": true,
+            "required": true
+          },
+          "description": {}
+        }
+      },
+      "priceListVersion": {
+        "fields": {
+          "name": {
+            "required": true,
+            "defaultValue": "@#Date@"
+          },
+          "validFromDate": {
+            "required": true,
+            "defaultValue": "@#Date@"
+          },
+          "priceListSchema": {
+            "required": true
+          },
+          "basePriceListVersion": {},
+          "description": {},
+          "create": {}
+        }
+      },
+      "productPrice": {
+        "fields": {
+          "product": {
+            "required": true
+          },
+          "standardPrice": {
+            "required": true
+          },
+          "listPrice": {
+            "required": true
+          },
+          "cost": {
+            "required": true,
+            "defaultValue": "0"
+          },
+          "algorithm": {
+            "required": true,
+            "defaultValue": "S"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage price list records.",
+    "whenToUse": [
+      "Use for price list management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name",
+        "salesPriceList",
+        "default",
+        "active"
+      ],
+      "lineFields": [
+        "name",
+        "validFromDate",
+        "priceListSchema",
+        "product",
+        "standardPrice",
+        "listPrice",
+        "cost",
+        "algorithm"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "create",
+      "generatePriceListVersion"
+    ],
+    "workflow": [],
+    "edgeCases": [
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name",
+          "salesPriceList",
+          "default",
+          "active"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "16ee7c7f9668ffe4"
+}

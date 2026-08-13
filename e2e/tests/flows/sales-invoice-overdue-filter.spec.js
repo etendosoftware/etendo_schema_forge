@@ -24,15 +24,15 @@ test.describe('Sales Invoice — overdue filter', () => {
   });
 
   test('funnel button shows badge with count 2', async ({ page }) => {
-    const funnelBtn = page.locator('button[title="Filtros avanzados"], button[title="Advanced filters"]');
+    const funnelBtn = page.locator('button[data-testid="filter-advanced"]');
     await expect(funnelBtn).toBeVisible({ timeout: 5_000 });
 
-    const badge = funnelBtn.locator('span');
+    const badge = funnelBtn.locator('span.rounded-full');
     await expect(badge).toHaveText('2');
   });
 
   test('opening the funnel shows the documentStatus condition', async ({ page }) => {
-    const funnelBtn = page.locator('button[title="Filtros avanzados"], button[title="Advanced filters"]');
+    const funnelBtn = page.locator('button[data-testid="filter-advanced"]');
     await funnelBtn.click();
 
     await expect(
@@ -43,7 +43,7 @@ test.describe('Sales Invoice — overdue filter', () => {
   });
 
   test('opening the funnel shows the outstandingAmount condition', async ({ page }) => {
-    const funnelBtn = page.locator('button[title="Filtros avanzados"], button[title="Advanced filters"]');
+    const funnelBtn = page.locator('button[data-testid="filter-advanced"]');
     await funnelBtn.click();
 
     await expect(
@@ -63,7 +63,7 @@ test.describe('Sales Invoice — overdue filter', () => {
   test('navigating without filter param shows no funnel badge', async ({ page }) => {
     await navigateTo(page, 'sales-invoice');
 
-    const funnelBtn = page.locator('button[title="Filtros avanzados"], button[title="Advanced filters"]');
+    const funnelBtn = page.locator('button[data-testid="filter-advanced"]');
     await expect(funnelBtn).toBeVisible({ timeout: 5_000 });
 
     const badge = funnelBtn.locator('span.rounded-full');

@@ -4,8 +4,10 @@
  * Two groups:
  *   1. CommandPalette i18n — opens on Ctrl+K, shows translated items, hides
  *      hidden items, search finds visible items.
- *   2. SendDocumentModal email validation — clicking the email quick-action
- *      opens the modal; Send button disabled/enabled based on email validity.
+ *   2. SendDocumentModal editable recipients (ETP-4226) — clicking the email
+ *      quick-action opens the modal with an editable chip editor; chips are
+ *      added/removed, Send is gated by the presence of a To recipient, and the
+ *      add-CC affordance reveals the CC editor.
  *
  * Mock mode only — no Etendo backend required.
  * Run: cd e2e && npx playwright test tests/flows/i18n-etp4003.mocked.spec.js
@@ -31,7 +33,7 @@ const SI_ROWS = [
 ];
 
 async function installSalesInvoiceMock(page) {
-  await page.route('**/sws/neo/sales-invoice/header**', async (route) => {
+  await page.route('**/sws/neo/sales-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
     if (req.method() === 'GET' && !/\/header\/[^/?]+/.test(url)) {
@@ -144,9 +146,23 @@ test.describe('CommandPalette i18n (ETP-4003)', () => {
   });
 });
 
-// ─── Group 2: SendDocumentModal email validation ──────────────────────────────
+// ─── Group 2: SendDocumentModal editable recipients (ETP-4003 / ETP-4226) ─────
+//
+// ETP-4226 made `DEFAULT_SEND_POLICY.editableRecipients` default to `true`, so
+// document sends now render an editable chip editor (RecipientChipEditor) for
+// the To/CC fields instead of the legacy read-only preview input. These tests
+// assert the editable-chips behaviour:
+//   - To field exposes `send-modal-to-input` (placeholder is the i18n
+//     `sendModalRecipientPlaceholder`, not the legacy "email@company.com").
+//   - Typing an email + Enter creates a chip `send-modal-to-chip-<email>`; the
+//     remove button removes it.
+//   - Send is locally gated by `noToRecipient`: disabled while To is empty,
+//     enabled once a valid recipient chip exists.
+//   - The add-CC affordance reveals the CC chip editor.
 
-test.describe('SendDocumentModal email validation (ETP-4003)', () => {
+test.describe('SendDocumentModal editable recipients (ETP-4003 / ETP-4226)', () => {
+  const TEST_EMAIL = 'buyer@example.com';
+
   test.beforeEach(async ({ page }) => {
     await login(page);
     await installSalesInvoiceMock(page);
@@ -154,74 +170,82 @@ test.describe('SendDocumentModal email validation (ETP-4003)', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('row email quick-action opens the Send modal', async ({ page }) => {
+  /** Open the Send modal from the row email quick-action and return the To input. */
+  async function openSendModal(page) {
     const firstRow = page.locator('tbody tr').filter({ hasText: 'INV-001' }).first();
     await expect(firstRow).toBeVisible({ timeout: 10_000 });
     await firstRow.hover();
     const emailBtn = firstRow.getByTestId('row-quick-action-email');
     await expect(emailBtn).toBeVisible({ timeout: 5_000 });
+
+    // Register BEFORE clicking — contacts fetch can complete before we'd start waiting.
+    // Swallowed with .catch so tests still run if the component never calls this endpoint.
+    const contactsDone = page.waitForResponse(
+      r => r.url().includes('/sws/neo/contacts'),
+      { timeout: 8_000 },
+    ).catch(() => {});
+
     await emailBtn.click();
-    // The modal should open — look for the email input (To field)
-    const toInput = page.locator('input[placeholder="email@company.com"]');
+
+    const toInput = page.getByTestId('send-modal-to-input');
     await expect(toInput).toBeVisible({ timeout: 8_000 });
+
+    // Wait for the contacts pre-fill fetch to settle before returning. Without this,
+    // the Send button can remain disabled mid-fetch even after a chip is added.
+    await contactsDone;
+
+    return toInput;
+  }
+
+  test('row email quick-action opens the Send modal with the editable To field', async ({ page }) => {
+    const toInput = await openSendModal(page);
+    // Editable chip editor input, not the legacy read-only preview field.
+    await expect(toInput).not.toHaveAttribute('readonly', '');
+    await expect(toInput).toBeEditable();
   });
 
-  test('Send button is initially disabled when email is empty', async ({ page }) => {
-    const firstRow = page.locator('tbody tr').filter({ hasText: 'INV-001' }).first();
-    await expect(firstRow).toBeVisible({ timeout: 10_000 });
-    await firstRow.hover();
-    await firstRow.getByTestId('row-quick-action-email').click();
-    const toInput = page.locator('input[placeholder="email@company.com"]');
-    await expect(toInput).toBeVisible({ timeout: 8_000 });
-    // The BP has no email in our mock, so input starts empty → Send disabled
-    // Find the Send button (contains send icon and no 'cancel' text)
-    const sendBtn = page.locator('button[disabled]').filter({ hasNotText: /cancel|close|download/i }).last();
-    await expect(sendBtn).toBeVisible({ timeout: 5_000 });
+  test('typing an email and pressing Enter creates a removable recipient chip', async ({ page }) => {
+    const toInput = await openSendModal(page);
+    // Contacts mock returns no email, so To starts empty.
+    await expect(page.getByTestId(`send-modal-to-chip-${TEST_EMAIL}`)).toHaveCount(0);
+
+    await toInput.click();
+    await toInput.fill(TEST_EMAIL);
+    await toInput.press('Enter');
+
+    const chip = page.getByTestId(`send-modal-to-chip-${TEST_EMAIL}`);
+    await expect(chip).toBeVisible({ timeout: 5_000 });
+    // The draft input clears after a valid commit.
+    await expect(toInput).toHaveValue('');
+
+    // Remove button drops the chip again.
+    await page.getByTestId(`send-modal-to-remove-${TEST_EMAIL}`).click();
+    await expect(chip).toHaveCount(0);
   });
 
-  test('Send button becomes enabled after filling a valid email', async ({ page }) => {
-    const firstRow = page.locator('tbody tr').filter({ hasText: 'INV-001' }).first();
-    await expect(firstRow).toBeVisible({ timeout: 10_000 });
-    await firstRow.hover();
-    await firstRow.getByTestId('row-quick-action-email').click();
-    const toInput = page.locator('input[placeholder="email@company.com"]');
-    await expect(toInput).toBeVisible({ timeout: 8_000 });
-    // Fill a valid email
-    await toInput.fill('test@example.com');
-    // The dark send button (black background) should become enabled
-    await page.waitForFunction(() => {
-      const btns = Array.from(document.querySelectorAll('button'));
-      return btns.some(
-        (b) => !b.disabled && b.style.background === 'rgb(24, 24, 27)',
-      );
-    }, { timeout: 5_000 });
-    // Verify it's actually not disabled
-    const sendBtn = page.locator('button').filter({
-      has: page.locator('[class*="mail"], svg'),
-    }).last();
-    // The send button with black background should exist and not be disabled
-    const enabledSendBtn = page.locator('button[style*="rgb(24, 24, 27)"]:not([disabled])');
-    await expect(enabledSendBtn).toBeVisible({ timeout: 3_000 });
+  test('Send is disabled while To is empty and enabled after adding a recipient', async ({ page }) => {
+    const toInput = await openSendModal(page);
+    const sendBtn = page.locator('button').filter({ hasText: /^(Enviar|Send)$/i });
+
+    // noToRecipient gating: no recipient chip yet → Send disabled.
+    await expect(page.getByTestId(`send-modal-to-chip-${TEST_EMAIL}`)).toHaveCount(0);
+    await expect(sendBtn).toBeDisabled({ timeout: 5_000 });
+
+    // Add a valid recipient → Send becomes enabled.
+    await toInput.click();
+    await toInput.fill(TEST_EMAIL);
+    await toInput.press('Enter');
+    await expect(page.getByTestId(`send-modal-to-chip-${TEST_EMAIL}`)).toBeVisible({ timeout: 5_000 });
+    await expect(sendBtn).toBeEnabled({ timeout: 5_000 });
   });
 
-  test('Send button becomes disabled again after clearing the email', async ({ page }) => {
-    const firstRow = page.locator('tbody tr').filter({ hasText: 'INV-001' }).first();
-    await expect(firstRow).toBeVisible({ timeout: 10_000 });
-    await firstRow.hover();
-    await firstRow.getByTestId('row-quick-action-email').click();
-    const toInput = page.locator('input[placeholder="email@company.com"]');
-    await expect(toInput).toBeVisible({ timeout: 8_000 });
-    // Fill valid email
-    await toInput.fill('test@example.com');
-    // Verify it's now enabled by waiting briefly
-    await page.waitForTimeout(300);
-    // Now clear the email
-    await toInput.fill('');
-    await toInput.blur();
-    // The send button should be disabled again
-    await page.waitForFunction(() => {
-      const btns = Array.from(document.querySelectorAll('button'));
-      return btns.some((b) => b.disabled && b.style.background === 'rgb(24, 24, 27)');
-    }, { timeout: 5_000 });
+  test('the add-CC affordance reveals the CC chip editor', async ({ page }) => {
+    await openSendModal(page);
+    const addCc = page.getByTestId('send-modal-add-cc');
+    await expect(addCc).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('send-modal-cc-input')).toHaveCount(0);
+
+    await addCc.click();
+    await expect(page.getByTestId('send-modal-cc-input')).toBeVisible({ timeout: 5_000 });
   });
 });

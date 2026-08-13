@@ -10,9 +10,15 @@ export const goodsShipment = [
     "description": "Standard order for Q1 delivery",
     "movementDate": "2026-01-15",
     "documentStatus": "DR",
+    "posted": "Sample posted",
     "invoiceStatus": "DR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsShipment-002",
@@ -23,9 +29,15 @@ export const goodsShipment = [
     "description": "Rush order - priority shipping required",
     "movementDate": "2026-01-16",
     "documentStatus": "CO",
+    "posted": "Sample posted",
     "invoiceStatus": "CO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsShipment-003",
@@ -36,9 +48,15 @@ export const goodsShipment = [
     "description": "Bulk purchase for warehouse restocking",
     "movementDate": "2026-01-17",
     "documentStatus": "VO",
+    "posted": "Sample posted",
     "invoiceStatus": "VO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsShipment-004",
@@ -49,9 +67,15 @@ export const goodsShipment = [
     "description": "Sample order for client evaluation",
     "movementDate": "2026-01-18",
     "documentStatus": "IP",
+    "posted": "Sample posted",
     "invoiceStatus": "IP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsShipment-005",
@@ -62,9 +86,15 @@ export const goodsShipment = [
     "description": "Recurring monthly supply order",
     "movementDate": "2026-01-19",
     "documentStatus": "DR",
+    "posted": "Sample posted",
     "invoiceStatus": "DR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsShipment-006",
@@ -75,9 +105,15 @@ export const goodsShipment = [
     "description": "Special pricing agreement applies",
     "movementDate": "2026-01-20",
     "documentStatus": "CO",
+    "posted": "Sample posted",
     "invoiceStatus": "CO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsShipment-007",
@@ -88,9 +124,15 @@ export const goodsShipment = [
     "description": "Consolidated order from multiple requests",
     "movementDate": "2026-01-21",
     "documentStatus": "VO",
+    "posted": "Sample posted",
     "invoiceStatus": "VO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsShipment-008",
@@ -101,9 +143,15 @@ export const goodsShipment = [
     "description": "Trial order for new product line",
     "movementDate": "2026-01-22",
     "documentStatus": "IP",
+    "posted": "Sample posted",
     "invoiceStatus": "IP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsShipment-009",
@@ -114,9 +162,15 @@ export const goodsShipment = [
     "description": "Replacement for damaged goods",
     "movementDate": "2026-01-23",
     "documentStatus": "DR",
+    "posted": "Sample posted",
     "invoiceStatus": "DR",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   },
   {
     "id": "mock-goodsShipment-010",
@@ -127,9 +181,15 @@ export const goodsShipment = [
     "description": "Pre-season inventory build-up",
     "movementDate": "2026-01-24",
     "documentStatus": "CO",
+    "posted": "Sample posted",
     "invoiceStatus": "CO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "USD"
   },
   {
     "id": "mock-goodsShipment-011",
@@ -140,9 +200,15 @@ export const goodsShipment = [
     "description": "Customer-specific configuration",
     "movementDate": "2026-01-25",
     "documentStatus": "VO",
+    "posted": "Sample posted",
     "invoiceStatus": "VO",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "EUR"
   },
   {
     "id": "mock-goodsShipment-012",
@@ -153,9 +219,15 @@ export const goodsShipment = [
     "description": "Government contract fulfillment",
     "movementDate": "2026-01-26",
     "documentStatus": "IP",
+    "posted": "Sample posted",
     "invoiceStatus": "IP",
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "processed": "Sample processed",
+    "etgoCurrency": "GBP"
   }
 ];
 
@@ -166,6 +238,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 402,
     "description": "Standard order for Q1 delivery",
     "orderQuantity": 402,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-001"
   },
   {
@@ -174,6 +248,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 54,
     "description": "Rush order - priority shipping required",
     "orderQuantity": 54,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-002"
   },
   {
@@ -182,6 +258,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 150,
     "description": "Bulk purchase for warehouse restocking",
     "orderQuantity": 150,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-003"
   },
   {
@@ -190,6 +268,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 97,
     "description": "Sample order for client evaluation",
     "orderQuantity": 97,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-004"
   },
   {
@@ -198,6 +278,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 311,
     "description": "Recurring monthly supply order",
     "orderQuantity": 311,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-005"
   },
   {
@@ -206,6 +288,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 451,
     "description": "Special pricing agreement applies",
     "orderQuantity": 451,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-006"
   },
   {
@@ -214,6 +298,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 496,
     "description": "Consolidated order from multiple requests",
     "orderQuantity": 496,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-007"
   },
   {
@@ -222,6 +308,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 284,
     "description": "Trial order for new product line",
     "orderQuantity": 284,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-008"
   },
   {
@@ -230,6 +318,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 225,
     "description": "Replacement for damaged goods",
     "orderQuantity": 225,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-009"
   },
   {
@@ -238,6 +328,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 479,
     "description": "Pre-season inventory build-up",
     "orderQuantity": 479,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-010"
   },
   {
@@ -246,6 +338,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 123,
     "description": "Customer-specific configuration",
     "orderQuantity": 123,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-011"
   },
   {
@@ -254,6 +348,8 @@ export const goodsShipmentLine = [
     "movementQuantity": 337,
     "description": "Government contract fulfillment",
     "orderQuantity": 337,
+    "project": "Sample project",
+    "costcenter": "Sample costcenter",
     "goodsShipmentId": "mock-goodsShipment-012"
   }
 ];

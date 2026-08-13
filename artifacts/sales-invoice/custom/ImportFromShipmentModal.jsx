@@ -87,9 +87,13 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   // ProductPriceSelectorPolicy only enriches _PSTD / _PLIST when priceList is
   // provided as a context param; without it the callout receives PSTD=0 and
   // returns the wrong price.
-  const [shipRes, invLinesRes, headerRes] = await Promise.all([
+  const invoicedLinesFilter = encodeURIComponent(
+    JSON.stringify([{ fieldName: 'goodsShipmentLine', operator: 'notNull' }]),
+  );
+  const [shipRes, invLinesRes, allInvoicedLinesRes, headerRes] = await Promise.all([
     fetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
     fetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
+    fetch(`${base}/sales-invoice/lines?criteria=${invoicedLinesFilter}&_startRow=0&_endRow=2000`, { headers }),
     fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
   ]);
 
@@ -98,8 +102,19 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
     invLines.forEach(il => {
-      if (il.mInoutlineId) alreadyImportedShipmentLines.add(il.mInoutlineId);
+      if (il.goodsShipmentLine) alreadyImportedShipmentLines.add(il.goodsShipmentLine);
       if (il.cOrderlineId) alreadyImportedOrderLines.add(il.cOrderlineId);
+    });
+  }
+
+  // Shipment lines already used in other invoices — prevents double-invoicing the same line.
+  const invoicedElsewhere = new Set();
+  if (allInvoicedLinesRes.ok) {
+    const all = (await allInvoicedLinesRes.json())?.response?.data || [];
+    all.forEach(il => {
+      if (il.goodsShipmentLine && !alreadyImportedShipmentLines.has(il.goodsShipmentLine)) {
+        invoicedElsewhere.add(il.goodsShipmentLine);
+      }
     });
   }
 
@@ -126,19 +141,42 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     }
   }
 
-  let documents = [];
+  let candidates = [];
   if (shipRes.ok) {
     const all = (await shipRes.json())?.response?.data || [];
-    documents = all.filter(s =>
+    candidates = all.filter(s =>
       s.documentStatus === 'CO'
       && s.businessPartner === bpId
       && s.invoiced !== true
     );
   }
 
+  // Shipments have no currency of their own (M_InOut has no C_Currency_ID column) —
+  // resolve it via the linked sales order. Shipments with no linked order can't be
+  // compared, so they're never excluded by this filter.
+  const invoiceCurrency = invoiceHeader.currency || null;
+  let documents = candidates;
+  let excludedByCurrency = false;
+  if (invoiceCurrency) {
+    const orderIds = [...new Set(candidates.filter(s => s.salesOrder).map(s => s.salesOrder))];
+    const orderCurrencyMap = {};
+    await Promise.all(orderIds.map(async (id) => {
+      try {
+        const r = await fetch(`${base}/sales-order/header/${id}`, { headers });
+        if (r.ok) {
+          const o = (await r.json())?.response?.data?.[0];
+          if (o) orderCurrencyMap[id] = o.currency;
+        }
+      } catch { /* ignore — treat as unresolved, don't exclude */ }
+    }));
+    documents = candidates.filter(s => !s.salesOrder || orderCurrencyMap[s.salesOrder] === invoiceCurrency);
+    excludedByCurrency = documents.length === 0 && candidates.length > 0;
+  }
+
   return {
     documents,
-    sharedContext: { invoiceHeader, productAuxMap, alreadyImportedShipmentLines, alreadyImportedOrderLines },
+    sharedContext: { invoiceHeader, productAuxMap, alreadyImportedShipmentLines, alreadyImportedOrderLines, invoicedElsewhere },
+    excludedByCurrency,
   };
 };
 
@@ -147,7 +185,7 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
-  const { invoiceHeader, productAuxMap, alreadyImportedShipmentLines, alreadyImportedOrderLines } = sharedContext;
+  const { invoiceHeader, productAuxMap, alreadyImportedShipmentLines, alreadyImportedOrderLines, invoicedElsewhere } = sharedContext;
 
   // Batch-fetch the referenced sales order lines to carry their discount into the
   // invoice. M_InOutLine has no Discount column — the value lives on C_OrderLine.
@@ -165,7 +203,7 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   }));
 
   return Promise.all(lines.map(async (l) => {
-    const imported = alreadyImportedShipmentLines?.has(l.id) || alreadyImportedOrderLines?.has(l.salesOrderLine);
+    const imported = alreadyImportedShipmentLines?.has(l.id) || alreadyImportedOrderLines?.has(l.salesOrderLine) || invoicedElsewhere?.has(l.id);
     const qty = Number(l.movementQuantity) || 1;
     const priceData = l.product ? await resolveLinePrice(base, headers, l.product, qty, invoiceHeader, productAuxMap[l.product] || {}) : {};
     return {
@@ -226,7 +264,7 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base
     tax,
     uOM,
     lineNo,
-    mInoutlineId: line.id,
+    goodsShipmentLine: line.id,
     cOrderlineId: line.salesOrderLine || null,
   };
 };
@@ -240,6 +278,7 @@ export default function ImportFromShipmentModal(props) {
       searchPlaceholderKey="searchShipment"
       emptyMessageKey="noPendingShipmentsForCustomer"
       noSearchResultsKey="noShipmentsMatchYourSearch"
+      noCurrencyMatchMessageKey="noShipmentsMatchCurrency"
       successMessageKey="linesImportedFromShipment"
       showPriceColumns={false}
       fetchDocuments={fetchDocuments}

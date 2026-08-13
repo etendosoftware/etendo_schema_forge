@@ -6,7 +6,14 @@ import InvoiceLinesTable from '../shared/InvoiceLinesTable.jsx';
 // when linesLayout='inlineEditable' and not in add-row mode, hand off to
 // InlineLinesPanel for hover actions, inline edit, and clearSelection.
 const InvoiceLineTableCustom = forwardRef(function InvoiceLineTableCustom(props, ref) {
-  return <InvoiceLinesTable ref={ref} productRequired taxRequired {...props} />;
+  return (
+    <InvoiceLinesTable
+      ref={ref}
+      productRequired
+      taxRequired
+      {...props}
+      data-testid="InvoiceLinesTable__a03f49" />
+  );
 });
 
 export default InvoiceLineTableCustom;

@@ -5,6 +5,10 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (key) => key,
 }));
 
+vi.mock('@/hooks/useCurrencyPrecision.js', () => ({
+  useCurrencyPrecision: () => 4,
+}));
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
   useLocation: () => ({ pathname: '/', state: null }),
@@ -31,12 +35,18 @@ vi.mock('../GenericPreviewModal.jsx', () => ({
 }));
 
 vi.mock('../PreviewActionButtons.jsx', () => ({
+  // Mirrors the real component's {onEmail && (...)} gate and its
+  // disabled={!hasPdf || !onDownloadPdf} download gate (PreviewActionButtons.jsx,
+  // ETP-4789) so tests can assert whether QuotationPreview passed a truthy
+  // onEmail/onDownloadPdf or not.
   default: ({ onEmail, onDownloadPdf, hasPdf, sendLabel, downloadLabel, editLabel }) => (
     <div data-testid="action-buttons">
-      <button data-testid="email-btn" onClick={onEmail}>
-        {sendLabel}
-      </button>
-      <button data-testid="download-btn" onClick={onDownloadPdf} disabled={!hasPdf}>
+      {onEmail && (
+        <button data-testid="email-btn" onClick={onEmail}>
+          {sendLabel}
+        </button>
+      )}
+      <button data-testid="download-btn" onClick={onDownloadPdf} disabled={!hasPdf || !onDownloadPdf}>
         {downloadLabel}
       </button>
       <button data-testid="edit-btn">{editLabel}</button>
@@ -67,11 +77,9 @@ vi.mock('../preview-cards/SummaryCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/EmailsCard.jsx', () => ({
-  default: () => <div data-testid="emails-card" />,
-}));
-
-vi.mock('../preview-cards/CategorizationCard.jsx', () => ({
-  default: () => <div data-testid="cat-card" />,
+  // vi.fn (not a plain arrow) so tests can inspect the onSend prop QuotationPreview
+  // passes in, matching the prop-inspection convention used across the sibling files.
+  default: vi.fn(() => <div data-testid="emails-card" />),
 }));
 
 vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
@@ -89,6 +97,12 @@ vi.mock('@/lib/statusBadge.js', () => ({
 import { render, screen, fireEvent } from '@testing-library/react';
 import QuotationPreview from '../QuotationPreview.jsx';
 import { useQuotationPdf } from '../useQuotationPdf.js';
+import EmailsCard from '../preview-cards/EmailsCard.jsx';
+import {
+  expectPresenceGatedByStatus,
+  expectEmailsCardOnSendGatedByStatus,
+  expectDisabledGatedByStatus,
+} from './testUtils/sendActionGatingCases.js';
 
 const defaultQuotation = {
   id: 'q-1',
@@ -180,5 +194,48 @@ describe('QuotationPreview', () => {
     useQuotationPdf.mockReturnValue({ pdfUrl: 'blob:q-test', pdfBlob: new Blob(), loading: false, error: null });
     renderQuotationPreview();
     expect(screen.getByTestId('download-btn')).not.toBeDisabled();
+  });
+
+  // ── ETP-4717 Pair 3 regression: preview drawer Send gating ────────────────
+  // QuotationPreview never gated its Send action by documentStatus. The fix
+  // matches the "Bajo evaluación+" rule already shipped for the Grid/Form
+  // gate on sales-quotation: quotation?.documentStatus !== 'DR'. These DR
+  // cases must FAIL against the current (unfixed) source.
+  describe('Send action gating by documentStatus (ETP-4717 Pair 3)', () => {
+    expectPresenceGatedByStatus({
+      hiddenIt: 'does NOT render the top action-bar email button when quotation.documentStatus is DR (draft)',
+      shownIt: 'renders the top action-bar email button when quotation.documentStatus is UE (under evaluation)',
+      renderHidden: () => renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'DR' } }),
+      renderShown: () => renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'UE' } }),
+      findElement: () => screen.queryByTestId('email-btn'),
+    });
+
+    expectEmailsCardOnSendGatedByStatus({
+      hiddenIt: 'passes onSend: undefined to EmailsCard when quotation.documentStatus is DR (draft)',
+      shownIt: 'passes a truthy onSend function to EmailsCard when quotation.documentStatus is UE (under evaluation)',
+      renderHidden: () => renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'DR' } }),
+      renderShown: () => renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'UE' } }),
+      EmailsCardMock: vi.mocked(EmailsCard),
+    });
+  });
+
+  // ── ETP-4789: Download PDF gating by documentStatus ───────────────────────
+  // QuotationPreview always passed onDownloadPdf=handleDownloadPdf regardless
+  // of documentStatus — only hasPdf gated it. The fix reuses the same
+  // isSendable variable already computed for Send (documentStatus !== 'DR').
+  // These cases must FAIL against the current (unfixed) source.
+  describe('Download PDF gating by documentStatus (ETP-4789)', () => {
+    function renderWithPdf(quotation) {
+      useQuotationPdf.mockReturnValue({ pdfUrl: 'blob:q-test', pdfBlob: new Blob(), loading: false, error: null });
+      return renderQuotationPreview({ quotation });
+    }
+
+    expectDisabledGatedByStatus({
+      hiddenIt: 'disables the download button when quotation.documentStatus is DR (draft), even with a PDF available',
+      shownIt: 'enables the download button when quotation.documentStatus is UE (under evaluation)',
+      renderHidden: () => renderWithPdf({ ...defaultQuotation, documentStatus: 'DR' }),
+      renderShown: () => renderWithPdf({ ...defaultQuotation, documentStatus: 'UE' }),
+      findElement: () => screen.getByTestId('download-btn'),
+    });
   });
 });

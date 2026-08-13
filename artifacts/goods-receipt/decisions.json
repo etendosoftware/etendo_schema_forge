@@ -3,8 +3,28 @@
   "window": {
     "category": "purchases",
     "name": "Goods Receipt",
+    "menuActions": [
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
+      }
+    ],
     "sendDocument": {
-      "allowEmail": false
+      "enabled": false
     },
     "relatedDocuments": true,
     "dateFilterKey": "movementDate",
@@ -14,21 +34,47 @@
       "processValue": "CO",
       "label": "Confirmar"
     },
+    "noHeaderBorder": true,
     "linesLayout": "inlineEditable",
     "customComponents": {
-      "bottomSection": "GoodsReceiptBottomPanel"
+      "topbarRight": "GoodsReceiptActions",
+      "bottomSection": "GoodsReceiptBottomPanel",
+      "topbarExtra": "GoodsReceiptDraftChips"
+    },
+    "hideDeleteWhenComplete": true,
+    "hidePrint": true,
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ],
+    "labelOverrides": {
+      "en_US": {
+        "EM_ETGO_Currency_ID": "Currency"
+      },
+      "es_ES": {
+        "EM_ETGO_Currency_ID": "Moneda"
+      }
     }
   },
   "entities": {
     "header": {
       "name": "goodsReceipt",
+      "javaQualifier": "goodsReceiptHeaderHandler",
       "fields": {
+        "processed": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": false
+        },
         "documentNo": {
           "visibility": "readOnly",
-          "grid": true,
+          "grid": false,
+          "form": false,
           "searchable": true,
-          "section": "principal",
-          "seq": 10,
           "readOnlyLogic": null
         },
         "businessPartner": {
@@ -36,7 +82,7 @@
           "searchable": true,
           "reference": "BusinessPartner",
           "section": "principal",
-          "seq": 20,
+          "seq": 10,
           "readOnlyLogic": "@Processed@='Y'"
         },
         "partnerAddress": {
@@ -46,29 +92,41 @@
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
-          "section": "principal",
-          "seq": 30,
-          "readOnlyLogic": "@Processed@='Y'"
-        },
-        "warehouse": {
-          "grid": true,
-          "section": "principal",
-          "seq": 40,
+          "form": false,
           "readOnlyLogic": "@Processed@='Y'"
         },
         "movementDate": {
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 50,
+          "seq": 30,
+          "defaultValue": "@#Date@",
           "readOnlyLogic": "@Processed@='Y'"
         },
         "orderReference": {
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 60,
+          "seq": 20,
           "readOnlyLogic": "@Processed@='Y'"
+        },
+        "warehouse": {
+          "grid": true,
+          "section": "principal",
+          "seq": 40,
+          "defaultExpr": "@#M_Warehouse_ID@",
+          "readOnlyLogic": "@Processed@='Y'"
+        },
+        "etgoCurrency": {
+          "visibility": "editable",
+          "reference": "Currency",
+          "inputMode": "selector",
+          "grid": false,
+          "form": true,
+          "section": "principal",
+          "seq": 45,
+          "readOnlyLogic": "@Processed@='Y'",
+          "defaultExpr": "@C_Currency_ID@"
         },
         "description": {
           "section": "collapsed",
@@ -76,11 +134,13 @@
           "readOnlyLogic": "@Processed@='Y'"
         },
         "accountingDate": {
-          "form": false,
-          "readOnlyLogic": null
+          "visibility": "system",
+          "_note": "ETP-4531 (redefined 2026-07-17): accounting date is now hidden and unified with the document date internally; the Java-side guard that used to block this cascade has been removed so the native document-date→accounting-date coupling flows through untouched."
         },
         "salesOrder": {
-          "form": false
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         },
         "documentStatus": {
           "grid": true,
@@ -88,15 +148,15 @@
           "searchable": true
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
+          "visibility": "editable",
+          "section": "principal",
           "reference": "CostCenter",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "asset": {
           "form": false,
@@ -116,6 +176,7 @@
           "displayLogic": null
         },
         "invoiceStatus": {
+          "grid": true,
           "form": false
         },
         "createLinesFrom": {
@@ -129,49 +190,75 @@
         "processGoodsJava": {
           "visibility": "discarded",
           "displayLogic": null
+        },
+        "posted": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "en_US": "Posted",
+              "es_ES": "Contabilizado"
+            },
+            "false": {
+              "en_US": "Not posted",
+              "es_ES": "Sin contabilizar"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         }
       }
     },
     "lines": {
       "name": "goodsReceiptLine",
+      "javaQualifier": "goodsReceiptLineHandler",
       "fields": {
         "product": {
           "grid": true,
+          "required": true,
           "section": "principal",
           "seq": 10,
-          "readOnlyLogic": null
-        },
-        "attributeSetValue": {
-          "section": "principal",
-          "seq": 20,
-          "readOnlyLogic": null,
-          "displayLogic": null
-        },
-        "uOM": {
-          "grid": true,
-          "section": "principal",
-          "seq": 30,
           "readOnlyLogic": null
         },
         "movementQuantity": {
           "grid": true,
           "section": "principal",
-          "seq": 40,
+          "seq": 20,
           "readOnlyLogic": null,
           "defaultValue": "1"
         },
-        "storageBin": {
+        "orderQuantity": {
           "grid": true,
+          "gridReadOnly": true,
+          "form": true,
+          "visibility": "readOnly",
           "section": "principal",
-          "seq": 50,
+          "seq": 30,
+          "readOnlyLogic": null
+        },
+        "attributeSetValue": {
+          "form": false,
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "uOM": {
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "storageBin": {
+          "form": false,
           "readOnlyLogic": null
         },
         "description": {
-          "section": "principal",
-          "seq": 60
+          "form": false
         },
         "lineNo": {
-          "grid": true,
+          "grid": false,
           "form": false,
           "readOnlyLogic": null
         },
@@ -187,29 +274,31 @@
           "displayLogic": null
         },
         "salesOrderLine": {
-          "form": false
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         },
         "invoiceQuantity": {
-          "grid": true,
+          "grid": false,
           "form": false,
           "displayLogic": null
         },
         "businessPartner": {
-          "reference": "BusinessPartner",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "discarded",
+          "reason": "ETP-4529 — never applicable as a dimension on Albarán compra lines."
         },
         "project": {
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "visibility": "editable",
+          "grid": false,
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "costcenter": {
+          "visibility": "editable",
+          "grid": false,
           "reference": "CostCenter",
-          "form": false,
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
+          "dimensionsPanel": true
         },
         "asset": {
           "form": false,
@@ -252,9 +341,9 @@
   "rules": {
     "SL_InOut_AccountingDate": {
       "entity": "goodsReceipt",
-      "decision": "Omit",
-      "description": "Auto-fill accounting date from movement date. Source not found — classic UI only, backend handles date defaulting.",
-      "impactIfOmitted": "Users must manually set accounting date; backend default still applies on save."
+      "decision": "Keep",
+      "description": "ETP-4531 (redefined 2026-07-17): M_InOut.MovementDate carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate, which auto-fills dateAcct from movementDate. com.etendoerp.go's NeoCalloutService executes this same callout server-side (create-time cascade and interactive per-field callout), so it fires in the GO SPA too. accountingDate is now hidden (visibility: system) and unified with movementDate — the native cascade is intentionally kept as-is. GoodsReceiptHeaderHandler#handle calls mirrorAccountingDate on every CRUD write (POST/PUT/PATCH), an explicit server-side mirror of movementDate into accountingDate that is the primary mechanism keeping the two in sync (this callout is a secondary path, e.g. classic-UI edits).",
+      "impactIfOmitted": "If mirrorAccountingDate were removed, this callout alone would not reliably keep accountingDate in sync (the live React UI always sends PATCH for edits, and NeoCalloutService's cascade doesn't cover every write path)."
     },
     "SE_InOut_Organization": {
       "entity": "goodsReceipt",

@@ -1,10 +1,11 @@
 {
   "$schema": "decisions-v2",
   "window": {
+    "agentPrompt": "#REF#agent-prompts/contacts/spec.md",
     "category": "contact",
     "name": "Contacts",
     "entityLabel": "Contact",
-    "sidebarLayout": true,
+    "sidebarLayout": false,
     "breadcrumb": "Contact",
     "detailEntity": null,
     "summaryFields": [],
@@ -46,7 +47,8 @@
         "PO_Financial_Account_ID": "Expense Account",
         "EM_Etgo_Web": "Website",
         "EM_Etgo_Firstname": "First Name",
-        "EM_Etgo_Lastname": "Last Name"
+        "EM_Etgo_Lastname": "Last Name",
+        "C_BP_Group_ID": "Contact Category"
       },
       "es_ES": {
         "Name": "Razón Social",
@@ -55,7 +57,8 @@
         "PO_Financial_Account_ID": "Cuenta contable de gastos",
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
-        "EM_Etgo_Lastname": "Apellidos"
+        "EM_Etgo_Lastname": "Apellidos",
+        "C_BP_Group_ID": "Categoría de contacto"
       }
     },
     "processOverrides": {
@@ -66,7 +69,6 @@
     "listBaseFilter": "criteria=%7B%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22customer%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D%7D",
     "listViewOptions": {
       "hidePrint": true,
-      "hideEye": true,
       "hideCounter": true,
       "hideLink": true
     },
@@ -103,7 +105,57 @@
         "label": "Location",
         "customAddModal": "LocationEditorModal",
         "requireSavedRecord": true
+      },
+      "customerAccounting": {
+        "tabMode": "table-form",
+        "tabOrder": 4,
+        "label": "Customer Accounting",
+        "addLineFields": [
+          "accountingSchema",
+          "customerReceivablesNo",
+          "customerPrepayment"
+        ],
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
+      },
+      "vendorAccounting": {
+        "tabMode": "table-form",
+        "tabOrder": 5,
+        "label": "Vendor Accounting",
+        "addLineFields": [
+          "accountingSchema",
+          "vendorLiability",
+          "vendorPrepayment"
+        ],
+        "requireSavedRecord": true,
+        "maxDetailLines": 1
       }
+    },
+    "import": {
+      "enabled": true,
+      "spec": "contacts",
+      "entity": "businessPartner",
+      "formats": ["csv", "txt"],
+      "limit": { "maxRows": 5000, "concurrency": 4 },
+      "dedupe": { "scope": "file", "key": ["etgoEmail"] },
+      "descriptor": "contacts",
+      "fields": [
+        { "target": "name", "aliases": ["nombre comercial", "razon social"], "label": "Commercial Name" },
+        { "target": "etgoFirstname", "aliases": ["nombre"], "label": "First Name (Company)" },
+        { "target": "etgoLastname", "aliases": ["apellido", "apellidos"], "label": "Last Name (Company)" },
+        { "target": "etgoEmail", "aliases": ["email", "correo", "e-mail"], "isEmail": true, "label": "Email (Company)" },
+        { "target": "etgoPhone", "aliases": ["telefono", "teléfono"], "label": "Phone (Company)" },
+        { "target": "email", "aliases": ["email de contacto"], "isEmail": true, "label": "Email (Contact)" },
+        { "target": "firstName", "aliases": ["nombre de contacto"], "label": "First Name (Contact)" },
+        { "target": "lastName", "aliases": ["apellido de contacto"], "label": "Last Name (Contact)" },
+        { "target": "phone", "aliases": ["telefono de contacto"], "label": "Phone (Contact)" },
+        { "target": "position", "aliases": ["cargo"], "label": "Position" },
+        { "target": "address", "aliases": ["direccion", "dirección"], "label": "Address" },
+        { "target": "city", "aliases": ["ciudad"], "label": "City" },
+        { "target": "postal", "aliases": ["codigo postal", "código postal", "cp"], "label": "Postal Code" },
+        { "target": "country", "aliases": ["pais", "país"], "label": "Country", "matchEntity": "Country" },
+        { "target": "region", "aliases": ["provincia", "region", "región"], "label": "Region" }
+      ]
     }
   },
   "entities": {
@@ -140,7 +192,7 @@
           "form": true,
           "grid": false,
           "section": "principal",
-          "order": 3,
+          "order": 4,
           "required": true
         },
         "etgoLastname": {
@@ -148,7 +200,7 @@
           "form": true,
           "grid": false,
           "section": "principal",
-          "order": 4,
+          "order": 5,
           "required": true
         },
         "etgoIsperson": {
@@ -178,10 +230,12 @@
         },
         "businessPartnerCategory": {
           "visibility": "editable",
-          "form": false,
+          "form": true,
           "grid": false,
           "section": "principal",
-          "label": "Business Partner Category",
+          "order": 3,
+          "required": true,
+          "label": "Contact Category",
           "reference": "BusinessPartnerCategory",
           "inputMode": "selector"
         },
@@ -194,11 +248,19 @@
         "taxID": {
           "visibility": "editable",
           "section": "principal",
-          "order": 6
+          "order": 7
+        },
+        "oBTIKVIESStatus": {
+          "visibility": "readOnly",
+          "section": "principal",
+          "form": true,
+          "grid": false,
+          "order": 8,
+          "displayLogic": "record.oBTIKTaxIDKey === '2'"
         },
         "oBTIKTaxIDKey": {
           "visibility": "editable",
-          "order": 5
+          "order": 6
         },
         "etgoWeb": {
           "visibility": "editable",
@@ -206,7 +268,8 @@
           "grid": true,
           "label": "Web",
           "section": "principal",
-          "order": 7
+          "order": 9,
+          "inputPrefix": "https://"
         },
         "etgoEmail": {
           "visibility": "editable",
@@ -214,7 +277,7 @@
           "grid": true,
           "label": "Email",
           "section": "principal",
-          "order": 8
+          "order": 10
         },
         "etgoPhone": {
           "visibility": "editable",
@@ -222,7 +285,7 @@
           "grid": true,
           "label": "Phone",
           "section": "principal",
-          "order": 9
+          "order": 11
         },
         "creditLimit": {
           "visibility": "editable",
@@ -371,20 +434,29 @@
           "visibility": "editable",
           "grid": true,
           "searchable": true,
-          "labels": { "en_US": "Location / Address", "es_ES": "Dirección" },
+          "labels": {
+            "en_US": "Location / Address",
+            "es_ES": "Dirección"
+          },
           "section": "principal"
         },
         "shipToAddress": {
           "visibility": "editable",
           "grid": true,
           "section": "principal",
-          "labels": { "en_US": "Shipping Address", "es_ES": "Dir.envíos" }
+          "labels": {
+            "en_US": "Shipping Address",
+            "es_ES": "Dir.envíos"
+          }
         },
         "invoiceToAddress": {
           "visibility": "editable",
           "grid": true,
           "section": "principal",
-          "labels": { "en_US": "Invoicing Address", "es_ES": "Dir.factura" }
+          "labels": {
+            "en_US": "Invoicing Address",
+            "es_ES": "Dir.factura"
+          }
         },
         "phone": {
           "visibility": "editable",
@@ -422,7 +494,8 @@
           "visibility": "editable",
           "grid": true,
           "searchable": true,
-          "section": "principal"
+          "section": "principal",
+          "columnWidth": 320
         },
         "phone": {
           "visibility": "editable",
@@ -462,8 +535,12 @@
           "visibility": "editable",
           "form": false,
           "section": "other"
+        },
+        "psd2ApiKey": {
+          "visibility": "discarded"
         }
-      }
+      },
+      "javaQualifier": "contactHandler"
     },
     "basicDiscount": {
       "fields": {
@@ -492,6 +569,7 @@
       }
     },
     "bankAccount": {
+      "agentPrompt": "#REF#agent-prompts/contacts/bank-account.md",
       "fields": {
         "bankName": {
           "visibility": "editable",
@@ -506,22 +584,29 @@
         "bankFormat": {
           "visibility": "editable",
           "grid": true,
-          "section": "principal"
+          "section": "principal",
+          "labels": { "en_US": "Format", "es_ES": "Formato" },
+          "columnWidth": 320
         },
         "accountNo": {
           "visibility": "editable",
           "grid": true,
-          "section": "principal"
+          "section": "principal",
+          "columnWidth": 360,
+          "agentPrompt": "#REF#agent-prompts/contacts/bank-account.account-no.md"
         },
         "iBAN": {
           "visibility": "editable",
           "grid": true,
-          "section": "principal"
+          "section": "principal",
+          "columnWidth": 400,
+          "agentPrompt": "#REF#agent-prompts/contacts/bank-account.iban.md"
         },
         "swiftCode": {
           "visibility": "editable",
           "grid": true,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "#REF#agent-prompts/contacts/bank-account.swift-code.md"
         },
         "displayedAccount": {
           "visibility": "readOnly",
@@ -530,25 +615,95 @@
         }
       }
     },
+    "customerAccounting": {
+      "javaQualifier": "customerAccountingHandler",
+      "hideDelete": true,
+      "fields": {
+        "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
+        "customerReceivablesNo": {
+          "visibility": "editable",
+          "grid": true,
+          "required": true,
+          "section": "principal",
+          "labels": {
+            "en_US": "Receivables Account",
+            "es_ES": "Cuenta a Cobrar"
+          }
+        },
+        "customerPrepayment": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal",
+          "labels": {
+            "en_US": "Prepayment Account",
+            "es_ES": "Cuenta de Anticipos"
+          }
+        }
+      }
+    },
+    "vendorAccounting": {
+      "javaQualifier": "vendorAccountingHandler",
+      "hideDelete": true,
+      "fields": {
+        "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
+        "vendorLiability": {
+          "visibility": "editable",
+          "grid": true,
+          "required": true,
+          "section": "principal",
+          "labels": {
+            "en_US": "Liability Account",
+            "es_ES": "Cuenta a Pagar"
+          }
+        },
+        "vendorPrepayment": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal",
+          "labels": {
+            "en_US": "Prepayment Account",
+            "es_ES": "Cuenta de Anticipos"
+          }
+        }
+      }
+    },
     "customer": {
       "fields": {
-        "etgoEmail": { "visibility": "discarded" },
-        "etgoPhone": { "visibility": "discarded" },
-        "etgoWeb":   { "visibility": "discarded" }
+        "etgoEmail": {
+          "visibility": "discarded"
+        },
+        "etgoPhone": {
+          "visibility": "discarded"
+        },
+        "etgoWeb": {
+          "visibility": "discarded"
+        }
       }
     },
     "vendorCreditor": {
       "fields": {
-        "etgoEmail": { "visibility": "discarded" },
-        "etgoPhone": { "visibility": "discarded" },
-        "etgoWeb":   { "visibility": "discarded" }
+        "etgoEmail": {
+          "visibility": "discarded"
+        },
+        "etgoPhone": {
+          "visibility": "discarded"
+        },
+        "etgoWeb": {
+          "visibility": "discarded"
+        }
       }
     },
     "employee": {
       "fields": {
-        "etgoEmail": { "visibility": "discarded" },
-        "etgoPhone": { "visibility": "discarded" },
-        "etgoWeb":   { "visibility": "discarded" }
+        "etgoEmail": {
+          "visibility": "discarded"
+        },
+        "etgoPhone": {
+          "visibility": "discarded"
+        },
+        "etgoWeb": {
+          "visibility": "discarded"
+        }
       }
     }
   },

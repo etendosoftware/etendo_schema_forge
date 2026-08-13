@@ -38,9 +38,16 @@ describe('FmOverlays — no removed components', () => {
   it('does NOT contain manual adjustment logic', () => assert.doesNotMatch(src, /manualAdj/));
 });
 
-describe('PresentModal — 3 paths', () => {
-  it('has presentadoAcuse path', () => assert.match(src, /presentadoAcuse/));
-  it('has presentado (sin acuse) path', () => assert.match(src, /'presentado'/));
-  it('has presentadoOtra path', () => assert.match(src, /presentadoOtra/));
-  it('file upload tied to presentadoAcuse path', () => assert.match(src, /acuseFile/));
+describe('PresentModal — 3 manual paths + 1 opt-in AEAT path', () => {
+  it('has submitted_ack path', () => assert.match(src, /submitted_ack/));
+  it('has submitted (no ack) path', () => assert.match(src, /'submitted'/));
+  it('has submitted_ext path', () => assert.match(src, /submitted_ext/));
+  it('file upload tied to submitted_ack path', () => assert.match(src, /acuseFile/));
+  it('has an aeat_telematic sentinel path, gated behind showAeatPath', () => {
+    assert.match(src, /aeat_telematic/);
+    assert.match(src, /showAeatPath/);
+  });
+  it('canConfirm allows the aeat_telematic path without requiring acuseFile', () => {
+    assert.match(src, /path === 'aeat_telematic'/);
+  });
 });

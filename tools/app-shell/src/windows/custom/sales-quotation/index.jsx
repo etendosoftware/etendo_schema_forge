@@ -1,17 +1,21 @@
 import { useMemo, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { XCircle } from 'lucide-react';
-import { useUI, useLocale } from '@/i18n';
+import { useUI, useLocale, useMenuLabel } from '@/i18n';
 import { useNavigate } from 'react-router-dom';
 import { useRowDelete } from '@/hooks/useRowDelete';
+import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
+import { useQuotationPdf } from '../shared/useQuotationPdf.js';
 import GeneratedApp from '@generated/sales-quotation/generated/web/sales-quotation/index.jsx';
 import QuotationTable from '@generated/sales-quotation/generated/web/sales-quotation/QuotationTable';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
+import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import QuotationPreview from '../shared/QuotationPreview.jsx';
 import { useSavedPreviewRecord } from '../shared/useSavedPreviewRecord.js';
+import { SEND_VISIBLE_WHEN_NOT_DRAFT } from '../shared/sendActionVisibility.js';
 
 const draftModeWithModal = {
   enabled: true,
@@ -39,7 +43,7 @@ const customMenuActions = ({ status }) => [
     icon: XCircle,
     // The XCircle icon already carries the destructive cue; the Figma
     // (Screenshot 2026-04-30 11-38-53) renders both icon and label in the
-    // neutral dark-gray (#121217), not the legacy red text.
+    // neutral dark-gray (hsl(var(--foreground))), not the legacy red text.
     visible: status === 'UE',
     onClick: () => window.dispatchEvent(new CustomEvent('sales-quotation:open-reject-modal')),
   },
@@ -47,10 +51,10 @@ const customMenuActions = ({ status }) => [
 
 function buildQuotationColumns(ui) {
   return [
-    { key: 'orderDate', column: 'DateOrdered', type: 'date', dot: false },
-    { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-    { key: 'documentStatus', column: 'DocStatus', type: 'status', enumLabels: {
+    { key: 'orderDate', column: 'DateOrdered', type: 'date', dot: false, required: true },
+    { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
+    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
+    { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true, enumLabels: {
       AE: ui('quotationStatus.AE'),
       CO: ui('quotationStatus.CO'),
       CL: ui('quotationStatus.CL'),
@@ -69,7 +73,7 @@ function buildQuotationColumns(ui) {
       VO: ui('quotationStatus.VO'),
     } },
     { key: 'validUntil', column: 'validuntil', type: 'date' },
-    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
+    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', required: true },
   ];
 }
 
@@ -78,14 +82,38 @@ function CustomQuotationTable(props) {
   const dictionary = useLocale();
   const quotationColumns = useMemo(() => buildQuotationColumns(ui), [dictionary]);
 
-  return <QuotationTable columns={quotationColumns} {...props} />;
+  return (
+    <QuotationTable
+      columns={quotationColumns}
+      {...props}
+      data-testid="QuotationTable__bc8637" />
+  );
+}
+
+function SalesQuotationBulkActions({ selectedRows, windowName }) {
+  return (
+    <CopyLinkButton
+      selectedRows={selectedRows}
+      windowName={windowName}
+      data-testid="CopyLinkButton__bc8637" />
+  );
 }
 
 export default function SalesQuotationWindow({ windowName, recordId, token, apiBaseUrl, ...rest }) {
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
+  const tMenu = useMenuLabel();
   const { effectiveRecord, clearSavedRecord } = useSavedPreviewRecord();
+
+  // ETP-4372 — row-hover email envelope opens SendDocumentModal with a PDF preview.
+  const { onEmail: onRowEmail, emailModalPortal } = useRowEmailModal({
+    usePdf: useQuotationPdf,
+    apiBaseUrl,
+    token,
+    windowName,
+    documentType: tMenu('Sales Quotation'),
+  });
 
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
@@ -105,7 +133,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
       windowName={windowName}
       onClose={onClose}
       onEdit={onEdit}
-    />
+      data-testid="QuotationPreview__bc8637" />
   ), [token, apiBaseUrl, windowName]);
 
   const rowQuickActions = useMemo(() => ({
@@ -116,13 +144,16 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
       edit:      { show: true },
       duplicate: { show: true },
       delete:    { show: true },
+      // ETP-4717 — see sendActionVisibility.js
+      email:     { visibleWhen: SEND_VISIBLE_WHEN_NOT_DRAFT },
     },
     documentPreview: true,
     onEdit:   (row) => navigate(`/${windowName}/${row.id}`),
     onClone:  (row) => setCloneTargets([row]),
+    onEmail:  onRowEmail,
     onDelete: requestDelete,
     menuActions: customMenuActions,
-  }), [navigate, windowName, requestDelete]);
+  }), [navigate, windowName, requestDelete, onRowEmail]);
 
   if (recordId) {
     return (
@@ -136,7 +167,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
           menuActions={customMenuActions}
           linesEmptyState={LinesEmptyState}
           {...rest}
-        />
+          data-testid="GeneratedApp__bc8637" />
         {contactPortal}
       </CreateContactContext.Provider>
     );
@@ -153,11 +184,13 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}
         rowQuickActions={rowQuickActions}
+        hideLink
+        bulkActions={SalesQuotationBulkActions}
         renderPreview={renderPreview}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
         {...rest}
-      />
+        data-testid="GeneratedApp__bc8637" />
       {deleteDialog}
       {cloneTargets && createPortal(
         <CloneOrderModal
@@ -168,9 +201,10 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
           routePrefix="/sales-quotation/"
           onClose={() => setCloneTargets(null)}
           onCloned={() => setRefreshKey(k => k + 1)}
-        />,
+          data-testid="CloneOrderModal__bc8637" />,
         document.body,
       )}
+      {emailModalPortal}
     </>
   );
 }

@@ -62,35 +62,39 @@ export default function FiscalKpiCards({ variant, kpis, activeKey, onPick }) {
         <FmKpi
           label={ui('fiscalMonitor.kpi.sii.issued')}
           num={sii.issued}
-          icon={icons.upload} tone="success"
+          icon={icons.upload}
+          tone="success"
           sub={ui('fiscalMonitor.kpi.sii.sub.current')}
           active={activeKey === 'issued'}
           onClick={() => onPick('issued')}
-        />
+          data-testid="FmKpi__d77e5d" />
         <FmKpi
           label={`${ui('fiscalMonitor.kpi.sii.issued')} · ${ui('fiscalMonitor.kpi.sii.sub.previous')}`}
           num={sii.issuedPrevious}
-          icon={icons.upload} tone="info"
+          icon={icons.upload}
+          tone="info"
           sub={ui('fiscalMonitor.kpi.sii.sub.previous')}
           active={activeKey === 'issued-previous'}
           onClick={() => onPick('issued-previous')}
-        />
+          data-testid="FmKpi__d77e5d" />
         <FmKpi
           label={ui('fiscalMonitor.kpi.sii.received')}
           num={sii.received}
-          icon={icons.download} tone="success"
+          icon={icons.download}
+          tone="success"
           sub={ui('fiscalMonitor.kpi.sii.sub.current')}
           active={activeKey === 'received'}
           onClick={() => onPick('received')}
-        />
+          data-testid="FmKpi__d77e5d" />
         <FmKpi
           label={`${ui('fiscalMonitor.kpi.sii.received')} · ${ui('fiscalMonitor.kpi.sii.sub.previous')}`}
           num={sii.receivedPrevious}
-          icon={icons.download} tone="info"
+          icon={icons.download}
+          tone="info"
           sub={ui('fiscalMonitor.kpi.sii.sub.previous')}
           active={activeKey === 'received-previous'}
           onClick={() => onPick('received-previous')}
-        />
+          data-testid="FmKpi__d77e5d" />
       </div>
     );
   }
@@ -102,27 +106,30 @@ export default function FiscalKpiCards({ variant, kpis, activeKey, onPick }) {
         <FmKpi
           label={ui('fiscalMonitor.kpi.tbai.total')}
           num={tbai.total}
-          icon={icons.check} tone="success"
+          icon={icons.check}
+          tone="success"
           sub={ui('fiscalMonitor.kpi.tbai.total.sub')}
           active={activeKey === 'all'}
           onClick={() => onPick('all')}
-        />
+          data-testid="FmKpi__d77e5d" />
         <FmKpi
           label={ui('fiscalMonitor.kpi.tbai.received.label')}
           num={tbai.received}
-          icon={icons.check} tone="success"
+          icon={icons.check}
+          tone="success"
           sub={ui('fiscalMonitor.kpi.tbai.received.sub')}
           active={activeKey === 'Recibido'}
           onClick={() => onPick('Recibido')}
-        />
+          data-testid="FmKpi__d77e5d" />
         <FmKpi
           label={ui('fiscalMonitor.kpi.tbai.error.label')}
           num={(tbai.rejected ?? 0) + (tbai.error ?? 0)}
-          icon={icons.xcircle} tone="danger"
+          icon={icons.xcircle}
+          tone="danger"
           sub={ui('fiscalMonitor.kpi.tbai.error.sub')}
           active={activeKey === 'Rechazado'}
           onClick={() => onPick('Rechazado')}
-        />
+          data-testid="FmKpi__d77e5d" />
       </div>
     );
   }
@@ -134,35 +141,39 @@ export default function FiscalKpiCards({ variant, kpis, activeKey, onPick }) {
         <FmKpi
           label={ui('fiscalMonitor.kpi.verifactu.accepted')}
           num={vf.accepted}
-          icon={icons.check} tone="success"
+          icon={icons.check}
+          tone="success"
           sub={ui('fiscalMonitor.kpi.verifactu.accepted.sub')}
           active={activeKey === 'accepted'}
           onClick={() => onPick('accepted')}
-        />
+          data-testid="FmKpi__d77e5d" />
         <FmKpi
           label={ui('fiscalMonitor.kpi.verifactu.partiallyAccepted')}
           num={vf.partiallyAccepted}
-          icon={icons.alert} tone="warn"
+          icon={icons.alert}
+          tone="warn"
           sub={ui('fiscalMonitor.kpi.verifactu.partiallyAccepted.sub')}
           active={activeKey === 'partiallyAccepted'}
           onClick={() => onPick('partiallyAccepted')}
-        />
+          data-testid="FmKpi__d77e5d" />
         <FmKpi
           label={ui('fiscalMonitor.kpi.verifactu.rejected')}
           num={vf.rejected}
-          icon={icons.xcircle} tone="danger"
+          icon={icons.xcircle}
+          tone="danger"
           sub={ui('fiscalMonitor.kpi.verifactu.rejected.sub')}
           active={activeKey === 'rejected'}
           onClick={() => onPick('rejected')}
-        />
+          data-testid="FmKpi__d77e5d" />
         <FmKpi
           label={ui('fiscalMonitor.kpi.verifactu.invalid')}
           num={vf.invalid}
-          icon={icons.alert} tone="danger"
+          icon={icons.alert}
+          tone="danger"
           sub={ui('fiscalMonitor.kpi.verifactu.invalid.sub')}
           active={activeKey === 'invalid'}
           onClick={() => onPick('invalid')}
-        />
+          data-testid="FmKpi__d77e5d" />
       </div>
     );
   }
