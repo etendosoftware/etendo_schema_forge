@@ -1,8 +1,8 @@
 {
-  "version": "0.22.1",
+  "version": "0.25.0",
   "generatedAt": "2026-07-06T16:17:20.249Z",
-  "updatedAt": "2026-08-13T12:04:56.203Z",
-  "checksum": "51c13671c84442ee",
+  "updatedAt": "2026-08-13T15:20:51.826Z",
+  "checksum": "075b9fa1753ce067",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -555,15 +555,15 @@
             "label": "Product",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false,
             "grid": true,
             "form": true,
             "reference": "Product",
             "inputMode": "search",
-            "lookup": true,
             "section": "principal",
             "gridOrder": 1,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 60
             },
@@ -677,6 +677,7 @@
             "form": true,
             "section": "principal",
             "gridOrder": 3,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 10
             },
@@ -1381,7 +1382,7 @@
             "apiKey": "product",
             "column": "M_Product_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {

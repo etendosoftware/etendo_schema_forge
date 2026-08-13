@@ -357,12 +357,11 @@
           "section": "principal"
         },
         "product": {
-          "visibility": "editable",
           "grid": true,
           "gridOrder": 1,
+          "gridReadOnly": true,
           "searchable": true,
           "inputMode": "search",
-          "lookup": true,
           "readOnlyLogic": null,
           "section": "principal"
         },

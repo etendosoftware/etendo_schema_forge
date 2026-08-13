@@ -50,7 +50,6 @@ const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', '
 // @sf-generated-start addLineFields:returnMaterialReceiptLine
 const addLineFields = {
   entry: [
-    { key: 'product', column: 'M_Product_ID', type: 'search', lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
   ],
   derived: [

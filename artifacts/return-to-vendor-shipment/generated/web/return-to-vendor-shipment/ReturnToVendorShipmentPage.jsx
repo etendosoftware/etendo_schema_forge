@@ -50,7 +50,6 @@ const requiredHeaderFields = ['documentNo', 'businessPartner', 'partnerAddress',
 // @sf-generated-start addLineFields:returnToVendorShipmentLine
 const addLineFields = {
   entry: [
-    { key: 'product', column: 'M_Product_ID', type: 'search', lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', labels: {"es_ES":"Cant. a devolver","en_US":"Return Qty"}, defaultValue: 0 },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
   ],
