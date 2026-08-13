@@ -1,5 +1,5 @@
 import { useRef, useMemo } from 'react';
-import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet, MoreVertical } from 'lucide-react';
+import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
 import { getLatestInstallmentDueDate } from '@/lib/invoiceDueDate';
@@ -8,6 +8,7 @@ import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useInvoicePreview } from './useInvoicePreview.js';
+import { resolveInvoicePaymentBadge } from './invoicePaymentBadge.js';
 import { useFiscalStatus } from './useFiscalStatus.js';
 import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
 import { getInvoiceFiscalTargets } from './fiscalTargets.js';
@@ -20,11 +21,13 @@ import { fetchByCriteria, fetchById } from '@/components/related-documents';
 import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
+// ETP-4841: a credit instrument is identified by the SIGN of its total, not by its
+// document type. This used to compare `arInvoiceSubtype` against the pre-ETP-4737
+// values 'NC'/'DEV', which no longer exist — the check was silently always false and
+// fell through to keyword matching on the document-type name.
 function isCreditNote(invoice) {
   if (!invoice) return false;
-  if (invoice.arInvoiceSubtype) return invoice.arInvoiceSubtype === 'NC' || invoice.arInvoiceSubtype === 'DEV';
-  const ident = (invoice['transactionDocument$_identifier'] || invoice['cDocTypeTargetId$_identifier'] || '').toLowerCase();
-  return ident.includes('credit') || ident.includes('memo') || ident.includes('crédito') || ident.includes('return') || ident.includes('devoluci');
+  return resolveInvoicePaymentBadge(invoice).isCredit;
 }
 
 /**
@@ -92,12 +95,6 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         <Edit2 className="text-muted-foreground" data-testid="Edit2__cf88e6" />
         {ui('invoicePreviewEdit')}
       </Button>
-      <button
-        type="button"
-        className="w-8 h-8 flex items-center justify-center bg-card border border-border shadow-sm rounded-lg hover:bg-muted transition-colors"
-      >
-        <MoreVertical size={20} className="text-muted-foreground" data-testid="MoreVertical__cf88e6" />
-      </button>
     </>
   );
 }
