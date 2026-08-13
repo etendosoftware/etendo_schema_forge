@@ -265,6 +265,16 @@ record_failure() {
   FAILED_STEPS+=("$label")
 }
 
+# Per-check timing/outcome, printed as one table at the end (see print_summary)
+# so a dev can paste real numbers into a task/PR without re-timing anything by
+# hand. One row per check regardless of outcome — skipped/cached checks are
+# summary-worthy too (they explain why the total is lower than expected).
+# $2 duration in seconds, or "-" when not applicable (skipped/instant checks).
+SUMMARY_ROWS=()
+record_summary_row() {
+  SUMMARY_ROWS+=("$1|$2|$3|${4:-}")
+}
+
 # Print the failure detail and record it, but keep going. If the step produced
 # a ready-to-use handoff prompt (e.g. the Sonar gate), print it IN FULL so the
 # developer sees what to fix, then remove it — otherwise a LATER, unrelated
@@ -313,6 +323,7 @@ run_step() {
   # locally" turns into a lie.
   if step_cache_lookup "$step_num" "$cache_key"; then
     echo "==> [$step_num/5] $step_name... CACHED (inputs unchanged since it last passed)"
+    record_summary_row "$step_name" "$(prev_duration "step-${step_num}")" "CACHED" ""
     return 0
   fi
 
@@ -328,11 +339,13 @@ run_step() {
     echo "==> [$step_num/5] $step_name... SUCCESS ✅ (${LAST_DURATION}s)"
     step_cache_store "$step_num" "$cache_key"
     [ "$step_num" = "$LAST_FAILED_STEP" ] && rm -f "$LAST_FAILED_FILE"
+    record_summary_row "$step_name" "$LAST_DURATION" "OK" ""
   else
     echo "==> [$step_num/5] $step_name... FAILED ❌ (${LAST_DURATION}s)"
     step_cache_invalidate "$step_num"
     report_failure "$step_name" "$exit_status" "$abs_log" "$step_num"
     STEP_OK=0
+    record_summary_row "$step_name" "$LAST_DURATION" "FAILED" ""
   fi
   return 0
 }
@@ -544,6 +557,8 @@ run_playwright() {
 
   if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ]; then
     echo "==> Playwright E2E... SKIPPED ⏭️  (no UI/spec changes relevant to these tests)"
+    record_summary_row "Playwright — mocked" "-" "SKIPPED" ""
+    record_summary_row "Playwright — integration" "-" "SKIPPED" ""
     return 0
   fi
 
@@ -551,15 +566,49 @@ run_playwright() {
     run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
   else
     echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (no mocked-spec / UI changes)"
+    record_summary_row "Playwright — mocked" "-" "SKIPPED" ""
   fi
 
   if [ "$RUN_PW_INTEGRATION" = "1" ]; then
     run_e2e_suite integration "integration specs" "$password" "$backend_url"
   else
     echo "==> Playwright E2E — integration specs... SKIPPED ⏭️  (no integration-spec / UI changes)"
+    record_summary_row "Playwright — integration" "-" "SKIPPED" ""
   fi
 
   return 0
+}
+
+# Extracts Playwright's own end-of-run counters ("498 passed", "1 flaky", ...)
+# from a captured log — these lines are always left-anchored with just a
+# number (test NAMES in the same failed/flaky block start with "[project]"
+# instead), so the pattern can't accidentally match those.
+playwright_test_counts() {
+  local log="$1" pw_status n result=""
+  for pw_status in passed failed flaky skipped interrupted; do
+    # No hard end-anchor: the "passed" line carries a trailing "(3.9m)"
+    # duration that the others don't, so this tolerates trailing text —
+    # `\>` isn't POSIX-portable, hence the explicit space-or-EOL alternation.
+    n="$(grep -oE "^[[:space:]]*[0-9]+ ${pw_status}([[:space:]]|\$)" "$log" 2>/dev/null | tail -1 | grep -oE '[0-9]+')"
+    if [ -n "$n" ]; then
+      [ -n "$result" ] && result="${result}, "
+      result="${result}${n} ${pw_status}"
+    fi
+  done
+  [ -z "$result" ] && result="no test-count line found in log"
+  echo "$result"
+}
+
+# Lists the actual test titles under a "N failed"/"N flaky" block (indented
+# lines starting with "[project] › ..." right after that count line) — the
+# count alone says something broke, this says exactly what to go look at.
+playwright_named_tests() {
+  local log="$1" pw_status="$2"
+  awk -v st="$pw_status" '
+    $0 ~ "^[[:space:]]*[0-9]+ " st "([[:space:]]|$)" { grab=1; next }
+    grab && /^[[:space:]]*\[/ { line=$0; sub(/^[[:space:]]+/, "", line); print "      - " line; next }
+    grab { grab=0 }
+  ' "$log" 2>/dev/null
 }
 
 # Runs one E2E_SUITE value through run-e2e-full.sh, streaming output live
@@ -569,17 +618,27 @@ run_playwright() {
 # $4 backend url (also passed as ETENDO_URL — the built bundle's proxy target
 # must point at the same instance the reachability check just verified).
 run_e2e_suite() {
-  local suite="$1" label="$2" password="$3" backend_url="$4" st
+  local suite="$1" label="$2" password="$3" backend_url="$4" st start dur counts
   local log="$REPO_DIR/tmp/pre-push/e2e-${suite}.log"
   mkdir -p "$REPO_DIR/tmp/pre-push"
 
   echo "==> Playwright E2E — ${label}..."
+  start=$SECONDS
   set +e
   ( cd "$REPO_DIR" && E2E_SUITE="$suite" E2E_PASSWORD="$password" \
       E2E_BACKEND_URL="$backend_url" ETENDO_URL="$backend_url" \
       ./scripts/run-e2e-full.sh ) 2>&1 | tee "$log"
   st=${PIPESTATUS[0]}
   set -e
+  dur=$(( SECONDS - start ))
+  counts="$(playwright_test_counts "$log")"
+
+  local flaky_names failed_names
+  flaky_names="$(playwright_named_tests "$log" flaky)"
+  if [ -n "$flaky_names" ]; then
+    echo "   ⚠️  Flaky (failed once, passed on retry):"
+    echo "$flaky_names"
+  fi
 
   if [ "$st" -ne 0 ]; then
     local reason="Playwright E2E — ${label}"
@@ -590,8 +649,13 @@ run_e2e_suite() {
     elif grep -q "Preview server did not come up" "$log"; then
       reason="${reason} (preview server didn't start)"
     fi
+    failed_names="$(playwright_named_tests "$log" failed)"
+    [ -n "$failed_names" ] && { echo "   ❌ Failed:"; echo "$failed_names"; }
     echo "==> Playwright E2E — ${label}... FAILED ❌ (exit $st)"
     record_failure "$reason"
+    record_summary_row "Playwright — ${label%% specs}" "$dur" "FAILED" "$counts"
+  else
+    record_summary_row "Playwright — ${label%% specs}" "$dur" "OK" "$counts"
   fi
 }
 
@@ -653,6 +717,7 @@ fi
 run_step_0() {
   if [ "$RUN_S0" != "1" ]; then
     echo "==> [0/5] Syncing npm dependencies (npm ci)... SKIPPED ⏭️  (lockfile unchanged)"
+    record_summary_row "Syncing npm dependencies with package-lock.json (npm ci)" "-" "SKIPPED" ""
     return 0
   fi
   # npm ci is a pure function of the lockfile and the node major it installs for.
@@ -665,6 +730,7 @@ run_step_0() {
 run_step_1() {
   if [ "$RUN_S1" != "1" ]; then
     echo "==> [1/5] Running data-testid check... SKIPPED ⏭️  (no app-shell/src changes)"
+    record_summary_row "Running data-testid check" "-" "SKIPPED" ""
     return 0
   fi
   # The checker only ever reads the app-shell sources it scans, plus its own script.
@@ -687,6 +753,7 @@ run_step_1() {
 run_step_2() {
   if [ "$RUN_S2" != "1" ]; then
     echo "==> [2/5] Running unit tests and SonarQube analysis... SKIPPED ⏭️  (no source/test/sonar-config changes)"
+    record_summary_row "Running unit tests and SonarQube analysis" "-" "SKIPPED" ""
     return 0
   fi
   local sonar_cmd
@@ -696,6 +763,19 @@ run_step_2() {
     sonar_cmd="./run-sonar.sh --all-issues --coverage --fail-on-gate --compare-coverage"
   fi
   run_step "2" "Running unit tests and SonarQube analysis" "$REPO_DIR" "tmp/pre-push/sonar-and-tests.log" "$sonar_cmd"
+
+  # run_step already recorded this row (duration + OK/FAILED) — patch in the
+  # unit-test counts vitest itself reported, e.g. "Tests  11676 passed | 3
+  # skipped (11679)", so the summary shows how many tests actually ran, not
+  # just pass/fail.
+  local abs_log="$REPO_DIR/tmp/pre-push/sonar-and-tests.log" counts
+  counts="$(grep -E '^[[:space:]]*Tests[[:space:]]+[0-9]' "$abs_log" 2>/dev/null | tail -1 \
+    | sed -E 's/^[[:space:]]*Tests[[:space:]]+//; s/ \| /, /g; s/\(([0-9]+)\)/(\1 total)/')"
+  if [ -n "$counts" ] && [ "${#SUMMARY_ROWS[@]}" -gt 0 ]; then
+    local last_idx=$(( ${#SUMMARY_ROWS[@]} - 1 )) name dur row_status
+    IFS='|' read -r name dur row_status _ <<< "${SUMMARY_ROWS[$last_idx]}"
+    SUMMARY_ROWS[$last_idx]="${name}|${dur}|${row_status}|${counts}"
+  fi
 }
 
 # 3. Run offline regeneration check
@@ -725,6 +805,7 @@ run_step_2() {
 run_step_3() {
   if [ "$RUN_S3" != "1" ]; then
     echo "==> [3/5] Regenerating all windows from cache (UI / contract drift check)... SKIPPED ⏭️  (no artifacts/ or cli/ changes)"
+    record_summary_row "Regenerating all windows from cache (UI / contract drift check)" "-" "SKIPPED" ""
     return 0
   fi
   local all_windows regen_all_cmd
@@ -768,10 +849,12 @@ process.stdout.write(r.windows.filter(w=>{\
     mkdir -p "$(dirname "$LAST_FAILED_FILE")"
     echo "3" > "$LAST_FAILED_FILE"
     record_failure "UI / contract drift (step 3)"
+    record_summary_row "UI / contract drift check" "-" "FAILED" ""
     return 0
   fi
   echo "    SUCCESS ✅ (schema_forge clean — no UI / contract drift)"
   [ "$LAST_FAILED_STEP" = "3" ] && rm -f "$LAST_FAILED_FILE"
+  record_summary_row "UI / contract drift check" "-" "OK" ""
   return 0
 }
 
@@ -781,6 +864,7 @@ process.stdout.write(r.windows.filter(w=>{\
 run_step_4() {
   if [ "$RUN_S4" != "1" ]; then
     echo "==> [4/5] Comparing ETGO_SF_*.xml against com.etendoerp.go... SKIPPED ⏭️  (no artifacts/ or cli/ changes)"
+    record_summary_row "Comparing ETGO_SF_*.xml against com.etendoerp.go" "-" "SKIPPED" ""
     return 0
   fi
   if [ -d "etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata" ]; then
@@ -788,6 +872,7 @@ run_step_4() {
     if [ "$STEP_OK" != "1" ]; then
       # Already recorded above — comparing against a sibling repo that isn't
       # fully pushed would just produce a misleading diff, so skip the compare.
+      record_summary_row "Comparing ETGO_SF_*.xml against com.etendoerp.go" "-" "FAILED" "sibling not fully pushed"
       return 0
     fi
     local regen_cmd="make regen-check FROM_CACHE=1 REGEN_CHECK_PREV_XML_DIR=etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata"
@@ -797,6 +882,7 @@ run_step_4() {
     run_step "4" "Comparing ETGO_SF_*.xml against com.etendoerp.go" "$REPO_DIR" "tmp/pre-push/offline-regen-check.log" "$regen_cmd" "$key"
   else
     echo "==> [4/5] Comparing ETGO_SF_*.xml against com.etendoerp.go... SKIPPED ⚠️ (sourcedata not found — UI/contract drift above was still checked)"
+    record_summary_row "Comparing ETGO_SF_*.xml against com.etendoerp.go" "-" "SKIPPED" "no sibling checkout"
   fi
 }
 
@@ -851,6 +937,36 @@ run_step_4
 # failing E2E test should show both here, not one now and the other on the
 # next push attempt.
 run_playwright
+
+# One line per check that had a turn this run (skipped ones included) — real
+# numbers a dev can drop straight into a task update instead of re-timing
+# things by hand. Always printed, pass or fail.
+print_summary() {
+  [ "${#SUMMARY_ROWS[@]}" -eq 0 ] && return 0
+  echo ""
+  echo "=========================================="
+  echo "📊 Pre-push summary"
+  echo "=========================================="
+  local row name dur row_status detail total=0 dur_disp
+  for row in "${SUMMARY_ROWS[@]}"; do
+    IFS='|' read -r name dur row_status detail <<< "$row"
+    if [[ "$dur" =~ ^[0-9]+$ ]]; then
+      dur_disp="${dur}s"
+      total=$(( total + dur ))
+    else
+      dur_disp="-"
+    fi
+    if [ -n "$detail" ]; then
+      echo "  • ${name} — ${dur_disp} — ${row_status} — ${detail}"
+    else
+      echo "  • ${name} — ${dur_disp} — ${row_status}"
+    fi
+  done
+  echo "------------------------------------------"
+  printf 'Total measured time: %ds (%dm %ds)\n' "$total" $(( total / 60 )) $(( total % 60 ))
+  echo "=========================================="
+}
+print_summary
 
 if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then
   echo ""
