@@ -92,6 +92,16 @@ const BASE_DATA = {
   'transactionDocument$_identifier': 'AP Invoice',
 };
 
+// ETP-4841: a credit instrument is one with a NEGATIVE total, whatever its
+// document type. Every credit fixture below therefore carries negative amounts;
+// the doc-type identifier / apInvoiceSubtype fields are only kept to prove they
+// no longer decide anything.
+const CREDIT_DATA = {
+  ...BASE_DATA,
+  grandTotalAmount: -1000,
+  outstandingAmount: -500,
+};
+
 describe('PurchaseInvoiceTopbar', () => {
   const defaultProps = {
     data: BASE_DATA,
@@ -125,54 +135,64 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.queryByTestId('send-to-sif-btn')).toBeNull();
   });
 
-  it('shows the remaining "saldo a favor" badge for AP CreditMemo doc type', () => {
+  it('shows the remaining credit badge for a negative-total AP CreditMemo', () => {
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
-        data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'AP CreditMemo' }}
+        data={{ ...CREDIT_DATA, 'transactionDocument$_identifier': 'AP CreditMemo' }}
       />,
     );
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
   });
 
-  it('shows the remaining "saldo a favor" badge for Nota de Crédito doc type', () => {
+  it('shows the remaining credit badge for a negative-total Nota de Crédito', () => {
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
-        data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'Nota de Crédito' }}
+        data={{ ...CREDIT_DATA, 'transactionDocument$_identifier': 'Nota de Crédito' }}
       />,
     );
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
   });
 
-  // ETP-4737: the new doc type didn't match any hardcoded name/category check
-  // before this fix, so it fell through to the regular (non-credit) badge logic.
-  it('shows the remaining "saldo a favor" badge for the new Factura Rectificativa (compras) doc type', () => {
+  it('shows the remaining credit badge for a negative-total Factura Rectificativa (compras)', () => {
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
-        data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }}
+        data={{ ...CREDIT_DATA, 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }}
       />,
     );
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
   });
 
-  it('prefers the server-injected apInvoiceSubtype over the identifier string', () => {
+  // ETP-4841: apInvoiceSubtype used to select the credit branch. It no longer
+  // participates at all — the same subtype yields opposite badges purely on sign.
+  it('ignores apInvoiceSubtype entirely: the sign of the total decides the badge', () => {
+    const asCredit = render(
+      <PurchaseInvoiceTopbar
+        {...defaultProps}
+        data={{ ...CREDIT_DATA, apInvoiceSubtype: 'RECTIFICATIVA', 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }}
+      />,
+    );
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+    asCredit.unmount();
+
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
         data={{ ...BASE_DATA, apInvoiceSubtype: 'RECTIFICATIVA', 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }}
       />,
     );
-    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+    expect(screen.getByText('statusPending')).toBeInTheDocument();
+    expect(screen.queryByText('cpFavorBadge')).toBeNull();
   });
 
-  it('shows the fully-applied badge when a credit note has no remaining balance', () => {
+  it('shows the fully-applied badge when a credit has no remaining balance', () => {
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
         data={{
-          ...BASE_DATA,
+          ...CREDIT_DATA,
           'transactionDocument$_identifier': 'AP CreditMemo',
           outstandingAmount: 0,
         }}
@@ -246,11 +266,11 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
   });
 
-  it('clicking the credit-note badge opens the payment history modal (like the grid)', () => {
+  it('clicking the credit badge opens the payment history modal (like the grid)', () => {
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
-        data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'AP CreditMemo' }}
+        data={{ ...CREDIT_DATA, 'transactionDocument$_identifier': 'AP CreditMemo' }}
       />,
     );
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
@@ -304,15 +324,40 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.getByText(/USD:/)).toBeInTheDocument();
   });
 
-  it('outstanding falls back to grandTotal when outstandingAmount is null', () => {
+  it('falls back to the full grandTotal when outstandingAmount is absent — an unknown balance reads as UNPAID, never settled', () => {
     render(
       <PurchaseInvoiceTopbar
         {...defaultProps}
         data={{ ...BASE_DATA, outstandingAmount: null }}
       />,
     );
-    // outstanding = grandTotal (1000), grandTotal (1000) => not fully paid (outstanding > 0)
+    // Safe direction by design: rendering "unknown" as "Pagada" would tell the
+    // user an invoice is settled on no evidence. resolveInvoicePaymentBadge
+    // therefore falls back to grandTotal (1000) → pending for the whole amount.
     expect(screen.getByText('statusPending')).toBeInTheDocument();
+    expect(screen.queryByText('statusPaid')).toBeNull();
+    expect(screen.getByText('EUR:1000')).toBeInTheDocument();
+  });
+
+  it('applies the same absent-value fallback when the outstandingAmount key is missing entirely', () => {
+    const data = { ...BASE_DATA };
+    delete data.outstandingAmount;
+    render(<PurchaseInvoiceTopbar {...defaultProps} data={data} />);
+    expect(screen.getByText('statusPending')).toBeInTheDocument();
+    expect(screen.getByText('EUR:1000')).toBeInTheDocument();
+  });
+
+  it('a PRESENT zero outstandingAmount still means genuinely settled', () => {
+    // The contrast that makes the fallback safe rather than sloppy: 0 is a real
+    // answer, null/undefined/'' are the absence of one.
+    render(
+      <PurchaseInvoiceTopbar
+        {...defaultProps}
+        data={{ ...BASE_DATA, outstandingAmount: 0 }}
+      />,
+    );
+    expect(screen.getByText('statusPaid')).toBeInTheDocument();
+    expect(screen.queryByText('statusPending')).toBeNull();
   });
 
   // ETP-4404: the backend enriches invoices with hasRectifications; the topbar
@@ -330,16 +375,12 @@ describe('PurchaseInvoiceTopbar', () => {
   });
 });
 
-// ── ETP-4738: Factura Rectificativa de Compra recognized via apInvoiceSubtype ──
-// A Factura Rectificativa with a negative total is reclassified server-side to
-// apInvoiceSubtype: 'RECTIFICATIVA' (unified with the legacy AP CreditMemo subtype
-// per ETP-4737), but its doc-type identifier ("Factura Rectificativa") is not one
-// of the two hardcoded legacy doc-type-name checks ('Nota de Crédito' / 'AP
-// CreditMemo'). isCreditType must still recognize it via the server-injected
-// subtype field alone. This exercises the REAL
-// artifacts/purchase-invoice/custom/purchaseInvoiceSubtype.js (not mocked here
-// — @generated resolves to artifacts/ in vitest.config.js).
-describe('PurchaseInvoiceTopbar — apInvoiceSubtype recognizes Factura Rectificativa (ETP-4738)', () => {
+// ── ETP-4841: the topbar badge follows the SIGN of the total ─────────────────
+// The credit branch used to be selected by apInvoiceSubtype === 'RECTIFICATIVA'
+// (ETP-4738). It now reads resolveInvoicePaymentBadge(data).isCredit, so the two
+// mislabelled shapes below — a POSITIVE rectificativa and a NEGATIVE ordinary
+// Factura — finally render the right badge.
+describe('PurchaseInvoiceTopbar — sign-driven payment badge (ETP-4841)', () => {
   const props = {
     data: BASE_DATA,
     recordId: 'inv-001',
@@ -353,7 +394,7 @@ describe('PurchaseInvoiceTopbar — apInvoiceSubtype recognizes Factura Rectific
     vi.clearAllMocks();
   });
 
-  const RECTIFICATIVA_DATA = {
+  const NEGATIVE_RECTIFICATIVA_DATA = {
     ...BASE_DATA,
     'transactionDocument$_identifier': 'Factura Rectificativa',
     apInvoiceSubtype: 'RECTIFICATIVA',
@@ -361,41 +402,130 @@ describe('PurchaseInvoiceTopbar — apInvoiceSubtype recognizes Factura Rectific
     outstandingAmount: -15,
   };
 
-  it('shows the "Saldo a favor" badge for a Factura Rectificativa with apInvoiceSubtype RECTIFICATIVA and a nonzero remaining balance', () => {
-    render(<PurchaseInvoiceTopbar {...props} data={RECTIFICATIVA_DATA} />);
+  // Case A of the ETP-4841 matrix: billed 3, should have been 4 → a correction
+  // invoice for the difference, PAYABLE like any other invoice.
+  const POSITIVE_RECTIFICATIVA_DATA = {
+    ...NEGATIVE_RECTIFICATIVA_DATA,
+    grandTotalAmount: 15,
+    outstandingAmount: 15,
+  };
+
+  // Case B: an ordinary Factura whose total came out negative → a credit.
+  const NEGATIVE_ORDINARY_DATA = {
+    ...BASE_DATA,
+    apInvoiceSubtype: 'FAC',
+    grandTotalAmount: -750,
+    outstandingAmount: -750,
+  };
+
+  it('shows the credit badge for a NEGATIVE Factura Rectificativa with a remaining balance', () => {
+    render(<PurchaseInvoiceTopbar {...props} data={NEGATIVE_RECTIFICATIVA_DATA} />);
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+    expect(screen.getByText('EUR:15')).toBeInTheDocument();
     expect(screen.queryByText('statusPending')).toBeNull();
   });
 
-  it('shows the "Aplicada" pill for a Factura Rectificativa with apInvoiceSubtype RECTIFICATIVA once fully consumed', () => {
+  it('shows the fully-applied pill for a NEGATIVE Factura Rectificativa once fully consumed', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}
-        data={{ ...RECTIFICATIVA_DATA, outstandingAmount: 0 }}
+        data={{ ...NEGATIVE_RECTIFICATIVA_DATA, outstandingAmount: 0 }}
       />,
     );
     expect(screen.getByText('cpCreditFullyApplied')).toBeInTheDocument();
     expect(screen.queryByText('cpFavorBadge')).toBeNull();
   });
 
-  it('clicking the Factura Rectificativa "Saldo a favor" badge opens the payment history modal', () => {
-    render(<PurchaseInvoiceTopbar {...props} data={RECTIFICATIVA_DATA} />);
+  it('clicking the credit badge opens the payment history modal', () => {
+    render(<PurchaseInvoiceTopbar {...props} data={NEGATIVE_RECTIFICATIVA_DATA} />);
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
     fireEvent.click(screen.getByText('cpFavorBadge'));
     expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
   });
 
-  it('regression guard: legacy doc-type-name fallback still works when apInvoiceSubtype is ABSENT (old/undeployed backend)', () => {
+  it('case A: a POSITIVE Factura Rectificativa shows the pending badge, never the credit one', () => {
+    render(<PurchaseInvoiceTopbar {...props} data={POSITIVE_RECTIFICATIVA_DATA} />);
+    expect(screen.getByText('statusPending')).toBeInTheDocument();
+    expect(screen.getByText('EUR:15')).toBeInTheDocument();
+    expect(screen.queryByText('cpFavorBadge')).toBeNull();
+    expect(screen.queryByText('cpCreditFullyApplied')).toBeNull();
+  });
+
+  it('case A: a POSITIVE Factura Rectificativa marked paymentComplete shows the paid badge', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}
-        data={{ ...BASE_DATA, 'transactionDocument$_identifier': 'AP CreditMemo' }}
+        data={{ ...POSITIVE_RECTIFICATIVA_DATA, paymentComplete: 'Y' }}
+      />,
+    );
+    expect(screen.getByText('statusPaid')).toBeInTheDocument();
+    expect(screen.queryByText('cpFavorBadge')).toBeNull();
+  });
+
+  it('case B: an ordinary Factura with a NEGATIVE total shows the credit badge, never "pagada"', () => {
+    render(<PurchaseInvoiceTopbar {...props} data={NEGATIVE_ORDINARY_DATA} />);
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+    expect(screen.getByText('EUR:750')).toBeInTheDocument();
+    expect(screen.queryByText('statusPaid')).toBeNull();
+  });
+
+  it('case B: paymentComplete never turns a credit into the paid badge', () => {
+    // isFullyPaid is gated on !badge.isCredit, so a credit stays a credit even
+    // when Etendo has flagged the invoice as settled.
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...NEGATIVE_ORDINARY_DATA, paymentComplete: true }}
+      />,
+    );
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+    expect(screen.queryByText('statusPaid')).toBeNull();
+  });
+
+  it('case C: a negative invoice with a zero outstanding shows the fully-applied pill', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...NEGATIVE_ORDINARY_DATA, outstandingAmount: 0 }}
+      />,
+    );
+    expect(screen.getByText('cpCreditFullyApplied')).toBeInTheDocument();
+  });
+
+  it('case D: an OVERPAID positive invoice (outstanding < 0) shows the paid badge, not a credit', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...BASE_DATA, grandTotalAmount: 700, outstandingAmount: -50 }}
+      />,
+    );
+    expect(screen.getByText('statusPaid')).toBeInTheDocument();
+    expect(screen.queryByText('cpFavorBadge')).toBeNull();
+  });
+
+  it('case E: a draft credit shows no payment badge at all', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...NEGATIVE_ORDINARY_DATA, documentStatus: 'DR' }}
+      />,
+    );
+    expect(screen.queryByTestId('payment-status-badge')).toBeNull();
+    expect(screen.queryByText('cpFavorBadge')).toBeNull();
+    expect(screen.queryByText('cpCreditFullyApplied')).toBeNull();
+  });
+
+  it('regression guard: an AP CreditMemo with no apInvoiceSubtype and a negative total is still a credit', () => {
+    render(
+      <PurchaseInvoiceTopbar
+        {...props}
+        data={{ ...CREDIT_DATA, 'transactionDocument$_identifier': 'AP CreditMemo' }}
       />,
     );
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
   });
 
-  it('negative control: a normal invoice with apInvoiceSubtype "FAC" still shows the normal pending badge, never the credit badge', () => {
+  it('negative control: a normal positive invoice with apInvoiceSubtype "FAC" shows the pending badge', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}
@@ -461,14 +591,15 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
     delete data.grandTotalAmount;
     delete data.outstandingAmount;
     render(<PurchaseInvoiceTopbar {...props} data={data} />);
-    // grandTotal 0 → outstanding 0 → isFullyPaid, totalPaid 0
+    // The absent-outstanding fallback lands on a grandTotal that is itself 0,
+    // so there is genuinely nothing owed → isFullyPaid, totalPaid 0.
     expect(screen.getByText('statusPaid')).toBeInTheDocument();
     expect(screen.getByText('EUR:0')).toBeInTheDocument();
   });
 
   // ── currency fallbacks in the credit and paid badges (lines 111/126) ───────
 
-  it('credit-note badge falls back to USD when the invoice carries no currency', () => {
+  it('credit badge falls back to USD when the invoice carries no currency', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}
@@ -497,17 +628,19 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
     expect(screen.getByText('USD:500')).toBeInTheDocument();
   });
 
-  it('credit-note badge uses the invoice currency when present', () => {
+  it('credit badge uses the invoice currency when present', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}
         data={{
           ...BASE_DATA,
           'transactionDocument$_identifier': 'AP CreditMemo',
+          grandTotalAmount: -20,
           outstandingAmount: -20,
         }}
       />,
     );
+    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
     expect(screen.getByText('EUR:20')).toBeInTheDocument();
   });
 

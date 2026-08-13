@@ -511,13 +511,23 @@ When the invoice currency differs from the currency of the selected financial ac
 | Field | i18n key | Behavior |
 |-------|----------|----------|
 | **Tasa de conversión** (Conversion rate) | `cpConversionRate` | Editable numeric input, prefilled from `GET {base}/validate-exchange-rate` via the `useConversionRate` hook (`tools/app-shell/src/windows/custom/shared/useConversionRate.js`); accepts `0.92` or `0,92`. |
-| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Read-only, `= amount × rate`, recomputed live; rendered in the account currency. |
+| **Importe en moneda de la cuenta** (Amount in account currency) | `cpAmountInAccount` | Also editable, mirroring Classic's Add Payment. Whichever of the two the user edits drives the other: typing a rate recomputes this amount (`= invoice amount × rate`, rounded to 2 decimals); typing an amount here recomputes the rate instead (`= typed amount ÷ invoice amount`, rounded to 6 decimals). Changing the invoice-currency amount elsewhere in the modal (e.g. **Igualar**) keeps the rate fixed and recomputes this amount forward. |
 
 Both are **hidden when the currencies match**. On a foreign-currency payment a **positive rate
 ≠ 1 is required** — a blank/non-positive or `1` rate disables **Guardar** and **Confirmar** (the
 blank/non-positive case also shows the `cpConversionRateRequired` inline error;
 `cpConversionRateInvalid` is the "must differ from 1" copy). The rate is sent as `conversionRate`
 on `registerPayment`; the backend recomputes the account-currency amount authoritatively.
+
+**Rate persistence on drafts (ETP-4841).** A rate typed by the user is stored on the draft and
+shown back when the draft is reopened — it is not re-derived from the system rate. The mechanism
+is shared with the collection side and documented in full in
+[`sales-invoice.md`](sales-invoice.md#multi-currency-support-in-the-cobrospagos-modal--etp-4504):
+the `invoicePayments` row carrying `conversionRate`, the verbatim backend store in
+`PaymentCurrencyConverter.applyTransactionAmountAndRate` (bypassing core's
+`rate = txnAmount / amount` recompute, which mangles a user-typed rate), the once-per-currency-pair
+reseed keyed on the **account currency rather than the account id**, and the table of what each
+action in a reopened draft does to the rate field. None of it is payment-side specific.
 
 ### F2 — Credit filtered by invoice currency
 
@@ -558,6 +568,37 @@ sides, so the Pagos modal could incorrectly surface accumulated-credit rows (bad
 guard (see the AR-side note in `sales-invoice.md`), so Pagos (AP) never lists a `kind: 'credit'`
 row while Cobros (AR) keeps it. The "no accumulated AP credit source (it1)" behavior documented
 above is now actually enforced in code, not just intended.
+
+### F5 — "Saldo a favor" is decided by the SIGN of the total, not the document type — ETP-4841
+
+> **Supersedes F4** (and the AP-side badge notes above). Kept for history; where they conflict,
+> this section wins.
+
+A Factura Rectificativa de Compra can be **positive** (the supplier under-invoiced, so the
+correction is **payable**) or **negative** (a credit). An ordinary "Factura" with a negative
+total is likewise a credit. Payment state is therefore decided by `grandTotalAmount < 0`, never
+by the document type. Full rationale, the shared helper contract and the evaluation order are in
+[`sales-invoice.md` § F6](sales-invoice.md#f6--saldo-a-favor-is-decided-by-the-sign-of-the-total-not-the-document-type--etp-4841)
+— the mechanism is identical on both sides and is applied symmetrically.
+
+AP-specific consequences:
+
+- **`PurchaseInvoiceHeaderTable.jsx` no longer sign-flips the total column.** It used to render
+  `-Math.abs(Number(raw))` for any row whose `getApSubtype` was `RECTIFICATIVA`, which displayed
+  a positive rectificativa as negative. The column is now the plain
+  `{ key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', … }` declaration that
+  sales-invoice always used — the generic amount renderer, no custom `render`.
+- `PurchaseInvoiceTopbar.jsx`'s `isFullyPaid` no longer fires for credit instruments, so a
+  negative purchase invoice stops rendering **"Pagado · 0,00 €"** (it computed
+  `totalPaid = grandTotal − outstanding` = 0 for those rows).
+- Both the grid cell and the topbar now consume `resolveInvoicePaymentBadge`; the local
+  `isNcOrReturn` predicate is gone. `getApSubtype` remains, driving only the document-type badge
+  column (`SUBTYPE_BADGE`) and the list tab filters.
+- The grid stopped hardcoding `Saldo a favor` / `Aplicada` and uses the `cpFavorBadge` /
+  `cpCreditFullyApplied` i18n keys.
+- The credit selector (`pendingAbonos`) dropped the doc-type whitelist: any purchase invoice
+  with a negative total and an unpaid negative PSD of the same supplier and currency now
+  appears. `PaymentCreditConsumer` rejects only non-negative totals.
 
 ### Known display-only limitation
 
@@ -957,3 +998,17 @@ Three constraints worth knowing:
 The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
 **not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
 different endpoint (`AddPaymentService`), and this modal never used it.
+
+## Print button hidden in every status, list view unaffected — ETP-4714
+
+The generic detail-view "Imprimir" action is hidden unconditionally on this window via
+`"hidePrintWhen": true` in `decisions.json`. Two earlier iterations were tried and superseded:
+first `hidePrintWhen: { documentStatus: "DR" }` (hide only in Borrador — the ticket's original,
+later-corrected ask), then plain `"hidePrint": true`. The plain flag was itself a regression
+caught during review: `hidePrint` drives **both** the detail-view Print button and the list
+view's two print buttons (bulk "Print (N)" + toolbar Print/Report, neither status-gated), and
+this window never had `hidePrint` set before this ticket — its list-view print was visible. The
+final fix passes the literal `true` to `hidePrintWhen` instead, which
+`evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
+the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
+`docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.

@@ -14456,7 +14456,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "e5fab3eb2657be6362f38b715aacc6089409ff598736e34d1ee8e631c6750d41",
+      "checksum": "90ad40a8b083ebd1aaf49265debfcc477e7e80081dbf07b492c090db4c94479f",
       "params": [
         "123"
       ],
@@ -17518,7 +17518,7 @@
           "entity_javapackage": "org.openbravo.model.common.businesspartner",
           "field_group_name": "Contact Details",
           "field_isactive": "Y",
-          "field_name": "Web",
+          "field_name": "EM_Etgo_Web",
           "field_seq": "430",
           "fieldlength": "60",
           "filterclause": null,
@@ -333372,7 +333372,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "62286d3cd366c8ba9c39cc6d471079da7f6b6073c01b56bc54a39b7de9cf850c",
+      "checksum": "ab22471d12dddf1edfbc3d6a1363211b1d579b4f17171128aec88a715a1cefb1",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -336795,7 +336795,7 @@
           "computation_function": null,
           "computation_mode": null,
           "defaultvalue": null,
-          "displaylogic": "@PSD2_HasConecctions@>0 & @Type@!'C'",
+          "displaylogic": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "em_obuiapp_process_id": "83C5DBC9F05B4D38BBB3F5486B377427",
@@ -336804,11 +336804,11 @@
           "entity_javapackage": "org.openbravo.model.financialmgmt.payment",
           "field_group_name": "Bank Integration",
           "field_isactive": "Y",
-          "field_name": "Refresh Connections",
+          "field_name": "Search Recent Transactions",
           "field_seq": "550",
           "fieldlength": "1",
           "filterclause": null,
-          "help_text": "Refreshes the bank connection and synchronizes the latest data from the bank using the current consent. This action does not require credentials or user interaction and keeps the connection active.",
+          "help_text": "Forces the bank connection to fetch the most recent transactions directly from the bank using the existing consent, and keeps the user on screen until the synchronization finishes. Use it before getting transactions when the most up-to-date data is needed; otherwise the data from the latest available refresh is used. This action does not require credentials or user interaction and keeps the connection active.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -350798,7 +350798,7 @@
           "hqlfilterclause": null,
           "hqlorderbyclause": "lineNo",
           "hqlwhereclause": null,
-          "isdisplayed": "Y",
+          "isdisplayed": "N",
           "isfilterable": "Y",
           "isidentifier": "N",
           "iskey": "N",

@@ -309,6 +309,31 @@ frontend (there is no `AD_Field` for it on this window). No UI or behavior chang
 this note only records why the contract was regenerated when the PSD2 dependency
 was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
 
+## Print button — added, visible in specific evaluation/closed states — ETP-4714
+
+This window previously suppressed the generic detail-view Print button entirely
+(`window.hidePrint: true`). `decisions.json` now declares
+`hidePrintWhen: { documentStatus: { notIn: ["UE", "CA", "ETGO_CI", "CJ"] } }` — i.e. hidden
+except when the quotation is Bajo Evaluación (`UE`), Cerrado - Pedido creado (`CA`), Cerrado -
+Factura creada (`ETGO_CI`), or Cerrado - Rechazado (`CJ`), per `QuotationStatusBadge.jsx`'s
+`STATUS_CONFIG` map — exactly the state list on the ticket. Backed by the pre-existing
+`print-sales-quotation` report via the generic `DetailView` Print button; verified end-to-end
+by moving a real quotation from Borrador to `UE` in the running app and confirming the button
+appears and opens the correct rendered document. No custom component was added:
+`QuotationTopbarActions.jsx` and its `useQuotationPdf` hook — used only to feed the "Enviar
+documento" preview modal — are unrelated and untouched. See `docs/decisions-reference.md`
+("Print Visibility") for the generic mechanism.
+
+**List-view print — superseded by ETP-4729, do not re-hide.** An earlier iteration of this fix
+also declared `"listViewOptions": { "hidePrint": true }` to keep the list's bulk "Print (N)"
+and toolbar Print buttons hidden, matching this window's pre-ticket state. A separate, later
+ticket (ETP-4729 — "print unification onto the generic icon — print restored") deliberately
+removed the window-level `hidePrint: true` this window had before ETP-4714 even started,
+restoring list-view print to always-visible as the new, intended, tested baseline. The
+`listViewOptions` addition was removed to defer to ETP-4729's more recent decision; only the
+detail-view `hidePrintWhen` gate above still applies. See `docs/decisions-reference.md`
+("Print Visibility") for the full collision writeup.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

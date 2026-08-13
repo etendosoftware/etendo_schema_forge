@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCalendarDate } from '@/lib/dateOnly';
 
 /* eslint-disable react/prop-types */
 
@@ -143,10 +144,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
     return { filtered: visible.slice(0, MAX_VISIBLE), hiddenCount: Math.max(0, visible.length - MAX_VISIBLE) };
   }, [invoices, search, currentId]);
 
-  const fmtDate = (d) => {
-    if (!d) return '—';
-    try { return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch { return d; }
-  };
+  const fmtDate = (d) => formatCalendarDate(d, 'es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const fmtAmt = (v) => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 
   const invoiceRow = (inv) => (

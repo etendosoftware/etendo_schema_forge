@@ -8,7 +8,7 @@
       "allowEmail": false
     },
     "hideDeleteWhenComplete": true,
-    "hidePrint": true,
+    "hidePrintWhen": true,
     "relatedDocuments": true,
     "notesField": "description",
     "noHeaderBorder": true,

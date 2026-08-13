@@ -123,3 +123,60 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Multi-currency readout on the payment detail — ETP-4841
+
+When a payment's own currency differs from the currency of the financial account the money moved
+through (e.g. a 21.34 USD payment made from a EUR bank account), the detail page now shows
+both sides plus the rate that was actually booked:
+
+```
+Importe del pago
+− 21,34 $
+  (0,680272)  14,52 €
+```
+
+- **Hero amount** stays in the PAYMENT's currency — the document's own defining value, and the
+  currency the `Importe total` / `Aplicado a facturas` / `Sin aplicar` rows below it use.
+- **Secondary line** is `(rate) amount-in-account-currency`, echoing the invoice preview's
+  `SummaryCard`. The rate is the payment's OWN stored `Finacc_Txn_Convert_Rate`, shown verbatim with
+  up to 6 decimals — not the org's standard precision (2), which would render `0,68` and hide the
+  rate the user typed in the Cobros/Pagos modal (see the ETP-4841 rate-persistence notes in
+  `purchase-invoice.md` / `sales-invoice.md`).
+- **Deliberately no currency badge.** On the preview card the badge is load-bearing because its hero
+  figure is the *converted* one, so the badge names the document's true currency ("shown in €, but
+  this invoice is in USD"). Here the hero is already the true one, so a bare ISO badge would carry
+  the inverted meaning to anyone trained on that card, and it is redundant next to a secondary line
+  that already renders its own symbol.
+- **Hidden entirely when the currencies match** (`accountCurrency === currency`), which is the common
+  case: a same-currency payment stores rate `1` and an account amount equal to the payment amount, so
+  the line would be pure noise. The Cobros/Pagos modal gates its own conversion fields on the same
+  condition (`isForeign`, ETP-4504).
+
+Rendered by `tools/app-shell/src/windows/custom/shared/PaymentDetailSidebarBase.jsx` (shared by both
+payment windows through the thin `custom/PaymentDetailSidebar.jsx` shims).
+
+**Backend:** `accountCurrency`, `conversionRate` and `financialTransactionAmount` are injected into
+the single-record GET by `ReactivatePaymentHandler.injectMultiCurrencyExtras` (`com.etendoerp.go`).
+None is reachable through the frontend contract — `Finacc_Txn_Convert_Rate` / `Finacc_Txn_Amount` are
+`ISINCLUDED = N` on payment-in, and the account's currency ISO is one hop past
+`Fin_Financial_Account_ID` in both windows — so this is a pure read enrichment with **no AD change**,
+hence no `push-to-neo` / `export.database`. The injection sits in its own try/catch so a failure
+resolving it can never discard the `financialTransactionId` the same post-hook already provides.
+Field names match what `PaymentRegistrationService.paymentListItem` emits for the invoice payment
+modal, so both surfaces speak one shape. On an older backend the three fields are absent and the
+block simply does not render.
+
+## Line amounts showed a hardcoded euro symbol — ETP-4841
+
+The "Líneas del pago" table rendered every amount with a literal `' €'` suffix: its `fmtAmt` helper
+was a hand-rolled formatter that took no currency argument at all, so a 21.34 USD payment read
+`21,34 €` regardless of the payment or the account. The values themselves were always correct — they
+come from `FIN_Payment_ScheduleDetail`, stored in the payment/invoice currency — only the symbol was
+wrong. Now `fmtAmt(val, currency)` delegates to the canonical `formatAmount`/`formatCurrency` with
+`data['currency$_identifier']`, the same field the `Moneda` readout in the panel above already used.
+
+The ETP-4314 sweep that centralized currency formatting missed this panel and its payment-out twin
+(`artifacts/payment-in/custom/PaymentBottomPanel.jsx`, fixed identically). The existing
+source-guard tests only asserted that a function named `fmtAmt` exists, never anything about
+currency, which is why it survived.
