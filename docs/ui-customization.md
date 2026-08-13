@@ -855,7 +855,26 @@ Clicking either the chevron or the hover action toggles the same expand state �
 - The built-in "Edit dimensions" action (§14b) is computed internally by `InlineLinesPanel` from its own `dimensionFields` metadata and merged into the same list ahead of any caller-supplied `rowActions` — both render through the identical `renderRowActionStrip({ extraActions })` code path, so there is only one hover-action rendering mechanism in the component, not two.
 - Purely additive: omitting `rowActions` (every existing caller today) renders byte-for-byte the same strip as before this slot existed.
 
-**Real example:** the internal "Edit dimensions" action is the only current consumer; no external caller passes `rowActions` yet. See `tools/app-shell/src/components/contract-ui/__tests__/InlineLinesPanel.vitest.jsx`'s `rowActions — generic hover-action extension slot` describe block for the mechanism's own regression tests (rendering, static `show: false`, per-row `show` function, declared-order rendering).
+**Real example:** the internal "Edit dimensions" action is the only current consumer of the *raw* `InlineLinesPanel` prop; no external caller passes `rowActions` directly. See `tools/app-shell/src/components/contract-ui/__tests__/InlineLinesPanel.vitest.jsx`'s `rowActions — generic hover-action extension slot` describe block for the mechanism's own regression tests (rendering, static `show: false`, per-row `show` function, declared-order rendering). §14d below is the first caller-level (`DetailView`/window) consumer.
+
+---
+
+### 14d. `DetailView`'s `lineRowActions` prop — window-level entry point for §14c (ETP-4888)
+
+**What it does:** forwards a `rowActions`-shaped array (§14c) from a WINDOW down to the generated lines grid, without `DetailView.jsx` (a shared, entirely generic component) ever knowing which window populated it or why. `DetailView` just does `<DetailTable ... rowActions={lineRowActions} />` — the prop defaults to `[]`, so every window that doesn't pass it renders byte-for-byte the same as before this prop existed.
+
+**Why a new prop instead of declaring it on `decisions.json` end-to-end:** the natural home for a NEW per-window boolean is `decisions.json` + `generate-frontend.js` baking a literal prop into the generated `HeaderPage.jsx` (like `hidePrintWhen`, `documentDateField`, etc.). `generate-frontend.js` lives in `schema_forge_core` — out of reach for a window-specific feature living entirely in this repo. The decision is still declared in `decisions.json` (`window.lineTaxSifTrigger`, see `docs/decisions-reference.md`) as the source of truth; only the WIRING is hand-mirrored today, exactly like this repo's `sales-invoice`/`purchase-invoice` `index.jsx` already hand-mirrors `subsetFilters`/`labelOverrides` for their hand-rolled list route (see the comments on `SUBSET_FILTERS`/`LABEL_OVERRIDES` in those files). If a future ticket adds `generate-frontend.js` support for this, the hand-mirrored constant + hook call in each window's `index.jsx` can simply be deleted.
+
+**Real example — "tax needs SIF configuration" trigger (ETP-4888 point 5):** on `sales-invoice`'s and `purchase-invoice`'s lines grid, the `tax` cell shows a warning icon (via a `rowActions` entry) ONLY when the selected tax is missing its TBAI/Verifactu key — never for SII (which has nothing to configure at tax level; see `docs/decisions-reference.md`'s `lineTaxSifTrigger` row). Clicking it opens `TaxSifModal.jsx`, a standalone `EntityForm entity="tax"` dialog that reuses `TaxSifField.jsx`'s pure `selectSifFields()` to pick the same 0–2 applicable fields the Tax window itself would show, and saves via a new cross-spec `patchById()` helper (`components/related-documents/helpers.js`, sibling of the existing `fetchById()`).
+
+```
+tools/app-shell/src/windows/custom/shared/
+  useTaxSifLineRowActions.js   // hook: builds `rowActions` (§14c shape) + the modal JSX
+  TaxSifModal.jsx              // the quick-fix dialog itself (EntityForm entity="tax")
+  TaxSifField.jsx              // pre-existing; selectSifFields() is reused, not duplicated
+```
+
+The "missing" check needs each row's tax record without an extra per-tax fetch. Instead of enriching every invoice line's own GET response, the hook calls the SAME tax selector (`{apiBaseUrl}/lines/selectors/C_Tax_ID`) ONCE per invoice with a large page size — the backend (`InvoiceLineTaxSifSelectorPolicy` in `com.etendoerp.go`, a `SelectorEnrichmentPolicy`) projects `taxExempt`/`notTaxable` plus the TBAI/Verifactu key columns onto each selector item, scoped to exactly these two windows via `NeoSelectorService.SOURCE_WINDOW_ID_PARAM` (AD_Window_Id `167`/`183`) so no other window's tax/product selectors are affected. The frontend then re-runs `selectSifFields()` against each enriched tax row and flags it "missing" when any resolved field's value is blank — the same pure function decides WHICH fields apply on both the Tax window's own form and this modal, so the business rule is never duplicated.
 
 ---
 

@@ -59,6 +59,7 @@
     ],
     "lineEntityConfig": "invoice",
     "linesLayout": "inlineEditable",
+    "lineTaxSifTrigger": true,
     "extraTabs": [
       {
         "key": "sif",

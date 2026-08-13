@@ -18,6 +18,7 @@
       "topbarRight": "InvoiceTopbarExtra"
     },
     "linesLayout": "inlineEditable",
+    "lineTaxSifTrigger": true,
     "extraTabs": [
       {
         "key": "sif",
