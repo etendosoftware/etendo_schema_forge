@@ -5,27 +5,8 @@ import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, openDraftRow, clickConfirmButton,
   waitForConfirmResponse, dismissSuccessModal, expectStatusPill, safeReload,
-  readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
+  readDocumentTotals, verifyTotalsConsistency, parseAmount,
 } from '../helpers/purchase-helpers.js';
-
-/**
- * Locate the first line row (rendered by the shared InlineLinesPanel —
- * `data-testid="line-row-{id}"`, `data-cell-key="{fieldKey}"` per cell, see
- * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx) whose
- * `qtyFieldKey` cell holds a negative value. Reading the actual cell value
- * (rather than pattern-matching the row's rendered text) avoids false
- * positives from unrelated hyphens in a product name/description.
- */
-async function findNegativeLineRow(page, qtyFieldKey) {
-  const rows = page.locator('[data-testid^="line-row-"]');
-  const count = await rows.count();
-  for (let i = 0; i < count; i++) {
-    const row = rows.nth(i);
-    const qtyText = await row.locator(`[data-cell-key="${qtyFieldKey}"]`).textContent().catch(() => '');
-    if (parseAmount(qtyText) < 0) return row;
-  }
-  throw new Error(`No line row with a negative "${qtyFieldKey}" was found`);
-}
 
 /**
  * Purchase Order — Full flow: PO → Goods Receipt → Purchase Invoice.

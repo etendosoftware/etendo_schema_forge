@@ -19576,7 +19576,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "684405511115288359e4a0b3ba956f56e546a3a3181ab6283388e5170d9df3cb",
+      "checksum": "7519fe302ff9d241889fd69df0063b209c04e2afe7eb45feed700cdac6c20fd9",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -19944,9 +19944,9 @@
         {
           "column_id": "7DE2810AD9F142D09D7D5E74753C51FC",
           "columnname": "EM_Psd2_Refresh_Connections",
-          "displaylogic": "@PSD2_HasConecctions@>0 & @Type@!'C'",
+          "displaylogic": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'",
           "field_id": "9A2A15384FB74ACC86A3018A7FCD010A",
-          "name": "Refresh Connections",
+          "name": "Search Recent Transactions",
           "readonlylogic": null,
           "tab_id": "2845D761A8394468BD3BA4710AA888D4",
           "tab_name": "Account",

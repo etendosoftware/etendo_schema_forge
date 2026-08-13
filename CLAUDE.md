@@ -248,6 +248,15 @@ See `docs/window-templates.md` for layout types (kanban, calendar, custom), conf
 - Both read the instance-wide thousands/decimal separators from one shared NEO config source (`GET /sws/neo/currency-format`, `currencyFormatConfig.js`) — see `docs/plans/2026-07-28-currency-format-centralization-proposal.md` for the full architecture.
 - Before adding a new component or report that displays an amount, **grep for `formatCurrency` first** — there is almost certainly an existing pattern to copy in a sibling window/component.
 
+## Date-Only Parsing & Formatting (MANDATORY)
+
+**Every business/calendar date (invoice date, movement date, statement date, etc.) MUST be parsed through the canonical date-only utilities — never a hand-rolled `new Date(string)` on a date-only value.** `new Date("2026-08-10")` parses the string as UTC midnight; reading it back with local-time getters (`getDate()`/`getMonth()`/`getFullYear()`) or formatting it with `toLocaleDateString()`/`Intl.DateTimeFormat` without an explicit `timeZone` rolls the displayed day back one under a negative-UTC-offset timezone (e.g. `America/Argentina/Buenos_Aires`). This exact bug shipped repeatedly across the codebase — ETP-4031, then again as ETP-4850 across five unrelated components — before being centralized. Treat any new ad-hoc date-only parser as a bug, not a style nit.
+
+- Use `parseCalendarDate(raw)` and `formatCalendarDate(raw, locales, options)` from `tools/app-shell/src/lib/dateOnly.js`. `parseCalendarDate` extracts the `yyyy-MM-dd` prefix and builds the `Date` via the local-time constructor (`new Date(year, month-1, day)`), so the calendar day is never shifted by the host's timezone offset; `formatCalendarDate` wraps it with `toLocaleDateString`.
+- This applies to sorting/bucketing by date too — e.g. grouping transactions into monthly buckets or comparing against date-range bounds — not just display. Use `parseCalendarDate`, not `new Date(...).getTime()`, whenever the comparison must stay in local-calendar-day space (see `tools/app-shell/src/lib/dateRangeBounds.js`, whose `from`/`to` bounds are local-time `Date`s).
+- A comparator that only orders full timestamp instants (no local-getter reads, no day-bucket keys) is timezone-independent and does not need this helper — don't over-apply the fix where the bug can't occur.
+- Before writing a new date formatter or date-bucketing comparator, **grep for `parseCalendarDate`/`formatCalendarDate` first** — there is almost certainly an existing pattern to copy in a sibling window/component (10+ call sites already use it).
+
 ## Testing
 
 Contract tests (Node.js), Unit tests (JUnit in Etendo Go), Integration tests (OBBaseTest), E2E (Playwright).

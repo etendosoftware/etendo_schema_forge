@@ -297,6 +297,29 @@ line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285
 this window's workflow rules, update the `agentPrompt` in the same change: it is the only thing
 telling the agent what is legal.
 
+## Print button — added, visible only in Completado — ETP-4714
+
+This window previously suppressed the generic detail-view Print button entirely
+(`window.hidePrint: true`). `decisions.json` now declares
+`hidePrintWhen: { documentStatus: { notEquals: "CO" } }` instead, so the same generic Print
+button in `DetailView.jsx` now shows once the order is Completado, backed by the pre-existing
+`print-sales-order` report — verified rendering real order data end-to-end during this ticket.
+No custom component was added: `OrderCreateInvoice.jsx` (this window's `topbarRight`) and its
+`useOrderPdf` hook — used only to feed the "Enviar documento" preview modal — are unrelated
+and untouched. See `docs/decisions-reference.md` ("Print Visibility") for the generic
+mechanism.
+
+**List-view print — superseded by ETP-4729, do not re-hide.** An earlier iteration of this fix
+also declared `"listViewOptions": { "hidePrint": true }` to keep the list's bulk "Print (N)"
+and toolbar Print buttons hidden, matching this window's pre-ticket state. A separate, later
+ticket (ETP-4729 — "print unification onto the generic icon — print restored") deliberately
+removed the window-level `hidePrint: true` this window had before ETP-4714 even started,
+restoring list-view print to always-visible as the new, intended, tested baseline —
+`tools/app-shell/src/windows/custom/sales-order/__tests__/index.test.js` has an explicit
+regression guard against reintroducing it. The `listViewOptions` addition was removed to defer
+to ETP-4729's more recent decision; only the detail-view `hidePrintWhen` gate above still
+applies. See `docs/decisions-reference.md` ("Print Visibility") for the full collision writeup.
+
 ## Semantic visual states
 
 The confirmation modal uses information roles for its selected document options,

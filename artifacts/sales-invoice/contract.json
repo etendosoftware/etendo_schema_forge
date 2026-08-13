@@ -1,8 +1,8 @@
 {
   "version": "0.71.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-10T14:53:19.968Z",
-  "checksum": "67646cb4f61cb33c",
+  "updatedAt": "2026-08-11T19:52:33.386Z",
+  "checksum": "4daf2836eb8c2a05",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -12,6 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
@@ -63,6 +68,9 @@
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type"
         }
+      },
+      "listViewOptions": {
+        "hidePrint": true
       },
       "subsetFilters": [
         {
@@ -2618,6 +2626,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
@@ -2669,6 +2682,9 @@
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type"
         }
+      },
+      "listViewOptions": {
+        "hidePrint": true
       },
       "subsetFilters": [
         {
