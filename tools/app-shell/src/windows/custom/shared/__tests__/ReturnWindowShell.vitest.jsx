@@ -12,6 +12,11 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
 }));
 
+const useBulkActionToast = vi.fn();
+vi.mock('@/hooks/useBulkActionToast', () => ({
+  useBulkActionToast: () => useBulkActionToast(),
+}));
+
 let rowDeleteConfig;
 const requestDelete = vi.fn();
 vi.mock('@/hooks/useRowDelete', () => ({
@@ -83,6 +88,10 @@ describe('ReturnWindowShell', () => {
       />,
     );
 
+    // ETP-4857 — the shell must call useBulkActionToast() on mount so the
+    // toast left behind by BulkDocumentAction's window.location.reload() is
+    // read and shown; without this it silently fails to display.
+    expect(useBulkActionToast).toHaveBeenCalled();
     expect(screen.getByTestId('page-component')).toHaveAttribute('data-record-id', 'ret-1');
     expect(lastPageProps).toMatchObject({
       recordId: 'ret-1',

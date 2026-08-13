@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useRowDelete } from '@/hooks/useRowDelete';
+import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { useRowEmailModal } from './useRowEmailModal.jsx';
 
@@ -20,6 +21,10 @@ export default function ReturnWindowShell({
   emailAction,
   ...pageProps
 }) {
+  // ETP-4857 — reads the sessionStorage result BulkDocumentAction leaves behind
+  // before its window.location.reload(); without this the toast only shows up
+  // the next time some other window that calls this hook happens to mount.
+  useBulkActionToast();
   const navigate = useNavigate();
   const [refreshKey, setRefreshKey] = useState(0);
   const [cloneTargets, setCloneTargets] = useState(null);
