@@ -37,3 +37,43 @@ describe('SalesInvoiceWindow — wiring', () => {
     assert.match(src, /if\s*\(recordId\)/);
   });
 });
+
+// ETP-4888 point 5 — Tax SIF quick-fix modal shortcut on invoice lines. The
+// hook itself is fully unit-tested (useTaxSifLineRowActions.vitest.jsx); this
+// file only proves the WIRING: the window imports the hook, gates it behind a
+// local LINE_TAX_SIF_TRIGGER_ENABLED constant (hand-mirroring
+// artifacts/sales-invoice/decisions.json -> window.lineTaxSifTrigger, since
+// DetailView's lineRowActions prop has no generate-frontend.js wiring — see the
+// constant's own comment in index.jsx), and forwards both the resulting
+// rowActions and the modal portal to HeaderPage.
+describe('SalesInvoiceWindow — Tax SIF trigger wiring (ETP-4888)', () => {
+  it('imports useTaxSifLineRowActions from the shared hook module', () => {
+    assert.match(src, /import\s*\{\s*useTaxSifLineRowActions\s*\}\s*from\s*'\.\.\/shared\/useTaxSifLineRowActions\.js'/);
+  });
+
+  it('declares LINE_TAX_SIF_TRIGGER_ENABLED as a local true constant', () => {
+    assert.match(src, /const\s+LINE_TAX_SIF_TRIGGER_ENABLED\s*=\s*true\s*;/);
+  });
+
+  it('calls the hook with apiBaseUrl, token and enabled: LINE_TAX_SIF_TRIGGER_ENABLED', () => {
+    assert.match(
+      src,
+      /useTaxSifLineRowActions\(\{\s*\n?\s*apiBaseUrl,\s*token,\s*enabled:\s*LINE_TAX_SIF_TRIGGER_ENABLED,?\s*\n?\s*\}\)/,
+    );
+  });
+
+  it('destructures rowActions/modal as taxSifRowActions/taxSifModal', () => {
+    assert.match(
+      src,
+      /const\s*\{\s*rowActions:\s*taxSifRowActions,\s*modal:\s*taxSifModal\s*\}\s*=\s*useTaxSifLineRowActions/,
+    );
+  });
+
+  it('forwards taxSifRowActions to HeaderPage as lineRowActions', () => {
+    assert.match(src, /lineRowActions=\{taxSifRowActions\}/);
+  });
+
+  it('renders the taxSifModal portal alongside contactPortal', () => {
+    assert.match(src, /\{contactPortal\}\s*\n\s*\{taxSifModal\}/);
+  });
+});
