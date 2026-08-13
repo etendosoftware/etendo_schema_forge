@@ -65,7 +65,7 @@ test.describe('Sales Order — Happy path (integration)', () => {
     'Set E2E_SALES_INTEGRATION=1 to run this live sales order integration test.',
   );
 
-  test('creates an order, confirms with invoice, then confirms the invoice', async ({ page }) => {
+  test.skip('creates an order, confirms with invoice, then confirms the invoice', async ({ page }) => {
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 

@@ -854,8 +854,7 @@ test.describe('Assets (real backend)', () => {
 
   // Case 7 — copy of Case 4 (by PERCENTAGE) + Descripción/Valor residual edits
   // + cascade delete.
-  test('Case 7: by percentage — edit description/residual, then cascade delete', async ({ page }) => {
-    test.skip(true, 'Temporarily skipped: real-backend flow is unstable during login and amortization setup.');
+  test.skip('Case 7: by percentage — edit description/residual, then cascade delete', async ({ page }) => {
     const stamp = Date.now();
     const name = `Activo E2E residual porcentaje ${stamp}`;
     await createDepreciableAsset(page, { stamp, name });
